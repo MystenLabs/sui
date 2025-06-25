@@ -24,31 +24,17 @@ use crate::{
     errors::{FileHandle, TheFile},
     flavor::MoveFlavor,
     jsonrpc::Endpoint,
-    package::{EnvironmentName, PackageName},
+    package::{EnvironmentID, EnvironmentName, PackageName},
+    schema::{ManifestDependencyInfo, ResolveRequest, ResolveResponse, ResolverDependencyInfo},
 };
 
-use super::{DependencySet, UnpinnedDependencyInfo};
+use super::{Combined, Dependency, DependencySet, Resolved};
 
 pub type ResolverName = String;
 pub type ResolverResult<T> = Result<T, ResolverError>;
 
 pub const RESOLVE_ARG: &str = "--resolve-deps";
 pub const RESOLVE_METHOD: &str = "resolve";
-
-/// An external dependency has the form `{ r.<res> = <data> }`. External
-/// dependencies are resolved by external resolvers.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(try_from = "RField", into = "RField")]
-pub struct ExternalDependency {
-    /// The `<res>` in `{ r.<res> = <data> }`
-    pub resolver: ResolverName,
-
-    /// The `<data>` in `{ r.<res> = <data> }`
-    data: toml::Value,
-
-    /// The file containing this dependency
-    containing_file: FileHandle,
-}
 
 #[derive(Error, Debug)]
 pub enum ResolverError {
@@ -84,65 +70,24 @@ pub enum ResolverError {
     },
 }
 
-/// Convenience type for serializing/deserializing external deps
-#[derive(Serialize, Deserialize)]
-struct RField {
-    r: BTreeMap<String, toml::Value>,
-
-    #[serde(skip, default = "TheFile::handle")]
-    containing_file: FileHandle,
-}
-
-/// Requests from the package mananger to the external resolver
-#[derive(Serialize, Debug)]
-struct ResolveRequest<EnvironmentID: Serialize> {
-    #[serde(default)]
-    env: EnvironmentID,
-    data: toml::Value,
-    #[serde(skip)]
-    containing_file: FileHandle,
-}
-
-/// Responses from the external resolver back to the package manager
-#[derive(Deserialize)]
-#[serde(bound = "")]
-struct ResolveResponse {
-    result: UnpinnedDependencyInfo,
-    warnings: Vec<String>,
-}
-
-impl ExternalDependency {
-    /// Replace all [ExternalDependency]s in `deps` with internal dependencies by invoking their
-    /// resolvers.
-    ///
-    /// Note that the set of entries may be changed because external dependencies may be resolved
-    /// differently for different environments - this may cause the addition of a new
-    /// dep-replacement;
-    /// this method may also optimize by removing unnecessary dep-replacements.
-    ///
-    /// Expects all environments in [deps] to also be contained in [envs]
-    pub async fn resolve<EnvironmentID: Serialize + Clone>(
-        deps: &mut DependencySet<UnpinnedDependencyInfo>,
+impl Dependency<Resolved> {
+    /// Replace all external dependencies in `deps` with internal dependencies by invoking their
+    /// resolvers. Requires all environments in `deps` to be contained in `envs`
+    pub async fn resolve(
+        deps: DependencySet<Dependency<Combined>>,
         envs: &BTreeMap<EnvironmentName, EnvironmentID>,
-    ) -> ResolverResult<()> {
+    ) -> ResolverResult<DependencySet<Dependency<Resolved>>> {
         // iterate over [deps] to collect queries for external resolvers
-        let mut requests: BTreeMap<ResolverName, DependencySet<ResolveRequest<EnvironmentID>>> =
-            BTreeMap::new();
+        let mut requests: BTreeMap<ResolverName, DependencySet<ResolveRequest>> = BTreeMap::new();
 
         for (env, pkg, dep) in deps.iter() {
-            if let UnpinnedDependencyInfo::External(dep) = dep {
-                let env_id = envs
-                    .get(env)
-                    .expect("all environments must be in [envs]")
-                    .clone();
-
-                requests.entry(dep.resolver.clone()).or_default().insert(
+            if let Combined::External(ext) = &dep.dep_info {
+                requests.entry(ext.resolver.clone()).or_default().insert(
                     env.clone(),
                     pkg.clone(),
                     ResolveRequest {
-                        env: env_id,
-                        data: dep.data.clone(),
-                        containing_file: dep.containing_file,
+                        env: envs[dep.use_environment()].clone(),
+                        data: ext.data.clone(),
                     },
                 );
             }
@@ -152,14 +97,28 @@ impl ExternalDependency {
         let responses = requests
             .into_iter()
             .map(async |(resolver, reqs)| resolve_single(resolver, reqs).await);
-        let responses = DependencySet::merge(try_join_all(responses).await?);
+        let mut responses = DependencySet::merge(try_join_all(responses).await?);
 
-        // put the responses back in (note: insert replaces the old External deps)
-        for (env, pkg, dep) in responses.into_iter() {
-            deps.insert(env, pkg, dep);
+        // build the output
+        let mut result = DependencySet::new();
+        for (env, pkg, dep) in deps.into_iter() {
+            let ext = responses.remove(&env, &pkg);
+            result.insert(
+                env,
+                pkg,
+                dep.map(|info| match info {
+                    Combined::Local(loc) => Resolved::Local(loc),
+                    Combined::Git(git) => Resolved::Git(git),
+                    Combined::OnChain(onchain) => Resolved::OnChain(onchain),
+                    Combined::External(_) => {
+                        ext.expect("resolve_single outputs same keys as input")
+                    }
+                }),
+            );
         }
+        assert!(responses.is_empty());
 
-        Ok(())
+        Ok(result)
     }
 }
 
@@ -203,57 +162,28 @@ impl ResolverError {
     }
 }
 
-impl TryFrom<RField> for ExternalDependency {
-    type Error = String;
-
-    /// Convert from [RField] (`{r.<res> = <data>}`) to [ExternalDependency] (`{ res, data }`)
-    fn try_from(value: RField) -> Result<Self, Self::Error> {
-        if value.r.len() != 1 {
-            return Err(
-                "Externally resolved dependencies may only have one `r.<resolver>` field"
-                    .to_string(),
-            );
-        }
-
-        let (resolver, data) = value
-            .r
-            .into_iter()
-            .next()
-            .expect("iterator of length 1 structure is nonempty");
-
-        Ok(Self {
-            resolver,
-            data,
-            containing_file: value.containing_file,
-        })
-    }
-}
-
-impl From<ExternalDependency> for RField {
-    /// Translate from [ExternalDependency] `{ res, data }` to [RField] `{r.<res> = data}`
-    fn from(value: ExternalDependency) -> Self {
-        let ExternalDependency {
-            resolver,
-            data,
-            containing_file: containing_dir,
-        } = value;
-
-        RField {
-            containing_file: containing_dir,
-            r: BTreeMap::from([(resolver, data)]),
-        }
-    }
-}
-
-/// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
-/// performed for all environments in [envs]. Ensures that the returned dependency set contains no
-/// externally resolved dependencies.
-///
-/// Assumes `requests` is nonempty
-async fn resolve_single<E: Serialize>(
+/// Resolve the dependencies in `requests` with the external resolver `resolver`
+async fn resolve_single(
     resolver: ResolverName,
-    requests: DependencySet<ResolveRequest<E>>,
-) -> ResolverResult<DependencySet<UnpinnedDependencyInfo>> {
+    requests: DependencySet<ResolveRequest>,
+) -> ResolverResult<DependencySet<Resolved>> {
+    let (envs, pkgs, reqs): (Vec<_>, Vec<_>, Vec<_>) = requests.into_iter().multiunzip();
+
+    let resps = call_resolver(resolver, reqs);
+
+    let result: DependencySet<ResolveResponse> = izip!(envs, pkgs, resps.await?).collect();
+
+    Ok(result
+        .into_iter()
+        .map(|(env, pkg, resp)| (env, pkg, resp.0))
+        .collect())
+}
+
+/// Invoke the `resolver` process and feed it `reqs`; parse the output and log as appropriate
+async fn call_resolver(
+    resolver: ResolverName,
+    reqs: Vec<ResolveRequest>,
+) -> ResolverResult<Vec<ResolveResponse>> {
     let mut command = Command::new(&resolver);
     command
         .arg(RESOLVE_ARG)
@@ -280,26 +210,10 @@ async fn resolve_single<E: Serialize>(
         child.stdin.take().expect("stdin is available"),
     );
 
-    let (envs, pkgs, reqs): (Vec<_>, Vec<_>, Vec<_>) = requests.into_iter().multiunzip();
-
-    // TODO: There is a potential bug here: we just use the file from the first request, rather
-    // than pairing each request with its own file. This almost certainly isn't a problem in
-    // practice because we probably only care about the file if external resolvers are
-    // returning local dependencies, which they almost certainly shouldn't. Moreover, we're
-    // currently only calling `resolve` on a batch of deps from the same manifest, so there
-    // shouldn't be confusion. If this becomes a problem, we probably need to sort out requests
-    // into common files, although at that point we'll probably need to replace or fix TheFile
-    // anyway due to threading problems.
-
-    let parsing_file = reqs.first().expect("nonempty input").containing_file;
-
-    let resps = TheFile::with_existing(parsing_file, async || {
-        endpoint
-            .batch_call("resolve", reqs)
-            .await
-            .map_err(|e| ResolverError::bad_resolver(&resolver, e.to_string()))
-    })
-    .await;
+    let resps = endpoint.batch_call("resolve", reqs).await.map_err(|e| {
+        debug!("deserialization error: {e:?}");
+        ResolverError::bad_resolver(&resolver, e.to_string())
+    });
 
     let output = child
         .wait_with_output()
@@ -321,17 +235,5 @@ async fn resolve_single<E: Serialize>(
         return Err(ResolverError::nonzero_exit(&resolver, output.status));
     }
 
-    let result: DependencySet<UnpinnedDependencyInfo> = izip!(envs, pkgs, resps?).collect();
-
-    // ensure no externally resolved responses
-    for (_, _, dep) in result.iter() {
-        if let UnpinnedDependencyInfo::External(_) = dep {
-            return Err(ResolverError::bad_resolver(
-                &resolver,
-                "resolvers must return resolved dependencies",
-            ));
-        }
-    }
-
-    Ok(result)
+    Ok(resps?.collect())
 }

@@ -12,14 +12,12 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::manifest::Manifest;
-use super::{
-    lockfile::{Lockfile, Publication},
-    paths::PackagePath,
-};
+use super::paths::PackagePath;
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
+    schema::{LocalDepInfo, LockfileDependencyInfo, Pin},
 };
 use move_core_types::identifier::Identifier;
 use tracing::{debug, info};
@@ -36,6 +34,9 @@ pub struct Package<F: MoveFlavor> {
     // Package long term?
     manifest: Manifest<F>,
     path: PackagePath,
+
+    /// The way this package should be serialized to the lockfile
+    source: LockfileDependencyInfo,
 }
 
 impl<F: MoveFlavor> Package<F> {
@@ -47,7 +48,11 @@ impl<F: MoveFlavor> Package<F> {
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
         let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
 
-        Ok(Self { manifest, path })
+        Ok(Self {
+            manifest,
+            path,
+            source: LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }),
+        })
     }
 
     /// Fetch [dep] and load a package from the fetched source
@@ -56,7 +61,11 @@ impl<F: MoveFlavor> Package<F> {
         let path = PackagePath::new(dep.fetch().await?)?;
         let manifest = Manifest::read_from_file(path.manifest_path())?;
 
-        Ok(Self { manifest, path })
+        Ok(Self {
+            manifest,
+            path,
+            source: dep.into(),
+        })
     }
 
     /// The path to the root directory of this package. This path is guaranteed to exist
@@ -72,6 +81,10 @@ impl<F: MoveFlavor> Package<F> {
     /// TODO: comment
     pub fn manifest(&self) -> &Manifest<F> {
         &self.manifest
+    }
+
+    pub fn dep_for_self(&self) -> &LockfileDependencyInfo {
+        &self.source
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`

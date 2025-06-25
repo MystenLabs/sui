@@ -8,16 +8,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::package::paths::PackagePath;
+use crate::{package::paths::PackagePath, schema::OnChainDepInfo};
 
-/// An on-chain dependency `{on-chain = true}`
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct OnChainDependency {
-    #[serde(rename = "on-chain")]
-    on_chain: ConstTrue,
-}
-
-impl OnChainDependency {
+impl OnChainDepInfo {
     pub fn unfetched_path(&self) -> PathBuf {
         todo!()
     }
@@ -30,7 +23,7 @@ impl OnChainDependency {
 /// The constant `true`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(try_from = "bool", into = "bool")]
-struct ConstTrue;
+pub struct ConstTrue;
 
 impl TryFrom<bool> for ConstTrue {
     type Error = &'static str;

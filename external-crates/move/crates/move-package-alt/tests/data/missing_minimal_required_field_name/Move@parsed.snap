@@ -5,7 +5,7 @@ error: Error while loading `"tests/data/missing_minimal_required_field_name/Move
   ┌─ "tests/data/missing_minimal_required_field_name/Move.toml":1:1
   │  
 1 │ ╭ [package]
-2 │ │ edition = "2024.beta"
+2 │ │ edition = "2025"
 3 │ │ version = "0.1.1"
   │ ╰─────────────────^
   │  
