@@ -131,10 +131,7 @@ fn command<Mode: ExecutionMode>(
     result: &T::ResultType,
 ) -> Result<Vec<IsDirty>, ExecutionError> {
     Ok(match &command.value {
-        T::Command_::MoveCall(call) => {
-            let result_dirties = move_call::<Mode>(env, context, call, result)?;
-            result_dirties
-        }
+        T::Command_::MoveCall(call) => move_call::<Mode>(env, context, call, result)?,
         T::Command_::TransferObjects(objs, recipient) => {
             arguments(env, context, objs);
             argument(env, context, recipient);

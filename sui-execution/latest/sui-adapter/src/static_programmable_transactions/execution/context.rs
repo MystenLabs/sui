@@ -39,7 +39,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
     sync::Arc,
-    vec,
 };
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
