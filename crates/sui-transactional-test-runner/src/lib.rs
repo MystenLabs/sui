@@ -76,6 +76,7 @@ pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Erro
         "checkpoint",
         "child_count",
         "children",
+        "dynamic_fields",
         "mvcc",
     ];
     let mut components = path.parent().unwrap().components();
