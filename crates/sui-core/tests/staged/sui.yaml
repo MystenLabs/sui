@@ -1327,11 +1327,7 @@ UnchangedSharedKind:
         NEWTYPE:
           TYPENAME: SequenceNumber
     4:
-      PerEpochConfigDEPRECATED: UNIT
-    5:
-      PerEpochConfigWithSeqno:
-        NEWTYPE:
-          TYPENAME: SequenceNumber
+      PerEpochConfig: UNIT
 UpgradeInfo:
   STRUCT:
     - upgraded_id:
