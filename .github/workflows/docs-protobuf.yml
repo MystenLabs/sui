@@ -1,0 +1,67 @@
+name: Generate Protobuf Docs After Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  generate-docs-if-merged:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Install protoc-gen-doc
+        run: |
+          go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Generate documentation.json
+        run: |
+          mkdir -p crates/sui-rpc-api/proto
+          
+          PROTO_FILES=$(find crates/sui-rpc-api/proto -name "*.proto")
+
+          protoc \
+          --proto_path=crates/sui-rpc-api/proto \
+          --doc_out=json,crates/sui-rpc-api/proto/documentation.json:. \
+          $PROTO_FILES
+
+      - name: Check for changes
+        id: git-diff
+        run: |
+          git add crates/sui-rpc-api/proto/documentation.json
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR with updated docs
+        if: steps.git-diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update generated documentation.json"
+          branch: update/proto-docs-${{ github.run_id }}
+          title: "[docs][auto] Update proto docs after merge of PR #${{ github.event.pull_request.number }}"
+          body: |
+            This PR includes regenerated protobuf documentation (`documentation.json`) based on changes merged in PR #${{ github.event.pull_request.number }}.
+          labels: auto-update, documentation
