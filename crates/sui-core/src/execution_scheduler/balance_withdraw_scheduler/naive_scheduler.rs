@@ -10,7 +10,7 @@ use tracing::debug;
 use crate::execution_scheduler::balance_withdraw_scheduler::{
     balance_read::AccountBalanceRead,
     scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
-    BalanceSettlement, ScheduleResult,
+    BalanceSettlement, ScheduleResult, ScheduleStatus,
 };
 
 /// A naive implementation of the balance withdraw scheduler that does not attempt to optimize the scheduling.
@@ -110,9 +110,15 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                         }
                     }
                 }
-                let _ = sender.send(ScheduleResult::SufficientBalance);
+                let _ = sender.send(ScheduleResult {
+                    tx_digest: withdraw.tx_digest,
+                    status: ScheduleStatus::SufficientBalance,
+                });
             } else {
-                let _ = sender.send(ScheduleResult::InsufficientBalance);
+                let _ = sender.send(ScheduleResult {
+                    tx_digest: withdraw.tx_digest,
+                    status: ScheduleStatus::InsufficientBalance,
+                });
             }
         }
     }

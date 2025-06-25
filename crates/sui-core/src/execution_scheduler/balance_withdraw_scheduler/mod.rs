@@ -18,9 +18,9 @@ mod tests;
 #[cfg(test)]
 mod e2e_tests;
 
-/// The result of scheduling the withdraw reservations for a transaction.
+/// The status of scheduling the withdraw reservations for a transaction.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum ScheduleResult {
+pub(crate) enum ScheduleStatus {
     /// We know for sure that the withdraw reservations in this transactions all have enough balance.
     /// This transaction can be executed normally as soon as its object dependencies are ready.
     SufficientBalance,
@@ -32,6 +32,13 @@ pub(crate) enum ScheduleResult {
     /// The caller should stop the scheduling of this transaction.
     /// This is to avoid scheduling the same transaction multiple times.
     AlreadyScheduled,
+}
+
+/// The result of scheduling the withdraw reservations for a transaction.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ScheduleResult {
+    pub tx_digest: TransactionDigest,
+    pub status: ScheduleStatus,
 }
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed

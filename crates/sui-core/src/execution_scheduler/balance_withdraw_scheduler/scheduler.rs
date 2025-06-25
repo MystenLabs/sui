@@ -5,10 +5,11 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
     balance_read::AccountBalanceRead, naive_scheduler::NaiveBalanceWithdrawScheduler,
-    BalanceSettlement, ScheduleResult, TxBalanceWithdraw,
+    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
 };
+use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use sui_types::{base_types::SequenceNumber, digests::TransactionDigest};
+use sui_types::base_types::SequenceNumber;
 use tokio::sync::oneshot;
 use tracing::debug;
 
@@ -36,15 +37,11 @@ impl WithdrawReservations {
     pub fn new(
         accumulator_version: SequenceNumber,
         withdraws: Vec<TxBalanceWithdraw>,
-    ) -> (
-        Self,
-        BTreeMap<TransactionDigest, oneshot::Receiver<ScheduleResult>>,
-    ) {
-        let (senders, receivers) = withdraws
-            .iter()
-            .map(|withdraw| {
+    ) -> (Self, FuturesUnordered<oneshot::Receiver<ScheduleResult>>) {
+        let (senders, receivers) = (0..withdraws.len())
+            .map(|_| {
                 let (sender, receiver) = oneshot::channel();
-                (sender, (withdraw.tx_digest, receiver))
+                (sender, receiver)
             })
             .unzip();
         (
@@ -92,7 +89,7 @@ impl BalanceWithdrawScheduler {
         &self,
         accumulator_version: SequenceNumber,
         withdraws: Vec<TxBalanceWithdraw>,
-    ) -> BTreeMap<TransactionDigest, oneshot::Receiver<ScheduleResult>> {
+    ) -> FuturesUnordered<oneshot::Receiver<ScheduleResult>> {
         debug!(
             "schedule_withdraws: {:?}, {:?}",
             accumulator_version, withdraws
@@ -125,8 +122,11 @@ impl BalanceWithdrawScheduler {
                     // It is possible to receive withdraw reservations for the same accumulator version
                     // multiple times due to the race between consensus and checkpoint execution.
                     // Hence we may receive a version from the past after the version is updated.
-                    for sender in event.senders {
-                        let _ = sender.send(ScheduleResult::AlreadyScheduled);
+                    for (withdraw, sender) in event.withdraws.into_iter().zip(event.senders) {
+                        let _ = sender.send(ScheduleResult {
+                            tx_digest: withdraw.tx_digest,
+                            status: ScheduleStatus::AlreadyScheduled,
+                        });
                     }
                     continue;
                 }

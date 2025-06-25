@@ -9,16 +9,17 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
         balance_withdraw_scheduler::{
-            scheduler::BalanceWithdrawScheduler, BalanceSettlement, ScheduleResult,
+            scheduler::BalanceWithdrawScheduler, BalanceSettlement, ScheduleStatus,
             TxBalanceWithdraw,
         },
         ExecutingGuard, PendingCertificateStats,
     },
 };
+use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 use sui_config::node::AuthorityOverloadConfig;
@@ -258,36 +259,42 @@ impl ExecutionScheduler {
                     reservations: tx_withdraws,
                 });
         }
-        let mut receivers = BTreeMap::new();
+        let mut receivers = FuturesUnordered::new();
         for (version, tx_withdraws) in withdraws {
             receivers.extend(scheduler.schedule_withdraws(version, tx_withdraws));
         }
         let scheduler = self.clone();
         let epoch_store = epoch_store.clone();
         spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+            let mut cert_map = HashMap::new();
             for (cert, _, env) in certs {
-                let tx_digest = *cert.digest();
-                let receiver = receivers.remove(&tx_digest).expect("receiver must exist");
-                let result = receiver.await;
+                cert_map.insert(*cert.digest(), (cert, env));
+            }
+            while let Some(result) = receivers.next().await {
                 match result {
-                    Ok(ScheduleResult::InsufficientBalance) => {
-                        debug!(
-                            ?tx_digest,
-                            "Balance withdraw scheduling result: Insufficient balance"
-                        );
-                        let env = env.with_insufficient_balance();
-                        scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
-                    }
-                    Ok(ScheduleResult::SufficientBalance) => {
-                        debug!(?tx_digest, "Balance withdraw scheduling result: Success");
-                        let env = env.with_sufficient_balance();
-                        scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
-                    }
-                    Ok(ScheduleResult::AlreadyScheduled) => {
-                        debug!(?tx_digest, "Withdraw already scheduled or executed");
-                    }
+                    Ok(result) => match result.status {
+                        ScheduleStatus::InsufficientBalance => {
+                            let tx_digest = result.tx_digest;
+                            debug!(
+                                ?tx_digest,
+                                "Balance withdraw scheduling result: Insufficient balance"
+                            );
+                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                        }
+                        ScheduleStatus::SufficientBalance => {
+                            let tx_digest = result.tx_digest;
+                            debug!(?tx_digest, "Balance withdraw scheduling result: Success");
+                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                        }
+                        ScheduleStatus::AlreadyScheduled => {
+                            let tx_digest = result.tx_digest;
+                            debug!(?tx_digest, "Withdraw already scheduled or executed");
+                        }
+                    },
                     Err(e) => {
-                        error!(?tx_digest, "Withdraw scheduler stopped: {:?}", e);
+                        error!("Withdraw scheduler stopped: {:?}", e);
                     }
                 }
             }
