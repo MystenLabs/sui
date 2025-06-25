@@ -184,14 +184,14 @@ where
         // Run full effects request and acknowledgments concurrently
         let (full_effects_result, acknowledgments_result) = tokio::join!(
             self.get_full_effects_with_retry(
-                &auth_agg,
+                auth_agg,
                 transaction,
                 consensus_position,
                 epoch,
                 options
             ),
             self.wait_for_acknowledgments_with_retry(
-                &auth_agg,
+                auth_agg,
                 transaction,
                 consensus_position,
                 epoch,
@@ -217,7 +217,7 @@ where
                                 effects_digest
                             );
 
-                            return Ok(QuorumSubmitTransactionResponse {
+                            Ok(QuorumSubmitTransactionResponse {
                                 effects: details,
                                 events: executed_data.events,
                                 input_objects: if !executed_data.input_objects.is_empty() {
@@ -231,18 +231,18 @@ where
                                     None
                                 },
                                 auxiliary_data: None,
-                            });
+                            })
                         } else {
-                            return Err(TransactionDriverError::EffectsDigestMismatch {
+                            Err(TransactionDriverError::EffectsDigestMismatch {
                                 quorum_expected: effects_digest.to_string(),
                                 actual: confirmed_digest.to_string(),
-                            });
+                            })
                         }
                     }
-                    Err(e) => return Err(e),
+                    Err(e) => Err(e),
                 }
             }
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
     }
 
@@ -268,7 +268,7 @@ where
                 transaction_position: consensus_position,
                 include_details: true,
             })
-            .map_err(|e| TransactionDriverError::SerializationError(e))?;
+            .map_err(TransactionDriverError::SerializationError)?;
 
             match timeout(
                 Duration::from_secs(2),
@@ -344,7 +344,7 @@ where
         let mut futures = Vec::new();
         for (name, client) in clients {
             let client_clone = client.clone();
-            let name_clone = name.clone();
+            let name_clone = *name;
             let transaction_digest = *transaction.digest();
 
             let future = async move {
@@ -354,7 +354,7 @@ where
                     transaction_position: consensus_position,
                     include_details: false,
                 })
-                .map_err(|e| TransactionDriverError::SerializationError(e))?;
+                .map_err(TransactionDriverError::SerializationError)?;
 
                 match timeout(
                     Duration::from_secs(2),

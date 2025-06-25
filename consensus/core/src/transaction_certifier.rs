@@ -510,9 +510,11 @@ impl VoteInfo {
         }
         // The block is certified.
         tracing::debug!(
-            "Block tx count: {} & rejected txn count: {}",
+            "Block {} certified with tx count: {} & rejected txn count: {}:{:?}",
+            block.digest(),
             block.transactions().len(),
-            rejected.len()
+            rejected.len(),
+            rejected
         );
         let accepted_txn_count = block.transactions().len().saturating_sub(rejected.len());
         context

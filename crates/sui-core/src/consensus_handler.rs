@@ -724,6 +724,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     if parsed.rejected {
                         // TODO(fastpath): Add metrics for rejected transactions.
                         if parsed.transaction.kind.is_user_transaction() {
+                            debug!(
+                            "[handle consensus commit] Try setting transaction status {:?}: {:?}",
+                            position, ConsensusTxStatus::Rejected
+                        );
                             self.epoch_store
                                 .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                         }
@@ -732,6 +736,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         continue;
                     }
                     if parsed.transaction.kind.is_user_transaction() {
+                        debug!(
+                            "[handle consensus commit] Try setting transaction status {:?}: {:?}",
+                            position,
+                            ConsensusTxStatus::Finalized
+                        );
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
                     }
@@ -1279,6 +1288,11 @@ impl ConsensusBlockHandler {
                     index: txn_idx as TransactionIndex,
                 };
                 if parsed.rejected {
+                    debug!(
+                        "[handle fast path] Try setting transaction status {:?}: {:?}",
+                        position,
+                        ConsensusTxStatus::Rejected
+                    );
                     // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
@@ -1288,6 +1302,11 @@ impl ConsensusBlockHandler {
                         .inc();
                     continue;
                 }
+                debug!(
+                    "[handle fast path] Try setting transaction status {:?}: {:?}",
+                    position,
+                    ConsensusTxStatus::FastpathCertified
+                );
                 self.epoch_store
                     .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
 

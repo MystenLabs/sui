@@ -27,7 +27,7 @@ pub enum TransactionDriverError {
     TransactionRejected(String),
     #[error("Transaction expired at round: {0}")]
     TransactionExpired(String),
-    #[error("Insufficient responses from quorum: total_responses_weight {total_responses_weight}, executed_weight {executed_weight}, executed_weight {executed_weight}. Errors: {errors:?}")]
+    #[error("Insufficient responses from quorum: total_responses_weight {total_responses_weight}, executed_weight {executed_weight}, expired_weight {expired_weight}, rejected_weight {rejected_weight}. Errors: {errors:?}")]
     InsufficientResponses {
         total_responses_weight: u64,
         executed_weight: u64,

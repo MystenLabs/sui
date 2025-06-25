@@ -79,15 +79,29 @@ impl ConsensusTxStatusCache {
             match status_entry {
                 Entry::Vacant(entry) => {
                     // Set the status for the first time.
+                    debug!(
+                        "Transaction status is set for the first time {:?}: {:?}",
+                        pos, status
+                    );
                     entry.insert(status);
                 }
                 Entry::Occupied(mut entry) => {
                     let old_status = *entry.get();
                     match (old_status, status) {
                         // If the statuses are the same, no update is needed.
-                        (s1, s2) if s1 == s2 => return,
+                        (s1, s2) if s1 == s2 => {
+                            debug!(
+                                "Transaction at pos {:?} status is not updated old status {:?} & new status {:?}",
+                                pos, old_status, status
+                            );
+                            return;
+                        }
                         // FastpathCertified is transient and can be updated to other statuses.
                         (ConsensusTxStatus::FastpathCertified, _) => {
+                            debug!(
+                                "Transaction at pos {:?} status was FastpathCertified {:?} and setting to new status {:?}",
+                                pos, old_status, status
+                            );
                             entry.insert(status);
                         }
                         // This happens when statuses arrive out-of-order, and is a no-op.
@@ -95,6 +109,10 @@ impl ConsensusTxStatusCache {
                             ConsensusTxStatus::Rejected | ConsensusTxStatus::Finalized,
                             ConsensusTxStatus::FastpathCertified,
                         ) => {
+                            debug!(
+                                "Transaction at pos {:?} status was Rejected or Finalized {:?} and no need to update to FastPathCertified {:?}",
+                                pos, old_status, status
+                            );
                             return;
                         }
                         // Transitions between terminal statuses are invalid.

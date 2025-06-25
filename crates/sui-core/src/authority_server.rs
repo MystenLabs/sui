@@ -1171,7 +1171,7 @@ impl ValidatorService {
                             if status == ConsensusTxStatus::Rejected {
                                 return Ok(WaitForEffectsResponse::Rejected { reason: RejectReason::None });
                             }
-                            assert!(matches!(status, ConsensusTxStatus::Finalized));
+                            assert!(matches!(status, ConsensusTxStatus::Finalized), "Transaction {} at position {:?} should now be finalized and has status {status:?} with cur_status {cur_status:?}", request.transaction_digest, request.transaction_position);
                             // Update the current status so that notify_read_transaction_status will no
                             // longer be triggered again after the transaction is finalized.
                             cur_status = status;
