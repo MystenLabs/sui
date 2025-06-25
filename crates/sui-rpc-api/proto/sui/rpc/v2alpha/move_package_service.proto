@@ -12,6 +12,7 @@ service MovePackageService {
   rpc GetModule(GetModuleRequest) returns (GetModuleResponse);
   rpc GetDatatype(GetDatatypeRequest) returns (GetDatatypeResponse);
   rpc GetFunction(GetFunctionRequest) returns (GetFunctionResponse);
+  rpc ListPackageVersions(ListPackageVersionsRequest) returns (ListPackageVersionsResponse);
 }
 
 message GetPackageRequest {
@@ -67,4 +68,21 @@ message GetFunctionRequest {
 message GetFunctionResponse {
   // The function.
   optional FunctionDescriptor function = 1;
+}
+
+message ListPackageVersionsRequest {
+  // Required. The `storage_id` of any version of the package.
+  optional string package_id = 1;
+}
+
+message ListPackageVersionsResponse {
+  message PackageVersion {
+    // The storage ID of this package version
+    optional string package_id = 1;
+    // The version number
+    optional uint64 version = 2;
+  }
+  
+  // List of all package versions, ordered by version.
+  repeated PackageVersion versions = 1;
 }
