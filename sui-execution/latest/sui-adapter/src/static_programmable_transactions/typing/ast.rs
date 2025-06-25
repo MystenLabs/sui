@@ -12,6 +12,7 @@ use sui_types::base_types::ObjectID;
 // AST Nodes
 //**************************************************************************************************
 
+#[derive(Debug)]
 pub struct Transaction {
     pub inputs: Inputs,
     pub commands: Commands,
@@ -27,6 +28,7 @@ pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
 
+#[derive(Debug)]
 pub enum InputType {
     Bytes(
         /* all types that this must satisfy */

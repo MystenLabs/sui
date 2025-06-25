@@ -423,7 +423,7 @@ fn argument_(
                 actual_ty,
                 inner,
             )?;
-            T::Argument__::Borrow(/* mut */ false, location)
+            T::Argument__::Borrow(/* mut */ *is_mut, location)
         }
         (actual_ty, _) => {
             check_type(command_and_arg_idx, actual_ty, expected_ty)?;

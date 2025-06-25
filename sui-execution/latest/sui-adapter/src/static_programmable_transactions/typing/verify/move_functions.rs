@@ -67,8 +67,15 @@ impl Context {
         }
     }
 
+    /// Marks mutable usages as dirty. We don't care about `Move` since the value will be moved
+    /// and that location is no longer accessible.
     fn mark_dirty(&mut self, arg: &T::Argument) {
-        self.mark_loc_dirty(arg.value.0.location())
+        match &arg.value.0 {
+            T::Argument__::Borrow(/* mut */ true, loc) => self.mark_loc_dirty(*loc),
+            T::Argument__::Borrow(/* mut */ false, _)
+            | T::Argument__::Use(_)
+            | T::Argument__::Read(_) => (),
+        }
     }
 
     fn mark_loc_dirty(&mut self, location: T::Location) {
