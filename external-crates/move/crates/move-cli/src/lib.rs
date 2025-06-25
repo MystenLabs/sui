@@ -4,7 +4,7 @@
 
 use base::{
     build::Build, coverage::Coverage, disassemble::Disassemble, docgen::Docgen, info::Info,
-    migrate::Migrate, new::New, stackless::Stackless, summary::Summary, test::Test,
+    migrate::Migrate, new::New, summary::Summary, test::Test,
 };
 use move_package::{BuildConfig, resolution::resolution_graph::ResolvedGraph};
 
@@ -74,7 +74,6 @@ pub enum Command {
         #[clap(subcommand)]
         cmd: sandbox::cli::SandboxCommand,
     },
-    Stackless(Stackless),
     Summary(Summary),
 }
 
@@ -115,9 +114,6 @@ pub fn run_cli(
                 None,
                 None,
             ),
-        Command::Stackless(c) => {
-            c.execute(move_args.package_path.as_deref(), move_args.build_config)
-        }
     }
 }
 

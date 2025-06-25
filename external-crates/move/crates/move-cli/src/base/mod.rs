@@ -8,7 +8,6 @@ pub mod docgen;
 pub mod info;
 pub mod migrate;
 pub mod new;
-pub mod stackless;
 pub mod summary;
 pub mod test;
 
