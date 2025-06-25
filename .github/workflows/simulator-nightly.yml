@@ -38,13 +38,13 @@ jobs:
       - name: Install Teleport
         uses: teleport-actions/setup@176c25dfcd19cd31a252f275d579822b243e7b9c # pin@v1.0.6
         with:
-          version: 17.4.6
+          version: 17.5.2
       - name: Authorize against Teleport
         id: auth
         uses: teleport-actions/auth@d48447391aa28b202c98ae3f3358097025c32511 # pin@v2.0.4
         with:
           # Specify the publically accessible address of your Teleport proxy.
-          proxy: mystenlabs.teleport.sh:443
+          proxy: mysten.teleport.sh:443
           # Specify the name of the join token for your bot.
           token: sui-simtest-token
           # Specify the length of time that the generated credentials should be
