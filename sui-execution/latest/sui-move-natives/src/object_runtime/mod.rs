@@ -302,10 +302,13 @@ impl<'a> ObjectRuntime<'a> {
         } else {
             TransferResult::OwnerChanged
         };
-        debug_assert_eq!(
-            end_of_transaction,
-            matches!(transfer_result, TransferResult::SameOwner),
-        );
+        // assert!(end of transaction ==> same owner)
+        if end_of_transaction && !matches!(transfer_result, TransferResult::SameOwner) {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Untransferred object {} had its owner change", id)),
+            );
+        }
 
         // Metered transactions don't have limits for now
 
