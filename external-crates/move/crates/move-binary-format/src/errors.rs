@@ -239,7 +239,6 @@ impl PartialVMError {
     }
 
     pub fn new(major_status: StatusCode) -> Self {
-        debug_assert_ne!(major_status.status_type(), StatusType::InvariantViolation);
         Self(Box::new(PartialVMError_ {
             major_status,
             sub_status: None,
