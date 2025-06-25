@@ -47,7 +47,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
-                let name = format!("{}::{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
+                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
                 let stackless_bytecode = format!("{}", module);
                 insta_assert! {
                     input_path: file_path,
@@ -65,7 +65,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
         let pkg_name = pkg.name;
         for (module_name, module) in &pkg.modules {
             if test_module_names.contains(module_name) {
-                let name = format!("{}::{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
+                let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
                 let stackless_bytecode = format!("{}", module);
                 insta_assert! {
                     input_path: file_path,
