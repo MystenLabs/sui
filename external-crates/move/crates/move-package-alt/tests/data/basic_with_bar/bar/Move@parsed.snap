@@ -1,37 +1,35 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-Manifest {
+ParsedManifest {
     package: PackageMetadata {
-        name: Located {
-            loc: Location {
-                file: "tests/data/basic_with_bar/bar/Move.toml",
-                span: 17..22,
-            },
+        name: Spanned {
+            span: 17..22,
             value: Identifier(
                 "bar",
             ),
         },
-        edition: Located {
-            loc: Location {
-                file: "tests/data/basic_with_bar/bar/Move.toml",
-                span: 33..44,
-            },
-            value: "2024.beta",
-        },
-        metadata: (),
+        edition: "2025",
     },
     environments: {
-        "mainnet": "35834a8a",
+        Spanned {
+            span: 124..131,
+            value: "mainnet",
+        }: Spanned {
+            span: 134..144,
+            value: "35834a8a",
+        },
     },
     dependencies: {
-        Identifier(
-            "Sui",
-        ): ManifestDependency {
+        Spanned {
+            span: 161..164,
+            value: Identifier(
+                "Sui",
+            ),
+        }: DefaultDependency {
             dependency_info: Local(
-                LocalDependency {
+                LocalDepInfo {
                     local: "../../../../../../../../../crates/sui-framework/packages/sui-framework",
-                    relative_to_parent_dir: "tests/data/basic_with_bar/bar",
                 },
             ),
             is_override: false,

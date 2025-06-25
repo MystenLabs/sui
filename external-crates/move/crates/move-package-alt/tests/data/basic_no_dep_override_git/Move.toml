@@ -1,6 +1,6 @@
 [package]
 name = "example"
-edition = "2024.beta"
+edition = "2025"
 license = "Apache-2.0"
 authors = ["Move Team"]
 
@@ -13,4 +13,3 @@ foo = { rename-from = "Foo", override = true, rev = "releases/v1", git = "https:
 
 [dep-replacements]
 mainnet.foo = { original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_alpha" }
-
