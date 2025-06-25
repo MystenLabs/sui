@@ -72,15 +72,24 @@ impl MergedValue {
                 MergedValue::SumU128(merge_amount),
                 MergedValue::SumU128(split_amount),
             ) => {
-                let merge_amount = builder.pure(merge_amount).unwrap();
-                let split_amount = builder.pure(split_amount).unwrap();
-                builder.programmable_move_call(
-                    SUI_FRAMEWORK_PACKAGE_ID,
-                    Identifier::new("accumulator").unwrap(),
-                    Identifier::new("settle_u128").unwrap(),
-                    vec![address.ty.clone()],
-                    vec![root, address_arg, merge_amount, split_amount],
-                );
+                // Net out the merge and split amounts.
+                let (merge_amount, split_amount) = if merge_amount >= split_amount {
+                    (merge_amount - split_amount, 0)
+                } else {
+                    (0, split_amount - merge_amount)
+                };
+
+                if merge_amount != 0 || split_amount != 0 {
+                    let merge_amount = builder.pure(merge_amount).unwrap();
+                    let split_amount = builder.pure(split_amount).unwrap();
+                    builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("accumulator").unwrap(),
+                        Identifier::new("settle_u128").unwrap(),
+                        vec![address.ty.clone()],
+                        vec![root, address_arg, merge_amount, split_amount],
+                    );
+                }
             }
             (_, MergedValue::SumU128U128(_v1, _v2), MergedValue::SumU128U128(_w1, _w2)) => todo!(),
             _ => fatal!("invalid merge {:?} {:?}", merge, split),

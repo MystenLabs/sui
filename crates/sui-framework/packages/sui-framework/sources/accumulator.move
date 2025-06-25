@@ -105,6 +105,8 @@ fun settle_u128<T>(
     ctx: &TxContext,
 ) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
+    // Merge and split should be netted out prior to calling this function.
+    assert!((merge == 0 ) != (split == 0), EInvalidSplitAmount);
 
     let name = AccumulatorName<T> { address: owner };
 
