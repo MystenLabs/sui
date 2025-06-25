@@ -32,6 +32,7 @@ use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiError, SuiResult},
     gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
@@ -47,6 +48,17 @@ pub struct ReplayExecutor {
     metrics: Arc<LimitsMetrics>,
 }
 
+// Returned struct from execution. Contains all the data related to a transaction.
+// Transaction data and effects (both expected and actual) and the caches containing
+// the objects used during execution.
+pub struct TxnContextAndEffects {
+    pub execution_effects: TransactionEffects, // effects of the replay execution
+    pub expected_effects: TransactionEffects,  // expected effects as found in the transaction data
+    pub gas_status: SuiGasStatus,              // gas status of the replay execution
+    pub object_cache: BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
+    pub inner_store: InnerTemporaryStore,      // temporary store used during execution
+}
+
 // Entry point. Executes a transaction.
 // Return all the information that can be used by a client
 // to verify execution.
@@ -58,11 +70,8 @@ pub fn execute_transaction_to_effects(
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> Result<
     (
-        Result<(), ExecutionError>,                // transaction result
-        TransactionEffects,                        // effects of the replay execution
-        SuiGasStatus,                              // gas status of the replay execution
-        TransactionEffects, // expected effects as found in the transaction data
-        BTreeMap<ObjectID, BTreeMap<u64, Object>>, // object cache
+        Result<(), ExecutionError>, // transaction result
+        TxnContextAndEffects,       // data touched and changed during execution
     ),
     anyhow::Error,
 > {
@@ -100,7 +109,7 @@ pub fn execute_transaction_to_effects(
         store: object_store,
         object_cache: RefCell::new(object_cache),
     };
-    let (_inner_store, gas_status, effects, _execution_timing, result) =
+    let (inner_store, gas_status, effects, _execution_timing, result) =
         executor.executor.execute_transaction_to_effects(
             &store,
             protocol_config,
@@ -124,7 +133,16 @@ pub fn execute_transaction_to_effects(
     } = store;
     let object_cache = object_cache.into_inner();
     debug!("End execution");
-    Ok((result, effects, gas_status, expected_effects, object_cache))
+    Ok((
+        result,
+        TxnContextAndEffects {
+            execution_effects: effects,
+            expected_effects,
+            gas_status,
+            object_cache,
+            inner_store,
+        },
+    ))
 }
 
 impl ReplayExecutor {
