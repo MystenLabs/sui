@@ -21,4 +21,5 @@ sui-sdk-types.workspace = true
 telemetry-subscribers.workspace = true
 tokio.workspace = true
 tonic.workspace = true
+tonic-reflection.workspace = true
 sui-protocol-config.workspace = true

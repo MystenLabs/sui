@@ -141,17 +141,15 @@ async fn get_service_info(
     chain_id: ChainIdentifier,
     server_version: Option<ServerVersion>,
 ) -> Result<GetServiceInfoResponse, RpcError> {
-    let seq_number = client.get_latest_checkpoint().await?;
-    let checkpoint = client.get_checkpoints(&[seq_number]).await?.pop();
-    let Some(checkpoint) = checkpoint else {
-        return Err(CheckpointNotFoundError::sequence_number(seq_number).into());
+    let Some(checkpoint) = client.get_latest_checkpoint_summary().await? else {
+        return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
     Ok(GetServiceInfoResponse {
         chain_id: Some(CheckpointDigest::new(chain_id.as_bytes().to_owned()).to_string()),
         chain: Some(chain_id.chain().as_str().into()),
-        epoch: Some(checkpoint.summary.epoch),
-        checkpoint_height: Some(seq_number),
-        timestamp: Some(timestamp_ms_to_proto(checkpoint.summary.timestamp_ms)),
+        epoch: Some(checkpoint.epoch),
+        checkpoint_height: Some(checkpoint.sequence_number),
+        timestamp: Some(timestamp_ms_to_proto(checkpoint.timestamp_ms)),
         lowest_available_checkpoint: Some(0),
         lowest_available_checkpoint_objects: Some(0),
         server_version: server_version.as_ref().map(ToString::to_string),

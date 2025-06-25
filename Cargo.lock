@@ -14982,6 +14982,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tonic 0.13.1",
+ "tonic-reflection",
 ]
 
 [[package]]
