@@ -8,12 +8,13 @@ use std::{
 };
 
 use consensus_config::{AuthorityIndex, Stake};
+use consensus_types::block::Round;
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 
 use crate::{
     commit::CommitRange, context::Context, dag_state::DagState, leader_scoring::ReputationScores,
-    CommitIndex, Round,
+    CommitIndex,
 };
 
 /// The `LeaderSchedule` is responsible for producing the leader schedule across
@@ -433,10 +434,11 @@ impl Debug for LeaderSwapTable {
 
 #[cfg(test)]
 mod tests {
+    use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs};
 
     use super::*;
     use crate::{
-        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         commit::{CommitDigest, CommitInfo, CommitRef, CommittedSubDag, TrustedCommit},
         storage::{mem_store::MemStore, Store, WriteBatch},
         test_dag_builder::DagBuilder,

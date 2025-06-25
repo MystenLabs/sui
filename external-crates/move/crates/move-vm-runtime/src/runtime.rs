@@ -467,6 +467,19 @@ impl VMRuntime {
             data_store,
             bypass_declared_entry_check,
         )?;
+        if func.arg_count() != args.len() {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!(
+                        "'{}::{}' has {} arguments, but got {}",
+                        module,
+                        function_name,
+                        func.arg_count(),
+                        args.len()
+                    ))
+                    .finish(Location::Undefined),
+            );
+        }
 
         // execute the function
         self.execute_function_with_values_impl(

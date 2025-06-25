@@ -9,9 +9,10 @@ pub(crate) mod rocksdb_store;
 mod store_tests;
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::VerifiedBlock,
     commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
     CommitIndex,

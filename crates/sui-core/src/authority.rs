@@ -1281,7 +1281,7 @@ impl AuthorityState {
         transaction: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<TransactionEffects> {
-        let _metrics_guard = if transaction.contains_shared_object() {
+        let _metrics_guard = if transaction.is_consensus_tx() {
             self.metrics
                 .execute_certificate_latency_shared_object
                 .start_timer()
@@ -1294,8 +1294,7 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-        if !transaction.contains_shared_object() {
+        if !transaction.is_consensus_tx() {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
@@ -1367,7 +1366,7 @@ impl AuthorityState {
 
         let tx_cache_reader = self.get_transaction_cache_reader();
         if epoch_store.protocol_config().mysticeti_fastpath()
-            && !certificate.contains_shared_object()
+            && !certificate.is_consensus_tx()
             && execution_env.scheduling_source == SchedulingSource::NonFastPath
         {
             // If this transaction is not scheduled from fastpath, it must be either
@@ -3429,7 +3428,7 @@ impl AuthorityState {
     /// Advance the epoch store to the next epoch for testing only.
     /// This only manually sets all the places where we have the epoch number.
     /// It doesn't properly reconfigure the node, hence should be only used for testing.
-    pub async fn reconfigure_for_testing(self: &Arc<AuthorityState>) {
+    pub async fn reconfigure_for_testing(&self) {
         let mut execution_lock = self.execution_lock_for_reconfiguration().await;
         let epoch_store = self.epoch_store_for_testing().clone();
         let protocol_config = epoch_store.protocol_config().clone();
@@ -3441,7 +3440,16 @@ impl AuthorityState {
         // across epochs.
         let _guard =
             ProtocolConfig::apply_overrides_for_testing(move |_, _| protocol_config.clone());
-        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(self).await;
+        let new_epoch_store = epoch_store.new_at_next_epoch_for_testing(
+            self.get_backing_package_store().clone(),
+            self.get_object_store().clone(),
+            &self.config.expensive_safety_check_config,
+            self.checkpoint_store
+                .get_epoch_last_checkpoint(epoch_store.epoch())
+                .unwrap()
+                .map(|c| *c.sequence_number())
+                .unwrap_or_default(),
+        );
         let new_epoch = new_epoch_store.epoch();
         match self.execution_scheduler.as_ref() {
             ExecutionSchedulerWrapper::ExecutionScheduler(_) => {}

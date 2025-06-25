@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use consensus_types::block::{BlockRef, TransactionIndex};
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-    block::{genesis_blocks, BlockAPI, BlockRef, SignedBlock, GENESIS_ROUND},
+    block::{genesis_blocks, BlockAPI, SignedBlock, GENESIS_ROUND},
     context::Context,
     error::{ConsensusError, ConsensusResult},
     transaction::TransactionVerifier,
-    TransactionIndex,
 };
 
 pub(crate) trait BlockVerifier: Send + Sync + 'static {
@@ -203,11 +203,12 @@ impl BlockVerifier for NoopBlockVerifier {
 #[cfg(test)]
 mod test {
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::{BlockDigest, BlockRef, TransactionIndex};
     use sui_protocol_config::ProtocolConfig;
 
     use super::*;
     use crate::{
-        block::{BlockDigest, BlockRef, TestBlock, Transaction, TransactionIndex},
+        block::{TestBlock, Transaction},
         context::Context,
         transaction::{TransactionVerifier, ValidationError},
     };

@@ -3,10 +3,10 @@
 
 use std::{cmp::Ordering, sync::Arc};
 
+use consensus_types::block::{BlockRef, Round};
 use tokio::time::Instant;
 
 use crate::{
-    block::{BlockRef, Round},
     context::Context,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
 };
@@ -90,8 +90,9 @@ impl ThresholdClock {
 
 #[cfg(test)]
 mod tests {
+    use consensus_types::block::BlockDigest;
+
     use super::*;
-    use crate::block::BlockDigest;
     use consensus_config::AuthorityIndex;
 
     #[tokio::test]

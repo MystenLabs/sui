@@ -2910,6 +2910,7 @@ dependencies = [
  "bytes",
  "cfg-if",
  "consensus-config",
+ "consensus-types",
  "dashmap",
  "enum_dispatch",
  "eyre",
@@ -2960,6 +2961,7 @@ dependencies = [
  "arc-swap",
  "consensus-config",
  "consensus-core",
+ "consensus-types",
  "mysten-metrics",
  "mysten-network",
  "parking_lot 0.12.3",
@@ -2976,6 +2978,16 @@ dependencies = [
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store",
+]
+
+[[package]]
+name = "consensus-types"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.7",
+ "consensus-config",
+ "fastcrypto",
+ "serde",
 ]
 
 [[package]]
@@ -13697,6 +13709,7 @@ dependencies = [
  "clap",
  "consensus-config",
  "consensus-core",
+ "consensus-types",
  "count-min-sketch",
  "criterion",
  "dashmap",
@@ -13806,7 +13819,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1eed1b281702de4290a0e492600ce2a1fd45a331#1eed1b281702de4290a0e492600ce2a1fd45a331"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=b64827452de2e3f9e62ee8f3cb456a93c2b66b53#b64827452de2e3f9e62ee8f3cb456a93c2b66b53"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -13956,7 +13969,6 @@ dependencies = [
  "futures",
  "indexmap 2.8.0",
  "insta",
- "itertools 0.13.0",
  "jsonrpsee",
  "move-binary-format",
  "move-core-types",
@@ -14518,6 +14530,7 @@ dependencies = [
  "bb8",
  "chrono",
  "clap",
+ "dashmap",
  "diesel",
  "diesel-async",
  "diesel_migrations",
@@ -15852,7 +15865,7 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=1eed1b281702de4290a0e492600ce2a1fd45a331#1eed1b281702de4290a0e492600ce2a1fd45a331"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=b64827452de2e3f9e62ee8f3cb456a93c2b66b53#b64827452de2e3f9e62ee8f3cb456a93c2b66b53"
 dependencies = [
  "base64ct",
  "bcs",
@@ -16405,7 +16418,7 @@ dependencies = [
  "chrono",
  "ciborium",
  "consensus-config",
- "consensus-core",
+ "consensus-types",
  "coset",
  "criterion",
  "derive_more 1.0.0",

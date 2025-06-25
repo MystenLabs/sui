@@ -1,0 +1,26 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-36:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6072400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 38:
+//# run test::m::create --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2439600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 40:
+//# run test::m::unwrap_and_transfer --args object(2,0) --sender A
+mutated: object(0,0)
+unwrapped: object(3,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 2415204, non_refundable_storage_fee: 24396

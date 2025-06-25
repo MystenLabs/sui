@@ -117,16 +117,6 @@ impl<T> Schedulable<T> {
         }
     }
 
-    pub fn contains_shared_object(&self) -> bool
-    where
-        T: AsTx,
-    {
-        match self {
-            Schedulable::Transaction(tx) => tx.as_tx().contains_shared_object(),
-            Schedulable::RandomnessStateUpdate(_, _) => true,
-        }
-    }
-
     pub fn non_shared_input_object_keys(&self) -> Vec<ObjectKey>
     where
         T: AsTx,
@@ -187,9 +177,6 @@ impl SharedObjVerManager {
         )?;
         let mut assigned_versions = Vec::new();
         for assignable in assignables {
-            if !assignable.contains_shared_object() {
-                continue;
-            }
             let cert_assigned_versions = Self::assign_versions_for_certificate(
                 epoch_store,
                 assignable,
@@ -260,6 +247,12 @@ impl SharedObjVerManager {
         shared_input_next_versions: &mut HashMap<ConsensusObjectSequenceKey, SequenceNumber>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> AssignedVersions {
+        let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
+        if shared_input_objects.is_empty() {
+            // No shared object used by this transaction. No need to assign versions.
+            return vec![];
+        }
+
         let tx_key = assignable.key();
 
         // Check if the transaction is cancelled due to congestion.
@@ -275,9 +268,6 @@ impl SharedObjVerManager {
                 None
             };
         let txn_cancelled = cancellation_info.is_some();
-
-        // Make an iterator to update the locks of the transaction's shared objects.
-        let shared_input_objects: Vec<_> = assignable.shared_input_objects(epoch_store).collect();
 
         let mut input_object_keys = assignable.non_shared_input_object_keys();
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());

@@ -206,8 +206,7 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use super::*;
-    use consensus_core::BlockRef;
-    use sui_types::messages_consensus::TransactionIndex;
+    use consensus_types::block::{BlockRef, TransactionIndex};
 
     fn create_test_tx_position(round: u64, index: u64) -> ConsensusPosition {
         ConsensusPosition {

@@ -18,6 +18,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use consensus_types::block::Round;
 use futures::stream::{FuturesUnordered, StreamExt as _};
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::monitored_scope;
@@ -26,7 +27,7 @@ use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
     context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::NetworkClient, round_tracker::PeerRoundTracker, BlockAPI as _, Round,
+    network::NetworkClient, round_tracker::PeerRoundTracker, BlockAPI as _,
 };
 
 // Handle to control the RoundProber loop and read latest round gaps.
@@ -219,10 +220,10 @@ mod test {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::{BlockRef, Round};
     use parking_lot::RwLock;
 
     use crate::{
-        block::BlockRef,
         commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -232,7 +233,7 @@ mod test {
         round_prober::RoundProber,
         round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
-        Round, TestBlock, VerifiedBlock,
+        TestBlock, VerifiedBlock,
     };
 
     struct FakeThreadDispatcher {

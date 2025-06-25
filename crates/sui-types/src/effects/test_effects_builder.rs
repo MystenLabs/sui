@@ -258,7 +258,7 @@ impl TestEffectsBuilder {
             executed_epoch,
             GasCostSummary::default(),
             shared_objects,
-            BTreeMap::new(),
+            BTreeSet::new(),
             self.transaction.digest(),
             lamport_version,
             changed_objects,

@@ -52,7 +52,7 @@ pub struct TransactionFailures {
 
 /// A mock store for testing. It maintains a map of checkpoint sequence numbers to transaction
 /// sequence numbers, and a watermark that can be used to test the watermark task.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MockStore {
     /// Tracks various watermark states (committer, reader, pruner)
     pub watermarks: Arc<Mutex<MockWatermark>>,
@@ -72,20 +72,6 @@ pub struct MockStore {
     pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
     /// Configuration for simulating transaction failures in tests
     pub transaction_failures: Arc<TransactionFailures>,
-}
-
-impl Default for MockStore {
-    fn default() -> Self {
-        Self {
-            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
-            data: Arc::new(Mutex::new(HashMap::new())),
-            sequential_checkpoint_data: Arc::new(Mutex::new(Vec::new())),
-            prune_failure_attempts: Arc::new(Mutex::new(HashMap::new())),
-            connection_failure: Arc::new(Mutex::new(ConnectionFailure::default())),
-            set_reader_watermark_failure_attempts: Arc::new(Mutex::new(0)),
-            transaction_failures: Arc::new(TransactionFailures::default()),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -213,9 +199,7 @@ impl Store for MockStore {
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
         }
 
-        if should_fail {
-            return Err(anyhow::anyhow!("Connection failed"));
-        }
+        ensure!(!should_fail, "Connection failed");
 
         Ok(MockConnection(self))
     }

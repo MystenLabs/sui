@@ -63,6 +63,7 @@ pub struct Local<'a>(&'a mut Locals, u16);
 /// A set of memory locations that can be borrowed or moved from. Used for inputs and results
 pub struct Locals(VMLocals);
 
+#[derive(Debug)]
 pub struct Value(VMValue);
 
 impl Inputs {

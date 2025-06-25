@@ -1,6 +1,6 @@
 [package]
 name = ""
-edition = "2024"
+edition = "2025"
 
 [environments]
 mainnet = "35834a8a"

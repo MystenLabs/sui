@@ -1,0 +1,65 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-23:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 25:
+//# run test::m::mint_s
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 27:
+//# run test::m::mint_child --args object(2,0)
+created: object(3,0), object(3,1)
+mutated: object(0,2), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
+
+task 4, line 29:
+//# view-object 3,0
+Owner: Object ID: ( fake(2,0) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(3,1),
+    },
+}
+
+task 5, line 31:
+//# transfer-object 3,0 --sender A --recipient B
+Error: Error checking transaction input objects: InvalidChildObjectArgument { child_id: object(3,0), parent_id: object(2,0) }
+
+task 6, line 33:
+//# view-object 3,0
+Owner: Object ID: ( fake(2,0) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(3,1),
+    },
+}

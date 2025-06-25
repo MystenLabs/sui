@@ -1,0 +1,38 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-28:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5631600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 29-33:
+//# programmable --sender A --inputs 0u64
+//> 0: test::m1::new();
+//> TransferObjects([Result(0)], Input(0));
+// not an address
+Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be deserialized into a value of the specified type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: None, command: Some(1) } }
+
+task 3, lines 34-39:
+//# programmable --sender A
+//> 0: test::m1::new();
+//> 1: test::m1::value();
+//> TransferObjects([Result(0)], Result(1));
+// not an address
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }
+
+task 4, lines 40-43:
+//# programmable --sender A
+//> 0: test::m1::new();
+//> 1: test::m1::vec();
+//> TransferObjects([Result(0)], Result(1));
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }

@@ -1,0 +1,247 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 24 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-58:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 10533600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 60:
+//# run tto::M1::start --sender A
+created: object(2,0), object(2,1), object(2,2), object(2,3)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7273200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 62:
+//# view-object 2,0
+Owner: Object ID: ( fake(2,1) )
+Version: 2
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,3),
+    },
+}
+
+task 4, line 64:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,0) )
+Version: 2
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 0u64,
+}
+
+task 5, line 66:
+//# view-object 2,1
+Owner: Account Address ( fake(2,2) )
+Version: 2
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    value: 0u64,
+}
+
+task 6, line 68:
+//# view-object 2,2
+Owner: Account Address ( A )
+Version: 2
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
+
+task 7, line 70:
+//# run tto::M1::receive --args object(2,2) receiving(2,1) --sender A
+created: object(7,0)
+mutated: object(0,0), object(2,1), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 5996400,  storage_rebate: 3506184, non_refundable_storage_fee: 35416
+
+task 8, lines 72-74:
+//# view-object 2,0
+Owner: Object ID: ( fake(2,1) )
+Version: 2
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,3),
+    },
+}
+
+task 9, line 75:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,0) )
+Version: 2
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 0u64,
+}
+
+task 10, line 77:
+//# view-object 2,1
+Owner: Object ID: ( fake(7,0) )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    value: 0u64,
+}
+
+task 11, line 79:
+//# view-object 2,2
+Owner: Account Address ( A )
+Version: 3
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 0u64,
+}
+
+task 12, lines 81-82:
+//# programmable --sender A --inputs object(2,2) 1 2 3
+//> tto::M1::set(Input(0), Input(1), Input(2), Input(3))
+mutated: object(0,0), object(2,1), object(2,2), object(2,3)
+gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 4770216, non_refundable_storage_fee: 48184
+
+task 13, lines 84-86:
+//# view-object 2,0
+Owner: Object ID: ( fake(2,1) )
+Version: 2
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(2,3),
+    },
+}
+
+task 14, line 87:
+//# view-object 2,3
+Owner: Object ID: ( fake(2,0) )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,3),
+        },
+    },
+    value: 3u64,
+}
+
+task 15, line 89:
+//# view-object 2,1
+Owner: Object ID: ( fake(7,0) )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+    value: 2u64,
+}
+
+task 16, line 91:
+//# view-object 2,2
+Owner: Account Address ( A )
+Version: 4
+Contents: tto::M1::A {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+    value: 1u64,
+}
+
+task 17, lines 93-96:
+//# programmable --sender A --inputs object(2,2)
+//> tto::M1::remove(Input(0))
+// dev-inspect with 'check' and correct values
+mutated: object(0,0), object(2,2)
+deleted: object(2,0), object(2,3)
+gas summary: computation_cost: 1000000, storage_cost: 2264800,  storage_rebate: 5936436, non_refundable_storage_fee: 59964
+
+task 18, lines 98-99:
+//# programmable --sender A --inputs object(2,2)@3 0 0 vector[0] --dev-inspect
+//> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
+mutated: object(_), object(2,2)
+gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
+
+task 19, lines 101-102:
+//# programmable --sender A --inputs object(2,2)@4 1 2 vector[3] --dev-inspect
+//> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
+mutated: object(_), object(2,2)
+gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
+
+task 20, lines 104-107:
+//# programmable --sender A --inputs object(2,2)@5 1 2 vector[] --dev-inspect
+//> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
+// dev-inspect with 'check' and _incorrect_ values
+mutated: object(_), object(2,2)
+gas summary: computation_cost: 500000, storage_cost: 2264800,  storage_rebate: 1264032, non_refundable_storage_fee: 12768
+
+task 21, lines 109-110:
+//# programmable --sender A --inputs object(2,2)@4 0 0 vector[0] --dev-inspect
+//> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: tto, name: Identifier("M1") }, function: 4, instruction: 10, function_name: Some("check") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: tto, name: Identifier("M1") }, function: 4, instruction: 10, function_name: Some("check") }, 0) in command 0
+
+task 22, lines 112-113:
+//# programmable --sender A --inputs object(2,2)@5 1 2 vector[3] --dev-inspect
+//> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+
+task 23, lines 115-116:
+//# programmable --sender A --inputs object(2,2)@3 1 2 vector[] --dev-inspect
+//> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: tto, name: Identifier("M1") }, function: 4, instruction: 10, function_name: Some("check") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: tto, name: Identifier("M1") }, function: 4, instruction: 10, function_name: Some("check") }, 0) in command 0

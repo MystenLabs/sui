@@ -21,6 +21,7 @@ bincode.workspace = true
 bytes.workspace = true
 consensus-core.workspace = true
 consensus-config.workspace = true
+consensus-types.workspace = true
 count-min-sketch.workspace = true
 dashmap.workspace = true
 diffy = { version = "0.3", default-features = false }
