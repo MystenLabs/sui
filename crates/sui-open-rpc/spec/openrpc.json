@@ -1340,7 +1340,6 @@
                 "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
-                "include_epoch_stable_sequence_number_in_effects": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,

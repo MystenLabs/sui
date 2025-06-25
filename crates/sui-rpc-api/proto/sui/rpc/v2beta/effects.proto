@@ -132,12 +132,7 @@ message UnchangedSharedObject {
     CANCELED = 4;
 
     // Read of a per-epoch config object that should remain the same during an epoch.
-    // This has been deprecated in favor of `PER_EPOCH_CONFIG_WITH_SEQUENCE_NUMBER`.
     PER_EPOCH_CONFIG = 5;
-
-    // Read of a per-epoch config object that should remain the same during an epoch.
-    // This contains the sequence number config at the start of the epoch.
-    PER_EPOCH_CONFIG_WITH_SEQUENCE_NUMBER = 6;
   }
 
   optional UnchangedSharedObjectKind kind = 1;
