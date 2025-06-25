@@ -1188,7 +1188,7 @@ mod checked {
     }
 
     /// substitutes the type arguments into the parameter and return types
-    fn subst_signature(
+    pub fn subst_signature(
         signature: LoadedFunctionInstantiation,
         type_arguments: &[Type],
     ) -> VMResult<LoadedFunctionInstantiation> {
