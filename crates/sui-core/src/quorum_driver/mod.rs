@@ -596,7 +596,7 @@ where
         } = task;
         let transaction = &request.transaction;
         let tx_digest = *transaction.digest();
-        let is_single_writer_tx = !transaction.contains_shared_object();
+        let is_single_writer_tx = !transaction.is_consensus_tx();
 
         let timer = Instant::now();
         let (tx_cert, newly_formed) = match tx_cert {

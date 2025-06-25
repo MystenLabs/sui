@@ -263,3 +263,291 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
         );
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use sui_types::full_checkpoint_content::CheckpointData;
+    use tokio::sync::mpsc;
+    use tokio_util::sync::CancellationToken;
+
+    use crate::{
+        metrics::IndexerMetrics,
+        pipeline::{CommitterConfig, Processor, WatermarkPart},
+        store::CommitterWatermark,
+        testing::mock_store::*,
+        FieldCount,
+    };
+
+    use super::*;
+
+    #[derive(Clone, FieldCount)]
+    pub struct StoredData;
+
+    pub struct DataPipeline;
+
+    impl Processor for DataPipeline {
+        const NAME: &'static str = "data";
+        type Value = StoredData;
+
+        fn process(&self, _checkpoint: &Arc<CheckpointData>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
+        }
+    }
+
+    #[async_trait]
+    impl Handler for DataPipeline {
+        type Store = MockStore;
+
+        async fn commit<'a>(
+            _values: &[StoredData],
+            _conn: &mut MockConnection<'a>,
+        ) -> anyhow::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    struct TestSetup {
+        store: MockStore,
+        watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
+        commit_watermark_handle: JoinHandle<()>,
+        cancel: CancellationToken,
+    }
+
+    fn setup_test<H: Handler<Store = MockStore> + 'static>(
+        config: CommitterConfig,
+        initial_watermark: Option<CommitterWatermark>,
+        store: MockStore,
+    ) -> TestSetup {
+        let (watermark_tx, watermark_rx) = mpsc::channel(100);
+        let metrics = IndexerMetrics::new(&Default::default());
+        let cancel = CancellationToken::new();
+
+        let store_clone = store.clone();
+        let cancel_clone = cancel.clone();
+
+        let commit_watermark_handle = commit_watermark::<H>(
+            initial_watermark,
+            config,
+            false,
+            watermark_rx,
+            store_clone,
+            metrics,
+            cancel_clone,
+        );
+
+        TestSetup {
+            store,
+            watermark_tx,
+            commit_watermark_handle,
+            cancel,
+        }
+    }
+
+    fn create_watermark_part_for_checkpoint(checkpoint: u64) -> WatermarkPart {
+        WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: checkpoint,
+                ..Default::default()
+            },
+            batch_rows: 1,
+            total_rows: 1,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_basic_watermark_progression() {
+        let config = CommitterConfig::default();
+        let initial_watermark = Some(CommitterWatermark {
+            checkpoint_hi_inclusive: 0,
+            ..Default::default()
+        });
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
+
+        // Send watermark parts in order
+        for cp in 1..4 {
+            let part = create_watermark_part_for_checkpoint(cp);
+            setup.watermark_tx.send(vec![part]).await.unwrap();
+        }
+
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Verify watermark progression
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 3);
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_out_of_order_watermarks() {
+        let config = CommitterConfig::default();
+        let initial_watermark = Some(CommitterWatermark {
+            checkpoint_hi_inclusive: 0,
+            ..Default::default()
+        });
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
+
+        // Send watermark parts out of order
+        let parts = vec![
+            create_watermark_part_for_checkpoint(4),
+            create_watermark_part_for_checkpoint(2),
+            create_watermark_part_for_checkpoint(1),
+        ];
+        setup.watermark_tx.send(parts).await.unwrap();
+
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Verify watermark hasn't progressed past 2
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 2);
+
+        // Send checkpoint 3 to fill the gap
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(3)])
+            .await
+            .unwrap();
+
+        // Wait for the next polling and processing
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        // Verify watermark has progressed to 4
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 4);
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_watermark_with_connection_failure() {
+        let config = CommitterConfig {
+            watermark_interval_ms: 1_000, // Long polling interval to test connection retry
+            ..Default::default()
+        };
+        let initial_watermark = Some(CommitterWatermark {
+            checkpoint_hi_inclusive: 0,
+            ..Default::default()
+        });
+        let store = MockStore::default().with_connection_failures(1);
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, store);
+
+        // Send watermark part
+        let part = create_watermark_part_for_checkpoint(1);
+        setup.watermark_tx.send(vec![part]).await.unwrap();
+
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
+
+        // Wait for next polling and processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
+
+        // Verify watermark has progressed
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_incomplete_watermark() {
+        let config = CommitterConfig {
+            watermark_interval_ms: 1_000, // Long polling interval to test adding complete part
+            ..Default::default()
+        };
+        let initial_watermark = Some(CommitterWatermark {
+            checkpoint_hi_inclusive: 0,
+            ..Default::default()
+        });
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
+
+        // Send the first incomplete watermark part
+        let part = WatermarkPart {
+            watermark: CommitterWatermark {
+                checkpoint_hi_inclusive: 1,
+                ..Default::default()
+            },
+            batch_rows: 1,
+            total_rows: 3,
+        };
+        setup.watermark_tx.send(vec![part.clone()]).await.unwrap();
+
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
+
+        // Send the other two parts to complete the watermark
+        setup
+            .watermark_tx
+            .send(vec![part.clone(), part.clone()])
+            .await
+            .unwrap();
+
+        // Wait for next polling and processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(1_200)).await;
+
+        // Verify watermark has progressed
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_no_initial_watermark() {
+        let config = CommitterConfig::default();
+        let initial_watermark = None;
+        let setup = setup_test::<DataPipeline>(config, initial_watermark, MockStore::default());
+
+        // Send the checkpoint 1 watermark
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(1)])
+            .await
+            .unwrap();
+
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 0);
+
+        // Send the checkpoint 0 watermark to fill the gap.
+        setup
+            .watermark_tx
+            .send(vec![create_watermark_part_for_checkpoint(0)])
+            .await
+            .unwrap();
+
+        // Wait for processing
+        tokio::time::sleep(tokio::time::Duration::from_millis(1200)).await;
+
+        // Verify watermark has progressed
+        let watermark = setup.store.get_watermark();
+        assert_eq!(watermark.checkpoint_hi_inclusive, 1);
+
+        // Clean up
+        setup.cancel.cancel();
+        let _ = setup.commit_watermark_handle.await;
+    }
+}

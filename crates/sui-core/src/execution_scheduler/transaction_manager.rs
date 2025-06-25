@@ -9,18 +9,17 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_common::{fatal, random_util::randomize_cache_capacity_in_tests};
+use mysten_common::{debug_fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
     base_types::{FullObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
-    digests::TransactionEffectsDigest,
     error::{SuiError, SuiResult},
     fp_ensure,
     message_envelope::Message,
     storage::InputKey,
-    transaction::TransactionDataAPI,
+    transaction::{TransactionDataAPI, TransactionKey},
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
@@ -28,14 +27,21 @@ use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore, execution_cache::ObjectCacheRead,
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        shared_object_version_manager::Schedulable,
+    },
+    execution_cache::ObjectCacheRead,
 };
-use crate::{authority::AuthorityMetrics, execution_cache::TransactionCacheRead};
+use crate::{
+    authority::{AuthorityMetrics, ExecutionEnv},
+    execution_cache::TransactionCacheRead,
+};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
-use super::{ExecutionSchedulerAPI, PendingCertificate, PendingCertificateStats, SchedulingSource};
+use super::{ExecutionSchedulerAPI, PendingCertificate, PendingCertificateStats};
 
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
@@ -47,7 +53,7 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// executes them in parallel.
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
 /// storage, committed objects and certificates are notified back to TransactionManager.
-pub(crate) struct TransactionManager {
+pub struct TransactionManager {
     object_cache_read: Arc<dyn ObjectCacheRead>,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
@@ -219,6 +225,10 @@ struct Inner {
 
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
+
+    // Pseudo-transactions which have been scheduled, but for which we do not have a
+    // digest or transaction yet
+    pending_transaction_keys: HashMap<TransactionKey, ExecutionEnv>,
 }
 
 impl Inner {
@@ -230,6 +240,7 @@ impl Inner {
             available_objects_cache: AvailableObjectsCache::new(metrics),
             pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             executing_certificates: HashSet::with_capacity(MIN_HASHMAP_CAPACITY),
+            pending_transaction_keys: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
         }
     }
 
@@ -338,6 +349,40 @@ impl TransactionManager {
         *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
+    pub(crate) fn notify_transaction_key(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        key: TransactionKey,
+        digest: TransactionDigest,
+    ) {
+        if matches!(key, TransactionKey::Digest(_)) {
+            debug_fatal!("useless notify_transaction_key");
+            return;
+        }
+
+        let certs = {
+            let reconfig_lock = self.inner.read();
+            let mut inner = reconfig_lock.write();
+            if let Some(env) = inner.pending_transaction_keys.remove(&key) {
+                // we were waiting on the key, so load the transaction
+                let transaction = self
+                    .transaction_cache_read
+                    .get_transaction_block(&digest)
+                    .expect("tx must exist")
+                    .as_ref()
+                    .clone();
+                let cert =
+                    VerifiedExecutableTransaction::new_system(transaction, epoch_store.epoch());
+                Some(vec![(cert, env)])
+            } else {
+                None
+            }
+        };
+        if let Some(certs) = certs {
+            self.enqueue_transactions(certs, epoch_store);
+        }
+    }
+
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn notify_commit(
         &self,
@@ -379,14 +424,64 @@ impl TransactionManager {
 }
 
 impl ExecutionSchedulerAPI for TransactionManager {
-    fn enqueue_impl(
+    fn enqueue(
         &self,
-        certs: Vec<(
-            VerifiedExecutableTransaction,
-            Option<TransactionEffectsDigest>,
-        )>,
+        certs: Vec<(Schedulable, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        scheduling_source: SchedulingSource,
+    ) {
+        // schedule all transacctions immediately
+        let mut txns = Vec::with_capacity(certs.len());
+        let mut rest = Vec::new();
+
+        for (schedulable, env) in certs {
+            if let Schedulable::Transaction(tx) = schedulable {
+                txns.push((tx, env));
+            } else {
+                rest.push((schedulable, env));
+            }
+        }
+
+        self.enqueue_transactions(txns, epoch_store);
+
+        let executable = {
+            let reconfig_lock = self.inner.read();
+
+            let mut executable = Vec::with_capacity(rest.len());
+            let mut inner = reconfig_lock.write();
+            for (schedulable, env) in rest {
+                debug_assert!(!matches!(schedulable, Schedulable::Transaction(_)));
+                let key = schedulable.key();
+
+                let Ok(digest) = epoch_store.tx_key_to_digest(&key) else {
+                    warn!("Epoch ended, not enqueueing any more transactions");
+                    return;
+                };
+
+                if let Some(digest) = digest {
+                    let transaction = self
+                        .transaction_cache_read
+                        .get_transaction_block(&digest)
+                        .expect("tx must exist")
+                        .as_ref()
+                        .clone();
+                    executable.push((
+                        VerifiedExecutableTransaction::new_system(transaction, epoch_store.epoch()),
+                        env,
+                    ));
+                } else {
+                    inner.pending_transaction_keys.insert(key, env);
+                }
+            }
+            executable
+        };
+
+        self.enqueue_transactions(executable, epoch_store);
+    }
+
+    fn enqueue_transactions(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let reconfig_lock = self.inner.read();
 
@@ -412,31 +507,18 @@ impl ExecutionSchedulerAPI for TransactionManager {
         let mut receiving_objects: HashSet<InputKey> = HashSet::new();
         let certs: Vec<_> = certs
             .into_iter()
-            .filter_map(|(cert, fx_digest)| {
+            .map(|(cert, execution_env)| {
                 let input_object_kinds = cert
                     .data()
                     .intent_message()
                     .value
                     .input_objects()
                     .expect("input_objects() cannot fail");
-                let mut input_object_keys =
-                    match epoch_store.get_input_object_keys(&cert.key(), &input_object_kinds) {
-                        Ok(keys) => keys,
-                        Err(e) => {
-                            // Because we do not hold the transaction lock during enqueue, it is possible
-                            // that the transaction was executed and the shared version assignments deleted
-                            // since the earlier check. This is a rare race condition, and it is better to
-                            // handle it ad-hoc here than to hold tx locks for every cert for the duration
-                            // of this function in order to remove the race.
-                            if self
-                                .transaction_cache_read
-                                .is_tx_already_executed(cert.digest())
-                            {
-                                return None;
-                            }
-                            fatal!("Failed to get input object keys: {:?}", e);
-                        }
-                    };
+                let mut input_object_keys = epoch_store.get_input_object_keys(
+                    &cert.key(),
+                    &input_object_kinds,
+                    execution_env.assigned_versions.as_ref(),
+                );
 
                 if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);
@@ -464,7 +546,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
                     }
                 }
 
-                Some((cert, fx_digest, input_object_keys))
+                (cert, execution_env, input_object_keys)
             })
             .collect();
 
@@ -538,17 +620,16 @@ impl ExecutionSchedulerAPI for TransactionManager {
         let mut pending = Vec::new();
         let pending_cert_enqueue_time = Instant::now();
 
-        for (cert, expected_effects_digest, input_object_keys) in certs {
+        for (cert, execution_env, input_object_keys) in certs {
             pending.push(PendingCertificate {
                 certificate: cert,
-                expected_effects_digest,
+                execution_env,
                 waiting_input_objects: input_object_keys,
                 stats: PendingCertificateStats {
                     enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
                 },
                 executing_guard: None,
-                scheduling_source,
             });
         }
 

@@ -2271,6 +2271,10 @@ impl SuiCallArg {
                     digest,
                 })
             }
+            CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Add support for balance withdraws.
+                todo!("Balance withdraws not yet supported in json rpc types")
+            }
         })
     }
 

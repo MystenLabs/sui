@@ -496,6 +496,7 @@ mod tests {
             connection_failure: Arc::new(Mutex::new(ConnectionFailure {
                 connection_failure_attempts: 1,
                 connection_delay_ms: 1_000, // Long connection delay for testing state between retry
+                ..Default::default()
             })),
             ..Default::default()
         };

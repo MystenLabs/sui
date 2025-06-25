@@ -4,19 +4,18 @@
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
-use once_cell::unsync::OnceCell;
 use prometheus::core::{Atomic, AtomicU64};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, ConfigStore, ObjectStore,
-    PackageObject, ParentSync,
+    get_module_by_id, BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject,
+    ParentSync,
 };
 use sui_types::transaction::{InputObjectKind, InputObjects, ObjectReadResult, TransactionKey};
 
@@ -45,11 +44,12 @@ impl InMemoryObjectStore {
     // We will need a trait to unify the these functions. (similarly the one in simulacrum)
     pub(crate) fn read_objects_for_execution(
         &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         tx_key: &TransactionKey,
+        assigned_versions: &AssignedVersions,
         input_object_kinds: &[InputObjectKind],
     ) -> SuiResult<InputObjects> {
-        let shared_version_assignments_cell: OnceCell<Option<HashMap<_, _>>> = OnceCell::new();
+        let shared_version_assignments: HashMap<_, _> =
+            assigned_versions.iter().map(|(k, v)| (*k, *v)).collect();
         let mut input_objects = Vec::new();
         for kind in input_object_kinds {
             let obj: Option<Object> = match kind {
@@ -63,16 +63,6 @@ impl InMemoryObjectStore {
                     initial_shared_version,
                     ..
                 } => {
-                    let shared_version_assignments = shared_version_assignments_cell
-                        .get_or_init(|| {
-                            epoch_store
-                                .get_assigned_shared_object_versions(tx_key)
-                                .map(|l| l.into_iter().collect())
-                        })
-                        .as_ref()
-                        .ok_or_else(|| SuiError::GenericAuthorityError {
-                            error: "Shared object versions should have been assigned.".to_string(),
-                        })?;
                     let version = shared_version_assignments.get(&(*id, *initial_shared_version)).unwrap_or_else(|| {
                         panic!("Shared object version should have been assigned. key: {tx_key:?}, obj id: {id:?}")
                     });
@@ -117,18 +107,6 @@ impl ObjectStore for InMemoryObjectStore {
                 None
             }
         })
-    }
-}
-
-impl ConfigStore for InMemoryObjectStore {
-    fn get_current_epoch_stable_sequence_number(
-        &self,
-        _object_id: &ObjectID,
-        _epoch_id: EpochId,
-    ) -> Option<VersionNumber> {
-        unimplemented!(
-            "TODO InMemoryObjectStore::get_current_epoch_stable_sequence_number is not yet supported",
-        )
     }
 }
 

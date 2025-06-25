@@ -4,11 +4,12 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::Round;
 use parking_lot::RwLock;
 
 use crate::{
     base_committer::BaseCommitter,
-    block::{Round, Slot, GENESIS_ROUND},
+    block::{Slot, GENESIS_ROUND},
     commit::{DecidedLeader, Decision},
     context::Context,
     dag_state::DagState,
@@ -77,18 +78,18 @@ impl UniversalCommitter {
                     break 'outer;
                 }
 
-                tracing::debug!("Trying to decide {slot} with {committer}",);
+                tracing::trace!("Trying to decide {slot} with {committer}",);
 
                 // Try to directly decide the leader.
                 let mut status = committer.try_direct_decide(slot);
-                tracing::debug!("Outcome of direct rule: {status}");
+                tracing::debug!("Outcome of direct rule: {status} with {committer}");
 
                 // If we can't directly decide the leader, try to indirectly decide it.
                 if status.is_decided() {
                     leaders.push_front((status, Decision::Direct));
                 } else {
                     status = committer.try_indirect_decide(slot, leaders.iter().map(|(x, _)| x));
-                    tracing::debug!("Outcome of indirect rule: {status}");
+                    tracing::debug!("Outcome of indirect rule: {status} with {committer}");
                     leaders.push_front((status, Decision::Indirect));
                 }
             }
@@ -107,7 +108,9 @@ impl UniversalCommitter {
             Self::update_metrics(&self.context, &decided_leader, decision);
             decided_leaders.push(decided_leader);
         }
-        tracing::debug!("Decided {decided_leaders:?}");
+        if !decided_leaders.is_empty() {
+            tracing::debug!("Decided {decided_leaders:?}");
+        }
         decided_leaders
     }
 

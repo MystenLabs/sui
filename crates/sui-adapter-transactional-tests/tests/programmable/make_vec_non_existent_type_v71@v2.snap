@@ -1,0 +1,19 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 7-8:
+//# programmable --sender A 
+//> 0: MakeMoveVec<std::string::utf8>([]);
+Error: Transaction Effects Status: MOVE VM INVARIANT VIOLATION.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMInvariantViolation, source: Some(VMError { major_status: TYPE_RESOLUTION_FAILURE, sub_status: None, message: Some("Cannot find std::string::utf8 in cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+
+task 2, lines 10-11:
+//# programmable --sender A --inputs 1
+//> 0: MakeMoveVec<std::string::utf8>([Input(0)]);
+Error: Transaction Effects Status: MOVE VM INVARIANT VIOLATION.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMInvariantViolation, source: Some(VMError { major_status: TYPE_RESOLUTION_FAILURE, sub_status: None, message: Some("Cannot find std::string::utf8 in cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }

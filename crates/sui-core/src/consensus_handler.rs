@@ -12,6 +12,7 @@ use std::{
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
+use consensus_types::block::TransactionIndex;
 use lru::LruCache;
 use mysten_common::{debug_fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::{
@@ -32,7 +33,7 @@ use sui_types::{
     messages_consensus::{
         AuthorityIndex, ConsensusDeterminedVersionAssignments, ConsensusPosition,
         ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-        ExecutionTimeObservation, TransactionIndex,
+        ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{SenderSignedData, VerifiedTransaction},
@@ -49,12 +50,13 @@ use crate::{
         backpressure::{BackpressureManager, BackpressureSubscriber},
         consensus_tx_status_cache::ConsensusTxStatus,
         epoch_start_configuration::EpochStartConfigTrait,
-        AuthorityMetrics, AuthorityState,
+        shared_object_version_manager::{AssignedTxAndVersions, Schedulable},
+        AuthorityMetrics, AuthorityState, ExecutionEnv,
     },
     checkpoints::{CheckpointService, CheckpointServiceNotify},
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
-    execution_cache::{ObjectCacheRead, TransactionCacheRead},
+    execution_cache::ObjectCacheRead,
     execution_scheduler::{ExecutionSchedulerAPI, ExecutionSchedulerWrapper, SchedulingSource},
     scoring_decision::update_low_scoring_authorities,
 };
@@ -115,7 +117,6 @@ impl ConsensusHandlerInitializer {
             self.checkpoint_service.clone(),
             self.state.execution_scheduler().clone(),
             self.state.get_object_cache_reader().clone(),
-            self.state.get_transaction_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
             consensus_committee,
             self.state.metrics.clone(),
@@ -421,7 +422,9 @@ mod additional_consensus_state {
             }
 
             /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
-            fn transactions(&self) -> Vec<(consensus_core::BlockRef, Vec<ParsedTransaction>)> {
+            fn transactions(
+                &self,
+            ) -> Vec<(consensus_types::block::BlockRef, Vec<ParsedTransaction>)> {
                 vec![]
             }
 
@@ -471,8 +474,6 @@ pub struct ConsensusHandler<C> {
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
-    /// used to read randomness transactions during crash recovery
-    tx_reader: Arc<dyn TransactionCacheRead>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The consensus committee used to do stake computations for deciding set of low scoring authorities
@@ -500,7 +501,6 @@ impl<C> ConsensusHandler<C> {
         checkpoint_service: Arc<C>,
         execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         cache_reader: Arc<dyn ObjectCacheRead>,
-        tx_reader: Arc<dyn TransactionCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -525,7 +525,6 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
-            tx_reader,
             low_scoring_authorities,
             committee,
             metrics,
@@ -835,14 +834,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
-        let executable_transactions = self
+        let (executable_transactions, assigned_versions) = self
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
                 all_transactions,
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
-                self.tx_reader.as_ref(),
                 &commit_info,
                 &self.metrics,
             )
@@ -862,8 +860,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         fail_point!("crash"); // for tests that produce random crashes
 
-        self.transaction_manager_sender
-            .send(executable_transactions, SchedulingSource::NonFastPath);
+        self.transaction_manager_sender.send(
+            executable_transactions,
+            assigned_versions,
+            SchedulingSource::NonFastPath,
+        );
     }
 }
 
@@ -872,7 +873,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 #[derive(Clone)]
 pub(crate) struct TransactionManagerSender {
     // Using unbounded channel to avoid blocking consensus commit and transaction handler.
-    sender: monitored_mpsc::UnboundedSender<(Vec<VerifiedExecutableTransaction>, SchedulingSource)>,
+    sender: monitored_mpsc::UnboundedSender<(
+        Vec<Schedulable>,
+        AssignedTxAndVersions,
+        SchedulingSource,
+    )>,
 }
 
 impl TransactionManagerSender {
@@ -887,23 +892,42 @@ impl TransactionManagerSender {
 
     fn send(
         &self,
-        transactions: Vec<VerifiedExecutableTransaction>,
+        transactions: Vec<Schedulable>,
+        assigned_versions: AssignedTxAndVersions,
         scheduling_source: SchedulingSource,
     ) {
-        let _ = self.sender.send((transactions, scheduling_source));
+        let _ = self
+            .sender
+            .send((transactions, assigned_versions, scheduling_source));
     }
 
     async fn run(
         mut recv: monitored_mpsc::UnboundedReceiver<(
-            Vec<VerifiedExecutableTransaction>,
+            Vec<Schedulable>,
+            AssignedTxAndVersions,
             SchedulingSource,
         )>,
         execution_scheduler: Arc<ExecutionSchedulerWrapper>,
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) {
-        while let Some((transactions, scheduling_source)) = recv.recv().await {
+        while let Some((transactions, assigned_versions, scheduling_source)) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
-            execution_scheduler.enqueue(transactions, &epoch_store, scheduling_source);
+            let assigned_versions = assigned_versions.into_map();
+            let txns = transactions
+                .into_iter()
+                .map(|txn| {
+                    let key = txn.key();
+                    (
+                        txn,
+                        ExecutionEnv::new()
+                            .with_scheduling_source(scheduling_source)
+                            .with_assigned_versions(
+                                assigned_versions.get(&key).cloned().unwrap_or_default(),
+                            ),
+                    )
+                })
+                .collect();
+            execution_scheduler.enqueue(txns, &epoch_store);
         }
     }
 }
@@ -984,7 +1008,7 @@ impl<C> ConsensusHandler<C> {
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
         ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-            if certificate.contains_shared_object() {
+            if certificate.is_consensus_tx() {
                 "shared_certificate"
             } else {
                 "owned_certificate"
@@ -999,7 +1023,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => "randomness_dkg_confirmation",
         ConsensusTransactionKind::UserTransaction(tx) => {
-            if tx.contains_shared_object() {
+            if tx.is_consensus_tx() {
                 "shared_user_transaction"
             } else {
                 "owned_user_transaction"
@@ -1181,17 +1205,17 @@ impl SequencedConsensusTransaction {
         }
     }
 
-    pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
+    pub fn as_consensus_txn(&self) -> Option<&SenderSignedData> {
         match &self.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
-            }) if certificate.contains_shared_object() => Some(certificate.data()),
+            }) if certificate.is_consensus_tx() => Some(certificate.data()),
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..
-            }) if txn.contains_shared_object() => Some(txn.data()),
-            SequencedConsensusTransactionKind::System(txn) if txn.contains_shared_object() => {
+            }) if txn.is_consensus_tx() => Some(txn.data()),
+            SequencedConsensusTransactionKind::System(txn) if txn.is_consensus_tx() => {
                 Some(txn.data())
             }
             _ => None,
@@ -1296,17 +1320,16 @@ impl ConsensusBlockHandler {
                     .with_label_values(&["certified"])
                     .inc();
                 if let ConsensusTransactionKind::UserTransaction(tx) = parsed.transaction.kind {
-                    // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-                    if tx.contains_shared_object() {
+                    if tx.is_consensus_tx() {
                         continue;
                     }
                     let tx = VerifiedTransaction::new_unchecked(*tx);
-                    executable_transactions.push(
+                    executable_transactions.push(Schedulable::Transaction(
                         VerifiedExecutableTransaction::new_from_consensus(
                             tx,
                             self.epoch_store.epoch(),
                         ),
-                    );
+                    ));
                 }
             }
         }
@@ -1318,8 +1341,11 @@ impl ConsensusBlockHandler {
         self.metrics
             .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
-        self.transaction_manager_sender
-            .send(executable_transactions, SchedulingSource::MysticetiFastPath);
+        self.transaction_manager_sender.send(
+            executable_transactions,
+            Default::default(),
+            SchedulingSource::MysticetiFastPath,
+        );
     }
 }
 
@@ -1362,6 +1388,7 @@ mod tests {
         BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
         VerifiedBlock,
     };
+    use consensus_types::block::TransactionIndex;
     use futures::pin_mut;
     use prometheus::Registry;
     use sui_protocol_config::{
@@ -1373,7 +1400,6 @@ mod tests {
         crypto::deterministic_random_account_key,
         messages_consensus::{
             AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
-            TransactionIndex,
         },
         object::Object,
         supported_protocol_versions::SupportedProtocolVersions,
@@ -1397,6 +1423,8 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_consensus_commit_handler() {
+        telemetry_subscribers::init_for_testing();
+
         // GIVEN
         // 1 account keypair
         let (sender, keypair) = deterministic_random_account_key();
@@ -1447,7 +1475,6 @@ mod tests {
             Arc::new(CheckpointServiceNoop {}),
             state.execution_scheduler().clone(),
             state.get_object_cache_reader().clone(),
-            state.get_transaction_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,

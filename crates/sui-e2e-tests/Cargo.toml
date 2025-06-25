@@ -31,7 +31,6 @@ serde_json.workspace = true
 reqwest.workspace = true
 prost.workspace = true
 tokio-stream.workspace = true
-itertools.workspace = true
 
 move-binary-format.workspace = true
 move-package.workspace = true

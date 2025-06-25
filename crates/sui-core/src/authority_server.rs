@@ -23,7 +23,6 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -46,6 +45,9 @@ use sui_types::{
     effects::TransactionEffects,
     messages_grpc::{RawSubmitTxRequest, RawWaitForEffectsRequest, RawWaitForEffectsResponse},
 };
+use sui_types::{
+    effects::TransactionEffectsAPI, executable_transaction::VerifiedExecutableTransaction,
+};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -59,13 +61,14 @@ use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, error_span, info, Instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
+        shared_object_version_manager::Schedulable, ExecutionEnv,
     },
     checkpoints::CheckpointStore,
+    execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_outputs::TransactionOutputs,
     wait_for_effects_request::{
@@ -76,6 +79,9 @@ use crate::{
     authority::{consensus_tx_status_cache::ConsensusTxStatus, AuthorityState},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
     traffic_controller::{parse_ip, policies::TrafficTally, TrafficController},
+};
+use crate::{
+    consensus_adapter::ConnectionMonitorStatusForTests, execution_scheduler::ExecutionSchedulerAPI,
 };
 use nonempty::{nonempty, NonEmpty};
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
@@ -459,7 +465,7 @@ impl ValidatorService {
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -545,7 +551,7 @@ impl ValidatorService {
                 error: e.to_string(),
             }
         })?;
-        transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         // Check system overload
         let overload_check_res = self.state.check_system_overload(
@@ -632,13 +638,11 @@ impl ValidatorService {
             SuiError::FullNodeCantHandleCertificate.into()
         );
 
-        let shared_object_tx = certificates
-            .iter()
-            .any(|cert| cert.contains_shared_object());
+        let is_consensus_tx = certificates.iter().any(|cert| cert.is_consensus_tx());
 
         let metrics = if certificates.len() == 1 {
             if wait_for_effects {
-                if shared_object_tx {
+                if is_consensus_tx {
                     &self.metrics.handle_certificate_consensus_latency
                 } else {
                     &self.metrics.handle_certificate_non_consensus_latency
@@ -847,23 +851,29 @@ impl ValidatorService {
         if !wait_for_effects {
             // It is useful to enqueue owned object transaction for execution locally,
             // even when we are not returning effects to user
-            let certificates_without_shared_objects = consensus_transactions
+            let fast_path_certificates = consensus_transactions
                 .iter()
                 .filter_map(|tx| {
                     if let ConsensusTransactionKind::CertifiedTransaction(certificate) = &tx.kind {
-                        (!certificate.contains_shared_object())
+                        (!certificate.is_consensus_tx())
                             // Certificates already verified by callers of this function.
-                            .then_some(VerifiedCertificate::new_unchecked(*(certificate.clone())))
+                            .then_some((
+                                VerifiedExecutableTransaction::new_from_certificate(
+                                    VerifiedCertificate::new_unchecked(*(certificate.clone())),
+                                ),
+                                ExecutionEnv::new()
+                                    .with_scheduling_source(SchedulingSource::NonFastPath),
+                            ))
                     } else {
                         None
                     }
                 })
+                .map(|(tx, env)| (Schedulable::Transaction(tx), env))
                 .collect::<Vec<_>>();
-            if !certificates_without_shared_objects.is_empty() {
-                self.state.enqueue_certificates_for_execution(
-                    certificates_without_shared_objects,
-                    epoch_store,
-                );
+            if !fast_path_certificates.is_empty() {
+                self.state
+                    .execution_scheduler()
+                    .enqueue(fast_path_certificates, epoch_store);
             }
             return Ok((None, Weight::zero()));
         }
@@ -991,7 +1001,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<SubmitCertificateResponse> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        certificate.validity_check(&epoch_store.tx_validity_check_context())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
@@ -1021,7 +1031,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<HandleCertificateResponseV2> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        certificate.validity_check(&epoch_store.tx_validity_check_context())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         self.handle_certificates(
@@ -1057,7 +1067,7 @@ impl ValidatorService {
         let request = request.into_inner();
         request
             .certificate
-            .validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+            .validity_check(&epoch_store.tx_validity_check_context())?;
 
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
         self.handle_certificates(
@@ -1288,7 +1298,7 @@ impl ValidatorService {
         for certificate in certificates {
             let tx_digest = *certificate.digest();
             fp_ensure!(
-                certificate.contains_shared_object(),
+                certificate.is_consensus_tx(),
                 SuiError::UserInputError {
                     error: UserInputError::NoSharedObjectError { digest: tx_digest }
                 }
@@ -1350,9 +1360,8 @@ impl ValidatorService {
         let mut total_size_bytes = 0;
         for certificate in &certificates {
             // We need to check this first because we haven't verified the cert signature.
-            total_size_bytes += certificate
-                .validity_check(epoch_store.protocol_config(), epoch_store.epoch())?
-                as u64;
+            total_size_bytes +=
+                certificate.validity_check(&epoch_store.tx_validity_check_context())? as u64;
         }
 
         self.metrics

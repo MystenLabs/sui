@@ -5,7 +5,7 @@ use crate::base_types::VersionNumber;
 use crate::committee::EpochId;
 use crate::inner_temporary_store::WrittenObjects;
 use crate::storage::{
-    get_module, get_module_by_id, load_package_object_from_object_store, ConfigStore, PackageObject,
+    get_module, get_module_by_id, load_package_object_from_object_store, PackageObject,
 };
 use crate::transaction::TransactionDataAPI;
 use crate::transaction::{InputObjectKind, InputObjects, ObjectReadResult, Transaction};
@@ -141,26 +141,6 @@ impl ObjectStore for &mut InMemoryStorage {
                 }
             })
             .cloned()
-    }
-}
-
-impl ConfigStore for InMemoryStorage {
-    fn get_current_epoch_stable_sequence_number(
-        &self,
-        object_id: &ObjectID,
-        _epoch_id: EpochId,
-    ) -> Option<VersionNumber> {
-        self.persistent.get(object_id).map(|o| o.version())
-    }
-}
-
-impl ConfigStore for &mut InMemoryStorage {
-    fn get_current_epoch_stable_sequence_number(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Option<VersionNumber> {
-        (**self).get_current_epoch_stable_sequence_number(object_id, epoch_id)
     }
 }
 

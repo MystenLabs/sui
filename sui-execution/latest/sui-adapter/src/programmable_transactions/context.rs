@@ -1634,6 +1634,10 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
+            CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Add support for balance withdraws.
+                todo!("Load balance withdraw call arg")
+            }
         })
     }
 

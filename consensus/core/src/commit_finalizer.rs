@@ -7,6 +7,7 @@ use std::{
 };
 
 use consensus_config::Stake;
+use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_metrics::{
     monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     monitored_scope, spawn_logged_monitored_task,
@@ -20,7 +21,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, BlockRef, CommitIndex, CommittedSubDag, Round, TransactionIndex,
+    BlockAPI, CommitIndex, CommittedSubDag,
 };
 
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH

@@ -13,7 +13,7 @@ use crate::supported_protocol_versions::{
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
-use consensus_core::BlockRef;
+use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
@@ -30,12 +30,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// The value should be the same in Sui committee.
 pub type AuthorityIndex = u32;
 
+// TODO: Switch to using consensus_types::block::Round?
 /// Consensus round number in u64 instead of u32 for compatibility with Narwhal.
 pub type Round = u64;
 
-/// The index of a transaction in a consensus block.
-pub type TransactionIndex = u16;
-
+// TODO: Switch to using consensus_types::block::BlockTimestampMs?
 /// Non-decreasing timestamp produced by consensus in ms.
 pub type TimestampMs = u64;
 

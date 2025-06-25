@@ -151,10 +151,10 @@ impl SharedObjectCongestionTracker {
         trace!(
             "created SharedObjectCongestionTracker with
              {} initial object debts,
-             mode: {mode:?}, 
-             max_accumulated_txn_cost_per_object_in_commit: {max_accumulated_txn_cost_per_object_in_commit:?}, 
-             gas_budget_based_txn_cost_cap_factor: {gas_budget_based_txn_cost_cap_factor:?}, 
-             gas_budget_based_txn_cost_absolute_cap: {gas_budget_based_txn_cost_absolute_cap:?}, 
+             mode: {mode:?},
+             max_accumulated_txn_cost_per_object_in_commit: {max_accumulated_txn_cost_per_object_in_commit:?},
+             gas_budget_based_txn_cost_cap_factor: {gas_budget_based_txn_cost_cap_factor:?},
+             gas_budget_based_txn_cost_absolute_cap: {gas_budget_based_txn_cost_absolute_cap:?},
              max_txn_cost_overage_per_object_in_commit: {max_txn_cost_overage_per_object_in_commit:?}",
             object_execution_cost.len(),
         );
@@ -260,7 +260,7 @@ impl SharedObjectCongestionTracker {
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {
-            // This is an owned object only transaction. No need to defer.
+            // No shared object used by this transaction. No need to defer.
             return None;
         }
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
@@ -281,7 +281,7 @@ impl SharedObjectCongestionTracker {
         // Note that the congested objects here may be caused by transaction dependency of other congested objects.
         // Consider in a consensus commit, there are many transactions touching object A, and later in processing the
         // consensus commit, there is a transaction touching both object A and B. Although there are fewer transactions
-        // touching object B, becase it's starting execution is delayed due to dependency to other transactions on
+        // touching object B, because it's starting execution is delayed due to dependency to other transactions on
         // object A, it may be shown up as congested objects.
         let mut congested_objects = vec![];
         for obj in shared_input_objects {
@@ -319,11 +319,15 @@ impl SharedObjectCongestionTracker {
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
         cert: &VerifiedExecutableTransaction,
     ) {
+        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
+        if shared_input_objects.is_empty() {
+            return;
+        }
+
         let Some(tx_cost) = self.get_tx_cost(execution_time_estimator, cert) else {
             return;
         };
 
-        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         let end_cost = start_cost.saturating_add(tx_cost);
 

@@ -21,7 +21,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::base_types::{FullObjectID, VerifiedExecutionData, VersionNumber};
+use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
@@ -29,8 +29,8 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
-    BackingPackageStore, BackingStore, ChildObjectResolver, ConfigStore, FullObjectKey,
-    MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
+    BackingPackageStore, BackingStore, ChildObjectResolver, FullObjectKey, MarkerValue, ObjectKey,
+    ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
@@ -181,12 +181,6 @@ pub trait ObjectCacheRead: Send + Sync {
         }
         ret
     }
-
-    fn get_current_epoch_stable_sequence_number(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Option<VersionNumber>;
 
     fn get_latest_object_ref_or_tombstone(&self, object_id: ObjectID) -> Option<ObjectRef>;
 
@@ -375,20 +369,6 @@ pub trait ObjectCacheRead: Send + Sync {
     ) -> Option<TransactionDigest> {
         match self.get_marker_value(object_key, epoch_id) {
             Some(MarkerValue::ConsensusStreamEnded(digest)) => Some(digest),
-            _ => None,
-        }
-    }
-
-    /// If the config object was updated, return the first sequence number it was modified at in the
-    /// given epoch.
-    fn get_config_object_change_sequence_number(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> Option<SequenceNumber> {
-        let full_key = FullObjectKey::config_key_for_id(object_id);
-        match self.get_marker_value(full_key, epoch_id) {
-            Some(MarkerValue::ConfigUpdate(version)) => Some(version),
             _ => None,
         }
     }
@@ -714,16 +694,6 @@ macro_rules! implement_storage_traits {
                 version: sui_types::base_types::VersionNumber,
             ) -> Option<Object> {
                 ObjectCacheRead::get_object_by_key(self, object_id, version)
-            }
-        }
-
-        impl ConfigStore for $implementor {
-            fn get_current_epoch_stable_sequence_number(
-                &self,
-                object_id: &ObjectID,
-                epoch_id: EpochId,
-            ) -> Option<VersionNumber> {
-                ObjectCacheRead::get_current_epoch_stable_sequence_number(self, object_id, epoch_id)
             }
         }
 

@@ -244,7 +244,6 @@ const MAX_PROTOCOL_VERSION: u64 = 86;
 // Version 85: Enable party transfer in devnet.
 // Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
 //             Make variant count limit explicit in protocol config.
-//             Enable epoch stable sequence number in effects for unsequenced config reads.
 //             Enable party transfer in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -717,10 +716,6 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
-
-    // Rethrow type layout errors during serialization instead of trying to convert them.
-    #[serde(skip_serializing_if = "is_false")]
-    include_epoch_stable_sequence_number_in_effects: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -2070,11 +2065,6 @@ impl ProtocolConfig {
 
     pub fn type_tags_in_object_runtime(&self) -> bool {
         self.feature_flags.type_tags_in_object_runtime
-    }
-
-    pub fn include_epoch_stable_sequence_number_in_effects(&self) -> bool {
-        self.feature_flags
-            .include_epoch_stable_sequence_number_in_effects
     }
 
     pub fn enable_ptb_execution_v2(&self) -> bool {
@@ -3764,9 +3754,6 @@ impl ProtocolConfig {
                                 stake_weighted_median_threshold: 3334,
                             },
                         );
-                    cfg.feature_flags
-                        .include_epoch_stable_sequence_number_in_effects = true;
-
                     // Enable party transfer for testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_party_transfer = true;
@@ -3972,10 +3959,6 @@ impl ProtocolConfig {
             aliased,
             allowed_tx_digests,
         });
-    }
-    pub fn set_include_epoch_stable_sequence_number_in_effects_for_testing(&mut self, val: bool) {
-        self.feature_flags
-            .include_epoch_stable_sequence_number_in_effects = val;
     }
 }
 

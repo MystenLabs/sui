@@ -3,7 +3,8 @@
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::mock_consensus::with_block_status;
-use consensus_core::{BlockRef, BlockStatus};
+use consensus_core::BlockStatus;
+use consensus_types::block::BlockRef;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use move_core_types::ident_str;
@@ -550,7 +551,7 @@ async fn do_transaction_test_impl(
             err_check(&err);
 
             // Additionally, if the tx contains access to shared objects, check if Soft Bundle handler returns the same error.
-            if ct.contains_shared_object() {
+            if ct.is_consensus_tx() {
                 epoch_store.clear_signature_cache();
                 let err = client
                     .handle_soft_bundle_certificates_v3(
