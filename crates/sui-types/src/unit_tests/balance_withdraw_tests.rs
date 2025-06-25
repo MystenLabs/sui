@@ -21,7 +21,7 @@ fn test_withdraw_max_amount() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_balance_withdraws());
-    let withdraws = tx.balance_withdraws().unwrap();
+    let withdraws = tx.process_balance_withdraws().unwrap();
     let account_id = derive_balance_account_object_id(
         sender,
         WithdrawTypeParam::Balance(GAS::type_tag().into()),
@@ -39,7 +39,7 @@ fn test_withdraw_entire_balance() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_balance_withdraws());
-    let withdraws = tx.balance_withdraws().unwrap();
+    let withdraws = tx.process_balance_withdraws().unwrap();
     let account_id = derive_balance_account_object_id(
         sender,
         WithdrawTypeParam::Balance(GAS::type_tag().into()),
@@ -59,7 +59,7 @@ fn test_multiple_withdraws() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_balance_withdraws());
-    let withdraws = tx.balance_withdraws().unwrap();
+    let withdraws = tx.process_balance_withdraws().unwrap();
     let account_id1 = derive_balance_account_object_id(
         sender,
         WithdrawTypeParam::Balance(GAS::type_tag().into()),
@@ -85,7 +85,7 @@ fn test_withdraw_zero_amount() {
     let sender = SuiAddress::random_for_testing_only();
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
-    assert!(tx.balance_withdraws().is_err());
+    assert!(tx.process_balance_withdraws().is_err());
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn test_withdraw_entire_balance_multiple_times() {
     let sender = SuiAddress::random_for_testing_only();
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
-    assert!(tx.balance_withdraws().is_err());
+    assert!(tx.process_balance_withdraws().is_err());
 }
 
 #[test]
@@ -111,7 +111,7 @@ fn test_withdraw_amount_and_entire_balance() {
     let sender = SuiAddress::random_for_testing_only();
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
-    assert!(tx.balance_withdraws().is_err());
+    assert!(tx.process_balance_withdraws().is_err());
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn test_withdraw_entire_balance_multiple_times_different_types() {
     let sender = SuiAddress::random_for_testing_only();
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
-    let withdraws = tx.balance_withdraws().unwrap();
+    let withdraws = tx.process_balance_withdraws().unwrap();
     let account_id1 = derive_balance_account_object_id(
         sender,
         WithdrawTypeParam::Balance(GAS::type_tag().into()),
@@ -155,5 +155,5 @@ fn test_withdraw_too_many_withdraws() {
     let sender = SuiAddress::random_for_testing_only();
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
-    assert!(tx.balance_withdraws().is_err());
+    assert!(tx.process_balance_withdraws().is_err());
 }

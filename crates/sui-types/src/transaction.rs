@@ -2185,10 +2185,10 @@ pub trait TransactionDataAPI {
 
     fn receiving_objects(&self) -> Vec<ObjectRef>;
 
-    /// Returns a map from each balance account object ID to the total reservation of the balance to withdraw.
-    /// Note that this does not return the raw withdraw arguments. Instead,
-    /// it processes all withdraws and put them toggether in a map.
-    fn balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>>;
+    /// Processes balance withdraws and returns a map from balance account object ID to total reservation.
+    /// This method aggregates all withdraw operations for the same account by merging their reservations.
+    /// Each account object ID is derived from the type parameter of each withdraw operation.
+    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>>;
 
     // A cheap way to quickly check if the transaction has balance withdraws.
     fn has_balance_withdraws(&self) -> bool;
@@ -2295,7 +2295,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.kind.receiving_objects()
     }
 
-    fn balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>> {
+    fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>> {
         let mut withdraws = Vec::new();
         // TODO(address-balances): Once we support paying gas using address balances,
         // we add gas reservations here.
@@ -2705,8 +2705,7 @@ impl SenderSignedData {
             return Err(SuiError::TransactionExpired);
         }
 
-        let balance_withdraws = tx_data.balance_withdraws()?;
-        if !balance_withdraws.is_empty() {
+        if tx_data.has_balance_withdraws() {
             fp_ensure!(
                 context.config.enable_accumulators()
                     && context.accumulator_object_init_shared_version.is_some(),
@@ -2716,6 +2715,7 @@ impl SenderSignedData {
                     )
                 }
             );
+            tx_data.process_balance_withdraws()?;
         }
 
         // Enforce overall transaction size limit.
