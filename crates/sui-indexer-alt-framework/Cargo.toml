@@ -46,6 +46,7 @@ rand.workspace = true
 telemetry-subscribers.workspace = true
 wiremock.workspace = true
 sui-pg-db.workspace = true
+dashmap.workspace = true
 
 sui-synthetic-ingestion.workspace = true
 
