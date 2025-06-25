@@ -159,7 +159,8 @@ impl<F: MoveFlavor> Manifest<F> {
     }
 }
 
-// TODO: doc
+/// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
+/// from `file`).
 fn combine_deps(
     file: FileHandle,
     manifest: &ParsedManifest,

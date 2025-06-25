@@ -89,7 +89,7 @@ impl PackagePath {
 
 impl AsRef<Path> for PackagePath {
     fn as_ref(&self) -> &Path {
-        &self.path()
+        self.path()
     }
 }
 

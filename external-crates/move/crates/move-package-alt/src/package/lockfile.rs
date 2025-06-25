@@ -79,7 +79,7 @@ impl<F: MoveFlavor> Lockfiles<F> {
         std::fs::write(path.lockfile_path(), self.main.render_as_toml())?;
 
         for (env, entry) in &self.ephemeral {
-            std::fs::write(path.lockfile_by_env_path(&env), entry.render_as_toml())?;
+            std::fs::write(path.lockfile_by_env_path(env), entry.render_as_toml())?;
         }
 
         Ok(())

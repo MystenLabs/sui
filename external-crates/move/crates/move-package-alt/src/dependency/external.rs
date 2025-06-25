@@ -116,6 +116,8 @@ impl Dependency<Resolved> {
                 }),
             );
         }
+        assert!(responses.is_empty());
+
         Ok(result)
     }
 }
