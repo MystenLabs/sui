@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use sui_types::base_types::SequenceNumber;
+use sui_types::{base_types::SequenceNumber, transaction::Reservation};
 use tokio::sync::watch;
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
@@ -51,22 +51,54 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
             }
         }
 
+        // Map from each account ID that we have seen so far to the current
+        // remaining balance for reservation.
         let mut cur_balances = BTreeMap::new();
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
+            // We need to first walk through all reservations in this transaction
+            // to see if we can successfully reserve each of them.
+            // If we can, we then update the current balances atomically.
+            // If not, we leave the current balances unchanged for the next transaction.
+            // We make sure to initialize each account we see in the cur_balances map.
             let mut success = true;
-            for (object_id, amount) in &withdraw.reservations {
-                let balance = cur_balances.entry(*object_id).or_insert_with(|| {
+            for (object_id, reservation) in &withdraw.reservations {
+                let entry = cur_balances.entry(*object_id).or_insert_with(|| {
                     self.balance_read
                         .get_account_balance(object_id, withdraws.accumulator_version)
                 });
-                if *balance < *amount {
-                    success = false;
-                    break;
+
+                match reservation {
+                    Reservation::MaxAmountU64(amount) => {
+                        if *entry < *amount {
+                            success = false;
+                            break;
+                        }
+                    }
+                    Reservation::EntireBalance => {
+                        // When we want to reserve the entire balance,
+                        // we still need to ensure that the entire balance is not already reserved.
+                        if *entry == 0 {
+                            success = false;
+                            break;
+                        }
+                    }
                 }
             }
             if success {
-                for (object_id, amount) in withdraw.reservations {
-                    *cur_balances.get_mut(&object_id).unwrap() -= amount;
+                for (object_id, reservation) in withdraw.reservations {
+                    // unwrap safe because we always initialize each account in the above loop.
+                    let balance = cur_balances.get_mut(&object_id).unwrap();
+                    match reservation {
+                        Reservation::MaxAmountU64(amount) => {
+                            *balance -= amount;
+                        }
+                        Reservation::EntireBalance => {
+                            // We use 0 remaining balance to indicate that the entire balance is reserved.
+                            // This works because we require that all explicit withdraw reservations
+                            // use a non-zero amount.
+                            *balance = 0;
+                        }
+                    }
                 }
                 let _ = sender.send(ScheduleResult::SufficientBalance);
             } else {

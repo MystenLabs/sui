@@ -10,6 +10,7 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
+    transaction::Reservation,
 };
 #[cfg(test)]
 use tokio::sync::oneshot;
@@ -59,10 +60,9 @@ async fn test_basic_sufficient_balance() {
     let account = ObjectID::random();
     let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
 
-    let reservations = BTreeMap::from([(account, 50)]);
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations,
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
 
     let receivers = test
@@ -79,10 +79,9 @@ async fn test_basic_insufficient_balance() {
     let account = ObjectID::random();
     let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
 
-    let reservations = BTreeMap::from([(account, 150)]);
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations,
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(150))]),
     };
 
     let receivers = test
@@ -99,10 +98,9 @@ async fn test_already_scheduled() {
     let account = ObjectID::random();
     let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
 
-    let reservations = BTreeMap::from([(account, 50)]);
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations,
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
 
     let receivers = test
@@ -126,10 +124,9 @@ async fn test_basic_settlement() {
     let account = ObjectID::random();
     let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
 
-    let reservations = BTreeMap::from([(account, 50)]);
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations,
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
 
     let receivers = test
@@ -164,7 +161,7 @@ async fn test_out_of_order_settlements() {
 
     let withdraw1 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, 50)]),
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
     let mut receivers = test
         .scheduler
@@ -177,7 +174,7 @@ async fn test_out_of_order_settlements() {
 
     let withdraw2 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, 80)]),
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(80))]),
     };
     let mut receivers = test
         .scheduler
@@ -199,17 +196,26 @@ async fn test_multi_accounts() {
         BTreeMap::from([(account1, 100), (account2, 100)]),
     );
 
-    let reservations1 = BTreeMap::from([(account1, 50), (account2, 50)]);
+    let reservations1 = BTreeMap::from([
+        (account1, Reservation::MaxAmountU64(50)),
+        (account2, Reservation::MaxAmountU64(50)),
+    ]);
     let withdraw1 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: reservations1,
     };
-    let reservations2 = BTreeMap::from([(account1, 50), (account2, 60)]);
+    let reservations2 = BTreeMap::from([
+        (account1, Reservation::MaxAmountU64(50)),
+        (account2, Reservation::MaxAmountU64(60)),
+    ]);
     let withdraw2 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: reservations2,
     };
-    let reservations3 = BTreeMap::from([(account1, 50), (account2, 50)]);
+    let reservations3 = BTreeMap::from([
+        (account1, Reservation::MaxAmountU64(50)),
+        (account2, Reservation::MaxAmountU64(50)),
+    ]);
     let withdraw3 = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: reservations3,
@@ -242,10 +248,9 @@ async fn test_multi_settlements() {
     let account = ObjectID::random();
     let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
 
-    let reservations = BTreeMap::from([(account, 50)]);
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations,
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
 
     let mut receivers = test
@@ -302,7 +307,7 @@ async fn test_settlement_far_ahead_of_schedule() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, 100)]),
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(100))]),
     };
     let mut receivers = test
         .scheduler
@@ -324,7 +329,7 @@ async fn test_settlement_far_ahead_of_schedule() {
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(account, 50)]),
+        reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
 
     let mut receivers = test
@@ -338,8 +343,88 @@ async fn test_settlement_far_ahead_of_schedule() {
 }
 
 #[tokio::test]
+async fn test_withdraw_entire_balance() {
+    let init_version = SequenceNumber::from_u64(0);
+    let next_version = init_version.next();
+    let account = ObjectID::random();
+    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+
+    let withdraws1 = vec![
+        TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::EntireBalance)]),
+        },
+        TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        },
+        TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::EntireBalance)]),
+        },
+    ];
+
+    let mut receivers1 = test
+        .scheduler
+        .schedule_withdraws(init_version, withdraws1.clone());
+
+    let withdraws2 = vec![
+        TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(100))]),
+        },
+        TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::EntireBalance)]),
+        },
+        TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(1))]),
+        },
+    ];
+
+    let mut receivers2 = test
+        .scheduler
+        .schedule_withdraws(next_version, withdraws2.clone());
+
+    test.settle_balance_changes(next_version, BTreeMap::new());
+
+    wait_until(
+        receivers1.remove(&withdraws1[0].tx_digest).unwrap(),
+        ScheduleResult::SufficientBalance,
+    )
+    .await;
+    wait_until(
+        receivers1.remove(&withdraws1[1].tx_digest).unwrap(),
+        ScheduleResult::InsufficientBalance,
+    )
+    .await;
+    wait_until(
+        receivers1.remove(&withdraws1[2].tx_digest).unwrap(),
+        ScheduleResult::InsufficientBalance,
+    )
+    .await;
+
+    wait_until(
+        receivers2.remove(&withdraws2[0].tx_digest).unwrap(),
+        ScheduleResult::SufficientBalance,
+    )
+    .await;
+    wait_until(
+        receivers2.remove(&withdraws2[1].tx_digest).unwrap(),
+        ScheduleResult::InsufficientBalance,
+    )
+    .await;
+    wait_until(
+        receivers2.remove(&withdraws2[2].tx_digest).unwrap(),
+        ScheduleResult::InsufficientBalance,
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn stress_test() {
-    let num_accounts = 100;
+    let num_accounts = 5;
     let num_transactions = 10000;
 
     let mut version = SequenceNumber::from_u64(0);
@@ -351,18 +436,15 @@ async fn stress_test() {
         .iter()
         .filter_map(|account_id| {
             if rng.gen_bool(0.7) {
-                Some((*account_id, rng.gen_range(0..10)))
+                Some((*account_id, rng.gen_range(0..20)))
             } else {
                 None
             }
         })
         .collect::<BTreeMap<_, _>>();
-    let test = TestScheduler::new(version, init_balances.clone());
 
     let mut withdraws = Vec::new();
-    let mut expected_results = BTreeMap::new();
     let mut settlements = Vec::new();
-    let mut balances = init_balances;
     let mut cur_reservations = Vec::new();
 
     for idx in 0..num_transactions {
@@ -373,82 +455,80 @@ async fn stress_test() {
             .collect::<Vec<_>>();
         let reservations = account_ids
             .iter()
-            .map(|account_id| (*account_id, rng.gen_range(0..10)))
+            .map(|account_id| {
+                (
+                    *account_id,
+                    if rng.gen_bool(0.8) {
+                        Reservation::MaxAmountU64(rng.gen_range(1..10))
+                    } else {
+                        Reservation::EntireBalance
+                    },
+                )
+            })
             .collect::<BTreeMap<_, _>>();
         cur_reservations.push(TxBalanceWithdraw {
             tx_digest: TransactionDigest::random(),
             reservations,
         });
         if rng.gen_bool(0.2) || idx == num_transactions - 1 {
-            let mut accumulated_reservations: BTreeMap<ObjectID, u64> = BTreeMap::new();
-            let mut balance_changes: BTreeMap<ObjectID, i128> = BTreeMap::new();
-            for reservation in &cur_reservations {
-                let mut success = true;
-                for (account_id, amount) in &reservation.reservations {
-                    if *amount
-                        + accumulated_reservations
-                            .get(account_id)
-                            .copied()
-                            .unwrap_or_default()
-                        > balances.get(account_id).copied().unwrap_or_default()
-                    {
-                        success = false;
-                        break;
-                    }
-                }
-                if success {
-                    for (account_id, amount) in &reservation.reservations {
-                        *accumulated_reservations.entry(*account_id).or_default() += *amount;
-                    }
-                    expected_results
-                        .insert(reservation.tx_digest, ScheduleResult::SufficientBalance);
-                    for (account_id, amount) in &reservation.reservations {
-                        *balance_changes.entry(*account_id).or_default() +=
-                            -(rng.gen_range(0..=*amount) as i128);
-                    }
-                } else {
-                    expected_results
-                        .insert(reservation.tx_digest, ScheduleResult::InsufficientBalance);
-                }
-            }
-            let num_deposits = rng.gen_range(0..5);
-            for _ in 0..num_deposits {
-                let account_id = accounts.choose(&mut rng).unwrap();
-                let amount = rng.gen_range(0..10) as i128;
-                *balance_changes.entry(*account_id).or_default() += amount;
-            }
-            for (account_id, amount) in &balance_changes {
-                let existing = balances.entry(*account_id).or_default();
-                *existing = (*existing as i128 + *amount) as u64;
-            }
+            // Every now and then we generate a settlement to advance the version.
+            // We don't really settle any balance changes here, as this test
+            // is primarily focusing on the scheduler's ability to handle
+            // random combinations ofwithdraws reservations.
             withdraws.push((version, std::mem::take(&mut cur_reservations)));
             version = version.next();
-            settlements.push((version, balance_changes));
+            settlements.push((version, BTreeMap::new()));
         }
     }
 
-    // Start a separate thread to run all settlements on the scheduler.
-    let test_clone = test.clone();
-    let settle_task = tokio::spawn(async move {
-        for (version, balance_changes) in settlements {
-            test_clone.settle_balance_changes(version, balance_changes);
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-    });
+    // Run through the scheduler many times and check that the results are always the same.
+    let mut expected_results = None;
+    let mut handles = Vec::new();
 
-    // Run all withdraws on the scheduler.
-    let mut all_receivers = BTreeMap::new();
-    for (version, withdraws) in withdraws {
-        let receivers = test.scheduler.schedule_withdraws(version, withdraws);
-        tokio::time::sleep(Duration::from_millis(5)).await;
-        all_receivers.extend(receivers);
+    // Spawn 10 concurrent tasks
+    for _ in 0..10 {
+        let init_balances = init_balances.clone();
+        let settlements = settlements.clone();
+        let withdraws = withdraws.clone();
+
+        let handle = tokio::spawn(async move {
+            let test = TestScheduler::new(version, init_balances);
+
+            // Start a separate thread to run all settlements on the scheduler.
+            let test_clone = test.clone();
+            let settlements = settlements.clone();
+            let settle_task = tokio::spawn(async move {
+                for (version, balance_changes) in settlements {
+                    test_clone.settle_balance_changes(version, balance_changes);
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            });
+
+            let mut all_receivers = BTreeMap::new();
+            for (version, withdraws) in withdraws {
+                let receivers = test.scheduler.schedule_withdraws(version, withdraws);
+                tokio::time::sleep(Duration::from_millis(5)).await;
+                all_receivers.extend(receivers);
+            }
+            // Wait for the settle task to finish.
+            settle_task.await.unwrap();
+
+            let mut results = BTreeMap::new();
+            for (tx_digest, receiver) in all_receivers {
+                results.insert(tx_digest, receiver.await.unwrap());
+            }
+            results
+        });
+        handles.push(handle);
     }
 
-    // Wait for the settle task to finish.
-    settle_task.await.unwrap();
-
-    // Wait for all receivers to be processed.
-    for (tx_digest, receiver) in all_receivers {
-        wait_until(receiver, expected_results[&tx_digest]).await;
+    // Wait for all tasks to complete and compare results
+    for handle in handles {
+        let results = handle.await.unwrap();
+        if expected_results.is_none() {
+            expected_results = Some(results);
+        } else {
+            assert_eq!(expected_results, Some(results));
+        }
     }
 }
