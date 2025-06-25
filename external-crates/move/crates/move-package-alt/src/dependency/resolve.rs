@@ -21,23 +21,29 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
-    dependency::{PinnedDependency, PinnedDependencyInfo},
+    dependency::{PinnedDependencyInfo, combine::Combined},
     errors::{FileHandle, TheFile},
     flavor::MoveFlavor,
     jsonrpc::Endpoint,
     package::{EnvironmentID, EnvironmentName, PackageName},
-    schema::{ManifestDependencyInfo, ResolveRequest, ResolveResponse, ResolverDependencyInfo},
+    schema::{
+        EXTERNAL_RESOLVE_ARG, ManifestDependencyInfo, ResolveRequest, ResolveResponse,
+        ResolverDependencyInfo,
+    },
 };
 
-use super::{
-    Combined, CombinedDependency, Dependency, DependencySet, Resolved, ResolvedDependency,
-};
+use super::{CombinedDependency, Dependency, DependencySet};
+
+/// A [Dependency<Resolved>] is like a [Dependency<Combined>] except that it no longer has
+/// externally resolved dependencies
+type Resolved = ResolverDependencyInfo;
 
 pub type ResolverName = String;
 pub type ResolverResult<T> = Result<T, ResolverError>;
 
-pub const RESOLVE_ARG: &str = "--resolve-deps";
-pub const RESOLVE_METHOD: &str = "resolve";
+/// A [ResolvedDependency] is like a [CombinedDependency] except that it no longer has
+/// externally resolved dependencies
+pub struct ResolvedDependency(pub(super) Dependency<Resolved>);
 
 #[derive(Error, Debug)]
 pub enum ResolverError {
@@ -189,7 +195,7 @@ async fn call_resolver(
 ) -> ResolverResult<Vec<ResolveResponse>> {
     let mut command = Command::new(&resolver);
     command
-        .arg(RESOLVE_ARG)
+        .arg(EXTERNAL_RESOLVE_ARG)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

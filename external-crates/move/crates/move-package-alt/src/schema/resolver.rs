@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{EnvironmentID, LocalDepInfo, ManifestGitDependency, OnChainDepInfo};
 
+pub const EXTERNAL_RESOLVE_ARG: &str = "--resolve-deps";
+pub const EXTERNAL_RESOLVE_METHOD: &str = "resolve";
+
 /// The name of an external resolver
 pub type ResolverName = String;
 
