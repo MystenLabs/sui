@@ -246,8 +246,11 @@ impl Handler for CoinBalanceBuckets {
             deleted_refs AS (
                 DELETE FROM coin_balance_buckets_deletion_reference
                 WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
+                RETURNING object_id
             )
-            SELECT count(*) FROM deleted_coins
+            SELECT
+                (SELECT count(*) FROM deleted_coins) as deleted_coins_count,
+                (SELECT count(*) FROM deleted_refs) as deleted_refs_count
             ",
             from, to_exclusive, from, to_exclusive
         );
@@ -255,14 +258,24 @@ impl Handler for CoinBalanceBuckets {
         #[derive(QueryableByName)]
         struct CountResult {
             #[diesel(sql_type = diesel::sql_types::BigInt)]
-            count: i64,
+            deleted_coins_count: i64,
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            deleted_refs_count: i64,
         }
 
         let result = diesel::sql_query(query)
             .get_result::<CountResult>(conn)
             .await?;
 
-        Ok(result.count as usize)
+        if result.deleted_coins_count != result.deleted_refs_count {
+            Err(anyhow::anyhow!(
+                "Deleted coins count ({}) does not match deleted refs count ({})",
+                result.deleted_coins_count,
+                result.deleted_refs_count
+            ))?;
+        }
+
+        Ok(result.deleted_coins_count as usize)
     }
 }
 

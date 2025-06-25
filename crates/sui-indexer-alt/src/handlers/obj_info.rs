@@ -173,7 +173,9 @@ impl Handler for ObjInfo {
 
     /// To prune `obj_info`, entries between `[from, to_exclusive)` are read from the reference
     /// table, and the previous versions of the objects are deleted from the main table. Finally,
-    /// the reference entries themselves are deleted.
+    /// the reference entries themselves are deleted. The framework guarantees that `to_exclusive <=
+    /// checkpoint_hi_inclusive - retention`, so we only prune data that has been committed but is
+    /// beyond the retention window.
     async fn prune<'a>(
         &self,
         from: u64,
@@ -209,8 +211,11 @@ impl Handler for ObjInfo {
             deleted_refs AS (
                 DELETE FROM obj_info_deletion_reference
                 WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
+                RETURNING object_id
             )
-            SELECT count(*) FROM deleted_objects
+            SELECT
+                (SELECT count(*) FROM deleted_objects) as deleted_objects_count,
+                (SELECT count(*) FROM deleted_refs) as deleted_refs_count
             ",
             from, to_exclusive, from, to_exclusive
         );
@@ -218,14 +223,24 @@ impl Handler for ObjInfo {
         #[derive(QueryableByName)]
         struct CountResult {
             #[diesel(sql_type = diesel::sql_types::BigInt)]
-            count: i64,
+            deleted_objects_count: i64,
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            deleted_refs_count: i64,
         }
 
         let result = diesel::sql_query(query)
             .get_result::<CountResult>(conn)
             .await?;
 
-        Ok(result.count as usize)
+        if result.deleted_objects_count != result.deleted_refs_count {
+            Err(anyhow::anyhow!(
+                "Deleted objects count ({}) does not match deleted refs count ({})",
+                result.deleted_objects_count,
+                result.deleted_refs_count
+            ))?;
+        };
+
+        Ok(result.deleted_objects_count as usize)
     }
 }
 
@@ -276,6 +291,13 @@ mod tests {
         Ok(query)
     }
 
+    async fn get_all_obj_info_deletion_references(
+        conn: &mut Connection<'_>,
+    ) -> Result<Vec<StoredObjInfoDeletionReference>> {
+        let query = obj_info_deletion_reference::table.load(conn).await?;
+        Ok(query)
+    }
+
     #[tokio::test]
     async fn test_process_basics() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
@@ -303,6 +325,11 @@ mod tests {
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let object0 = TestCheckpointDataBuilder::derive_object_id(0);
         let addr0 = TestCheckpointDataBuilder::derive_address(0);
+        // No deletion references are created for newly created objects.
+        let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+        assert!(all_obj_info_deletion_references.is_empty());
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
         assert_eq!(all_obj_info[0].cp_sequence_number, 0);
@@ -411,8 +438,9 @@ mod tests {
         assert_eq!(rows_pruned, 0);
     }
 
+    /// Tests create (cp 0) -> wrap (cp 1) -> prune -> unwrap (cp 2)
     #[tokio::test]
-    async fn test_process_wrap() {
+    async fn test_process_wrap_and_prune_before_unwrap() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
         let mut builder = TestCheckpointDataBuilder::new(0)
@@ -476,8 +504,68 @@ mod tests {
         assert_eq!(rows_pruned, 0);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+        assert!(all_obj_info_deletion_references.is_empty());
         assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].object_id, object0.to_vec());
+        assert_eq!(all_obj_info[0].cp_sequence_number, 2);
+        assert!(all_obj_info[0].owner_kind.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_process_wrap_and_prune_after_unwrap() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let mut builder = TestCheckpointDataBuilder::new(0)
+            .start_transaction(0)
+            .create_owned_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        builder = builder
+            .start_transaction(0)
+            .wrap_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Delete(_)
+        ));
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        builder = builder
+            .start_transaction(0)
+            .unwrap_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 1);
+        let processed = &result[0];
+        assert!(matches!(
+            processed.update,
+            ProcessedObjInfoUpdate::Created(_)
+        ));
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        let rows_pruned = ObjInfo.prune(0, 3, &mut conn).await.unwrap();
+        assert_eq!(rows_pruned, 2);
+
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+        assert!(all_obj_info_deletion_references.is_empty());
+        assert_eq!(all_obj_info.len(), 1);
         assert_eq!(all_obj_info[0].cp_sequence_number, 2);
         assert!(all_obj_info[0].owner_kind.is_some());
     }
@@ -757,5 +845,200 @@ mod tests {
         let checkpoint = builder.build_checkpoint();
         let result = ObjInfo.process(&Arc::new(checkpoint)).unwrap();
         assert!(result.is_empty());
+    }
+
+    /// Three objects are created in checkpoint 0. All are transferred in checkpoint 1, and
+    /// transferred back in checkpoint 2. Prune `[2, 3)` first, then `[1, 2)`, finally `[0, 1)`.
+    #[tokio::test]
+    async fn test_process_out_of_order_pruning() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .create_owned_object(1)
+            .create_owned_object(2)
+            .finish_transaction();
+        let checkpoint0 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint0)).unwrap();
+        assert_eq!(result.len(), 3);
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 3);
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .transfer_object(1, 1)
+            .transfer_object(2, 1)
+            .finish_transaction();
+        let checkpoint1 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
+        assert_eq!(result.len(), 3);
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 3);
+
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(0, 0)
+            .transfer_object(1, 0)
+            .transfer_object(2, 0)
+            .finish_transaction();
+        let checkpoint2 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
+        assert_eq!(result.len(), 3);
+        let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        assert_eq!(rows_inserted, 3);
+
+        // Each of the 3 objects will have two entries, one at cp_sequence_number 1, another at 2.
+        let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+        assert_eq!(all_obj_info_deletion_references.len(), 6);
+        for object in &all_obj_info_deletion_references {
+            assert!(object.cp_sequence_number == 1 || object.cp_sequence_number == 2);
+        }
+
+        let rows_pruned = ObjInfo.prune(2, 3, &mut conn).await.unwrap();
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+        // Each object should have two entries, with cp_sequence_number being either 0 or 2.
+        for object in &all_obj_info {
+            assert!(object.cp_sequence_number == 0 || object.cp_sequence_number == 2);
+        }
+        assert_eq!(rows_pruned, 3);
+        assert_eq!(all_obj_info.len(), 6);
+        // References at cp_sequence_number 2 should be pruned.
+        for object in &all_obj_info_deletion_references {
+            assert!(object.cp_sequence_number != 2);
+        }
+
+        let rows_pruned = ObjInfo.prune(1, 2, &mut conn).await.unwrap();
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+        // Each object should have a single entry with cp_sequence_number 2.
+        for object in &all_obj_info {
+            assert_eq!(object.cp_sequence_number, 2);
+        }
+        assert_eq!(rows_pruned, 3);
+        assert_eq!(all_obj_info.len(), 3);
+        // References at cp_sequence_number 1 should be pruned.
+        for object in &all_obj_info_deletion_references {
+            assert_eq!(object.cp_sequence_number, 0);
+        }
+    }
+
+    /// Test concurrent pruning operations to ensure thread safety and data consistency.
+    /// This test creates the same scenario as test_process_out_of_order_pruning but runs
+    /// multiple pruning operations concurrently.
+    #[tokio::test]
+    async fn test_process_concurrent_pruning() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+
+        // Create the same scenario as the out-of-order test
+        builder = builder
+            .start_transaction(0)
+            .create_owned_object(0)
+            .create_owned_object(1)
+            .create_owned_object(2)
+            .finish_transaction();
+        let checkpoint0 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint0)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .transfer_object(1, 1)
+            .transfer_object(2, 1)
+            .finish_transaction();
+        let checkpoint1 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(0, 0)
+            .transfer_object(1, 0)
+            .transfer_object(2, 0)
+            .finish_transaction();
+        let checkpoint2 = builder.build_checkpoint();
+        let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
+        ObjInfo::commit(&result, &mut conn).await.unwrap();
+
+        // Verify initial state
+        let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        assert_eq!(all_obj_info.len(), 9); // 3 objects × 3 checkpoints
+        let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+        assert_eq!(all_obj_info_deletion_references.len(), 6);
+
+        // Run concurrent pruning operations
+        let mut handles = Vec::new();
+
+        // Clone the store so each spawned task can own its own connection
+        let store = indexer.store().clone();
+
+        // Spawn pruning [2, 3)
+        let store1 = store.clone();
+        handles.push(tokio::spawn(async move {
+            let mut conn = store1.connect().await.unwrap();
+            ObjInfo.prune(2, 3, &mut conn).await
+        }));
+
+        // Spawn pruning [1, 2)
+        let store2 = store.clone();
+        handles.push(tokio::spawn(async move {
+            let mut conn = store2.connect().await.unwrap();
+            ObjInfo.prune(1, 2, &mut conn).await
+        }));
+
+        // Spawn pruning [0, 1)
+        let store3 = store.clone();
+        handles.push(tokio::spawn(async move {
+            let mut conn = store3.connect().await.unwrap();
+            ObjInfo.prune(0, 1, &mut conn).await
+        }));
+
+        // Wait for all pruning operations to complete
+        let results: Vec<Result<usize, anyhow::Error>> = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .map(|r| r.unwrap())
+            .collect();
+
+        // Verify all pruning operations succeeded
+        for result in &results {
+            assert!(result.is_ok(), "Pruning operation failed: {:?}", result);
+        }
+
+        // Verify final state is consistent
+        let final_obj_info = get_all_obj_info(&mut conn).await.unwrap();
+        let final_deletion_references = get_all_obj_info_deletion_references(&mut conn)
+            .await
+            .unwrap();
+
+        // After all pruning, we should have only the latest versions (cp_sequence_number = 2)
+        assert_eq!(final_obj_info.len(), 3);
+        for object in &final_obj_info {
+            assert_eq!(object.cp_sequence_number, 2);
+        }
+
+        // All deletion references should be cleaned up
+        assert_eq!(final_deletion_references.len(), 0);
+
+        // Verify the total number of pruned rows matches expectations
+        let total_pruned: usize = results.into_iter().map(|r| r.unwrap()).sum();
+        assert_eq!(total_pruned, 6);
+        for object in &final_obj_info {
+            assert_eq!(object.cp_sequence_number, 2);
+        }
     }
 }
