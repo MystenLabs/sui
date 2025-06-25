@@ -33,7 +33,7 @@ fn process_instruction(mut inst: Instruction, env: &mut Env) -> Option<Instructi
     match &mut inst {
         Instruction::AssignReg { lhs, rhs } if matches!(lhs[..], [_]) => match rhs {
             RValue::Trivial(imm @ Trivial::Immediate(_)) => {
-                let register = lhs[0].clone();
+                let register = lhs[0];
                 env.immediates.insert(register, imm.clone());
                 None
             }
