@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   generate-docs-if-merged:
     if: github.event.pull_request.merged == true
