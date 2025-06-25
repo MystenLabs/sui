@@ -384,10 +384,8 @@ mod tests {
     };
 
     use super::*;
-    use std::{
-        sync::{atomic::AtomicUsize, Arc},
-        time::Duration,
-    };
+    use prometheus::Registry;
+    use std::{sync::Arc, time::Duration};
     use sui_types::full_checkpoint_content::CheckpointData;
     use tokio::sync::mpsc;
     use tokio_util::sync::CancellationToken;
@@ -435,12 +433,12 @@ mod tests {
         committer_handle: JoinHandle<()>,
     }
 
-    async fn setup_test(
+    fn setup_test(
         initial_watermark: Option<CommitterWatermark>,
         config: SequentialConfig,
         store: MockStore,
     ) -> TestSetup {
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(&Registry::default());
         let cancel = CancellationToken::new();
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
@@ -448,18 +446,15 @@ mod tests {
         let (watermark_tx, watermark_rx) = mpsc::unbounded_channel();
 
         let store_clone = store.clone();
-        let committer_handle = tokio::spawn(async move {
-            let _ = committer(
-                config,
-                initial_watermark,
-                checkpoint_rx,
-                watermark_tx,
-                store_clone,
-                metrics,
-                cancel,
-            )
-            .await;
-        });
+        let committer_handle = committer(
+            config,
+            initial_watermark,
+            checkpoint_rx,
+            watermark_tx,
+            store_clone,
+            metrics,
+            cancel,
+        );
 
         TestSetup {
             store,
@@ -495,7 +490,7 @@ mod tests {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default()).await;
+        let mut setup = setup_test(initial_watermark, config, MockStore::default());
 
         // Send checkpoints in order
         for i in 0..3 {
@@ -533,7 +528,7 @@ mod tests {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default()).await;
+        let mut setup = setup_test(initial_watermark, config, MockStore::default());
 
         // Send checkpoints out of order
         for i in [1, 0, 2] {
@@ -571,7 +566,7 @@ mod tests {
             committer: CommitterConfig::default(),
             checkpoint_lag: 0, // Zero checkpoint lag to process new batch instantly
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default()).await;
+        let mut setup = setup_test(initial_watermark, config, MockStore::default());
 
         // Send checkpoints up to MAX_BATCH_CHECKPOINTS
         for i in 0..4 {
@@ -610,7 +605,7 @@ mod tests {
             committer: CommitterConfig::default(),
             checkpoint_lag: 1, // Only commit checkpoints that are at least 1 behind
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default()).await;
+        let mut setup = setup_test(initial_watermark, config, MockStore::default());
 
         // Send checkpoints 0-2
         for i in 0..3 {
@@ -652,7 +647,7 @@ mod tests {
             },
             checkpoint_lag: 0, // Zero checkpoint lag to not block the eager logic
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default()).await;
+        let mut setup = setup_test(initial_watermark, config, MockStore::default());
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -690,7 +685,7 @@ mod tests {
             },
             checkpoint_lag: 4, // High checkpoint lag to block eager commits
         };
-        let mut setup = setup_test(initial_watermark, config, MockStore::default()).await;
+        let mut setup = setup_test(initial_watermark, config, MockStore::default());
 
         // Wait for initial poll to be over
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -733,12 +728,9 @@ mod tests {
         };
 
         // Create store with transaction failure configuration
-        let store = MockStore {
-            transaction_failure_attempts: Arc::new(AtomicUsize::new(1)), // Will fail once before succeeding
-            ..Default::default()
-        };
+        let store = MockStore::default().with_transaction_failures(1); // Will fail once before succeeding
 
-        let mut setup = setup_test(initial_watermark, config, store).await;
+        let mut setup = setup_test(initial_watermark, config, store);
 
         // Send a checkpoint
         send_checkpoint(&mut setup, 0).await;

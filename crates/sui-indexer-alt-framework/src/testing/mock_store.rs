@@ -10,6 +10,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use anyhow::ensure;
 use async_trait::async_trait;
 use scoped_futures::ScopedBoxFuture;
 use tokio::time::Duration;
@@ -40,6 +41,15 @@ pub struct ConnectionFailure {
     pub connection_attempts: usize,
 }
 
+/// Configuration for simulating transaction failures in tests
+#[derive(Default)]
+pub struct TransactionFailures {
+    /// Number of failures to simulate before allowing success
+    pub failures: usize,
+    /// Counter for tracking total transaction attempts
+    pub attempts: AtomicUsize,
+}
+
 /// A mock store for testing. It maintains a map of checkpoint sequence numbers to transaction
 /// sequence numbers, and a watermark that can be used to test the watermark task.
 #[derive(Clone)]
@@ -60,8 +70,8 @@ pub struct MockStore {
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
     /// Number of remaining failures for set_reader_watermark operation
     pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
-    /// Number of remaining failures for transaction operation
-    pub transaction_failure_attempts: Arc<AtomicUsize>,
+    /// Configuration for simulating transaction failures in tests
+    pub transaction_failures: Arc<TransactionFailures>,
 }
 
 impl Default for MockStore {
@@ -73,7 +83,7 @@ impl Default for MockStore {
             prune_failure_attempts: Arc::new(Mutex::new(HashMap::new())),
             connection_failure: Arc::new(Mutex::new(ConnectionFailure::default())),
             set_reader_watermark_failure_attempts: Arc::new(Mutex::new(0)),
-            transaction_failure_attempts: Arc::new(AtomicUsize::new(0)),
+            transaction_failures: Arc::new(TransactionFailures::default()),
         }
     }
 }
@@ -222,16 +232,15 @@ impl TransactionalStore for MockStore {
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
     {
         // Check if we should simulate a transaction failure
-        if let Ok(prev) = self.transaction_failure_attempts.fetch_update(
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-            |x| if x > 0 { Some(x - 1) } else { None },
-        ) {
-            return Err(anyhow::anyhow!(
-                "Transaction failed, remaining failures: {}",
-                prev - 1
-            ));
-        }
+        let prev = self
+            .transaction_failures
+            .attempts
+            .fetch_add(1, Ordering::Relaxed);
+        ensure!(
+            prev >= self.transaction_failures.failures,
+            "Transaction failed, remaining failures: {}",
+            self.transaction_failures.failures - prev
+        );
 
         let mut conn = self.connect().await?;
         f(&mut conn).await
@@ -245,6 +254,15 @@ impl MockStore {
             .lock()
             .unwrap()
             .connection_failure_attempts = attempts;
+        self
+    }
+
+    /// Helper to configure transaction failure simulation
+    pub fn with_transaction_failures(mut self, failures: usize) -> Self {
+        self.transaction_failures = Arc::new(TransactionFailures {
+            failures,
+            attempts: AtomicUsize::new(0),
+        });
         self
     }
 
