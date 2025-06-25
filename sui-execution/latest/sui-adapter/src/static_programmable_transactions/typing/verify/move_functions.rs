@@ -106,7 +106,8 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
     let T::Transaction { inputs, commands } = txn;
     let mut context = Context::new(inputs);
     for (c, result) in commands {
-        let result_dirties = command::<Mode>(env, &mut context, c, result)?;
+        let result_dirties = command::<Mode>(env, &mut context, c, result)
+            .map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(
             result_dirties.len() == result.len(),
             "result length mismatch"
