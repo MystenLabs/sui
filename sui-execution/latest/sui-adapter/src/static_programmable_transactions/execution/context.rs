@@ -39,6 +39,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     rc::Rc,
     sync::Arc,
+    vec,
 };
 use sui_move_natives::object_runtime::{
     self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
@@ -733,23 +734,25 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: &RootedLinkage,
         mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
-        let modules_to_init = modules.iter().filter_map(|module| {
-            for fdef in &module.function_defs {
-                let fhandle = module.function_handle_at(fdef.function);
-                let fname = module.identifier_at(fhandle.name);
-                if fname == INIT_FN_NAME {
-                    return Some(module.self_id());
-                }
-            }
-            None
-        });
-
-        for module_id in modules_to_init {
-            let args = vec![CtxValue(Value::tx_context(
-                self.tx_context.borrow().digest(),
-            )?)];
+        for module in modules {
+            let Some((_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str()) else {
+                continue;
+            };
+            let fhandle = module.function_handle_at(fdef.function);
+            let fparameters = module.signature_at(fhandle.parameters);
+            assert_invariant!(
+                fparameters.0.len() <= 2,
+                "init function should have at most 2 parameters"
+            );
+            let has_otw = fparameters.0.len() == 2;
+            let tx_context = CtxValue(Value::tx_context(self.tx_context.borrow().digest())?);
+            let args = if has_otw {
+                vec![CtxValue(Value::one_time_witness()?), tx_context]
+            } else {
+                vec![tx_context]
+            };
             let return_values = self.execute_function_bypass_visibility(
-                &module_id,
+                &module.self_id(),
                 INIT_FN_NAME,
                 &[],
                 args,

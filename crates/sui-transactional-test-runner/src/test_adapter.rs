@@ -363,8 +363,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        protocol_config
-            .set_enable_ptb_execution_v2_for_testing(ENABLE_PTB_V2.get().copied().unwrap_or(false));
+        let enabled_ptb_v2 =
+            protocol_config.version >= 86.into() && ENABLE_PTB_V2.get().copied().unwrap_or(false);
+        protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
         let (
             executor,

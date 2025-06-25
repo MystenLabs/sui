@@ -75,6 +75,8 @@ pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Erro
         "call",
         "checkpoint",
         "child_count",
+        "children",
+        "mvcc",
     ];
     let mut components = path.parent().unwrap().components();
     let enabled = components.any(|c| {

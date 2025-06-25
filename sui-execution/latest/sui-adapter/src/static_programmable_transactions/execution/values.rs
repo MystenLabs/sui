@@ -332,6 +332,13 @@ impl Value {
             VMValue::u64(0),
         ]))))
     }
+
+    pub fn one_time_witness() -> Result<Self, ExecutionError> {
+        // public struct <ONE_TIME_WITNESS> has drop{
+        //     _dummy: bool,
+        // }
+        Ok(Self(VMValue::struct_(Struct::pack([VMValue::bool(true)]))))
+    }
 }
 
 //**************************************************************************************************
