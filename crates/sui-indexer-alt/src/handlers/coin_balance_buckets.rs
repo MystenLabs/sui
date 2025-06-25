@@ -797,4 +797,289 @@ mod tests {
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 0);
     }
+
+    #[tokio::test]
+    async fn test_process_coin_balance_buckets_wrap_and_prune_after_unwrap() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+
+        // Create a coin in checkpoint 0
+        builder = builder
+            .start_transaction(0)
+            .create_sui_object(0, 100)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        // Wrap the coin in checkpoint 1
+        builder = builder
+            .start_transaction(0)
+            .wrap_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
+        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        // Unwrap the coin in checkpoint 2
+        builder = builder
+            .start_transaction(0)
+            .unwrap_object(0)
+            .finish_transaction();
+        let checkpoint = builder.build_checkpoint();
+        let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(
+            values[0].change,
+            CoinBalanceBucketChangeKind::Insert {
+                owner_kind: StoredCoinOwnerKind::Fastpath,
+                balance_bucket: 2,
+                coin_type: GAS::type_tag(),
+                owner_id: TestCheckpointDataBuilder::derive_address(0),
+                created: true,
+            }
+        );
+        let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(rows_inserted, 1);
+
+        // Prune after unwrap
+        let rows_pruned = CoinBalanceBuckets.prune(0, 3, &mut conn).await.unwrap();
+        assert_eq!(rows_pruned, 2);
+
+        let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
+        assert_eq!(all_balance_buckets.len(), 1);
+        assert_eq!(all_balance_buckets[0].cp_sequence_number, 2);
+        assert!(all_balance_buckets[0].owner_kind.is_some());
+    }
+
+    /// Three coins are created in checkpoint 0. All are transferred in checkpoint 1, and
+    /// transferred back in checkpoint 2. Prune `[2, 3)` first, then `[1, 2)`, finally `[0, 1)`.
+    #[tokio::test]
+    async fn test_process_coin_balance_buckets_out_of_order_pruning() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+
+        // Create three coins in checkpoint 0
+        builder = builder
+            .start_transaction(0)
+            .create_sui_object(0, 100)
+            .create_sui_object(1, 1000)
+            .create_sui_object(2, 10000)
+            .finish_transaction();
+        let checkpoint0 = builder.build_checkpoint();
+        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint0)).unwrap();
+        assert_eq!(result.len(), 3);
+        let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(rows_inserted, 3);
+
+        // Transfer all coins to address 1 in checkpoint 1
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .transfer_object(1, 1)
+            .transfer_object(2, 1)
+            .finish_transaction();
+        let checkpoint1 = builder.build_checkpoint();
+        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint1)).unwrap();
+        assert_eq!(result.len(), 3);
+        let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(rows_inserted, 3);
+
+        // Transfer all coins back to address 0 in checkpoint 2
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(0, 0)
+            .transfer_object(1, 0)
+            .transfer_object(2, 0)
+            .finish_transaction();
+        let checkpoint2 = builder.build_checkpoint();
+        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint2)).unwrap();
+        assert_eq!(result.len(), 3);
+        let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
+            .await
+            .unwrap();
+        assert_eq!(rows_inserted, 3);
+
+        // Each of the 3 coins will have two deletion references, one at cp_sequence_number 1, another at 2.
+        let all_deletion_references = coin_balance_buckets_deletion_reference::table
+            .load::<StoredCoinBalanceBucketDeletionReference>(&mut conn)
+            .await
+            .unwrap();
+        assert_eq!(all_deletion_references.len(), 6);
+        for reference in &all_deletion_references {
+            assert!(reference.cp_sequence_number == 1 || reference.cp_sequence_number == 2);
+        }
+
+        // Prune [2, 3) first (reverse order)
+        let rows_pruned = CoinBalanceBuckets.prune(2, 3, &mut conn).await.unwrap();
+        let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
+        let all_deletion_references = coin_balance_buckets_deletion_reference::table
+            .load::<StoredCoinBalanceBucketDeletionReference>(&mut conn)
+            .await
+            .unwrap();
+
+        // Each coin should have two entries, with cp_sequence_number being either 0 or 2.
+        for bucket in &all_balance_buckets {
+            assert!(bucket.cp_sequence_number == 0 || bucket.cp_sequence_number == 2);
+        }
+        assert_eq!(rows_pruned, 3);
+        assert_eq!(all_balance_buckets.len(), 6);
+        // References at cp_sequence_number 2 should be pruned.
+        for reference in &all_deletion_references {
+            assert!(reference.cp_sequence_number != 2);
+        }
+
+        // Prune [1, 2) next
+        let rows_pruned = CoinBalanceBuckets.prune(1, 2, &mut conn).await.unwrap();
+        let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
+        let all_deletion_references = coin_balance_buckets_deletion_reference::table
+            .load::<StoredCoinBalanceBucketDeletionReference>(&mut conn)
+            .await
+            .unwrap();
+
+        // Each coin should have a single entry with cp_sequence_number 2.
+        for bucket in &all_balance_buckets {
+            assert_eq!(bucket.cp_sequence_number, 2);
+        }
+        assert_eq!(rows_pruned, 3);
+        assert_eq!(all_balance_buckets.len(), 3);
+        // References at cp_sequence_number 1 should be pruned.
+        for reference in &all_deletion_references {
+            assert_eq!(reference.cp_sequence_number, 0);
+        }
+    }
+
+    /// Test concurrent pruning operations to ensure thread safety and data consistency.
+    /// This test creates the same scenario as test_process_coin_balance_buckets_out_of_order_pruning but runs
+    /// multiple pruning operations concurrently.
+    #[tokio::test]
+    async fn test_process_coin_balance_buckets_concurrent_pruning() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+        let mut builder = TestCheckpointDataBuilder::new(0);
+
+        // Create the same scenario as the out-of-order test
+        builder = builder
+            .start_transaction(0)
+            .create_sui_object(0, 100)
+            .create_sui_object(1, 1000)
+            .create_sui_object(2, 10000)
+            .finish_transaction();
+        let checkpoint0 = builder.build_checkpoint();
+        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint0)).unwrap();
+        CoinBalanceBuckets::commit(&result, &mut conn)
+            .await
+            .unwrap();
+
+        builder = builder
+            .start_transaction(0)
+            .transfer_object(0, 1)
+            .transfer_object(1, 1)
+            .transfer_object(2, 1)
+            .finish_transaction();
+        let checkpoint1 = builder.build_checkpoint();
+        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint1)).unwrap();
+        CoinBalanceBuckets::commit(&result, &mut conn)
+            .await
+            .unwrap();
+
+        builder = builder
+            .start_transaction(1)
+            .transfer_object(0, 0)
+            .transfer_object(1, 0)
+            .transfer_object(2, 0)
+            .finish_transaction();
+        let checkpoint2 = builder.build_checkpoint();
+        let result = CoinBalanceBuckets.process(&Arc::new(checkpoint2)).unwrap();
+        CoinBalanceBuckets::commit(&result, &mut conn)
+            .await
+            .unwrap();
+
+        // Verify initial state
+        let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
+        assert_eq!(all_balance_buckets.len(), 9); // 3 coins × 3 checkpoints
+        let all_deletion_references = coin_balance_buckets_deletion_reference::table
+            .load::<StoredCoinBalanceBucketDeletionReference>(&mut conn)
+            .await
+            .unwrap();
+        assert_eq!(all_deletion_references.len(), 6);
+
+        // Run concurrent pruning operations
+        let mut handles = Vec::new();
+
+        // Clone the store so each spawned task can own its own connection
+        let store = indexer.store().clone();
+
+        // Spawn pruning [2, 3)
+        let store1 = store.clone();
+        handles.push(tokio::spawn(async move {
+            let mut conn = store1.connect().await.unwrap();
+            CoinBalanceBuckets.prune(2, 3, &mut conn).await
+        }));
+
+        // Spawn pruning [1, 2)
+        let store2 = store.clone();
+        handles.push(tokio::spawn(async move {
+            let mut conn = store2.connect().await.unwrap();
+            CoinBalanceBuckets.prune(1, 2, &mut conn).await
+        }));
+
+        // Spawn pruning [0, 1)
+        let store3 = store.clone();
+        handles.push(tokio::spawn(async move {
+            let mut conn = store3.connect().await.unwrap();
+            CoinBalanceBuckets.prune(0, 1, &mut conn).await
+        }));
+
+        // Wait for all pruning operations to complete
+        let results: Vec<Result<usize, anyhow::Error>> = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .map(|r| r.unwrap())
+            .collect();
+
+        // Verify all pruning operations succeeded
+        for result in &results {
+            assert!(result.is_ok(), "Pruning operation failed: {:?}", result);
+        }
+
+        // Verify final state is consistent
+        let final_balance_buckets = get_all_balance_buckets(&mut conn).await;
+        let final_deletion_references = coin_balance_buckets_deletion_reference::table
+            .load::<StoredCoinBalanceBucketDeletionReference>(&mut conn)
+            .await
+            .unwrap();
+
+        // After all pruning, we should have only the latest versions (cp_sequence_number = 2)
+        assert_eq!(final_balance_buckets.len(), 3);
+        for bucket in &final_balance_buckets {
+            assert_eq!(bucket.cp_sequence_number, 2);
+        }
+
+        // All deletion references should be cleaned up
+        assert_eq!(final_deletion_references.len(), 0);
+
+        // Verify the total number of pruned rows matches expectations
+        let total_pruned: usize = results.into_iter().map(|r| r.unwrap()).sum();
+        assert_eq!(total_pruned, 6);
+        for bucket in &final_balance_buckets {
+            assert_eq!(bucket.cp_sequence_number, 2);
+        }
+    }
 }
