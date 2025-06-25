@@ -1,0 +1,8 @@
+# this section can contain some of the settings you'd normall see in a cargo.toml, specifically settings that you'd use to configure
+# dependencies in cargo.toml.  We support package and version keys.
+[crates]
+sui-proxy = {}
+
+# static is like crates, but will always be included as static deps in reindeer's cargo.toml.  We support package and version keys.
+[static]
+libc = { version = "0.2" }

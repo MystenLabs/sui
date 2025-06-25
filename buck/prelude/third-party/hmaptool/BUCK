@@ -1,0 +1,11 @@
+native.export_file(
+    name = "_hmaptool",
+    src = "hmaptool",
+    mode = "reference",
+)
+
+native.command_alias(
+    name = "hmaptool",
+    exe = ":_hmaptool",
+    visibility = ["PUBLIC"],
+)

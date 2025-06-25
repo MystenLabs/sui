@@ -1,0 +1,53 @@
+#!<PYTHON> <PYTHON_INTERPRETER_FLAGS>
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under both the MIT license found in the
+# LICENSE-MIT file in the root directory of this source tree and the Apache
+# License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+# of this source tree.
+
+# LINKTREEDIR=<MODULES_DIR>
+
+main_module = "<MAIN_MODULE>"
+main_function = "<MAIN_FUNCTION>"
+modules_dir = "<MODULES_DIR>"
+
+# Wrap everything in a private function to prevent globals being captured by
+# the `runpy._run_module_as_main` below.
+def __run():
+    import sys
+    import os
+    import site
+    import time
+
+    os.environ["PAR_LAUNCH_TIMESTAMP"] = str(time.time())
+
+    # We set the paths beforehand to have a minimal amount of imports before
+    # nuking PWD from sys.path. Otherwise, there can be problems if someone runs
+    # from a directory with a similarly named file, even if their code is properly
+    # namespaced. e.g. if one has foo/bar/contextlib.py and while in foo/bar runs
+    # `buck run foo/bar:bin`, runpy will fail as it tries to import
+    # foo/bar/contextlib.py. You're just out of luck if you have sys.py or os.py
+
+    dirpath = os.path.dirname(os.path.realpath(__file__))
+
+    # Save the variables that will be restored back into the environment by
+    # fbcode/buck2/prelude/python/tools/make_par/sitecustomize.py
+    for env in ("PYTHONPATH", "LD_LIBRARY_PATH", "LD_PRELOAD",
+                "DYLD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"):
+        if env in os.environ:
+            os.environ["FB_SAVED_" + env] = os.environ[env]
+
+    path = os.path.join(dirpath, modules_dir)
+    os.environ["PYTHONPATH"] = path
+
+    # Replace the working directory with location of the modules directory.
+    sys.path[0] = path
+
+    site.execsitecustomize()
+
+    from <MAIN_RUNNER_MODULE> import <MAIN_RUNNER_FUNCTION> as run_as_main
+    run_as_main(main_module, main_function)
+
+
+__run()
