@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::Parser;
+use crate::build::BuildCmdConfig;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_types::supported_protocol_versions::Chain;
 
+pub mod build;
 pub mod data_store;
 pub mod execution;
 pub mod gql_queries;
@@ -26,6 +28,23 @@ pub mod tracing;
     about = "Replay executed transactions.",
     rename_all = "kebab-case"
 )]
+pub struct Config {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
+    #[command(flatten)]
+    pub replay: ReplayConfig,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum Commands {
+    /// Build and prepare replay data
+    #[clap(alias = "b")]
+    Build(BuildCmdConfig),
+}
+
+/// Arguments for the (implicit) replay command.
+#[derive(Parser, Clone, Debug)]
 pub struct ReplayConfig {
     /// Transaction digest to replay.
     #[arg(long, short)]

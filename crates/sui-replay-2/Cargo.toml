@@ -19,10 +19,12 @@ fastcrypto.workspace = true
 futures.workspace = true
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
+move-cli.workspace = true
 move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
+move-package.workspace = true
 move-trace-format.workspace = true
 prometheus.workspace = true
 reqwest = { workspace = true, features = ["json"] }
@@ -31,6 +33,8 @@ similar.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
 sui-types.workspace = true
+sui-move-build.workspace = true
+sui-package-management.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
