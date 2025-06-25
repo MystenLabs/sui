@@ -821,7 +821,7 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner = Pin<Arc<dyn Signer<AuthoritySignature> + Send + Sync>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BalanceWithdrawEnv {
+pub enum BalanceWithdrawStatus {
     NoWithdraw,
     SufficientBalance,
     // TODO(address-balances): Add information on the address and type?
@@ -840,7 +840,7 @@ pub struct ExecutionEnv {
     /// The source of the scheduling of the transaction.
     pub scheduling_source: SchedulingSource,
     /// Information regarding the balance withdraw of the transaction.
-    pub withdraw_env: BalanceWithdrawEnv,
+    pub withdraw_env: BalanceWithdrawStatus,
 }
 
 impl Default for ExecutionEnv {
@@ -849,7 +849,7 @@ impl Default for ExecutionEnv {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
-            withdraw_env: BalanceWithdrawEnv::NoWithdraw,
+            withdraw_env: BalanceWithdrawStatus::NoWithdraw,
         }
     }
 }
@@ -882,12 +882,12 @@ impl ExecutionEnv {
     }
 
     pub fn with_sufficient_balance(mut self) -> Self {
-        self.withdraw_env = BalanceWithdrawEnv::SufficientBalance;
+        self.withdraw_env = BalanceWithdrawStatus::SufficientBalance;
         self
     }
 
     pub fn with_insufficient_balance(mut self) -> Self {
-        self.withdraw_env = BalanceWithdrawEnv::InsufficientBalance;
+        self.withdraw_env = BalanceWithdrawStatus::InsufficientBalance;
         self
     }
 }

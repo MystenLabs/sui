@@ -88,10 +88,12 @@ impl ExecutionScheduler {
         let balance_withdraw_scheduler = if balance_accumulator_enabled {
             let starting_accumulator_version = object_cache_read
                 .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                .map(|obj| obj.version());
-            starting_accumulator_version.map(|version| {
-                BalanceWithdrawScheduler::new(Arc::new(object_cache_read.clone()), version)
-            })
+                .expect("Accumulator root object must be present if balance accumulator is enabled")
+                .version();
+            Some(BalanceWithdrawScheduler::new(
+                Arc::new(object_cache_read.clone()),
+                starting_accumulator_version,
+            ))
         } else {
             None
         };

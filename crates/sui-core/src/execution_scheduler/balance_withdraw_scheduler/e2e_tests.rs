@@ -30,7 +30,7 @@ use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::{
     authority::{
         shared_object_version_manager::Schedulable, test_authority_builder::TestAuthorityBuilder,
-        AuthorityState, BalanceWithdrawEnv, ExecutionEnv,
+        AuthorityState, BalanceWithdrawStatus, ExecutionEnv,
     },
     execution_scheduler::{
         ExecutionScheduler, ExecutionSchedulerAPI, ExecutionSchedulerWrapper, PendingCertificate,
@@ -157,7 +157,7 @@ impl TestEnv {
             .ok()?
     }
 
-    async fn expect_withdraw_results(&mut self, expected_results: Vec<BalanceWithdrawEnv>) {
+    async fn expect_withdraw_results(&mut self, expected_results: Vec<BalanceWithdrawStatus>) {
         for expected_result in expected_results {
             let cert = self.receive_certificate().await.unwrap();
             assert_eq!(cert.execution_env.withdraw_env, expected_result);
@@ -206,9 +206,9 @@ async fn test_withdraw_schedule_e2e() {
     test_env.enqueue_transactions(transactions);
     test_env
         .expect_withdraw_results(vec![
-            BalanceWithdrawEnv::SufficientBalance,
-            BalanceWithdrawEnv::SufficientBalance,
-            BalanceWithdrawEnv::InsufficientBalance,
+            BalanceWithdrawStatus::SufficientBalance,
+            BalanceWithdrawStatus::SufficientBalance,
+            BalanceWithdrawStatus::InsufficientBalance,
         ])
         .await;
 
@@ -221,8 +221,8 @@ async fn test_withdraw_schedule_e2e() {
 
     test_env
         .expect_withdraw_results(vec![
-            BalanceWithdrawEnv::SufficientBalance,
-            BalanceWithdrawEnv::InsufficientBalance,
+            BalanceWithdrawStatus::SufficientBalance,
+            BalanceWithdrawStatus::InsufficientBalance,
         ])
         .await;
 
@@ -233,6 +233,6 @@ async fn test_withdraw_schedule_e2e() {
     test_env.enqueue_transactions(transactions);
 
     test_env
-        .expect_withdraw_results(vec![BalanceWithdrawEnv::InsufficientBalance])
+        .expect_withdraw_results(vec![BalanceWithdrawStatus::InsufficientBalance])
         .await;
 }
