@@ -7,6 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use anyhow::ensure;
 use async_trait::async_trait;
 use tokio::time::Duration;
 
@@ -36,7 +37,7 @@ pub struct ConnectionFailure {
 
 /// A mock store for testing. It maintains a map of checkpoint sequence numbers to transaction
 /// sequence numbers, and a watermark that can be used to test the watermark task.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MockStore {
     /// Tracks various watermark states (committer, reader, pruner)
     pub watermarks: Arc<Mutex<MockWatermark>>,
@@ -51,18 +52,6 @@ pub struct MockStore {
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
     /// Number of remaining failures for set_reader_watermark operation
     pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
-}
-
-impl Default for MockStore {
-    fn default() -> Self {
-        Self {
-            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
-            data: Arc::new(Mutex::new(HashMap::new())),
-            prune_failure_attempts: Arc::new(Mutex::new(HashMap::new())),
-            connection_failure: Arc::new(Mutex::new(ConnectionFailure::default())),
-            set_reader_watermark_failure_attempts: Arc::new(Mutex::new(0)),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -190,9 +179,7 @@ impl Store for MockStore {
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
         }
 
-        if should_fail {
-            return Err(anyhow::anyhow!("Connection failed"));
-        }
+        ensure!(!should_fail, "Connection failed");
 
         Ok(MockConnection(self))
     }

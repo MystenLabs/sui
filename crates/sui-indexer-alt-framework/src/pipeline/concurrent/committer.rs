@@ -224,6 +224,7 @@ mod tests {
         },
     };
 
+    use anyhow::ensure;
     use async_trait::async_trait;
     use sui_types::full_checkpoint_content::CheckpointData;
     use tokio::sync::mpsc;
@@ -242,7 +243,7 @@ mod tests {
 
     use super::*;
 
-    #[derive(Clone, FieldCount)]
+    #[derive(Clone, FieldCount, Default)]
     pub struct StoredData {
         pub cp_sequence_number: u64,
         pub tx_sequence_numbers: Vec<u64>,
@@ -251,17 +252,6 @@ mod tests {
         /// so this needs to be thread-safe (hence Arc<AtomicUsize>).
         pub commit_failure_remaining: Arc<AtomicUsize>,
         pub commit_delay_ms: u64,
-    }
-
-    impl Default for StoredData {
-        fn default() -> Self {
-            Self {
-                cp_sequence_number: 0,
-                tx_sequence_numbers: Vec::new(),
-                commit_failure_remaining: Arc::new(AtomicUsize::new(0)),
-                commit_delay_ms: 0,
-            }
-        }
     }
 
     pub struct DataPipeline;
@@ -294,13 +284,12 @@ mod tests {
                 {
                     let remaining = value
                         .commit_failure_remaining
-                        .fetch_sub(1, Ordering::SeqCst);
-                    if remaining > 0 {
-                        return Err(anyhow::anyhow!(
-                            "Commit failed, remaining failures: {}",
-                            remaining - 1
-                        ));
-                    }
+                        .fetch_sub(1, Ordering::Relaxed);
+                    ensure!(
+                        remaining == 0,
+                        "Commit failed, remaining failures: {}",
+                        remaining - 1
+                    );
                 }
 
                 // Lock, insert, and immediately drop the lock
@@ -359,11 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_batch_processing() {
-        let store = MockStore {
-            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
-            ..Default::default()
-        };
-        let mut setup = setup_test(store, false).await;
+        let mut setup = setup_test(MockStore::default(), false).await;
 
         // Send batches
         let batch1 = BatchedRows {
@@ -447,13 +432,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit_with_retries_for_commit_failure() {
-        // Create a batch with a single item that will fail once before succeeding
-        let store = MockStore {
-            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
-            ..Default::default()
-        };
-        let mut setup = setup_test(store, false).await;
+        let mut setup = setup_test(MockStore::default(), false).await;
 
+        // Create a batch with a single item that will fail once before succeeding
         let batch = BatchedRows {
             values: vec![StoredData {
                 cp_sequence_number: 1,
@@ -576,11 +557,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_batch_handling() {
-        let store = MockStore {
-            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
-            ..Default::default()
-        };
-        let mut setup = setup_test(store, false).await;
+        let mut setup = setup_test(MockStore::default(), false).await;
 
         let empty_batch = BatchedRows {
             values: vec![], // Empty values
@@ -621,11 +598,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skip_watermark_mode() {
-        let store = MockStore {
-            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
-            ..Default::default()
-        };
-        let mut setup = setup_test(store, true).await;
+        let mut setup = setup_test(MockStore::default(), true).await;
 
         let batch = BatchedRows {
             values: vec![StoredData {
@@ -670,11 +643,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_watermark_channel_closed() {
-        let store = MockStore {
-            watermarks: Arc::new(Mutex::new(MockWatermark::default())),
-            ..Default::default()
-        };
-        let setup = setup_test(store, false).await;
+        let setup = setup_test(MockStore::default(), false).await;
 
         let batch = BatchedRows {
             values: vec![StoredData {
