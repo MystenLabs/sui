@@ -205,25 +205,19 @@ pub(crate) fn bytecode<K: SourceKind>(
             Instruction::Return(returned_vars)
         }
 
-        IB::BrTrue(code_offset) => {
-            Instruction::JumpIf {
-                condition: Register(pop!()),
-                then_label: *code_offset as usize,
-                else_label: pc + 1,
-            }
-        }
+        IB::BrTrue(code_offset) => Instruction::JumpIf {
+            condition: Register(pop!()),
+            then_label: *code_offset as usize,
+            else_label: pc + 1,
+        },
 
-        IB::BrFalse(code_offset) => {
-            Instruction::JumpIf {
-                condition: Register(pop!()),
-                then_label: pc + 1,
-                else_label: *code_offset as usize,
-            }
-        }
+        IB::BrFalse(code_offset) => Instruction::JumpIf {
+            condition: Register(pop!()),
+            then_label: pc + 1,
+            else_label: *code_offset as usize,
+        },
 
-        IB::Branch(code_offset) => {
-            Instruction::Jump(*code_offset as usize)
-        }
+        IB::Branch(code_offset) => Instruction::Jump(*code_offset as usize),
 
         IB::LdU8(value) => assign_reg!([push!()] = imm!(Value::U8(*value))),
 
