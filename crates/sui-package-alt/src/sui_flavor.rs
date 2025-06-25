@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use move_package_alt::{
-    dependency::{self, DependencySet, Pinned, PinnedDependencyInfo, Unpinned},
+    dependency::{self, DependencySet, PinnedDependencyInfo},
     errors::PackageResult,
     flavor::MoveFlavor,
     package::PackageName,
@@ -16,7 +16,7 @@ pub struct SuiFlavor;
 
 impl MoveFlavor for SuiFlavor {
     fn name() -> String {
-        "sui move 2025".to_string()
+        "sui".to_string()
     }
 
     type PublishedMetadata = (); // TODO
