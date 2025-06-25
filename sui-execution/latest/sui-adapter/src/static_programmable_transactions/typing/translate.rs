@@ -10,7 +10,7 @@ use crate::{
         spanned::sp,
     },
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
     base_types::TxContextKind,
     coin::RESOLVED_COIN_STRUCT,
@@ -183,7 +183,7 @@ fn command<Mode: ExecutionMode>(
             let coin = coin_mut_ref_argument(env, context, 0, coin_loc)?;
             let coin_type = match &coin.value.1 {
                 Type::Reference(true, ty) => (**ty).clone(),
-                _ => invariant_violation!("coin must be a mutable reference"),
+                ty => invariant_violation!("coin must be a mutable reference. Found: {ty:?}"),
             };
             let amounts = arguments(
                 env,
@@ -201,7 +201,7 @@ fn command<Mode: ExecutionMode>(
             let target = coin_mut_ref_argument(env, context, 0, target_loc)?;
             let coin_type = match &target.value.1 {
                 Type::Reference(true, ty) => (**ty).clone(),
-                _ => invariant_violation!("target must be a mutable reference"),
+                ty => invariant_violation!("target must be a mutable reference. Found: {ty:?}"),
             };
             let coins = arguments(
                 env,
@@ -560,7 +560,10 @@ fn coin_mut_ref_argument_(
         }
         LocationType::Fixed(ty) => {
             check_coin_type(ty)?;
-            (T::Argument__::Borrow(/* mut */ true, location), ty.clone())
+            (
+                T::Argument__::Borrow(/* mut */ true, location),
+                Type::Reference(true, Rc::new(ty.clone())),
+            )
         }
         LocationType::Bytes(_, _) => {
             // TODO we do not currently bytes in any mode as that would require additional type
