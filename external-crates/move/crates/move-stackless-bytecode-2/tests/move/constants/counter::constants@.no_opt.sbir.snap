@@ -2,7 +2,7 @@
 source: crates/move-stackless-bytecode-2/tests/tests.rs
 ---
   Module: constants
-    Function: compute
+    Function: compute (entry: LBL_0)
       Label LBL_0:
         reg_0 = Immediate(U64(0))
         lcl_4 = reg_0
@@ -21,7 +21,7 @@ source: crates/move-stackless-bytecode-2/tests/tests.rs
         Jump(LBL_15)
 
       Label LBL_13:
-        reg_8 = Immediate(False)
+        reg_8 = Immediate(false)
         lcl_2 = reg_8
 
       Label LBL_15:

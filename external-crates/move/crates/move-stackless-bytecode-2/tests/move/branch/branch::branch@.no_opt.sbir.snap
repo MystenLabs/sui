@@ -2,7 +2,7 @@
 source: crates/move-stackless-bytecode-2/tests/tests.rs
 ---
   Module: branch
-    Function: is_even
+    Function: is_even (entry: LBL_0)
       Label LBL_0:
         reg_0 = Immediate(U64(10))
         lcl_2 = reg_0
