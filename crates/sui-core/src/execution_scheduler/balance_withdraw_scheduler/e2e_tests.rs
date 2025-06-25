@@ -10,6 +10,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::accumulator_root::update_account_balance_for_testing;
 use sui_types::base_types::ObjectID;
+use sui_types::digests::TransactionDigest;
 use sui_types::transaction::WithdrawTypeParam;
 use sui_types::type_input::TypeInput;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
@@ -157,11 +158,19 @@ impl TestEnv {
             .ok()?
     }
 
-    async fn expect_withdraw_results(&mut self, expected_results: Vec<BalanceWithdrawStatus>) {
-        for expected_result in expected_results {
+    async fn expect_withdraw_results(
+        &mut self,
+        expected_results: BTreeMap<TransactionDigest, BalanceWithdrawStatus>,
+    ) {
+        let mut results = BTreeMap::new();
+        while results.len() < expected_results.len() {
             let cert = self.receive_certificate().await.unwrap();
-            assert_eq!(cert.execution_env.withdraw_status, expected_result);
+            results.insert(
+                *cert.certificate.digest(),
+                cert.execution_env.withdraw_status,
+            );
         }
+        assert_eq!(results, expected_results);
     }
 
     fn settle_balances(&mut self, balance_changes: BTreeMap<ObjectID, i128>) {
@@ -203,36 +212,53 @@ async fn test_withdraw_schedule_e2e() {
     telemetry_subscribers::init_for_testing();
     let mut test_env = create_test_env(BTreeMap::from([(GAS::type_tag(), 1000)])).await;
     let transactions: Vec<_> = test_env.create_transactions(vec![Some(400), Some(600), Some(1)]);
-    test_env.enqueue_transactions(transactions);
+    test_env.enqueue_transactions(transactions.clone());
     test_env
-        .expect_withdraw_results(vec![
-            BalanceWithdrawStatus::SufficientBalance,
-            BalanceWithdrawStatus::SufficientBalance,
-            BalanceWithdrawStatus::InsufficientBalance,
-        ])
+        .expect_withdraw_results(BTreeMap::from([
+            (
+                *transactions[0].digest(),
+                BalanceWithdrawStatus::SufficientBalance,
+            ),
+            (
+                *transactions[1].digest(),
+                BalanceWithdrawStatus::SufficientBalance,
+            ),
+            (
+                *transactions[2].digest(),
+                BalanceWithdrawStatus::InsufficientBalance,
+            ),
+        ]))
         .await;
 
     let transactions: Vec<_> = test_env.create_transactions(vec![Some(500), Some(500)]);
     let next_version = test_env.get_accumulator_version().next();
-    test_env.enqueue_transactions_with_version(transactions, next_version);
+    test_env.enqueue_transactions_with_version(transactions.clone(), next_version);
     assert!(test_env.receive_certificate().await.is_none());
 
     test_env.settle_balances(BTreeMap::from([(test_env.account_objects[0], -500)]));
-
     test_env
-        .expect_withdraw_results(vec![
-            BalanceWithdrawStatus::SufficientBalance,
-            BalanceWithdrawStatus::InsufficientBalance,
-        ])
+        .expect_withdraw_results(BTreeMap::from([
+            (
+                *transactions[0].digest(),
+                BalanceWithdrawStatus::SufficientBalance,
+            ),
+            (
+                *transactions[1].digest(),
+                BalanceWithdrawStatus::InsufficientBalance,
+            ),
+        ]))
         .await;
 
     test_env.settle_balances(BTreeMap::from([(test_env.account_objects[0], -500)]));
 
     let transactions = test_env.create_transactions(vec![None]);
 
-    test_env.enqueue_transactions(transactions);
+    test_env.enqueue_transactions(transactions.clone());
 
     test_env
-        .expect_withdraw_results(vec![BalanceWithdrawStatus::InsufficientBalance])
+        .expect_withdraw_results(BTreeMap::from([(
+            *transactions[0].digest(),
+            BalanceWithdrawStatus::InsufficientBalance,
+        )]))
         .await;
 }

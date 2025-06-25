@@ -280,12 +280,14 @@ impl ExecutionScheduler {
                                 "Balance withdraw scheduling result: Insufficient balance"
                             );
                             let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            let env = env.with_insufficient_balance();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::SufficientBalance => {
                             let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Balance withdraw scheduling result: Success");
                             let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            let env = env.with_sufficient_balance();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::AlreadyScheduled => {
