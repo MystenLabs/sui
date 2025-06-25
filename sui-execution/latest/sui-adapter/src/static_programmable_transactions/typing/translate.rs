@@ -235,23 +235,24 @@ fn command<Mode: ExecutionMode>(
                 );
             };
             let first_loc = one_location(context, 0, lfirst)?;
-            let Some(first_ty) =
-                constrained_type(env, context, first_loc, |ty| Ok(ty.abilities().has_key()))?
-            else {
-                // TODO need a new error here
-                return Err(command_argument_error(
-                    CommandArgumentError::TypeMismatch,
-                    0,
-                ));
-            };
+            let first_arg = constrained_argument(
+                env,
+                context,
+                0,
+                first_loc,
+                |ty| Ok(ty.abilities().has_key()),
+                CommandArgumentError::InvalidMakeMoveVecNonObjectArgument,
+            )?;
+            let first_ty = first_arg.value.1.clone();
             let elems_loc = locations(context, 1, lelems)?;
-            let elems = arguments(
+            let mut elems = arguments(
                 env,
                 context,
                 1,
                 elems_loc,
                 std::iter::repeat_with(|| first_ty.clone()),
             )?;
+            elems.insert(0, first_arg);
             (
                 T::Command_::MakeMoveVec(first_ty.clone(), elems),
                 vec![env.vector_type(first_ty)?],
@@ -488,7 +489,7 @@ fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
         .into_iter()
         .enumerate()
         .map(|(i, location)| {
-            constrained_argument(env, context, start_idx + i, location, is_valid, err_case)
+            constrained_argument_(env, context, start_idx + i, location, is_valid, err_case)
         })
         .collect()
 }
@@ -498,15 +499,33 @@ fn constrained_argument<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     context: &mut Context,
     command_arg_idx: usize,
     location: T::Location,
+    mut is_valid: P,
+    err_case: CommandArgumentError,
+) -> Result<T::Argument, ExecutionError> {
+    constrained_argument_(
+        env,
+        context,
+        command_arg_idx,
+        location,
+        &mut is_valid,
+        err_case,
+    )
+}
+
+fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
+    env: &Env,
+    context: &mut Context,
+    command_arg_idx: usize,
+    location: T::Location,
     is_valid: &mut P,
     err_case: CommandArgumentError,
 ) -> Result<T::Argument, ExecutionError> {
-    let arg_ = constrained_argument_(env, context, location, is_valid, err_case)
+    let arg_ = constrained_argument__(env, context, location, is_valid, err_case)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     Ok(sp(command_arg_idx as u16, arg_))
 }
 
-fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
+fn constrained_argument__<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
     location: T::Location,
@@ -514,7 +533,11 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     err_case: CommandArgumentError,
 ) -> Result<T::Argument_, EitherError> {
     if let Some(ty) = constrained_type(env, context, location, is_valid)? {
-        Ok((T::Argument__::Use(T::Usage::Move(location)), ty))
+        if ty.abilities().has_copy() {
+            Ok((T::Argument__::new_copy(location), ty))
+        } else {
+            Ok((T::Argument__::new_move(location), ty))
+        }
     } else {
         Err(err_case.into())
     }

@@ -310,6 +310,11 @@ pub enum CommandArgumentError {
         ability"
     )]
     InvalidTransferObject,
+    #[error(
+        "When MakeMoveVec is used without a type specified, all arguments must be the same \
+        object type. In this case, the first argument was not an object."
+    )]
+    InvalidMakeMoveVecNonObjectArgument,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
