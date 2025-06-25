@@ -106,11 +106,6 @@ impl PinnedGitDependency {
     pub fn unfetched_path(&self) -> PathBuf {
         self.inner.path_to_tree()
     }
-
-    // TODO: remove
-    pub fn inner(&self) -> &GitTree {
-        &self.inner
-    }
 }
 
 // TODO: what is this here for?
@@ -130,9 +125,9 @@ impl From<PinnedDependencyInfo> for LockfileDependencyInfo {
         match value.0.dep_info {
             Pinned::Local(loc) => Self::Local(loc),
             Pinned::Git(git) => Self::Git(LockfileGitDepInfo {
-                repo: git.inner().repo_url().to_string(),
-                rev: git.inner().sha().clone(),
-                path: git.inner().path_in_repo().to_path_buf(),
+                repo: git.inner.repo_url().to_string(),
+                rev: git.inner.sha().clone(),
+                path: git.inner.path_in_repo().to_path_buf(),
             }),
             Pinned::OnChain(on_chain) => Self::OnChain(on_chain),
         }
