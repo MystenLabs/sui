@@ -839,8 +839,8 @@ pub struct ExecutionEnv {
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
     /// The source of the scheduling of the transaction.
     pub scheduling_source: SchedulingSource,
-    /// Information regarding the balance withdraw of the transaction.
-    pub withdraw_env: BalanceWithdrawStatus,
+    /// Status of the balance withdraw scheduling of the transaction.
+    pub withdraw_status: BalanceWithdrawStatus,
 }
 
 impl Default for ExecutionEnv {
@@ -849,7 +849,7 @@ impl Default for ExecutionEnv {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
-            withdraw_env: BalanceWithdrawStatus::NoWithdraw,
+            withdraw_status: BalanceWithdrawStatus::NoWithdraw,
         }
     }
 }
@@ -882,12 +882,12 @@ impl ExecutionEnv {
     }
 
     pub fn with_sufficient_balance(mut self) -> Self {
-        self.withdraw_env = BalanceWithdrawStatus::SufficientBalance;
+        self.withdraw_status = BalanceWithdrawStatus::SufficientBalance;
         self
     }
 
     pub fn with_insufficient_balance(mut self) -> Self {
-        self.withdraw_env = BalanceWithdrawStatus::InsufficientBalance;
+        self.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
         self
     }
 }

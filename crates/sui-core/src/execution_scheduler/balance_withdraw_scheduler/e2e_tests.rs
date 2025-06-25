@@ -160,7 +160,7 @@ impl TestEnv {
     async fn expect_withdraw_results(&mut self, expected_results: Vec<BalanceWithdrawStatus>) {
         for expected_result in expected_results {
             let cert = self.receive_certificate().await.unwrap();
-            assert_eq!(cert.execution_env.withdraw_env, expected_result);
+            assert_eq!(cert.execution_env.withdraw_status, expected_result);
         }
     }
 
