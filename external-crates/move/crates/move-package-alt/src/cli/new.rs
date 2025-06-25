@@ -111,10 +111,10 @@ testnet = "{TESTNET_CHAIN_ID}"
 # Add your dependencies here or leave empty.
 
 # Depedency on local package in the directory `../bar`, which can be referred to in the Move code as "bar::module::function"
-# bar = { path = "../bar" }
+# bar = { local = "../bar" }
 
 # Git dependency
-# foo = { git = "https://example.com/foo.git", rev = "releases/v1"}
+# foo = { git = "https://example.com/foo.git", rev = "releases/v1", subdir = "foo" }
 
 # Setting `override = true` forces your dependencies to use this version of the package.
 # This is required if you need to link against a different version from one of your dependencies, or if

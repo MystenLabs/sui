@@ -108,6 +108,7 @@ pub struct ManifestGitDependency {
 
     /// The path within the repository
     #[serde(default)]
+    #[serde(rename = "subdir")]
     pub path: PathBuf,
 }
 

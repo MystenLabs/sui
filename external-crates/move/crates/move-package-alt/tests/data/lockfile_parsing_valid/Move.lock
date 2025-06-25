@@ -12,36 +12,36 @@ deps.non = "Foo_1" # ensure rename-from is respected
 deps.bar = "bar"
 
 [pinned.mainnet.MoveStdlib]
-source = { git = "...", path = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
 manifest_digest = "..."
 deps = {}
 
 [pinned.mainnet.Sui]
-source = { git = "...", path = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 
 [pinned.mainnet.Foo_0]
-source = { git = "...", path = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
 
 [pinned.mainnet.Foo_1]
-source = { git = "...", path = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
 
 [pinned.mainnet.bar]
-source = { git = "...", path = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
 manifest_digest = "..."
 deps.baz = "baz"
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
 
 [pinned.mainnet.baz]
-source = { git = "...", path = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
 manifest_digest = "..."
 deps.std = "MoveStdlib"
 deps.sui = "Sui"
@@ -57,7 +57,7 @@ deps.non = "Foo_1" # ensure rename-from is respected
 deps.bar = "bar"
 
 [pinned.testnet.MoveStdlib]
-source = { git = "...", path = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
+source = { git = "...", subdir = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709" }
 manifest_digest = "..."
 deps = {}
 
