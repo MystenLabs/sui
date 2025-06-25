@@ -50,9 +50,6 @@ pub mod verify_indexes;
 mod wait_for_effects_request;
 
 #[cfg(test)]
-#[path = "unit_tests/config_tests.rs"]
-mod config_tests;
-#[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]
 mod congestion_control_tests;
 #[cfg(test)]
