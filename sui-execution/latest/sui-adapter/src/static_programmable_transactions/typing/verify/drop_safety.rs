@@ -181,7 +181,7 @@ mod verify {
                 let coin_values = arguments(context, coins)?;
                 consume_values(coin_values);
                 consume_value(target_value);
-                vec![Value]
+                vec![]
             }
             T::Command_::MakeMoveVec(_, xs) => {
                 let vs = arguments(context, xs)?;

@@ -106,7 +106,12 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
     let T::Transaction { inputs, commands } = txn;
     let mut context = Context::new(inputs);
     for (c, result) in commands {
-        command::<Mode>(env, &mut context, c, result)?;
+        let result_dirties = command::<Mode>(env, &mut context, c, result)?;
+        assert_invariant!(
+            result_dirties.len() == result.len(),
+            "result length mismatch"
+        );
+        context.results.push(result_dirties);
     }
     Ok(())
 }
@@ -116,28 +121,23 @@ fn command<Mode: ExecutionMode>(
     context: &mut Context,
     command: &T::Command,
     result: &T::ResultType,
-) -> Result<(), ExecutionError> {
-    match &command.value {
+) -> Result<Vec<IsDirty>, ExecutionError> {
+    Ok(match &command.value {
         T::Command_::MoveCall(call) => {
             let result_dirties = move_call::<Mode>(env, context, call, result)?;
-            debug_assert!(result_dirties.len() == result.len());
-            context.results.push(result_dirties);
+            result_dirties
         }
         T::Command_::TransferObjects(objs, recipient) => {
             arguments(env, context, objs);
             argument(env, context, recipient);
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            vec![]
         }
         T::Command_::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
             debug_assert!(!amounts_are_dirty);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
-            debug_assert_eq!(result.len(), amounts.len());
-            context
-                .results
-                .push(vec![IsDirty::Fixed { is_dirty }; result.len()]);
+            vec![IsDirty::Fixed { is_dirty }; result.len()]
         }
         T::Command_::MergeCoins(_, target, coins) => {
             let is_dirty = arguments(env, context, coins);
@@ -145,31 +145,28 @@ fn command<Mode: ExecutionMode>(
             if is_dirty {
                 context.mark_dirty(target);
             }
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            vec![]
         }
         T::Command_::MakeMoveVec(_, args) => {
             let is_dirty = arguments(env, context, args);
             debug_assert_eq!(result.len(), 1);
-            context.results.push(vec![IsDirty::Fixed { is_dirty }]);
+            vec![IsDirty::Fixed { is_dirty }]
         }
         T::Command_::Publish(_, _, _) => {
             debug_assert_eq!(Mode::packages_are_predefined(), result.is_empty());
             debug_assert_eq!(!Mode::packages_are_predefined(), result.len() == 1);
-            let result = result
+            result
                 .iter()
                 .map(|_| IsDirty::Fixed { is_dirty: false })
-                .collect::<Vec<_>>();
-            context.results.push(result);
+                .collect::<Vec<_>>()
         }
         T::Command_::Upgrade(_, _, _, ticket, _) => {
             debug_assert_eq!(result.len(), 1);
             let result = vec![IsDirty::Fixed { is_dirty: false }];
             argument(env, context, ticket);
-            context.results.push(result);
+            result
         }
-    }
-    Ok(())
+    })
 }
 
 fn arguments(env: &Env, context: &mut Context, args: &[T::Argument]) -> bool {
