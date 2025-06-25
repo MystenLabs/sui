@@ -225,7 +225,7 @@ where
     // (and maybe store it for caching purposes)
     pub async fn execute_transaction_impl(
         &self,
-        epoch_store: &AuthorityPerEpochStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<(VerifiedTransaction, QuorumDriverResponse), QuorumDriverError> {
@@ -260,7 +260,12 @@ where
         });
 
         let ticket = self
-            .submit(transaction.clone(), request, client_addr)
+            .submit(
+                epoch_store.clone(),
+                transaction.clone(),
+                request,
+                client_addr,
+            )
             .await
             .map_err(|e| {
                 warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
@@ -296,6 +301,7 @@ where
     #[instrument(name = "tx_orchestrator_submit", level = "trace", skip_all)]
     async fn submit(
         &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
@@ -322,7 +328,8 @@ where
         let qd = self.clone_quorum_driver();
         Ok(async move {
             let digests = [tx_digest];
-            let effects_await = cache_reader.notify_read_executed_effects(&digests);
+            let effects_await =
+                epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(&digests));
             // let-and-return necessary to satisfy borrow checker.
             #[allow(clippy::let_and_return)]
             let res = match select(ticket, effects_await.boxed()).await {
