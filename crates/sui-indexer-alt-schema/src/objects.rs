@@ -69,7 +69,6 @@ pub struct StoredObjInfo {
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = obj_info_deletion_reference, primary_key(cp_sequence_number, object_id))]
-#[diesel(treat_none_as_default_value = false)]
 pub struct StoredObjInfoDeletionReference {
     pub object_id: Vec<u8>,
     pub cp_sequence_number: i64,
@@ -89,7 +88,6 @@ pub struct StoredCoinBalanceBucket {
 
 #[derive(Insertable, Queryable, Debug, Clone, FieldCount, Eq, PartialEq)]
 #[diesel(table_name = coin_balance_buckets_deletion_reference, primary_key(cp_sequence_number, object_id))]
-#[diesel(treat_none_as_default_value = false)]
 pub struct StoredCoinBalanceBucketDeletionReference {
     pub object_id: Vec<u8>,
     pub cp_sequence_number: i64,

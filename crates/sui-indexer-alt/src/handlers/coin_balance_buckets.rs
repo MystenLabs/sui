@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use diesel::prelude::QueryableByName;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
@@ -43,7 +43,7 @@ pub(crate) struct ProcessedCoinBalanceBucket {
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CoinBalanceBucketChangeKind {
-    Insert {
+    Upsert {
         owner_kind: StoredCoinOwnerKind,
         owner_id: SuiAddress,
         coin_type: TypeTag,
@@ -131,7 +131,7 @@ impl Processor for CoinBalanceBuckets {
                         ProcessedCoinBalanceBucket {
                             object_id: *object_id,
                             cp_sequence_number,
-                            change: CoinBalanceBucketChangeKind::Insert {
+                            change: CoinBalanceBucketChangeKind::Upsert {
                                 owner_kind: new_owner.0,
                                 owner_id: new_owner.1,
                                 coin_type,
@@ -164,7 +164,7 @@ impl Handler for CoinBalanceBuckets {
         let mut references = Vec::new();
         for value in values {
             match &value.change {
-                CoinBalanceBucketChangeKind::Insert { created, .. } => {
+                CoinBalanceBucketChangeKind::Upsert { created, .. } => {
                     if !created {
                         references.push(StoredCoinBalanceBucketDeletionReference {
                             object_id: value.object_id.to_vec(),
@@ -172,6 +172,9 @@ impl Handler for CoinBalanceBuckets {
                         });
                     }
                 }
+                // Store record of current version to delete previous version, and another to delete
+                // itself. When pruning, the deletion record will not be pruned in the
+                // `value.cp_sequence_number` checkpoint, but the next one.
                 CoinBalanceBucketChangeKind::Delete => {
                     references.push(StoredCoinBalanceBucketDeletionReference {
                         object_id: value.object_id.to_vec(),
@@ -222,60 +225,66 @@ impl Handler for CoinBalanceBuckets {
         // 3. Delete the deletion references themselves
         let query = format!(
             "
+            -- Delete reference records and return immediate predecessor refs to the main table.
             WITH deletion_refs AS (
-                SELECT object_id, cp_sequence_number
-                FROM coin_balance_buckets_deletion_reference
-                WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
+                DELETE FROM
+                    coin_balance_buckets_deletion_reference dr
+                WHERE
+                    {} <= cp_sequence_number AND cp_sequence_number < {}
+                RETURNING
+                    object_id, (
+                    SELECT
+                        cb.cp_sequence_number
+                    FROM
+                        coin_balance_buckets cb
+                    WHERE
+                        dr.object_id = cb.object_id
+                    AND cb.cp_sequence_number < dr.cp_sequence_number
+                    ORDER BY
+                        cb.cp_sequence_number DESC
+                    LIMIT
+                        1
+                    ) AS cp_sequence_number
             ),
             deleted_coins AS (
-                DELETE FROM coin_balance_buckets cb
-                WHERE EXISTS (
-                    SELECT 1 FROM deletion_refs dr
-                    WHERE dr.object_id = cb.object_id
-                    AND cb.cp_sequence_number = (
-                        SELECT cb2.cp_sequence_number
-                        FROM coin_balance_buckets cb2
-                        WHERE cb2.object_id = dr.object_id
-                        AND cb2.cp_sequence_number < dr.cp_sequence_number
-                        ORDER BY cb2.cp_sequence_number DESC
-                        LIMIT 1
-                    )
-                )
-                RETURNING cb.object_id
-            ),
-            deleted_refs AS (
-                DELETE FROM coin_balance_buckets_deletion_reference
-                WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
-                RETURNING object_id
+                DELETE FROM
+                    coin_balance_buckets cb
+                USING
+                    deletion_refs dr
+                WHERE
+                    cb.object_id = dr.object_id
+                AND cb.cp_sequence_number = dr.cp_sequence_number
+                RETURNING
+                    cb.object_id
             )
             SELECT
-                (SELECT count(*) FROM deleted_coins) as deleted_coins_count,
-                (SELECT count(*) FROM deleted_refs) as deleted_refs_count
+                (SELECT COUNT(*) FROM deleted_coins) AS deleted_coins,
+                (SELECT COUNT(*) FROM deletion_refs) AS deleted_refs
             ",
-            from, to_exclusive, from, to_exclusive
+            from, to_exclusive
         );
 
         #[derive(QueryableByName)]
         struct CountResult {
             #[diesel(sql_type = diesel::sql_types::BigInt)]
-            deleted_coins_count: i64,
+            deleted_coins: i64,
             #[diesel(sql_type = diesel::sql_types::BigInt)]
-            deleted_refs_count: i64,
+            deleted_refs: i64,
         }
 
-        let result = diesel::sql_query(query)
+        let CountResult {
+            deleted_coins,
+            deleted_refs,
+        } = diesel::sql_query(query)
             .get_result::<CountResult>(conn)
             .await?;
 
-        if result.deleted_coins_count != result.deleted_refs_count {
-            Err(anyhow::anyhow!(
-                "Deleted coins count ({}) does not match deleted refs count ({})",
-                result.deleted_coins_count,
-                result.deleted_refs_count
-            ))?;
-        }
+        ensure!(
+                deleted_coins == deleted_refs,
+                "Deleted coins count ({deleted_coins}) does not match deleted refs count ({deleted_refs})",
+            );
 
-        Ok(result.deleted_coins_count as usize)
+        Ok(deleted_coins as usize)
     }
 }
 
@@ -288,7 +297,7 @@ impl TryInto<StoredCoinBalanceBucket> for &ProcessedCoinBalanceBucket {
 
     fn try_into(self) -> Result<StoredCoinBalanceBucket> {
         match &self.change {
-            CoinBalanceBucketChangeKind::Insert {
+            CoinBalanceBucketChangeKind::Upsert {
                 owner_kind,
                 owner_id,
                 coin_type,
@@ -464,7 +473,7 @@ mod tests {
         assert_eq!(values.len(), 2);
         assert!(values.iter().any(|v| matches!(
             v.change,
-            CoinBalanceBucketChangeKind::Insert {
+            CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 0,
                 created: true,
@@ -473,7 +482,7 @@ mod tests {
         )));
         assert!(values.iter().any(|v| matches!(
             v.change,
-            CoinBalanceBucketChangeKind::Insert {
+            CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 2,
                 created: true,
@@ -505,7 +514,7 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(
             &values[0].change,
-            &CoinBalanceBucketChangeKind::Insert {
+            &CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 1,
                 coin_type: coin_type.clone(),
@@ -538,7 +547,7 @@ mod tests {
         // Checkpoint 0 creates coin object 0.
         assert_eq!(
             values[0].change,
-            CoinBalanceBucketChangeKind::Insert {
+            CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 4,
                 coin_type: GAS::type_tag(),
@@ -566,7 +575,7 @@ mod tests {
         // Checkpoint 1 creates coin object 1.
         assert_eq!(
             values[0].change,
-            CoinBalanceBucketChangeKind::Insert {
+            CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 1,
                 coin_type: GAS::type_tag(),
@@ -596,7 +605,7 @@ mod tests {
         assert_eq!(values.len(), 2);
         // Checkpoint 2 creates coin object 2, and mutates coin object 0.
         assert!(values.iter().any(|v| v.change
-            == CoinBalanceBucketChangeKind::Insert {
+            == CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 3,
                 coin_type: GAS::type_tag(),
@@ -604,7 +613,7 @@ mod tests {
                 created: false,
             }));
         assert!(values.iter().any(|v| v.change
-            == CoinBalanceBucketChangeKind::Insert {
+            == CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 0,
                 coin_type: GAS::type_tag(),
@@ -731,7 +740,7 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
-            CoinBalanceBucketChangeKind::Insert {
+            CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 2,
                 coin_type: GAS::type_tag(),
@@ -840,7 +849,7 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(
             values[0].change,
-            CoinBalanceBucketChangeKind::Insert {
+            CoinBalanceBucketChangeKind::Upsert {
                 owner_kind: StoredCoinOwnerKind::Fastpath,
                 balance_bucket: 2,
                 coin_type: GAS::type_tag(),

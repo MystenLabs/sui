@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use diesel::prelude::QueryableByName;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
@@ -25,10 +25,11 @@ pub(crate) struct ObjInfo;
 /// Enum to encapsulate different types of updates to be written to the main `obj_info` and
 /// reference tables.
 pub(crate) enum ProcessedObjInfoUpdate {
-    /// Represents both object creation and unwrapping. An entry is created on the main table only.
-    Created(Object),
-    /// Any mutation that isn't a wrap or delete. An entry is created on both the main and reference tables.
-    Mutated(Object),
+    Upsert {
+        object: Object,
+        /// Indicates whether the object was created/unwrapped in this checkpoint.
+        created: bool,
+    },
     /// Represents object wrap or deletion. An entry is created on the main table, and two entries
     /// are added to the reference table, one to delete the previous version, and one to delete the
     /// sentinel row itself.
@@ -77,23 +78,17 @@ impl Processor for ObjInfo {
             };
             if should_insert {
                 // We make note of whether the obj was mutated or created to help with pruning.
-                if checkpoint_input_objects.contains_key(object_id) {
-                    values.insert(
-                        *object_id,
-                        ProcessedObjInfo {
-                            cp_sequence_number,
-                            update: ProcessedObjInfoUpdate::Mutated((*object).clone()),
+                let created = !checkpoint_input_objects.contains_key(object_id);
+                values.insert(
+                    *object_id,
+                    ProcessedObjInfo {
+                        cp_sequence_number,
+                        update: ProcessedObjInfoUpdate::Upsert {
+                            object: (*object).clone(),
+                            created,
                         },
-                    );
-                } else {
-                    values.insert(
-                        *object_id,
-                        ProcessedObjInfo {
-                            cp_sequence_number,
-                            update: ProcessedObjInfoUpdate::Created((*object).clone()),
-                        },
-                    );
-                }
+                    },
+                );
             }
         }
 
@@ -117,16 +112,17 @@ impl Handler for ObjInfo {
         let mut references = Vec::new();
         for value in values {
             match &value.update {
-                // Created objects don't have a previous entry in the main table. Unwrapped objects
-                // must have been previously wrapped, and the deletion record for that wrap will
-                // have handled itself. Thus we don't emit an entry to the reference table.
-                ProcessedObjInfoUpdate::Created(_) => {}
-                // Store a record to delete previous version
-                ProcessedObjInfoUpdate::Mutated(object) => {
-                    references.push(StoredObjInfoDeletionReference {
-                        object_id: object.id().to_vec(),
-                        cp_sequence_number: value.cp_sequence_number as i64,
-                    });
+                ProcessedObjInfoUpdate::Upsert { object, created } => {
+                    // Created objects don't have a previous entry in the main table. Unwrapped
+                    // objects must have been previously wrapped, and the deletion record for that
+                    // wrap will have handled itself. Thus we don't emit an entry to the reference
+                    // table.
+                    if !created {
+                        references.push(StoredObjInfoDeletionReference {
+                            object_id: object.id().to_vec(),
+                            cp_sequence_number: value.cp_sequence_number as i64,
+                        });
+                    }
                 }
                 // Store record of current version to delete previous version, and another to delete
                 // itself. When pruning, the deletion record will not be pruned in the
@@ -187,60 +183,66 @@ impl Handler for ObjInfo {
         // 3. Delete the deletion references themselves
         let query = format!(
             "
+            -- Delete reference records and return immediate predecessor refs to the main table.
             WITH deletion_refs AS (
-                SELECT object_id, cp_sequence_number
-                FROM obj_info_deletion_reference
-                WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
+                DELETE FROM
+                    obj_info_deletion_reference dr
+                WHERE
+                    {} <= cp_sequence_number AND cp_sequence_number < {}
+                RETURNING
+                    object_id, (
+                    SELECT
+                        oi.cp_sequence_number
+                    FROM
+                        obj_info oi
+                    WHERE
+                        dr.object_id = oi.object_id
+                    AND oi.cp_sequence_number < dr.cp_sequence_number
+                    ORDER BY
+                        oi.cp_sequence_number DESC
+                    LIMIT
+                        1
+                    ) AS cp_sequence_number
             ),
             deleted_objects AS (
-                DELETE FROM obj_info oi
-                WHERE EXISTS (
-                    SELECT 1 FROM deletion_refs dr
-                    WHERE dr.object_id = oi.object_id
-                    AND oi.cp_sequence_number = (
-                        SELECT oi2.cp_sequence_number
-                        FROM obj_info oi2
-                        WHERE oi2.object_id = dr.object_id
-                        AND oi2.cp_sequence_number < dr.cp_sequence_number
-                        ORDER BY oi2.cp_sequence_number DESC
-                        LIMIT 1
-                    )
-                )
-                RETURNING oi.object_id
-            ),
-            deleted_refs AS (
-                DELETE FROM obj_info_deletion_reference
-                WHERE cp_sequence_number >= {} AND cp_sequence_number < {}
-                RETURNING object_id
+                DELETE FROM
+                    obj_info oi
+                USING
+                    deletion_refs dr
+                WHERE
+                    oi.object_id = dr.object_id
+                AND oi.cp_sequence_number = dr.cp_sequence_number
+                RETURNING
+                    oi.object_id
             )
             SELECT
-                (SELECT count(*) FROM deleted_objects) as deleted_objects_count,
-                (SELECT count(*) FROM deleted_refs) as deleted_refs_count
+                (SELECT COUNT(*) FROM deleted_objects) AS deleted_objects,
+                (SELECT COUNT(*) FROM deletion_refs) AS deleted_refs
             ",
-            from, to_exclusive, from, to_exclusive
+            from, to_exclusive
         );
 
         #[derive(QueryableByName)]
         struct CountResult {
             #[diesel(sql_type = diesel::sql_types::BigInt)]
-            deleted_objects_count: i64,
+            deleted_objects: i64,
             #[diesel(sql_type = diesel::sql_types::BigInt)]
-            deleted_refs_count: i64,
+            deleted_refs: i64,
         }
 
-        let result = diesel::sql_query(query)
+        let CountResult {
+            deleted_objects,
+            deleted_refs,
+        } = diesel::sql_query(query)
             .get_result::<CountResult>(conn)
             .await?;
 
-        if result.deleted_objects_count != result.deleted_refs_count {
-            Err(anyhow::anyhow!(
-                "Deleted objects count ({}) does not match deleted refs count ({})",
-                result.deleted_objects_count,
-                result.deleted_refs_count
-            ))?;
-        };
+        ensure!(
+            deleted_objects == deleted_refs,
+            "Deleted objects count ({deleted_objects}) does not match deleted refs count ({deleted_refs})",
+        );
 
-        Ok(result.deleted_objects_count as usize)
+        Ok(deleted_objects as usize)
     }
 }
 
@@ -253,7 +255,7 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 
     fn try_into(self) -> Result<StoredObjInfo> {
         match &self.update {
-            ProcessedObjInfoUpdate::Created(object) | ProcessedObjInfoUpdate::Mutated(object) => {
+            ProcessedObjInfoUpdate::Upsert { object, .. } => {
                 StoredObjInfo::from_object(object, self.cp_sequence_number as i64)
             }
             ProcessedObjInfoUpdate::Delete(object_id) => Ok(StoredObjInfo {
@@ -314,7 +316,10 @@ mod tests {
         assert_eq!(processed.cp_sequence_number, 0);
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Created(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: true,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
@@ -365,7 +370,10 @@ mod tests {
         assert_eq!(processed.cp_sequence_number, 2);
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Mutated(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: false,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
@@ -495,7 +503,10 @@ mod tests {
         let processed = &result[0];
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Created(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: true,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
@@ -552,7 +563,10 @@ mod tests {
         let processed = &result[0];
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Created(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: true,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
@@ -584,7 +598,10 @@ mod tests {
         let processed = &result[0];
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Created(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: true,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
@@ -622,7 +639,10 @@ mod tests {
         let processed = &result[0];
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Mutated(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: false,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
@@ -660,7 +680,10 @@ mod tests {
         let processed = &result[0];
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Mutated(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: false,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
@@ -708,7 +731,10 @@ mod tests {
         let processed = &result[0];
         assert!(matches!(
             processed.update,
-            ProcessedObjInfoUpdate::Mutated(_)
+            ProcessedObjInfoUpdate::Upsert {
+                object: _,
+                created: false,
+            }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
         assert_eq!(rows_inserted, 1);
