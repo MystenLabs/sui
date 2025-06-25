@@ -3,6 +3,7 @@
 
 use std::net::SocketAddr;
 
+use anyhow::Context;
 use axum::{http::StatusCode, routing::get, Extension, Router};
 use prometheus::{Registry, TextEncoder};
 use tokio::{net::TcpListener, task::JoinHandle};
@@ -53,7 +54,10 @@ impl MetricsService {
             cancel,
         } = self;
 
-        let listener = TcpListener::bind(&self.addr).await?;
+        let listener = TcpListener::bind(&self.addr)
+            .await
+            .with_context(|| format!("Failed to bind metrics at {addr}"))?;
+
         let app = Router::new()
             .route("/metrics", get(metrics))
             .layer(Extension(registry));
