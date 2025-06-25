@@ -87,7 +87,7 @@ module a::n {
 
 module b::other {
     fun calls_m_foo(): u64 {
-        b::m::foo() // ERROR!
+        a::m::foo() // ERROR!
 //      ^^^^^^^^^^^ 'foo' can only be called from a module in `a`
     }
 }
@@ -218,7 +218,7 @@ sequence
 
 ```move
 fun example(): u64 {
-    let x = 0;
+    let mut x = 0;
     x = x + 1;
     x // returns 'x'
 }
@@ -289,7 +289,7 @@ module b::other {
 Type arguments can be either specified or inferred. Both calls are equivalent.
 
 ```move
-module aexample {
+module a::example {
     public fun id<T>(x: T): T { x }
 }
 
@@ -358,7 +358,7 @@ example, the function iterates through a vector to find the index of a given val
 use std::vector;
 use std::option::{Self, Option};
 fun index_of<T>(v: &vector<T>, target: &T): Option<u64> {
-    let i = 0;
+    let mut i = 0;
     let n = vector::length(v);
     while (i < n) {
         if (vector::borrow(v, i) == target) return option::some(i);
