@@ -413,7 +413,7 @@ export class MoveDebugSession extends LoggingDebugSession {
             const localScope = new Scope(`locals: ${frame.name}`, localScopeReference, false);
             scopes.push(localScope);
         } else if (frameID === EXT_EVENT_FRAME_ID) {
-            if ('locals' in eventFrame && 'camel_case_name' in eventFrame) {
+            if ('locals' in eventFrame && 'name' in eventFrame) {
                 const localScopeReference =
                     this.variableHandles.create({ locals: eventFrame.locals });
                 const name = eventFrame.name;

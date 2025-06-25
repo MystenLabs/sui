@@ -11,7 +11,7 @@ use crate::programmable_transactions::context::*;
 use move_core_types::language_storage::StructTag;
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use move_trace_format::{
-    format::{MoveTraceBuilder, RefType, TraceEvent, TypeTagWithRefs},
+    format::{Effect, MoveTraceBuilder, RefType, TraceEvent, TypeTagWithRefs},
     value::{SerializableMoveValue, SimplifiedMoveStruct},
 };
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -55,7 +55,7 @@ pub fn trace_transfer(
     if let Some(trace_builder) = trace_builder_opt {
         let mut to_transfer = vec![];
         for (idx, v) in obj_values.iter().enumerate() {
-            let obj_info = obj_info_from_obj_value(context, v)?;
+            let obj_info = move_value_info_from_obj_value(context, v)?;
             to_transfer.push(ExtMoveValue::Single {
                 name: format!("obj{idx}"),
                 info: obj_info,
@@ -136,7 +136,7 @@ pub fn trace_split_coins(
                 invariant_violation!("Expected result of split coins PTB command to be a coin");
             };
             split_coin_move_values.push(
-                coin_obj_info(
+                coin_move_value_info(
                     type_tag_with_refs.clone(),
                     *coin.id.object_id(),
                     coin.balance.value(),
@@ -145,7 +145,7 @@ pub fn trace_split_coins(
             );
         }
 
-        let input = coin_obj_info(
+        let input = coin_move_value_info(
             type_tag_with_refs.clone(),
             *input_coin.id.object_id(),
             input_coin.value(),
@@ -171,38 +171,218 @@ pub fn trace_split_coins(
     Ok(())
 }
 
-/// Creates `ObjectInfo` from `ObjectValue`.
-fn obj_info_from_obj_value(
+/// Inserts merge coins event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn trace_merge_coins(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    coin_type: &Type,
+    input_infos: &[(u64, ObjectID)],
+    target_coin: &Coin,
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, coin_type)?;
+        let mut input_coin_move_values = vec![];
+        let mut to_merge = 0;
+        for (balance, id) in input_infos {
+            input_coin_move_values.push(coin_move_value_info(
+                type_tag_with_refs.clone(),
+                *id,
+                *balance,
+            )?);
+            to_merge += balance;
+        }
+        let merge_target = coin_move_value_info(
+            type_tag_with_refs.clone(),
+            *target_coin.id.object_id(),
+            target_coin.value() - to_merge,
+        )?;
+        let mut values = vec![ExtMoveValue::Single {
+            name: "merge_target".to_string(),
+            info: merge_target,
+        }];
+        for (idx, input_value) in input_coin_move_values.into_iter().enumerate() {
+            values.push(ExtMoveValue::Single {
+                name: format!("coin{idx}"),
+                info: input_value,
+            });
+        }
+        let merge_result = coin_move_value_info(
+            type_tag_with_refs.clone(),
+            *target_coin.id.object_id(),
+            target_coin.value(),
+        )?;
+        values.push(ExtMoveValue::Single {
+            name: "merge_result".to_string(),
+            info: merge_result,
+        });
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBEvent::ExternalEvent(ExternalEvent {
+                description: "MergeCoins: merge_target, coin0...coinN => mergeresult".to_string(),
+                name: "MergeCoins".to_string(),
+                values,
+            })
+        ))));
+    }
+    Ok(())
+}
+
+/// Inserts make move vec event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn trace_make_move_vec(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    move_values: Vec<ExtMoveValueInfo>,
+    type_: &Type,
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, type_)?;
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBEvent::ExternalEvent(ExternalEvent {
+                description: "MakeMoveVec: vec".to_string(),
+                name: "MakeMoveVec".to_string(),
+                values: vec![ExtMoveValue::Vector {
+                    name: "vec".to_string(),
+                    type_: type_tag_with_refs,
+                    value: move_values
+                        .into_iter()
+                        .map(|move_value| move_value.value)
+                        .collect(),
+                }],
+            })
+        ))));
+    }
+    Ok(())
+}
+
+/// Inserts publish event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn trace_publish_event(
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBEvent::ExternalEvent(ExternalEvent {
+                description: "Publish: ()".to_string(),
+                name: "Publish".to_string(),
+                values: vec![],
+            })
+        ))));
+    }
+    Ok(())
+}
+
+/// Inserts upgrade event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn trace_upgrade_event(
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+) -> Result<(), ExecutionError> {
+    if let Some(trace_builder) = trace_builder_opt {
+        trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
+            PTBEvent::ExternalEvent(ExternalEvent {
+                description: "Upgrade: ()".to_string(),
+                name: "Upgrade".to_string(),
+                values: vec![],
+            })
+        ))));
+    }
+    Ok(())
+}
+
+/// Inserts execution error event into the trace. As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn trace_execution_error(trace_builder_opt: &mut Option<MoveTraceBuilder>, msg: String) {
+    if let Some(trace_builder) = trace_builder_opt {
+        trace_builder.push_event(TraceEvent::Effect(Box::new(Effect::ExecutionError(msg))));
+    }
+}
+
+/// Adds `ExtMoveValueInfo` to the mutable vector passed as an argument.
+/// As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn add_move_value_info_from_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    move_values: &mut Vec<ExtMoveValueInfo>,
+    type_: &Type,
+    value: &Value,
+) -> Result<(), ExecutionError> {
+    if trace_builder_opt.is_some() {
+        if let Some(move_value_info) = move_value_info_from_value(context, type_, value)? {
+            move_values.push(move_value_info);
+        }
+    }
+    Ok(())
+}
+
+/// Adds `ExtMoveValueInfo` to the mutable vector passed as an argument.
+/// As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn add_move_value_info_from_obj_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    move_values: &mut Vec<ExtMoveValueInfo>,
+    obj_val: &ObjectValue,
+) -> Result<(), ExecutionError> {
+    if trace_builder_opt.is_some() {
+        let move_value_info = move_value_info_from_obj_value(context, obj_val)?;
+        move_values.push(move_value_info);
+    }
+    Ok(())
+}
+
+/// Creates `ExtMoveValueInfo` from raw bytes.
+fn move_value_info_from_raw_bytes(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    type_: &Type,
+    bytes: &[u8],
+) -> Result<ExtMoveValueInfo, ExecutionError> {
+    let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, type_)?;
+    let layout = context
+        .vm
+        .get_runtime()
+        .type_to_fully_annotated_layout(type_)
+        .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
+    let move_value = BoundedVisitor::deserialize_value(bytes, &layout)
+        .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
+    let serialized_move_value = SerializableMoveValue::from(move_value);
+    Ok(ExtMoveValueInfo {
+        type_: type_tag_with_refs,
+        value: serialized_move_value,
+    })
+}
+
+/// Creates `ExtMoveValueInfo` from `Value`.
+fn move_value_info_from_value(
+    context: &mut ExecutionContext<'_, '_, '_>,
+    type_: &Type,
+    value: &Value,
+) -> Result<Option<ExtMoveValueInfo>, ExecutionError> {
+    match value {
+        Value::Object(obj_val) => Ok(Some(move_value_info_from_obj_value(context, obj_val)?)),
+        Value::Raw(_, bytes) => Ok(Some(move_value_info_from_raw_bytes(context, type_, bytes)?)),
+        Value::Receiving(_, _, _) => Ok(None),
+    }
+}
+
+/// Creates `ExtMoveValueInfo` from `ObjectValue`.
+fn move_value_info_from_obj_value(
     context: &mut ExecutionContext<'_, '_, '_>,
     obj_val: &ObjectValue,
 ) -> Result<ExtMoveValueInfo, ExecutionError> {
     let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, &obj_val.type_)?;
     match &obj_val.contents {
         ObjectContents::Coin(coin) => {
-            coin_obj_info(type_tag_with_refs, *coin.id.object_id(), coin.value())
+            coin_move_value_info(type_tag_with_refs, *coin.id.object_id(), coin.value())
         }
         ObjectContents::Raw(bytes) => {
-            let layout = context
-                .vm
-                .get_runtime()
-                .type_to_fully_annotated_layout(&obj_val.type_)
-                .map_err(|e| {
-                    ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
-                })?;
-            let move_value = BoundedVisitor::deserialize_value(bytes, &layout).map_err(|e| {
-                ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e)
-            })?;
-            let serialized_move_value = SerializableMoveValue::from(move_value);
-            Ok(ExtMoveValueInfo {
-                type_: type_tag_with_refs,
-                value: serialized_move_value,
-            })
+            move_value_info_from_raw_bytes(context, &obj_val.type_, bytes)
         }
     }
 }
 
-/// Creates `ObjectInfo` for a coin.
-fn coin_obj_info(
+/// Creates `ExtMoveValueInfo` for a coin.
+fn coin_move_value_info(
     type_tag_with_refs: TypeTagWithRefs,
     object_id: ObjectID,
     balance: u64,

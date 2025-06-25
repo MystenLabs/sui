@@ -17,8 +17,10 @@ mod checked {
         programmable_transactions::{
             context::*,
             trace_utils::{
-                trace_move_call_end, trace_move_call_start, trace_ptb_summary, trace_split_coins,
-                trace_transfer,
+                add_move_value_info_from_obj_value, add_move_value_info_from_value,
+                trace_execution_error, trace_make_move_vec, trace_merge_coins, trace_move_call_end,
+                trace_move_call_start, trace_ptb_summary, trace_publish_event, trace_split_coins,
+                trace_transfer, trace_upgrade_event,
             },
         },
         static_programmable_transactions,
@@ -126,7 +128,11 @@ mod checked {
 
         match result {
             Ok(result) => Ok((result, timings)),
-            Err(e) => Err((e, timings)),
+            Err(e) => {
+                trace_execution_error(trace_builder_opt, e.to_string());
+
+                Err((e, timings))
+            }
         }
     }
 
@@ -223,6 +229,9 @@ mod checked {
                 let abilities = context.get_type_abilities(&ty)?;
                 // BCS layout for any empty vector should be the same
                 let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
+
+                trace_make_move_vec(context, trace_builder_opt, vec![], &ty)?;
+
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -238,6 +247,7 @@ mod checked {
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
+                let mut move_values = vec![];
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
                         let tag = to_type_tag(context, tag)?;
@@ -256,6 +266,12 @@ mod checked {
                         let (idx, arg) = arg_iter.next().unwrap();
                         let obj: ObjectValue =
                             context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                        add_move_value_info_from_obj_value(
+                            context,
+                            trace_builder_opt,
+                            &mut move_values,
+                            &obj,
+                        )?;
                         let bound =
                             amplification_bound::<Mode>(context, &obj.type_, &elem_abilities)?;
                         obj.write_bcs_bytes(
@@ -267,6 +283,13 @@ mod checked {
                 };
                 for (idx, arg) in arg_iter {
                     let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    add_move_value_info_from_value(
+                        context,
+                        trace_builder_opt,
+                        &mut move_values,
+                        &elem_ty,
+                        &value,
+                    )?;
                     check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
@@ -278,6 +301,9 @@ mod checked {
                 }
                 let ty = Type::Vector(Box::new(elem_ty));
                 let abilities = context.get_type_abilities(&ty)?;
+
+                trace_make_move_vec(context, trace_builder_opt, move_values, &ty)?;
+
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -356,6 +382,7 @@ mod checked {
                     .enumerate()
                     .map(|(idx, arg)| context.by_value_arg(CommandKind::MergeCoins, idx + 1, arg))
                     .collect::<Result<_, _>>()?;
+                let mut input_infos = vec![];
                 for (idx, coin) in coins.into_iter().enumerate() {
                     if target.type_ != coin.type_ {
                         let e = ExecutionErrorKind::command_argument_error(
@@ -371,9 +398,19 @@ mod checked {
                             This should be a coin"
                         );
                     };
+                    input_infos.push((balance.value(), *id.object_id()));
                     context.delete_id(*id.object_id())?;
                     target_coin.add(balance)?;
                 }
+
+                trace_merge_coins(
+                    context,
+                    trace_builder_opt,
+                    &target.type_,
+                    &input_infos,
+                    &target_coin,
+                )?;
+
                 context.restore_arg::<Mode>(
                     &mut argument_updates,
                     target_arg,
@@ -426,14 +463,20 @@ mod checked {
                 context.linkage_view.reset_linkage()?;
                 return_values?
             }
-            Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
-                context,
-                &mut argument_updates,
-                modules,
-                dep_ids,
-                trace_builder_opt,
-            )?,
+            Command::Publish(modules, dep_ids) => {
+                trace_publish_event(trace_builder_opt)?;
+
+                execute_move_publish::<Mode>(
+                    context,
+                    &mut argument_updates,
+                    modules,
+                    dep_ids,
+                    trace_builder_opt,
+                )?
+            }
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
+                trace_upgrade_event(trace_builder_opt)?;
+
                 let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     context,
