@@ -289,7 +289,7 @@ impl Value {
 
     pub fn receiving(id: ObjectID, version: SequenceNumber) -> Self {
         Self(VMValue::struct_(Struct::pack([
-            Self::uid(id.into()).0,
+            Self::id(id.into()).0,
             VMValue::u64(version.into()),
         ])))
     }
