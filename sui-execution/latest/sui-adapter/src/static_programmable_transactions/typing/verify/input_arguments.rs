@@ -242,7 +242,7 @@ fn check_obj_usages(
 fn check_obj_usage(context: &mut Context, arg: &T::Argument) -> Result<(), ExecutionError> {
     match &arg.value.0 {
         T::Argument__::Borrow(true, l) => check_obj_by_mut_ref(context, arg.idx, l),
-        T::Argument__::Use(T::Usage::Move(l)) => check_by_value_ref(context, arg.idx, l),
+        T::Argument__::Use(T::Usage::Move(l)) => check_by_value(context, arg.idx, l),
         T::Argument__::Borrow(false, _)
         | T::Argument__::Use(T::Usage::Copy { .. })
         | T::Argument__::Read(_) => Ok(()),
@@ -275,7 +275,7 @@ fn check_obj_by_mut_ref(
 }
 
 // Checks for valid by-value usage of input objects
-fn check_by_value_ref(
+fn check_by_value(
     context: &mut Context,
     arg_idx: u16,
     location: &T::Location,
