@@ -23,7 +23,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_extensions::NativeExtensionMarker;
-use move_vm_types::values::{GlobalValue, Value};
+use move_vm_types::values::{GlobalValue, Struct, Value};
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -89,6 +89,12 @@ pub struct RuntimeResults {
 #[derive(Default)]
 pub(crate) struct ObjectRuntimeState {
     pub(crate) input_objects: BTreeMap<ObjectID, Owner>,
+    /// The current root accumulator version as of the commit in which this transaction
+    /// was sequenced, or None if we are on the fast path.
+    pub(crate) root_accumulator_version: Option<SequenceNumber>,
+    // Once an object balance value is loaded via the root accumulator, it is stored here.
+    // The key is the accumulator object ID, not the ID of the object that owns it.
+    pub(crate) object_balances: BTreeMap<ObjectID, u128>,
     // new ids from object::new
     new_ids: Set<ObjectID>,
     // ids passed to object::delete
@@ -125,6 +131,13 @@ pub enum TransferResult {
     OwnerChanged,
 }
 
+pub enum ObjectBalanceResult {
+    // Transaction is executed from fast path, so we can't check the balance. Should
+    // result in an error.
+    OnFastPath,
+    InsufficientBalance,
+}
+
 pub struct InputObject {
     pub contained_uids: BTreeSet<ObjectID>,
     pub version: SequenceNumber,
@@ -141,6 +154,7 @@ impl<'a> ObjectRuntime<'a> {
     pub fn new(
         object_resolver: &'a dyn ChildObjectResolver,
         input_objects: BTreeMap<ObjectID, InputObject>,
+        root_accumulator_version: Option<SequenceNumber>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -178,6 +192,8 @@ impl<'a> ObjectRuntime<'a> {
             test_inventories: TestInventories::new(),
             state: ObjectRuntimeState {
                 input_objects: input_object_owners,
+                root_accumulator_version,
+                object_balances: BTreeMap::new(),
                 new_ids: Set::new(),
                 deleted_ids: Set::new(),
                 transfers: IndexMap::new(),
@@ -361,6 +377,45 @@ impl<'a> ObjectRuntime<'a> {
         };
         self.state.accumulator_events.push(event);
         Ok(())
+    }
+
+    pub fn check_and_update_available_object_balance(
+        &mut self,
+        accumulator: ObjectID,
+        amount: u64,
+    ) -> PartialVMResult<ObjectBalanceResult> {
+        let current_balance = self
+            .state
+            .object_balances
+            .entry(accumulator)
+            .or_insert_with(|| {
+                let global_value_result = get_or_fetch_object!(
+                    context,
+                    ty_args,
+                    parent,
+                    child_id,
+                    dynamic_field_borrow_child_object_cost_params
+                        .dynamic_field_borrow_child_object_type_cost_per_byte
+                );
+                let global_value = match global_value_result {
+                    ObjectResult::MismatchedType => {
+                        return Ok(NativeResult::err(context.gas_used(), E_FIELD_TYPE_MISMATCH))
+                    }
+                    ObjectResult::Loaded(gv) => gv,
+                };
+
+                let value = global_value.borrow_global()?;
+                let value: Struct = value.value_as()?;
+                let fields = value.unpack()?.collect::<Vec<_>>();
+                if fields.len() != 1 {
+                    // TODO: return an error?
+                    panic!("expected 1 field, got {}", fields.len());
+                }
+                let balance = fields[0].value_as::<u128>()?;
+                balance
+            });
+
+        Ok(ObjectBalanceResult::InsufficientBalance)
     }
 
     pub(crate) fn child_object_exists(
@@ -587,6 +642,7 @@ impl ObjectRuntimeState {
         self.apply_child_object_effects(&mut loaded_child_objects, child_object_effects);
         let ObjectRuntimeState {
             input_objects: _,
+            object_balances: _,
             new_ids,
             deleted_ids,
             transfers,

@@ -160,3 +160,9 @@ fun withdraw_from_account<T>(amount: u64, ctx: &TxContext): Balance<T> {
     sui::accumulator::emit_withdraw_event<Balance<T>>(accumulator, owner, amount);
     credit
 }
+
+#[allow(unused_function)]
+fun withdraw_from_object_balance<T>(object: &mut UID, amount: u64) {
+    let accumulator = accumulator::get_accumulator_field_address<Balance<T>>(object.to_address());
+    accumulator::withdraw_from_object_balance<T>(object, amount);
+}

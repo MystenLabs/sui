@@ -137,3 +137,26 @@ public(package) native fun emit_withdraw_event<T>(
     owner: address,
     amount: u64,
 );
+
+/// Aborts if the object does not have enough balance available.
+/// Aborts if called on the fast-path. Will be re-executed after
+/// transaction is sequenced by consensus. (This is hidden from the user).
+public(package) native fun emit_withdraw_from_object_balance_event<T>(
+    accumulator: address,
+    object: &mut UID,
+    amount: u64,
+);
+
+public(package) native fun native_get_available_object_balance<T>(accumulator: address): u128;
+
+#[allow(unused_mut_parameter)]
+public(package) fun get_available_object_balance_u128<T>(object: &mut UID): u128 {
+    let accumulator = get_accumulator_field_address<T>(object.to_address());
+    native_get_available_object_balance<U128>(accumulator)
+}
+
+public(package) fun withdraw_from_object_balance_u128<T>(object: &mut UID, amount: u64) {
+    let accumulator = get_accumulator_field_address<T>(object.to_address());
+    // Will abort if the object does not have enough balance available.
+    emit_withdraw_from_object_balance_event<T>(accumulator, object, amount);
+}

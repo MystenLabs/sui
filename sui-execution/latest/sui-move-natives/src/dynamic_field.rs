@@ -28,8 +28,9 @@ use tracing::instrument;
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
-const E_BCS_SERIALIZATION_FAILURE: u64 = 3;
+pub(crate) const E_BCS_SERIALIZATION_FAILURE: u64 = 3;
 
+#[macro_export]
 macro_rules! get_or_fetch_object {
     ($context:ident, $ty_args:ident, $parent:ident, $child_id:ident, $ty_cost_per_byte:expr) => {{
         let child_ty = $ty_args.pop().unwrap();
@@ -39,24 +40,25 @@ macro_rules! get_or_fetch_object {
         );
 
         assert!($ty_args.is_empty());
-        let (tag, layout, annotated_layout) = match crate::get_tag_and_layouts($context, &child_ty)?
-        {
-            Some(res) => res,
-            None => {
-                return Ok(NativeResult::err(
-                    $context.gas_used(),
-                    E_BCS_SERIALIZATION_FAILURE,
-                ))
-            }
-        };
+        let (tag, layout, annotated_layout) =
+            match $crate::get_tag_and_layouts($context, &child_ty)? {
+                Some(res) => res,
+                None => {
+                    return Ok(NativeResult::err(
+                        $context.gas_used(),
+                        $crate::dynamic_field::E_BCS_SERIALIZATION_FAILURE,
+                    ))
+                }
+            };
 
         let object_runtime: &mut ObjectRuntime = $context.extensions_mut().get_mut()?;
+
         object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
             &layout,
             &annotated_layout,
-            MoveObjectType::from(tag),
+            sui_types::base_types::MoveObjectType::from(tag),
         )?
     }};
 }
