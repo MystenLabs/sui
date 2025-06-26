@@ -49,11 +49,14 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_consensus_gc_depth_for_testing(3);
+            config
+        });
 
         const NUM_OF_AUTHORITIES: usize = 10;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        std::env::set_var("SIMTEST_CONSENSUS_GC_DEPTH_OVERRIDE", "3");
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
@@ -132,6 +135,10 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(RegistryService::new(db_registry));
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_consensus_gc_depth_for_testing(3);
+            config
+        });
 
         const NUM_OF_AUTHORITIES: usize = 10;
         const REJECTION_PROBABILITY: f64 = 0.35;
@@ -140,7 +147,6 @@ mod test {
 
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        std::env::set_var("SIMTEST_CONSENSUS_GC_DEPTH_OVERRIDE", "3");
 
         let mut authorities = Vec::with_capacity(committee.size());
         let mut transaction_clients = Vec::with_capacity(committee.size());
