@@ -1283,7 +1283,6 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             }
         }
 
-        // Track package versions
         if let Some((key, info)) = IndexStoreTables::extract_version_if_package(&object) {
             self.batch
                 .insert_batch(&self.tables.package_version, [(key, info)])?;
