@@ -247,7 +247,6 @@ public macro fun find_index<$T>($v: &vector<$T>, $f: |&$T| -> bool): Option<u64>
     }
 }
 
-
 /// Finds all indices of elements in the vector `v` that satisfy the predicate `f`.
 /// Returns a vector of indices.
 public macro fun find_indices<$T>($v: &vector<$T>, $f: |&$T| -> bool): vector<u64> {
