@@ -229,7 +229,7 @@ public macro fun is_some_and<$T>($o: &Option<$T>, $f: |&$T| -> bool): bool {
 /// Similar to `destroy_or`, but can be performed on a mutable reference to the option.
 public macro fun extract_or<$T>($o: &mut Option<$T>, $default: $T): $T {
     let o = $o;
-    if (o.is_some()) o.destroy_some() else $default
+    if (o.is_some()) o.extract() else $default
 }
 
 /// Destroy `Option<T>` and return the value inside if it holds one, or `default` otherwise.

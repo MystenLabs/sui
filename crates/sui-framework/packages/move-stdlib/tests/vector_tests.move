@@ -718,10 +718,7 @@ fun find_indices_macro() {
     let r = vector[0, 10, 100, 1_000];
     assert!(r.find_indices!(|e| *e == 100) == vector[2]);
     assert!(r.find_indices!(|e| *e == 10_000) == vector[]);
-
-    let v = vector[Droppable {}, Droppable {}];
-    let idx = v.find_indices!(|e| e == Droppable{});
-    assert!(idx == vector[0, 1]);
+    assert!(r.find_indices!(|e| *e / 10 > 0) == vector[2, 3]);
 }
 
 #[test]
