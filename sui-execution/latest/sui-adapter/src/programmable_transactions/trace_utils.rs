@@ -6,24 +6,31 @@
 //! tracing is enabled or not to make sure that any errors coming from these functions only manifest itself
 //! when tracing is enabled.
 
-use crate::execution_value::{ObjectContents, ObjectValue, Value};
-use crate::programmable_transactions::context::*;
-use move_core_types::language_storage::StructTag;
-use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use crate::{
+    execution_mode::ExecutionMode,
+    execution_value::{ObjectContents, ObjectValue, Value},
+    programmable_transactions::context::*,
+};
+use move_core_types::{
+    identifier::Identifier,
+    language_storage::{StructTag, TypeTag},
+};
 use move_trace_format::{
     format::{Effect, MoveTraceBuilder, RefType, TraceEvent, TypeTagWithRefs},
     value::{SerializableMoveValue, SimplifiedMoveStruct},
 };
 use move_vm_types::loaded_data::runtime_types::Type;
-use sui_types::coin::Coin;
-use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::ptb_trace::{ExtMoveValue, ExternalEvent, PTBCommandInfo, PTBEvent, SummaryEvent};
-use sui_types::transaction::Command;
 use sui_types::{
     base_types::ObjectID,
+    coin::Coin,
     error::{ExecutionError, ExecutionErrorKind},
-    ptb_trace::ExtMoveValueInfo,
+    object::bounded_visitor::BoundedVisitor,
+    ptb_trace::{
+        ExtMoveValue, ExtMoveValueInfo, ExternalEvent, PTBCommandInfo, PTBEvent, SummaryEvent,
+    },
+    transaction::Command,
 };
+use sui_verifier::INIT_FN_NAME;
 
 /// Inserts Move call start event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
@@ -74,7 +81,8 @@ pub fn trace_transfer(
 
 /// Inserts PTB summary event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_ptb_summary(
+pub fn trace_ptb_summary<Mode: ExecutionMode>(
+    context: &mut ExecutionContext<'_, '_, '_>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     commands: &[Command],
 ) -> Result<(), ExecutionError> {
@@ -86,23 +94,53 @@ pub fn trace_ptb_summary(
                     let pkg = move_call.package.to_string();
                     let module = move_call.module.clone();
                     let function = move_call.function.clone();
-                    PTBCommandInfo::MoveCall {
+                    Ok(vec![PTBCommandInfo::MoveCall {
                         pkg,
                         module,
                         function,
-                    }
+                    }])
                 }
-                Command::TransferObjects(..) => {
-                    PTBCommandInfo::ExternalEvent("TransferObjects".to_string())
+                Command::TransferObjects(..) => Ok(vec![PTBCommandInfo::ExternalEvent(
+                    "TransferObjects".to_string(),
+                )]),
+                Command::SplitCoins(..) => Ok(vec![PTBCommandInfo::ExternalEvent(
+                    "SplitCoins".to_string(),
+                )]),
+                Command::MergeCoins(..) => Ok(vec![PTBCommandInfo::ExternalEvent(
+                    "MergeCoins".to_string(),
+                )]),
+                Command::Publish(module_bytes, _) => {
+                    let mut events = vec![];
+                    events.push(PTBCommandInfo::ExternalEvent("Publish".to_string()));
+                    // Not ideal but it only runs when tracing is enabled so overhead
+                    // should be insignificant
+                    let modules = deserialize_modules::<Mode>(context, module_bytes)?;
+                    events.extend(modules.into_iter().find_map(|m| {
+                        for fdef in &m.function_defs {
+                            let fhandle = m.function_handle_at(fdef.function);
+                            let fname = m.identifier_at(fhandle.name);
+                            if fname == INIT_FN_NAME {
+                                return Some(PTBCommandInfo::MoveCall {
+                                    pkg: m.address().to_string(),
+                                    module: m.name().to_string(),
+                                    function: INIT_FN_NAME.to_string(),
+                                });
+                            }
+                        }
+                        None
+                    }));
+                    Ok(events)
                 }
-                Command::SplitCoins(..) => PTBCommandInfo::ExternalEvent("SplitCoins".to_string()),
-                Command::MergeCoins(..) => PTBCommandInfo::ExternalEvent("MergeCoins".to_string()),
-                Command::Publish(..) => PTBCommandInfo::ExternalEvent("Publish".to_string()),
-                Command::MakeMoveVec(..) => {
-                    PTBCommandInfo::ExternalEvent("MakeMoveVec".to_string())
+                Command::MakeMoveVec(..) => Ok(vec![PTBCommandInfo::ExternalEvent(
+                    "MakeMoveVec".to_string(),
+                )]),
+                Command::Upgrade(..) => {
+                    Ok(vec![PTBCommandInfo::ExternalEvent("Upgrade".to_string())])
                 }
-                Command::Upgrade(..) => PTBCommandInfo::ExternalEvent("Upgrade".to_string()),
             })
+            .collect::<Result<Vec<Vec<PTBCommandInfo>>, ExecutionError>>()?
+            .into_iter()
+            .flatten()
             .collect();
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
             PTBEvent::Summary(SummaryEvent {

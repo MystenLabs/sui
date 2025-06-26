@@ -158,7 +158,7 @@ mod checked {
             inputs,
         )?;
 
-        trace_ptb_summary(trace_builder_opt, &commands)?;
+        trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &commands)?;
 
         // execute commands
         let mut mode_results = Mode::empty_results();
@@ -985,29 +985,6 @@ mod checked {
         Ok(result)
     }
 
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn deserialize_modules<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
-        module_bytes: &[Vec<u8>],
-    ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        let binary_config = to_binary_config(context.protocol_config);
-        let modules = module_bytes
-            .iter()
-            .map(|b| {
-                CompiledModule::deserialize_with_config(b, &binary_config)
-                    .map_err(|e| e.finish(Location::Undefined))
-            })
-            .collect::<VMResult<Vec<CompiledModule>>>()
-            .map_err(|e| context.convert_vm_error(e))?;
-
-        assert_invariant!(
-            !modules.is_empty(),
-            "input checker ensures package is not empty"
-        );
-
-        Ok(modules)
-    }
-
     fn publish_and_verify_modules(
         context: &mut ExecutionContext<'_, '_, '_>,
         package_id: ObjectID,
@@ -1066,6 +1043,7 @@ mod checked {
         });
 
         for module_id in modules_to_init {
+            trace_move_call_start(trace_builder_opt);
             let return_values = execute_move_call::<Mode>(
                 context,
                 argument_updates,
@@ -1084,7 +1062,9 @@ mod checked {
             assert_invariant!(
                 return_values.is_empty(),
                 "init should not have return values"
-            )
+            );
+
+            trace_move_call_end(trace_builder_opt);
         }
 
         Ok(())
