@@ -2,10 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
+use crate::ingestion::slow_future_monitor::with_slow_future_monitor;
 use crate::ingestion::Result as IngestionResult;
 use reqwest::{Client, StatusCode};
-use tracing::{debug, error};
+use std::time::Duration;
+use tracing::{debug, error, warn};
 use url::Url;
+
+/// Threshold for logging warnings about slow HTTP operations during checkpoint fetching.
+///
+/// Operations that take longer than this duration will trigger a warning log, but will
+/// continue executing without being canceled. This helps identify network issues or
+/// slow remote stores without interrupting the ingestion process.
+const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum HttpError {
@@ -49,15 +58,23 @@ impl IngestionClientTrait for RemoteIngestionClient {
             .join(&format!("/{checkpoint}.chk"))
             .expect("Unexpected invalid URL");
 
-        let response = self
-            .client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| FetchError::Transient {
-                reason: "request",
-                error: e.into(),
-            })?;
+        let response = with_slow_future_monitor(
+            self.client.get(url).send(),
+            SLOW_OPERATION_WARNING_THRESHOLD,
+            /* on_threshold_exceeded =*/
+            || {
+                warn!(
+                    checkpoint,
+                    threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
+                    "Slow checkpoint fetch operation detected"
+                );
+            },
+        )
+        .await
+        .map_err(|e| FetchError::Transient {
+            reason: "request",
+            error: e.into(),
+        })?;
 
         match response.status() {
             code if code.is_success() => {
