@@ -24,7 +24,6 @@
 use std::{collections::BTreeMap, env, io::stdin};
 
 use jsonrpc::types::{BatchRequest, JsonRpcResult, RequestID, Response, TwoPointZero};
-use move_package_alt::dependency::external::{RESOLVE_ARG, RESOLVE_METHOD};
 use move_package_alt::schema::{EXTERNAL_RESOLVE_ARG, EXTERNAL_RESOLVE_METHOD};
 use serde::Deserialize;
 use tracing::debug;
