@@ -34,12 +34,7 @@ pub fn list_package_versions(
     let mut versions = vec![];
     let iter = indexes
         .package_versions_iter(original_package_id)
-        .map_err(|e| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!("Failed to query package versions: {}", e),
-            )
-        })?;
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
     for result in iter {
         let (version, storage_id) =
