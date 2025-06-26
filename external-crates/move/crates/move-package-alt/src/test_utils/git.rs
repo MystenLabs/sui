@@ -48,9 +48,9 @@ use std::sync::Once;
 use url::Url;
 
 use crate::t;
-use crate::test_framework::panic_error;
-use crate::test_framework::paths::*;
-use crate::test_framework::*;
+use crate::test_utils::panic_error;
+use crate::test_utils::paths::*;
+use crate::test_utils::*;
 use std::env::consts;
 
 /// Manually construct a [`Repository`]
@@ -229,6 +229,14 @@ pub fn tag(repo: &git2::Repository, name: &str) {
         "make a new tag",
         false
     ));
+}
+
+pub fn commits(repo: &git2::Repository) -> Vec<git2::Commit> {
+    let mut revwalk = t!(repo.revwalk());
+    t!(revwalk.push_head());
+    revwalk
+        .map(|oid| t!(repo.find_commit(oid.unwrap())))
+        .collect()
 }
 
 /// Returns true if gitoxide is globally activated.

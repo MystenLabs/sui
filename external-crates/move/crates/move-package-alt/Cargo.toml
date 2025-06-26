@@ -30,6 +30,7 @@ serde_json.workspace = true
 serde_spanned.workspace = true
 sha2.workspace = true
 snapbox = { version = "0.6.21", features = ["diff", "dir", "term-svg", "regex", "json"] }
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 toml.workspace = true
@@ -37,13 +38,12 @@ toml_edit.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
+walkdir.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
-tempfile.workspace = true
-walkdir.workspace = true
 
 [[bin]]
 name = "mock-resolver"

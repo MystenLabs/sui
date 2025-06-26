@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::t;
-use crate::test_framework::panic_error;
+use crate::test_utils::panic_error;
 
 static CARGO_INTEGRATION_TEST_DIR: &str = "cit";
 

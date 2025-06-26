@@ -380,6 +380,9 @@ fn display_cmd(cmd: &Command) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::basic_manifest;
+    use crate::test_utils::git;
+    use crate::test_utils::git::commits;
     use std::collections::BTreeSet;
     use std::env;
     use std::fs;
@@ -508,14 +511,19 @@ mod tests {
     /// Ensure that loading a package into an empty cache outputs only the correct files
     #[test(tokio::test)]
     async fn test_sparse_checkout_branch() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project
+                .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+        });
+
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         // Pass in a branch name
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
+                project.root_path(),
                 &Some("main".into()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -530,18 +538,23 @@ mod tests {
         assert_exactly_paths(&checkout_path, ["Move.toml"]);
     }
 
-    /// Ensure that loading a package into an empty cache from a SHA outputs only the correct files
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_sparse_checkout_sha() {
-        let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
+        // create a git repository with two packages
+        let project = git::new("git_repo", |project| {
+            project
+                .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+        });
+
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         // Pass in a commit SHA
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
-                &Some(second_sha),
+                project.root_path(),
+                &Some(project.commits().first().unwrap().to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
             .await
@@ -550,24 +563,36 @@ mod tests {
         // Fetch the dependency
         let checkout_path = git_tree.fetch().await.unwrap();
 
-        // Verify only packages/pkg_b was checked out
+        // Verify only packages/pkg_a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["packages/pkg_a/Move.toml"]);
     }
 
     /// Ensure that checking out two different paths from the same repo / sha works
     #[test(tokio::test)]
     async fn test_multi_checkout() {
-        let (repo_dir, repo_path, _, second_sha) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project
+                .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree_a = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 
         let git_tree_b = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_b")))
+            .resolve_to_tree(
+                project.root_path(),
+                &None,
+                Some(PathBuf::from("packages/pkg_b")),
+            )
             .await
             .unwrap();
 
@@ -585,7 +610,10 @@ mod tests {
     /// Creating a git tree should fail if the sha doesn't exist
     #[test(tokio::test)]
     async fn test_wrong_sha() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
+
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
@@ -596,7 +624,7 @@ mod tests {
         // contact the server - we only fail when we try to fetch (which seems reasonable)
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
+                project.root_path(),
                 &Some(wrong_sha),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -611,14 +639,15 @@ mod tests {
     /// Creating a git tree should fail if the branch doesn't exist
     #[test(tokio::test)]
     async fn test_wrong_branch_name() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
-        let wrong_branch = "test";
         let git_tree = cache
             .resolve_to_tree(
-                &repo_path,
+                project.root_path(),
                 &Some("nonexisting_branch".to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -630,12 +659,14 @@ mod tests {
     /// Fetching should succeeed if the path is `None`
     #[test(tokio::test)]
     async fn test_fetch_no_path() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_path, &None, None)
+            .resolve_to_tree(project.root_path(), &None, None)
             .await
             .unwrap();
 
@@ -645,12 +676,18 @@ mod tests {
     /// Fetching should fail if a dirty checkout exists
     #[test(tokio::test)]
     async fn test_fetch_dirty_fail() {
-        let (repo_dir, repo_path, _, _) = setup_test_move_project().await;
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(&repo_path, &None, Some(PathBuf::from("packages/pkg_a")))
+            .resolve_to_tree(
+                project.root_path(),
+                &None,
+                Some(PathBuf::from("packages/pkg_a")),
+            )
             .await
             .unwrap();
 

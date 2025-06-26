@@ -154,6 +154,7 @@ impl SymlinkBuilder {
 /// A cargo project to run tests against.
 ///
 /// See [`ProjectBuilder`] or [`Project::from_template`] to get started.
+#[derive(Debug)]
 pub struct Project {
     root: PathBuf,
 }
@@ -177,17 +178,8 @@ pub struct ProjectBuilder {
 
 impl ProjectBuilder {
     /// Root of the project
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo`
     pub fn root(&self) -> PathBuf {
         self.root.root()
-    }
-
-    /// Project's debug dir
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug`
-    pub fn target_debug_dir(&self) -> PathBuf {
-        self.root.target_debug_dir()
     }
 
     /// Create project in `root`
@@ -259,14 +251,14 @@ impl ProjectBuilder {
         // Create the empty directory
         self.root.root().mkdir_p();
 
-        let manifest_path = self.root.root().join("Move.toml");
-        if !self.no_manifest && self.files.iter().all(|fb| fb.path != manifest_path) {
-            self._file(
-                Path::new("Move.toml"),
-                &basic_manifest("foo", "0.0.1"),
-                false,
-            )
-        }
+        // let manifest_path = self.root.root().join("Move.toml");
+        // if !self.no_manifest && self.files.iter().all(|fb| fb.path != manifest_path) {
+        //     self._file(
+        //         Path::new("Move.toml"),
+        //         &basic_manifest("foo", "0.0.1"),
+        //         false,
+        //     )
+        // }
 
         let past = time::SystemTime::now() - Duration::new(1, 0);
         let ftime = filetime::FileTime::from_system_time(past);
@@ -297,6 +289,17 @@ impl ProjectBuilder {
 }
 
 impl Project {
+    /// Try to get the git commits in the project, but it will fail if this is not a git
+    /// repository.
+    pub fn commits(&self) -> Vec<String> {
+        let repo = git2::Repository::open(self.root.clone())
+            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()));
+        git::commits(&repo)
+            .into_iter()
+            .map(|c| c.id().to_string())
+            .collect()
+    }
+
     /// Copy the test project from a fixed state
     pub fn from_template(template_path: impl AsRef<Path>) -> Self {
         let root = root();
@@ -306,82 +309,19 @@ impl Project {
     }
 
     /// Root of the project
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo`
     pub fn root(&self) -> PathBuf {
         self.root.clone()
     }
 
-    /// Project's target dir
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target`
-    pub fn build_dir(&self) -> PathBuf {
-        self.root().join("target")
-    }
-
-    /// Project's debug dir
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug`
-    pub fn target_debug_dir(&self) -> PathBuf {
-        self.build_dir().join("debug")
+    /// Root of the project as a string. This will panic if root does not exist.
+    pub fn root_path(&self) -> &str {
+        self.root.to_str().unwrap()
     }
 
     /// File url for root
-    ///
-    /// ex: `file://$CARGO_TARGET_TMPDIR/cit/t0/foo`
     pub fn url(&self) -> Url {
         use CargoPathExt;
         self.root().to_url()
-    }
-
-    /// Path to an example built as a library.
-    ///
-    /// `kind` should be one of: "lib", "rlib", "staticlib", "dylib", "proc-macro"
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug/examples/libex.rlib`
-    pub fn example_lib(&self, name: &str, kind: &str) -> PathBuf {
-        self.target_debug_dir()
-            .join("examples")
-            .join(get_lib_filename(name, kind))
-    }
-
-    /// Path to a dynamic library.
-    /// ex: `/path/to/cargo/target/cit/t0/foo/target/debug/examples/libex.dylib`
-    pub fn dylib(&self, name: &str) -> PathBuf {
-        self.target_debug_dir().join(format!(
-            "{}{name}{}",
-            env::consts::DLL_PREFIX,
-            env::consts::DLL_SUFFIX
-        ))
-    }
-
-    /// Path to a debug binary.
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/debug/foo`
-    pub fn bin(&self, b: &str) -> PathBuf {
-        self.build_dir()
-            .join("debug")
-            .join(&format!("{}{}", b, env::consts::EXE_SUFFIX))
-    }
-
-    /// Path to a release binary.
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/release/foo`
-    pub fn release_bin(&self, b: &str) -> PathBuf {
-        self.build_dir()
-            .join("release")
-            .join(&format!("{}{}", b, env::consts::EXE_SUFFIX))
-    }
-
-    /// Path to a debug binary for a specific target triple.
-    ///
-    /// ex: `$CARGO_TARGET_TMPDIR/cit/t0/foo/target/i686-apple-darwin/debug/foo`
-    pub fn target_bin(&self, target: &str, b: &str) -> PathBuf {
-        self.build_dir().join(target).join("debug").join(&format!(
-            "{}{}",
-            b,
-            env::consts::EXE_SUFFIX
-        ))
     }
 
     /// Returns an iterator of paths within [`Project::root`] matching the glob pattern
@@ -442,9 +382,9 @@ impl Project {
     //     self.process(dst)
     // }
     //
-    /// Returns the contents of `Cargo.lock`.
+    /// Returns the contents of `Move.lock`.
     pub fn read_lockfile(&self) -> String {
-        self.read_file("Cargo.lock")
+        self.read_file("Move.lock")
     }
 
     /// Returns the contents of a path in the project root
@@ -454,10 +394,10 @@ impl Project {
             .unwrap_or_else(|e| panic!("could not read file {}: {}", full.display(), e))
     }
 
-    /// Modifies `Cargo.toml` to remove all commented lines.
+    /// Modifies `Move.toml` to remove all commented lines.
     pub fn uncomment_root_manifest(&self) {
-        let contents = self.read_file("Cargo.toml").replace("#", "");
-        fs::write(self.root().join("Cargo.toml"), contents).unwrap();
+        let contents = self.read_file("Move.toml").replace("#", "");
+        fs::write(self.root().join("Move.toml"), contents).unwrap();
     }
 
     pub fn symlink(&self, src: impl AsRef<Path>, dst: impl AsRef<Path>) {
