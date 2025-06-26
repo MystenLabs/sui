@@ -159,6 +159,40 @@ public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
     v.pop_back()
 }
 
+/// Take all elements of the vector `v` except the first `n` elements. Aborts if `n` is greater
+/// than the length of `v`. Modifies the original vector.
+public fun skip_mut<T>(v: &mut vector<T>, n: u64): vector<T> {
+    assert!(n < v.length()); // Q: should this be `<=`?
+    let mut r = vector[];
+    let i = v.length() - n;
+    i.do!(|_| r.push_back(v.pop_back()));
+    r.reverse();
+    r
+}
+
+/// Return a new vector containing the elements of `v` in the range `[start, end)`.
+/// Take all elements of the vector `v` except the first `n` elements and drop the vector.
+public fun skip<T: drop>(mut v: vector<T>, n: u64): vector<T> {
+    v.skip_mut(n)
+}
+
+/// Take the first `n` elements of the vector `v`. Aborts if `n` is greater than the length of `v`.
+/// Modifies the original vector.
+public fun take_mut<T>(v: &mut vector<T>, n: u64): vector<T> {
+    assert!(n <= v.length());
+    v.reverse();
+    let mut r = vector[];
+    n.do!(|_| r.push_back(v.pop_back()));
+    v.reverse();
+    r
+}
+
+/// Take the first `n` elements of the vector `v` and drop the rest. Aborts if `n` is greater
+/// than the length of `v`. Destroys the original vector after taking the elements.
+public fun take<T: drop>(mut v: vector<T>, n: u64): vector<T> {
+    v.take_mut(n)
+}
+
 // === Macros ===
 
 /// Create a vector of length `n` by calling the function `f` on each index.
@@ -497,4 +531,45 @@ public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): boo
         n_minus_1.do!(|i| if (!$le(&v[i], &v[i + 1])) return 'is_sorted_by false);
         true
     }
+}
+
+/// Takes the first `n` elements of the vector `v` that satisfy the predicate `p`.
+/// Modifies the original vector.
+public macro fun take_mut_while<$T>($v: &mut vector<$T>, $p: |&$T| -> bool): vector<$T> {
+    let v = $v;
+    let len = v.length();
+    'search: {
+        len.do!(|i| if (!$p(&v[i])) return 'search v.take_mut(i));
+        let mut r = tabulate!(len, |_| v.pop_back());
+        r.reverse();
+        r
+    }
+}
+
+/// Takes the first `n` elements of the vector `v` that satisfy the predicate `p` and drops the rest.
+/// Destroys the original vector after taking the elements.
+public macro fun take_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
+    let v = $v;
+    'search: {
+        v.length().do!(|i| if (!$p(&v[i])) return 'search v.take(i));
+        v
+    }
+}
+
+/// Take all elements of the vector `v` except the first `n` elements that satisfy the predicate `p`.
+/// Modifies the original vector.
+public macro fun skip_mut_while<$T>($v: &mut vector<$T>, $p: |&$T| -> bool): vector<$T> {
+    let v = $v;
+    // find first element that does not satisfy the predicate, then skip from there
+    'search: {
+        v.length().do!(|i| if (!$p(&v[i])) return 'search v.skip_mut(i));
+        vector[]
+    }
+}
+
+/// Take all elements of the vector `v` except the first `n` elements that satisfy the predicate `p`
+/// and drop the vector.
+public macro fun skip_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
+    let mut v = $v;
+    v.skip_mut_while!($p)
 }
