@@ -710,6 +710,21 @@ fun find_index_macro() {
 }
 
 #[test]
+fun find_indices_macro() {
+    let e = vector<u8>[];
+    assert!(e.find_indices!(|e| *e == 0) == vector[]);
+    assert!(e.find_indices!(|_| true) == vector[]);
+
+    let r = vector[0, 10, 100, 1_000];
+    assert!(r.find_indices!(|e| *e == 100) == vector[2]);
+    assert!(r.find_indices!(|e| *e == 10_000) == vector[]);
+
+    let v = vector[Droppable {}, Droppable {}];
+    let idx = v.find_indices!(|e| e == Droppable{});
+    assert!(idx == vector[0, 1]);
+}
+
+#[test]
 fun fold_macro() {
     let e = vector<u8>[];
     assert!(e.fold!(0, |acc, e| acc + e) == 0);
