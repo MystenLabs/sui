@@ -7,7 +7,7 @@ use move_command_line_common::testing::insta_assert;
 
 use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
-    dependency::{self, Combined, Dependency, DependencySet},
+    dependency::{self, CombinedDependency, DependencySet},
     errors::Files,
     flavor::Vanilla,
     package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
@@ -124,7 +124,7 @@ fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
     let manifest = Manifest::<Vanilla>::read_from_file(input_path).unwrap();
 
-    let deps: DependencySet<Dependency<Combined>> = manifest.dependencies();
+    let deps: DependencySet<CombinedDependency> = manifest.dependencies();
     debug!("{deps:?}");
 
     add_bindir();
