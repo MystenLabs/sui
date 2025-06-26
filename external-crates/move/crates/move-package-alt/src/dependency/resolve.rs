@@ -22,19 +22,28 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
+    dependency::{PinnedDependencyInfo, combine::Combined},
     errors::{FileHandle, TheFile},
     flavor::MoveFlavor,
     package::{EnvironmentID, EnvironmentName, PackageName},
-    schema::{ManifestDependencyInfo, ResolveRequest, ResolveResponse, ResolverDependencyInfo},
+    schema::{
+        EXTERNAL_RESOLVE_ARG, ManifestDependencyInfo, ResolveRequest, ResolveResponse,
+        ResolverDependencyInfo,
+    },
 };
 
-use super::{Combined, Dependency, DependencySet, Resolved};
+use super::{CombinedDependency, Dependency, DependencySet};
+
+/// A [Dependency<Resolved>] is like a [Dependency<Combined>] except that it no longer has
+/// externally resolved dependencies
+type Resolved = ResolverDependencyInfo;
 
 pub type ResolverName = String;
 pub type ResolverResult<T> = Result<T, ResolverError>;
 
-pub const RESOLVE_ARG: &str = "--resolve-deps";
-pub const RESOLVE_METHOD: &str = "resolve";
+/// A [ResolvedDependency] is like a [CombinedDependency] except that it no longer has
+/// externally resolved dependencies
+pub struct ResolvedDependency(pub(super) Dependency<Resolved>);
 
 #[derive(Error, Debug)]
 pub enum ResolverError {
@@ -70,23 +79,23 @@ pub enum ResolverError {
     },
 }
 
-impl Dependency<Resolved> {
+impl ResolvedDependency {
     /// Replace all external dependencies in `deps` with internal dependencies by invoking their
     /// resolvers. Requires all environments in `deps` to be contained in `envs`
     pub async fn resolve(
-        deps: DependencySet<Dependency<Combined>>,
+        deps: DependencySet<CombinedDependency>,
         envs: &BTreeMap<EnvironmentName, EnvironmentID>,
-    ) -> ResolverResult<DependencySet<Dependency<Resolved>>> {
+    ) -> ResolverResult<DependencySet<ResolvedDependency>> {
         // iterate over [deps] to collect queries for external resolvers
         let mut requests: BTreeMap<ResolverName, DependencySet<ResolveRequest>> = BTreeMap::new();
 
         for (env, pkg, dep) in deps.iter() {
-            if let Combined::External(ext) = &dep.dep_info {
+            if let Combined::External(ext) = &dep.0.dep_info {
                 requests.entry(ext.resolver.clone()).or_default().insert(
                     env.clone(),
                     pkg.clone(),
                     ResolveRequest {
-                        env: envs[dep.use_environment()].clone(),
+                        env: envs[dep.0.use_environment()].clone(),
                         data: ext.data.clone(),
                     },
                 );
@@ -106,14 +115,14 @@ impl Dependency<Resolved> {
             result.insert(
                 env,
                 pkg,
-                dep.map(|info| match info {
+                ResolvedDependency(dep.0.map(|info| match info {
                     Combined::Local(loc) => Resolved::Local(loc),
                     Combined::Git(git) => Resolved::Git(git),
                     Combined::OnChain(onchain) => Resolved::OnChain(onchain),
                     Combined::External(_) => {
                         ext.expect("resolve_single outputs same keys as input")
                     }
-                }),
+                })),
             );
         }
         assert!(responses.is_empty());
@@ -186,7 +195,7 @@ async fn call_resolver(
 ) -> ResolverResult<Vec<ResolveResponse>> {
     let mut command = Command::new(&resolver);
     command
-        .arg(RESOLVE_ARG)
+        .arg(EXTERNAL_RESOLVE_ARG)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

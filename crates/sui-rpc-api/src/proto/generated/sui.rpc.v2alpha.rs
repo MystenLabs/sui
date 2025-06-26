@@ -1108,7 +1108,7 @@ pub struct Module {
     pub name: ::core::option::Option<::prost::alloc::string::String>,
     /// List of DataTypes defined by this module.
     #[prost(message, repeated, tag = "3")]
-    pub data_types: ::prost::alloc::vec::Vec<DatatypeDescriptor>,
+    pub datatypes: ::prost::alloc::vec::Vec<DatatypeDescriptor>,
     /// List of Functions defined by this module.
     #[prost(message, repeated, tag = "4")]
     pub functions: ::prost::alloc::vec::Vec<FunctionDescriptor>,
@@ -1193,6 +1193,12 @@ pub mod datatype_descriptor {
             }
         }
     }
+}
+/// A set of abilities for a type parameter
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AbilitySet {
+    #[prost(enumeration = "Ability", repeated, tag = "1")]
+    pub abilities: ::prost::alloc::vec::Vec<i32>,
 }
 /// A generic type parameter used in the declaration of a struct or enum.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1328,8 +1334,9 @@ pub struct FunctionDescriptor {
     #[prost(bool, optional, tag = "6")]
     pub is_entry: ::core::option::Option<bool>,
     /// Ability constraints for type parameters
-    #[prost(enumeration = "Ability", repeated, tag = "7")]
-    pub type_parameters: ::prost::alloc::vec::Vec<i32>,
+    /// Each AbilitySet represents the constraints for one type parameter
+    #[prost(message, repeated, tag = "7")]
+    pub type_parameters: ::prost::alloc::vec::Vec<AbilitySet>,
     /// Formal parameter types.
     #[prost(message, repeated, tag = "8")]
     pub parameters: ::prost::alloc::vec::Vec<OpenSignature>,
