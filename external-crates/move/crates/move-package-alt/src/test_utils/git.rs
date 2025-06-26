@@ -89,13 +89,6 @@ impl RepoBuilder {
         me
     }
 
-    /// Create a symlink to a directory
-    pub fn nocommit_symlink_dir<T: AsRef<Path>>(self, dst: T, src: T) -> Self {
-        let workdir = self.repo.workdir().unwrap();
-        SymlinkBuilder::new_dir(workdir.join(dst), workdir.join(src)).mk();
-        self
-    }
-
     /// Add a file that will be left in the working directory, but not added
     /// to the repository.
     pub fn nocommit_file(self, path: &str, contents: &str) -> RepoBuilder {
@@ -149,19 +142,6 @@ pub fn init(path: &Path) -> git2::Repository {
     let repo = t!(git2::Repository::init(path));
     default_repo_cfg(&repo);
     repo
-}
-
-fn default_search_path() {
-    use git2::{ConfigLevel, opts::set_search_path};
-
-    static INIT: Once = Once::new();
-    INIT.call_once(|| unsafe {
-        let path = global_root().join("blank_git_search_path");
-        t!(set_search_path(ConfigLevel::System, &path));
-        t!(set_search_path(ConfigLevel::Global, &path));
-        t!(set_search_path(ConfigLevel::XDG, &path));
-        t!(set_search_path(ConfigLevel::ProgramData, &path));
-    })
 }
 
 fn default_repo_cfg(repo: &git2::Repository) {
@@ -243,5 +223,5 @@ pub fn commits(repo: &git2::Repository) -> Vec<git2::Commit> {
 ///
 /// That way, tests that normally use `git2` can transparently use `gitoxide`.
 pub fn cargo_uses_gitoxide() -> bool {
-    std::env::var_os("__CARGO_USE_GITOXIDE_INSTEAD_OF_GIT2").map_or(false, |value| value == "1")
+    std::env::var_os("__CARGO_USE_GITOXIDE_INSTEAD_OF_GIT2").is_some_and(|value| value == "1")
 }
