@@ -333,19 +333,17 @@ impl IndexStoreTables {
     fn extract_version_if_package(
         object: &Object,
     ) -> Option<(PackageVersionKey, PackageVersionInfo)> {
-        if object.is_package() {
-            if let Data::Package(package) = &object.data {
-                let original_id = package.original_package_id();
-                let version = package.version().value();
-                let storage_id = object.id();
+        if let Data::Package(package) = &object.data {
+            let original_id = package.original_package_id();
+            let version = package.version().value();
+            let storage_id = object.id();
 
-                let key = PackageVersionKey {
-                    original_package_id: original_id,
-                    version,
-                };
-                let info = PackageVersionInfo { storage_id };
-                return Some((key, info));
-            }
+            let key = PackageVersionKey {
+                original_package_id: original_id,
+                version,
+            };
+            let info = PackageVersionInfo { storage_id };
+            return Some((key, info));
         }
         None
     }
