@@ -90,7 +90,7 @@ impl<F: MoveFlavor> Manifest<F> {
         let parsed: ParsedManifest =
             toml_edit::de::from_str(file_id.source()).map_err(ManifestError::from_toml(file_id))?;
 
-        let dependencies = combine_deps(file_id, &parsed)?;
+        let dependencies = CombinedDependency::combine_deps(file_id, &parsed)?;
 
         let result = Self {
             inner: parsed,
@@ -157,51 +157,6 @@ impl<F: MoveFlavor> Manifest<F> {
 
         Ok(())
     }
-}
-
-/// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
-/// from `file`).
-fn combine_deps(
-    file: FileHandle,
-    manifest: &ParsedManifest,
-) -> ManifestResult<DependencySet<CombinedDependency>> {
-    let mut result = DependencySet::new();
-
-    for env in manifest.environments.keys() {
-        let mut replacements = manifest
-            .dep_replacements
-            .get(env.as_ref())
-            .cloned()
-            .unwrap_or_default();
-
-        for (pkg, default) in manifest.dependencies.iter() {
-            let combined = if let Some(replacement) = replacements.remove(pkg.as_ref()) {
-                CombinedDependency::from_default_with_replacement(
-                    file,
-                    env.as_ref().clone(),
-                    default.clone(),
-                    replacement.into_inner(),
-                )?
-            } else {
-                CombinedDependency::from_default(file, env.as_ref().clone(), default.clone())
-            };
-            result.insert(env.as_ref().clone(), pkg.as_ref().clone(), combined);
-        }
-
-        for (pkg, dep) in replacements {
-            result.insert(
-                env.as_ref().clone(),
-                pkg.clone(),
-                CombinedDependency::from_replacement(
-                    file,
-                    env.as_ref().clone(),
-                    dep.as_ref().clone(),
-                )?,
-            );
-        }
-    }
-
-    Ok(result)
 }
 
 impl ManifestError {
