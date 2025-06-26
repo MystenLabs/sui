@@ -17,7 +17,7 @@ pub use files::Files;
 use codespan_reporting::diagnostic::Diagnostic;
 use thiserror::Error;
 
-use crate::dependency::external::ResolverError;
+use crate::dependency::ResolverError;
 use crate::git::GitError;
 use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
