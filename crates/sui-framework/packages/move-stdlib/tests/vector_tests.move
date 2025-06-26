@@ -712,13 +712,13 @@ fun find_index_macro() {
 #[test]
 fun find_indices_macro() {
     let e = vector<u8>[];
-    assert!(e.find_indices!(|e| *e == 0) == vector[]);
-    assert!(e.find_indices!(|_| true) == vector[]);
+    assert_eq!(e.find_indices!(|e| *e == 0), vector[]);
+    assert_eq!(e.find_indices!(|_| true), vector[]);
 
     let r = vector[0, 10, 100, 1_000];
-    assert!(r.find_indices!(|e| *e == 100) == vector[2]);
-    assert!(r.find_indices!(|e| *e == 10_000) == vector[]);
-    assert!(r.find_indices!(|e| *e / 10 > 0) == vector[2, 3]);
+    assert_eq!(r.find_indices!(|e| *e == 100), vector[2]);
+    assert_eq!(r.find_indices!(|e| *e == 10_000), vector[]);
+    assert_eq!(r.find_indices!(|e| *e / 10 > 0), vector[1, 2, 3]);
 }
 
 #[test]
