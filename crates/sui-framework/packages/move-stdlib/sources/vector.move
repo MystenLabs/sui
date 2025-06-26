@@ -159,38 +159,39 @@ public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
     v.pop_back()
 }
 
-/// Take all elements of the vector `v` except the first `n` elements. Aborts if `n` is greater
-/// than the length of `v`. Modifies the original vector.
-public fun skip_mut<T>(v: &mut vector<T>, n: u64): vector<T> {
-    assert!(n < v.length()); // Q: should this be `<=`?
-    let mut r = vector[];
-    let i = v.length() - n;
-    i.do!(|_| r.push_back(v.pop_back()));
-    r.reverse();
-    r
-}
-
-/// Return a new vector containing the elements of `v` in the range `[start, end)`.
-/// Take all elements of the vector `v` except the first `n` elements and drop the vector.
+/// Return a new vector containing the elements of `v` except the first `n` elements.
 public fun skip<T: drop>(mut v: vector<T>, n: u64): vector<T> {
     v.skip_mut(n)
 }
 
-/// Take the first `n` elements of the vector `v`. Aborts if `n` is greater than the length of `v`.
+/// Return a new vector containing all elements of the vector `v` except the
+/// first `n` elements.
+/// Modifies the original vector - moves the elements to the new vector.
+/// If `n > length`, returns an empty vector.
+public fun skip_mut<T>(v: &mut vector<T>, n: u64): vector<T> {
+    let len = v.length();
+    if (n >= len) return vector[];
+    let mut r = vector::tabulate!(len - n, |_| v.pop_back());
+    r.reverse();
+    r
+}
+
+/// Take the first `n` elements of the vector `v` and drop the rest.
+/// Aborts if `n` is greater than the length of `v`.
+/// Destroys the original vector after taking the elements.
+public fun take<T: drop>(mut v: vector<T>, n: u64): vector<T> {
+    v.take_mut(n)
+}
+
+/// Take the first `n` elements of the vector `v`.
+/// Aborts if `n` is greater than the length of `v`.
 /// Modifies the original vector.
 public fun take_mut<T>(v: &mut vector<T>, n: u64): vector<T> {
     assert!(n <= v.length());
     v.reverse();
-    let mut r = vector[];
-    n.do!(|_| r.push_back(v.pop_back()));
+    let r = vector::tabulate!(n, |_| v.pop_back());
     v.reverse();
     r
-}
-
-/// Take the first `n` elements of the vector `v` and drop the rest. Aborts if `n` is greater
-/// than the length of `v`. Destroys the original vector after taking the elements.
-public fun take<T: drop>(mut v: vector<T>, n: u64): vector<T> {
-    v.take_mut(n)
 }
 
 // === Macros ===
