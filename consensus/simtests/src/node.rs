@@ -19,8 +19,8 @@ use tempfile::TempDir;
 use consensus_core::network::tonic_network::to_socket_addr;
 use consensus_core::transaction::NoopTransactionVerifier;
 use consensus_core::{
-    BlockTimestampMs, Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag,
-    ConsensusAuthority, TransactionClient, TransactionVerifier,
+    Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
+    TransactionClient, TransactionVerifier,
 };
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::unbounded_channel;

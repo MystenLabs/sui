@@ -3771,8 +3771,7 @@ impl ProtocolConfig {
         }
 
         // Simtest specific overrides.
-        #[cfg(msim)]
-        {
+        if cfg!(msim) {
             cfg.consensus_gc_depth = Some(5);
         }
 
