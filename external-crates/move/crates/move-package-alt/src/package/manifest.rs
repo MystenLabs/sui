@@ -21,7 +21,7 @@ use thiserror::Error;
 use tracing::debug;
 
 use crate::{
-    dependency::{Combined, Dependency, DependencySet},
+    dependency::{CombinedDependency, DependencySet},
     errors::{FileHandle, Files, Located, Location, TheFile},
     flavor::MoveFlavor,
     schema::{self, DefaultDependency, ParsedManifest, ReplacementDependency},
@@ -38,7 +38,7 @@ pub type Digest = String;
 pub struct Manifest<F: MoveFlavor> {
     inner: ParsedManifest,
     digest: Digest,
-    dependencies: DependencySet<Dependency<Combined>>,
+    dependencies: DependencySet<CombinedDependency>,
     // TODO: remove <F>
     phantom: PhantomData<F>,
 }
@@ -104,7 +104,7 @@ impl<F: MoveFlavor> Manifest<F> {
 
     /// The combined entries of the `[dependencies]` and `[dep-replacements]` sections for this
     /// manifest
-    pub fn dependencies(&self) -> DependencySet<Dependency<Combined>> {
+    pub fn dependencies(&self) -> DependencySet<CombinedDependency> {
         self.dependencies.clone()
     }
 
@@ -164,7 +164,7 @@ impl<F: MoveFlavor> Manifest<F> {
 fn combine_deps(
     file: FileHandle,
     manifest: &ParsedManifest,
-) -> ManifestResult<DependencySet<Dependency<Combined>>> {
+) -> ManifestResult<DependencySet<CombinedDependency>> {
     let mut result = DependencySet::new();
 
     for env in manifest.environments.keys() {
@@ -176,14 +176,14 @@ fn combine_deps(
 
         for (pkg, default) in manifest.dependencies.iter() {
             let combined = if let Some(replacement) = replacements.remove(pkg.as_ref()) {
-                Dependency::from_default_with_replacement(
+                CombinedDependency::from_default_with_replacement(
                     file,
                     env.as_ref().clone(),
                     default.clone(),
                     replacement.into_inner(),
                 )?
             } else {
-                Dependency::from_default(file, env.as_ref().clone(), default.clone())
+                CombinedDependency::from_default(file, env.as_ref().clone(), default.clone())
             };
             result.insert(env.as_ref().clone(), pkg.as_ref().clone(), combined);
         }
@@ -192,7 +192,11 @@ fn combine_deps(
             result.insert(
                 env.as_ref().clone(),
                 pkg.clone(),
-                Dependency::from_replacement(file, env.as_ref().clone(), dep.as_ref().clone())?,
+                CombinedDependency::from_replacement(
+                    file,
+                    env.as_ref().clone(),
+                    dep.as_ref().clone(),
+                )?,
             );
         }
     }

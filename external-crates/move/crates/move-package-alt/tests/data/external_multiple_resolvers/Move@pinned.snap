@@ -6,30 +6,34 @@ DependencySet {
         "default": {
             Identifier(
                 "mock1",
-            ): Dependency {
-                dep_info: Local(
-                    LocalDepInfo {
-                        local: "for-res-1",
-                    },
-                ),
-                use_environment: "default",
-                is_override: false,
-                published_at: None,
-                containing_file: "tests/data/external_multiple_resolvers/Move.toml",
-            },
+            ): PinnedDependencyInfo(
+                Dependency {
+                    dep_info: Local(
+                        LocalDepInfo {
+                            local: "for-res-1",
+                        },
+                    ),
+                    use_environment: "default",
+                    is_override: false,
+                    published_at: None,
+                    containing_file: "tests/data/external_multiple_resolvers/Move.toml",
+                },
+            ),
             Identifier(
                 "mock2",
-            ): Dependency {
-                dep_info: Local(
-                    LocalDepInfo {
-                        local: "for-res-2",
-                    },
-                ),
-                use_environment: "default",
-                is_override: false,
-                published_at: None,
-                containing_file: "tests/data/external_multiple_resolvers/Move.toml",
-            },
+            ): PinnedDependencyInfo(
+                Dependency {
+                    dep_info: Local(
+                        LocalDepInfo {
+                            local: "for-res-2",
+                        },
+                    ),
+                    use_environment: "default",
+                    is_override: false,
+                    published_at: None,
+                    containing_file: "tests/data/external_multiple_resolvers/Move.toml",
+                },
+            ),
         },
     },
 }

@@ -20,7 +20,7 @@ use toml_edit::{
 use tracing::debug;
 
 use crate::{
-    dependency::{Dependency, DependencySet, Pinned, PinnedDependencyInfo},
+    dependency::{DependencySet, PinnedDependencyInfo},
     errors::{FileHandle, LockfileError, PackageError, PackageResult, TheFile},
     flavor::MoveFlavor,
     schema::{self, PackageID, ParsedLockfile, Pin, Publication},
