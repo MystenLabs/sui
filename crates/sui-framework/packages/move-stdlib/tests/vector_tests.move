@@ -1106,6 +1106,7 @@ fun take_while() {
     assert_eq!(vector[0, 1, 2].take_while!(|e| *e > 0), vector[]);
     assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 2), vector[0, 1]);
     assert_eq!(vector[0, 1, 2].take_while!(|e| *e == 0), vector[0]);
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 3), vector[0, 1, 2]);
 }
 
 #[test]
