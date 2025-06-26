@@ -1144,7 +1144,7 @@ pub fn main_file(println: &str, externed_deps: &[&str]) -> String {
 //     }
 // }
 //
-/// Generate a basic `Cargo.toml`
+/// Generate a basic `Move.toml` content
 pub fn basic_manifest(name: &str, version: &str) -> String {
     format!(
         r#"
@@ -1152,11 +1152,11 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
         name = "{}"
         version = "{}"
         authors = []
-        edition = "2015"
+        edition = "2025"
 
         [environments]
-        mainnet = ""
-        testnet = ""
+        mainnet = "35834a8a"
+        testnet = "4c78adac"
     "#,
         name, version
     )
