@@ -15,6 +15,7 @@ codespan-reporting.workspace = true
 derive-where.workspace = true
 futures.workspace = true
 itertools.workspace = true
+jsonrpc.workspace = true
 move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true

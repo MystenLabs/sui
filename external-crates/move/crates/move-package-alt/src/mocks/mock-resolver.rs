@@ -23,10 +23,8 @@
 
 use std::{collections::BTreeMap, env, io::stdin};
 
-use move_package_alt::{
-    jsonrpc::types::{BatchRequest, JsonRpcResult, RequestID, Response, TwoPointZero},
-    schema::{EXTERNAL_RESOLVE_ARG, EXTERNAL_RESOLVE_METHOD},
-};
+use jsonrpc::types::{BatchRequest, JsonRpcResult, RequestID, Response, TwoPointZero};
+use move_package_alt::schema::{EXTERNAL_RESOLVE_ARG, EXTERNAL_RESOLVE_METHOD};
 use serde::Deserialize;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;

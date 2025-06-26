@@ -6730,6 +6730,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "jsonrpsee"
 version = "0.24.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8193,6 +8204,7 @@ dependencies = [
  "derive-where",
  "futures",
  "itertools 0.10.5",
+ "jsonrpc",
  "move-command-line-common",
  "move-core-types",
  "move-package",
