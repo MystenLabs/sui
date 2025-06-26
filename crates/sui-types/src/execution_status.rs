@@ -311,8 +311,7 @@ pub enum CommandArgumentError {
     )]
     InvalidTransferObject,
     #[error(
-        "When MakeMoveVec is used without a type specified, all arguments must be the same \
-        object type. In this case, the first argument was not an object."
+        "First argument to MakeMoveVec is not an object. If no type is specified for MakeMoveVec, all arguments must be the same object type."
     )]
     InvalidMakeMoveVecNonObjectArgument,
 }
