@@ -563,6 +563,7 @@ public macro fun take_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector
 public macro fun skip_mut_while<$T>($v: &mut vector<$T>, $p: |&$T| -> bool): vector<$T> {
     let v = $v;
     // find first element that does not satisfy the predicate, then skip from there
+    // if not found, we skip the whole vector and return an empty vector
     'search: {
         v.length().do!(|i| if (!$p(&v[i])) return 'search v.skip_mut(i));
         vector[]
