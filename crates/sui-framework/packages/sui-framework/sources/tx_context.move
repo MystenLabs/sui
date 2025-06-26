@@ -111,8 +111,8 @@ public fun new(
         epoch,
         epoch_timestamp_ms,
         ids_created,
-        native_rgp(),
-        native_gas_price(),
+        600, // rgp
+        700, // gas price
         native_gas_budget(),
         native_sponsor(),
     );
