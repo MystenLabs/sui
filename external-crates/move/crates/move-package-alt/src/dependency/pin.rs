@@ -114,8 +114,8 @@ impl ManifestGitDependency {
     /// repository
     pub async fn pin(&self) -> PackageResult<PinnedGitDependency> {
         let cache = GitCache::new();
-        let ManifestGitDependency { repo, rev, path } = self.clone();
-        let tree = cache.resolve_to_tree(&repo, &rev, Some(path)).await?;
+        let ManifestGitDependency { repo, rev, subdir } = self.clone();
+        let tree = cache.resolve_to_tree(&repo, &rev, Some(subdir)).await?;
         Ok(PinnedGitDependency { inner: tree })
     }
 }
