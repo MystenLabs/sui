@@ -5,32 +5,32 @@ source: crates/move-package-alt/tests/test_runner.rs
 # This file should be checked in.
 
 [pinned.mainnet.Foo_0]
-source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", path = "..." }
+source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", subdir = "..." }
 manifest_digest = "..."
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.Foo_1]
-source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", path = "..." }
+source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", subdir = "..." }
 manifest_digest = "..."
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.MoveStdlib]
-source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", path = "..." }
+source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", subdir = "..." }
 manifest_digest = "..."
 deps = {}
 
 [pinned.mainnet.Sui]
-source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", path = "..." }
+source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", subdir = "..." }
 manifest_digest = "..."
 deps = { std = "MoveStdlib" }
 
 [pinned.mainnet.bar]
-source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", path = "..." }
+source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", subdir = "..." }
 manifest_digest = "..."
 deps = { baz = "baz", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.baz]
-source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", path = "..." }
+source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", subdir = "..." }
 manifest_digest = "..."
 deps = { std = "MoveStdlib", sui = "Sui" }
 
@@ -40,7 +40,7 @@ manifest_digest = "..."
 deps = { bar = "bar", foo = "Foo_0", non = "Foo_1", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.MoveStdlib]
-source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", path = "..." }
+source = { git = "...", rev = "da39a3ee5e6b4b0d3255bfef95601890afd80709", subdir = "..." }
 manifest_digest = "..."
 deps = {}
 

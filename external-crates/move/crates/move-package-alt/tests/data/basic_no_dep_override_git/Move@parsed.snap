@@ -40,7 +40,7 @@ ParsedManifest {
                     rev: Some(
                         "releases/v1",
                     ),
-                    path: "",
+                    subdir: "",
                 },
             ),
             is_override: true,

@@ -76,7 +76,7 @@ pub enum LockfileDependencyInfo {
     Git(LockfileGitDepInfo),
 }
 
-/// A serialized lockfile dependency of the form `{git = "...", rev = "...", path = "..."}`
+/// A serialized lockfile dependency of the form `{git = "...", rev = "...", subdir = "..."}`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct LockfileGitDepInfo {
     /// The repository containing the dependency
@@ -87,6 +87,7 @@ pub struct LockfileGitDepInfo {
     pub rev: GitSha,
 
     /// The path within the repository
+    #[serde(rename = "subdir")]
     pub path: PathBuf,
 }
 

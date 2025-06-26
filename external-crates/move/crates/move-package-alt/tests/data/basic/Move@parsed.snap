@@ -40,7 +40,7 @@ ParsedManifest {
                     rev: Some(
                         "releases/v1",
                     ),
-                    path: "",
+                    subdir: "",
                 },
             ),
             is_override: true,
@@ -79,7 +79,7 @@ ParsedManifest {
                                 ManifestGitDependency {
                                     repo: "https://example.com/bar.git",
                                     rev: None,
-                                    path: "",
+                                    subdir: "",
                                 },
                             ),
                             is_override: false,
@@ -105,7 +105,7 @@ ParsedManifest {
                                 ManifestGitDependency {
                                     repo: "https://example.com/foo.git",
                                     rev: None,
-                                    path: "",
+                                    subdir: "",
                                 },
                             ),
                             is_override: false,
