@@ -15,11 +15,11 @@ mod fetch;
 pub use fetch::FetchedDependency;
 
 mod dependency_set;
-use crate::{
-    errors::FileHandle,
-    schema::{Address, EnvironmentName},
-};
 pub use dependency_set::DependencySet;
+
+use crate::{errors::FileHandle, schema::EnvironmentName};
+
+use move_core_types::account_address::AccountAddress;
 
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
 /// fields) with additional metadata about how the dependency is used (such as the source file,
