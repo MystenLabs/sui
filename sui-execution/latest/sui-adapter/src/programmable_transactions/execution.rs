@@ -408,7 +408,7 @@ mod checked {
                     trace_builder_opt,
                     &target.type_,
                     &input_infos,
-                    &target_coin,
+                    target_coin,
                 )?;
 
                 context.restore_arg::<Mode>(
