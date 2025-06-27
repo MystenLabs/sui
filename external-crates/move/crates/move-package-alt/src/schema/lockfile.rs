@@ -9,10 +9,9 @@ use toml_edit::{
 use crate::flavor::MoveFlavor;
 
 use super::{
-    EnvironmentID, EnvironmentName, LocalDepInfo, OnChainDepInfo, OriginalID, PackageName,
+    EnvironmentID, EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, OriginalID, PackageName,
     PublishedID,
 };
-use move_core_types::account_address::AccountAddress;
 
 /// An identifier for a node in the package graph, used to index into the
 /// `[pinned.<environment>]` table

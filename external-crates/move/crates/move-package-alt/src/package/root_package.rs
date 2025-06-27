@@ -15,6 +15,9 @@ use crate::{
 };
 use tracing::debug;
 
+#[cfg(test)]
+use crate::dependency::PinnedDependencyInfo;
+
 /// A package that is defined as the root of a Move project.
 ///
 /// This is a special package that contains the project manifest and dependencies' graphs,
@@ -163,6 +166,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(())
     }
 
+    // TODO: probably remove this?
     #[cfg(test)]
     pub async fn direct_dependencies(
         &self,

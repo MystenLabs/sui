@@ -189,8 +189,3 @@ impl<T> Extend<(EnvironmentName, PackageName, T)> for DependencySet<T> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::dependency::DependencySet;
-}

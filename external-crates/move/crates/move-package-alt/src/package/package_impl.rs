@@ -12,10 +12,9 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{LocalDepInfo, LockfileDependencyInfo, Pin},
+    schema::{LocalDepInfo, LockfileDependencyInfo},
 };
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use tracing::{debug, info};
+use move_core_types::identifier::Identifier;
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
