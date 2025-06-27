@@ -35,7 +35,6 @@ pub mod args;
 pub mod benchmark;
 pub(crate) mod bootstrap;
 pub mod config;
-pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
 
 pub async fn setup_indexer(
@@ -191,8 +190,8 @@ pub async fn setup_indexer(
     }
 
     // Consistent pipelines
-    add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
-    add_consistent!(ObjInfo::default(), obj_info);
+    add_consistent!(CoinBalanceBuckets, coin_balance_buckets);
+    add_consistent!(ObjInfo, obj_info);
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
