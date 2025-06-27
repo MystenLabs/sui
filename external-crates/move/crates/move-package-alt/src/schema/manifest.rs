@@ -1,11 +1,14 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
+use move_core_types::account_address::AccountAddress;
+
 use serde::{Deserialize, Deserializer, de};
 use serde_spanned::Spanned;
 
+use super::shared::ser_opt_account;
 use crate::dependency::DependencySet;
 
-use super::{Address, EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, ResolverName};
+use super::{EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, ResolverName};
 
 // TODO: look at Brandon's serialization code (https://github.com/MystenLabs/sui-rust-sdk/blob/master/crates/sui-sdk-types/src/object.rs)
 
@@ -63,8 +66,8 @@ pub struct ReplacementDependency {
     #[serde(flatten, default)]
     pub dependency: Option<DefaultDependency>,
 
-    #[serde(default)]
-    pub published_at: Option<Address>,
+    #[serde(default, serialize_with = "ser_opt_account")]
+    pub published_at: Option<AccountAddress>,
 
     #[serde(default)]
     pub use_environment: Option<EnvironmentName>,

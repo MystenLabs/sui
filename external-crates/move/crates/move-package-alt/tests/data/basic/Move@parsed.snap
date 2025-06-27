@@ -71,7 +71,7 @@ ParsedManifest {
             Identifier(
                 "bar",
             ): Spanned {
-                span: 655..922,
+                span: 655..921,
                 value: ReplacementDependency {
                     dependency: Some(
                         DefaultDependency {
@@ -87,7 +87,7 @@ ParsedManifest {
                         },
                     ),
                     published_at: Some(
-                        "0x12ga0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb",
+                        10775b77a3deea86dd3b4a1dbebd18736f85677535e86db56cdb40c52778da5b,
                     ),
                     use_environment: Some(
                         "mainnet_beta",
@@ -113,7 +113,7 @@ ParsedManifest {
                         },
                     ),
                     published_at: Some(
-                        "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb",
+                        6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb,
                     ),
                     use_environment: Some(
                         "mainnet_alpha",

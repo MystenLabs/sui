@@ -53,8 +53,10 @@ deps = { bar = "bar", foo = "Foo_0", non = "Foo_1", std = "MoveStdlib", sui = "S
 published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
 original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
 chain-id = "35834a8a"
+toolchain-version = "1.52.0"
 
 [published.testnet]
 published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
 original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
 chain-id = "4c78adac"
+toolchain-version = "1.52.0"

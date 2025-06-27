@@ -95,7 +95,7 @@ impl<F: MoveFlavor> Lockfiles<F> {
 
     // TODO: handle ephemerals correctly
     /// Return the published metadata for all environments.
-    fn published(&self) -> &BTreeMap<EnvironmentName, Publication<F>> {
+    pub fn published(&self) -> &BTreeMap<EnvironmentName, Publication<F>> {
         &self.main.published
     }
 
