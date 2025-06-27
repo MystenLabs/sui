@@ -15,10 +15,10 @@ pub enum TransactionDriverError {
     DeserializationError(SuiError),
     #[error("Transaction timed out getting consensus position")]
     TimeoutSubmittingTransaction,
-    #[error("Transaction timed out before getting wait for effects response")]
+    #[error("Transaction timed out while waiting for effects")]
     TimeoutWaitingForEffects,
-    #[error("Transaction timed out before reaching finality")]
-    TimeoutBeforeFinality,
+    #[error("Transaction timed out while getting full effects")]
+    TimeoutGettingFullEffects,
     #[error("Failed to call validator {0}: {1}")]
     RpcFailure(String, String),
     #[error("Failed to find execution data: {0}")]
@@ -27,4 +27,17 @@ pub enum TransactionDriverError {
     TransactionRejected(String),
     #[error("Transaction expired at round: {0}")]
     TransactionExpired(String),
+    #[error("Insufficient responses from quorum: total_responses_weight {total_responses_weight}, executed_weight {executed_weight}, executed_weight {executed_weight}. Errors: {errors:?}")]
+    InsufficientResponses {
+        total_responses_weight: u64,
+        executed_weight: u64,
+        rejected_weight: u64,
+        expired_weight: u64,
+        errors: Vec<String>,
+    },
+    #[error("Effects digest mismatch: quorum_expected {quorum_expected}, got {actual}")]
+    EffectsDigestMismatch {
+        quorum_expected: String,
+        actual: String,
+    },
 }
