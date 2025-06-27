@@ -1138,8 +1138,13 @@ impl CheckpointBuilder {
             last_height = Some(height);
             last_timestamp = Some(current_timestamp);
             debug!(
-                checkpoint_commit_height = height,
-                "Making checkpoint at commit height"
+                checkpoint_commit_height_from = grouped_pending_checkpoints
+                    .first()
+                    .unwrap()
+                    .details()
+                    .checkpoint_height,
+                checkpoint_commit_height_to = last_height,
+                "Making checkpoint with commit height range"
             );
 
             match self
@@ -1194,6 +1199,10 @@ impl CheckpointBuilder {
         let mut all_roots = HashSet::new();
         for pending_checkpoint in pendings.into_iter() {
             let pending = pending_checkpoint.into_v2();
+            debug!(
+                checkpoint_commit_height = pending.details.checkpoint_height,
+                "Resolving checkpoint transactions for pending checkpoint.",
+            );
             let (root_digests, txn_in_checkpoint) = self
                 .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
                 .await?;
@@ -1509,6 +1518,7 @@ impl CheckpointBuilder {
             Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.store)?;
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
         info!(
+            checkpoint_commit_height = details.checkpoint_height,
             next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
             checkpoint_timestamp = details.timestamp_ms,
             "Creating checkpoint(s) for {} transactions",
