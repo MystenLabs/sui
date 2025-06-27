@@ -2,27 +2,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Debug},
-    marker::PhantomData,
-    path::{Path, PathBuf},
-};
-
-use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, fmt, path::Path};
 
 use super::paths::PackagePath;
-use super::{EnvironmentID, lockfile::Lockfiles, manifest::Manifest};
+use super::{EnvironmentID, manifest::Manifest};
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
     package::{EnvironmentName, Package, PackageName},
     schema::{PackageID, ParsedLockfile, Pin},
 };
-use move_core_types::identifier::Identifier;
-use tracing::{debug, info};
+use tracing::debug;
 
 /// A package that is defined as the root of a Move project.
 ///
@@ -197,10 +188,11 @@ mod tests {
     use super::*;
     use crate::{
         flavor::Vanilla,
-        git::{GitCache, GitResult, GitTree, run_git_cmd_with_args},
+        git::{GitResult, run_git_cmd_with_args},
         schema::LockfileDependencyInfo,
     };
-    use std::{fs, process::Output};
+    use move_core_types::identifier::Identifier;
+    use std::{fs, path::PathBuf};
     use tempfile::{TempDir, tempdir};
     use test_log::test;
     use tokio::process::Command;

@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     fmt::{Debug, Display},
     fs, io,
     path::{Path, PathBuf},
@@ -7,8 +6,6 @@ use std::{
 
 use append_only_vec::AppendOnlyVec;
 use codespan_reporting::files::SimpleFile;
-
-use super::PackageResult;
 
 /// A wrapper around [PathBuf] that implements [Display]
 #[derive(Clone)]

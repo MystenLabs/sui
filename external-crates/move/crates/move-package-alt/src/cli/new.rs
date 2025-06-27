@@ -10,9 +10,8 @@ use std::{
 };
 
 use crate::{errors::PackageResult, package::PackageName};
-use anyhow::{Context, ensure};
-use clap::{Command, Parser, Subcommand};
-use move_core_types::identifier::Identifier;
+use anyhow::Context;
+use clap::Parser;
 use move_package::source_package::layout::SourcePackageLayout;
 
 const MAINNET_CHAIN_ID: &str = "35834a8a";

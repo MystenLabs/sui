@@ -6,7 +6,7 @@ use toml_edit::{
     visit_mut::{self, VisitMut},
 };
 
-use crate::{flavor::MoveFlavor, git::GitSha};
+use crate::flavor::MoveFlavor;
 
 use super::{
     EnvironmentID, EnvironmentName, LocalDepInfo, OnChainDepInfo, OriginalID, PackageName,
