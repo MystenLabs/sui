@@ -10,6 +10,7 @@ pub mod get_datatype;
 pub mod get_function;
 pub mod get_module;
 pub mod get_package;
+pub mod list_package_versions;
 
 pub(crate) fn load_package(service: &RpcService, package_id_str: &str) -> Result<MovePackage> {
     let package_id = package_id_str.parse::<ObjectID>().map_err(|e| {
