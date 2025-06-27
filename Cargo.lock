@@ -5337,11 +5337,11 @@ checksum = "f90f7dce0722e95104fcb095585910c0977252f286e354b5e3bd38902cd99988"
 [[package]]
 name = "futures-timer"
 version = "3.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=cad62679fd180a48c665f842cb80045f8fcfdee9#cad62679fd180a48c665f842cb80045f8fcfdee9"
 dependencies = [
  "gloo-timers 0.2.6",
  "send_wrapper 0.4.0",
+ "tokio",
 ]
 
 [[package]]
@@ -10961,7 +10961,8 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2 0.5.6",
- "tokio-macros 2.5.0 (git+https://github.com/MystenLabs/tokio-msim-fork.git?rev=7329bff6ee996d8df6cf810a9c2e59631ad5a2fb)",
+ "tokio-macros",
+ "tracing",
  "windows-sys 0.52.0",
 ]
 
@@ -17188,20 +17189,15 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 [[package]]
 name = "tokio"
 version = "1.44.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=cad62679fd180a48c665f842cb80045f8fcfdee9#cad62679fd180a48c665f842cb80045f8fcfdee9"
 dependencies = [
- "backtrace",
  "bytes",
+ "futures",
  "libc",
- "mio 1.0.3",
- "parking_lot 0.12.3",
- "pin-project-lite",
- "signal-hook-registry",
- "socket2 0.5.6",
- "tokio-macros 2.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "mio 0.8.11",
+ "msim",
+ "real_tokio",
  "tracing",
- "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -17227,17 +17223,6 @@ checksum = "30b74022ada614a1b4834de765f9bb43877f910cc8ce4be40e89042c9223a8bf"
 dependencies = [
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.99",
 ]
 
 [[package]]

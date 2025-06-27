@@ -1910,12 +1910,7 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        if cfg!(msim) {
-            // exercise a very low gc_depth
-            5
-        } else {
-            self.consensus_gc_depth.unwrap_or(0)
-        }
+        self.consensus_gc_depth.unwrap_or(0)
     }
 
     pub fn mysticeti_fastpath(&self) -> bool {
@@ -3757,6 +3752,13 @@ impl ProtocolConfig {
                 _ => panic!("unsupported version {:?}", version),
             }
         }
+
+        // Simtest specific overrides.
+        #[cfg(msim)]
+        {
+            cfg.consensus_gc_depth = Some(5);
+        }
+
         cfg
     }
 
