@@ -13,7 +13,6 @@ use sui_types::transaction::VerifiedTransaction;
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::authority::ExecutionEnv;
 use crate::execution_scheduler::{ExecutionSchedulerAPI, SchedulingSource};
 use crate::transaction_outputs::TransactionOutputs;
 
@@ -100,8 +99,9 @@ async fn test_fast_path_execution() {
     let (effects, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            None,
             &state.epoch_store_for_testing(),
+            SchedulingSource::MysticetiFastPath,
         )
         .await
         .unwrap();
@@ -157,8 +157,9 @@ async fn test_fast_path_then_consensus_execution() {
     let (effects1, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            None,
             &state.epoch_store_for_testing(),
+            SchedulingSource::MysticetiFastPath,
         )
         .await
         .unwrap();
@@ -166,8 +167,9 @@ async fn test_fast_path_then_consensus_execution() {
     let (effects2, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            None,
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         )
         .await
         .unwrap();
@@ -207,8 +209,9 @@ async fn test_consensus_then_fast_path_execution() {
     let (effects1, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            None,
             &state.epoch_store_for_testing(),
+            SchedulingSource::NonFastPath,
         )
         .await
         .unwrap();
@@ -216,8 +219,9 @@ async fn test_consensus_then_fast_path_execution() {
     let (effects2, _) = state
         .try_execute_immediately(
             &cert,
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            None,
             &state.epoch_store_for_testing(),
+            SchedulingSource::MysticetiFastPath,
         )
         .await
         .unwrap();
@@ -257,12 +261,10 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     );
 
     let tx_digest = *cert.digest();
-    state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
-        )],
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
         &state.epoch_store_for_testing(),
+        SchedulingSource::MysticetiFastPath,
     );
 
     let outputs = tokio::time::timeout(
@@ -284,12 +286,10 @@ async fn test_fast_path_then_consensus_execution_e2e() {
         .get_transaction_cache_reader()
         .is_tx_already_executed(&tx_digest));
 
-    state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-        )],
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
         &state.epoch_store_for_testing(),
+        SchedulingSource::NonFastPath,
     );
 
     let effects_digest = tokio::time::timeout(
@@ -335,12 +335,10 @@ async fn test_consensus_then_fast_path_execution_e2e() {
     );
 
     let tx_digest = *cert.digest();
-    state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-        )],
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
         &state.epoch_store_for_testing(),
+        SchedulingSource::NonFastPath,
     );
 
     state
@@ -355,12 +353,10 @@ async fn test_consensus_then_fast_path_execution_e2e() {
         .get_transaction_cache_reader()
         .is_tx_already_executed(&tx_digest));
 
-    state.execution_scheduler().enqueue_transactions(
-        vec![(
-            cert.clone(),
-            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
-        )],
+    state.execution_scheduler().enqueue(
+        vec![cert.clone()],
         &state.epoch_store_for_testing(),
+        SchedulingSource::MysticetiFastPath,
     );
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     assert!(!state

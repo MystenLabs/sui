@@ -31,14 +31,11 @@ use sui_core::authority::authority_store_tables::{
 use sui_core::authority::backpressure::BackpressureManager;
 use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::execution_time_estimator::ExecutionTimeObserver;
-use sui_core::authority::shared_object_version_manager::Schedulable;
-use sui_core::authority::ExecutionEnv;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
-use sui_core::execution_scheduler::ExecutionSchedulerAPI;
 use sui_core::execution_scheduler::SchedulingSource;
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
 use sui_core::storage::RestReadStore;
@@ -760,8 +757,9 @@ impl SuiNode {
             state
                 .try_execute_immediately(
                     &transaction,
-                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                    None,
                     &epoch_store,
+                    SchedulingSource::NonFastPath,
                 )
                 .instrument(span)
                 .await
@@ -1402,6 +1400,15 @@ impl SuiNode {
             .await;
         let consensus_replay_waiter = consensus_manager.replay_waiter();
 
+        if !epoch_store
+            .epoch_start_config()
+            .is_data_quarantine_active_from_beginning_of_epoch()
+        {
+            checkpoint_store
+                .reexecute_local_checkpoints(&state, &epoch_store)
+                .await;
+        }
+
         info!("Spawning checkpoint service");
         let checkpoint_service_tasks = checkpoint_service.spawn(consensus_replay_waiter).await;
 
@@ -1586,16 +1593,9 @@ impl SuiNode {
                         .get_signed_effects_digest(tx.digest())
                         .expect("db error")
                     {
-                        pending_consensus_certificates.push((
-                            Schedulable::Transaction(tx),
-                            ExecutionEnv::new().with_expected_effects_digest(fx_digest),
-                        ));
+                        pending_consensus_certificates.push((tx, fx_digest));
                     } else {
-                        additional_certs.push((
-                            Schedulable::Transaction(tx),
-                            ExecutionEnv::new()
-                                .with_scheduling_source(SchedulingSource::NonFastPath),
-                        ));
+                        additional_certs.push(tx);
                     }
                 }
                 _ => (),
@@ -1604,8 +1604,7 @@ impl SuiNode {
 
         let digests = pending_consensus_certificates
             .iter()
-            // unwrap_digest okay because only user certs are in pending_consensus_certificates
-            .map(|(tx, _)| *tx.key().unwrap_digest())
+            .map(|(tx, _)| *tx.digest())
             .collect::<Vec<_>>();
 
         info!(
@@ -1614,12 +1613,8 @@ impl SuiNode {
             digests
         );
 
-        state
-            .execution_scheduler()
-            .enqueue(pending_consensus_certificates, epoch_store);
-        state
-            .execution_scheduler()
-            .enqueue(additional_certs, epoch_store);
+        state.enqueue_with_expected_effects_digest(pending_consensus_certificates, epoch_store);
+        state.enqueue_transactions_for_execution(additional_certs, epoch_store);
 
         // If this times out, the validator will still almost certainly start up fine. But, it is
         // possible that it may temporarily "forget" about transactions that it had previously

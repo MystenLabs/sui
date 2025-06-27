@@ -20,7 +20,7 @@ use sui_types::transaction::{
 use sui_types::utils::to_sender_signed_transaction;
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::authority::{AuthorityState, ExecutionEnv};
+use crate::authority::AuthorityState;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
@@ -202,8 +202,9 @@ async fn test_submit_transaction_already_executed() {
         state_clone
             .try_execute_immediately(
                 &verified_transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                None,
                 &epoch_store,
+                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()
