@@ -53,6 +53,7 @@ use sui_graphql_rpc::{
     test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
 
+use move_core_types::account_address::AccountAddress;
 use serde_json::json;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -576,6 +577,18 @@ impl SuiCommand {
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
                         let mut build_config =
                             resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+
+                        let previous_id = if let Some(ref chain_id) = chain_id {
+                            sui_package_management::set_package_id(
+                                &rerooted_path,
+                                build_config.install_dir.clone(),
+                                chain_id,
+                                AccountAddress::ZERO,
+                            )?
+                        } else {
+                            None
+                        };
+
                         if let Some(client) = &client {
                             let protocol_config =
                                 client.read_api().get_protocol_config(None).await?;
@@ -589,12 +602,22 @@ impl SuiCommand {
                         }
 
                         let mut pkg = SuiBuildConfig {
-                            config: build_config,
+                            config: build_config.clone(),
                             run_bytecode_verifier: true,
                             print_diags_to_stderr: true,
-                            chain_id,
+                            chain_id: chain_id.clone(),
                         }
                         .build(&rerooted_path)?;
+
+                        // Restore original ID, then check result.
+                        if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
+                            let _ = sui_package_management::set_package_id(
+                                &rerooted_path,
+                                build_config.install_dir.clone(),
+                                &chain_id,
+                                previous_id,
+                            )?;
+                        }
 
                         let with_unpublished_deps = build.with_unpublished_dependencies;
 
