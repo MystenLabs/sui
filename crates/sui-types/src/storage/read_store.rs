@@ -609,7 +609,11 @@ pub trait RpcIndexes: Send + Sync {
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> Result<BalanceIterator<'_>>;
 
-    fn package_versions_iter(&self, original_id: ObjectID) -> Result<PackageVersionsIterator<'_>>;
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<PackageVersionsIterator<'_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

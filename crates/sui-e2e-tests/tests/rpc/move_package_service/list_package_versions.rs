@@ -25,6 +25,8 @@ async fn test_list_package_versions_system_package() {
 
     let request = ListPackageVersionsRequest {
         package_id: Some("0x2".to_string()),
+        page_size: None,
+        page_token: None,
     };
 
     let response = service.list_package_versions(request).await.unwrap();
@@ -122,6 +124,8 @@ async fn test_list_package_versions_with_upgrades() {
                 .unwrap()
                 .to_string(),
         ),
+        page_size: None,
+        page_token: None,
     };
 
     let grpc_response = service
@@ -335,6 +339,77 @@ async fn test_list_package_versions_with_upgrades() {
     assert_ne!(package_ids[0], package_ids[1]);
     assert_ne!(package_ids[1], package_ids[2]);
     assert_ne!(package_ids[0], package_ids[2]);
+
+    // Test pagination
+    // Test 1: Get first page with page_size = 2
+    let request = ListPackageVersionsRequest {
+        package_id: Some(
+            package_ids[0]
+                .to_hex_literal()
+                .strip_prefix("0x")
+                .unwrap()
+                .to_string(),
+        ),
+        page_size: Some(2),
+        page_token: None,
+    };
+
+    let response = service
+        .list_package_versions(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(response.versions.len(), 2);
+    assert_eq!(response.versions[0].version, Some(1));
+    assert_eq!(response.versions[1].version, Some(2));
+    assert!(response.next_page_token.is_some());
+
+    // Test 2: Get second page using page token
+    let request = ListPackageVersionsRequest {
+        package_id: Some(
+            package_ids[0]
+                .to_hex_literal()
+                .strip_prefix("0x")
+                .unwrap()
+                .to_string(),
+        ),
+        page_size: Some(2),
+        page_token: response.next_page_token,
+    };
+
+    let response = service
+        .list_package_versions(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(response.versions.len(), 1);
+    assert_eq!(response.versions[0].version, Some(3));
+    assert!(response.next_page_token.is_none());
+
+    // Test 3: Different page size
+    let request = ListPackageVersionsRequest {
+        package_id: Some(
+            package_ids[0]
+                .to_hex_literal()
+                .strip_prefix("0x")
+                .unwrap()
+                .to_string(),
+        ),
+        page_size: Some(1),
+        page_token: None,
+    };
+
+    let response = service
+        .list_package_versions(request)
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(response.versions.len(), 1);
+    assert_eq!(response.versions[0].version, Some(1));
+    assert!(response.next_page_token.is_some());
 }
 
 #[sim_test]
@@ -348,6 +423,8 @@ async fn test_list_package_versions_not_found() {
         package_id: Some(
             "0x0000000000000000000000000000000000000000000000000000000000000999".to_string(),
         ),
+        page_size: None,
+        page_token: None,
     };
 
     let error = service.list_package_versions(request).await.unwrap_err();
@@ -363,6 +440,8 @@ async fn test_list_package_versions_invalid_package_id() {
 
     let request = ListPackageVersionsRequest {
         package_id: Some("invalid-package-id".to_string()),
+        page_size: None,
+        page_token: None,
     };
 
     let error = service.list_package_versions(request).await.unwrap_err();
@@ -381,12 +460,77 @@ async fn test_list_package_versions_missing_package_id() {
         .await
         .unwrap();
 
-    let request = ListPackageVersionsRequest { package_id: None };
+    let request = ListPackageVersionsRequest {
+        package_id: None,
+        page_size: None,
+        page_token: None,
+    };
 
     let error = service.list_package_versions(request).await.unwrap_err();
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
     assert!(
         error.message().contains("missing package_id"),
+        "Error message: {}",
+        error.message()
+    );
+}
+
+#[sim_test]
+async fn test_list_package_versions_invalid_pagination() {
+    let cluster = TestClusterBuilder::new().build().await;
+    let mut service = MovePackageServiceClient::connect(cluster.rpc_url().to_owned())
+        .await
+        .unwrap();
+
+    // Test 1: Invalid page token encoding
+    let request = ListPackageVersionsRequest {
+        package_id: Some("0x2".to_string()),
+        page_size: Some(10),
+        page_token: Some(vec![0xFF, 0xFF, 0xFF].into()), // Invalid BCS encoding
+    };
+
+    let error = service.list_package_versions(request).await.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error.message().contains("invalid page token encoding"),
+        "Error message: {}",
+        error.message()
+    );
+
+    // Test 2: Page token with mismatched package ID
+    // Create a valid page token for a different package ID
+    use sui_types::base_types::ObjectID;
+
+    #[derive(serde::Serialize)]
+    struct PageToken {
+        original_package_id: ObjectID,
+        version: u64,
+    }
+
+    let different_package_id = ObjectID::from_hex_literal(
+        "0x0000000000000000000000000000000000000000000000000000000000000999",
+    )
+    .unwrap();
+
+    let page_token = PageToken {
+        original_package_id: different_package_id,
+        version: 1,
+    };
+
+    let encoded_token = bcs::to_bytes(&page_token).unwrap();
+
+    let request = ListPackageVersionsRequest {
+        package_id: Some("0x2".to_string()),
+        page_size: Some(10),
+        page_token: Some(encoded_token.into()),
+    };
+
+    let error = service.list_package_versions(request).await.unwrap_err();
+    assert_eq!(error.code(), tonic::Code::InvalidArgument);
+    assert!(
+        error
+            .message()
+            .contains("page token package ID does not match request package ID"),
         "Error message: {}",
         error.message()
     );

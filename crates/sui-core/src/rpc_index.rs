@@ -869,13 +869,14 @@ impl IndexStoreTables {
     fn package_versions_iter(
         &self,
         original_id: ObjectID,
+        cursor: Option<u64>,
     ) -> Result<
         impl Iterator<Item = Result<(PackageVersionKey, PackageVersionInfo), TypedStoreError>> + '_,
         TypedStoreError,
     > {
         let lower_bound = PackageVersionKey {
             original_package_id: original_id,
-            version: 0,
+            version: cursor.unwrap_or(0),
         };
         let upper_bound = PackageVersionKey {
             original_package_id: original_id,
@@ -1087,11 +1088,12 @@ impl RpcIndexStore {
     pub fn package_versions_iter(
         &self,
         original_id: ObjectID,
+        cursor: Option<u64>,
     ) -> Result<
         impl Iterator<Item = Result<(PackageVersionKey, PackageVersionInfo), TypedStoreError>> + '_,
         TypedStoreError,
     > {
-        self.tables.package_versions_iter(original_id)
+        self.tables.package_versions_iter(original_id, cursor)
     }
 }
 
