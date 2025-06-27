@@ -197,14 +197,17 @@ impl Handler for CoinBalanceBuckets {
                         .on_conflict_do_nothing()
                         .execute(conn)
                         .await?;
-                    if !references.is_empty() {
+                    let deleted_refs = if !references.is_empty() {
                         diesel::insert_into(coin_balance_buckets_deletion_reference::table)
                             .values(&references)
                             .on_conflict_do_nothing()
                             .execute(conn)
-                            .await?;
-                    }
-                    Ok::<_, anyhow::Error>(count)
+                            .await?
+                    } else {
+                        0
+                    };
+
+                    Ok::<_, anyhow::Error>(count + deleted_refs)
                 }
                 .scope_boxed()
             })
@@ -220,9 +223,16 @@ impl Handler for CoinBalanceBuckets {
         to_exclusive: u64,
         conn: &mut Connection<'a>,
     ) -> anyhow::Result<usize> {
-        // 1. Find all deletion references in range
-        // 2. Find and delete previous versions of objects
-        // 3. Delete the deletion references themselves
+        // This query first deletes from coin_balance_buckets_deletion_reference and computes
+        // predecessors, then deletes from coin_balance_buckets using the precomputed predecessor
+        // information. The inline compute avoids HashAggregate operations and the ensuing
+        // materialization overhead.
+        //
+        // This works best on under 1.5 million object changes, roughly 15k checkpoints. Performance
+        // degrades sharply beyond this, since the planner switches to hash joins and full table
+        // scans. A HashAggregate approach interestingly becomes more performant in this scenario.
+        //
+        // TODO: use sui_sql_macro's query!
         let query = format!(
             "
             -- Delete reference records and return immediate predecessor refs to the main table.
@@ -284,7 +294,7 @@ impl Handler for CoinBalanceBuckets {
                 "Deleted coins count ({deleted_coins}) does not match deleted refs count ({deleted_refs})",
             );
 
-        Ok(deleted_coins as usize)
+        Ok((deleted_coins + deleted_refs) as usize)
     }
 }
 
@@ -623,12 +633,14 @@ mod tests {
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
-        assert_eq!(rows_inserted, 2);
+        // 2 inserts to main table, only 1 from the transfer - creations don't emit rows on ref
+        // table.
+        assert_eq!(rows_inserted, 3);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 4);
 
         let rows_pruned = CoinBalanceBuckets.prune(2, 3, &mut conn).await.unwrap();
-        assert_eq!(rows_pruned, 1);
+        assert_eq!(rows_pruned, 2);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 3);
         assert_eq!(
@@ -693,7 +705,8 @@ mod tests {
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
-        assert_eq!(rows_inserted, 1);
+        // 1 insertion to main table, 2 to ref table because of delete.
+        assert_eq!(rows_inserted, 3);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 2);
         assert_eq!(
@@ -710,7 +723,7 @@ mod tests {
 
         let rows_pruned = CoinBalanceBuckets.prune(0, 2, &mut conn).await.unwrap();
         let sentinel_rows_pruned = CoinBalanceBuckets.prune(2, 3, &mut conn).await.unwrap();
-        assert_eq!(rows_pruned + sentinel_rows_pruned, 2);
+        assert_eq!(rows_pruned + sentinel_rows_pruned, 4);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 0);
     }
@@ -751,10 +764,10 @@ mod tests {
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
-        assert_eq!(rows_inserted, 1);
+        assert_eq!(rows_inserted, 2);
 
         let rows_pruned = CoinBalanceBuckets.prune(0, 2, &mut conn).await.unwrap();
-        assert_eq!(rows_pruned, 1);
+        assert_eq!(rows_pruned, 2);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 1);
         assert_eq!(
@@ -798,11 +811,11 @@ mod tests {
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
-        assert_eq!(rows_inserted, 1);
+        assert_eq!(rows_inserted, 3);
 
         let rows_pruned = CoinBalanceBuckets.prune(0, 2, &mut conn).await.unwrap();
         let sentinel_rows_pruned = CoinBalanceBuckets.prune(2, 3, &mut conn).await.unwrap();
-        assert_eq!(rows_pruned + sentinel_rows_pruned, 2);
+        assert_eq!(rows_pruned + sentinel_rows_pruned, 4);
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 0);
     }
@@ -834,10 +847,11 @@ mod tests {
         let values = CoinBalanceBuckets.process(&Arc::new(checkpoint)).unwrap();
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].change, CoinBalanceBucketChangeKind::Delete);
+        // 1 insertion to main table, 2 to ref table because of wrap.
         let rows_inserted = CoinBalanceBuckets::commit(&values, &mut conn)
             .await
             .unwrap();
-        assert_eq!(rows_inserted, 1);
+        assert_eq!(rows_inserted, 3);
 
         // Unwrap the coin in checkpoint 2
         builder = builder
@@ -864,7 +878,7 @@ mod tests {
 
         // Prune after unwrap
         let rows_pruned = CoinBalanceBuckets.prune(0, 3, &mut conn).await.unwrap();
-        assert_eq!(rows_pruned, 2);
+        assert_eq!(rows_pruned, 4);
 
         let all_balance_buckets = get_all_balance_buckets(&mut conn).await;
         assert_eq!(all_balance_buckets.len(), 1);
@@ -908,7 +922,7 @@ mod tests {
         let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
             .await
             .unwrap();
-        assert_eq!(rows_inserted, 3);
+        assert_eq!(rows_inserted, 6);
 
         // Transfer all coins back to address 0 in checkpoint 2
         builder = builder
@@ -923,7 +937,7 @@ mod tests {
         let rows_inserted = CoinBalanceBuckets::commit(&result, &mut conn)
             .await
             .unwrap();
-        assert_eq!(rows_inserted, 3);
+        assert_eq!(rows_inserted, 6);
 
         // Each of the 3 coins will have two deletion references, one at cp_sequence_number 1, another at 2.
         let all_deletion_references = coin_balance_buckets_deletion_reference::table
@@ -947,7 +961,7 @@ mod tests {
         for bucket in &all_balance_buckets {
             assert!(bucket.cp_sequence_number == 0 || bucket.cp_sequence_number == 2);
         }
-        assert_eq!(rows_pruned, 3);
+        assert_eq!(rows_pruned, 6);
         assert_eq!(all_balance_buckets.len(), 6);
         // References at cp_sequence_number 2 should be pruned.
         for reference in &all_deletion_references {
@@ -966,7 +980,7 @@ mod tests {
         for bucket in &all_balance_buckets {
             assert_eq!(bucket.cp_sequence_number, 2);
         }
-        assert_eq!(rows_pruned, 3);
+        assert_eq!(rows_pruned, 6);
         assert_eq!(all_balance_buckets.len(), 3);
         // References at cp_sequence_number 1 should be pruned.
         for reference in &all_deletion_references {
@@ -1086,7 +1100,7 @@ mod tests {
 
         // Verify the total number of pruned rows matches expectations
         let total_pruned: usize = results.into_iter().map(|r| r.unwrap()).sum();
-        assert_eq!(total_pruned, 6);
+        assert_eq!(total_pruned, 12);
         for bucket in &final_balance_buckets {
             assert_eq!(bucket.cp_sequence_number, 2);
         }
