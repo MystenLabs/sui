@@ -100,8 +100,6 @@ impl Processor for ObjInfo {
 impl Handler for ObjInfo {
     type Store = Db;
 
-    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()
@@ -150,15 +148,17 @@ impl Handler for ObjInfo {
                         .execute(conn)
                         .await?;
 
-                    if !references.is_empty() {
+                    let deleted_refs = if !references.is_empty() {
                         diesel::insert_into(obj_info_deletion_reference::table)
                             .values(&references)
                             .on_conflict_do_nothing()
                             .execute(conn)
-                            .await?;
-                    }
+                            .await?
+                    } else {
+                        0
+                    };
 
-                    Ok::<_, anyhow::Error>(count)
+                    Ok::<_, anyhow::Error>(count + deleted_refs)
                 }
                 .scope_boxed()
             })
@@ -178,12 +178,17 @@ impl Handler for ObjInfo {
         to_exclusive: u64,
         conn: &mut Connection<'a>,
     ) -> Result<usize> {
-        // 1. Find all deletion references in range
-        // 2. Find and delete previous versions of objects
-        // 3. Delete the deletion references themselves
+        // This query first deletes from obj_info_deletion_reference and computes predecessors, then
+        // deletes from obj_info using the precomputed predecessor information. The inline compute
+        // avoids HashAggregate operations and the ensuing materialization overhead.
+        //
+        // This works best on under 1.5 million object changes, roughly 15k checkpoints. Performance
+        // degrades sharply beyond this, since the planner switches to hash joins and full table
+        // scans. A HashAggregate approach interestingly becomes more performant in this scenario.
+        //
+        // TODO: use sui_sql_macro's query!
         let query = format!(
             "
-            -- Delete reference records and return immediate predecessor refs to the main table.
             WITH deletion_refs AS (
                 DELETE FROM
                     obj_info_deletion_reference dr
@@ -242,7 +247,7 @@ impl Handler for ObjInfo {
             "Deleted objects count ({deleted_objects}) does not match deleted refs count ({deleted_refs})",
         );
 
-        Ok(deleted_objects as usize)
+        Ok((deleted_objects + deleted_refs) as usize)
     }
 }
 
@@ -376,7 +381,7 @@ mod tests {
             }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 1);
+        assert_eq!(rows_inserted, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let addr1 = TestCheckpointDataBuilder::derive_address(1);
@@ -387,8 +392,9 @@ mod tests {
         assert_eq!(all_obj_info[1].owner_id, Some(addr1.to_vec()));
 
         let rows_pruned = ObjInfo.prune(2, 3, &mut conn).await.unwrap();
-        // The object is transferred, so we prune the old entry.
-        assert_eq!(rows_pruned, 1);
+        // The object is transferred, so we prune the old entry. Two counts, one from main table and
+        // another from ref.
+        assert_eq!(rows_pruned, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         assert_eq!(all_obj_info.len(), 1);
@@ -410,11 +416,12 @@ mod tests {
             ProcessedObjInfoUpdate::Delete(_)
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 1);
+        // 1 insertion to main table, 2 to ref table because of delete.
+        assert_eq!(rows_inserted, 3);
         let rows_pruned = ObjInfo.prune(3, 4, &mut conn).await.unwrap();
         let delete_row_pruned = ObjInfo.prune(4, 5, &mut conn).await.unwrap();
         // The object is deleted, so we prune both the old entry and the delete entry.
-        assert_eq!(rows_pruned + delete_row_pruned, 2);
+        assert_eq!(rows_pruned + delete_row_pruned, 4);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         assert_eq!(all_obj_info.len(), 0);
@@ -473,7 +480,8 @@ mod tests {
             ProcessedObjInfoUpdate::Delete(_)
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 1);
+        // 3, not 2, because the wrap entry emits two rows on the ref table
+        assert_eq!(rows_inserted, 3);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let object0 = TestCheckpointDataBuilder::derive_object_id(0);
@@ -488,7 +496,7 @@ mod tests {
         let rows_pruned = ObjInfo.prune(0, 2, &mut conn).await.unwrap();
         let wrapped_row_pruned = ObjInfo.prune(2, 3, &mut conn).await.unwrap();
         // Both the creation entry and the wrap entry will be pruned.
-        assert_eq!(rows_pruned + wrapped_row_pruned, 2);
+        assert_eq!(rows_pruned + wrapped_row_pruned, 4);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         assert_eq!(all_obj_info.len(), 0);
@@ -551,7 +559,8 @@ mod tests {
             ProcessedObjInfoUpdate::Delete(_)
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 1);
+        // 3, not 2, because the wrap entry emits two rows on the ref table
+        assert_eq!(rows_inserted, 3);
 
         builder = builder
             .start_transaction(0)
@@ -569,10 +578,11 @@ mod tests {
             }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
+        // Only one, we don't insert a row to ref table on create or unwrap.
         assert_eq!(rows_inserted, 1);
 
         let rows_pruned = ObjInfo.prune(0, 3, &mut conn).await.unwrap();
-        assert_eq!(rows_pruned, 2);
+        assert_eq!(rows_pruned, 4);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
@@ -645,10 +655,10 @@ mod tests {
             }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 1);
+        assert_eq!(rows_inserted, 2);
         let rows_pruned = ObjInfo.prune(0, 2, &mut conn).await.unwrap();
-        // The creation entry will be pruned.
-        assert_eq!(rows_pruned, 1);
+        // The creation entry will be pruned. Result is 2, 1 from main table and 1 from reference.
+        assert_eq!(rows_pruned, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let object0 = TestCheckpointDataBuilder::derive_object_id(0);
@@ -686,11 +696,11 @@ mod tests {
             }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 1);
+        assert_eq!(rows_inserted, 2);
 
         let rows_pruned = ObjInfo.prune(1, 2, &mut conn).await.unwrap();
         // The creation entry will be pruned.
-        assert_eq!(rows_pruned, 1);
+        assert_eq!(rows_pruned, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let object0 = TestCheckpointDataBuilder::derive_object_id(0);
@@ -737,14 +747,14 @@ mod tests {
             }
         ));
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 1);
+        assert_eq!(rows_inserted, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         assert_eq!(all_obj_info.len(), 2);
 
         let rows_pruned = ObjInfo.prune(1, 2, &mut conn).await.unwrap();
-        // The creation entry will be pruned.
-        assert_eq!(rows_pruned, 1);
+        // The creation entry will be pruned. Two counts, one from main table and another from ref.
+        assert_eq!(rows_pruned, 2);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         let object0 = TestCheckpointDataBuilder::derive_object_id(0);
@@ -787,7 +797,7 @@ mod tests {
 
         let rows_pruned = ObjInfo.prune(0, 3, &mut conn).await.unwrap();
         let delete_row_pruned = ObjInfo.prune(3, 4, &mut conn).await.unwrap();
-        assert_eq!(rows_pruned + delete_row_pruned, 3);
+        assert_eq!(rows_pruned + delete_row_pruned, 6);
 
         let all_obj_info = get_all_obj_info(&mut conn).await.unwrap();
         assert_eq!(all_obj_info.len(), 0);
@@ -829,7 +839,7 @@ mod tests {
         ObjInfo::commit(&values, &mut conn).await.unwrap();
 
         // Prune based on new info from checkpoint 2
-        assert_eq!(ObjInfo.prune(2, 4, &mut conn).await.unwrap(), 1);
+        assert_eq!(ObjInfo.prune(2, 4, &mut conn).await.unwrap(), 2);
 
         builder = builder
             .start_transaction(2)
@@ -902,7 +912,7 @@ mod tests {
         let result = ObjInfo.process(&Arc::new(checkpoint1)).unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 3);
+        assert_eq!(rows_inserted, 6);
 
         builder = builder
             .start_transaction(1)
@@ -914,7 +924,7 @@ mod tests {
         let result = ObjInfo.process(&Arc::new(checkpoint2)).unwrap();
         assert_eq!(result.len(), 3);
         let rows_inserted = ObjInfo::commit(&result, &mut conn).await.unwrap();
-        assert_eq!(rows_inserted, 3);
+        assert_eq!(rows_inserted, 6);
 
         // Each of the 3 objects will have two entries, one at cp_sequence_number 1, another at 2.
         let all_obj_info_deletion_references = get_all_obj_info_deletion_references(&mut conn)
@@ -934,7 +944,7 @@ mod tests {
         for object in &all_obj_info {
             assert!(object.cp_sequence_number == 0 || object.cp_sequence_number == 2);
         }
-        assert_eq!(rows_pruned, 3);
+        assert_eq!(rows_pruned, 6);
         assert_eq!(all_obj_info.len(), 6);
         // References at cp_sequence_number 2 should be pruned.
         for object in &all_obj_info_deletion_references {
@@ -950,7 +960,7 @@ mod tests {
         for object in &all_obj_info {
             assert_eq!(object.cp_sequence_number, 2);
         }
-        assert_eq!(rows_pruned, 3);
+        assert_eq!(rows_pruned, 6);
         assert_eq!(all_obj_info.len(), 3);
         // References at cp_sequence_number 1 should be pruned.
         for object in &all_obj_info_deletion_references {
@@ -1062,7 +1072,7 @@ mod tests {
 
         // Verify the total number of pruned rows matches expectations
         let total_pruned: usize = results.into_iter().map(|r| r.unwrap()).sum();
-        assert_eq!(total_pruned, 6);
+        assert_eq!(total_pruned, 12);
         for object in &final_obj_info {
             assert_eq!(object.cp_sequence_number, 2);
         }
