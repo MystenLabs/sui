@@ -1100,6 +1100,16 @@ pub struct Package {
     #[prost(message, repeated, tag = "4")]
     pub modules: ::prost::alloc::vec::Vec<Module>,
 }
+/// A simplified representation of a package version
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PackageVersion {
+    /// The storage ID of this package version
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The version number
+    #[prost(uint64, optional, tag = "2")]
+    pub version: ::core::option::Option<u64>,
+}
 /// A Move Module.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Module {
@@ -1548,8 +1558,8 @@ pub struct ListPackageVersionsRequest {
     #[prost(string, optional, tag = "1")]
     pub package_id: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of versions to return. The service may return fewer than this value.
-    /// If unspecified, at most `50` entries will be returned.
-    /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+    /// If unspecified, at most `1000` entries will be returned.
+    /// The maximum value is `10000`; values above `10000` will be coerced to `10000`.
     #[prost(uint32, optional, tag = "2")]
     pub page_size: ::core::option::Option<u32>,
     /// A page token, received from a previous `ListPackageVersions` call.
@@ -1564,25 +1574,11 @@ pub struct ListPackageVersionsRequest {
 pub struct ListPackageVersionsResponse {
     /// List of all package versions, ordered by version.
     #[prost(message, repeated, tag = "1")]
-    pub versions: ::prost::alloc::vec::Vec<
-        list_package_versions_response::PackageVersion,
-    >,
+    pub versions: ::prost::alloc::vec::Vec<PackageVersion>,
     /// A token, which can be sent as `page_token` to retrieve the next page.
     /// If this field is omitted, there are no subsequent pages.
     #[prost(bytes = "bytes", optional, tag = "2")]
     pub next_page_token: ::core::option::Option<::prost::bytes::Bytes>,
-}
-/// Nested message and enum types in `ListPackageVersionsResponse`.
-pub mod list_package_versions_response {
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct PackageVersion {
-        /// The storage ID of this package version
-        #[prost(string, optional, tag = "1")]
-        pub package_id: ::core::option::Option<::prost::alloc::string::String>,
-        /// The version number
-        #[prost(uint64, optional, tag = "2")]
-        pub version: ::core::option::Option<u64>,
-    }
 }
 /// Generated client implementations.
 pub mod move_package_service_client {

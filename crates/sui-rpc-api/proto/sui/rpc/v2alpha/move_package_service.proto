@@ -88,13 +88,6 @@ message ListPackageVersionsRequest {
 }
 
 message ListPackageVersionsResponse {
-  message PackageVersion {
-    // The storage ID of this package version
-    optional string package_id = 1;
-    // The version number
-    optional uint64 version = 2;
-  }
-  
   // List of all package versions, ordered by version.
   repeated PackageVersion versions = 1;
 

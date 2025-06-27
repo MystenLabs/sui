@@ -5,8 +5,7 @@ use crate::{
     grpc::v2alpha::move_package::load_package,
     proto::google::rpc::bad_request::FieldViolation,
     proto::rpc::v2alpha::{
-        list_package_versions_response::PackageVersion, ListPackageVersionsRequest,
-        ListPackageVersionsResponse,
+        ListPackageVersionsRequest, ListPackageVersionsResponse, PackageVersion,
     },
     ErrorReason, Result, RpcError, RpcService,
 };
