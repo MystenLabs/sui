@@ -382,7 +382,6 @@ fn display_cmd(cmd: &Command) -> String {
     result
 }
 
-// TODO: add more tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,7 +432,7 @@ mod tests {
     }
 
     /// Ensure that loading a package into an empty cache outputs only the correct files
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_sparse_checkout_branch() {
         let project = git::new("git_repo", |project| {
             project
@@ -492,7 +491,7 @@ mod tests {
     }
 
     /// Ensure that checking out two different paths from the same repo / sha works
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_multi_checkout() {
         let project = git::new("git_repo", |project| {
             project
@@ -532,7 +531,7 @@ mod tests {
     }
 
     /// Creating a git tree should fail if the sha doesn't exist
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_wrong_sha() {
         let project = git::new("git_repo", |project| {
             project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
@@ -561,7 +560,7 @@ mod tests {
     }
 
     /// Creating a git tree should fail if the branch doesn't exist
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_wrong_branch_name() {
         let project = git::new("git_repo", |project| {
             project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
@@ -581,7 +580,7 @@ mod tests {
     }
 
     /// Fetching should succeeed if the path is `None`
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_no_path() {
         let project = git::new("git_repo", |project| {
             project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
@@ -598,7 +597,7 @@ mod tests {
     }
 
     /// Fetching should fail if a dirty checkout exists
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_dirty_fail() {
         let project = git::new("git_repo", |project| {
             project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
@@ -626,7 +625,7 @@ mod tests {
     }
 
     /// `fetch_allow_dirty` should succeed with a dirty checkout
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_allow_dirty() {
         let project = git::new("git_repo", |project| {
             project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
@@ -653,7 +652,7 @@ mod tests {
     }
 
     /// Fetching should succeed if a clean checkout exists
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_clean_exists() {
         let project = git::new("git_repo", |project| {
             project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
@@ -686,7 +685,7 @@ mod tests {
     }
 
     /// Fetching should succeed if the path is clean but other paths are not
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_fetch_clean_parallel_dirty() {
         let project = git::new("git_repo", |project| {
             project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))

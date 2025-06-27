@@ -16,4 +16,5 @@ pub mod graph;
 pub mod jsonrpc;
 pub mod package;
 pub mod schema;
-pub(crate) mod test_utils;
+#[cfg(test)]
+pub mod test_utils;

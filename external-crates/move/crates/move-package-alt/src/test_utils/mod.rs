@@ -10,7 +10,6 @@ pub mod git;
 mod paths;
 
 use paths::CargoPathExt;
-use paths::home;
 use paths::root;
 use std::env;
 use std::env::consts;

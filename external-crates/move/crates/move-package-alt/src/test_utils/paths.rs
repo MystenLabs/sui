@@ -27,23 +27,6 @@ pub fn root() -> PathBuf {
     tempdir.path().to_path_buf()
 }
 
-/// Path to the current test's `$HOME`
-///
-/// ex: `$CARGO_TARGET_TMPDIR/cit/t0/home`
-pub fn home() -> PathBuf {
-    let mut path = root();
-    path.push("home");
-    path.mkdir_p();
-    path
-}
-
-/// Path to the current test's `$CARGO_HOME`
-///
-/// ex: `$CARGO_TARGET_TMPDIR/cit/t0/home/.cargo`
-pub fn cargo_home() -> PathBuf {
-    home().join(".cargo")
-}
-
 /// Common path and file operations
 pub trait CargoPathExt {
     fn to_url(&self) -> url::Url;
@@ -122,14 +105,14 @@ where
         Ok(()) => {}
         Err(ref e) if e.kind() == ErrorKind::PermissionDenied => {
             let mut p = t!(path.metadata()).permissions();
-            p.set_readonly(false);
+            p.set_mode(0o777);
             t!(fs::set_permissions(path, p));
 
             // Unix also requires the parent to not be readonly for example when
             // removing files
             let parent = path.parent().unwrap();
             let mut p = t!(parent.metadata()).permissions();
-            p.set_readonly(false);
+            p.set_mode(0o777);
             t!(fs::set_permissions(parent, p));
 
             f(path).unwrap_or_else(|e| {

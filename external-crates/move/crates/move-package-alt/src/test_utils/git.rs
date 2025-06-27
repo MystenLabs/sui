@@ -22,7 +22,7 @@
 //!         .file("sources/dep1.move", r#"module dep1::dep1 { public fun f() { } }"#)
 //! });
 //!
-//! // Use the `url()` method to get the file url to the new repository.
+//! // Use the `root()` or `root_path()` method to get the FS path to the new repository.
 //! let p = project()
 //!     .file("Move.toml", &format!(r#"
 //!         [package]
@@ -32,7 +32,7 @@
 //!
 //!         [dependencies]
 //!         dep1 = {{ git = '{}' }}
-//!     "#, git_project.url()))
+//!     "#, git_project.root_path()))
 //!     .file("sources/a.move", "module a::a { public fun t() { dep1::f(); } }")
 //!     .build();
 //! ```
@@ -215,17 +215,11 @@ pub fn tag(repo: &git2::Repository, name: &str) {
     ));
 }
 
+// / *(`git2`)* Get all commits in the repository, starting from HEAD
 pub fn commits(repo: &git2::Repository) -> Vec<git2::Commit> {
     let mut revwalk = t!(repo.revwalk());
     t!(revwalk.push_head());
     revwalk
         .map(|oid| t!(repo.find_commit(oid.unwrap())))
         .collect()
-}
-
-/// Returns true if gitoxide is globally activated.
-///
-/// That way, tests that normally use `git2` can transparently use `gitoxide`.
-pub fn cargo_uses_gitoxide() -> bool {
-    std::env::var_os("__CARGO_USE_GITOXIDE_INSTEAD_OF_GIT2").is_some_and(|value| value == "1")
 }
