@@ -10,6 +10,7 @@ use crate::{
         PackageStore, cached_package_store::CachedPackageStore, linked_data_store::LinkedDataStore,
     },
     execution_value::ExecutionState,
+    programmable_transactions::execution::subst_signature,
     static_programmable_transactions::{
         linkage::{
             analysis::{LinkageAnalysis, type_linkage},
@@ -191,6 +192,8 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 &loaded_type_arguments,
                 &mut data_store,
             )
+            .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
+        let runtime_signature = subst_signature(runtime_signature, &loaded_type_arguments)
             .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let parameters = runtime_signature
             .parameters

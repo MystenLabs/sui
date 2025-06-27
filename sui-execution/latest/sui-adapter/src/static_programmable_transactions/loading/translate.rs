@@ -22,7 +22,8 @@ pub fn transaction(
         .collect::<Result<Vec<_>, _>>()?;
     let commands = commands
         .into_iter()
-        .map(|cmd| command(env, cmd))
+        .enumerate()
+        .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(L::Transaction { inputs, commands })
 }

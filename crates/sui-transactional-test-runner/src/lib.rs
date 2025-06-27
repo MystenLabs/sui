@@ -68,14 +68,30 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    // check if the test is enabled
-    const ENABLED_DIRECTORIES: &[&str] = &[];
+    // check if the test is disabled
+    const DISABLED_DIRECTORIES: &[&str] = &[
+        "deny_list_v1",
+        "deny_list_v2",
+        "dev_inspect",
+        "dry_run",
+        "entry_points",
+        "enums",
+        "init",
+        "party",
+        "programmable",
+        "programmable_transaction_examples",
+        "publish",
+        "receive_object",
+        "sui",
+        "upgrade",
+    ];
     let mut components = path.parent().unwrap().components();
-    let enabled = components.any(|c| {
+    let disabled = components.any(|c| {
         let string = c.as_os_str().to_string_lossy().to_string();
-        ENABLED_DIRECTORIES.contains(&string.as_str())
+        DISABLED_DIRECTORIES.contains(&string.as_str())
     });
-    ENABLE_PTB_V2.set(enabled).unwrap();
+
+    ENABLE_PTB_V2.set(!disabled).unwrap();
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();

@@ -10,7 +10,7 @@ use crate::{
         spanned::sp,
     },
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
     base_types::TxContextKind,
     coin::RESOLVED_COIN_STRUCT,
@@ -163,10 +163,17 @@ fn command<Mode: ExecutionMode>(
         L::Command::TransferObjects(lobjects, laddress) => {
             let object_locs = locations(context, 0, lobjects)?;
             let address_loc = one_location(context, object_locs.len(), laddress)?;
-            let objects = constrained_arguments(env, context, 0, object_locs, |ty| {
-                let abilities = ty.abilities();
-                Ok(abilities.has_store() && abilities.has_key())
-            })?;
+            let objects = constrained_arguments(
+                env,
+                context,
+                0,
+                object_locs,
+                |ty| {
+                    let abilities = ty.abilities();
+                    Ok(abilities.has_store() && abilities.has_key())
+                },
+                CommandArgumentError::InvalidTransferObject,
+            )?;
             let address = argument(env, context, objects.len(), address_loc, Type::Address)?;
             (T::Command_::TransferObjects(objects, address), vec![])
         }
@@ -176,7 +183,7 @@ fn command<Mode: ExecutionMode>(
             let coin = coin_mut_ref_argument(env, context, 0, coin_loc)?;
             let coin_type = match &coin.value.1 {
                 Type::Reference(true, ty) => (**ty).clone(),
-                _ => invariant_violation!("coin must be a mutable reference"),
+                ty => invariant_violation!("coin must be a mutable reference. Found: {ty:?}"),
             };
             let amounts = arguments(
                 env,
@@ -194,7 +201,7 @@ fn command<Mode: ExecutionMode>(
             let target = coin_mut_ref_argument(env, context, 0, target_loc)?;
             let coin_type = match &target.value.1 {
                 Type::Reference(true, ty) => (**ty).clone(),
-                _ => invariant_violation!("target must be a mutable reference"),
+                ty => invariant_violation!("target must be a mutable reference. Found: {ty:?}"),
             };
             let coins = arguments(
                 env,
@@ -228,23 +235,24 @@ fn command<Mode: ExecutionMode>(
                 );
             };
             let first_loc = one_location(context, 0, lfirst)?;
-            let Some(first_ty) =
-                constrained_type(env, context, first_loc, |ty| Ok(ty.abilities().has_key()))?
-            else {
-                // TODO need a new error here
-                return Err(command_argument_error(
-                    CommandArgumentError::TypeMismatch,
-                    0,
-                ));
-            };
+            let first_arg = constrained_argument(
+                env,
+                context,
+                0,
+                first_loc,
+                |ty| Ok(ty.abilities().has_key()),
+                CommandArgumentError::InvalidMakeMoveVecNonObjectArgument,
+            )?;
+            let first_ty = first_arg.value.1.clone();
             let elems_loc = locations(context, 1, lelems)?;
-            let elems = arguments(
+            let mut elems = arguments(
                 env,
                 context,
                 1,
                 elems_loc,
                 std::iter::repeat_with(|| first_ty.clone()),
             )?;
+            elems.insert(0, first_arg);
             (
                 T::Command_::MakeMoveVec(first_ty.clone(), elems),
                 vec![env.vector_type(first_ty)?],
@@ -415,7 +423,7 @@ fn argument_(
                 actual_ty,
                 inner,
             )?;
-            T::Argument__::Borrow(/* mut */ false, location)
+            T::Argument__::Borrow(/* mut */ *is_mut, location)
         }
         (actual_ty, _) => {
             check_type(command_and_arg_idx, actual_ty, expected_ty)?;
@@ -474,12 +482,15 @@ fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     start_idx: usize,
     locations: Vec<T::Location>,
     mut is_valid: P,
+    err_case: CommandArgumentError,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
     let is_valid = &mut is_valid;
     locations
         .into_iter()
         .enumerate()
-        .map(|(i, location)| constrained_argument(env, context, start_idx + i, location, is_valid))
+        .map(|(i, location)| {
+            constrained_argument_(env, context, start_idx + i, location, is_valid, err_case)
+        })
         .collect()
 }
 
@@ -488,23 +499,47 @@ fn constrained_argument<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     context: &mut Context,
     command_arg_idx: usize,
     location: T::Location,
-    is_valid: &mut P,
+    mut is_valid: P,
+    err_case: CommandArgumentError,
 ) -> Result<T::Argument, ExecutionError> {
-    let arg_ = constrained_argument_(env, context, location, is_valid)
-        .map_err(|e| e.into_execution_error(command_arg_idx))?;
-    Ok(sp(command_arg_idx as u16, arg_))
+    constrained_argument_(
+        env,
+        context,
+        command_arg_idx,
+        location,
+        &mut is_valid,
+        err_case,
+    )
 }
 
 fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
+    command_arg_idx: usize,
     location: T::Location,
     is_valid: &mut P,
+    err_case: CommandArgumentError,
+) -> Result<T::Argument, ExecutionError> {
+    let arg_ = constrained_argument__(env, context, location, is_valid, err_case)
+        .map_err(|e| e.into_execution_error(command_arg_idx))?;
+    Ok(sp(command_arg_idx as u16, arg_))
+}
+
+fn constrained_argument__<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
+    env: &Env,
+    context: &mut Context,
+    location: T::Location,
+    is_valid: &mut P,
+    err_case: CommandArgumentError,
 ) -> Result<T::Argument_, EitherError> {
     if let Some(ty) = constrained_type(env, context, location, is_valid)? {
-        Ok((T::Argument__::Use(T::Usage::Move(location)), ty))
+        if ty.abilities().has_copy() {
+            Ok((T::Argument__::new_copy(location), ty))
+        } else {
+            Ok((T::Argument__::new_move(location), ty))
+        }
     } else {
-        Err(CommandArgumentError::TypeMismatch.into())
+        Err(err_case.into())
     }
 }
 
@@ -548,7 +583,10 @@ fn coin_mut_ref_argument_(
         }
         LocationType::Fixed(ty) => {
             check_coin_type(ty)?;
-            (T::Argument__::Borrow(/* mut */ true, location), ty.clone())
+            (
+                T::Argument__::Borrow(/* mut */ true, location),
+                Type::Reference(true, Rc::new(ty.clone())),
+            )
         }
         LocationType::Bytes(_, _) => {
             // TODO we do not currently bytes in any mode as that would require additional type

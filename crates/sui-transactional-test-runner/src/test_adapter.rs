@@ -60,7 +60,7 @@ use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiExecutionStatus,
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
 };
-use sui_protocol_config::{Chain, ProtocolConfig};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
@@ -364,8 +364,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        protocol_config
-            .set_enable_ptb_execution_v2_for_testing(ENABLE_PTB_V2.get().copied().unwrap_or(false));
+        let enabled_ptb_v2 = protocol_config.version >= ProtocolVersion::max()
+            && ENABLE_PTB_V2.get().copied().unwrap_or(false);
+        protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
         let (
             executor,
