@@ -757,6 +757,7 @@ impl NodeConfig {
             .first()
             .map(|config| ArchiveReaderConfig {
                 ingestion_url: config.ingestion_url.clone(),
+                remote_store_options: config.remote_store_options.clone(),
                 download_concurrency: NonZeroUsize::new(config.concurrency)
                     .unwrap_or(NonZeroUsize::new(5).unwrap()),
                 remote_store_config: ObjectStoreConfig::default(),
@@ -1112,6 +1113,7 @@ pub struct ArchiveReaderConfig {
     pub remote_store_config: ObjectStoreConfig,
     pub download_concurrency: NonZeroUsize,
     pub ingestion_url: Option<String>,
+    pub remote_store_options: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
@@ -1122,6 +1124,8 @@ pub struct StateArchiveConfig {
     pub concurrency: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ingestion_url: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    remote_store_options: Vec<(String, String)>,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]

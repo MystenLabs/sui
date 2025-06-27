@@ -93,7 +93,7 @@ pub use generated::{
 pub use server::GetCheckpointAvailabilityResponse;
 pub use server::GetCheckpointSummaryRequest;
 use sui_config::node::ArchiveReaderConfig;
-use sui_data_ingestion_core::{setup_single_workflow, ReaderOptions};
+use sui_data_ingestion_core::{setup_single_workflow_with_options, ReaderOptions};
 use sui_storage::verify_checkpoint;
 
 /// A handle to the StateSync subsystem.
@@ -1182,14 +1182,19 @@ async fn sync_checkpoint_contents_from_archive_iteration<S>(
             warn!("Archival ingestion url for state sync is not configured");
             return;
         };
+        if ingestion_url.contains("checkpoints.mainnet.sui.io") {
+            warn!("{} can't be used as an archival fallback", ingestion_url);
+            return;
+        }
         let reader_options = ReaderOptions {
             batch_size: archive_config.download_concurrency.into(),
             upper_limit: Some(end),
             ..Default::default()
         };
-        let Ok((executor, _exit_sender)) = setup_single_workflow(
+        let Ok((executor, _exit_sender)) = setup_single_workflow_with_options(
             StateSyncWorker(store, metrics),
             ingestion_url.clone(),
+            archive_config.remote_store_options.clone(),
             start,
             1,
             Some(reader_options),
