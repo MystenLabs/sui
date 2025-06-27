@@ -42,7 +42,7 @@ pub trait Verifier {
 
         for module in &modules {
             for identifier in module.identifiers() {
-                if identifier.is_self() {
+                if identifier.as_str() == "<SELF>" {
                     return Err(sui_types::error::UserInputError::InvalidIdentifier {
                         error: format!("invalid identifier: {}", identifier),
                     }
