@@ -48,7 +48,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
 use url::Url;
 
 use crate::t;

@@ -12,18 +12,12 @@ mod paths;
 use paths::CargoPathExt;
 use paths::root;
 use std::env;
-use std::env::consts;
 use std::ffi::OsStr;
 use std::fmt::Write;
 use std::fs;
-use std::io::Write as IoWrite;
 use std::os;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::OnceLock;
-use std::time;
-use std::time::Duration;
-use url::Url;
 
 #[macro_export]
 macro_rules! t {

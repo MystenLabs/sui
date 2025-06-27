@@ -96,4 +96,3 @@ impl CargoPathExt for PathBuf {
         self.as_path().ls_r()
     }
 }
-
