@@ -623,9 +623,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     ) -> Result<Vec<CtxValue>, ExecutionError> {
         let ty_args = ty_args
             .iter()
-            .map(|ty| {
+            .enumerate()
+            .map(|(idx, ty)| {
                 self.env
-                    .load_vm_type_from_adapter_type(ty)
+                    .load_vm_type_argument_from_adapter_type(idx, ty)
                     .map(|(vm_ty, _)| vm_ty)
             })
             .collect::<Result<_, _>>()?;

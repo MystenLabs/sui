@@ -74,7 +74,6 @@ pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Erro
         "deny_list_v2",
         "dev_inspect",
         "dry_run",
-        "entry_points",
         "enums",
         "init",
         "party",
