@@ -3590,11 +3590,4 @@ impl TransactionKey {
             _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
         }
     }
-
-    pub fn as_digest(&self) -> Option<&TransactionDigest> {
-        match self {
-            TransactionKey::Digest(d) => Some(d),
-            _ => None,
-        }
-    }
 }
