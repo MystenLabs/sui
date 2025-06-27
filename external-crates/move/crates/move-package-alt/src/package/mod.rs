@@ -9,5 +9,3 @@ pub mod paths;
 mod root_package;
 pub use package_impl::*;
 pub use root_package::RootPackage;
-mod published_info;
-pub use published_info::{PublishInformation, PublishInformationMap, PublishedIds};

@@ -48,7 +48,6 @@ where
     S: serde::Serializer,
 {
     let canonical_string = account.to_hex_literal();
-    println!("Serializing account: {:?}", canonical_string);
     serializer.serialize_str(&canonical_string)
 }
 

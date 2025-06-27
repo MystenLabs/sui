@@ -29,7 +29,7 @@ pub struct ParsedLockfile<F: MoveFlavor> {
     pub published: BTreeMap<EnvironmentName, Publication<F>>,
 }
 
-pub type BuildConfig = BTreeMap<String, String>;
+pub type BuildConfig = toml::Value;
 
 /// A serialized entry in the `[published.<environment>]` table of the lockfile
 #[derive(Debug, Serialize, Deserialize)]
