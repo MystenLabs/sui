@@ -18,6 +18,7 @@ diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
 futures.workspace = true
+pin-project-lite.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
 scoped-futures.workspace = true
