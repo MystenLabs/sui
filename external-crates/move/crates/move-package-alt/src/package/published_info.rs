@@ -2,10 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::Publication;
 use crate::{
     flavor::MoveFlavor,
-    schema::{EnvironmentID, EnvironmentName},
+    schema::{EnvironmentID, EnvironmentName, Publication},
 };
 use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};

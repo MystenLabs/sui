@@ -1,10 +1,16 @@
-use std::path::PathBuf;
+use std::{fmt::Debug, fmt::Display, path::PathBuf};
 
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
 
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
+
+#[derive(Clone)]
+pub struct PublishedID(pub AccountAddress);
+
+#[derive(Clone)]
+pub struct OriginalID(pub AccountAddress);
 
 /// A serialized dependency of the form `{ local = <path> }`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -62,5 +68,67 @@ where
         ser_account(account, serializer)
     } else {
         serializer.serialize_none()
+    }
+}
+
+impl Serialize for OriginalID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        ser_account(&self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for OriginalID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let account = AccountAddress::deserialize(deserializer)?;
+        Ok(OriginalID(account))
+    }
+}
+
+impl Serialize for PublishedID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        ser_account(&self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PublishedID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let account = AccountAddress::deserialize(deserializer)?;
+        Ok(PublishedID(account))
+    }
+}
+
+impl Display for PublishedID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0.to_hex_literal())
+    }
+}
+
+impl Debug for PublishedID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0.to_hex_literal())
+    }
+}
+
+impl Display for OriginalID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0.to_hex_literal())
+    }
+}
+
+impl Debug for OriginalID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0.to_hex_literal())
     }
 }

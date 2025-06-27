@@ -13,12 +13,13 @@ use serde::{Deserialize, Serialize};
 
 use super::manifest::Manifest;
 use super::paths::PackagePath;
+use super::published_info::PublishInformation;
 use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{LocalDepInfo, LockfileDependencyInfo, Pin, PublishInformation},
+    schema::{LocalDepInfo, LockfileDependencyInfo, Pin},
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use tracing::{debug, info};
