@@ -8,18 +8,13 @@
 
 //! Access common paths and manipulate the filesystem
 
-use std::env;
 use std::fs;
-use std::io::{self, ErrorKind};
+use std::io::ErrorKind;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::Mutex;
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::t;
 use crate::test_utils::panic_error;
-use std::os::unix::fs::PermissionsExt;
 
 /// Path to the test's filesystem scratchpad
 pub fn root() -> PathBuf {
