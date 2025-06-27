@@ -28,6 +28,8 @@ use std::sync::Arc;
 use typed_store_error::TypedStoreError;
 
 pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
+pub type PackageVersionsIterator<'a> =
+    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
 
 pub trait ReadStore: ObjectStore {
     //
@@ -606,6 +608,12 @@ pub trait RpcIndexes: Send + Sync {
         owner: &SuiAddress,
         cursor: Option<(SuiAddress, StructTag)>,
     ) -> Result<BalanceIterator<'_>>;
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<PackageVersionsIterator<'_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

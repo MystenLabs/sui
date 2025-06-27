@@ -28,6 +28,7 @@ use crate::proto::rpc::v2alpha::VerifySignatureResponse;
 use crate::proto::rpc::v2alpha::{
     GetDatatypeRequest, GetDatatypeResponse, GetFunctionRequest, GetFunctionResponse,
     GetModuleRequest, GetModuleResponse, GetPackageRequest, GetPackageResponse,
+    ListPackageVersionsRequest, ListPackageVersionsResponse,
 };
 use crate::proto::rpc::v2beta::Checkpoint;
 use crate::subscription::SubscriptionServiceHandle;
@@ -190,6 +191,15 @@ impl MovePackageService for RpcService {
         request: tonic::Request<GetFunctionRequest>,
     ) -> Result<tonic::Response<GetFunctionResponse>, tonic::Status> {
         move_package::get_function::get_function(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_package_versions(
+        &self,
+        request: tonic::Request<ListPackageVersionsRequest>,
+    ) -> Result<tonic::Response<ListPackageVersionsResponse>, tonic::Status> {
+        move_package::list_package_versions::list_package_versions(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }

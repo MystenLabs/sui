@@ -611,4 +611,18 @@ impl RpcIndexes for RpcIndexStore {
             },
         )))
     }
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> sui_types::storage::error::Result<
+        Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>,
+    > {
+        let iter = self.package_versions_iter(original_id, cursor)?;
+        Ok(
+            Box::new(iter.map(|result| result.map(|(key, info)| (key.version, info.storage_id))))
+                as _,
+        )
+    }
 }
