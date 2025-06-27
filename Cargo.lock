@@ -903,7 +903,7 @@ dependencies = [
 [[package]]
 name = "async-graphql"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18#3fa614a54b4bda9efc9cad6f11579a328bfe35d0"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -942,7 +942,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-axum"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18#3fa614a54b4bda9efc9cad6f11579a328bfe35d0"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -959,7 +959,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-derive"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18#3fa614a54b4bda9efc9cad6f11579a328bfe35d0"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -975,7 +975,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-parser"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18#3fa614a54b4bda9efc9cad6f11579a328bfe35d0"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -986,7 +986,7 @@ dependencies = [
 [[package]]
 name = "async-graphql-value"
 version = "7.0.1"
-source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18#3fa614a54b4bda9efc9cad6f11579a328bfe35d0"
+source = "git+https://github.com/amnn/async-graphql?branch=v7.0.1-react-18-graphiql-4#accb23623380994ae8a02218858e23eb6ec66187"
 dependencies = [
  "bytes",
  "indexmap 2.8.0",
