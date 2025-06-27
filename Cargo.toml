@@ -779,6 +779,6 @@ sui-execution = { path = "sui-execution" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
 
 [patch.crates-io]
-async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
-async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
-async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
+async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
