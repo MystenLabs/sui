@@ -9,7 +9,7 @@
 pub mod git;
 mod paths;
 
-use paths::CargoPathExt;
+use paths::PathExt;
 use paths::root;
 use std::env;
 use std::ffi::OsStr;
@@ -87,9 +87,9 @@ impl FileBuilder {
     }
 }
 
-/// A cargo project to run tests against.
+/// A directory to run tests against.
 ///
-/// See [`ProjectBuilder`] or [`Project::from_template`] to get started.
+/// See [`ProjectBuilder`] to get started.
 #[derive(Debug)]
 pub struct Project {
     root: PathBuf,
@@ -104,7 +104,6 @@ pub struct Project {
 pub struct ProjectBuilder {
     root: Project,
     files: Vec<FileBuilder>,
-    no_manifest: bool,
 }
 
 impl ProjectBuilder {
@@ -118,7 +117,6 @@ impl ProjectBuilder {
         ProjectBuilder {
             root: Project { root },
             files: vec![],
-            no_manifest: false,
         }
     }
 
@@ -148,11 +146,6 @@ impl ProjectBuilder {
             body,
             executable,
         ));
-    }
-
-    pub fn no_manifest(mut self) -> Self {
-        self.no_manifest = true;
-        self
     }
 
     /// Creates the project.

@@ -28,7 +28,7 @@ pub fn root() -> PathBuf {
 }
 
 /// Common path and file operations
-pub trait CargoPathExt {
+pub trait PathExt {
     fn to_url(&self) -> url::Url;
 
     fn rm_rf(&self);
@@ -39,7 +39,7 @@ pub trait CargoPathExt {
     fn ls_r(&self) -> Vec<PathBuf>;
 }
 
-impl CargoPathExt for Path {
+impl PathExt for Path {
     fn to_url(&self) -> url::Url {
         url::Url::from_file_path(self).ok().unwrap()
     }
@@ -80,7 +80,7 @@ impl CargoPathExt for Path {
     }
 }
 
-impl CargoPathExt for PathBuf {
+impl PathExt for PathBuf {
     fn to_url(&self) -> url::Url {
         self.as_path().to_url()
     }
