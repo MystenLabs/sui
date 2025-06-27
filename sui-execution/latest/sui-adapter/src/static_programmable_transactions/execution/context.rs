@@ -465,7 +465,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 };
                 let value = load_byte_value(gas_charger, env, bytes, ty)?;
                 match usage {
-                    UsageKind::Move | UsageKind::Borrow(true) => {
+                    UsageKind::Borrow(true) => {
+                        // "fix" the BCS bytes to a given value
                         inputs.fix(i, value)?;
                         match inputs.get(i)? {
                             InputValue::Loaded(v) => v,
@@ -473,11 +474,17 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                         }
                     }
                     UsageKind::Borrow(false) => {
+                        // in the case that we need a reference but it is not "fixed", we must
+                        // create a temporary local to borrow
                         imm_ref_temps.push(Locals::new(vec![value])?);
                         let local = imm_ref_temps.last_mut().unwrap();
                         local.local(0)?
                     }
-                    UsageKind::Copy => return Ok(value),
+                    UsageKind::Move | UsageKind::Copy => {
+                        // return a fresh copy of the value
+                        // Move should only happen for dev-inspect or `Receiving`
+                        return Ok(value);
+                    }
                 }
             }
         };

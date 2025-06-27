@@ -103,8 +103,8 @@ impl Context {
         self.graph.borrowed_by(r).map_err(graph_err)
     }
 
-    /// Used for checking if a location is borrowed, primarily for recording this information on
-    /// a specific Copy instance
+    /// Used for checking if a location is borrowed
+    /// Used for updating the borrowed marker in Copy, and for correctness of Move
     fn is_location_borrowed(&self, l: T::Location) -> Result<bool, ExecutionError> {
         let borrowed_by = self.borrowed_by(self.local_root)?;
         Ok(borrowed_by
@@ -346,6 +346,13 @@ fn move_value(
     arg_idx: u16,
     l: T::Location,
 ) -> Result<Value, ExecutionError> {
+    if context.is_location_borrowed(l)? {
+        // TODO more specific error
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            arg_idx as usize,
+        ));
+    }
     let Some(value) = context.location(l).take() else {
         return Err(command_argument_error(
             CommandArgumentError::InvalidValueUsage,

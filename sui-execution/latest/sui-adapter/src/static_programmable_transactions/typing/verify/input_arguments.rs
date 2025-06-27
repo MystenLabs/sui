@@ -114,24 +114,12 @@ fn check_pure_bytes<Mode: ExecutionMode>(
     constraint: &Type,
     usage: BytesUsage,
 ) -> Result<(), ExecutionError> {
+    assert_invariant!(
+        !matches!(constraint, Type::Reference(_, _)),
+        "references should not be added as a constraint"
+    );
     if Mode::allow_arbitrary_values() {
-        assert_invariant!(
-            !matches!(constraint, Type::Reference(_, _)),
-            "references should not be added as a constraint"
-        );
         return Ok(());
-    }
-    match usage {
-        BytesUsage::Copied => assert_invariant!(
-            constraint.abilities().has_copy(),
-            "non-fixed bytes used by-value should be copyable"
-        ),
-        BytesUsage::ByImmRef => assert_invariant!(
-            constraint.abilities().has_drop(),
-            "non-fixed bytes used by-immutable-ref should be droppable since they will be \
-            deserialized, borrowed, but ultimately dropped"
-        ),
-        BytesUsage::ByMutRef => (),
     }
     let Some(layout) = primitive_serialization_layout(constraint)? else {
         let msg = format!(
@@ -146,6 +134,18 @@ fn check_pure_bytes<Mode: ExecutionMode>(
             msg,
         ));
     };
+    match usage {
+        BytesUsage::Copied => assert_invariant!(
+            constraint.abilities().has_copy(),
+            "non-fixed bytes used by-value should be copyable. For type {constraint:?}"
+        ),
+        BytesUsage::ByImmRef => assert_invariant!(
+            constraint.abilities().has_drop(),
+            "non-fixed bytes used by-immutable-ref should be droppable since they will be \
+            deserialized, borrowed, but ultimately dropped. For type {constraint:?}"
+        ),
+        BytesUsage::ByMutRef => (),
+    }
     bcs_argument_validate(bytes, command_arg_idx, layout)?;
     Ok(())
 }
