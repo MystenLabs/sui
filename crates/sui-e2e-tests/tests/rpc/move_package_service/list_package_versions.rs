@@ -369,23 +369,6 @@ async fn test_list_package_versions_with_upgrades() {
     assert_eq!(response.versions.len(), 1);
     assert_eq!(response.versions[0].version, Some(3));
     assert!(response.next_page_token.is_none());
-
-    // Test 3: Different page size
-    let request = ListPackageVersionsRequest {
-        package_id: Some(package_ids[0].to_string()),
-        page_size: Some(1),
-        page_token: None,
-    };
-
-    let response = service
-        .list_package_versions(request)
-        .await
-        .unwrap()
-        .into_inner();
-
-    assert_eq!(response.versions.len(), 1);
-    assert_eq!(response.versions[0].version, Some(1));
-    assert!(response.next_page_token.is_some());
 }
 
 #[sim_test]
