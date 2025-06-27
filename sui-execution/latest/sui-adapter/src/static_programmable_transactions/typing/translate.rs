@@ -8,6 +8,7 @@ use crate::{
     static_programmable_transactions::{
         loading::ast::{self as L, InputArg, Type},
         spanned::sp,
+        typing::ast::{BytesConstraint, BytesUsage},
     },
 };
 use std::{collections::BTreeMap, rc::Rc};
@@ -20,7 +21,7 @@ use sui_types::{
 
 struct Context {
     current_command: u16,
-    gathered_input_types: BTreeMap<u16, BTreeMap<Type, (u16, u16)>>,
+    gathered_input_types: BTreeMap<u16, BTreeMap<Type, BytesConstraint>>,
     inputs: Vec<(InputArg, InputType)>,
     results: Vec<T::ResultType>,
 }
@@ -33,7 +34,7 @@ enum InputType {
 enum LocationType<'context> {
     Bytes(
         &'context mut InputType,
-        &'context mut BTreeMap<Type, (u16, u16)>,
+        &'context mut BTreeMap<Type, BytesConstraint>,
     ),
     Fixed(Type),
 }
@@ -394,7 +395,7 @@ fn argument_(
     location: T::Location,
     expected_ty: &Type,
 ) -> Result<T::Argument__, EitherError> {
-    let command_and_arg_idx = (context.current_command, command_arg_idx as u16);
+    let current_command = context.current_command;
     let actual_ty = context.location_type(env, location)?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
@@ -403,11 +404,23 @@ fn argument_(
         {
             debug_assert!(!a_is_mut || *b_is_mut);
             debug_assert!(expected_ty.abilities().has_copy());
-            check_type(command_and_arg_idx, LocationType::Fixed((*a).clone()), b)?;
+            // unused since the type is fixed
+            let unused_constraint = BytesConstraint {
+                command: current_command,
+                argument: command_arg_idx as u16,
+                usage: BytesUsage::Copied,
+            };
+            check_type(unused_constraint, LocationType::Fixed((*a).clone()), b)?;
             T::Argument__::new_copy(location)
         }
         (LocationType::Fixed(Type::Reference(_, a)), b) => {
-            check_type(command_and_arg_idx, LocationType::Fixed((*a).clone()), b)?;
+            // unused since the type is fixed
+            let unused_constraint = BytesConstraint {
+                command: current_command,
+                argument: command_arg_idx as u16,
+                usage: BytesUsage::Copied,
+            };
+            check_type(unused_constraint, LocationType::Fixed((*a).clone()), b)?;
             if !b.abilities().has_copy() {
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());
@@ -417,16 +430,26 @@ fn argument_(
 
         // Non reference location types
         (actual_ty, Type::Reference(is_mut, inner)) => {
-            check_type_impl(
-                command_and_arg_idx,
-                /* fix */ *is_mut,
-                actual_ty,
-                inner,
-            )?;
+            let usage = if *is_mut {
+                BytesUsage::ByMutRef
+            } else {
+                BytesUsage::ByImmRef
+            };
+            let constraint = BytesConstraint {
+                command: current_command,
+                argument: command_arg_idx as u16,
+                usage,
+            };
+            check_type_impl(constraint, actual_ty, inner)?;
             T::Argument__::Borrow(/* mut */ *is_mut, location)
         }
         (actual_ty, _) => {
-            check_type(command_and_arg_idx, actual_ty, expected_ty)?;
+            let constraint = BytesConstraint {
+                command: current_command,
+                argument: command_arg_idx as u16,
+                usage: BytesUsage::Copied,
+            };
+            check_type(constraint, actual_ty, expected_ty)?;
             T::Argument__::Use(if expected_ty.abilities().has_copy() {
                 T::Usage::new_copy(location)
             } else {
@@ -437,21 +460,18 @@ fn argument_(
 }
 
 fn check_type(
-    command_and_arg_idx: (u16, u16),
+    // not used if the type is fixed
+    constraint: BytesConstraint,
     actual_ty: LocationType,
     expected_ty: &Type,
 ) -> Result<(), CommandArgumentError> {
-    check_type_impl(
-        command_and_arg_idx,
-        /* fix */ false,
-        actual_ty,
-        expected_ty,
-    )
+    debug_assert!(matches!(constraint.usage, BytesUsage::Copied));
+    check_type_impl(constraint, actual_ty, expected_ty)
 }
 
 fn check_type_impl(
-    command_and_arg_idx: (u16, u16),
-    fix: bool,
+    // not used if the type is fixed
+    constraint: BytesConstraint,
     mut actual_ty: LocationType,
     expected_ty: &Type,
 ) -> Result<(), CommandArgumentError> {
@@ -464,12 +484,10 @@ fn check_type_impl(
             }
         }
         LocationType::Bytes(ty, types) => {
-            types
-                .entry(expected_ty.clone())
-                .or_insert(command_and_arg_idx);
-            if fix {
+            if matches!(&constraint.usage, BytesUsage::ByMutRef) {
                 **ty = InputType::Fixed(expected_ty.clone());
             }
+            types.entry(expected_ty.clone()).or_insert(constraint);
             // validity of pure types is checked elsewhere
             Ok(())
         }
