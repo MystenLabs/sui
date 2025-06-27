@@ -32,8 +32,8 @@ Contents: test::m::S {
 
 task 4, line 31:
 //# transfer-object 2,0 --sender A --recipient B
-Error: Transaction Effects Status: Invalid Transfer Object, object does not have public transfer.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None, command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject }, source: None, command: Some(0) } }
 
 task 5, lines 33-36:
 //# view-object 2,0
@@ -67,8 +67,8 @@ Contents: test::m::Cup<test::m::S> {
 
 task 8, line 42:
 //# transfer-object 6,0 --sender A --recipient B
-Error: Transaction Effects Status: Invalid Transfer Object, object does not have public transfer.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidTransferObject, source: None, command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject }, source: None, command: Some(0) } }
 
 task 9, line 44:
 //# view-object 6,0

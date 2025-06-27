@@ -250,11 +250,14 @@ impl<'a> ObjectRuntime<'a> {
         Ok(())
     }
 
+    /// In the new PTB adapter, this function is also used for persisting owners at the end
+    /// of the transaction. In which case, we don't check the transfer limits.
     pub fn transfer(
         &mut self,
         owner: Owner,
         ty: MoveObjectType,
         obj: Value,
+        end_of_transaction: bool,
     ) -> PartialVMResult<TransferResult> {
         let id: ObjectID = get_object_id(obj.copy_value()?)?
             .value_as::<AccountAddress>()?
@@ -299,12 +302,22 @@ impl<'a> ObjectRuntime<'a> {
         } else {
             TransferResult::OwnerChanged
         };
+        // assert!(end of transaction ==> same owner)
+        if end_of_transaction && !matches!(transfer_result, TransferResult::SameOwner) {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Untransferred object {} had its owner change", id)),
+            );
+        }
 
         // Metered transactions don't have limits for now
 
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             // TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
-            self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
+            // We have higher limits for unmetered transactions and framework obj
+            // We don't check the limit for objects whose owner is persisted at the end of the
+            // transaction
+            self.is_metered && !is_framework_obj && !end_of_transaction,
             self.state.transfers.len(),
             self.protocol_config.max_num_transferred_move_object_ids(),
             self.protocol_config

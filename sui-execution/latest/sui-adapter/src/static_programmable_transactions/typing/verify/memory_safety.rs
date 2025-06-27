@@ -210,7 +210,10 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     for (c, t) in commands {
         let result =
             command(&mut context, c, t).map_err(|e| e.with_command_index(c.idx as usize))?;
-        assert_invariant!(result.len() == t.len(), "result length mismatch");
+        assert_invariant!(
+            result.len() == t.len(),
+            "result length mismatch for command. {c:?}"
+        );
         context.results.push(result.into_iter().map(Some).collect());
     }
 
@@ -277,7 +280,7 @@ fn command(
             let coin_values = arguments(context, coins)?;
             consume_values(context, coin_values)?;
             write_ref(context, 0, target_value)?;
-            vec![Value::NonRef]
+            vec![]
         }
         T::Command_::MakeMoveVec(_, xs) => {
             let vs = arguments(context, xs)?;

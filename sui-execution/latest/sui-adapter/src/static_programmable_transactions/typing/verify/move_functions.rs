@@ -67,8 +67,15 @@ impl Context {
         }
     }
 
+    /// Marks mutable usages as dirty. We don't care about `Move` since the value will be moved
+    /// and that location is no longer accessible.
     fn mark_dirty(&mut self, arg: &T::Argument) {
-        self.mark_loc_dirty(arg.value.0.location())
+        match &arg.value.0 {
+            T::Argument__::Borrow(/* mut */ true, loc) => self.mark_loc_dirty(*loc),
+            T::Argument__::Borrow(/* mut */ false, _)
+            | T::Argument__::Use(_)
+            | T::Argument__::Read(_) => (),
+        }
     }
 
     fn mark_loc_dirty(&mut self, location: T::Location) {
@@ -106,7 +113,13 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
     let T::Transaction { inputs, commands } = txn;
     let mut context = Context::new(inputs);
     for (c, result) in commands {
-        command::<Mode>(env, &mut context, c, result)?;
+        let result_dirties = command::<Mode>(env, &mut context, c, result)
+            .map_err(|e| e.with_command_index(c.idx as usize))?;
+        assert_invariant!(
+            result_dirties.len() == result.len(),
+            "result length mismatch"
+        );
+        context.results.push(result_dirties);
     }
     Ok(())
 }
@@ -116,28 +129,20 @@ fn command<Mode: ExecutionMode>(
     context: &mut Context,
     command: &T::Command,
     result: &T::ResultType,
-) -> Result<(), ExecutionError> {
-    match &command.value {
-        T::Command_::MoveCall(call) => {
-            let result_dirties = move_call::<Mode>(env, context, call, result)?;
-            debug_assert!(result_dirties.len() == result.len());
-            context.results.push(result_dirties);
-        }
+) -> Result<Vec<IsDirty>, ExecutionError> {
+    Ok(match &command.value {
+        T::Command_::MoveCall(call) => move_call::<Mode>(env, context, call, result)?,
         T::Command_::TransferObjects(objs, recipient) => {
             arguments(env, context, objs);
             argument(env, context, recipient);
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            vec![]
         }
         T::Command_::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
             debug_assert!(!amounts_are_dirty);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
-            debug_assert_eq!(result.len(), amounts.len());
-            context
-                .results
-                .push(vec![IsDirty::Fixed { is_dirty }; result.len()]);
+            vec![IsDirty::Fixed { is_dirty }; result.len()]
         }
         T::Command_::MergeCoins(_, target, coins) => {
             let is_dirty = arguments(env, context, coins);
@@ -145,31 +150,28 @@ fn command<Mode: ExecutionMode>(
             if is_dirty {
                 context.mark_dirty(target);
             }
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            vec![]
         }
         T::Command_::MakeMoveVec(_, args) => {
             let is_dirty = arguments(env, context, args);
             debug_assert_eq!(result.len(), 1);
-            context.results.push(vec![IsDirty::Fixed { is_dirty }]);
+            vec![IsDirty::Fixed { is_dirty }]
         }
         T::Command_::Publish(_, _, _) => {
             debug_assert_eq!(Mode::packages_are_predefined(), result.is_empty());
             debug_assert_eq!(!Mode::packages_are_predefined(), result.len() == 1);
-            let result = result
+            result
                 .iter()
                 .map(|_| IsDirty::Fixed { is_dirty: false })
-                .collect::<Vec<_>>();
-            context.results.push(result);
+                .collect::<Vec<_>>()
         }
         T::Command_::Upgrade(_, _, _, ticket, _) => {
             debug_assert_eq!(result.len(), 1);
             let result = vec![IsDirty::Fixed { is_dirty: false }];
             argument(env, context, ticket);
-            context.results.push(result);
+            result
         }
-    }
-    Ok(())
+    })
 }
 
 fn arguments(env: &Env, context: &mut Context, args: &[T::Argument]) -> bool {

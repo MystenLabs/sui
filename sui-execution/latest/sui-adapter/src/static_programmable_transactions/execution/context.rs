@@ -226,7 +226,12 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 },
             );
             if let Some(object) = value {
-                self.transfer_object(owner, type_, CtxValue(object))?;
+                self.transfer_object_(
+                    owner,
+                    type_,
+                    CtxValue(object),
+                    /* end of transaction */ true,
+                )?;
             } else if owner.is_shared() {
                 by_value_shared_objects.insert(id);
             } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
@@ -728,23 +733,25 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         linkage: &RootedLinkage,
         mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
-        let modules_to_init = modules.iter().filter_map(|module| {
-            for fdef in &module.function_defs {
-                let fhandle = module.function_handle_at(fdef.function);
-                let fname = module.identifier_at(fhandle.name);
-                if fname == INIT_FN_NAME {
-                    return Some(module.self_id());
-                }
-            }
-            None
-        });
-
-        for module_id in modules_to_init {
-            let args = vec![CtxValue(Value::tx_context(
-                self.tx_context.borrow().digest(),
-            )?)];
+        for module in modules {
+            let Some((_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str()) else {
+                continue;
+            };
+            let fhandle = module.function_handle_at(fdef.function);
+            let fparameters = module.signature_at(fhandle.parameters);
+            assert_invariant!(
+                fparameters.0.len() <= 2,
+                "init function should have at most 2 parameters"
+            );
+            let has_otw = fparameters.0.len() == 2;
+            let tx_context = CtxValue(Value::tx_context(self.tx_context.borrow().digest())?);
+            let args = if has_otw {
+                vec![CtxValue(Value::one_time_witness()?), tx_context]
+            } else {
+                vec![tx_context]
+            };
             let return_values = self.execute_function_bypass_visibility(
-                &module_id,
+                &module.self_id(),
                 INIT_FN_NAME,
                 &[],
                 args,
@@ -864,6 +871,16 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
         object: CtxValue,
     ) -> Result<(), ExecutionError> {
+        self.transfer_object_(recipient, ty, object, /* end of transaction */ false)
+    }
+
+    fn transfer_object_(
+        &mut self,
+        recipient: Owner,
+        ty: Type,
+        object: CtxValue,
+        end_of_transaction: bool,
+    ) -> Result<(), ExecutionError> {
         let tag = TypeTag::try_from(ty)
             .map_err(|_| make_invariant_violation!("Unable to convert Type to TypeTag"))?;
         let TypeTag::Struct(tag) = tag else {
@@ -871,7 +888,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         };
         let ty = MoveObjectType::from(*tag);
         object_runtime_mut!(self)?
-            .transfer(recipient, ty, object.0.into())
+            .transfer(recipient, ty, object.0.into(), end_of_transaction)
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))?;
         Ok(())
     }

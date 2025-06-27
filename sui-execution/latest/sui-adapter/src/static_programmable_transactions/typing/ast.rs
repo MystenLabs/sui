@@ -12,6 +12,7 @@ use sui_types::base_types::ObjectID;
 // AST Nodes
 //**************************************************************************************************
 
+#[derive(Debug)]
 pub struct Transaction {
     pub inputs: Inputs,
     pub commands: Commands,
@@ -27,6 +28,7 @@ pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
 
+#[derive(Debug)]
 pub enum InputType {
     Bytes(
         /* all types that this must satisfy */
@@ -38,6 +40,7 @@ pub type ResultType = Vec<Type>;
 
 pub type Command = Spanned<Command_>;
 
+#[derive(Debug)]
 pub enum Command_ {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
@@ -58,12 +61,13 @@ pub type LoadedFunctionInstantiation = L::LoadedFunctionInstantiation;
 
 pub type LoadedFunction = L::LoadedFunction;
 
+#[derive(Debug)]
 pub struct MoveCall {
     pub function: LoadedFunction,
     pub arguments: Vec<Argument>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Location {
     GasCoin,
     Input(u16),
@@ -71,7 +75,7 @@ pub enum Location {
 }
 
 // Non borrowing usage of locations, moving or copying
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Usage {
     Move(Location),
     Copy {
@@ -85,7 +89,7 @@ pub enum Usage {
 pub type Argument = Spanned<Argument_>;
 pub type Argument_ = (Argument__, Type);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Argument__ {
     Use(Usage),
     Borrow(/* mut */ bool, Location),

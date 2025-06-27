@@ -280,6 +280,10 @@ CommandArgumentError:
       SharedObjectOperationNotAllowed: UNIT
     12:
       InvalidArgumentArity: UNIT
+    13:
+      InvalidTransferObject: UNIT
+    14:
+      InvalidMakeMoveVecNonObjectArgument: UNIT
 CompressedSignature:
   ENUM:
     0:

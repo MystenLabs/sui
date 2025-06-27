@@ -752,6 +752,10 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             crate::execution_status::CommandArgumentError::InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
             crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
             crate::execution_status::CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
+            crate::execution_status::CommandArgumentError::InvalidTransferObject |
+            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument => {
+                todo!("New errors need to be added to SDK once stabilized")
+            }
         }
     }
 }
