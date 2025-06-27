@@ -1,13 +1,10 @@
 use std::path::PathBuf;
 
-use move_core_types::identifier::Identifier;
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
 
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
-
-// TODO: this should be an OID
-pub type Address = String;
 
 /// A serialized dependency of the form `{ local = <path> }`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -42,5 +39,28 @@ impl TryFrom<bool> for ConstTrue {
 impl From<ConstTrue> for bool {
     fn from(value: ConstTrue) -> Self {
         true
+    }
+}
+
+/// Serialize an `AccountAddress` as a hex literal string, which will have the 0x prefix.
+pub fn ser_account<S>(account: &AccountAddress, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let canonical_string = account.to_hex_literal();
+    serializer.serialize_str(&canonical_string)
+}
+
+pub fn ser_opt_account<S>(
+    account: &Option<AccountAddress>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    if let Some(account) = account {
+        ser_account(account, serializer)
+    } else {
+        serializer.serialize_none()
     }
 }
