@@ -17,7 +17,8 @@ use crate::{
     dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    schema::{LocalDepInfo, LockfileDependencyInfo, Pin, PublishInformation, PublishedIds},
+    package::lockfile::Lockfiles,
+    schema::{LocalDepInfo, LockfileDependencyInfo, Pin, PublishInformation},
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use tracing::{debug, info};
@@ -36,7 +37,7 @@ pub struct Package<F: MoveFlavor> {
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
     /// The on-chain publish information per environment
-    publish_data: BTreeMap<EnvironmentName, PublishInformation>,
+    publish_data: BTreeMap<EnvironmentName, PublishInformation<F>>,
     /// The way this package should be serialized to the lockfile
     source: LockfileDependencyInfo,
 }
@@ -77,8 +78,8 @@ impl<F: MoveFlavor> Package<F> {
     /// Try to load a lockfile and extract the published information for each environment from it
     fn load_published_info_from_lockfile(
         path: &PackagePath,
-    ) -> PackageResult<BTreeMap<EnvironmentName, PublishInformation>> {
-        let lockfile = crate::package::lockfile::Lockfiles::<F>::read_from_dir(path)?;
+    ) -> PackageResult<BTreeMap<EnvironmentName, PublishInformation<F>>> {
+        let lockfile = Lockfiles::<F>::read_from_dir(path)?;
 
         let publish_data = lockfile
             .map(|l| l.published().clone())
@@ -86,15 +87,10 @@ impl<F: MoveFlavor> Package<F> {
                 x.into_iter()
                     .map(|(env, pub_info)| {
                         (
-                            env.clone(),
+                            pub_info.chain_id.clone(),
                             PublishInformation {
                                 environment: env.clone(),
-                                published_ids: PublishedIds {
-                                    original_id: pub_info.original_id,
-                                    latest_id: pub_info.published_at,
-                                },
-                                // TODO: fix
-                                version: "".to_string(),
+                                publication: pub_info,
                             },
                         )
                     })
