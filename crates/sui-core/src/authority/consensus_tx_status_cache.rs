@@ -62,52 +62,48 @@ impl ConsensusTxStatusCache {
     }
 
     pub fn set_transaction_status(&self, pos: ConsensusPosition, status: ConsensusTxStatus) {
-        {
-            let mut inner = self.inner.write();
-            if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow()
-            {
-                if pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS < last_committed_leader_round
-                {
-                    // Ignore stale status updates.
-                    return;
-                }
+        let mut inner = self.inner.write();
+        if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {
+            if pos.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS < last_committed_leader_round {
+                // Ignore stale status updates.
+                return;
             }
+        }
 
-            // Calls to set_transaction_status are async and can be out of order.
-            // Makes sure this is tolerated by handling state transitions properly.
-            let status_entry = inner.transaction_status.entry(pos);
-            match status_entry {
-                Entry::Vacant(entry) => {
-                    // Set the status for the first time.
-                    entry.insert(status);
-                }
-                Entry::Occupied(mut entry) => {
-                    let old_status = *entry.get();
-                    match (old_status, status) {
-                        // If the statuses are the same, no update is needed.
-                        (s1, s2) if s1 == s2 => return,
-                        // FastpathCertified is transient and can be updated to other statuses.
-                        (ConsensusTxStatus::FastpathCertified, _) => {
-                            entry.insert(status);
-                        }
-                        // This happens when statuses arrive out-of-order, and is a no-op.
-                        (
-                            ConsensusTxStatus::Rejected | ConsensusTxStatus::Finalized,
-                            ConsensusTxStatus::FastpathCertified,
-                        ) => {
-                            return;
-                        }
-                        // Transitions between terminal statuses are invalid.
-                        _ => {
-                            panic!(
-                                "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
-                                pos, old_status, status
-                            );
-                        }
+        // Calls to set_transaction_status are async and can be out of order.
+        // Makes sure this is tolerated by handling state transitions properly.
+        let status_entry = inner.transaction_status.entry(pos);
+        match status_entry {
+            Entry::Vacant(entry) => {
+                // Set the status for the first time.
+                entry.insert(status);
+            }
+            Entry::Occupied(mut entry) => {
+                let old_status = *entry.get();
+                match (old_status, status) {
+                    // If the statuses are the same, no update is needed.
+                    (s1, s2) if s1 == s2 => return,
+                    // FastpathCertified is transient and can be updated to other statuses.
+                    (ConsensusTxStatus::FastpathCertified, _) => {
+                        entry.insert(status);
+                    }
+                    // This happens when statuses arrive out-of-order, and is a no-op.
+                    (
+                        ConsensusTxStatus::Rejected | ConsensusTxStatus::Finalized,
+                        ConsensusTxStatus::FastpathCertified,
+                    ) => {
+                        return;
+                    }
+                    // Transitions between terminal statuses are invalid.
+                    _ => {
+                        panic!(
+                            "Conflicting status updates for transaction {:?}: {:?} -> {:?}",
+                            pos, old_status, status
+                        );
                     }
                 }
-            };
-        }
+            }
+        };
 
         // All code paths leading to here should have set the status.
         debug!("Transaction status is set for {:?}: {:?}", pos, status);
