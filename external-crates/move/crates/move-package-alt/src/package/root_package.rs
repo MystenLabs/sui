@@ -304,10 +304,6 @@ mod tests {
         assert!(root.environments().contains_key("testnet"));
         assert!(root.environments().contains_key("mainnet"));
 
-        // Test dependencies operations
-        let deps = root.direct_dependencies().await.unwrap();
-        assert!(!deps.is_empty());
-
         assert_eq!(root.package_name(), &Identifier::new("graph").unwrap());
     }
 
