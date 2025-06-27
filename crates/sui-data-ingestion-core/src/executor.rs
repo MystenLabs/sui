@@ -161,6 +161,28 @@ pub async fn setup_single_workflow<W: Worker + 'static>(
     impl Future<Output = Result<ExecutorProgress>>,
     oneshot::Sender<()>,
 )> {
+    setup_single_workflow_with_options(
+        worker,
+        remote_store_url,
+        vec![],
+        initial_checkpoint_number,
+        concurrency,
+        reader_options,
+    )
+    .await
+}
+
+pub async fn setup_single_workflow_with_options<W: Worker + 'static>(
+    worker: W,
+    remote_store_url: String,
+    remote_store_options: Vec<(String, String)>,
+    initial_checkpoint_number: CheckpointSequenceNumber,
+    concurrency: usize,
+    reader_options: Option<ReaderOptions>,
+) -> Result<(
+    impl Future<Output = Result<ExecutorProgress>>,
+    oneshot::Sender<()>,
+)> {
     let (exit_sender, exit_receiver) = oneshot::channel();
     let metrics = DataIngestionMetrics::new(&Registry::new());
     let progress_store = ShimProgressStore(initial_checkpoint_number);
@@ -171,7 +193,7 @@ pub async fn setup_single_workflow<W: Worker + 'static>(
         executor.run(
             tempfile::tempdir()?.keep(),
             Some(remote_store_url),
-            vec![],
+            remote_store_options,
             reader_options.unwrap_or_default(),
             exit_receiver,
         ),
