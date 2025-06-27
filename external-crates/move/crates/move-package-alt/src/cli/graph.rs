@@ -5,10 +5,7 @@
 use std::path::PathBuf;
 
 use crate::{
-    errors::PackageResult,
-    flavor::Vanilla,
-    graph::PackageGraph,
-    package::paths::PackagePath,
+    errors::PackageResult, flavor::Vanilla, graph::PackageGraph, package::paths::PackagePath,
 };
 use clap::Parser;
 
