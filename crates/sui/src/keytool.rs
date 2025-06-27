@@ -670,11 +670,13 @@ impl KeyToolCommand {
             KeyToolCommand::Export { key_identity } => {
                 let address = get_identity_address_from_keystore(key_identity, keystore)?;
                 let skp = keystore.get_key(&address)?;
+                let mut key = Key::from(skp);
+                key.alias = keystore.get_alias_by_address(&key.sui_address).ok();
                 let key = ExportedKey {
                     exported_private_key: skp
                         .encode()
                         .map_err(|_| anyhow!("Cannot decode keypair"))?,
-                    key: Key::from(skp),
+                    key,
                 };
                 CommandOutput::Export(key)
             }
