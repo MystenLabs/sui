@@ -166,20 +166,8 @@ impl ProjectBuilder {
         // Create the empty directory
         self.root.root().mkdir_p();
 
-        let past = time::SystemTime::now() - Duration::new(1, 0);
-        let ftime = filetime::FileTime::from_system_time(past);
-
         for file in self.files.iter_mut() {
             file.mk();
-            // TODO: do we need this?
-            // if is_coarse_mtime() {
-            // Place the entire project 1 second in the past to ensure
-            // that if cargo is called multiple times, the 2nd call will
-            // see targets as "fresh". Without this, if cargo finishes in
-            // under 1 second, the second call will see the mtime of
-            // source == mtime of output and consider it dirty.
-            filetime::set_file_times(&file.path, ftime, ftime).unwrap();
-            // }
         }
 
         let ProjectBuilder { root, .. } = self;
@@ -203,14 +191,6 @@ impl Project {
             .collect()
     }
 
-    /// Copy the test project from a fixed state
-    pub fn from_template(template_path: impl AsRef<Path>) -> Self {
-        let root = root();
-        let project_root = root.join("case");
-        snapbox::dir::copy_template(template_path.as_ref(), &project_root).unwrap();
-        Self { root: project_root }
-    }
-
     /// Root of the project
     pub fn root(&self) -> PathBuf {
         self.root.clone()
@@ -219,13 +199,6 @@ impl Project {
     /// Root of the project as a string. This will panic if root does not exist.
     pub fn root_path(&self) -> &str {
         self.root.to_str().unwrap()
-    }
-
-    /// Returns an iterator of paths within [`Project::root`] matching the glob pattern
-    pub fn glob<P: AsRef<Path>>(&self, pattern: P) -> glob::Paths {
-        let pattern = self.root().join(pattern);
-        glob::glob(pattern.to_str().expect("failed to convert pattern to str"))
-            .expect("failed to glob")
     }
 
     /// Overwrite a file with new content

@@ -81,15 +81,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55cc3b69f167a1ef2e161439aa98aed94e6028e5f9a59be9a6ffb47aef1651f9"
 
 [[package]]
-name = "anstyle-lossy"
-version = "1.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04d3a5dc826f84d0ea11882bb8054ff7f3d482602e11bb181101303a279ea01f"
-dependencies = [
- "anstyle",
-]
-
-[[package]]
 name = "anstyle-parse"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -105,19 +96,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79947af37f4177cfead1110013d678905c37501914fba0efea834c3fe9a8d60c"
 dependencies = [
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "anstyle-svg"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a43964079ef399480603125d5afae2b219aceffb77478956e25f17b9bc3435c"
-dependencies = [
- "anstyle",
- "anstyle-lossy",
- "anstyle-parse",
- "html-escape",
- "unicode-width 0.2.0",
 ]
 
 [[package]]
@@ -664,15 +642,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "content_inspector"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7bda66e858c683005a53a9a60c69a4aca7eeaa45d124526e389f7aec8e62f38"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1109,18 +1078,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31a7a908b8f32538a2143e59a6e4e2508988832d5d4d6f7c156b3cbc762643a5"
 
 [[package]]
-name = "filetime"
-version = "0.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35c0522e981e68cbfa8c3f978441a5f34b30b96e146b33cd3359176b50fe8586"
-dependencies = [
- "cfg-if",
- "libc",
- "libredox",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "fixed-hash"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1328,12 +1285,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glob"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
-
-[[package]]
 name = "half"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1404,15 +1355,6 @@ name = "hex-literal"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
-
-[[package]]
-name = "html-escape"
-version = "0.2.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d1ad449764d627e22bfd7cd5e8868264fc9236e07c752972b4080cd351cb476"
-dependencies = [
- "utf8-width",
-]
 
 [[package]]
 name = "iana-time-zone"
@@ -1854,7 +1796,6 @@ checksum = "c0ff37bd590ca25063e35af745c343cb7a0271906fb7b37e4813e8f79f00268d"
 dependencies = [
  "bitflags 2.8.0",
  "libc",
- "redox_syscall 0.5.8",
 ]
 
 [[package]]
@@ -2611,10 +2552,8 @@ dependencies = [
  "codespan-reporting",
  "datatest-stable",
  "derive-where",
- "filetime",
  "futures",
  "git2",
- "glob",
  "insta",
  "itertools 0.10.5",
  "move-command-line-common",
@@ -2628,7 +2567,6 @@ dependencies = [
  "serde_json",
  "serde_spanned",
  "sha2",
- "snapbox",
  "tempfile",
  "test-log",
  "thiserror",
@@ -3069,12 +3007,6 @@ dependencies = [
  "widestring",
  "winapi",
 ]
-
-[[package]]
-name = "normalize-line-endings"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
 name = "nu-ansi-term"
@@ -4154,37 +4086,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
-name = "snapbox"
-version = "0.6.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96dcfc4581e3355d70ac2ee14cfdf81dce3d85c85f1ed9e2c1d3013f53b3436b"
-dependencies = [
- "anstream",
- "anstyle",
- "anstyle-svg",
- "content_inspector",
- "dunce",
- "filetime",
- "normalize-line-endings",
- "regex",
- "serde",
- "serde_json",
- "similar",
- "snapbox-macros",
- "tempfile",
- "walkdir",
-]
-
-[[package]]
-name = "snapbox-macros"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16569f53ca23a41bb6f62e0a5084aa1661f4814a67fa33696a79073e03a664af"
-dependencies = [
- "anstream",
-]
-
-[[package]]
 name = "socket2"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4707,12 +4608,6 @@ name = "utf16_iter"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8232dd3cdaed5356e0f716d285e4b40b932ac434100fe9b7e0e8e935b9e6246"
-
-[[package]]
-name = "utf8-width"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86bd8d4e895da8537e5315b8254664e6b769c4ff3db18321b297a1e7004392e3"
 
 [[package]]
 name = "utf8_iter"

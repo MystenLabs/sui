@@ -1,8 +1,5 @@
 //! Access common paths and manipulate the filesystem
 
-use filetime::FileTime;
-
-use std::cell::RefCell;
 use std::env;
 use std::fs;
 use std::io::{self, ErrorKind};
@@ -49,18 +46,6 @@ pub trait CargoPathExt {
     /// Returns a list of all files and directories underneath the given
     /// directory, recursively, including the starting path.
     fn ls_r(&self) -> Vec<PathBuf>;
-
-    fn move_into_the_past(&self) {
-        self.move_in_time(|sec, nsec| (sec - 3600, nsec))
-    }
-
-    fn move_into_the_future(&self) {
-        self.move_in_time(|sec, nsec| (sec + 3600, nsec))
-    }
-
-    fn move_in_time<F>(&self, travel_amount: F)
-    where
-        F: Fn(i64, u32) -> (i64, u32);
 }
 
 impl CargoPathExt for Path {
@@ -102,49 +87,6 @@ impl CargoPathExt for Path {
             .filter_map(|e| e.map(|e| e.path().to_owned()).ok())
             .collect()
     }
-
-    fn move_in_time<F>(&self, travel_amount: F)
-    where
-        F: Fn(i64, u32) -> (i64, u32),
-    {
-        if self.is_file() {
-            time_travel(self, &travel_amount);
-        } else {
-            recurse(self, &self.join("target"), &travel_amount);
-        }
-
-        fn recurse<F>(p: &Path, bad: &Path, travel_amount: &F)
-        where
-            F: Fn(i64, u32) -> (i64, u32),
-        {
-            if p.is_file() {
-                time_travel(p, travel_amount)
-            } else if !p.starts_with(bad) {
-                for f in t!(fs::read_dir(p)) {
-                    let f = t!(f).path();
-                    recurse(&f, bad, travel_amount);
-                }
-            }
-        }
-
-        fn time_travel<F>(path: &Path, travel_amount: &F)
-        where
-            F: Fn(i64, u32) -> (i64, u32),
-        {
-            let stat = t!(path.symlink_metadata());
-
-            let mtime = FileTime::from_last_modification_time(&stat);
-
-            let (sec, nsec) = travel_amount(mtime.unix_seconds(), mtime.nanoseconds());
-            let newtime = FileTime::from_unix_time(sec, nsec);
-
-            // Sadly change_file_times has a failure mode where a readonly file
-            // cannot have its times changed on windows.
-            do_op(path, "set file times", |path| {
-                filetime::set_file_times(path, newtime, newtime)
-            });
-        }
-    }
 }
 
 impl CargoPathExt for PathBuf {
@@ -162,13 +104,6 @@ impl CargoPathExt for PathBuf {
     fn ls_r(&self) -> Vec<PathBuf> {
         self.as_path().ls_r()
     }
-
-    fn move_in_time<F>(&self, travel_amount: F)
-    where
-        F: Fn(i64, u32) -> (i64, u32),
-    {
-        self.as_path().move_in_time(travel_amount)
-    }
 }
 
 fn do_op<F>(path: &Path, desc: &str, mut f: F)
@@ -180,7 +115,6 @@ where
         Err(ref e) if e.kind() == ErrorKind::PermissionDenied => {
             let mut p = t!(path.metadata()).permissions();
             p.set_readonly(false);
-            fs::set_permissions(path, PermissionsExt::set_mode() )
             t!(fs::set_permissions(path, p));
 
             // Unix also requires the parent to not be readonly for example when

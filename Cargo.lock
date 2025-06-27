@@ -311,15 +311,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8901269c6307e8d93993578286ac0edf7f195079ffff5ebdeea6a59ffb7e36bc"
 
 [[package]]
-name = "anstyle-lossy"
-version = "1.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04d3a5dc826f84d0ea11882bb8054ff7f3d482602e11bb181101303a279ea01f"
-dependencies = [
- "anstyle",
-]
-
-[[package]]
 name = "anstyle-parse"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -335,19 +326,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ca11d4be1bab0c8bc8734a9aa7bf4ee8316d462a08c6ac5052f888fef5b494b"
 dependencies = [
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "anstyle-svg"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a43964079ef399480603125d5afae2b219aceffb77478956e25f17b9bc3435c"
-dependencies = [
- "anstyle",
- "anstyle-lossy",
- "anstyle-parse",
- "html-escape",
- "unicode-width 0.2.0",
 ]
 
 [[package]]
@@ -3117,15 +3095,6 @@ name = "constant_time_eq"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7144d30dcf0fafbce74250a3963025d8d52177934239851c917d29f1df280c2"
-
-[[package]]
-name = "content_inspector"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7bda66e858c683005a53a9a60c69a4aca7eeaa45d124526e389f7aec8e62f38"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "convert_case"
@@ -5963,15 +5932,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "html-escape"
-version = "0.2.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d1ad449764d627e22bfd7cd5e8868264fc9236e07c752972b4080cd351cb476"
-dependencies = [
- "utf8-width",
-]
-
-[[package]]
 name = "http"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8286,10 +8246,8 @@ dependencies = [
  "clap",
  "codespan-reporting",
  "derive-where",
- "filetime",
  "futures",
  "git2",
- "glob",
  "itertools 0.10.5",
  "move-command-line-common",
  "move-core-types",
@@ -8302,7 +8260,7 @@ dependencies = [
  "serde_json",
  "serde_spanned",
  "sha2 0.9.9",
- "snapbox",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.5.11",
@@ -8310,6 +8268,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "walkdir",
 ]
 
 [[package]]
@@ -12744,37 +12703,6 @@ name = "snap"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e9f0ab6ef7eb7353d9119c170a436d1bf248eea575ac42d19d12f4e34130831"
-
-[[package]]
-name = "snapbox"
-version = "0.6.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96dcfc4581e3355d70ac2ee14cfdf81dce3d85c85f1ed9e2c1d3013f53b3436b"
-dependencies = [
- "anstream",
- "anstyle",
- "anstyle-svg",
- "content_inspector",
- "dunce",
- "filetime",
- "normalize-line-endings",
- "regex",
- "serde",
- "serde_json",
- "similar",
- "snapbox-macros",
- "tempfile",
- "walkdir",
-]
-
-[[package]]
-name = "snapbox-macros"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16569f53ca23a41bb6f62e0a5084aa1661f4814a67fa33696a79073e03a664af"
-dependencies = [
- "anstream",
-]
 
 [[package]]
 name = "snowflake-api"
@@ -18499,12 +18427,6 @@ name = "utf16_iter"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8232dd3cdaed5356e0f716d285e4b40b932ac434100fe9b7e0e8e935b9e6246"
-
-[[package]]
-name = "utf8-width"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86bd8d4e895da8537e5315b8254664e6b769c4ff3db18321b297a1e7004392e3"
 
 [[package]]
 name = "utf8_iter"
