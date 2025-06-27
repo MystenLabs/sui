@@ -1,3 +1,11 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+//
+// Copied and adapted from
+// <https://github.com/rust-lang/cargo/tree/master/crates/cargo-test-support/src> at SHA
+// 4ac865d3d7b62281ad4dcb92406c816b6f1aeceb
+
 //! Access common paths and manipulate the filesystem
 
 use std::env;
