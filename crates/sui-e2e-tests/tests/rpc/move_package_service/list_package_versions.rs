@@ -117,13 +117,7 @@ async fn test_list_package_versions_with_upgrades() {
         .unwrap();
 
     let request = ListPackageVersionsRequest {
-        package_id: Some(
-            package_ids[0]
-                .to_hex_literal()
-                .strip_prefix("0x")
-                .unwrap()
-                .to_string(),
-        ),
+        package_id: Some(package_ids[0].to_string()),
         page_size: None,
         page_token: None,
     };
@@ -138,7 +132,7 @@ async fn test_list_package_versions_with_upgrades() {
     assert_eq!(grpc_response.versions[0].version, Some(1));
     assert_eq!(
         grpc_response.versions[0].package_id,
-        Some(package_ids[0].to_hex_literal())
+        Some(package_ids[0].to_string())
     );
 
     // Perform first "upgrade" by republishing the same code
@@ -237,12 +231,12 @@ async fn test_list_package_versions_with_upgrades() {
     assert_eq!(grpc_response.versions[0].version, Some(1));
     assert_eq!(
         grpc_response.versions[0].package_id,
-        Some(package_ids[0].to_hex_literal())
+        Some(package_ids[0].to_string())
     );
     assert_eq!(grpc_response.versions[1].version, Some(2));
     assert_eq!(
         grpc_response.versions[1].package_id,
-        Some(package_ids[1].to_hex_literal())
+        Some(package_ids[1].to_string())
     );
 
     // Perform second upgrade
@@ -324,15 +318,15 @@ async fn test_list_package_versions_with_upgrades() {
 
     assert_eq!(
         grpc_response.versions[0].package_id,
-        Some(package_ids[0].to_hex_literal())
+        Some(package_ids[0].to_string())
     );
     assert_eq!(
         grpc_response.versions[1].package_id,
-        Some(package_ids[1].to_hex_literal())
+        Some(package_ids[1].to_string())
     );
     assert_eq!(
         grpc_response.versions[2].package_id,
-        Some(package_ids[2].to_hex_literal())
+        Some(package_ids[2].to_string())
     );
 
     // Sanity Check - Verify all package IDs are different
@@ -343,13 +337,7 @@ async fn test_list_package_versions_with_upgrades() {
     // Test pagination
     // Test 1: Get first page with page_size = 2
     let request = ListPackageVersionsRequest {
-        package_id: Some(
-            package_ids[0]
-                .to_hex_literal()
-                .strip_prefix("0x")
-                .unwrap()
-                .to_string(),
-        ),
+        package_id: Some(package_ids[0].to_string()),
         page_size: Some(2),
         page_token: None,
     };
@@ -367,13 +355,7 @@ async fn test_list_package_versions_with_upgrades() {
 
     // Test 2: Get second page using page token
     let request = ListPackageVersionsRequest {
-        package_id: Some(
-            package_ids[0]
-                .to_hex_literal()
-                .strip_prefix("0x")
-                .unwrap()
-                .to_string(),
-        ),
+        package_id: Some(package_ids[0].to_string()),
         page_size: Some(2),
         page_token: response.next_page_token,
     };
@@ -390,13 +372,7 @@ async fn test_list_package_versions_with_upgrades() {
 
     // Test 3: Different page size
     let request = ListPackageVersionsRequest {
-        package_id: Some(
-            package_ids[0]
-                .to_hex_literal()
-                .strip_prefix("0x")
-                .unwrap()
-                .to_string(),
-        ),
+        package_id: Some(package_ids[0].to_string()),
         page_size: Some(1),
         page_token: None,
     };
