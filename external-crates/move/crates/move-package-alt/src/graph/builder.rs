@@ -179,7 +179,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for (name, dep) in package.direct_deps(env).await?.iter() {
+        for (name, dep) in package.direct_deps(env)?.iter() {
             let fetched = self.cache.fetch(dep).await?;
             let future = self.add_transitive_manifest_deps(
                 fetched.clone(),

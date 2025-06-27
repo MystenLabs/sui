@@ -9,8 +9,8 @@ use toml_edit::{
 use crate::flavor::MoveFlavor;
 
 use super::{
-    EnvironmentID, EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, OriginalID, PackageName,
-    PublishedID,
+    EnvironmentID, EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, PackageName,
+    PublishAddresses,
 };
 
 /// An identifier for a node in the package graph, used to index into the
@@ -23,6 +23,7 @@ pub type PackageID = String;
 #[derive_where(Default, Clone)]
 #[serde(bound = "")]
 pub struct ParsedLockfile<F: MoveFlavor> {
+    #[serde(default)]
     pub pinned: BTreeMap<EnvironmentName, BTreeMap<PackageID, Pin>>,
 
     #[serde(default)]
@@ -35,10 +36,9 @@ pub type BuildConfig = toml::Value;
 #[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
 #[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
 pub struct Publication<F: MoveFlavor> {
-    pub published_at: PublishedID,
-    pub original_id: OriginalID,
+    #[serde(flatten)]
+    pub addresses: PublishAddresses,
     pub chain_id: EnvironmentID,
     pub toolchain_version: String,
     pub build_config: BuildConfig,

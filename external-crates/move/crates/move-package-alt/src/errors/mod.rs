@@ -3,6 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod lockfile_error;
+use codespan_reporting::diagnostic::Diagnostic;
+use codespan_reporting::term;
+use codespan_reporting::term::Config;
+use codespan_reporting::term::termcolor::ColorChoice;
+use codespan_reporting::term::termcolor::StandardStream;
 pub use lockfile_error::LockfileError;
 
 mod located;
@@ -54,4 +59,19 @@ pub enum PackageError {
 
     #[error(transparent)]
     PackagePath(#[from] PackagePathError),
+}
+
+impl PackageError {
+    pub fn to_diagnostic(&self) -> Diagnostic<FileHandle> {
+        match self {
+            Self::Manifest(e) => e.to_diagnostic(),
+            _ => Diagnostic::error().with_message(format!("{self}")),
+        }
+    }
+
+    pub fn emit(&self) {
+        let diagnostic = self.to_diagnostic();
+        let mut writer = StandardStream::stderr(ColorChoice::Auto);
+        term::emit(&mut writer, &Config::default(), &Files, &diagnostic).unwrap();
+    }
 }

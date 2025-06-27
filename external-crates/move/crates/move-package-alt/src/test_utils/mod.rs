@@ -9,6 +9,9 @@
 pub mod git;
 mod paths;
 
+pub mod graph_builder;
+
+use indoc::formatdoc;
 use paths::PathExt;
 use paths::root;
 use std::env;
@@ -229,7 +232,7 @@ pub fn project() -> ProjectBuilder {
 
 /// Generate a basic `Move.toml` content
 pub fn basic_manifest(name: &str, version: &str) -> String {
-    format!(
+    formatdoc!(
         r#"
         [package]
         name = "{}"
@@ -241,6 +244,7 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
         mainnet = "35834a8a"
         testnet = "4c78adac"
     "#,
-        name, version
+        name,
+        version
     )
 }
