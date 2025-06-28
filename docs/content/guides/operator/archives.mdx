@@ -6,10 +6,10 @@ description: The archive is a historical record of all transactions on Sui. Enab
 A Sui archive is a history of all transaction data on Sui. In some cases, peer nodes may not catch up with all transactions and effects through synchronization if they lag behind the current epoch by more than the latest few epochs. In such cases, instead of relying on synchronization, peer nodes can fallback to downloading the relevant information from an archive.
 
 :::info
-Starting with the 1.49 release, the existing special archive format is being deprecated in favor of a generic data ingestion format. Please migrate your configs using the configuration example that follows. The deprecated configuration is currently included for reference, but will be removed after a few releases.
+Starting with the 1.51 release, the default archive bucket for mainnet switches to a requester pays model. See below for a configuration example
 :::
 
-## Set up archival fallback (latest) {#set-up-archival-fallback}
+## Set up archival fallback {#set-up-archival-fallback}
 
 To enable your node to fallback to an archive in case of lag, add this to your fullnode.yaml file:
 
@@ -18,9 +18,12 @@ To enable your node to fallback to an archive in case of lag, add this to your f
 
 ```yaml
 state-archive-read-config:
-  - ingestion-url: "https://checkpoints.mainnet.sui.io"
+  - ingestion-url: "https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints"
     # How many objects to read ahead when catching up
     concurrency: 5
+    remote-store-options:
+      - ["aws_access_key_id", <YOUR_AWS_ACCESS_KEY_ID>]
+      - ["aws_secret_access_key", <AWS_SECRET_ACCESS_KEY>]
 ```
 
 </TabItem>
@@ -35,47 +38,4 @@ state-archive-read-config:
 
 </TabItem>
 </Tabs>
-
-
-## Set up archival fallback(deprecated) {#set-up-archival-fallback-deprecated}
-<Tabs groupId="object-store">
-<TabItem value="s3" label="Amazon S3">
-```yaml
-state-archive-read-config:
-  - object-store-config:
-      object-store: "S3"
-      # Use mysten-testnet-archives for testnet
-      # Use mysten-mainnet-archives for mainnet
-      bucket: "mysten-<testnet|mainnet>-archives"
-      # you can either provide your own aws credentials via "aws-secret-access-key" and
-      # "aws-access-key-id" or set no-sign-request: true
-      no-sign-request: true
-      aws-region: "us-west-2"
-      object-store-connection-limit: 20
-    concurrency: 5
-    # Whether to prune local state based on latest checkpoint in archive.
-    # This should stay false for most use cases
-    use-for-pruning-watermark: false
-```
-</TabItem>
-<TabItem value="gcs" label="Google Cloud Storage">
-```yaml
-state-archive-read-config:
-  - object-store-config:
-      object-store: "GCS"
-      # Use mysten-mainnet-archives for mainnet
-      # Notice there is no archive bucket setup for testnet in GCS
-      bucket: "mysten-<testnet|mainnet>-archives"
-      # Use your gcloud service account credentials
-      google-service-account: "</path/to/service/account/credentials>"
-      object-store-connection-limit: 20
-    # How many objects to read ahead when catching up
-    concurrency: 5
-    # Whether to prune local state based on latest checkpoint in archive.
-    # This should stay false for most use cases
-    use-for-pruning-watermark: false
-```
-</TabItem>
-</Tabs>
-
 
