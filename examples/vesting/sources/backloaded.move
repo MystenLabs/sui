@@ -12,7 +12,6 @@
 /// Functionality:
 /// - Defines a backloaded vesting schedule.
 /// ===========================================================================================
-#[allow(unused_const)]
 module vesting::backloaded;
 
 use sui::clock::Clock;
