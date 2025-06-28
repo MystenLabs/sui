@@ -118,6 +118,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
+    pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
@@ -327,6 +328,11 @@ impl NodeMetrics {
                 "broadcaster_rtt_estimate_ms",
                 "Estimated RTT latency per peer authority, for block sending in Broadcaster",
                 &["peer"],
+                registry,
+            ).unwrap(),
+            commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(
+                "commit_observer_last_recovered_commit_index",
+                "The last commit index recovered by the commit observer",
                 registry,
             ).unwrap(),
             core_add_blocks_batch_size: register_histogram_with_registry!(

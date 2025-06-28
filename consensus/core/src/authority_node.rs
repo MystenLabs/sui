@@ -198,12 +198,13 @@ where
         );
         let own_hostname = committee.authority(own_index).hostname.clone();
         info!(
-            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}",
+            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, last processed commit index {}",
             own_index,
             own_hostname,
             protocol_config.version,
             epoch_start_timestamp_ms,
-            boot_counter
+            boot_counter,
+            commit_consumer.last_processed_commit_index
         );
         info!(
             "Consensus authorities: {}",

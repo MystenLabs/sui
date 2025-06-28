@@ -8,6 +8,7 @@ use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
+use tracing::info;
 
 use crate::{
     block::{BlockTransactionVotes, GENESIS_ROUND},
@@ -83,6 +84,12 @@ impl TransactionCertifier {
         last_processed_commit_index: CommitIndex,
     ) {
         let mut certifier_state = self.certifier_state.write();
+        let context = certifier_state.context.clone();
+        if !context.protocol_config.mysticeti_fastpath() {
+            info!("Skipping certifier recovery in non-mysticeti fast path mode");
+            return;
+        }
+
         let dag_state = self.dag_state.read();
         let store = dag_state.store().clone();
 
@@ -111,7 +118,7 @@ impl TransactionCertifier {
         // Starts recovery from the GC round computed from the last processed commit.
         // All blocks from later commits must have rounds >= recovery_start_round.
         let recovery_start_round = certifier_gc_round + 1;
-        tracing::info!(
+        info!(
             "Recovering certifier state from round {}",
             recovery_start_round,
         );
@@ -126,6 +133,11 @@ impl TransactionCertifier {
             let blocks = store
                 .scan_blocks_by_author(authority_index, recovery_start_round)
                 .unwrap();
+            info!(
+                "Recovering {} blocks for authority {}",
+                blocks.len(),
+                context.committee.authority(authority_index).hostname
+            );
             let voted_blocks = blocks
                 .into_iter()
                 .map(|b| {
