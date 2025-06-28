@@ -5,17 +5,11 @@
 //! Defines the [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 //! flavor-specific resolvers and stores no additional metadata in the lockfile.
 
-use std::{
-    collections::{self, BTreeMap},
-    iter::empty,
-    marker::PhantomData,
-    path::{Path, PathBuf},
-};
+use std::iter::empty;
 
 use serde::{Deserialize, Serialize};
 
 use crate::dependency::{DependencySet, PinnedDependencyInfo};
-use crate::{errors::PackageResult, package::PackageName};
 
 use super::MoveFlavor;
 

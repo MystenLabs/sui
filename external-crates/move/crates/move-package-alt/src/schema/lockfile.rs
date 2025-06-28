@@ -6,10 +6,11 @@ use toml_edit::{
     visit_mut::{self, VisitMut},
 };
 
-use crate::{flavor::MoveFlavor, git::GitSha};
+use crate::flavor::MoveFlavor;
 
 use super::{
-    EnvironmentID, EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, shared::ser_account,
+    EnvironmentID, EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, PackageName,
+    shared::ser_account,
 };
 use move_core_types::account_address::AccountAddress;
 

@@ -5,9 +5,6 @@ use move_core_types::account_address::AccountAddress;
 use serde::{Deserialize, Deserializer, de};
 use serde_spanned::Spanned;
 
-use super::shared::ser_opt_account;
-use crate::dependency::DependencySet;
-
 use super::{EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, ResolverName};
 
 // TODO: look at Brandon's serialization code (https://github.com/MystenLabs/sui-rust-sdk/blob/master/crates/sui-sdk-types/src/object.rs)

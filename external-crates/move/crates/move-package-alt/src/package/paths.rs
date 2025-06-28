@@ -3,12 +3,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::errors::PackageResult;
-
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    fmt::{self, Debug, Display},
+    fmt::Debug,
     path::{Path, PathBuf},
 };
 

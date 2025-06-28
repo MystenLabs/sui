@@ -6,19 +6,11 @@ pub mod vanilla;
 
 pub use vanilla::Vanilla;
 
-use std::{
-    collections::BTreeMap,
-    fmt::Debug,
-    path::{Path, PathBuf},
-};
+use std::fmt::Debug;
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo},
-    errors::PackageResult,
-    package::PackageName,
-};
+use crate::dependency::{DependencySet, PinnedDependencyInfo};
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move

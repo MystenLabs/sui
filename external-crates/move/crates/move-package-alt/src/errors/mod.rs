@@ -6,15 +6,12 @@ mod lockfile_error;
 pub use lockfile_error::LockfileError;
 
 mod located;
-mod thefile;
-pub use located::{Located, Location};
-pub use thefile::TheFile;
+pub use located::Location;
 
 mod files;
 pub use files::FileHandle;
 pub use files::Files;
 
-use codespan_reporting::diagnostic::Diagnostic;
 use thiserror::Error;
 
 use crate::dependency::ResolverError;

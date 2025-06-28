@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    errors::{FileHandle, PackageResult},
-    flavor::MoveFlavor,
+    errors::FileHandle,
     package::manifest::ManifestResult,
     schema::{
         DefaultDependency, EnvironmentName, ManifestDependencyInfo, ParsedManifest,
@@ -12,7 +11,7 @@ use crate::{
     },
 };
 
-use super::{Dependency, DependencySet, PinnedDependencyInfo};
+use super::{Dependency, DependencySet};
 
 pub(super) type Combined = ManifestDependencyInfo;
 

@@ -4,14 +4,9 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
-use crate::{
-    dependency::pin,
-    errors::{PackageError, PackageResult},
-    flavor::Vanilla,
-    graph::PackageGraph,
-    package::{Package, RootPackage, manifest::Manifest, paths::PackagePath},
-};
-use clap::{Command, Parser, Subcommand};
+use clap::Parser;
+
+use crate::{errors::PackageResult, flavor::Vanilla, package::RootPackage};
 
 /// Re-pin the dependencies of this package.
 #[derive(Debug, Clone, Parser)]

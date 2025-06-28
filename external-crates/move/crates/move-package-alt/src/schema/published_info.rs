@@ -3,13 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::Publication;
-use crate::{
-    flavor::MoveFlavor,
-    schema::{EnvironmentID, EnvironmentName},
-};
-use move_core_types::account_address::AccountAddress;
+use crate::{flavor::MoveFlavor, schema::EnvironmentID};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Publish information for a package
 #[derive(Debug, Serialize, Deserialize)]

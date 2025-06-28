@@ -3,31 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::PinnedDependencyInfo,
-    errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{
-        EnvironmentName, Package, PackageName, lockfile::Lockfiles, manifest::Manifest,
-        paths::PackagePath,
-    },
-    schema::{LockfileDependencyInfo, PackageID, Pin},
+    package::PackageName,
+    schema::{PackageID, Pin},
 };
-use derive_where::derive_where;
-use move_core_types::identifier::Identifier;
-use path_clean::PathClean;
-use petgraph::{
-    graph::{DiGraph, NodeIndex},
-    visit::EdgeRef,
-};
-use sha2::{Digest, Sha256};
-use std::{
-    collections::{BTreeMap, btree_map::Entry},
-    fs::read_to_string,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
-use tokio::sync::OnceCell;
-use tracing::{debug, info};
+use petgraph::{graph::NodeIndex, visit::EdgeRef};
+use std::collections::BTreeMap;
 
 use super::PackageGraph;
 

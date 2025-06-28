@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Range, path::PathBuf};
+use std::ops::Range;
 
 use codespan_reporting::{
     diagnostic::{Diagnostic, Label},
@@ -13,8 +13,6 @@ use codespan_reporting::{
     },
 };
 use thiserror::Error;
-
-use crate::package::PackageName;
 
 use super::FileHandle;
 

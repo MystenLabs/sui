@@ -5,13 +5,9 @@
 //! Conveniences for managing the entire collection of dependencies (including replacements) for a
 //! package
 
-use std::{
-    collections::{BTreeMap, btree_map},
-    fmt::{self, Display},
-};
+use std::collections::{BTreeMap, btree_map};
 
 use derive_where::derive_where;
-use serde::{Deserialize, Serialize};
 
 use crate::package::{EnvironmentName, PackageName};
 
@@ -23,7 +19,7 @@ use crate::package::{EnvironmentName, PackageName};
 /// names.
 ///
 /// For convenience, iteration produces (EnvironmentName, PackageName, T) triples
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 #[derive_where(Default)]
 pub struct DependencySet<T> {
     inner: BTreeMap<EnvironmentName, BTreeMap<PackageName, T>>,
@@ -192,9 +188,4 @@ impl<T> Extend<(EnvironmentName, PackageName, T)> for DependencySet<T> {
             self.insert(env, pack, value);
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::dependency::DependencySet;
 }

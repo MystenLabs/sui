@@ -5,7 +5,7 @@
 use crate::{
     errors::{FileHandle, PackageResult},
     flavor::Vanilla,
-    package::{lockfile::Lockfiles, manifest::Manifest},
+    package::manifest::Manifest,
     schema::ParsedLockfile,
 };
 

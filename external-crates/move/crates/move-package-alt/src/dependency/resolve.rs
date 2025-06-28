@@ -8,28 +8,20 @@ use std::{
     collections::BTreeMap,
     ffi::OsStr,
     fmt::Debug,
-    ops::Range,
-    path::PathBuf,
     process::{ExitStatus, Stdio},
 };
 
 use futures::future::try_join_all;
 use itertools::{Itertools, izip};
 use jsonrpc::Endpoint;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::process::Command;
 use tracing::{debug, info};
 
 use crate::{
-    dependency::{PinnedDependencyInfo, combine::Combined},
-    errors::{FileHandle, TheFile},
-    flavor::MoveFlavor,
+    dependency::combine::Combined,
     package::{EnvironmentID, EnvironmentName, PackageName},
-    schema::{
-        EXTERNAL_RESOLVE_ARG, ManifestDependencyInfo, ResolveRequest, ResolveResponse,
-        ResolverDependencyInfo,
-    },
+    schema::{EXTERNAL_RESOLVE_ARG, ResolveRequest, ResolveResponse, ResolverDependencyInfo},
 };
 
 use super::{CombinedDependency, Dependency, DependencySet};

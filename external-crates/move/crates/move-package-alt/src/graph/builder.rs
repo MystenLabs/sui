@@ -12,7 +12,6 @@ use crate::{
 
 use std::{
     collections::{BTreeMap, btree_map::Entry},
-    fs::read_to_string,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
