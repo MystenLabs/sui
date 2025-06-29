@@ -181,6 +181,25 @@ impl ConsensusManagerTrait for MysticetiManager {
             );
         }
 
+        // spin up the new mysticeti consensus handler to listen for committed sub dags
+        let consensus_block_handler = ConsensusBlockHandler::new(
+            epoch_store.clone(),
+            consensus_handler.transaction_manager_sender().clone(),
+            consensus_handler_initializer.backpressure_subscriber(),
+            consensus_handler_initializer.metrics().clone(),
+        );
+        let handler = MysticetiConsensusHandler::new(
+            last_processed_commit,
+            consensus_handler,
+            consensus_block_handler,
+            commit_receiver,
+            block_receiver,
+            monitor,
+        );
+
+        let mut consensus_handler = self.consensus_handler.lock().await;
+        *consensus_handler = Some(handler);
+
         let authority = ConsensusAuthority::start(
             network_type,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
@@ -206,25 +225,6 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         // Initialize the client to send transactions to this Mysticeti instance.
         self.client.set(client);
-
-        // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let consensus_block_handler = ConsensusBlockHandler::new(
-            epoch_store.clone(),
-            consensus_handler.transaction_manager_sender().clone(),
-            consensus_handler_initializer.backpressure_subscriber(),
-            consensus_handler_initializer.metrics().clone(),
-        );
-        let handler = MysticetiConsensusHandler::new(
-            last_processed_commit,
-            consensus_handler,
-            consensus_block_handler,
-            commit_receiver,
-            block_receiver,
-            monitor,
-        );
-
-        let mut consensus_handler = self.consensus_handler.lock().await;
-        *consensus_handler = Some(handler);
     }
 
     async fn shutdown(&self) {
