@@ -16,7 +16,7 @@ use sui_protocol_config::ConsensusNetwork;
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 use tracing::info;
 
 use crate::{
@@ -53,6 +53,7 @@ pub struct MysticetiManager {
     // TODO: switch to parking_lot::Mutex.
     consensus_handler: Mutex<Option<MysticetiConsensusHandler>>,
     consumer_monitor: ArcSwapOption<CommitConsumerMonitor>,
+    consumer_monitor_sender: broadcast::Sender<Arc<CommitConsumerMonitor>>,
 }
 
 impl MysticetiManager {
@@ -66,6 +67,7 @@ impl MysticetiManager {
         metrics: Arc<ConsensusManagerMetrics>,
         client: Arc<LazyMysticetiClient>,
     ) -> Self {
+        let (consumer_monitor_sender, _) = broadcast::channel(1);
         Self {
             protocol_keypair: ProtocolKeyPair::new(protocol_keypair),
             network_keypair: NetworkKeyPair::new(network_keypair),
@@ -78,6 +80,7 @@ impl MysticetiManager {
             consensus_handler: Mutex::new(None),
             boot_counter: Mutex::new(0),
             consumer_monitor: ArcSwapOption::empty(),
+            consumer_monitor_sender,
         }
     }
 
@@ -157,6 +160,24 @@ impl ConsensusManagerTrait for MysticetiManager {
             CommitConsumer::new(starting_commit);
         let monitor = commit_consumer.monitor();
 
+        // Spin up the new mysticeti consensus handler to listen for committed sub dags, before starting authority.
+        let consensus_block_handler = ConsensusBlockHandler::new(
+            epoch_store.clone(),
+            consensus_handler.transaction_manager_sender().clone(),
+            consensus_handler_initializer.backpressure_subscriber(),
+            consensus_handler_initializer.metrics().clone(),
+        );
+        let handler = MysticetiConsensusHandler::new(
+            last_processed_commit,
+            consensus_handler,
+            consensus_block_handler,
+            commit_receiver,
+            block_receiver,
+            monitor.clone(),
+        );
+        let mut consensus_handler = self.consensus_handler.lock().await;
+        *consensus_handler = Some(handler);
+
         // If there is a previous consumer monitor, it indicates that the consensus engine has been restarted, due to an epoch change. However, that on its
         // own doesn't tell us much whether it participated on an active epoch or an old one. We need to check if it has handled any commits to determine this.
         // If indeed any commits did happen, then we assume that node did participate on previous run.
@@ -207,24 +228,8 @@ impl ConsensusManagerTrait for MysticetiManager {
         // Initialize the client to send transactions to this Mysticeti instance.
         self.client.set(client);
 
-        // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let consensus_block_handler = ConsensusBlockHandler::new(
-            epoch_store.clone(),
-            consensus_handler.transaction_manager_sender().clone(),
-            consensus_handler_initializer.backpressure_subscriber(),
-            consensus_handler_initializer.metrics().clone(),
-        );
-        let handler = MysticetiConsensusHandler::new(
-            last_processed_commit,
-            consensus_handler,
-            consensus_block_handler,
-            commit_receiver,
-            block_receiver,
-            monitor,
-        );
-
-        let mut consensus_handler = self.consensus_handler.lock().await;
-        *consensus_handler = Some(handler);
+        // Send the consumer monitor to the replay waiter.
+        let _ = self.consumer_monitor_sender.send(monitor);
     }
 
     async fn shutdown(&self) {
@@ -259,8 +264,8 @@ impl ConsensusManagerTrait for MysticetiManager {
         Running::False != *self.running.lock().await
     }
 
-    fn replay_waiter(&self) -> Option<ReplayWaiter> {
-        let authority = self.authority.load_full()?;
-        Some(ReplayWaiter::new(authority))
+    fn replay_waiter(&self) -> ReplayWaiter {
+        let consumer_monitor_receiver = self.consumer_monitor_sender.subscribe();
+        ReplayWaiter::new(consumer_monitor_receiver)
     }
 }
