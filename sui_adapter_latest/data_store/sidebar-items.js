@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["linkage_for_object_type","linkage_for_struct_tag"],"mod":["cached_package_store","legacy","linked_data_store"],"trait":["PackageStore"]};

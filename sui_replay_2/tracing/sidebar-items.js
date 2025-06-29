@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_trace_output_path","save_trace_output"]};

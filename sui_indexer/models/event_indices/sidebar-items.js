@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["StoredEventEmitModule","StoredEventEmitPackage","StoredEventSenders","StoredEventStructInstantiation","StoredEventStructModule","StoredEventStructName","StoredEventStructPackage"]};

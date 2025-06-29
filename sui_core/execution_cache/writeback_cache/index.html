@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="MemoryCache is a cache for the transaction execution which delays writes to the database until transaction results are certified (i.e. they appear in a certified checkpoint, or an effects cert is observed by a fullnode). The cache also stores committed data in memory in order to serve future reads without hitting the database."><title>sui_core::execution_cache::writeback_cache - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.1 (4eb161250 2025-03-15)" data-channel="1.85.1" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../../static.files/storage-59e33391.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../sui_core/index.html">sui_<wbr>core</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module writeback_<wbr>cache</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In sui_<wbr>core::<wbr>execution_<wbr>cache</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../../index.html">sui_core</a>::<wbr><a href="../index.html">execution_cache</a></span><h1>Module <span>writeback_cache</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/sui_core/execution_cache/writeback_cache.rs.html#4-2404">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>MemoryCache is a cache for the transaction execution which delays writes to the database until
+transaction results are certified (i.e. they appear in a certified checkpoint, or an effects cert
+is observed by a fullnode). The cache also stores committed data in memory in order to serve
+future reads without hitting the database.</p>
+<p>For storing uncommitted transaction outputs, we cannot evict the data at all until it is written
+to disk. Committed data not only can be evicted, but it is also unbounded (imagine a stream of
+transactions that keep splitting a coin into smaller coins).</p>
+<p>We also want to be able to support negative cache hits (i.e. the case where we can determine an
+object does not exist without hitting the database).</p>
+<p>To achieve both of these goals, we split the cache data into two pieces, a dirty set and a cached
+set. The dirty set has no automatic evictions, data is only removed after being committed. The
+cached set is in a bounded-sized cache with automatic evictions. In order to support negative
+cache hits, we treat the two halves of the cache as FIFO queue. Newly written (dirty) versions are
+inserted to one end of the dirty queue. As versions are committed to disk, they are
+removed from the other end of the dirty queue and inserted into the cache queue. The cache queue
+is truncated if it exceeds its maximum size, by removing all but the N newest versions.</p>
+<p>This gives us the property that the sequence of versions in the dirty and cached queues are the
+most recent versions of the object, i.e. there can be no “gaps”. This allows for the following:</p>
+<ul>
+<li>Negative cache hits: If the queried version is not in memory, but is higher than the smallest
+version in the cached queue, it does not exist in the db either.</li>
+<li>Bounded reads: When reading the most recent version that is &lt;= some version bound, we can
+correctly satisfy this query from the cache, or determine that we must go to the db.</li>
+</ul>
+<p>Note that at any time, either or both the dirty or the cached queue may be non-existent. There may be no
+dirty versions of the objects, in which case there will be no dirty queue. And, the cached queue
+may be evicted from the cache, in which case there will be no cached queue. Because only the cached
+queue can be evicted (the dirty queue can only become empty by moving versions from it to the cached
+queue), the “highest versions” property still holds in all cases.</p>
+<p>The above design is used for both objects and markers.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.WritebackCache.html" title="struct sui_core::execution_cache::writeback_cache::WritebackCache">Writeback<wbr>Cache</a></div></li></ul></section></div></main></body></html>

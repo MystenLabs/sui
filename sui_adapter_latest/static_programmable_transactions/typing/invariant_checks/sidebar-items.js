@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["transaction"],"mod":["defining_ids_in_types"]};
