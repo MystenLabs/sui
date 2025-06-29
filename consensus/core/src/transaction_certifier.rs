@@ -85,6 +85,10 @@ impl TransactionCertifier {
         let mut certifier_state = self.certifier_state.write();
         let dag_state = self.dag_state.read();
         let store = dag_state.store().clone();
+        if !certifier_state.context.protocol_config.mysticeti_fastpath() {
+            tracing::info!("Skipping certifier recovery in non-mysticeti fast path mode");
+            return;
+        }
 
         // Reads the last processed commit to determine where recovery starts. It can be None when
         // consensus starts in a new epoch.
