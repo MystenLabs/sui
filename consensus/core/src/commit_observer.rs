@@ -46,7 +46,7 @@ pub(crate) struct CommitObserver {
 }
 
 impl CommitObserver {
-    pub(crate) fn new(
+    pub(crate) async fn new(
         context: Arc<Context>,
         commit_consumer: CommitConsumer,
         dag_state: Arc<RwLock<DagState>>,
@@ -70,7 +70,9 @@ impl CommitObserver {
             commit_finalizer_handle,
         };
 
-        observer.recover_and_send_commits(commit_consumer.last_processed_commit_index);
+        observer
+            .recover_and_send_commits(commit_consumer.last_processed_commit_index)
+            .await;
         observer
     }
 
@@ -131,7 +133,7 @@ impl CommitObserver {
         Ok(committed_sub_dags)
     }
 
-    fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
+    async fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
         let now = Instant::now();
 
         // TODO: remove this check, to allow consensus to regenerate commits?
@@ -234,6 +236,8 @@ impl CommitObserver {
                     .node_metrics
                     .commit_observer_last_recovered_commit_index
                     .set(last_sent_commit_index as i64);
+
+                tokio::task::yield_now().await;
             }
 
             // If we have reached the last commit, then break, there is nothing more to recover.
@@ -342,7 +346,8 @@ mod tests {
             dag_state.clone(),
             transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
@@ -488,7 +493,8 @@ mod tests {
             dag_state.clone(),
             transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
@@ -579,7 +585,8 @@ mod tests {
             dag_state.clone(),
             transaction_certifier.clone(),
             leader_schedule,
-        );
+        )
+        .await;
 
         // Check commits sent over consensus output channel is accurate starting
         // from last processed index of 2 and finishing at last sent index of 3.
@@ -625,7 +632,8 @@ mod tests {
             dag_state.clone(),
             transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
@@ -685,7 +693,8 @@ mod tests {
             dag_state.clone(),
             transaction_certifier.clone(),
             leader_schedule,
-        );
+        )
+        .await;
 
         // No commits should be resubmitted as consensus store's last commit index
         // is equal to last processed index by consumer
