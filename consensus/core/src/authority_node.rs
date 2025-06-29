@@ -304,7 +304,8 @@ where
             dag_state.clone(),
             transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
