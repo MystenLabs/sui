@@ -850,7 +850,11 @@ impl SuiNode {
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
         let validator_components = if state.is_validator(&epoch_store) {
-            Self::recover_missing_tx_keys(&state, &epoch_store);
+            {
+                let state = state.clone();
+                let epoch_store = epoch_store.clone();
+                spawn_monitored_task!(Self::recover_missing_tx_keys(&state, &epoch_store));
+            }
 
             let (components, _) = futures::join!(
                 Self::construct_validator_components(
@@ -929,7 +933,7 @@ impl SuiNode {
         Ok(node)
     }
 
-    fn recover_missing_tx_keys(
+    async fn recover_missing_tx_keys(
         state: &Arc<AuthorityState>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
@@ -964,6 +968,8 @@ impl SuiNode {
             first_sequence_number, last_sequence_number
         );
         for sequence_number in first_sequence_number..=last_sequence_number {
+            tokio::task::yield_now().await;
+            info!("processing checkpoint {}", sequence_number);
             let Some(checkpoint) = state
                 .checkpoint_store
                 .get_checkpoint_by_sequence_number(sequence_number)
@@ -1001,6 +1007,7 @@ impl SuiNode {
                         continue;
                     }
 
+                    info!("inserting tx key {:?}", key);
                     epoch_store
                         .insert_tx_key_only_for_recovery(&key, tx.digest())
                         .unwrap();
