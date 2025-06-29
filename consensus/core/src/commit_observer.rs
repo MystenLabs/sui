@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use parking_lot::RwLock;
 use tokio::time::Instant;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
@@ -139,62 +139,114 @@ impl CommitObserver {
             .store
             .read_last_commit()
             .expect("Reading the last commit should not fail");
-        if let Some(last_commit) = &last_commit {
-            let last_commit_index = last_commit.index();
-            assert!(last_commit_index >= last_processed_commit_index);
-            if last_commit_index == last_processed_commit_index {
-                debug!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
-                return;
-            }
+        let Some(last_commit) = &last_commit else {
+            assert_eq!(
+                last_processed_commit_index, 0,
+                "Last processed commit index should be 0 if last commit is not found"
+            );
+            info!("Nothing to recover for commit observer as last processed index and commit index == 0");
+            return;
         };
 
-        // We should not send the last processed commit again, so start from last_processed_commit_index+1
-        let unsent_commits = self
-            .store
-            .scan_commits(((last_processed_commit_index + 1)..=CommitIndex::MAX).into())
-            .expect("Scanning commits should not fail");
-
-        // Buffered unsent commits in DAG state which is required to contain them when they are flushed
-        // by CommitFinalizer.
-        self.dag_state
-            .write()
-            .recover_commits_to_write(unsent_commits.clone());
-
-        info!("Recovering commit observer after index {last_processed_commit_index} with last commit {} and {} unsent commits", last_commit.map(|c|c.index()).unwrap_or_default(), unsent_commits.len());
-
-        // Resend all the committed subdags to the consensus output channel
-        // for all the commits above the last processed index.
-        let mut last_sent_commit_index = last_processed_commit_index;
-        let num_unsent_commits = unsent_commits.len();
-        for (index, commit) in unsent_commits.into_iter().enumerate() {
-            // Commit index must be continuous.
-            assert_eq!(commit.index(), last_sent_commit_index + 1);
-
-            // On recovery leader schedule will be updated with the current scores
-            // and the scores will be passed along with the last commit sent to
-            // sui so that the current scores are available for submission.
-            let reputation_scores = if index == num_unsent_commits - 1 {
-                self.leader_schedule
-                    .leader_swap_table
-                    .read()
-                    .reputation_scores_desc
-                    .clone()
-            } else {
-                vec![]
-            };
-
-            info!("Sending commit {} during recovery", commit.index());
-            let committed_sub_dag =
-                load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
-            // committed_sub_dag has the `local` field set to true, and will be treated as from
-            // local committer. This is fine even if the commit is originally from commit sync,
-            // because only finalized commits are persisted and can be recovered.
-            self.commit_finalizer_handle
-                .send(committed_sub_dag)
-                .unwrap();
-
-            last_sent_commit_index += 1;
+        let last_commit_index = last_commit.index();
+        assert!(last_commit_index >= last_processed_commit_index);
+        if last_commit_index == last_processed_commit_index {
+            info!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
+            return;
         }
+
+        info!(
+            "Recovering commit observer in the range [{}..={last_commit_index}]",
+            last_processed_commit_index + 1
+        );
+
+        // To avoid scanning too many commits at once and load in memory,
+        // we limit the batch size to 250 and iterate over.
+        const COMMIT_RECOVERY_BATCH_SIZE: u32 = if cfg!(test) { 3 } else { 250 };
+
+        let mut last_sent_commit_index = last_processed_commit_index;
+
+        // Make sure that there is no pending commits to be written to the store.
+        self.dag_state.read().ensure_commits_to_write_is_empty();
+
+        for start_index in (last_processed_commit_index + 1..=last_commit_index)
+            .step_by(COMMIT_RECOVERY_BATCH_SIZE as usize)
+        {
+            let end_index = start_index
+                .saturating_add(COMMIT_RECOVERY_BATCH_SIZE - 1)
+                .min(last_commit_index);
+
+            let unsent_commits = self
+                .store
+                .scan_commits((start_index..=end_index).into())
+                .expect("Scanning commits should not fail");
+
+            // If there are no unsent commits, then break, there is nothing more to recover.
+            if unsent_commits.is_empty() {
+                break;
+            }
+
+            // Buffered unsent commits in DAG state which is required to contain them when they are flushed
+            // by CommitFinalizer.
+            self.dag_state
+                .write()
+                .recover_commits_to_write(unsent_commits.clone());
+
+            info!(
+                "Recovered {} unsent commits in range [{start_index}..={end_index}]",
+                unsent_commits.len()
+            );
+
+            // Resend all the committed subdags to the consensus output channel
+            // for all the commits above the last processed index.
+            for commit in unsent_commits.into_iter() {
+                // Commit index must be continuous.
+                last_sent_commit_index += 1;
+                assert_eq!(commit.index(), last_sent_commit_index);
+
+                // On recovery leader schedule will be updated with the current scores
+                // and the scores will be passed along with the last commit of this recovered batch sent to
+                // Sui so that the current scores are available for submission.
+                let reputation_scores = if commit.index() == last_commit_index {
+                    self.leader_schedule
+                        .leader_swap_table
+                        .read()
+                        .reputation_scores_desc
+                        .clone()
+                } else {
+                    vec![]
+                };
+
+                let committed_sub_dag = load_committed_subdag_from_store(
+                    self.store.as_ref(),
+                    commit,
+                    reputation_scores,
+                );
+                // committed_sub_dag has the `local` field set to true, and will be treated as from
+                // local committer. This is fine even if the commit is originally from commit sync,
+                // because only finalized commits are persisted and can be recovered.
+                self.commit_finalizer_handle
+                    .send(committed_sub_dag)
+                    .unwrap();
+
+                self.context
+                    .metrics
+                    .node_metrics
+                    .commit_observer_last_recovered_commit_index
+                    .set(last_sent_commit_index as i64);
+            }
+
+            // If we have reached the last commit, then break, there is nothing more to recover.
+            if end_index == last_commit_index {
+                break;
+            }
+        }
+
+        assert_eq!(
+            last_sent_commit_index, last_commit_index,
+            "We should have sent all commits up to the last commit {}",
+            last_commit_index
+        );
 
         info!(
             "Commit observer recovery completed, took {:?}",
