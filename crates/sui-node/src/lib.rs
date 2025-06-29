@@ -155,7 +155,7 @@ pub mod metrics;
 pub struct ValidatorComponents {
     validator_server_handle: SpawnOnce,
     validator_overload_monitor_handle: Option<JoinHandle<()>>,
-    consensus_manager: ConsensusManager,
+    consensus_manager: Arc<ConsensusManager>,
     consensus_store_pruner: ConsensusStorePruner,
     consensus_adapter: Arc<ConsensusAdapter>,
     // Keeping the handle to the checkpoint service tasks to shut them down during reconfiguration.
@@ -1329,8 +1329,12 @@ impl SuiNode {
             client.clone(),
             checkpoint_store.clone(),
         ));
-        let consensus_manager =
-            ConsensusManager::new(&config, consensus_config, registry_service, client);
+        let consensus_manager = Arc::new(ConsensusManager::new(
+            &config,
+            consensus_config,
+            registry_service,
+            client,
+        ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
         let consensus_store_pruner = ConsensusStorePruner::new(
@@ -1399,7 +1403,7 @@ impl SuiNode {
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
-        consensus_manager: ConsensusManager,
+        consensus_manager: Arc<ConsensusManager>,
         consensus_store_pruner: ConsensusStorePruner,
         state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
@@ -1475,21 +1479,32 @@ impl SuiNode {
             backpressure_manager,
         );
 
-        info!("Starting consensus manager");
+        info!("Starting consensus manager asynchronously");
 
-        consensus_manager
-            .start(
-                config,
-                epoch_store.clone(),
-                consensus_handler_initializer,
-                SuiTxValidator::new(
-                    state.clone(),
-                    consensus_adapter.clone(),
-                    checkpoint_service.clone(),
-                    sui_tx_validator_metrics.clone(),
-                ),
-            )
-            .await;
+        // Spawn consensus startup asynchronously to avoid blocking other components
+        let config_clone = config.clone();
+        let epoch_store_clone = epoch_store.clone();
+        let sui_tx_validator_metrics_clone = sui_tx_validator_metrics.clone();
+        let state_clone = state.clone();
+        let consensus_adapter_clone = consensus_adapter.clone();
+        let checkpoint_service_clone = checkpoint_service.clone();
+        let consensus_manager_clone = consensus_manager.clone();
+
+        tokio::spawn(async move {
+            consensus_manager_clone
+                .start(
+                    &config_clone,
+                    epoch_store_clone,
+                    consensus_handler_initializer,
+                    SuiTxValidator::new(
+                        state_clone,
+                        consensus_adapter_clone,
+                        checkpoint_service_clone,
+                        sui_tx_validator_metrics_clone,
+                    ),
+                )
+                .await;
+        });
         let consensus_replay_waiter = consensus_manager.replay_waiter();
 
         if !epoch_store
