@@ -29,10 +29,10 @@ pub struct New {
 impl New {
     pub fn execute(&self) -> PackageResult<()> {
         let path = match self.path {
-            Some(ref path) => path.join(&self.name.to_string()),
+            Some(ref path) => path.join(self.name.to_string()),
             None => {
                 let current_dir = std::env::current_dir()?;
-                current_dir.join(&self.name.to_string())
+                current_dir.join(self.name.to_string())
             }
         };
 
