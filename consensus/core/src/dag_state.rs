@@ -898,8 +898,14 @@ impl DagState {
 
     /// Recovers commits to write from storage, at startup.
     pub(crate) fn recover_commits_to_write(&mut self, commits: Vec<TrustedCommit>) {
-        assert!(self.commits_to_write.is_empty());
         self.commits_to_write.extend(commits);
+    }
+
+    pub(crate) fn ensure_commits_to_write_is_empty(&self) {
+        assert!(
+            self.commits_to_write.is_empty(),
+            "Commits to write should be empty"
+        );
     }
 
     pub(crate) fn add_commit_info(&mut self, reputation_scores: ReputationScores) {
