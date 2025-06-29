@@ -115,10 +115,6 @@ impl CommitFinalizer {
                 vec![committed_sub_dag]
             };
             if let Some(commit) = finalized_commits.last() {
-                if commit.recovered {
-                    // Commits recovered from storage do not need to be persisted again.
-                    continue;
-                }
                 // Commits and committed blocks must be persisted to storage before sending them to Sui
                 // to execute their finalized transactions.
                 // Commit metadata and uncommitted blocks can be persisted more lazily because they are recoverable.

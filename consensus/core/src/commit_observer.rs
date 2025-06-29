@@ -593,7 +593,15 @@ mod tests {
         processed_subdag_index = expected_last_processed_index;
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("Processed {subdag} on resubmission");
-            assert_eq!(subdag, commits[processed_subdag_index]);
+            assert_eq!(
+                subdag.commit_ref,
+                commits[processed_subdag_index].commit_ref
+            );
+            assert_eq!(subdag.blocks, commits[processed_subdag_index].blocks);
+            assert_eq!(
+                subdag.timestamp_ms,
+                commits[processed_subdag_index].timestamp_ms
+            );
             assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_sent_index {
