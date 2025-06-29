@@ -1632,6 +1632,17 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn insert_tx_key_only_for_recovery(
+        &self,
+        tx_key: &TransactionKey,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+        tables.transaction_key_to_digest.insert(tx_key, tx_digest)?;
+        self.executed_digests_notify_read.notify(tx_key, tx_digest);
+        Ok(())
+    }
+
     pub(crate) fn remove_shared_version_assignments(
         &self,
         keys: impl IntoIterator<Item = TransactionKey>,
