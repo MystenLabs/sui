@@ -110,7 +110,7 @@ impl CommitConsumerMonitor {
         );
     }
 
-    pub(crate) async fn replay_complete(&self) {
+    pub async fn replay_complete(&self) {
         let highest_observed_commit_at_startup = self.highest_observed_commit_at_startup();
         let mut rx = self.highest_handled_commit.subscribe();
         loop {
