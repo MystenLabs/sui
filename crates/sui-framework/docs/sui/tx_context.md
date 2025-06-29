@@ -17,6 +17,9 @@ title: Module `sui::tx_context`
 -  [Function `fresh_id`](#sui_tx_context_fresh_id)
 -  [Function `ids_created`](#sui_tx_context_ids_created)
 -  [Function `native_ids_created`](#sui_tx_context_native_ids_created)
+-  [Function `reference_gas_price`](#sui_tx_context_reference_gas_price)
+-  [Function `native_rgp`](#sui_tx_context_native_rgp)
+-  [Function `gas_price`](#sui_tx_context_gas_price)
 -  [Function `native_gas_price`](#sui_tx_context_native_gas_price)
 -  [Function `native_gas_budget`](#sui_tx_context_native_gas_budget)
 -  [Function `option_sponsor`](#sui_tx_context_option_sponsor)
@@ -369,6 +372,80 @@ Hidden for now, but may expose later
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_ids_created">native_ids_created</a>(): u64;
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_tx_context_reference_gas_price"></a>
+
+## Function `reference_gas_price`
+
+Return the reference gas price in effect for the epoch the transaction
+is being executed in.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_reference_gas_price">reference_gas_price</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_reference_gas_price">reference_gas_price</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">TxContext</a>): u64 {
+    <a href="../sui/tx_context.md#sui_tx_context_native_rgp">native_rgp</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_tx_context_native_rgp"></a>
+
+## Function `native_rgp`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_rgp">native_rgp</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>native</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_native_rgp">native_rgp</a>(): u64;
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_tx_context_gas_price"></a>
+
+## Function `gas_price`
+
+Return the gas price submitted for the current transaction.
+That is the value the user submitted with the transaction data.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_gas_price">gas_price</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_gas_price">gas_price</a>(_self: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">TxContext</a>): u64 {
+    <a href="../sui/tx_context.md#sui_tx_context_native_gas_price">native_gas_price</a>()
+}
 </code></pre>
 
 

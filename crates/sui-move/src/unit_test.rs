@@ -139,6 +139,7 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         0,
         0,
         0,
+        0,
         None,
         &protocol_config,
     );
