@@ -359,7 +359,11 @@ pub struct CommittedSubDag {
     ///
     /// Whether the commit is produced from local DAG, or received through commit sync.
     /// In the 2nd case, this commit may not have blocks in the local DAG to finalize it.
+    /// Default to true.
     pub local: bool,
+    /// Whether the commit is recovered from storage.
+    /// Default to false.
+    pub recovered: bool,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
@@ -384,6 +388,7 @@ impl CommittedSubDag {
             timestamp_ms,
             commit_ref,
             local: true,
+            recovered: false,
             reputation_scores_desc: vec![],
             rejected_transactions_by_block: BTreeMap::new(),
         }
@@ -461,6 +466,7 @@ pub fn load_committed_subdag_from_store(
         commit.timestamp_ms(),
         commit.reference(),
     );
+    subdag.recovered = true;
     subdag.reputation_scores_desc = reputation_scores_desc;
     subdag
 }

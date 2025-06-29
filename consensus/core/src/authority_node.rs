@@ -39,7 +39,7 @@ use crate::{
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     transaction_certifier::TransactionCertifier,
-    CommitConsumer, CommitConsumerMonitor,
+    CommitConsumer,
 };
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
@@ -124,13 +124,6 @@ impl ConsensusAuthority {
         }
     }
 
-    pub async fn replay_complete(&self) {
-        match self {
-            Self::WithAnemo(authority) => authority.replay_complete().await,
-            Self::WithTonic(authority) => authority.replay_complete().await,
-        }
-    }
-
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
@@ -156,7 +149,6 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
-    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
@@ -424,7 +416,6 @@ where
             synchronizer,
             commit_syncer_handle,
             round_prober_handle,
-            commit_consumer_monitor,
             proposed_block_handler,
             leader_timeout_handle,
             core_thread_handle,
@@ -478,10 +469,6 @@ where
 
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
-    }
-
-    pub(crate) async fn replay_complete(&self) {
-        self.commit_consumer_monitor.replay_complete().await;
     }
 }
 
