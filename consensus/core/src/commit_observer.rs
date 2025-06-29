@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, thread, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use parking_lot::RwLock;
 use tokio::time::Instant;
@@ -139,30 +139,29 @@ impl CommitObserver {
             .store
             .read_last_commit()
             .expect("Reading the last commit should not fail");
-        if let Some(last_commit) = &last_commit {
-            let last_commit_index = last_commit.index();
-            assert!(last_commit_index >= last_processed_commit_index);
-            if last_commit_index == last_processed_commit_index {
-                info!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
-                return;
-            }
-        } else {
-            assert!(
-                last_processed_commit_index == 0,
+        let Some(last_commit) = &last_commit else {
+            assert_eq!(
+                last_processed_commit_index, 0,
                 "Last processed commit index should be 0 if last commit is not found"
             );
             info!("Nothing to recover for commit observer as last processed index and commit index == 0");
             return;
-        }
+        };
 
-        let last_commit_index = last_commit.unwrap().index();
+        let last_commit_index = last_commit.index();
+        assert!(last_commit_index >= last_processed_commit_index);
+        if last_commit_index == last_processed_commit_index {
+            info!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
+            return;
+        }
 
         info!(
             "Recovering commit observer in the range [{}..={last_commit_index}]",
             last_processed_commit_index + 1
         );
 
-        // To avoid scanning too many commits at once and load in memory, we limit the batch size to 1000 and iterate over.
+        // To avoid scanning too many commits at once and load in memory,
+        // we limit the batch size to 250 and iterate over.
         const COMMIT_RECOVERY_BATCH_SIZE: u32 = if cfg!(test) { 3 } else { 250 };
 
         let mut last_sent_commit_index = last_processed_commit_index;
@@ -206,8 +205,8 @@ impl CommitObserver {
                 assert_eq!(commit.index(), last_sent_commit_index);
 
                 // On recovery leader schedule will be updated with the current scores
-                // and the scores will be passed along with the last commit of this recovered batchsent to
-                // sui so that the current scores are available for submission.
+                // and the scores will be passed along with the last commit of this recovered batch sent to
+                // Sui so that the current scores are available for submission.
                 let reputation_scores = if commit.index() == last_commit_index {
                     self.leader_schedule
                         .leader_swap_table
@@ -241,9 +240,6 @@ impl CommitObserver {
             if end_index == last_commit_index {
                 break;
             }
-
-            // Sleep to avoid overwhelming the disk I/O.
-            thread::sleep(Duration::from_millis(100));
         }
 
         assert_eq!(
