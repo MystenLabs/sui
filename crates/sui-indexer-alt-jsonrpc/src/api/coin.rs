@@ -73,6 +73,17 @@ trait DelegationCoinsApi {
         /// the owner's Sui address
         owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
+
+    /// Return the total coin balance for one coin type, owned by the address.
+    /// If no coin type is specified, SUI coin balance is returned.
+    #[method(name = "getBalance")]
+    async fn get_balance(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance>;
 }
 
 pub(crate) struct Coins(pub Context);
@@ -166,6 +177,19 @@ impl DelegationCoinsApiServer for DelegationCoins {
 
         client
             .get_all_balances(owner)
+            .await
+            .map_err(client_error_to_error_object)
+    }
+
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance> {
+        let Self(client) = self;
+
+        client
+            .get_balance(owner, coin_type)
             .await
             .map_err(client_error_to_error_object)
     }
