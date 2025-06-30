@@ -83,6 +83,7 @@ better_any.workspace = true
 lru.workspace = true
 
 sui-sdk-types.workspace = true
+sui-rpc.workspace = true
 
 ciborium.workspace = true
 x509-parser.workspace = true

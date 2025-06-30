@@ -181,6 +181,23 @@ impl PasskeyAuthenticator {
     pub fn get_pk(&self) -> SuiResult<PublicKey> {
         Ok(PublicKey::Passkey((&self.pk).into()))
     }
+
+    pub fn authenticator_data(&self) -> &[u8] {
+        &self.authenticator_data
+    }
+
+    pub fn client_data_json(&self) -> &str {
+        &self.client_data_json
+    }
+
+    pub fn signature(&self) -> Signature {
+        let mut bytes = Vec::with_capacity(Secp256r1SuiSignature::LENGTH);
+        bytes.push(SignatureScheme::Secp256r1.flag());
+        bytes.extend_from_slice(self.signature.as_ref());
+        bytes.extend_from_slice(self.pk.as_ref());
+
+        Signature::Secp256r1SuiSignature(Secp256r1SuiSignature::from_bytes(&bytes).unwrap())
+    }
 }
 
 /// Necessary trait for [struct SenderSignedData].
