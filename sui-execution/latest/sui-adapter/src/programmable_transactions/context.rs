@@ -1193,9 +1193,8 @@ mod checked {
             }
         }
 
-        #[allow(clippy::extra_unused_type_parameters)]
         pub(crate) fn deserialize_modules(
-            &mut self,
+            &self,
             module_bytes: &[Vec<u8>],
         ) -> Result<Vec<CompiledModule>, ExecutionError> {
             let binary_config = to_binary_config(self.protocol_config);
