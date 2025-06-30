@@ -32,6 +32,7 @@ use move_core_types::{
     annotated_value,
     language_storage::{ModuleId, StructTag},
     runtime_value::{self, MoveTypeLayout},
+    vm_status::StatusCode,
 };
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runtime_type};
@@ -196,7 +197,19 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 &loaded_type_arguments,
                 &mut data_store,
             )
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
+            .map_err(|e| {
+                if e.major_status() == StatusCode::FUNCTION_RESOLUTION_FAILURE {
+                    ExecutionError::new_with_source(
+                        ExecutionErrorKind::FunctionNotFound,
+                        format!(
+                            "Could not resolve function '{}' in module {}",
+                            name, &storage_id,
+                        ),
+                    )
+                } else {
+                    self.convert_linked_vm_error(e, &linkage)
+                }
+            })?;
         let runtime_signature = subst_signature(runtime_signature, &loaded_type_arguments)
             .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let parameters = runtime_signature

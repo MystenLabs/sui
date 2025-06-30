@@ -15,7 +15,7 @@ use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
     base_types::TxContextKind,
     coin::RESOLVED_COIN_STRUCT,
-    error::{ExecutionError, command_argument_error},
+    error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
 };
 
@@ -151,6 +151,21 @@ fn command<Mode: ExecutionMode>(
                     &function.signature.parameters[0..n - 1]
                 }
             };
+            let num_args = arg_locs.len();
+            let num_parameters = parameter_tys.len();
+            if num_args != num_parameters {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::ArityMismatch,
+                    format!(
+                        "Expected {} argument{} calling function '{}::{}', but found {}",
+                        num_parameters,
+                        if num_parameters == 1 { "" } else { "s" },
+                        function.storage_id,
+                        function.name,
+                        num_args,
+                    ),
+                ));
+            }
             let args = arguments(env, context, 0, arg_locs, parameter_tys.iter().cloned())?;
             let result = function.signature.return_.clone();
             (
