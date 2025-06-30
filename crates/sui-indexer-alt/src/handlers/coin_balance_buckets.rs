@@ -153,8 +153,6 @@ impl Processor for CoinBalanceBuckets {
 impl Handler for CoinBalanceBuckets {
     type Store = Db;
 
-    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()

@@ -121,9 +121,6 @@ pub mod tests {
 
     macro_rules! define_test_concurrent_pipeline {
         ($name:ident) => {
-            define_test_concurrent_pipeline!($name, false);
-        };
-        ($name:ident, $pruning_requires_processed_values:expr) => {
             struct $name;
             impl Processor for $name {
                 const NAME: &'static str = stringify!($name);
@@ -140,7 +137,6 @@ pub mod tests {
             impl concurrent::Handler for $name {
                 type Store = Db;
 
-                const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
                 async fn commit<'a>(
                     _values: &[Self::Value],
                     _conn: &mut <Self::Store as Store>::Connection<'a>,
@@ -153,7 +149,6 @@ pub mod tests {
 
     define_test_concurrent_pipeline!(ConcurrentPipeline1);
     define_test_concurrent_pipeline!(ConcurrentPipeline2);
-    define_test_concurrent_pipeline!(ConcurrentPipeline3, true);
 
     #[tokio::test]
     async fn test_add_new_pipeline() {
@@ -210,42 +205,5 @@ pub mod tests {
             .await
             .unwrap();
         assert_eq!(indexer.first_checkpoint_from_watermark, 11);
-    }
-
-    #[tokio::test]
-    async fn test_add_multiple_pipelines_pruning_requires_processed_values() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        {
-            let watermark1 = CommitterWatermark::new_for_testing(10);
-            let mut conn = indexer.store().connect().await.unwrap();
-            assert!(conn
-                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
-                .await
-                .unwrap());
-        }
-        indexer
-            .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
-
-        {
-            let watermark3 = CommitterWatermark::new_for_testing(20);
-            let mut conn = indexer.store().connect().await.unwrap();
-            assert!(conn
-                .set_committer_watermark(ConcurrentPipeline3::NAME, watermark3)
-                .await
-                .unwrap());
-            assert!(conn
-                .set_pruner_watermark(ConcurrentPipeline3::NAME, 5)
-                .await
-                .unwrap());
-        }
-        indexer
-            .concurrent_pipeline(ConcurrentPipeline3, ConcurrentConfig::default())
-            .await
-            .unwrap();
-
-        assert_eq!(indexer.first_checkpoint_from_watermark, 5);
     }
 }
