@@ -289,3 +289,14 @@ fun destroy_or_no_drop() {
     let NoDrop {} = some;
     let NoDrop {} = none;
 }
+
+#[test]
+fun extract_or() {
+    let mut none = option::none<u64>();
+    assert!(none.extract_or!(10) == 10);
+    assert!(none.is_none());
+
+    let mut some = option::some(5);
+    assert!(some.extract_or!(10) == 5);
+    assert!(some.is_none());
+}
