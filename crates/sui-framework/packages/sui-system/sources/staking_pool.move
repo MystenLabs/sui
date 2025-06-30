@@ -366,8 +366,18 @@ public(package) fun process_pending_stakes_and_withdraws(pool: &mut StakingPool,
 /// Called at epoch boundaries to process pending stake withdraws requested during the epoch.
 /// Also called immediately upon withdrawal if the pool is inactive.
 fun process_pending_stake_withdraw(pool: &mut StakingPool) {
-    pool.sui_balance = pool.sui_balance - pool.pending_total_sui_withdraw;
-    pool.pool_token_balance = pool.pool_token_balance - pool.pending_pool_token_withdraw;
+    pool.sui_balance = if (pool.sui_balance >= pool.pending_total_sui_withdraw) {
+        pool.sui_balance - pool.pending_total_sui_withdraw
+    } else {
+        0
+    };
+
+    pool.pool_token_balance = if (pool.pool_token_balance >= pool.pending_pool_token_withdraw) {
+        pool.pool_token_balance - pool.pending_pool_token_withdraw
+    } else {
+        0
+    };
+
     pool.pending_total_sui_withdraw = 0;
     pool.pending_pool_token_withdraw = 0;
 }
@@ -709,6 +719,32 @@ public(package) fun create_fungible_staked_sui_for_testing(
         pool_id: object::id(self),
         value,
     }
+}
+
+#[test_only]
+public(package) fun process_pending_stake_withdraw_for_testing(pool: &mut StakingPool) {
+    pool.process_pending_stake_withdraw()
+}
+
+#[test_only]
+public(package) fun increase_pending_pool_token_withdraw_for_testing(
+    pool: &mut StakingPool,
+    delta: u64,
+) {
+    pool.pending_pool_token_withdraw = pool.pending_pool_token_withdraw + delta
+}
+
+#[test_only]
+public(package) fun increase_pending_total_sui_withdraw_for_testing(
+    pool: &mut StakingPool,
+    delta: u64,
+) {
+    pool.pending_total_sui_withdraw = pool.pending_total_sui_withdraw + delta
+}
+
+#[test_only]
+public(package) fun pool_token_balance(pool: &StakingPool): u64 {
+    pool.pool_token_balance
 }
 
 // ==== tests ====
