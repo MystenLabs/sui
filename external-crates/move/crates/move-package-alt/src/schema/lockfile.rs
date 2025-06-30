@@ -38,12 +38,20 @@ pub type BuildConfig = toml::Value;
 #[serde(rename_all = "kebab-case")]
 #[serde(deny_unknown_fields)]
 pub struct Publication<F: MoveFlavor> {
+    /// The package's current published ID
     pub published_at: PublishedID,
+    /// The package's original ID
     pub original_id: OriginalID,
+    /// The package's on-chain version
+    pub version: u64,
+    /// The chain ID of the environment where this package was published
     pub chain_id: EnvironmentID,
+    /// The compiler's toolchain version used to build this package
     pub toolchain_version: String,
+    /// The build config for this package
     pub build_config: BuildConfig,
 
+    /// Additional flavor specific metadata
     #[serde(flatten)]
     pub metadata: F::PublishedMetadata,
 }
