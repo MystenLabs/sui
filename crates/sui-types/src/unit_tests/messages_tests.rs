@@ -6,6 +6,7 @@ use super::*;
 use crate::base_types::random_object_ref;
 use crate::committee::Committee;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
+use crate::crypto::Ed25519SuiSignature;
 use crate::crypto::Secp256k1SuiSignature;
 use crate::crypto::SuiKeyPair;
 use crate::crypto::SuiSignature;
