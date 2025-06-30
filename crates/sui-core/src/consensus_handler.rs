@@ -342,7 +342,15 @@ mod additional_consensus_state {
             {
                 Some(
                     ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
-                        cancelled_txn_version_assignment,
+                        cancelled_txn_version_assignment
+                            .into_iter()
+                            .map(|(tx_digest, versions)| {
+                                (
+                                    tx_digest,
+                                    versions.into_iter().map(|(k, v)| (k, v.into())).collect(),
+                                )
+                            })
+                            .collect(),
                     ),
                 )
             } else if protocol_config.record_consensus_determined_version_assignments_in_prologue()
@@ -354,7 +362,10 @@ mod additional_consensus_state {
                             .map(|(tx_digest, versions)| {
                                 (
                                     tx_digest,
-                                    versions.into_iter().map(|(id, v)| (id.0, v)).collect(),
+                                    versions
+                                        .into_iter()
+                                        .map(|(id, v)| (id.0, v.into()))
+                                        .collect(),
                                 )
                             })
                             .collect(),

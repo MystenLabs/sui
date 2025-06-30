@@ -6654,8 +6654,11 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
                     &vec![(
                         *cancelled_txn.digest(),
                         vec![
-                            (shared_objects[0].id(), SequenceNumber::CONGESTED),
-                            (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+                            (shared_objects[0].id(), SequenceNumber::CONGESTED.into()),
+                            (
+                                shared_objects[1].id(),
+                                SequenceNumber::CANCELLED_READ.into()
+                            )
                         ]
                     )]
                 )
@@ -6671,14 +6674,14 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
                                     shared_objects[0].id(),
                                     shared_objects[0].owner().start_version().unwrap()
                                 ),
-                                SequenceNumber::CONGESTED
+                                SequenceNumber::CONGESTED.into()
                             ),
                             (
                                 (
                                     shared_objects[1].id(),
                                     shared_objects[1].owner().start_version().unwrap()
                                 ),
-                                SequenceNumber::CANCELLED_READ
+                                SequenceNumber::CANCELLED_READ.into()
                             ),
                         ]
                     )]

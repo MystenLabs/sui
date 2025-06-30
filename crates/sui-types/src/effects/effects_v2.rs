@@ -15,6 +15,7 @@ use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocat
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
+use crate::messages_consensus::BigSequenceNumber;
 use crate::object::{Owner, OBJECT_START_VERSION};
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
@@ -139,7 +140,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                             Some(InputSharedObject::ReadConsensusStreamEnded(*id, *seqno))
                         }
                         UnchangedSharedKind::Cancelled(seqno) => {
-                            Some(InputSharedObject::Cancelled(*id, *seqno))
+                            Some(InputSharedObject::Cancelled(*id, seqno.0))
                         }
                         // We can not expose the per epoch config object as input shared object,
                         // since it does not require sequencing, and hence shall not be considered
@@ -493,7 +494,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             }
             InputSharedObject::Cancelled(obj_id, seqno) => self
                 .unchanged_shared_objects
-                .push((obj_id, UnchangedSharedKind::Cancelled(seqno))),
+                .push((obj_id, UnchangedSharedKind::Cancelled(seqno.into()))),
         }
     }
 
@@ -563,7 +564,7 @@ impl TransactionEffectsV2 {
                 }
                 SharedInput::Cancelled((id, version)) => {
                     debug_assert!(!changed_objects.contains_key(&id));
-                    Some((id, UnchangedSharedKind::Cancelled(version)))
+                    Some((id, UnchangedSharedKind::Cancelled(version.into())))
                 }
             })
             .chain(
@@ -729,7 +730,7 @@ pub enum UnchangedSharedKind {
     /// Objects with ended consensus streams objects that appear as read-only in the input.
     ReadConsensusStreamEnded(SequenceNumber),
     /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
-    Cancelled(SequenceNumber),
+    Cancelled(BigSequenceNumber),
     /// Read of a per-epoch config object that should remain the same during an epoch.
     PerEpochConfig,
 }
