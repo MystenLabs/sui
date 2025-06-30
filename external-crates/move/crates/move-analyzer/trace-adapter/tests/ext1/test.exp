@@ -128,8 +128,8 @@ current event stack:
     MakeMoveVec
     MoveCall
   event frame: 
-    MakeMoveVec: vec
-      vec : [
+    MakeMoveVec: vector
+      vector : [
         0 : 500
         1 : 500
       ]
@@ -365,8 +365,8 @@ current event stack:
     MakeMoveVec
     MoveCall
   event frame: 
-    MakeMoveVec: vec
-      vec : [
+    MakeMoveVec: vector
+      vector : [
         0 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
           id : (0x2::object::UID) {
             id : (0x2::object::ID) {

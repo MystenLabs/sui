@@ -1192,6 +1192,29 @@ mod checked {
                 SizeBound::Object(bound)
             }
         }
+
+        #[allow(clippy::extra_unused_type_parameters)]
+        pub(crate) fn deserialize_modules(
+            &mut self,
+            module_bytes: &[Vec<u8>],
+        ) -> Result<Vec<CompiledModule>, ExecutionError> {
+            let binary_config = to_binary_config(self.protocol_config);
+            let modules = module_bytes
+                .iter()
+                .map(|b| {
+                    CompiledModule::deserialize_with_config(b, &binary_config)
+                        .map_err(|e| e.finish(Location::Undefined))
+                })
+                .collect::<VMResult<Vec<CompiledModule>>>()
+                .map_err(|e| self.convert_vm_error(e))?;
+
+            assert_invariant!(
+                !modules.is_empty(),
+                "input checker ensures package is not empty"
+            );
+
+            Ok(modules)
+        }
     }
 
     impl Arg {
@@ -1840,28 +1863,5 @@ mod checked {
                 })
             },
         )
-    }
-
-    #[allow(clippy::extra_unused_type_parameters)]
-    pub fn deserialize_modules<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
-        module_bytes: &[Vec<u8>],
-    ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        let binary_config = to_binary_config(context.protocol_config);
-        let modules = module_bytes
-            .iter()
-            .map(|b| {
-                CompiledModule::deserialize_with_config(b, &binary_config)
-                    .map_err(|e| e.finish(Location::Undefined))
-            })
-            .collect::<VMResult<Vec<CompiledModule>>>()
-            .map_err(|e| context.convert_vm_error(e))?;
-
-        assert_invariant!(
-            !modules.is_empty(),
-            "input checker ensures package is not empty"
-        );
-
-        Ok(modules)
     }
 }

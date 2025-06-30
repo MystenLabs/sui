@@ -114,7 +114,7 @@ pub fn trace_ptb_summary<Mode: ExecutionMode>(
                     events.push(PTBCommandInfo::ExternalEvent("Publish".to_string()));
                     // Not ideal but it only runs when tracing is enabled so overhead
                     // should be insignificant
-                    let modules = deserialize_modules::<Mode>(context, module_bytes)?;
+                    let modules = context.deserialize_modules(module_bytes)?;
                     events.extend(modules.into_iter().find_map(|m| {
                         for fdef in &m.function_defs {
                             let fhandle = m.function_handle_at(fdef.function);
@@ -277,10 +277,10 @@ pub fn trace_make_move_vec(
         let type_tag_with_refs = trace_type_to_type_tag_with_refs(context, type_)?;
         trace_builder.push_event(TraceEvent::External(Box::new(serde_json::json!(
             PTBEvent::ExternalEvent(ExternalEvent {
-                description: "MakeMoveVec: vec".to_string(),
+                description: "MakeMoveVec: vector".to_string(),
                 name: "MakeMoveVec".to_string(),
                 values: vec![ExtMoveValue::Vector {
-                    name: "vec".to_string(),
+                    name: "vector".to_string(),
                     type_: type_tag_with_refs,
                     value: move_values
                         .into_iter()
@@ -367,6 +367,20 @@ pub fn add_move_value_info_from_obj_value(
         move_values.push(move_value_info);
     }
     Ok(())
+}
+
+/// Adds coin object info to the mutable vector passed as an argument.
+/// As is the case for all other public functions in this module,
+/// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
+pub fn add_coin_obj_info(
+    trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    coin_infos: &mut Vec<(u64, ObjectID)>,
+    balance: u64,
+    id: ObjectID,
+) {
+    if trace_builder_opt.is_some() {
+        coin_infos.push((balance, id));
+    }
 }
 
 /// Creates `ExtMoveValueInfo` from raw bytes.

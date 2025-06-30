@@ -14,15 +14,7 @@ mod checked {
             ensure_serialized_size,
         },
         gas_charger::GasCharger,
-        programmable_transactions::{
-            context::*,
-            trace_utils::{
-                add_move_value_info_from_obj_value, add_move_value_info_from_value,
-                trace_execution_error, trace_make_move_vec, trace_merge_coins, trace_move_call_end,
-                trace_move_call_start, trace_ptb_summary, trace_publish_event, trace_split_coins,
-                trace_transfer, trace_upgrade_event,
-            },
-        },
+        programmable_transactions::{context::*, trace_utils},
         static_programmable_transactions,
         type_resolver::TypeTagResolver,
     };
@@ -129,7 +121,7 @@ mod checked {
         match result {
             Ok(result) => Ok((result, timings)),
             Err(e) => {
-                trace_execution_error(trace_builder_opt, e.to_string());
+                trace_utils::trace_execution_error(trace_builder_opt, e.to_string());
 
                 Err((e, timings))
             }
@@ -158,7 +150,7 @@ mod checked {
             inputs,
         )?;
 
-        trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &commands)?;
+        trace_utils::trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &commands)?;
 
         // execute commands
         let mut mode_results = Mode::empty_results();
@@ -230,7 +222,7 @@ mod checked {
                 // BCS layout for any empty vector should be the same
                 let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
 
-                trace_make_move_vec(context, trace_builder_opt, vec![], &ty)?;
+                trace_utils::trace_make_move_vec(context, trace_builder_opt, vec![], &ty)?;
 
                 vec![Value::Raw(
                     RawValueType::Loaded {
@@ -266,7 +258,7 @@ mod checked {
                         let (idx, arg) = arg_iter.next().unwrap();
                         let obj: ObjectValue =
                             context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                        add_move_value_info_from_obj_value(
+                        trace_utils::add_move_value_info_from_obj_value(
                             context,
                             trace_builder_opt,
                             &mut move_values,
@@ -283,7 +275,7 @@ mod checked {
                 };
                 for (idx, arg) in arg_iter {
                     let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                    add_move_value_info_from_value(
+                    trace_utils::add_move_value_info_from_value(
                         context,
                         trace_builder_opt,
                         &mut move_values,
@@ -302,7 +294,7 @@ mod checked {
                 let ty = Type::Vector(Box::new(elem_ty));
                 let abilities = context.get_type_abilities(&ty)?;
 
-                trace_make_move_vec(context, trace_builder_opt, move_values, &ty)?;
+                trace_utils::trace_make_move_vec(context, trace_builder_opt, move_values, &ty)?;
 
                 vec![Value::Raw(
                     RawValueType::Loaded {
@@ -325,7 +317,7 @@ mod checked {
                 let addr: SuiAddress =
                     context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
 
-                trace_transfer(context, trace_builder_opt, &objs)?;
+                trace_utils::trace_transfer(context, trace_builder_opt, &objs)?;
 
                 for obj in objs {
                     obj.ensure_public_transfer_eligible()?;
@@ -360,7 +352,13 @@ mod checked {
                     })
                     .collect::<Result<_, ExecutionError>>()?;
 
-                trace_split_coins(context, trace_builder_opt, &obj.type_, coin, &split_coins)?;
+                trace_utils::trace_split_coins(
+                    context,
+                    trace_builder_opt,
+                    &obj.type_,
+                    coin,
+                    &split_coins,
+                )?;
 
                 context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
@@ -398,12 +396,17 @@ mod checked {
                             This should be a coin"
                         );
                     };
-                    input_infos.push((balance.value(), *id.object_id()));
+                    trace_utils::add_coin_obj_info(
+                        trace_builder_opt,
+                        &mut input_infos,
+                        balance.value(),
+                        *id.object_id(),
+                    );
                     context.delete_id(*id.object_id())?;
                     target_coin.add(balance)?;
                 }
 
-                trace_merge_coins(
+                trace_utils::trace_merge_coins(
                     context,
                     trace_builder_opt,
                     &target.type_,
@@ -426,7 +429,7 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
-                trace_move_call_start(trace_builder_opt);
+                trace_utils::trace_move_call_start(trace_builder_opt);
 
                 let arguments = context.splat_args(0, arguments)?;
 
@@ -458,13 +461,13 @@ mod checked {
                     trace_builder_opt,
                 );
 
-                trace_move_call_end(trace_builder_opt);
+                trace_utils::trace_move_call_end(trace_builder_opt);
 
                 context.linkage_view.reset_linkage()?;
                 return_values?
             }
             Command::Publish(modules, dep_ids) => {
-                trace_publish_event(trace_builder_opt)?;
+                trace_utils::trace_publish_event(trace_builder_opt)?;
 
                 execute_move_publish::<Mode>(
                     context,
@@ -475,7 +478,7 @@ mod checked {
                 )?
             }
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
-                trace_upgrade_event(trace_builder_opt)?;
+                trace_utils::trace_upgrade_event(trace_builder_opt)?;
 
                 let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
@@ -642,7 +645,7 @@ mod checked {
             .gas_charger
             .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
-        let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
+        let mut modules = context.deserialize_modules(&module_bytes)?;
 
         // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
         // runtime does not to know about new packages created, since Move objects and Move packages
@@ -763,7 +766,7 @@ mod checked {
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_package = fetch_package(&context.state_view, &upgrade_ticket.package.bytes)?;
 
-        let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
+        let mut modules = context.deserialize_modules(&module_bytes)?;
         let runtime_id = current_package.move_package().original_package_id();
         substitute_package_id(&mut modules, runtime_id)?;
 
@@ -1043,7 +1046,7 @@ mod checked {
         });
 
         for module_id in modules_to_init {
-            trace_move_call_start(trace_builder_opt);
+            trace_utils::trace_move_call_start(trace_builder_opt);
             let return_values = execute_move_call::<Mode>(
                 context,
                 argument_updates,
@@ -1064,7 +1067,7 @@ mod checked {
                 "init should not have return values"
             );
 
-            trace_move_call_end(trace_builder_opt);
+            trace_utils::trace_move_call_end(trace_builder_opt);
         }
 
         Ok(())
