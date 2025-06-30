@@ -5,11 +5,12 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use sui_types::{base_types::SequenceNumber, transaction::Reservation};
 use tokio::sync::watch;
+use tracing::debug;
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
     balance_read::AccountBalanceRead,
     scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
-    BalanceSettlement, ScheduleResult,
+    BalanceSettlement, ScheduleResult, ScheduleStatus,
 };
 
 /// A naive implementation of the balance withdraw scheduler that does not attempt to optimize the scheduling.
@@ -17,7 +18,6 @@ use crate::execution_scheduler::balance_withdraw_scheduler::{
 /// and then check if the balance is sufficient.
 /// This implementation is simple and easy to understand, but it is not efficient.
 /// It is only used to unblock further development of the balance withdraw scheduler.
-#[allow(dead_code)]
 pub(crate) struct NaiveBalanceWithdrawScheduler {
     balance_read: Arc<dyn AccountBalanceRead>,
     last_settled_version_sender: watch::Sender<SequenceNumber>,
@@ -26,7 +26,6 @@ pub(crate) struct NaiveBalanceWithdrawScheduler {
 }
 
 impl NaiveBalanceWithdrawScheduler {
-    #[allow(dead_code)]
     pub fn new(
         balance_read: Arc<dyn AccountBalanceRead>,
         last_settled_accumulator_version: SequenceNumber,
@@ -46,6 +45,10 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations) {
         let mut receiver = self.last_settled_version_sender.subscribe();
         while *receiver.borrow_and_update() < withdraws.accumulator_version {
+            debug!(
+                "Waiting for accumulator version {:?} to be settled",
+                withdraws.accumulator_version
+            );
             if receiver.changed().await.is_err() {
                 return;
             }
@@ -66,10 +69,15 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                     self.balance_read
                         .get_account_balance(object_id, withdraws.accumulator_version)
                 });
+                debug!("Starting balance for {:?}: {:?}", object_id, entry);
 
                 match reservation {
                     Reservation::MaxAmountU64(amount) => {
                         if *entry < *amount {
+                            debug!(
+                                "Insufficient balance for {:?}. Requested: {:?}, Available: {:?}",
+                                object_id, amount, entry
+                            );
                             success = false;
                             break;
                         }
@@ -78,6 +86,7 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                         // When we want to reserve the entire balance,
                         // we still need to ensure that the entire balance is not already reserved.
                         if *entry == 0 {
+                            debug!("No more balance available for {:?}", object_id);
                             success = false;
                             break;
                         }
@@ -85,6 +94,7 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                 }
             }
             if success {
+                debug!("Successfully reserved all withdraws for {:?}", withdraw);
                 for (object_id, reservation) in withdraw.reservations {
                     // unwrap safe because we always initialize each account in the above loop.
                     let balance = cur_balances.get_mut(&object_id).unwrap();
@@ -100,14 +110,24 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                         }
                     }
                 }
-                let _ = sender.send(ScheduleResult::SufficientBalance);
+                let _ = sender.send(ScheduleResult {
+                    tx_digest: withdraw.tx_digest,
+                    status: ScheduleStatus::SufficientBalance,
+                });
             } else {
-                let _ = sender.send(ScheduleResult::InsufficientBalance);
+                let _ = sender.send(ScheduleResult {
+                    tx_digest: withdraw.tx_digest,
+                    status: ScheduleStatus::InsufficientBalance,
+                });
             }
         }
     }
 
     async fn settle_balances(&self, settlement: BalanceSettlement) {
+        debug!(
+            "Settling balances for version {:?}",
+            settlement.accumulator_version
+        );
         let _ = self
             .last_settled_version_sender
             .send(settlement.accumulator_version);

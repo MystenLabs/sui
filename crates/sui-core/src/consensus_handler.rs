@@ -924,6 +924,7 @@ impl TransactionManagerSender {
                             .with_assigned_versions(
                                 assigned_versions.get(&key).cloned().unwrap_or_default(),
                             ),
+                        // TODO(address-balances) Add the accumulator version for each transaction.
                     )
                 })
                 .collect();

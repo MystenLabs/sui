@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_scheduler::balance_withdraw_scheduler::ScheduleResult;
 use crate::execution_scheduler::balance_withdraw_scheduler::{
     balance_read::MockBalanceRead, scheduler::BalanceWithdrawScheduler, BalanceSettlement,
-    ScheduleResult, TxBalanceWithdraw,
+    ScheduleStatus, TxBalanceWithdraw,
 };
+use futures::stream::{FuturesUnordered, StreamExt};
 use rand::{seq::SliceRandom, Rng};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_types::{
@@ -12,8 +14,8 @@ use sui_types::{
     digests::TransactionDigest,
     transaction::Reservation,
 };
-#[cfg(test)]
 use tokio::sync::oneshot;
+use tokio::time::timeout;
 
 #[derive(Clone)]
 struct TestScheduler {
@@ -41,14 +43,17 @@ impl TestScheduler {
     }
 }
 
-#[cfg(test)]
-async fn wait_until(receiver: oneshot::Receiver<ScheduleResult>, until: ScheduleResult) {
-    use std::time::Duration;
-
-    use tokio::time::timeout;
-
+async fn wait_for_results(
+    mut receivers: FuturesUnordered<oneshot::Receiver<ScheduleResult>>,
+    expected_results: BTreeMap<TransactionDigest, ScheduleStatus>,
+) {
     timeout(Duration::from_secs(3), async {
-        assert_eq!(receiver.await.unwrap(), until);
+        let mut results = BTreeMap::new();
+        while let Some(result) = receivers.next().await {
+            let result = result.unwrap();
+            results.insert(result.tx_digest, result.status);
+        }
+        assert_eq!(results, expected_results);
     })
     .await
     .unwrap();
@@ -67,10 +72,12 @@ async fn test_basic_sufficient_balance() {
 
     let receivers = test
         .scheduler
-        .schedule_withdraws(init_version, vec![withdraw]);
-    for (_, receiver) in receivers {
-        wait_until(receiver, ScheduleResult::SufficientBalance).await;
-    }
+        .schedule_withdraws(init_version, vec![withdraw.clone()]);
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -86,10 +93,12 @@ async fn test_basic_insufficient_balance() {
 
     let receivers = test
         .scheduler
-        .schedule_withdraws(init_version, vec![withdraw]);
-    for (_, receiver) in receivers {
-        wait_until(receiver, ScheduleResult::InsufficientBalance).await;
-    }
+        .schedule_withdraws(init_version, vec![withdraw.clone()]);
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::InsufficientBalance)]),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -106,16 +115,20 @@ async fn test_already_scheduled() {
     let receivers = test
         .scheduler
         .schedule_withdraws(init_version, vec![withdraw.clone()]);
-    for (_, receiver) in receivers {
-        wait_until(receiver, ScheduleResult::SufficientBalance).await;
-    }
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+    )
+    .await;
 
     let receivers = test
         .scheduler
-        .schedule_withdraws(init_version, vec![withdraw]);
-    for (_, receiver) in receivers {
-        wait_until(receiver, ScheduleResult::AlreadyScheduled).await;
-    }
+        .schedule_withdraws(init_version, vec![withdraw.clone()]);
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::AlreadyScheduled)]),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -132,19 +145,23 @@ async fn test_basic_settlement() {
     let receivers = test
         .scheduler
         .schedule_withdraws(init_version, vec![withdraw.clone()]);
-    for (_, receiver) in receivers {
-        wait_until(receiver, ScheduleResult::SufficientBalance).await;
-    }
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+    )
+    .await;
 
     let next_version = init_version.next();
     test.settle_balance_changes(next_version, BTreeMap::from([(account, -50i128)]));
 
     let receivers = test
         .scheduler
-        .schedule_withdraws(next_version, vec![withdraw]);
-    for (_, receiver) in receivers {
-        wait_until(receiver, ScheduleResult::SufficientBalance).await;
-    }
+        .schedule_withdraws(next_version, vec![withdraw.clone()]);
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -163,12 +180,12 @@ async fn test_out_of_order_settlements() {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(v0, vec![withdraw1.clone()]);
-    wait_until(
-        receivers.remove(&withdraw1.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await;
 
@@ -176,12 +193,12 @@ async fn test_out_of_order_settlements() {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(80))]),
     };
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(v1, vec![withdraw2.clone()]);
-    wait_until(
-        receivers.remove(&withdraw2.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw2.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await;
 }
@@ -221,23 +238,17 @@ async fn test_multi_accounts() {
         reservations: reservations3,
     };
 
-    let mut receivers = test.scheduler.schedule_withdraws(
+    let receivers = test.scheduler.schedule_withdraws(
         init_version,
         vec![withdraw1.clone(), withdraw2.clone(), withdraw3.clone()],
     );
-    wait_until(
-        receivers.remove(&withdraw1.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
-    )
-    .await;
-    wait_until(
-        receivers.remove(&withdraw2.tx_digest).unwrap(),
-        ScheduleResult::InsufficientBalance,
-    )
-    .await;
-    wait_until(
-        receivers.remove(&withdraw3.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([
+            (withdraw1.tx_digest, ScheduleStatus::SufficientBalance),
+            (withdraw2.tx_digest, ScheduleStatus::InsufficientBalance),
+            (withdraw3.tx_digest, ScheduleStatus::SufficientBalance),
+        ]),
     )
     .await;
 }
@@ -253,36 +264,36 @@ async fn test_multi_settlements() {
         reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
 
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(init_version, vec![withdraw.clone()]);
-    wait_until(
-        receivers.remove(&withdraw.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await;
 
     let next_version = init_version.next();
     test.settle_balance_changes(next_version, BTreeMap::from([(account, -50i128)]));
 
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(next_version, vec![withdraw.clone()]);
-    wait_until(
-        receivers.remove(&withdraw.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await;
 
     let next_version = next_version.next();
     test.settle_balance_changes(next_version, BTreeMap::from([(account, -50i128)]));
 
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(next_version, vec![withdraw.clone()]);
-    wait_until(
-        receivers.remove(&withdraw.tx_digest).unwrap(),
-        ScheduleResult::InsufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::InsufficientBalance)]),
     )
     .await;
 }
@@ -309,21 +320,21 @@ async fn test_settlement_far_ahead_of_schedule() {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(100))]),
     };
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(v0, vec![withdraw.clone()]);
-    wait_until(
-        receivers.remove(&withdraw.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await;
 
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(v1, vec![withdraw.clone()]);
-    wait_until(
-        receivers.remove(&withdraw.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await;
 
@@ -332,12 +343,12 @@ async fn test_settlement_far_ahead_of_schedule() {
         reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
     };
 
-    let mut receivers = test
+    let receivers = test
         .scheduler
         .schedule_withdraws(v2, vec![withdraw.clone()]);
-    wait_until(
-        receivers.remove(&withdraw.tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
+    wait_for_results(
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
     )
     .await;
 }
@@ -364,7 +375,7 @@ async fn test_withdraw_entire_balance() {
         },
     ];
 
-    let mut receivers1 = test
+    let receivers1 = test
         .scheduler
         .schedule_withdraws(init_version, withdraws1.clone());
 
@@ -383,41 +394,29 @@ async fn test_withdraw_entire_balance() {
         },
     ];
 
-    let mut receivers2 = test
+    let receivers2 = test
         .scheduler
         .schedule_withdraws(next_version, withdraws2.clone());
 
     test.settle_balance_changes(next_version, BTreeMap::new());
 
-    wait_until(
-        receivers1.remove(&withdraws1[0].tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
-    )
-    .await;
-    wait_until(
-        receivers1.remove(&withdraws1[1].tx_digest).unwrap(),
-        ScheduleResult::InsufficientBalance,
-    )
-    .await;
-    wait_until(
-        receivers1.remove(&withdraws1[2].tx_digest).unwrap(),
-        ScheduleResult::InsufficientBalance,
+    wait_for_results(
+        receivers1,
+        BTreeMap::from([
+            (withdraws1[0].tx_digest, ScheduleStatus::SufficientBalance),
+            (withdraws1[1].tx_digest, ScheduleStatus::InsufficientBalance),
+            (withdraws1[2].tx_digest, ScheduleStatus::InsufficientBalance),
+        ]),
     )
     .await;
 
-    wait_until(
-        receivers2.remove(&withdraws2[0].tx_digest).unwrap(),
-        ScheduleResult::SufficientBalance,
-    )
-    .await;
-    wait_until(
-        receivers2.remove(&withdraws2[1].tx_digest).unwrap(),
-        ScheduleResult::InsufficientBalance,
-    )
-    .await;
-    wait_until(
-        receivers2.remove(&withdraws2[2].tx_digest).unwrap(),
-        ScheduleResult::InsufficientBalance,
+    wait_for_results(
+        receivers2,
+        BTreeMap::from([
+            (withdraws2[0].tx_digest, ScheduleStatus::SufficientBalance),
+            (withdraws2[1].tx_digest, ScheduleStatus::InsufficientBalance),
+            (withdraws2[2].tx_digest, ScheduleStatus::InsufficientBalance),
+        ]),
     )
     .await;
 }
@@ -504,7 +503,7 @@ async fn stress_test() {
                 }
             });
 
-            let mut all_receivers = BTreeMap::new();
+            let mut all_receivers = FuturesUnordered::new();
             for (version, withdraws) in withdraws {
                 let receivers = test.scheduler.schedule_withdraws(version, withdraws);
                 tokio::time::sleep(Duration::from_millis(5)).await;
@@ -514,8 +513,9 @@ async fn stress_test() {
             settle_task.await.unwrap();
 
             let mut results = BTreeMap::new();
-            for (tx_digest, receiver) in all_receivers {
-                results.insert(tx_digest, receiver.await.unwrap());
+            while let Some(result) = all_receivers.next().await {
+                let result = result.unwrap();
+                results.insert(result.tx_digest, result.status);
             }
             results
         });
