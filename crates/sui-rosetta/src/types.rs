@@ -18,16 +18,14 @@ use sui_sdk::rpc_types::{SuiExecutionStatus, SuiTransactionBlockKind};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::PublicKey as SuiPublicKey;
 use sui_types::crypto::SignatureScheme;
-use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::messages_checkpoint::CheckpointDigest;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::{Argument, CallArg, Command, ObjectArg, TransactionData};
-use sui_types::SUI_SYSTEM_PACKAGE_ID;
 
 use crate::errors::{Error, ErrorType};
 use crate::operations::Operations;
 use crate::SUI;
+pub use internal_operation::InternalOperation;
+
+pub mod internal_operation;
 
 #[cfg(test)]
 #[path = "unit_tests/types_tests.rs"]
@@ -629,7 +627,7 @@ pub struct ConstructionPreprocessResponse {
     pub required_public_keys: Vec<AccountIdentifier>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MetadataOptions {
     pub internal_operation: InternalOperation,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -663,11 +661,15 @@ pub struct ConstructionMetadataResponse {
     pub suggested_fee: Vec<Amount>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConstructionMetadata {
     pub sender: SuiAddress,
-    pub coins: Vec<ObjectRef>,
+    /// `Coin<SUI>` objects to be used as gas
+    pub gas_coins: Vec<ObjectRef>,
+    /// `Coin<SUI>` objects to be merged to GasCoin
+    pub extra_gas_coins: Vec<ObjectRef>,
     pub objects: Vec<ObjectRef>,
+    /// Always refers to SUI balance used
     #[serde(with = "str_format")]
     pub total_coin_value: i128,
     pub gas_price: u64,
@@ -914,139 +916,4 @@ pub struct PrefundedAccount {
     pub account_identifier: AccountIdentifier,
     pub curve_type: CurveType,
     pub currency: Currency,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum InternalOperation {
-    PaySui {
-        sender: SuiAddress,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-    },
-    PayCoin {
-        sender: SuiAddress,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<u64>,
-        currency: Currency,
-    },
-    Stake {
-        sender: SuiAddress,
-        validator: SuiAddress,
-        amount: Option<u64>,
-    },
-    WithdrawStake {
-        sender: SuiAddress,
-        #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        stake_ids: Vec<ObjectID>,
-    },
-}
-
-impl InternalOperation {
-    pub fn sender(&self) -> SuiAddress {
-        match self {
-            InternalOperation::PaySui { sender, .. }
-            | InternalOperation::PayCoin { sender, .. }
-            | InternalOperation::Stake { sender, .. }
-            | InternalOperation::WithdrawStake { sender, .. } => *sender,
-        }
-    }
-    /// Combine with ConstructionMetadata to form the TransactionData
-    pub fn try_into_data(self, metadata: ConstructionMetadata) -> Result<TransactionData, Error> {
-        let pt = match self {
-            Self::PaySui {
-                recipients,
-                amounts,
-                ..
-            } => {
-                let mut builder = ProgrammableTransactionBuilder::new();
-                builder.pay_sui(recipients, amounts)?;
-                builder.finish()
-            }
-            Self::PayCoin {
-                recipients,
-                amounts,
-                ..
-            } => {
-                let mut builder = ProgrammableTransactionBuilder::new();
-                builder.pay(metadata.objects.clone(), recipients, amounts)?;
-                let currency_str = serde_json::to_string(&metadata.currency.unwrap()).unwrap();
-                // This is a workaround in order to have the currency info available during the process
-                // of constructing back the Operations object from the transaction data. A process that
-                // takes place upon the request to the construction's /parse endpoint. The pure value is
-                // not actually being used in any on-chain transaction execution and its sole purpose
-                // is to act as a bearer of the currency info between the various steps of the flow.
-                // See also the value is being later accessed within the operations.rs file's
-                // parse_programmable_transaction function.
-                builder.pure(currency_str)?;
-                builder.finish()
-            }
-            InternalOperation::Stake {
-                validator, amount, ..
-            } => {
-                let mut builder = ProgrammableTransactionBuilder::new();
-
-                // [WORKAROUND] - this is a hack to work out if the staking ops is for a selected amount or None amount (whole wallet).
-                // if amount is none, validator input will be created after the system object input
-                let (validator, system_state, amount) = if let Some(amount) = amount {
-                    let amount = builder.pure(amount)?;
-                    let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
-                    let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                    (validator, state, amount)
-                } else {
-                    let amount =
-                        builder.pure(metadata.total_coin_value as u64 - metadata.budget)?;
-                    let state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                    let validator = builder.input(CallArg::Pure(bcs::to_bytes(&validator)?))?;
-                    (validator, state, amount)
-                };
-                let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
-
-                let arguments = vec![system_state, coin, validator];
-
-                builder.command(Command::move_call(
-                    SUI_SYSTEM_PACKAGE_ID,
-                    SUI_SYSTEM_MODULE_NAME.to_owned(),
-                    ADD_STAKE_FUN_NAME.to_owned(),
-                    vec![],
-                    arguments,
-                ));
-                builder.finish()
-            }
-            InternalOperation::WithdrawStake { stake_ids, .. } => {
-                let mut builder = ProgrammableTransactionBuilder::new();
-
-                for stake_id in metadata.objects {
-                    // [WORKAROUND] - this is a hack to work out if the withdraw stake ops is for selected stake_ids or None (all stakes) using the index of the call args.
-                    // if stake_ids is not empty, id input will be created after the system object input
-                    let (system_state, id) = if !stake_ids.is_empty() {
-                        let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                        let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
-                        (system_state, id)
-                    } else {
-                        let id = builder.obj(ObjectArg::ImmOrOwnedObject(stake_id))?;
-                        let system_state = builder.input(CallArg::SUI_SYSTEM_MUT)?;
-                        (system_state, id)
-                    };
-
-                    let arguments = vec![system_state, id];
-                    builder.command(Command::move_call(
-                        SUI_SYSTEM_PACKAGE_ID,
-                        SUI_SYSTEM_MODULE_NAME.to_owned(),
-                        WITHDRAW_STAKE_FUN_NAME.to_owned(),
-                        vec![],
-                        arguments,
-                    ));
-                }
-                builder.finish()
-            }
-        };
-
-        Ok(TransactionData::new_programmable(
-            metadata.sender,
-            metadata.coins,
-            pt,
-            metadata.budget,
-            metadata.gas_price,
-        ))
-    }
 }
