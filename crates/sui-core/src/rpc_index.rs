@@ -51,6 +51,8 @@ use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
 
 const CURRENT_DB_VERSION: u64 = 3;
+// I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
+const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -1216,6 +1218,7 @@ struct RpcLiveObjectIndexer<'a> {
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
     resolver: Box<dyn LayoutResolver + 'a>,
     object_store: &'a (dyn ObjectStore + Sync),
+    balance_changes: HashMap<BalanceKey, BalanceIndexInfo>,
 }
 
 impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
@@ -1231,6 +1234,7 @@ impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
                 .executor()
                 .type_layout_resolver(Box::new(self.package_store)),
             object_store: self.object_store,
+            balance_changes: HashMap::new(),
         }
     }
 }
@@ -1245,12 +1249,20 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                 self.batch
                     .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
 
-                // Track balance for coins
                 if let Some((coin_type, value)) = get_balance_and_type_if_coin(&object)? {
                     let balance_key = BalanceKey { owner, coin_type };
                     let balance_info = BalanceIndexInfo::from(value);
-                    self.batch
-                        .partial_merge_batch(&self.tables.balance, [(balance_key, balance_info)])?;
+                    self.balance_changes
+                        .entry(balance_key)
+                        .or_default()
+                        .merge_delta(&balance_info);
+
+                    if self.balance_changes.len() >= BALANCE_FLUSH_THRESHOLD {
+                        self.batch.partial_merge_batch(
+                            &self.tables.balance,
+                            std::mem::take(&mut self.balance_changes),
+                        )?;
+                    }
                 }
             }
 
@@ -1299,7 +1311,11 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
         Ok(())
     }
 
-    fn finish(self) -> Result<(), StorageError> {
+    fn finish(mut self) -> Result<(), StorageError> {
+        self.batch.partial_merge_batch(
+            &self.tables.balance,
+            std::mem::take(&mut self.balance_changes),
+        )?;
         self.batch.write()?;
         Ok(())
     }
