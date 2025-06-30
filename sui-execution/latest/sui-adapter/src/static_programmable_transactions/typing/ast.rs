@@ -41,7 +41,7 @@ pub enum BytesUsage {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Information for a given constraint for input bytes
 pub struct BytesConstraint {
-    /// The command that last first this constraint
+    /// The command that first added this constraint
     pub command: u16,
     /// The argument in that command
     pub argument: u16,
