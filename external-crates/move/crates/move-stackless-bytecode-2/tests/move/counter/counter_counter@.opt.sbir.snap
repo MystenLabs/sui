@@ -1,0 +1,37 @@
+---
+source: crates/move-stackless-bytecode-2/tests/tests.rs
+---
+  Module: counter
+    Function: create (entry: LBL_0)
+      Label LBL_0:
+        reg_1 = Pack(Immediate(U64(0)))
+        Return(reg_1)
+
+
+    Function: increment (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Copy(lcl_0)
+        reg_1 = ImmBorrowField(reg_0)
+        reg_2 = ReadRef(reg_1)
+        reg_4 = Add(Immediate(U64(1)), reg_2)
+        reg_5 = Move(lcl_0)
+        reg_6 = MutBorrowField(reg_5)
+        WriteRef(reg_6, reg_4)
+        Return()
+
+
+    Function: set_value (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_1)
+        reg_1 = Move(lcl_0)
+        reg_2 = MutBorrowField(reg_1)
+        WriteRef(reg_2, reg_0)
+        Return()
+
+
+    Function: value (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        reg_1 = ImmBorrowField(reg_0)
+        reg_2 = ReadRef(reg_1)
+        Return(reg_2)
