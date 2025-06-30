@@ -1198,6 +1198,12 @@ impl CheckpointBuilder {
         let mut sorted_tx_effects_included_in_checkpoint = Vec::new();
         let mut all_roots = HashSet::new();
 
+        let highest_executed_sequence = self
+            .store
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("db error")
+            .unwrap_or(0);
+
         let resolve_start_time = Instant::now();
         for pending_checkpoint in pendings.into_iter() {
             let pending = pending_checkpoint.into_v2();
@@ -1223,20 +1229,15 @@ impl CheckpointBuilder {
             )
             .await?;
         let highest_sequence = *new_checkpoints.last().0.sequence_number();
-
         if cfg!(msim)
-            && highest_sequence
-                <= self
-                    .store
-                    .get_highest_executed_checkpoint_seq_number()
-                    .expect("db error")
-                    .unwrap_or(0)
+            && highest_sequence <= highest_executed_sequence
             && resolve_elapsed.as_nanos() > 0
         {
             debug_fatal!(
-                "resolve_checkpoint_transactions should be instantaneous when executed checkpoint is ahead of checkpoint builder {:?} {}",
+                "resolve_checkpoint_transactions should be instantaneous when executed checkpoint is ahead of checkpoint builder {:?} {} <= {}",
                 resolve_elapsed,
-                highest_sequence
+                highest_sequence,
+                highest_executed_sequence
             );
         }
 

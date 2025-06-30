@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::{join_all, Either};
+use itertools::izip;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
@@ -14,6 +15,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::task::{Context, Poll};
 use tokio::sync::oneshot;
+
+use tracing::debug;
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
 
@@ -116,22 +119,26 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     }
 }
 
-impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> NotifyRead<K, V> {
+impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug, V: Clone + Unpin> NotifyRead<K, V> {
     pub async fn read(&self, keys: &[K], fetch: impl FnOnce(&[K]) -> Vec<Option<V>>) -> Vec<V> {
+        debug!("HAY");
         let registrations = self.register_all(keys);
 
         let results = fetch(keys);
 
-        let results = results
-            .into_iter()
-            .zip(registrations)
-            .map(|(a, r)| match a {
-                // Note that Some() clause also drops registration that is already fulfilled
-                Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
-            });
+        let results = izip!(results, registrations, keys).map(|(a, r, k)| match a {
+            // Note that Some() clause also drops registration that is already fulfilled
+            Some(ready) => Either::Left(futures::future::ready(ready)),
+            None => {
+                debug!("waiting for key {:?}", k);
+                Either::Right(r)
+            }
+        });
 
-        join_all(results).await
+        debug!("HAY");
+        let res = join_all(results).await;
+        debug!("HAY");
+        res
     }
 }
 
