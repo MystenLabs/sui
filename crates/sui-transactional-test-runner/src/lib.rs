@@ -81,6 +81,7 @@ pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Erro
         "programmable_transaction_examples",
         "publish",
         "upgrade",
+        "sui",
     ];
     let mut components = path.parent().unwrap().components();
     let disabled = components.any(|c| {
