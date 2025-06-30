@@ -79,6 +79,7 @@ pub mod proto_value;
 pub mod ptb_trace;
 pub mod quorum_driver_types;
 pub mod randomness_state;
+pub mod rpc_proto_conversions;
 pub mod signature;
 pub mod signature_verification;
 pub mod storage;

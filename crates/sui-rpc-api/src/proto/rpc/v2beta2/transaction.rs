@@ -291,6 +291,7 @@ impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
             ConsensusCommitPrologueV2(prologue) => Kind::ConsensusCommitPrologueV2(prologue.into()),
             ConsensusCommitPrologueV3(prologue) => Kind::ConsensusCommitPrologueV3(prologue.into()),
             ConsensusCommitPrologueV4(prologue) => Kind::ConsensusCommitPrologueV4(prologue.into()),
+            ProgrammableSystemTransaction(_) => return Self::default(),
         };
 
         Self { kind: Some(kind) }
@@ -1117,6 +1118,7 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
                 Kind::ExecutionTimeObservations(observations.into())
             }
             AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
+            CoinRegistryCreate => return Self::default(),
         };
 
         Self { kind: Some(kind) }
