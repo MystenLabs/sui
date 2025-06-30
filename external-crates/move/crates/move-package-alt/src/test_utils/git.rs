@@ -54,6 +54,7 @@ use crate::t;
 use crate::test_utils::panic_error;
 use crate::test_utils::paths::*;
 use crate::test_utils::*;
+use git2::RepositoryInitOptions;
 use std::env::consts;
 
 /// Manually construct a [`Repository`]
@@ -142,7 +143,9 @@ impl Repository {
 /// *(`git2`)* Initialize a new repository at the given path.
 pub fn init(path: &Path) -> git2::Repository {
     // default_search_path();
-    let repo = t!(git2::Repository::init(path));
+    let mut opts = RepositoryInitOptions::new();
+    opts.initial_head("main");
+    let repo = t!(git2::Repository::init_opts(path, &opts));
     default_repo_cfg(&repo);
     repo
 }
