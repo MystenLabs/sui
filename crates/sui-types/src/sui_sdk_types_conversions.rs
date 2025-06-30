@@ -561,6 +561,7 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
             }
             UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+            UnchangedSharedKind::PerEpochConfigWithSequenceNumber { .. } => todo!(),
         }
     }
 }

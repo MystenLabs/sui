@@ -25,21 +25,21 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionEffectsV2 {
     /// The status of the execution
-    status: ExecutionStatus,
+    pub(crate) status: ExecutionStatus,
     /// The epoch when this transaction was executed.
-    executed_epoch: EpochId,
-    gas_used: GasCostSummary,
+    pub(crate) executed_epoch: EpochId,
+    pub(crate) gas_used: GasCostSummary,
     /// The transaction digest
-    transaction_digest: TransactionDigest,
+    pub(crate) transaction_digest: TransactionDigest,
     /// The updated gas object reference, as an index into the `changed_objects` vector.
     /// Having a dedicated field for convenient access.
     /// System transaction that don't require gas will leave this as None.
-    gas_object_index: Option<u32>,
+    pub(crate) gas_object_index: Option<u32>,
     /// The digest of the events emitted during execution,
     /// can be None if the transaction does not emit any event.
-    events_digest: Option<TransactionEventsDigest>,
+    pub(crate) events_digest: Option<TransactionEventsDigest>,
     /// The set of transaction digests this transaction depends on.
-    dependencies: Vec<TransactionDigest>,
+    pub(crate) dependencies: Vec<TransactionDigest>,
 
     /// The version number of all the written Move objects by this transaction.
     pub(crate) lamport_version: SequenceNumber,
@@ -50,16 +50,16 @@ pub struct TransactionEffectsV2 {
     /// that stores the accumulator value. However this object is not really mutated
     /// in this transaction. We just have to use an ObjectID that is unique so that
     /// it does not conflict with any other object IDs in the changed_objects.
-    changed_objects: Vec<(ObjectID, EffectsObjectChange)>,
+    pub(crate) changed_objects: Vec<(ObjectID, EffectsObjectChange)>,
     /// Shared objects that are not mutated in this transaction. Unlike owned objects,
     /// read-only shared objects' version are not committed in the transaction,
     /// and in order for a node to catch up and execute it without consensus sequencing,
     /// the version needs to be committed in the effects.
-    unchanged_shared_objects: Vec<(ObjectID, UnchangedSharedKind)>,
+    pub(crate) unchanged_shared_objects: Vec<(ObjectID, UnchangedSharedKind)>,
     /// Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
     /// Storing it separately allows us to avoid bloating the effects with data that are not critical.
     /// It also provides more flexibility on the format and type of the data.
-    aux_data_digest: Option<EffectsAuxDataDigest>,
+    pub(crate) aux_data_digest: Option<EffectsAuxDataDigest>,
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV2 {
