@@ -684,14 +684,23 @@ export async function readTrace(
             frameInfo = frameInfoStack[frameInfoStack.length - 1];
 
             // Set end of lifetime for all locals to the max instruction PC ever seen
-            // for a given local (if they are live after this instructions, they will
+            // for a given local (if they are alive after this instructions, they will
             // be reset to FRAME_LIFETIME when processing subsequent effects).
             // All instructions in a given function, regardless of whether they are
             // in the inlined portion of the code or not, reset variable lifetimes.
-            const nonInlinedFrameID = frameInfo.ID !== INLINED_FRAME_ID_SAME_FILE &&
-                frameInfo.ID !== INLINED_FRAME_ID_DIFFERENT_FILE
-                ? frameInfo.ID
-                : frameInfoStack[frameInfoStack.length - 2].ID;
+            let nonInlinedFrameID = frameInfo.ID;
+            if (frameInfo.ID === INLINED_FRAME_ID_SAME_FILE || frameInfo.ID === INLINED_FRAME_ID_DIFFERENT_FILE) {
+                // Search from the top of the stack to find the first non-inlined frame.
+                // It's guaranteed that there is at least one non-inlined frame on the stack.
+                for (let i = frameInfoStack.length - 1; i >= 0; i--) {
+                    const currentFrame = frameInfoStack[i];
+                    if (currentFrame.ID !== INLINED_FRAME_ID_SAME_FILE &&
+                        currentFrame.ID !== INLINED_FRAME_ID_DIFFERENT_FILE) {
+                        nonInlinedFrameID = currentFrame.ID;
+                        break;
+                    }
+                }
+            }
             const lifetimeEnds = localLifetimeEnds.get(nonInlinedFrameID) || [];
             const lifetimeEndsMax = localLifetimeEndsMax.get(nonInlinedFrameID) || [];
             for (let i = 0; i < lifetimeEnds.length; i++) {

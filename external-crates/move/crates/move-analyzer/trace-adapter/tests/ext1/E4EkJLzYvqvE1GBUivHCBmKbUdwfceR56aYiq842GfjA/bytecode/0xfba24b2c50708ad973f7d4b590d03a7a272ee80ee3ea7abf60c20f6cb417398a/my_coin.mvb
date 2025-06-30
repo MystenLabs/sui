@@ -1,6 +1,7 @@
 // Move bytecode v6
-module 7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d.my_coin {
+module fba24b2c50708ad973f7d4b590d03a7a272ee80ee3ea7abf60c20f6cb417398a.my_coin {
 use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
 use 0000000000000000000000000000000000000000000000000000000000000002::balance;
 use 0000000000000000000000000000000000000000000000000000000000000002::coin;
 use 0000000000000000000000000000000000000000000000000000000000000002::transfer;
@@ -35,27 +36,59 @@ B0:
 	17: Ret
 }
 
-public mint(Arg0: &mut TreasuryCap<MY_COIN>, Arg1: u64, Arg2: &mut TxContext): Coin<MY_COIN> {
+public mint(Arg0: &mut TreasuryCap<MY_COIN>, Arg1: vector<u64>, Arg2: &mut TxContext): Coin<MY_COIN> {
+L3:	loc0: u64
 B0:
-	0: MoveLoc[0](Arg0: &mut TreasuryCap<MY_COIN>)
-	1: MoveLoc[1](Arg1: u64)
-	2: MoveLoc[2](Arg2: &mut TxContext)
-	3: Call coin::mint<MY_COIN>(&mut TreasuryCap<MY_COIN>, u64, &mut TxContext): Coin<MY_COIN>
-	4: Ret
+	0: LdU64(0)
+	1: StLoc[3](loc0: u64)
+B1:
+	2: ImmBorrowLoc[1](Arg1: vector<u64>)
+	3: Call vector::is_empty<u64>(&vector<u64>): bool
+	4: Not
+	5: BrFalse(13)
+B2:
+	6: Branch(7)
+B3:
+	7: MoveLoc[3](loc0: u64)
+	8: MutBorrowLoc[1](Arg1: vector<u64>)
+	9: VecPopBack(17)
+	10: Add
+	11: StLoc[3](loc0: u64)
+	12: Branch(2)
+B4:
+	13: MoveLoc[0](Arg0: &mut TreasuryCap<MY_COIN>)
+	14: MoveLoc[3](loc0: u64)
+	15: MoveLoc[2](Arg2: &mut TxContext)
+	16: Call coin::mint<MY_COIN>(&mut TreasuryCap<MY_COIN>, u64, &mut TxContext): Coin<MY_COIN>
+	17: Ret
 }
 
-public burn(Arg0: &mut TreasuryCap<MY_COIN>, Arg1: Coin<MY_COIN>) {
+public burn(Arg0: &mut TreasuryCap<MY_COIN>, Arg1: vector<Coin<MY_COIN>>) {
 L2:	loc0: Balance<MY_COIN>
 B0:
-	0: MoveLoc[1](Arg1: Coin<MY_COIN>)
-	1: Call coin::into_balance<MY_COIN>(Coin<MY_COIN>): Balance<MY_COIN>
-	2: StLoc[2](loc0: Balance<MY_COIN>)
-	3: MoveLoc[0](Arg0: &mut TreasuryCap<MY_COIN>)
-	4: Call coin::supply_mut<MY_COIN>(&mut TreasuryCap<MY_COIN>): &mut Supply<MY_COIN>
-	5: MoveLoc[2](loc0: Balance<MY_COIN>)
-	6: Call balance::decrease_supply<MY_COIN>(&mut Supply<MY_COIN>, Balance<MY_COIN>): u64
-	7: Pop
-	8: Ret
+	0: ImmBorrowLoc[1](Arg1: vector<Coin<MY_COIN>>)
+	1: Call vector::is_empty<Coin<MY_COIN>>(&vector<Coin<MY_COIN>>): bool
+	2: Not
+	3: BrFalse(15)
+B1:
+	4: Branch(5)
+B2:
+	5: MutBorrowLoc[1](Arg1: vector<Coin<MY_COIN>>)
+	6: VecPopBack(3)
+	7: Call coin::into_balance<MY_COIN>(Coin<MY_COIN>): Balance<MY_COIN>
+	8: StLoc[2](loc0: Balance<MY_COIN>)
+	9: CopyLoc[0](Arg0: &mut TreasuryCap<MY_COIN>)
+	10: Call coin::supply_mut<MY_COIN>(&mut TreasuryCap<MY_COIN>): &mut Supply<MY_COIN>
+	11: MoveLoc[2](loc0: Balance<MY_COIN>)
+	12: Call balance::decrease_supply<MY_COIN>(&mut Supply<MY_COIN>, Balance<MY_COIN>): u64
+	13: Pop
+	14: Branch(0)
+B3:
+	15: MoveLoc[0](Arg0: &mut TreasuryCap<MY_COIN>)
+	16: Pop
+	17: MoveLoc[1](Arg1: vector<Coin<MY_COIN>>)
+	18: VecUnpack(3, 0)
+	19: Ret
 }
 
 Constants [
