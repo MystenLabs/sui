@@ -287,6 +287,9 @@ impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
             EndOfEpoch(transactions) => Kind::EndOfEpoch(super::EndOfEpochTransaction {
                 transactions: transactions.into_iter().map(Into::into).collect(),
             }),
+            ProgrammableSystemTransaction(_ptb) => {
+                unreachable!("TODO fill this in when we add programmable system transactions")
+            }
             RandomnessStateUpdate(update) => Kind::RandomnessStateUpdate(update.into()),
             ConsensusCommitPrologueV2(prologue) => Kind::ConsensusCommitPrologueV2(prologue.into()),
             ConsensusCommitPrologueV3(prologue) => Kind::ConsensusCommitPrologueV3(prologue.into()),
@@ -1117,6 +1120,7 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
                 Kind::ExecutionTimeObservations(observations.into())
             }
             AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
+            CoinRegistryCreate => Kind::CoinRegistryCreate(()),
         };
 
         Self { kind: Some(kind) }
@@ -1151,6 +1155,7 @@ impl TryFrom<&super::EndOfEpochTransactionKind> for sui_sdk_types::EndOfEpochTra
                 Self::StoreExecutionTimeObservations(execution_time_observations.try_into()?)
             }
             Kind::AccumulatorRootCreate(()) => Self::AccumulatorRootCreate,
+            Kind::CoinRegistryCreate(()) => Self::CoinRegistryCreate,
         }
         .pipe(Ok)
     }
