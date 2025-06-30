@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use diesel::prelude::QueryableByName;
-use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
@@ -186,32 +185,22 @@ impl Handler for CoinBalanceBuckets {
             }
         }
 
-        use diesel_async::AsyncConnection;
-        let coin_balance_buckets_count = conn
-            .transaction(|conn| {
-                async move {
-                    let count = diesel::insert_into(coin_balance_buckets::table)
-                        .values(&stored)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                    let deleted_refs = if !references.is_empty() {
-                        diesel::insert_into(coin_balance_buckets_deletion_reference::table)
-                            .values(&references)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .await?
-                    } else {
-                        0
-                    };
-
-                    Ok::<_, anyhow::Error>(count + deleted_refs)
-                }
-                .scope_boxed()
-            })
+        let count = diesel::insert_into(coin_balance_buckets::table)
+            .values(&stored)
+            .on_conflict_do_nothing()
+            .execute(conn)
             .await?;
+        let deleted_refs = if !references.is_empty() {
+            diesel::insert_into(coin_balance_buckets_deletion_reference::table)
+                .values(&references)
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .await?
+        } else {
+            0
+        };
 
-        Ok(coin_balance_buckets_count)
+        Ok(count + deleted_refs)
     }
 
     // TODO: Add tests for this function.

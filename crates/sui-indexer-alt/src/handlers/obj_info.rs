@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{ensure, Result};
 use diesel::prelude::QueryableByName;
-use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
@@ -138,33 +137,23 @@ impl Handler for ObjInfo {
             }
         }
 
-        use diesel_async::AsyncConnection;
-        let obj_info_count = conn
-            .transaction(|conn| {
-                async move {
-                    let count = diesel::insert_into(obj_info::table)
-                        .values(&stored)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-
-                    let deleted_refs = if !references.is_empty() {
-                        diesel::insert_into(obj_info_deletion_reference::table)
-                            .values(&references)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .await?
-                    } else {
-                        0
-                    };
-
-                    Ok::<_, anyhow::Error>(count + deleted_refs)
-                }
-                .scope_boxed()
-            })
+        let count = diesel::insert_into(obj_info::table)
+            .values(&stored)
+            .on_conflict_do_nothing()
+            .execute(conn)
             .await?;
 
-        Ok(obj_info_count)
+        let deleted_refs = if !references.is_empty() {
+            diesel::insert_into(obj_info_deletion_reference::table)
+                .values(&references)
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .await?
+        } else {
+            0
+        };
+
+        Ok(count + deleted_refs)
     }
 
     /// To prune `obj_info`, entries between `[from, to_exclusive)` are read from the reference
