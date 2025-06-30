@@ -1687,6 +1687,10 @@ impl AuthorityState {
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
         epoch_store.insert_executed_in_epoch(tx_digest);
+        let key = certificate.key();
+        if !matches!(key, TransactionKey::Digest(_)) {
+            epoch_store.insert_tx_key(key, *tx_digest)?;
+        }
 
         // Allow testing what happens if we crash here.
         fail_point!("crash");

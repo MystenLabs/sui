@@ -2465,13 +2465,14 @@ impl AuthorityPerEpochStore {
             .tables()?
             .transaction_key_to_digest
             .multi_get(&non_digest_keys)?;
-        let futures = executed_digests
-            .into_iter()
-            .zip(registrations)
-            .map(|(d, r)| match d {
+        let futures =
+            izip!(executed_digests, registrations, non_digest_keys).map(|(d, r, k)| match d {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
+                None => {
+                    trace!("waiting for transaction key {:?}", k);
+                    Either::Right(r)
+                }
             });
         let mut results = VecDeque::from(join_all(futures).await);
 

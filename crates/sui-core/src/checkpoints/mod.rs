@@ -45,7 +45,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Weak;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::StakeUnit;
@@ -1197,18 +1197,24 @@ impl CheckpointBuilder {
         // in this order.
         let mut sorted_tx_effects_included_in_checkpoint = Vec::new();
         let mut all_roots = HashSet::new();
+
+        let resolve_start_time = Instant::now();
         for pending_checkpoint in pendings.into_iter() {
             let pending = pending_checkpoint.into_v2();
             debug!(
                 checkpoint_commit_height = pending.details.checkpoint_height,
+                roots = ?pending.roots,
                 "Resolving checkpoint transactions for pending checkpoint.",
             );
             let (root_digests, txn_in_checkpoint) = self
                 .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
                 .await?;
+            debug!("HAY");
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
             all_roots.extend(root_digests);
         }
+        let resolve_elapsed = resolve_start_time.elapsed();
+
         let new_checkpoints = self
             .create_checkpoints(
                 sorted_tx_effects_included_in_checkpoint,
@@ -1217,6 +1223,23 @@ impl CheckpointBuilder {
             )
             .await?;
         let highest_sequence = *new_checkpoints.last().0.sequence_number();
+
+        if cfg!(msim)
+            && highest_sequence
+                <= self
+                    .store
+                    .get_highest_executed_checkpoint_seq_number()
+                    .expect("db error")
+                    .unwrap_or(0)
+            && resolve_elapsed.as_nanos() > 0
+        {
+            debug_fatal!(
+                "resolve_checkpoint_transactions should be instantaneous when executed checkpoint is ahead of checkpoint builder {:?} {}",
+                resolve_elapsed,
+                highest_sequence
+            );
+        }
+
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
             .await?;
         Ok(highest_sequence)
@@ -1238,16 +1261,20 @@ impl CheckpointBuilder {
             .checkpoint_roots_count
             .inc_by(roots.len() as u64);
 
+        debug!("HAY");
+
         let root_digests = self
             .epoch_store
             .notify_read_tx_key_to_digest(&roots)
             .in_monitored_scope("CheckpointNotifyDigests")
             .await?;
+        debug!("HAY");
         let root_effects = self
             .effects_store
             .notify_read_executed_effects(&root_digests)
             .in_monitored_scope("CheckpointNotifyRead")
             .await;
+        debug!("HAY");
 
         let consensus_commit_prologue = if self
             .epoch_store
@@ -1257,9 +1284,8 @@ impl CheckpointBuilder {
             // If the roots contains consensus commit prologue transaction, we want to extract it,
             // and put it to the front of the checkpoint.
 
-            let consensus_commit_prologue = self
-                .extract_consensus_commit_prologue(&root_digests, &root_effects)
-                .await?;
+            let consensus_commit_prologue =
+                self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
 
             // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
             // other dependencies that haven't been included in any previous checkpoints.
@@ -1317,7 +1343,7 @@ impl CheckpointBuilder {
     // transactions.
     // This function can only be used when prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
     // The consensus commit prologue is expected to be the first transaction in the roots.
-    async fn extract_consensus_commit_prologue(
+    fn extract_consensus_commit_prologue(
         &self,
         root_digests: &[TransactionDigest],
         root_effects: &[TransactionEffects],
