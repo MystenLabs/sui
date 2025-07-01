@@ -1731,8 +1731,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     None
                 }
             };
-            let result_type = core::make_tvar(context, aloc);
-            let earms = match_arms(context, &esubject.ty, &result_type, narms_, &ref_mut);
+            let (result_type, earms) = match_arms(context, &esubject.ty, &aloc, narms_, &ref_mut);
             (result_type, TE::Match(esubject, sp(aloc, earms)))
         }
         NE::While(name, nb, nloop) => {
@@ -2210,20 +2209,31 @@ fn loop_body(
 fn match_arms(
     context: &mut Context,
     subject_type: &Type,
-    result_type: &Type,
+    arms_loc: &Loc,
     narms: Vec<N::MatchArm>,
     ref_mut: &Option<bool>,
-) -> Vec<T::MatchArm> {
-    narms
+) -> (Type, Vec<T::MatchArm>) {
+    let arms = narms
         .into_iter()
-        .map(|narm| match_arm(context, subject_type, result_type, narm, ref_mut))
-        .collect()
+        .map(|narm| match_arm(context, subject_type, narm, ref_mut))
+        .collect::<Vec<_>>();
+    let result_type = arms
+        .iter()
+        .fold(core::make_tvar(context, *arms_loc), |ty, arm| {
+            join(
+                context,
+                *arms_loc,
+                || "invalid match arm",
+                ty,
+                arm.value.rhs.ty.clone(),
+            )
+        });
+    (result_type, arms)
 }
 
 fn match_arm(
     context: &mut Context,
     subject_type: &Type,
-    result_type: &Type,
     sp!(aloc, arm_): N::MatchArm,
     ref_mut: &Option<bool>,
 ) -> T::MatchArm {
@@ -2261,7 +2271,6 @@ fn match_arm(
     );
 
     let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
-
     for (pat_var, guard_var) in guard_binders.clone() {
         use Type_::*;
         let ety = binder_map.get(&pat_var).unwrap().clone();
@@ -2288,14 +2297,6 @@ fn match_arm(
     }
 
     let rhs = exp(context, rhs);
-    subtype(
-        context,
-        rhs.exp.loc,
-        || "Invalid right-hand side expression",
-        rhs.ty.clone(),
-        result_type.clone(),
-    );
-
     sp(
         aloc,
         T::MatchArm_ {
@@ -2335,9 +2336,9 @@ fn match_pattern_(
     use T::UnannotatedPat_ as TP;
 
     macro_rules! rtype {
-        ($ty:expr) => {
+        ($loc:expr, $ty:expr) => {
             if let Some(mut_) = mut_ref {
-                sp($ty.loc, Type_::Ref(*mut_, Box::new($ty)))
+                sp($loc, Type_::Ref(*mut_, Box::new($ty)))
             } else {
                 $ty
             }
@@ -2371,15 +2372,17 @@ fn match_pattern_(
                 if matches!(fty.value, N::Type_::UnresolvedError) {
                     field_error = true;
                 }
-                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty.clone());
-                subtype(
+                let mut tpat =
+                    match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(tpat.pat.loc, fty.clone());
+                let pat_ty = subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
+                tpat.ty = pat_ty;
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2397,7 +2400,7 @@ fn match_pattern_(
                     ),
                 );
             }
-            let bt = rtype!(bt);
+            let bt = rtype!(loc, bt);
             let pat_ = if field_error {
                 TP::ErrorPat
             } else if let Some(mut_) = mut_ref {
@@ -2423,15 +2426,17 @@ fn match_pattern_(
                 if matches!(fty.value, N::Type_::UnresolvedError) {
                     field_error = true;
                 }
-                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty.clone());
-                subtype(
+                let mut tpat =
+                    match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(tpat.pat.loc, fty.clone());
+                let pat_ty = subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
+                tpat.ty = pat_ty;
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2442,7 +2447,7 @@ fn match_pattern_(
                 );
                 context.add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
-            let bt = rtype!(bt);
+            let bt = rtype!(loc, bt);
             let pat_ = if field_error {
                 TP::ErrorPat
             } else if let Some(mut_) = mut_ref {
@@ -2475,7 +2480,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Constant(m, const_)))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Constant(m, const_)))
         }
         P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
@@ -2506,7 +2511,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Literal(v)))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Literal(v)))
         }
         P::Wildcard => {
             let ty = core::make_tvar(context, loc);
@@ -2516,7 +2521,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Wildcard))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Wildcard))
         }
         P::Or(lhs, rhs) => {
             let lpat = match_pattern_(context, *lhs, mut_ref, rhs_binders, wildcard_needs_drop);
