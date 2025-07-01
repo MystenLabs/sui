@@ -5,20 +5,18 @@
 use crate::{
     compilation::on_disk_package::OnDiskPackage,
     flavor::MoveFlavor,
-    graph::PackageGraph,
-    package::{EnvironmentName, Package, RootPackage, paths::PackagePath},
+    package::{EnvironmentName, RootPackage, paths::PackagePath},
 };
 
-use move_bytecode_source_map::utils::{serialize_to_json, serialize_to_json_string};
+use crate::schema::PublishedID;
+
 use move_core_types::account_address::AccountAddress;
 
 use super::{build_config::BuildConfig, on_disk_package::OnDiskCompiledPackage};
 use anyhow::{Result, bail};
-use clap::Parser;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{
-    DEBUG_INFO_EXTENSION, MOVE_BYTECODE_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
     extension_equals, find_filenames, find_move_filenames,
 };
 use move_compiler::{
@@ -34,18 +32,16 @@ use move_compiler::{
     },
 };
 use move_core_types::{identifier::Identifier, parsing::address::NumericalAddress};
-use move_disassembler::disassembler::Disassembler;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_package::{
-    compilation::{compiled_package::ModuleFormat, package_layout::CompiledPackageLayout},
+    compilation::package_layout::CompiledPackageLayout,
     source_package::layout::SourcePackageLayout,
 };
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
-    fmt,
     io::Write,
     path::{Path, PathBuf},
 };
@@ -60,7 +56,7 @@ pub struct CompiledPackage<F: MoveFlavor> {
     root_compiled_units: Vec<CompiledUnitWithSource>,
     deps_compiled_units: Vec<(Symbol, CompiledUnitWithSource)>,
     compiled_docs: Option<Vec<(String, String)>>,
-    published_ids: Vec<AccountAddress>,
+    published_ids: Vec<PublishedID>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,7 +141,7 @@ impl<F: MoveFlavor> CompiledPackage<F> {
             .collect()
     }
 
-    pub fn dependency_ids(&self) -> Vec<AccountAddress> {
+    pub fn dependency_ids(&self) -> Vec<PublishedID> {
         self.published_ids.clone()
     }
 }
@@ -234,14 +230,17 @@ pub async fn compile<F: MoveFlavor>(
             if node.package().name() == root_pkg.package_name() {
                 continue;
             }
-            let addr = if let Some(n) = node
+            let addr = if let Some(addr) = node
                 .package()
                 .publish_data()
                 .get(env)
-                .map(|data| data.publication.published_at)
+                .map(|data| data.publication.published_at.clone())
             {
-                published_ids.push(n.clone());
-                NumericalAddress::new(n.into_bytes(), move_compiler::shared::NumberFormat::Hex)
+                published_ids.push(addr.clone());
+                NumericalAddress::new(
+                    addr.0.into_bytes(),
+                    move_compiler::shared::NumberFormat::Hex,
+                )
             } else {
                 bail!(
                     "No published address for package {} in env {}",
@@ -251,10 +250,12 @@ pub async fn compile<F: MoveFlavor>(
             };
 
             let pkg_name: Symbol = if names.contains_key(&node.name().as_str()) {
+                // return one of the standard aliases
                 (*names.get(node.name().as_str()).unwrap()).into()
             } else {
                 node.package().name().as_str().into()
             };
+
             named_address_map.insert(pkg_name, addr);
         }
     }

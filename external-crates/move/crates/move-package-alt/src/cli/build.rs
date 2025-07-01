@@ -8,9 +8,9 @@ use crate::{
     compilation::{build_config::BuildConfig, compiled_package::compile},
     errors::PackageResult,
     flavor::Vanilla,
-    package::{Package, RootPackage},
+    package::RootPackage,
 };
-use clap::{Command, Parser, Subcommand};
+use clap::Parser;
 
 /// Build the package
 #[derive(Debug, Clone, Parser)]
