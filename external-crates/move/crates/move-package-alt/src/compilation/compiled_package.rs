@@ -278,11 +278,7 @@ pub async fn compile<F: MoveFlavor>(
         for node in nodes {
             println!("Building dependency: {}", node.package().name());
             let sources = get_sources(node.package().path())?;
-            let is_dependency = if node.package().name() == root_pkg.package_name() {
-                false
-            } else {
-                true
-            };
+            let is_dependency = node.package().name() != root_pkg.package_name();
 
             debug!(
                 "Node: {:?}, is dependency: {is_dependency}",
@@ -324,7 +320,7 @@ pub async fn compile<F: MoveFlavor>(
         let data: (MappedFiles, Vec<_>) = match units_res {
             Ok((units, warning_diags)) => {
                 decorate_warnings(warning_diags, Some(&files));
-                ((files, units))
+                (files, units)
             }
             Err(error_diags) => {
                 // with errors present don't even try decorating warnings output to avoid
@@ -419,7 +415,7 @@ pub async fn compile<F: MoveFlavor>(
         let under_path = root_pkg.package_path().path().join("build");
         let root_package_name: Symbol = root_pkg.package_name().as_str().into();
 
-        save_to_disk::<F>(
+        save_to_disk(
             root_compiled_units.clone(),
             compiled_package_info.clone(),
             deps_compiled_units.clone(),
@@ -458,7 +454,7 @@ fn find_default_address<'a>(
     }
 }
 
-pub(crate) fn save_to_disk<F: MoveFlavor>(
+pub(crate) fn save_to_disk(
     root_compiled_units: Vec<CompiledUnitWithSource>,
     compiled_package_info: CompiledPackageInfo,
     deps_compiled_units: Vec<(Symbol, CompiledUnitWithSource)>,
@@ -474,7 +470,7 @@ pub(crate) fn save_to_disk<F: MoveFlavor>(
             compiled_package_info: compiled_package_info.clone(),
             dependencies: deps_compiled_units
                 .iter()
-                .map(|(package_name, _)| package_name.clone())
+                .map(|(package_name, _)| *package_name)
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect(),

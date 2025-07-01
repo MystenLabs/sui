@@ -5,12 +5,12 @@
 use super::compiled_package::{CompiledPackageInfo, CompiledUnitWithSource};
 use serde::{Deserialize, Serialize};
 
+use crate::compilation::package_layout::CompiledPackageLayout;
 use move_bytecode_source_map::utils::{serialize_to_json, serialize_to_json_string};
 use move_command_line_common::files::{
     DEBUG_INFO_EXTENSION, MOVE_BYTECODE_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
 };
 use move_disassembler::disassembler::Disassembler;
-use move_package::compilation::package_layout::CompiledPackageLayout;
 use move_symbol_pool::Symbol;
 use std::{
     fs,
