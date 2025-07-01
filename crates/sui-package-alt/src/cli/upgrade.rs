@@ -100,7 +100,7 @@ impl Upgrade {
                 env
             ))
         })?;
-        let package_id: ObjectID = published_info.publication.published_at.into();
+        let package_id: ObjectID = published_info.publication.published_at.0.into();
 
         root_pkg
             .update_deps_and_write_to_lockfile(&BTreeMap::from([(env.clone(), chain_id.clone())]))
@@ -127,7 +127,7 @@ impl Upgrade {
         let dep_ids: Vec<ObjectID> = compiled_package
             .dependency_ids()
             .into_iter()
-            .map(|x| x.into())
+            .map(|x| x.0.into())
             .collect();
         let digest = get_package_digest(&compiled_modules, dep_ids.iter().collect());
 

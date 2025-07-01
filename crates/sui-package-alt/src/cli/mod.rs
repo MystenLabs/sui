@@ -11,7 +11,7 @@ use crate::{sui_flavor::SuiMetadata, SuiFlavor};
 pub use build::Build;
 use move_package_alt::{
     compilation::build_config::BuildConfig,
-    schema::{ParsedLockfile, Publication},
+    schema::{OriginalID, ParsedLockfile, Publication, PublishedID},
 };
 pub use publish::Publish;
 use shared_crypto::intent::Intent;
@@ -135,8 +135,8 @@ pub async fn update_lock_file_for_chain_env(
             let (upgrade_cap, _, _) = get_new_package_upgrade_cap_from_response(response)
                 .ok_or_else(|| anyhow!("Expected a valid published package with a upgrade cap"))?;
             let publication_data = Publication::<SuiFlavor> {
-                published_at: *published_id,
-                original_id: *published_id,
+                published_at: PublishedID(*published_id),
+                original_id: OriginalID(*published_id),
                 chain_id: chain_id.to_string(),
                 toolchain_version: binary_version.to_string(),
                 build_config: toml::from_str(&toml::to_string(build_config)?)?,
@@ -150,7 +150,7 @@ pub async fn update_lock_file_for_chain_env(
         }
         LockCommand::Upgrade => {
             lockfile.published.get_mut(env).map(|pub_data| {
-                pub_data.published_at = *published_id;
+                pub_data.published_at = PublishedID(*published_id);
                 pub_data.metadata.version = Some(version.value());
             });
         }
