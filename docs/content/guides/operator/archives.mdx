@@ -18,9 +18,12 @@ To enable your node to fallback to an archive in case of lag, add this to your f
 
 ```yaml
 state-archive-read-config:
-  - ingestion-url: "https://checkpoints.mainnet.sui.io"
+  - ingestion-url: "https://s3.us-west-2.amazonaws.com/mysten-mainnet-checkpoints"
     # How many objects to read ahead when catching up
     concurrency: 5
+    remote-store-options:
+      - ["aws_access_key_id", <YOUR_AWS_ACCESS_KEY_ID|PATH_TO_AWS_ACCESS_KEY>]
+      - ["aws_secret_access_key", <AWS_SECRET_ACCESS_KEY|PATH_TO_AWS_SECRET_ACCESS_KEY>]
 ```
 
 </TabItem>
