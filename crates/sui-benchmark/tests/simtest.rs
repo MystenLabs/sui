@@ -450,6 +450,7 @@ mod test {
             }
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
+        register_fail_point_async("randomness-delay", || delay_failpoint(10..1000, 0.5));
 
         test_simulated_load(test_cluster, 120).await;
     }

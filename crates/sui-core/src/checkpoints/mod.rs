@@ -26,6 +26,7 @@ use mysten_common::{assert_reachable, debug_fatal, fatal};
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
+use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
@@ -41,10 +42,13 @@ use crate::consensus_handler::SequencedConsensusTransactionKey;
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
+use std::future::Future;
 use std::io::Write;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
@@ -1187,28 +1191,17 @@ impl CheckpointBuilder {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
         let last_details = pendings.last().unwrap().details().clone();
 
-        // Keeps track of the effects that are already included in the current checkpoint.
-        // This is used when there are multiple pending checkpoints to create a single checkpoint
-        // because in such scenarios, dependencies of a transaction may in earlier created checkpoints,
-        // or in earlier pending checkpoints.
-        let mut effects_in_current_checkpoint = BTreeSet::new();
-
         // Stores the transactions that should be included in the checkpoint. Transactions will be recorded in the checkpoint
         // in this order.
-        let mut sorted_tx_effects_included_in_checkpoint = Vec::new();
-        let mut all_roots = HashSet::new();
-        for pending_checkpoint in pendings.into_iter() {
-            let pending = pending_checkpoint.into_v2();
-            debug!(
-                checkpoint_commit_height = pending.details.checkpoint_height,
-                "Resolving checkpoint transactions for pending checkpoint.",
-            );
-            let (root_digests, txn_in_checkpoint) = self
-                .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
-                .await?;
-            sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
-            all_roots.extend(root_digests);
-        }
+        let highest_executed_sequence = self
+            .store
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("db error")
+            .unwrap_or(0);
+
+        let (poll_count, result) = poll_count(self.resolve_checkpoint_transactions(pendings)).await;
+        let (sorted_tx_effects_included_in_checkpoint, all_roots) = result?;
+
         let new_checkpoints = self
             .create_checkpoints(
                 sorted_tx_effects_included_in_checkpoint,
@@ -1217,6 +1210,12 @@ impl CheckpointBuilder {
             )
             .await?;
         let highest_sequence = *new_checkpoints.last().0.sequence_number();
+        if highest_sequence <= highest_executed_sequence && poll_count > 1 {
+            debug_fatal!(
+                "resolve_checkpoint_transactions should be instantaneous when executed checkpoint is ahead of checkpoint builder"
+            );
+        }
+
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
             .await?;
         Ok(highest_sequence)
@@ -1229,95 +1228,116 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all)]
     async fn resolve_checkpoint_transactions(
         &self,
-        roots: Vec<TransactionKey>,
-        effects_in_current_checkpoint: &mut BTreeSet<TransactionDigest>,
-    ) -> SuiResult<(Vec<TransactionDigest>, Vec<TransactionEffects>)> {
+        pending_checkpoints: Vec<PendingCheckpointV2>,
+    ) -> SuiResult<(Vec<TransactionEffects>, HashSet<TransactionDigest>)> {
         let _scope = monitored_scope("CheckpointBuilder::resolve_checkpoint_transactions");
 
-        self.metrics
-            .checkpoint_roots_count
-            .inc_by(roots.len() as u64);
+        // Keeps track of the effects that are already included in the current checkpoint.
+        // This is used when there are multiple pending checkpoints to create a single checkpoint
+        // because in such scenarios, dependencies of a transaction may in earlier created checkpoints,
+        // or in earlier pending checkpoints.
+        let mut effects_in_current_checkpoint = BTreeSet::new();
 
-        let root_digests = self
-            .epoch_store
-            .notify_read_tx_key_to_digest(&roots)
-            .in_monitored_scope("CheckpointNotifyDigests")
-            .await?;
-        let root_effects = self
-            .effects_store
-            .notify_read_executed_effects(&root_digests)
-            .in_monitored_scope("CheckpointNotifyRead")
-            .await;
+        let mut tx_effects = Vec::new();
+        let mut tx_roots = HashSet::new();
 
-        let consensus_commit_prologue = if self
-            .epoch_store
-            .protocol_config()
-            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
-        {
-            // If the roots contains consensus commit prologue transaction, we want to extract it,
-            // and put it to the front of the checkpoint.
+        for pending_checkpoint in pending_checkpoints.into_iter() {
+            let pending = pending_checkpoint.into_v2();
+            debug!(
+                checkpoint_commit_height = pending.details.checkpoint_height,
+                roots = ?pending.roots,
+                "Resolving checkpoint transactions for pending checkpoint.",
+            );
 
-            let consensus_commit_prologue = self
-                .extract_consensus_commit_prologue(&root_digests, &root_effects)
+            let roots = &pending.roots;
+
+            self.metrics
+                .checkpoint_roots_count
+                .inc_by(roots.len() as u64);
+
+            let root_digests = self
+                .epoch_store
+                .notify_read_tx_key_to_digest(roots)
+                .in_monitored_scope("CheckpointNotifyDigests")
                 .await?;
+            let root_effects = self
+                .effects_store
+                .notify_read_executed_effects(&root_digests)
+                .in_monitored_scope("CheckpointNotifyRead")
+                .await;
 
-            // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
-            // other dependencies that haven't been included in any previous checkpoints.
-            if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
-                let unsorted_ccp = self.complete_checkpoint_effects(
-                    vec![ccp_effects.clone()],
-                    effects_in_current_checkpoint,
-                )?;
+            let consensus_commit_prologue = if self
+                .epoch_store
+                .protocol_config()
+                .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+            {
+                // If the roots contains consensus commit prologue transaction, we want to extract it,
+                // and put it to the front of the checkpoint.
 
-                // No other dependencies of this consensus commit prologue that haven't been included
-                // in any previous checkpoint.
-                if unsorted_ccp.len() != 1 {
-                    fatal!(
-                        "Expected 1 consensus commit prologue, got {:?}",
-                        unsorted_ccp
-                            .iter()
-                            .map(|e| e.transaction_digest())
-                            .collect::<Vec<_>>()
-                    );
+                let consensus_commit_prologue =
+                    self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
+
+                // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
+                // other dependencies that haven't been included in any previous checkpoints.
+                if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
+                    let unsorted_ccp = self.complete_checkpoint_effects(
+                        vec![ccp_effects.clone()],
+                        &mut effects_in_current_checkpoint,
+                    )?;
+
+                    // No other dependencies of this consensus commit prologue that haven't been included
+                    // in any previous checkpoint.
+                    if unsorted_ccp.len() != 1 {
+                        fatal!(
+                            "Expected 1 consensus commit prologue, got {:?}",
+                            unsorted_ccp
+                                .iter()
+                                .map(|e| e.transaction_digest())
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                    assert_eq!(unsorted_ccp.len(), 1);
+                    assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
                 }
-                assert_eq!(unsorted_ccp.len(), 1);
-                assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
-            }
-            consensus_commit_prologue
-        } else {
-            None
-        };
+                consensus_commit_prologue
+            } else {
+                None
+            };
 
-        let unsorted =
-            self.complete_checkpoint_effects(root_effects, effects_in_current_checkpoint)?;
+            let unsorted =
+                self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
 
-        let _scope = monitored_scope("CheckpointBuilder::causal_sort");
-        let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
-        if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
-            if cfg!(debug_assertions) {
-                // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
-                for tx in unsorted.iter() {
-                    assert!(tx.transaction_digest() != &ccp_digest);
+            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+            if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
+                if cfg!(debug_assertions) {
+                    // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
+                    for tx in unsorted.iter() {
+                        assert!(tx.transaction_digest() != &ccp_digest);
+                    }
                 }
+                sorted.push(ccp_effects);
             }
-            sorted.push(ccp_effects);
-        }
-        sorted.extend(CausalOrder::causal_sort(unsorted));
+            sorted.extend(CausalOrder::causal_sort(unsorted));
 
-        #[cfg(msim)]
-        {
-            // Check consensus commit prologue invariants in sim test.
-            self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
+            #[cfg(msim)]
+            {
+                // Check consensus commit prologue invariants in sim test.
+                self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
+            }
+
+            tx_effects.extend(sorted);
+            tx_roots.extend(root_digests);
         }
 
-        Ok((root_digests, sorted))
+        Ok((tx_effects, tx_roots))
     }
 
     // This function is used to extract the consensus commit prologue digest and effects from the root
     // transactions.
     // This function can only be used when prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
     // The consensus commit prologue is expected to be the first transaction in the roots.
-    async fn extract_consensus_commit_prologue(
+    fn extract_consensus_commit_prologue(
         &self,
         root_digests: &[TransactionDigest],
         root_effects: &[TransactionEffects],
@@ -2749,6 +2769,41 @@ impl From<PendingCheckpoint> for PendingCheckpointV2 {
             details: value.details,
         })
     }
+}
+
+pin_project! {
+    pub struct PollCounter<Fut> {
+        #[pin]
+        future: Fut,
+        count: usize,
+    }
+}
+
+impl<Fut> PollCounter<Fut> {
+    pub fn new(future: Fut) -> Self {
+        Self { future, count: 0 }
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
+    }
+}
+
+impl<Fut: Future> Future for PollCounter<Fut> {
+    type Output = (usize, Fut::Output);
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        *this.count += 1;
+        match this.future.poll(cx) {
+            Poll::Ready(output) => Poll::Ready((*this.count, output)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+fn poll_count<Fut>(future: Fut) -> PollCounter<Fut> {
+    PollCounter::new(future)
 }
 
 #[cfg(test)]
