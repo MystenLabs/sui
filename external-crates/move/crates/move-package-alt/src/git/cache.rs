@@ -5,16 +5,15 @@
 use std::{
     io::BufRead,
     path::{Path, PathBuf},
-    process::{Output, Stdio},
+    process::Stdio,
 };
 
 use tokio::process::Command;
 use tracing::{debug, info};
 
-use super::{
-    errors::{GitError, GitResult},
-    sha::GitSha,
-};
+use crate::schema::GitSha;
+
+use super::errors::{GitError, GitResult};
 
 use once_cell::sync::OnceCell;
 
@@ -381,13 +380,10 @@ mod tests {
     use super::*;
     use crate::test_utils::basic_manifest;
     use crate::test_utils::git;
-    use crate::test_utils::git::commits;
     use std::collections::BTreeSet;
-    use std::env;
     use std::fs;
     use std::path::Path;
-    use tempfile::{TempDir, tempdir};
-    use test_log::test;
+    use tempfile::tempdir;
     use walkdir::DirEntry;
     use walkdir::WalkDir;
 

@@ -2,36 +2,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    ffi::OsString,
-    fmt,
-    fs::read_to_string,
-    path::{Path, PathBuf},
-};
+use std::collections::BTreeMap;
 
-use derive_where::derive_where;
-use serde::{Deserialize, Serialize};
-use serde_spanned::Spanned;
-use toml_edit::{
-    DocumentMut, InlineTable, Item, KeyMut, Table, Value,
-    visit_mut::{VisitMut, visit_table_like_kv_mut, visit_table_mut},
-};
 use tracing::debug;
 
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo},
-    errors::{FileHandle, LockfileError, PackageError, PackageResult, TheFile},
+    errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
-    schema::{self, PackageID, ParsedLockfile, Pin, Publication},
+    schema::{PackageID, ParsedLockfile, Pin, Publication},
 };
 
-use super::{
-    EnvironmentName, PackageName,
-    manifest::{Digest, Manifest},
-    paths::PackagePath,
-};
-use move_core_types::identifier::Identifier;
+use super::{EnvironmentName, paths::PackagePath};
 
 #[derive(Debug)]
 pub struct Lockfiles<F: MoveFlavor> {

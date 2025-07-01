@@ -55,7 +55,6 @@ use crate::test_utils::panic_error;
 use crate::test_utils::paths::*;
 use crate::test_utils::*;
 use git2::RepositoryInitOptions;
-use std::env::consts;
 
 /// Manually construct a [`Repository`]
 ///

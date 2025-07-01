@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 
 use crate::{errors::PackageResult, flavor::Vanilla, package::Package};
-use clap::{Command, Parser, Subcommand};
+use clap::Parser;
 
 /// Build the package
 #[derive(Debug, Clone, Parser)]
