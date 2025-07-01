@@ -175,6 +175,10 @@ impl Handler for ObjInfo {
         // degrades sharply beyond this, since the planner switches to hash joins and full table
         // scans. A HashAggregate approach interestingly becomes more performant in this scenario.
         //
+        // If the first call to prune succeeds, subsequent calls will find no records to delete from
+        // obj_info_deletion_reference, and consequently no records to delete from the main table.
+        // Pruning is thus idempotent after the initial run.
+        //
         // TODO: use sui_sql_macro's query!
         let query = format!(
             "
