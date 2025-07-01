@@ -32,7 +32,7 @@ use move_compiler::{
         files::{FileName, MappedFiles},
     },
 };
-use move_core_types::{identifier::Identifier, parsing::address::NumericalAddress};
+use move_core_types::parsing::address::NumericalAddress;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_symbol_pool::Symbol;
@@ -47,13 +47,24 @@ use tracing::debug;
 /// References file for documentation generation
 pub const REFERENCE_TEMPLATE_FILENAME: &str = "references.md";
 
-pub struct CompiledPackage<F: MoveFlavor> {
-    root_pkg: RootPackage<F>,
+/// Represents a compiled package in memory.
+pub struct CompiledPackage {
+    /// Meta information about the compilation of this `CompiledPackage`
     compiled_package_info: CompiledPackageInfo,
+    /// The output compiled bytecode in the root package (both module, and scripts) along with its
+    /// source file
     root_compiled_units: Vec<CompiledUnitWithSource>,
+    /// The output compiled bytecode for dependencies
     deps_compiled_units: Vec<(Symbol, CompiledUnitWithSource)>,
+
+    // Optional artifacts from compilation
+    //
+    /// filename -> doctext
     compiled_docs: Option<Vec<(String, String)>>,
-    published_ids: Vec<PublishedID>,
+    /// The list of published ids for the dependencies of this package
+    deps_published_ids: Vec<PublishedID>,
+    /// The mapping of file hashes to file names and contents
+    file_map: MappedFiles,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,7 +86,8 @@ pub struct CompiledUnitWithSource {
     pub source_path: PathBuf,
 }
 
-impl<F: MoveFlavor> CompiledPackage<F> {
+impl CompiledPackage {
+    /// Return an iterator over all compiled units in this package, including dependencies
     pub fn get_all_compiled_units_with_source(
         &self,
     ) -> impl Iterator<Item = &CompiledUnitWithSource> {
@@ -83,14 +95,14 @@ impl<F: MoveFlavor> CompiledPackage<F> {
             .iter()
             .chain(self.deps_compiled_units.iter().map(|(_, unit)| unit))
     }
+
+    /// Return an iterator over all bytecode modules in this package, including dependencies
     pub fn get_modules_and_deps(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_all_compiled_units_with_source()
             .map(|m| &m.unit.module)
-        // TODO we're ditching bytecode deps support, so maybe this is not needed.
-        // .chain(self.bytecode_deps.iter().map(|(_, m)| m))
-        // this might need a chain with bytecode_deps.
     }
 
+    /// Return an iterator over the root bytecode modules in this package, excluding dependencies
     pub fn root_modules_map(&self) -> Modules {
         Modules::new(
             self.root_compiled_units
@@ -100,9 +112,7 @@ impl<F: MoveFlavor> CompiledPackage<F> {
     }
 
     /// Return the bytecode modules in this package, topologically sorted in dependency order.
-    /// Optionally include dependencies that have not been published (are at address 0x0), if
-    /// `with_unpublished_deps` is true. This is the function to call if you would like to publish
-    /// or statically analyze the modules.
+    /// This is the function to call if you would like to publish or statically analyze the modules.
     pub fn get_dependency_sorted_modules(&self) -> Vec<CompiledModule> {
         let all_modules = Modules::new(self.get_modules_and_deps());
 
@@ -126,7 +136,8 @@ impl<F: MoveFlavor> CompiledPackage<F> {
             .collect()
     }
 
-    /// Return a serialized representation of the bytecode modules in this package, topologically sorted in dependency order
+    /// Return a serialized representation of the bytecode modules in this package, topologically
+    /// sorted in dependency order.
     pub fn get_package_bytes(&self) -> Vec<Vec<u8>> {
         self.get_dependency_sorted_modules()
             .iter()
@@ -140,7 +151,7 @@ impl<F: MoveFlavor> CompiledPackage<F> {
 
     /// Return the published ids of the dependencies of this package
     pub fn dependency_ids(&self) -> Vec<PublishedID> {
-        self.published_ids.clone()
+        self.deps_published_ids.clone()
     }
 }
 
@@ -199,18 +210,19 @@ fn build_docs(
 }
 
 pub async fn compile<F: MoveFlavor>(
+    // TODO: how does this work?
+    // vfs_root: Option<&Path>,
     root_pkg: RootPackage<F>,
     build_config: BuildConfig,
     env: &EnvironmentName,
-) -> Result<CompiledPackage<F>> {
+) -> Result<CompiledPackage> {
+    // TODO: refactor this
     let pkgs = BTreeSet::from(["Sui", "SuiSystem", "MoveStdlib"]);
     let names = BTreeMap::from([
         ("Sui", "sui"),
         ("SuiSystem", "sui_system"),
         ("MoveStdlib", "std"),
     ]);
-
-    let mut starting_addr = 9010;
 
     let mut named_address_map: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
     let root_pkg_paths = find_move_filenames(&[root_pkg.package_path().path()], false)
@@ -389,8 +401,6 @@ pub async fn compile<F: MoveFlavor>(
                 all_compiled_units_vec,
             )?;
 
-            // let direct_deps = root_pkg.direct_dependencies_by_env(env)
-
             compiled_docs = Some(build_docs(
                 DocgenFlags::default(), // TODO this should be configurable
                 root_package_name,
@@ -429,9 +439,10 @@ pub async fn compile<F: MoveFlavor>(
             root_compiled_units,
             deps_compiled_units,
             compiled_docs: None,
-            published_ids,
+            deps_published_ids: published_ids,
+            file_map,
             // compiled_docs,
-            root_pkg,
+            // root_pkg,
         };
 
         Ok(compiled_package)
@@ -440,21 +451,8 @@ pub async fn compile<F: MoveFlavor>(
     }
 }
 
-fn find_default_address<'a>(
-    pkg_name: &Identifier,
-    default_addresses: &'a BTreeMap<Symbol, NumericalAddress>,
-) -> Option<&'a NumericalAddress> {
-    let std = Identifier::from_utf8("MoveStdlib".into()).unwrap();
-    let sui = Identifier::from_utf8("Sui".into()).unwrap();
-    let system = Identifier::from_utf8("SuiSystem".into()).unwrap();
-    match pkg_name {
-        std => default_addresses.get(&("std".into())),
-        sui => default_addresses.get(&("sui".into())),
-        system => default_addresses.get(&("sui_system".into())),
-    }
-}
-
-pub(crate) fn save_to_disk(
+/// Save the compiled package to disk
+fn save_to_disk(
     root_compiled_units: Vec<CompiledUnitWithSource>,
     compiled_package_info: CompiledPackageInfo,
     deps_compiled_units: Vec<(Symbol, CompiledUnitWithSource)>,
@@ -521,7 +519,7 @@ pub(crate) fn save_to_disk(
 
 /// There may be additional information that needs to be displayed after diagnostics are reported
 /// (optionally report diagnostics themselves if files argument is provided).
-pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>) {
+fn decorate_warnings(warning_diags: Diagnostics, files: Option<&MappedFiles>) {
     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
     let (filtered_diags_num, unique) =
         warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
@@ -558,7 +556,7 @@ fn source_paths_for_config(package_path: &Path) -> Vec<PathBuf> {
 }
 
 // Find all the source files for a package at the given path
-pub fn get_sources(path: &PackagePath) -> Result<Vec<FileName>> {
+fn get_sources(path: &PackagePath) -> Result<Vec<FileName>> {
     let places_to_look = source_paths_for_config(path.path());
     Ok(find_move_filenames(&places_to_look, false)?
         .into_iter()
