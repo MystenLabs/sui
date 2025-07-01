@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::rpc::v2beta2::GetServiceInfoResponse;
-use crate::proto::timestamp_ms_to_proto;
 use crate::RpcError;
 use crate::RpcService;
+use sui_rpc::proto::sui::rpc::v2beta2::GetServiceInfoResponse;
+use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::CheckpointDigest;
 use tap::Pipe;
 
@@ -30,7 +30,7 @@ pub fn get_service_info(service: &RpcService) -> Result<GetServiceInfoResponse, 
         timestamp: Some(timestamp_ms_to_proto(latest_checkpoint.timestamp_ms)),
         lowest_available_checkpoint,
         lowest_available_checkpoint_objects,
-        server_version: service.server_version().map(ToString::to_string),
+        server: service.server_version().map(ToString::to_string),
     }
     .pipe(Ok)
 }

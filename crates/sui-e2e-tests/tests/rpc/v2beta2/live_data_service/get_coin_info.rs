@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
-use sui_rpc_api::proto::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::GetCoinInfoRequest;
-use sui_rpc_api::proto::rpc::v2beta2::GetCoinInfoResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
 use sui_sdk_types::TypeTag;
 use test_cluster::TestClusterBuilder;
 

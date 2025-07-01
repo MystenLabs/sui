@@ -12,16 +12,13 @@ use tap::Pipe;
 pub mod client;
 mod config;
 mod error;
-pub mod field_mask;
 mod grpc;
-pub mod message;
 mod metrics;
 pub mod proto;
 mod reader;
 mod response;
 mod service;
 pub mod subscription;
-pub mod types;
 
 pub use crate::grpc::v2beta::ledger_service;
 pub use client::Client;
@@ -127,16 +124,16 @@ impl RpcService {
             let move_package_service = crate::proto::rpc::v2alpha::move_package_service_server::MovePackageServiceServer::new(self.clone());
 
             let ledger_service2 =
-                crate::proto::rpc::v2beta2::ledger_service_server::LedgerServiceServer::new(
+                sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer::new(
                     self.clone(),
                 );
-            let transaction_execution_service2 = crate::proto::rpc::v2beta2::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone());
+            let transaction_execution_service2 = sui_rpc::proto::sui::rpc::v2beta2::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone());
             let live_data_service2 =
-                crate::proto::rpc::v2beta2::live_data_service_server::LiveDataServiceServer::new(
+                sui_rpc::proto::sui::rpc::v2beta2::live_data_service_server::LiveDataServiceServer::new(
                     self.clone(),
                 );
-            let signature_verification_service2 = crate::proto::rpc::v2beta2::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone());
-            let move_package_service2 = crate::proto::rpc::v2beta2::move_package_service_server::MovePackageServiceServer::new(self.clone());
+            let signature_verification_service2 = sui_rpc::proto::sui::rpc::v2beta2::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone());
+            let move_package_service2 = sui_rpc::proto::sui::rpc::v2beta2::move_package_service_server::MovePackageServiceServer::new(self.clone());
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -151,7 +148,7 @@ impl RpcService {
                     crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(
-                    crate::proto::rpc::v2beta2::FILE_DESCRIPTOR_SET,
+                    sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(
                     crate::proto::rpc::v2alpha::FILE_DESCRIPTOR_SET,
@@ -171,7 +168,7 @@ impl RpcService {
                     crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(
-                    crate::proto::rpc::v2beta2::FILE_DESCRIPTOR_SET,
+                    sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(
                     crate::proto::rpc::v2alpha::FILE_DESCRIPTOR_SET,
@@ -229,7 +226,7 @@ crate::proto::rpc::v2alpha::subscription_service_server::SubscriptionServiceServ
                 services = services.add_service(subscription_service);
 
                 let subscription_service2 =
-crate::proto::rpc::v2beta2::subscription_service_server::SubscriptionServiceServer::new(subscription_service_handle);
+sui_rpc::proto::sui::rpc::v2beta2::subscription_service_server::SubscriptionServiceServer::new(subscription_service_handle);
                 health_reporter
                     .set_service_status(
                         service_name(&subscription_service2),

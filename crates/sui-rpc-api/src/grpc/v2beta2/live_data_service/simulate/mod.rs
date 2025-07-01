@@ -1,18 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::field_mask::FieldMaskTree;
-use crate::message::MessageMergeFrom;
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::Bcs;
-use crate::proto::rpc::v2beta2::CommandOutput;
-use crate::proto::rpc::v2beta2::CommandResult;
-use crate::proto::rpc::v2beta2::ExecutedTransaction;
-use crate::proto::rpc::v2beta2::SimulateTransactionRequest;
-use crate::proto::rpc::v2beta2::SimulateTransactionResponse;
-use crate::proto::rpc::v2beta2::Transaction;
-use crate::proto::rpc::v2beta2::TransactionEffects;
-use crate::proto::rpc::v2beta2::TransactionEvents;
 use crate::reader::StateReader;
 use crate::ErrorReason;
 use crate::Result;
@@ -20,6 +8,18 @@ use crate::RpcError;
 use crate::RpcService;
 use itertools::Itertools;
 use sui_protocol_config::ProtocolConfig;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::Bcs;
+use sui_rpc::proto::sui::rpc::v2beta2::CommandOutput;
+use sui_rpc::proto::sui::rpc::v2beta2::CommandResult;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
+use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
 use sui_types::balance_change::derive_balance_changes;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -245,52 +245,6 @@ fn to_command_output(
             value: Some(bcs.into()),
         }),
         json,
-    }
-}
-
-impl From<sui_types::transaction::Argument> for crate::proto::rpc::v2beta2::Argument {
-    fn from(value: sui_types::transaction::Argument) -> Self {
-        use crate::proto::rpc::v2beta2::argument::ArgumentKind;
-        use sui_types::transaction::Argument;
-
-        let mut message = Self::default();
-
-        let kind = match value {
-            Argument::GasCoin => ArgumentKind::Gas,
-            Argument::Input(input) => {
-                message.input = Some(input.into());
-                ArgumentKind::Input
-            }
-            Argument::Result(result) => {
-                message.result = Some(result.into());
-                ArgumentKind::Result
-            }
-            Argument::NestedResult(result, subresult) => {
-                message.result = Some(result.into());
-                message.subresult = Some(subresult.into());
-                ArgumentKind::Result
-            }
-        };
-
-        message.set_kind(kind);
-        message
-    }
-}
-
-impl From<crate::proto::rpc::v2beta2::simulate_transaction_request::TransactionChecks>
-    for TransactionChecks
-{
-    fn from(
-        value: crate::proto::rpc::v2beta2::simulate_transaction_request::TransactionChecks,
-    ) -> Self {
-        match value {
-            crate::proto::rpc::v2beta2::simulate_transaction_request::TransactionChecks::Enabled => {
-                Self::Enabled
-            }
-            crate::proto::rpc::v2beta2::simulate_transaction_request::TransactionChecks::Disabled => {
-                Self::Disabled
-            }
-        }
     }
 }
 

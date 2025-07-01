@@ -7,13 +7,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::{
-    types::{
-        X_SUI_CHAIN, X_SUI_CHAIN_ID, X_SUI_CHECKPOINT_HEIGHT, X_SUI_EPOCH,
-        X_SUI_LOWEST_AVAILABLE_CHECKPOINT, X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS,
-        X_SUI_TIMESTAMP, X_SUI_TIMESTAMP_MS,
-    },
-    RpcService,
+use crate::RpcService;
+use sui_rpc::headers::{
+    X_SUI_CHAIN, X_SUI_CHAIN_ID, X_SUI_CHECKPOINT_HEIGHT, X_SUI_EPOCH,
+    X_SUI_LOWEST_AVAILABLE_CHECKPOINT, X_SUI_LOWEST_AVAILABLE_CHECKPOINT_OBJECTS, X_SUI_TIMESTAMP,
+    X_SUI_TIMESTAMP_MS,
 };
 
 pub async fn append_info_headers(

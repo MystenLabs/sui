@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::message::{MessageField, MessageFields};
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
 
 // Include the generated proto definitions
 include!("../../generated/sui.rpc.v2beta.rs");

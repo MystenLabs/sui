@@ -2,10 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::CheckpointNotFoundError;
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMerge;
-use crate::message::MessageMergeFrom;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2beta::get_checkpoint_request::CheckpointId;
 use crate::proto::rpc::v2beta::Checkpoint;
@@ -21,6 +17,9 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
 use sui_sdk_types::CheckpointDigest;
 
 #[tracing::instrument(skip(service))]

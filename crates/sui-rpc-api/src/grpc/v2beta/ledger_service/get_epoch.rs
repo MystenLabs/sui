@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMergeFrom;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2beta::Epoch;
 use crate::proto::rpc::v2beta::GetEpochRequest;
@@ -13,6 +10,9 @@ use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
 use sui_sdk_types::EpochId;
 
 #[tracing::instrument(skip(service))]

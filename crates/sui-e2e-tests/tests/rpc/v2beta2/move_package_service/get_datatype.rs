@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_rpc_api::proto::rpc::v2beta2::move_package_service_client::MovePackageServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::GetDatatypeRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::move_package_service_client::MovePackageServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::GetDatatypeRequest;
 use test_cluster::TestClusterBuilder;
 
 use crate::v2beta2::move_package_service::system_package_expectations::validate_validator_operation_cap_datatype;

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{ExecuteTransactionRequest, ExecuteTransactionResponse, ExecutedTransaction};
-use crate::message::{MessageField, MessageFields};
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
 
 impl ExecuteTransactionResponse {
     pub const FINALITY_FIELD: &'static MessageField = &MessageField::new("finality");

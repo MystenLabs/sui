@@ -6,19 +6,21 @@ use sui_sdk_types::ObjectId;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 use crate::error::ObjectNotFoundError;
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMerge;
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::BatchGetObjectsRequest;
-use crate::proto::rpc::v2beta2::BatchGetObjectsResponse;
-use crate::proto::rpc::v2beta2::GetObjectRequest;
-use crate::proto::rpc::v2beta2::GetObjectResponse;
-use crate::proto::rpc::v2beta2::GetObjectResult;
-use crate::proto::rpc::v2beta2::Object;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectResult;
+use sui_rpc::proto::sui::rpc::v2beta2::Object;
+
+pub const READ_MASK_DEFAULT: &str = "object_id,version,digest";
 
 type ValidationResult = Result<(Vec<(ObjectId, Option<u64>)>, FieldMaskTree), RpcError>;
 
@@ -27,8 +29,7 @@ pub fn validate_get_object_requests(
     read_mask: Option<FieldMask>,
 ) -> ValidationResult {
     let read_mask = {
-        let read_mask =
-            read_mask.unwrap_or_else(|| FieldMask::from_str(GetObjectRequest::READ_MASK_DEFAULT));
+        let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask.validate::<Object>().map_err(|path| {
             FieldViolation::new("read_mask")
                 .with_description(format!("invalid read_mask path: {path}"))

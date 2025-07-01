@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
-use sui_rpc_api::proto::rpc::v2beta2::{
+use sui_rpc::proto::sui::rpc::v2beta2::{
     move_package_service_client::MovePackageServiceClient, GetPackageRequest,
 };
 use test_cluster::TestClusterBuilder;
