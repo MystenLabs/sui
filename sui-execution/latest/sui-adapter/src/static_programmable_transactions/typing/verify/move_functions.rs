@@ -226,17 +226,13 @@ fn check_signature<Mode: ExecutionMode>(
         idx: usize,
         return_type: &T::Type,
     ) -> Result<(), ExecutionError> {
-        match return_type {
-            Type::Reference(_, _) => {
-                if !Mode::allow_arbitrary_values() {
-                    return Err(ExecutionError::from_kind(
-                        ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                    ));
-                }
-                todo!("RUNTIME"); // can we support this?
+        if let Type::Reference(_, _) = return_type {
+            if !Mode::allow_arbitrary_values() {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+                ));
             }
-            t => t,
-        };
+        }
         Ok(())
     }
     for (idx, ty) in function.signature.return_.iter().enumerate() {

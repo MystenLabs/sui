@@ -1,15 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{env::Env, typing::ast as T};
+use crate::{
+    execution_mode::ExecutionMode,
+    static_programmable_transactions::{env::Env, typing::ast as T},
+};
 use sui_types::error::ExecutionError;
 
 /// Refines usage of values so that the last `Copy` of a value is a `Move` if it is not borrowed
 /// After, it verifies the following
 /// - No results without `drop` are unused (all unused non-input values have `drop`)
-pub fn refine_and_verify(env: &Env, ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+pub fn refine_and_verify<Mode: ExecutionMode>(
+    env: &Env,
+    ast: &mut T::Transaction,
+) -> Result<(), ExecutionError> {
     refine::transaction(ast);
-    verify::transaction(env, ast)?;
+    verify::transaction::<Mode>(env, ast)?;
     Ok(())
 }
 
@@ -80,6 +86,7 @@ mod refine {
 
 mod verify {
     use crate::{
+        execution_mode::ExecutionMode,
         sp,
         static_programmable_transactions::{
             env::Env,
@@ -121,7 +128,10 @@ mod verify {
 
     /// Checks the following
     /// - All unused result values have `drop`
-    pub fn transaction(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
+    pub fn transaction<Mode: ExecutionMode>(
+        _env: &Env,
+        ast: &T::Transaction,
+    ) -> Result<(), ExecutionError> {
         let mut context = Context::new(ast)?;
         let commands = &ast.commands;
         for (c, t) in commands {
@@ -144,7 +154,7 @@ mod verify {
         for (i, (result, (_, tys))) in results.into_iter().zip(&ast.commands).enumerate() {
             assert_invariant!(result.len() == tys.len(), "result length mismatch");
             for (j, (vopt, ty)) in result.into_iter().zip(tys).enumerate() {
-                drop_value_opt((i, j), vopt, ty)?;
+                drop_value_opt::<Mode>((i, j), vopt, ty)?;
             }
         }
         assert_invariant!(tx_context.is_some(), "tx_context should never be moved");
@@ -210,19 +220,23 @@ mod verify {
 
     fn consume_value_opt(_: Option<Value>) {}
 
-    fn drop_value_opt(
+    fn drop_value_opt<Mode: ExecutionMode>(
         idx: (usize, usize),
         value: Option<Value>,
         ty: &Type,
     ) -> Result<(), ExecutionError> {
         match value {
-            Some(v) => drop_value(idx, v, ty),
+            Some(v) => drop_value::<Mode>(idx, v, ty),
             None => Ok(()),
         }
     }
 
-    fn drop_value((i, j): (usize, usize), value: Value, ty: &Type) -> Result<(), ExecutionError> {
-        if !ty.abilities().has_drop() {
+    fn drop_value<Mode: ExecutionMode>(
+        (i, j): (usize, usize),
+        value: Value,
+        ty: &Type,
+    ) -> Result<(), ExecutionError> {
+        if !ty.abilities().has_drop() && !Mode::allow_arbitrary_values() {
             return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
                 result_idx: i as u16,
                 secondary_idx: j as u16,
