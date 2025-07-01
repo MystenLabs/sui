@@ -8226,7 +8226,6 @@ dependencies = [
  "move-disassembler",
  "move-docgen",
  "move-model-2",
- "move-package",
  "move-symbol-pool",
  "once_cell",
  "path-clean",
