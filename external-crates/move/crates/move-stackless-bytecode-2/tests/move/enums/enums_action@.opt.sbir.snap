@@ -1,0 +1,122 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: action
+    Function: destroy_action (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_2 = reg_0
+        reg_1 = ImmBorrow(lcl_2)
+        lcl_1 = reg_1
+        reg_2 = Copy(lcl_1)
+        VariantSwitch(SUBJECT(reg_2), LBL_(6), LBL_(11), LBL_(20))
+
+      Label LBL_6:
+        reg_3 = Move(lcl_1)
+        UnpackVariantImmRef<Stop>(reg_3)
+        reg_4 = Move(lcl_2)
+        UnpackVariant<Stop>(reg_4)
+        Jump(LBL_26)
+
+      Label LBL_11:
+        reg_5 = Move(lcl_1)
+        reg_6, reg_7 = UnpackVariantImmRef<MoveTo>(reg_5)
+        Drop(7)
+        Drop(6)
+        reg_8 = Move(lcl_2)
+        reg_9, reg_10 = UnpackVariant<MoveTo>(reg_8)
+        Drop(10)
+        Drop(9)
+        Jump(LBL_26)
+
+      Label LBL_20:
+        reg_11 = Move(lcl_1)
+        reg_12 = UnpackVariantImmRef<ChangeSpeed>(reg_11)
+        Drop(12)
+        reg_13 = Move(lcl_2)
+        reg_14 = UnpackVariant<ChangeSpeed>(reg_13)
+        Drop(14)
+
+      Label LBL_26:
+        Return()
+
+
+    Function: increase_speed (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = Copy(lcl_3)
+        NoOperation
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        VariantSwitch(SUBJECT(reg_2), LBL_(7), LBL_(13), LBL_(21))
+
+      Label LBL_7:
+        reg_3 = Move(lcl_3)
+        Drop(3)
+        reg_4 = Move(lcl_2)
+        UnpackVariantImmRef<Stop>(reg_4)
+        Abort(reg_5)
+
+      Label LBL_13:
+        reg_6 = Move(lcl_3)
+        Drop(6)
+        reg_7 = Move(lcl_2)
+        reg_8, reg_9 = UnpackVariantImmRef<MoveTo>(reg_7)
+        Drop(9)
+        Drop(8)
+        Abort(reg_10)
+
+      Label LBL_21:
+        reg_11 = Move(lcl_2)
+        reg_12 = UnpackVariantImmRef<ChangeSpeed>(reg_11)
+        Drop(12)
+        reg_13 = Move(lcl_3)
+        reg_14 = UnpackVariant<ChangeSpeed>(reg_13)
+        lcl_4 = reg_14
+        reg_15 = Move(lcl_1)
+        reg_16 = Move(lcl_4)
+        WriteRef(reg_16, reg_15)
+        Return()
+
+
+    Function: speed (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Move(lcl_0)
+        lcl_3 = reg_0
+        reg_1 = Copy(lcl_3)
+        lcl_2 = reg_1
+        reg_2 = Copy(lcl_2)
+        VariantSwitch(SUBJECT(reg_2), LBL_(6), LBL_(12), LBL_(22))
+
+      Label LBL_6:
+        reg_3 = Move(lcl_3)
+        Drop(3)
+        reg_4 = Move(lcl_2)
+        UnpackVariantImmRef<Stop>(reg_4)
+        Abort(reg_5)
+
+      Label LBL_12:
+        reg_6 = Move(lcl_2)
+        reg_7, reg_8 = UnpackVariantImmRef<MoveTo>(reg_6)
+        Drop(8)
+        Drop(7)
+        reg_9 = Move(lcl_3)
+        reg_10, reg_11 = UnpackVariantImmRef<MoveTo>(reg_9)
+        Drop(11)
+        reg_12 = ReadRef(reg_10)
+        lcl_1 = reg_12
+        Jump(LBL_29)
+
+      Label LBL_22:
+        reg_13 = Move(lcl_2)
+        reg_14 = UnpackVariantImmRef<ChangeSpeed>(reg_13)
+        Drop(14)
+        reg_15 = Move(lcl_3)
+        reg_16 = UnpackVariantImmRef<ChangeSpeed>(reg_15)
+        reg_17 = ReadRef(reg_16)
+        lcl_1 = reg_17
+
+      Label LBL_29:
+        reg_18 = Move(lcl_1)
+        Return(reg_18)

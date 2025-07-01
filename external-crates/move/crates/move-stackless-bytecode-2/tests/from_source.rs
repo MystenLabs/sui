@@ -13,23 +13,19 @@ use std::{collections::BTreeSet, io::BufRead, path::Path};
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
     let pkg_dir = file_path.parent().unwrap();
-    // let toml_path = Path::join(&pkg_dir, "Move.toml");
     let output_dir = TempDir::new()?;
 
     let config = BuildConfig {
         dev_mode: true,
         install_dir: Some(output_dir.path().to_path_buf()),
         force_recompilation: false,
+
         ..Default::default()
     };
 
     let mut writer = Vec::new();
     let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
     let model = model_builder::build(resolved_package, &mut writer)?;
-
-    // let bytecode_files = find_filenames(&[output_dir], |path| {
-    //     extension_equals(path, MOVE_COMPILED_EXTENSION)
-    // })?;
 
     let generator = StacklessBytecodeGenerator::from_model(model);
 
@@ -81,4 +77,4 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
 }
 
 // Hand in each Move.toml path
-datatest_stable::harness!(run_test, "tests/move", r"modules\.txt$");
+datatest_stable::harness!(run_test, "tests/move", r"from_source\.txt$");

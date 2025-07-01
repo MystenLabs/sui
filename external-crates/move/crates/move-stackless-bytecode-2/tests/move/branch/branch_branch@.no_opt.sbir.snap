@@ -1,7 +1,62 @@
 ---
-source: crates/move-stackless-bytecode-2/tests/tests.rs
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
 ---
   Module: branch
+    Function: conditions (entry: LBL_0)
+      Label LBL_0:
+        reg_0 = Copy(lcl_0)
+        reg_1 = Immediate(U64(10))
+        reg_2 = GreaterThan(reg_1, reg_0)
+        JumpIf(reg_2, LBL_4, LBL_9)
+
+      Label LBL_4:
+        reg_3 = Copy(lcl_1)
+        reg_4 = Immediate(U64(20))
+        reg_5 = LessThan(reg_4, reg_3)
+        lcl_3 = reg_5
+        Jump(LBL_11)
+
+      Label LBL_9:
+        reg_6 = Immediate(false)
+        lcl_3 = reg_6
+
+      Label LBL_11:
+        reg_7 = Move(lcl_3)
+        JumpIf(reg_7, LBL_13, LBL_16)
+
+      Label LBL_13:
+        reg_8 = Immediate(true)
+        lcl_2 = reg_8
+        Jump(LBL_20)
+
+      Label LBL_16:
+        reg_9 = Copy(lcl_0)
+        reg_10 = Immediate(U64(30))
+        reg_11 = LessThan(reg_10, reg_9)
+        lcl_2 = reg_11
+
+      Label LBL_20:
+        reg_12 = Move(lcl_2)
+        JumpIf(reg_12, LBL_22, LBL_27)
+
+      Label LBL_22:
+        reg_13 = Move(lcl_0)
+        reg_14 = Move(lcl_1)
+        reg_15 = Add(reg_14, reg_13)
+        lcl_4 = reg_15
+        Jump(LBL_31)
+
+      Label LBL_27:
+        reg_16 = Move(lcl_0)
+        reg_17 = Move(lcl_1)
+        reg_18 = Multiply(reg_16, reg_17)
+        lcl_4 = reg_18
+
+      Label LBL_31:
+        reg_19 = Move(lcl_4)
+        Return(reg_19)
+
+
     Function: is_even (entry: LBL_0)
       Label LBL_0:
         reg_0 = Immediate(U64(10))
