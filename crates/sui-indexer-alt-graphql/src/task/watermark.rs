@@ -10,12 +10,12 @@ use std::{
 use anyhow::{ensure, Context as _};
 use chrono::{DateTime, Utc};
 use diesel::{
-    sql_query,
-    sql_types::{Array, BigInt, Text},
+    sql_types::{BigInt, Text},
     QueryableByName,
 };
 use futures::future::OptionFuture;
 use sui_indexer_alt_reader::{bigtable_reader::BigtableReader, pg_reader::PgReader};
+use sui_sql_macro::query;
 use tokio::{join, sync::RwLock, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
@@ -316,29 +316,29 @@ async fn watermarks_from_pg(
         .await
         .context("Failed to connect to database")?;
 
-    let query = sql_query(
-        r#"
-        SELECT
-            w.pipeline,
-            w.epoch_hi_inclusive,
-            w.checkpoint_hi_inclusive,
-            w.tx_hi,
-            w.timestamp_ms_hi_inclusive,
-            c.epoch AS epoch_lo,
-            w.reader_lo AS checkpoint_lo,
-            c.tx_lo AS tx_lo
-        FROM
-            watermarks w
-        INNER JOIN
-            cp_sequence_numbers c
-        ON (w.reader_lo = c.cp_sequence_number)
-        WHERE
-            pipeline = ANY($1)
-        "#,
-    )
-    .bind::<Array<Text>, _>(pg_pipelines);
-
-    let rows: Vec<WatermarkRow> = conn.results(query).await?;
+    let rows: Vec<WatermarkRow> = conn
+        .results(query!(
+            r#"
+            SELECT
+                w.pipeline,
+                w.epoch_hi_inclusive,
+                w.checkpoint_hi_inclusive,
+                w.tx_hi,
+                w.timestamp_ms_hi_inclusive,
+                c.epoch AS epoch_lo,
+                w.reader_lo AS checkpoint_lo,
+                c.tx_lo AS tx_lo
+            FROM
+                watermarks w
+            INNER JOIN
+                cp_sequence_numbers c
+            ON (w.reader_lo = c.cp_sequence_number)
+            WHERE
+                pipeline = ANY({Array<Text>})
+            "#,
+            pg_pipelines,
+        ))
+        .await?;
 
     ensure!(
         !pg_pipelines.is_empty(),
