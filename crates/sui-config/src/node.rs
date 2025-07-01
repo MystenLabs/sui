@@ -1639,7 +1639,7 @@ remote-store-options:
   - ["aws_secret_access_key", "literal_secret_key"]
 "#;
 
-        let config: StateArchiveConfig = serde_yaml::from_str(&yaml_config).unwrap();
+        let config: StateArchiveConfig = serde_yaml::from_str(yaml_config).unwrap();
 
         assert_eq!(config.remote_store_options.len(), 2);
         assert_eq!(config.remote_store_options[0].1, "literal_access_key");
