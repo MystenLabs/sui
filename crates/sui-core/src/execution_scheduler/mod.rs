@@ -103,7 +103,7 @@ impl ExecutionSchedulerWrapper {
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        is_fullnode: bool,
+        _is_fullnode: bool,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         // If Mysticeti fastpath is enabled, we must use ExecutionScheduler.
@@ -124,7 +124,7 @@ impl ExecutionSchedulerWrapper {
             rand::thread_rng().gen_bool(0.5)
         } else {
             let chain = epoch_store.get_chain_identifier().chain();
-            chain == Chain::Unknown || (chain == Chain::Testnet && is_fullnode)
+            chain != Chain::Mainnet
         };
         if enable_execution_scheduler {
             Self::ExecutionScheduler(ExecutionScheduler::new(
