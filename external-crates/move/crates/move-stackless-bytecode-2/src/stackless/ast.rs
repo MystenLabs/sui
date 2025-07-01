@@ -286,8 +286,7 @@ impl std::fmt::Display for Instruction {
                 for (i, case) in cases.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", LBL_({case})")?;
-                    }
-                    else {
+                    } else {
                         write!(f, "LBL_({case})")?;
                     }
                 }

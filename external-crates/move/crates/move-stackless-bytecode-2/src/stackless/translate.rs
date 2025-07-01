@@ -225,21 +225,13 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::LdU128(bx) => assign_reg!([push!()] = imm!(Value::U128(*(*bx)))),
 
-        IB::CastU8 => {
-            assign_reg!([push!()] = primitive_op!(Op::CastU8, Register(pop!())))
-        }
+        IB::CastU8 => assign_reg!([push!()] = primitive_op!(Op::CastU8, Register(pop!()))),
 
-        IB::CastU64 => {
-            assign_reg!([push!()] = primitive_op!(Op::CastU64, Register(pop!())))
-        }
+        IB::CastU64 => assign_reg!([push!()] = primitive_op!(Op::CastU64, Register(pop!()))),
 
-        IB::CastU128 => {
-            assign_reg!([push!()] = primitive_op!(Op::CastU128, Register(pop!())))
-        }
+        IB::CastU128 => assign_reg!([push!()] = primitive_op!(Op::CastU128, Register(pop!()))),
 
-        IB::LdConst(const_ref) => {
-            assign_reg!([push!()] = RValue::Constant(const_ref.clone()))
-        }
+        IB::LdConst(const_ref) => assign_reg!([push!()] = RValue::Constant(const_ref.clone())),
 
         IB::LdTrue => assign_reg!([push!()] = imm!(Value::Bool(true))),
 
@@ -286,7 +278,12 @@ pub(crate) fn bytecode<K: SourceKind>(
             let function = compiled
                 .functions
                 .get(&function_ref.function)
-                .unwrap_or_else(|| panic!("Function {} not found in module {}", function_ref.function, name));
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Function {} not found in module {}",
+                        function_ref.function, name
+                    )
+                });
 
             let args = make_vec!(function.parameters.len(), Register(pop!()));
 
@@ -320,9 +317,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             Instruction::AssignReg { rhs, lhs }
         }
 
-        IB::ReadRef => {
-            assign_reg!([push!()] = data_op!(DataOp::ReadRef, Register(pop!())))
-        }
+        IB::ReadRef => assign_reg!([push!()] = data_op!(DataOp::ReadRef, Register(pop!()))),
 
         IB::WriteRef => {
             assign_reg!([] = data_op!(DataOp::WriteRef, Register(pop!()), Register(pop!())))
@@ -417,14 +412,11 @@ pub(crate) fn bytecode<K: SourceKind>(
             assign_reg!([push!()] = primitive_op!(Op::And, Register(pop!()), Register(pop!())))
         }
 
-        IB::Not => {
-            assign_reg!([push!()] = primitive_op!(Op::Not, Register(pop!())))
-        }
+        IB::Not => assign_reg!([push!()] = primitive_op!(Op::Not, Register(pop!()))),
 
         IB::Eq => {
             assign_reg!([push!()] = primitive_op!(Op::Equal, Register(pop!()), Register(pop!())))
         }
-
         IB::Neq => {
             assign_reg!([push!()] = primitive_op!(Op::NotEqual, Register(pop!()), Register(pop!())))
         }
@@ -485,19 +477,33 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::VecImmBorrow(rc_type) => {
             assign_reg!(
-                [push!()] = data_op!(DataOp::VecImmBorrow(rc_type.clone()), Register(pop!()), Register(pop!()))
+                [push!()] = data_op!(
+                    DataOp::VecImmBorrow(rc_type.clone()),
+                    Register(pop!()),
+                    Register(pop!())
+                )
             )
         }
 
         IB::VecMutBorrow(rc_type) => {
             assign_reg!(
-                [push!()] = data_op!(DataOp::VecMutBorrow(rc_type.clone()), Register(pop!()), Register(pop!()))
+                [push!()] = data_op!(
+                    DataOp::VecMutBorrow(rc_type.clone()),
+                    Register(pop!()),
+                    Register(pop!())
+                )
             )
         }
 
         // TODO check if this is ok for the SSA
         IB::VecPushBack(rc_type) => {
-            assign_reg!([] = data_op!(DataOp::VecPushBack(rc_type.clone()), Register(pop!()), Register(pop!())))
+            assign_reg!(
+                [] = data_op!(
+                    DataOp::VecPushBack(rc_type.clone()),
+                    Register(pop!()),
+                    Register(pop!())
+                )
+            )
         }
 
         IB::VecPopBack(rc_type) => {
@@ -532,17 +538,11 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::LdU256(_bx) => assign_reg!([push!()] = imm!(Value::U256(*(*_bx)))),
 
-        IB::CastU16 => {
-            assign_reg!([push!()] = primitive_op!(Op::CastU16, Register(pop!())))
-        }
+        IB::CastU16 => assign_reg!([push!()] = primitive_op!(Op::CastU16, Register(pop!()))),
 
-        IB::CastU32 => {
-            assign_reg!([push!()] = primitive_op!(Op::CastU32, Register(pop!())))
-        }
+        IB::CastU32 => assign_reg!([push!()] = primitive_op!(Op::CastU32, Register(pop!()))),
 
-        IB::CastU256 => {
-            assign_reg!([push!()] = primitive_op!(Op::CastU256, Register(pop!())))
-        }
+        IB::CastU256 => assign_reg!([push!()] = primitive_op!(Op::CastU256, Register(pop!()))),
 
         IB::PackVariant(bx) => {
             let args = make_vec!(bx.variant.fields.0.len(), Register(pop!()));
