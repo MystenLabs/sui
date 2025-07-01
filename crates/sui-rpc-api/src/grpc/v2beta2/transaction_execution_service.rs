@@ -1,24 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMergeFrom;
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::transaction_execution_service_server::TransactionExecutionService;
-use crate::proto::rpc::v2beta2::transaction_finality::Finality;
-use crate::proto::rpc::v2beta2::ExecuteTransactionRequest;
-use crate::proto::rpc::v2beta2::ExecuteTransactionResponse;
-use crate::proto::rpc::v2beta2::ExecutedTransaction;
-use crate::proto::rpc::v2beta2::Object;
-use crate::proto::rpc::v2beta2::Transaction;
-use crate::proto::rpc::v2beta2::TransactionEffects;
-use crate::proto::rpc::v2beta2::TransactionEvents;
-use crate::proto::rpc::v2beta2::UserSignature;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::transaction_execution_service_server::TransactionExecutionService;
+use sui_rpc::proto::sui::rpc::v2beta2::transaction_finality::Finality;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecuteTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecuteTransactionResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2beta2::Object;
+use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
+use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
+use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
 use sui_sdk_types::ObjectId;
 use sui_types::balance_change::derive_balance_changes;
 use sui_types::transaction_executor::TransactionExecutor;
@@ -41,6 +41,8 @@ impl TransactionExecutionService for RpcService {
             .map_err(Into::into)
     }
 }
+
+pub const EXECUTE_TRANSACTION_READ_MASK_DEFAULT: &str = "finality";
 
 #[tracing::instrument(skip(executor))]
 pub async fn execute_transaction(
@@ -79,7 +81,7 @@ pub async fn execute_transaction(
     let read_mask = {
         let read_mask = request
             .read_mask
-            .unwrap_or_else(|| FieldMask::from_str(ExecuteTransactionRequest::READ_MASK_DEFAULT));
+            .unwrap_or_else(|| FieldMask::from_str(EXECUTE_TRANSACTION_READ_MASK_DEFAULT));
         read_mask
             .validate::<ExecuteTransactionResponse>()
             .map_err(|path| {
@@ -133,7 +135,7 @@ pub async fn execute_transaction(
                 Finality::QuorumExecuted(())
             }
         };
-        crate::proto::rpc::v2beta2::TransactionFinality {
+        sui_rpc::proto::sui::rpc::v2beta2::TransactionFinality {
             finality: Some(finality),
         }
     };

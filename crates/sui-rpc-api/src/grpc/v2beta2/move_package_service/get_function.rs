@@ -6,10 +6,10 @@ use crate::{
         conversions::{convert_error, convert_function},
         load_package,
     },
-    proto::google::rpc::bad_request::FieldViolation,
-    proto::rpc::v2beta2::{GetFunctionRequest, GetFunctionResponse},
     ErrorReason, Result, RpcService,
 };
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::{GetFunctionRequest, GetFunctionResponse};
 
 #[tracing::instrument(skip(service))]
 pub fn get_function(

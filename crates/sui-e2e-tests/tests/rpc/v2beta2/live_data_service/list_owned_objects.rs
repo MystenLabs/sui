@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
-use sui_rpc_api::proto::rpc::v2beta2::changed_object::{IdOperation, OutputObjectState};
-use sui_rpc_api::proto::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::{
+use sui_rpc::proto::sui::rpc::v2beta2::changed_object::{IdOperation, OutputObjectState};
+use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::{
     GetCoinInfoRequest, GetCoinInfoResponse, ListOwnedObjectsRequest,
 };
 use sui_sdk_types::TypeTag;

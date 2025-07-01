@@ -3,7 +3,7 @@
 
 use prost_types::FieldMask;
 use sui_macros::sim_test;
-use sui_rpc_api::field_mask::FieldMaskUtil;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc_api::proto::rpc::v2beta::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_rpc_api::proto::rpc::v2beta::Bcs;
 use sui_rpc_api::proto::rpc::v2beta::ExecuteTransactionRequest;

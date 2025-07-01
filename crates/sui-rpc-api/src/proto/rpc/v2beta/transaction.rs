@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::Transaction;
-use crate::message::{MessageField, MessageFields, MessageMerge};
 use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 use tap::Pipe;
 
 //
@@ -36,17 +39,13 @@ impl MessageFields for Transaction {
 impl From<sui_sdk_types::Transaction> for Transaction {
     fn from(value: sui_sdk_types::Transaction) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::Transaction> for Transaction {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::Transaction,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::Transaction> for Transaction {
+    fn merge(&mut self, source: sui_sdk_types::Transaction, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
             let mut bcs = super::Bcs::serialize(&source).unwrap();
             bcs.name = Some("TransactionData".to_owned());
@@ -79,8 +78,8 @@ impl MessageMerge<sui_sdk_types::Transaction> for Transaction {
     }
 }
 
-impl MessageMerge<&Transaction> for Transaction {
-    fn merge(&mut self, source: &Transaction, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&Transaction> for Transaction {
+    fn merge(&mut self, source: &Transaction, mask: &FieldMaskTree) {
         let Transaction {
             bcs,
             digest,

@@ -1,26 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod response_ext;
 use std::time::Duration;
-
-pub use response_ext::ResponseExt;
 
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
-use crate::field_mask::FieldMaskUtil;
 use crate::proto::rpc::v2beta as proto;
 use crate::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
 use crate::proto::rpc::v2beta::transaction_execution_service_client::TransactionExecutionServiceClient;
 use crate::proto::TryFromProtoError;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
+
+pub use sui_rpc::client::ResponseExt;
 
 pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;

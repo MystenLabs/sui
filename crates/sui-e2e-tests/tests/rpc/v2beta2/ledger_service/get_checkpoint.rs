@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
-use sui_rpc_api::field_mask::FieldMask;
-use sui_rpc_api::field_mask::FieldMaskUtil;
-use sui_rpc_api::proto::rpc::v2beta2::get_checkpoint_request::CheckpointId;
-use sui_rpc_api::proto::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::GetTransactionRequest;
-use sui_rpc_api::proto::rpc::v2beta2::{
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2beta2::get_checkpoint_request::CheckpointId;
+use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::GetTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::{
     Checkpoint, ExecutedTransaction, GetCheckpointRequest, Object,
 };
 use test_cluster::TestClusterBuilder;

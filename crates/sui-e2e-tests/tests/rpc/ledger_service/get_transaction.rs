@@ -3,8 +3,8 @@
 
 use crate::stake_with_validator;
 use sui_macros::sim_test;
-use sui_rpc_api::field_mask::FieldMask;
-use sui_rpc_api::field_mask::FieldMaskUtil;
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
 use sui_rpc_api::proto::rpc::v2beta::{ExecutedTransaction, GetTransactionRequest};
 use test_cluster::TestClusterBuilder;

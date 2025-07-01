@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::Balance;
-use crate::proto::rpc::v2beta2::ListBalancesRequest;
-use crate::proto::rpc::v2beta2::ListBalancesResponse;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use bytes::Bytes;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::Balance;
+use sui_rpc::proto::sui::rpc::v2beta2::ListBalancesRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::ListBalancesResponse;
 use sui_sdk_types::Address;
 use sui_types::storage::BalanceInfo;
 use tap::Pipe;
