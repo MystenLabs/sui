@@ -61,6 +61,7 @@ pub enum Instruction {
     Nop,
     VariantSwitch {
         cases: Vec<Label>,
+        target: Trivial,
     },
     Drop(RegId), // Drop an operand in the case of a Pop operation
     NotImplemented(String),
@@ -273,13 +274,13 @@ impl std::fmt::Display for Instruction {
                 else_label,
             } => write!(f, "JumpIf({condition}, LBL_{then_label}, LBL_{else_label})"),
             Instruction::Abort(trivial) => write!(f, "Abort({trivial})"),
-            Instruction::VariantSwitch { cases } => {
-                write!(f, "VariantSwitch(")?;
+            Instruction::VariantSwitch { cases, target } => {
+                write!(f, "VariantSwitch(TRGT({target}), ")?;
                 for (i, case) in cases.iter().enumerate() {
                     if i > 0 {
-                        write!(f, ", ")?;
+                        write!(f, "LBL_({case}), ")?;
                     }
-                    write!(f, "Label({case})")?;
+                    write!(f, "LBL_({case})")?;
                 }
                 write!(f, ")")
             }

@@ -534,16 +534,14 @@ pub fn offsets<S: Hash + Eq + Display + Debug>(
             Bytecode::VariantSwitch(jt) => {
                 let JumpTableInner::Full(offsets) = &jt.jump_table;
 
+                assert!(
+                    // The jump table index must be within the bounds of the jump tables. This is
+                    // checked in the bounds checker.
+                    // TODO is this really necessary?
+                    jump_tables.iter().any(|jt_| jt_.equivalent(jt)),
+                    "Jump table index out of bounds"
+                );
 
-                for offset in offsets {
-                    assert!(
-                        // The jump table index must be within the bounds of the jump tables. This is
-                        // checked in the bounds checker.
-                        (*offset as usize) < jump_tables.len(),
-                        "Jump table index out of bounds"
-                    );
-
-                }
                 offsets.clone()
             }
             // Separated out for clarity -- these are branch instructions, but have no offset so we

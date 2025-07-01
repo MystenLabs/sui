@@ -508,6 +508,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::VecUnpack(bx) => {
             let rhs = data_op!(DataOp::VecUnpack, Register(pop!()));
             let mut lhs = vec![];
+            // Actually VecUnpack is only generated on empty vectors, so bx.1 is always 0
             for _i in 0..bx.1 {
                 lhs.push(push!());
             }
@@ -588,6 +589,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                     .iter()
                     .map(|offset| *offset as usize)
                     .collect::<Vec<_>>(),
+                target: Register(pop!()),
             }
         }
 
