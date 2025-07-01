@@ -42,7 +42,7 @@ use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
-use typed_store::rocksdb::MergeOperands;
+use typed_store::rocksdb::{MergeOperands, WriteOptions};
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
@@ -50,6 +50,12 @@ use typed_store::TypedStoreError;
 const CURRENT_DB_VERSION: u64 = 3;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
+
+fn bulk_ingestion_write_options() -> WriteOptions {
+    let mut opts = WriteOptions::default();
+    opts.disable_wal(true);
+    opts
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -470,7 +476,9 @@ impl IndexStoreTables {
             self.index_epoch(&checkpoint_data, &mut batch)?;
             self.index_transactions(&checkpoint_data, &mut batch)?;
 
-            batch.write().map_err(StorageError::from)
+            batch
+                .write_opt(&(bulk_ingestion_write_options()))
+                .map_err(StorageError::from)
         })?;
 
         info!(
@@ -1219,7 +1227,8 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
         // If the batch size grows to greater that 128MB then write out to the DB so that the
         // data we need to hold in memory doesn't grown unbounded.
         if self.batch.size_in_bytes() >= 1 << 27 {
-            std::mem::replace(&mut self.batch, self.tables.owner.batch()).write()?;
+            std::mem::replace(&mut self.batch, self.tables.owner.batch())
+                .write_opt(&bulk_ingestion_write_options())?;
         }
 
         Ok(())
@@ -1230,7 +1239,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             &self.tables.balance,
             std::mem::take(&mut self.balance_changes),
         )?;
-        self.batch.write()?;
+        self.batch.write_opt(&bulk_ingestion_write_options())?;
         Ok(())
     }
 }
