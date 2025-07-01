@@ -32,6 +32,7 @@ use move_core_types::{
     annotated_value,
     language_storage::{ModuleId, StructTag},
     runtime_value::{self, MoveTypeLayout},
+    vm_status::StatusCode,
 };
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runtime_type};
@@ -142,7 +143,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         ty: &Type,
     ) -> Result<annotated_value::MoveTypeLayout, ExecutionError> {
-        let (ty, linkage) = self.load_vm_type_from_adapter_type(ty)?;
+        let (ty, linkage) = self.load_vm_type_from_adapter_type(None, ty)?;
         self.vm
             .get_runtime()
             .type_to_fully_annotated_layout(&ty)
@@ -153,7 +154,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         &self,
         ty: &Type,
     ) -> Result<runtime_value::MoveTypeLayout, ExecutionError> {
-        let (ty, linkage) = self.load_vm_type_from_adapter_type(ty)?;
+        let (ty, linkage) = self.load_vm_type_from_adapter_type(None, ty)?;
         self.vm
             .get_runtime()
             .type_to_type_layout(&ty)
@@ -181,7 +182,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         let mut data_store = LinkedDataStore::new(&linkage, self.linkable_store);
         let loaded_type_arguments = type_arguments
             .iter()
-            .map(|ty| self.load_vm_type_from_adapter_type(ty).map(|(ty, _)| ty))
+            .enumerate()
+            .map(|(idx, ty)| {
+                self.load_vm_type_argument_from_adapter_type(idx, ty)
+                    .map(|(ty, _)| ty)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let runtime_signature = self
             .vm
@@ -192,7 +197,19 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 &loaded_type_arguments,
                 &mut data_store,
             )
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
+            .map_err(|e| {
+                if e.major_status() == StatusCode::FUNCTION_RESOLUTION_FAILURE {
+                    ExecutionError::new_with_source(
+                        ExecutionErrorKind::FunctionNotFound,
+                        format!(
+                            "Could not resolve function '{}' in module {}",
+                            name, &storage_id,
+                        ),
+                    )
+                } else {
+                    self.convert_linked_vm_error(e, &linkage)
+                }
+            })?;
         let runtime_signature = subst_signature(runtime_signature, &loaded_type_arguments)
             .map_err(|e| self.convert_linked_vm_error(e, &linkage))?;
         let parameters = runtime_signature
@@ -226,15 +243,15 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         })
     }
 
-    pub fn load_type_input(&self, _idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
-        let (runtime_type, linkage) = self.load_vm_type_from_type_input(ty)?;
+    pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
+        let (runtime_type, linkage) = self.load_vm_type_from_type_input(idx, ty)?;
         self.adapter_type_from_vm_type(&runtime_type, &linkage)
     }
 
     /// We verify that all types in the `StructTag` are defining ID-based types.
     pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
         let (vm_type, linkage) =
-            self.load_vm_type_from_type_tag(&TypeTag::Struct(Box::new(tag.clone())))?;
+            self.load_vm_type_from_type_tag(None, &TypeTag::Struct(Box::new(tag.clone())))?;
         self.adapter_type_from_vm_type(&vm_type, &linkage)
     }
 
@@ -286,19 +303,29 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     /// Takes an adapter Type and returns a VM runtime Type and the linkage for it.
-    pub fn load_vm_type_from_adapter_type(
+    pub fn load_vm_type_argument_from_adapter_type(
         &self,
+        idx: usize,
+        ty: &Type,
+    ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
+        self.load_vm_type_from_adapter_type(Some(idx), ty)
+    }
+
+    fn load_vm_type_from_adapter_type(
+        &self,
+        type_arg_idx: Option<usize>,
         ty: &Type,
     ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
             ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
         })?;
-        self.load_vm_type_from_type_tag(&tag)
+        self.load_vm_type_from_type_tag(type_arg_idx, &tag)
     }
 
     /// Take a type tag and returns a VM runtime Type and the linkage for it.
     fn load_vm_type_from_type_tag(
         &self,
+        type_arg_idx: Option<usize>,
         tag: &TypeTag,
     ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
         let (addresses, link_context) = link_info_for_type_tag(tag)?;
@@ -309,7 +336,13 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         self.vm
             .get_runtime()
             .load_type_tag(tag, &linked_store)
-            .map_err(|e| self.convert_linked_vm_error(e, &linkage))
+            .map_err(|e| {
+                if let Some(idx) = type_arg_idx {
+                    self.convert_type_argument_error(idx, e, &linkage)
+                } else {
+                    self.convert_linked_vm_error(e, &linkage)
+                }
+            })
             .map(|runtime_ty| (runtime_ty, linkage))
     }
 
@@ -415,6 +448,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     /// IDs.
     fn load_vm_type_from_type_input(
         &self,
+        type_arg_idx: usize,
         ty: TypeInput,
     ) -> Result<(vm_runtime_type::Type, RootedLinkage), ExecutionError> {
         fn to_type_tag_internal(ty: TypeInput) -> Result<TypeTag, ExecutionError> {
@@ -455,7 +489,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             })
         }
         let tag = to_type_tag_internal(ty)?;
-        self.load_vm_type_from_type_tag(&tag)
+        self.load_vm_type_from_type_tag(Some(type_arg_idx), &tag)
     }
 }
 

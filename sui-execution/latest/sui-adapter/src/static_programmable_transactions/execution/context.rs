@@ -106,6 +106,9 @@ enum UsageKind {
     Borrow(/* mut */ bool),
 }
 
+// Type alias used to document borrowing the `imm_ref_temps` field
+type TempLocals = Vec<Locals>;
+
 /// Maintains all runtime state specific to programmable transactions
 pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     pub env: &'env Env<'pc, 'vm, 'state, 'linkage>,
@@ -128,6 +131,9 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     /// It will only not be 1 for Move calls with multiple return values.
     /// Inner values are None if taken/moved by-value
     results: Vec<Locals>,
+    // used by by-ref Pure inputs without fixed types. We must create one-off references to these
+    // values, which will be dropped at the end of the transaction.
+    imm_ref_temps: TempLocals,
 }
 
 impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
@@ -190,6 +196,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             gas,
             inputs,
             results: vec![],
+            imm_ref_temps: vec![],
         })
     }
 
@@ -406,6 +413,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ty: Type,
     ) -> Result<
         (
+            &'a mut TempLocals,
             &'a mut GasCharger,
             &'env Env<'pc, 'vm, 'state, 'linkage>,
             LocationValue<'a>,
@@ -438,7 +446,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 }
             }
         };
-        Ok((self.gas_charger, self.env, v))
+        Ok((&mut self.imm_ref_temps, self.gas_charger, self.env, v))
     }
 
     fn location(
@@ -447,30 +455,38 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         location: T::Location,
         ty: Type,
     ) -> Result<Value, ExecutionError> {
-        let (gas_charger, env, lv) = self.location_value(location, ty)?;
+        let (imm_ref_temps, gas_charger, env, lv) = self.location_value(location, ty)?;
         let mut local = match lv {
             LocationValue::Loaded(v) => v,
-            LocationValue::InputBytes(inputs, i, ty) => match usage {
-                UsageKind::Move | UsageKind::Borrow(true) => {
-                    let bytes = match inputs.get(i)? {
-                        InputValue::Bytes(v) => v,
-                        InputValue::Loaded(_) => invariant_violation!("Expected bytes"),
-                    };
-                    let value = load_byte_value(gas_charger, env, bytes, ty)?;
-                    inputs.fix(i, value)?;
-                    match inputs.get(i)? {
-                        InputValue::Loaded(v) => v,
-                        InputValue::Bytes(_) => invariant_violation!("Expected fixed value"),
+            LocationValue::InputBytes(inputs, i, ty) => {
+                let bytes = match inputs.get(i)? {
+                    InputValue::Bytes(v) => v,
+                    InputValue::Loaded(_) => invariant_violation!("Expected bytes"),
+                };
+                let value = load_byte_value(gas_charger, env, bytes, ty)?;
+                match usage {
+                    UsageKind::Borrow(true) => {
+                        // "fix" the BCS bytes to a given value
+                        inputs.fix(i, value)?;
+                        match inputs.get(i)? {
+                            InputValue::Loaded(v) => v,
+                            InputValue::Bytes(_) => invariant_violation!("Expected fixed value"),
+                        }
+                    }
+                    UsageKind::Borrow(false) => {
+                        // in the case that we need a reference but it is not "fixed", we must
+                        // create a temporary local to borrow
+                        imm_ref_temps.push(Locals::new(vec![value])?);
+                        let local = imm_ref_temps.last_mut().unwrap();
+                        local.local(0)?
+                    }
+                    UsageKind::Move | UsageKind::Copy => {
+                        // return a fresh copy of the value
+                        // Move should only happen for dev-inspect or `Receiving`
+                        return Ok(value);
                     }
                 }
-                UsageKind::Copy | UsageKind::Borrow(false) => {
-                    let bytes = match inputs.get(i)? {
-                        InputValue::Bytes(v) => v,
-                        InputValue::Loaded(_) => invariant_violation!("Expected bytes"),
-                    };
-                    return load_byte_value(gas_charger, env, bytes, ty);
-                }
-            },
+            }
         };
         Ok(match usage {
             UsageKind::Move => local.move_()?,
@@ -607,9 +623,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     ) -> Result<Vec<CtxValue>, ExecutionError> {
         let ty_args = ty_args
             .iter()
-            .map(|ty| {
+            .enumerate()
+            .map(|(idx, ty)| {
                 self.env
-                    .load_vm_type_from_adapter_type(ty)
+                    .load_vm_type_argument_from_adapter_type(idx, ty)
                     .map(|(vm_ty, _)| vm_ty)
             })
             .collect::<Result<_, _>>()?;
@@ -919,7 +936,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let Ok(tag): Result<TypeTag, _> = ty.clone().try_into() else {
             invariant_violation!("unable to generate type tag from type")
         };
-        let (_, _, lv) = self.location_value(location, ty)?;
+        let (_, _, _, lv) = self.location_value(location, ty)?;
         let local = match lv {
             LocationValue::Loaded(v) => {
                 if v.is_invalid()? {

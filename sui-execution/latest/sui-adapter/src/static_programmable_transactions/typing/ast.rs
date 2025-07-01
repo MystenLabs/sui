@@ -28,12 +28,32 @@ pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BytesUsage {
+    /// The bytes are copied
+    Copied,
+    /// The bytes are immutably borrowed, which means they are created once and then dropped
+    ByImmRef,
+    /// The bytes are mutably borrowed, which "fixes" the type
+    ByMutRef,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Information for a given constraint for input bytes
+pub struct BytesConstraint {
+    /// The command that first added this constraint
+    pub command: u16,
+    /// The argument in that command
+    pub argument: u16,
+    /// The type of usage for this bytes constraint
+    pub usage: BytesUsage,
+}
+
 #[derive(Debug)]
 pub enum InputType {
-    Bytes(
-        /* all types that this must satisfy */
-        BTreeMap<Type, /* command, arg idx */ (u16, u16)>,
-    ),
+    /// A series of BCS bytes, and all types that this must satisfy
+    Bytes(BTreeMap<Type, BytesConstraint>),
+    /// A fixed type--the type is known and "fixed" at input
     Fixed(Type),
 }
 pub type ResultType = Vec<Type>;
