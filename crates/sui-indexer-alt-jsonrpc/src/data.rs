@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::time::Duration;
 
 use anyhow::Context as _;
 use serde::de::DeserializeOwned;
@@ -28,11 +29,25 @@ pub(crate) async fn load_live(
         return Ok(None);
     }
 
-    let object = ctx
-        .kv_loader()
-        .load_one_object(object_id, latest_version.object_version as u64)
-        .await
-        .context("Failed to load latest object")?;
+    // Read from kv store and retry if the object is not found.
+    let mut object = None;
+    let retry_interval = Duration::from_millis(ctx.config().objects.kv_retry_interval_ms);
+    for _ in 0..ctx.config().objects.kv_retry_count {
+        object = ctx
+            .kv_loader()
+            .load_one_object(object_id, latest_version.object_version as u64)
+            .await
+            .context("Failed to load latest object")?;
+        if object.is_some() {
+            break;
+        }
+
+        ctx.metrics()
+            .read_retries
+            .with_label_values(&["kv_object"])
+            .inc();
+        tokio::time::sleep(retry_interval).await;
+    }
 
     Ok(object)
 }
