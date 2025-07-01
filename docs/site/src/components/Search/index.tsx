@@ -19,15 +19,15 @@ function getQueryParam(key) {
 
 function TabbedResults({ activeTab, onChange, tabs }) {
   return (
-    <div className="mb-4 flex justify-center">
+    <div className="mb-4 flex justify-start">
       {tabs.map(({ label, indexName, count }) => (
         <button
           key={indexName}
-          className="mx-4"
+          className="mr-4 text-lg border-none bg-white"
           onClick={() => onChange(indexName)}
-          disabled={activeTab === indexName}
+          active={activeTab === indexName}
         >
-          {label} | {count}
+          {label} | <span className="text-sm">{count} hits</span>
         </button>
       ))}
     </div>
