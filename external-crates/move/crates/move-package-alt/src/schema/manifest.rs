@@ -1,11 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use move_core_types::account_address::AccountAddress;
-
 use serde::{Deserialize, Deserializer, de};
 use serde_spanned::Spanned;
-
-use crate::dependency::DependencySet;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishedID, ResolverName,

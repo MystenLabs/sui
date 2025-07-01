@@ -7,6 +7,7 @@
 //! TODO: major modules, etc
 
 #![allow(unused)]
+#![warn(unused_imports)]
 pub mod cli;
 pub mod dependency;
 pub mod errors;

@@ -2,13 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    flavor::MoveFlavor,
-    schema::{EnvironmentID, EnvironmentName, Publication},
-};
-use move_core_types::account_address::AccountAddress;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use crate::schema::Publication;
+use crate::{flavor::MoveFlavor, schema::EnvironmentID};
 
 /// Publish information for a package in a specific environment.
 #[derive(Debug)]

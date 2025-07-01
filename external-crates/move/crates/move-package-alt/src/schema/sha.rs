@@ -4,9 +4,19 @@
 
 use std::fmt::Display;
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-use super::errors::{ShaError, ShaResult};
+pub type ShaResult<T> = std::result::Result<T, ShaError>;
+
+#[derive(Error, Debug)]
+pub enum ShaError {
+    #[error("`{input}` is an invalid commit sha; commits must be 40 characters")]
+    WrongLength { input: String },
+
+    #[error("`{input}` is an invalid commit sha; commits must be lowercase hex strings")]
+    InvalidChars { input: String },
+}
 
 /// A git commit hash
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

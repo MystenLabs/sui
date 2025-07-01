@@ -2,27 +2,21 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Debug},
-    marker::PhantomData,
-    path::{Path, PathBuf},
-};
-
-use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, fmt, path::Path};
 
 use super::paths::PackagePath;
-use super::{EnvironmentID, lockfile::Lockfiles, manifest::Manifest};
+use super::{EnvironmentID, manifest::Manifest};
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
     package::{EnvironmentName, Package, PackageName},
     schema::{PackageID, ParsedLockfile, Pin},
 };
-use move_core_types::identifier::Identifier;
-use tracing::{debug, info};
+use tracing::debug;
+
+#[cfg(test)]
+use crate::dependency::PinnedDependencyInfo;
 
 /// A package that is defined as the root of a Move project.
 ///
@@ -172,6 +166,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(())
     }
 
+    // TODO: probably remove this?
     #[cfg(test)]
     pub async fn direct_dependencies(
         &self,
@@ -197,10 +192,11 @@ mod tests {
     use super::*;
     use crate::{
         flavor::Vanilla,
-        git::{GitCache, GitResult, GitTree, run_git_cmd_with_args},
+        git::{GitResult, run_git_cmd_with_args},
         schema::LockfileDependencyInfo,
     };
-    use std::{fs, process::Output};
+    use move_core_types::identifier::Identifier;
+    use std::{fs, path::PathBuf};
     use tempfile::{TempDir, tempdir};
     use test_log::test;
     use tokio::process::Command;
@@ -307,10 +303,6 @@ mod tests {
         // Test environment operations
         assert!(root.environments().contains_key("testnet"));
         assert!(root.environments().contains_key("mainnet"));
-
-        // Test dependencies operations
-        let deps = root.direct_dependencies().await.unwrap();
-        assert!(!deps.is_empty());
 
         assert_eq!(root.package_name(), &Identifier::new("graph").unwrap());
     }

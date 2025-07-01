@@ -2,27 +2,19 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Debug},
-    marker::PhantomData,
-    path::{Path, PathBuf},
-};
-
-use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, path::Path};
 
 use super::manifest::Manifest;
 use super::paths::PackagePath;
 use super::published_info::PublishInformation;
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo, pin},
+    dependency::{PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{LocalDepInfo, LockfileDependencyInfo, Pin},
+    schema::{LocalDepInfo, LockfileDependencyInfo},
 };
-use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use tracing::{debug, info};
+use move_core_types::identifier::Identifier;
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;

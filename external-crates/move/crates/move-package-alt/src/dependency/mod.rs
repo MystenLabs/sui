@@ -19,8 +19,6 @@ pub use dependency_set::DependencySet;
 
 use crate::{errors::FileHandle, schema::EnvironmentName, schema::PublishedID};
 
-use move_core_types::account_address::AccountAddress;
-
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
 /// fields) with additional metadata about how the dependency is used (such as the source file,
 /// enviroment overrides, etc).
