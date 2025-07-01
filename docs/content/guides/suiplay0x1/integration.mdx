@@ -1,0 +1,43 @@
+---
+title: Integration
+---
+
+{@include: ../../snippets/suiplay.mdx}
+
+## **On-Device Integration (Playtron SDK)**
+
+Playtron has provided an SDK that games should integrate with to enable wallet interaction on the SuiPlay0x1 device.
+
+### **Setup and Configuration**
+
+* Playtron SDK installation and initialization  
+* Reference: [GITHUB REPO LINK](https://github.com/playtron-os/playtron-sdk)  
+* The repo contains examples on how to use it for cpp, csharp, and nodejs  
+* It also contains the .dll build files needed to compile the cpp code  
+* For the csharp and nodejs examples, they can be installed from the respective package manager
+
+### **Key Integration Points**
+
+**Automatic Wallet Access**
+
+* Users already have a Playtron-tied zkLogin wallet through their Playtron OS account  
+* No additional wallet setup required on-device  
+* Games can immediately access wallet functions through the SDK  
+* The SDK also has documentation on other non-web3 exposed functionality as well, which includes: PACT (OS verification), Virtual Keyboard/Browser utils
+
+## **Off-Device Integration (dApp Kit)**
+
+By integrating the Sui dApp Kit as well, your game can continue to use the Playtron zkLogin wallet when running *off* the SuiPlay0x1.
+
+### **Cross-Platform Wallet Support**
+
+* Sui wallet dApp kit integration steps  
+* Enabling Playtron zkLogin wallet as connection option  
+* Reference: [dApp Kit docs](https://sdk.mystenlabs.com/dapp-kit)  
+* 🚩Note: The dApp Kit runs in TypeScript, meaning your game needs to a way to run TypeScript in order to integrate with this SDK. If your game is a web-based game, or you pop users out to a browser to perform web3 transactions on your associated website, this should be fine.  
+  * You can always support *sending* assets from your wallet to the Playtron wallet if you are unable to run TypeScript. As long as the user provides the Playtron wallet address, you can support sending assets from your game on a different platform (e.g., the user can use your PC client to transfer assets to their Playtron wallet, and continue playing on device).
+
+### **Supported Wallet Types**
+
+* **Playtron zkLogin**: Seamless continuation from on-device sessions  
+* **Self-Custody Options**: Support for any wallet available via Sui dApp Kit (e.g., Slush wallet, Phantom, Backpack) including future wallets that are integrated

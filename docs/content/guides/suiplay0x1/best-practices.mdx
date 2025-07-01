@@ -1,0 +1,31 @@
+---
+title: Best Practices
+---
+
+{@include: ../../snippets/suiplay.mdx}
+
+## **Handling transactions**
+
+If players are using their self-custody wallets, and transactions require explicit player signatures (as opposed to if you are managing custodial wallets on behalf of the player), then you should avoid frequent micro-transactions, particularly during gameplay. Signing a transaction will require popping up an OS UI element (on device) or a web browser (off device) to approve, and breaks the gameplay flow.
+
+Many on-chain actions do not require explicit user approval. For example, dropping rewards to a user, incrementing their currency, etc. These can be handled whenever appropriate by the game, even silently in the background during gameplay.
+
+**Managing Gas**
+
+* If using a third-party wallet service (Beamable, Shinami), leverage gas sponsorship for custodial implementations to abstract from users  
+* Consider tradeoffs between aggregated and individual wallets  
+* Batch transactions when possible to reduce gas costs
+
+## **Data Management Best Practices**
+
+**On-Chain vs Off-Chain Storage**
+
+* **On-Chain**: Assets / currencies that can be traded/sold  
+* **Off-Chain**: Game state, progress, etc using traditional game servers
+
+While you can store any information on-chain, consider whether it’s important to your game for that data to exist on-chain. If not, leverage traditional game server backends, which will make data syncing and updating easier.
+
+**Session Start Protocol**
+
+* Always check wallet state at session beginning  
+* Don't cache wallet data between sessions (assets may change externally)
