@@ -6,3 +6,5 @@ pub mod build_config;
 pub mod compiled_package;
 pub mod lint_flag;
 pub mod on_disk_package;
+mod package_layout;
+mod source_layout;

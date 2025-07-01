@@ -12,13 +12,14 @@ use crate::schema::PublishedID;
 
 use move_core_types::account_address::AccountAddress;
 
-use super::{build_config::BuildConfig, on_disk_package::OnDiskCompiledPackage};
+use super::{
+    build_config::BuildConfig, on_disk_package::OnDiskCompiledPackage,
+    package_layout::CompiledPackageLayout, source_layout::SourcePackageLayout,
+};
 use anyhow::{Result, bail};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::Modules;
-use move_command_line_common::files::{
-    extension_equals, find_filenames, find_move_filenames,
-};
+use move_command_line_common::files::{extension_equals, find_filenames, find_move_filenames};
 use move_compiler::{
     compiled_unit::CompiledUnit,
     diagnostics::{
@@ -34,10 +35,6 @@ use move_compiler::{
 use move_core_types::{identifier::Identifier, parsing::address::NumericalAddress};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
-use move_package::{
-    compilation::package_layout::CompiledPackageLayout,
-    source_package::layout::SourcePackageLayout,
-};
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -141,6 +138,7 @@ impl<F: MoveFlavor> CompiledPackage<F> {
             .collect()
     }
 
+    /// Return the published ids of the dependencies of this package
     pub fn dependency_ids(&self) -> Vec<PublishedID> {
         self.published_ids.clone()
     }
