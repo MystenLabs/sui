@@ -268,25 +268,25 @@ pub(crate) fn bytecode<K: SourceKind>(
             value: Register(pop!()),
         },
 
-        IB::Call(bx) => {
-            let name = &bx.module.name;
+        IB::Call(function_ref) => {
+            let name = &function_ref.module.name;
             let mut modules = ctxt.model.modules();
             let module = modules
                 .find(|m| {
-                    m.compiled().name() == (&bx.module.name)
-                        && *m.compiled().address() == bx.module.address
+                    m.compiled().name() == (&function_ref.module.name)
+                        && *m.compiled().address() == function_ref.module.address
                 })
                 .unwrap_or_else(|| {
                     panic!(
                         "Module {} with address {} not found in the model",
-                        name, bx.module.address
+                        name, function_ref.module.address
                     )
                 });
             let compiled = module.compiled();
             let function = compiled
                 .functions
-                .get(&bx.function)
-                .unwrap_or_else(|| panic!("Function {} not found in module {}", bx.function, name));
+                .get(&function_ref.function)
+                .unwrap_or_else(|| panic!("Function {} not found in module {}", function_ref.function, name));
 
             let args = make_vec!(function.parameters.len(), Register(pop!()));
 
@@ -305,18 +305,18 @@ pub(crate) fn bytecode<K: SourceKind>(
             let args = make_vec!(struct_ref.struct_.fields.0.len(), Register(pop!()));
             assign_reg!(
                 [push!()] = RValue::Data {
-                    op: DataOp::Pack,
+                    op: DataOp::Pack(struct_ref.clone()),
                     args
                 }
             )
         }
 
-        IB::Unpack(bx) => {
+        IB::Unpack(struct_ref) => {
             let rhs = RValue::Data {
-                op: DataOp::Unpack,
+                op: DataOp::Unpack(struct_ref.clone()),
                 args: vec![Register(pop!())],
             };
-            let lhs = make_vec!(bx.struct_.fields.0.len(), push!());
+            let lhs = make_vec!(struct_ref.struct_.fields.0.len(), push!());
             Instruction::AssignReg { rhs, lhs }
         }
 
@@ -324,7 +324,6 @@ pub(crate) fn bytecode<K: SourceKind>(
             assign_reg!([push!()] = data_op!(DataOp::ReadRef, Register(pop!())))
         }
 
-        // TODO check if this is ok for the SSA
         IB::WriteRef => {
             assign_reg!([] = data_op!(DataOp::WriteRef, Register(pop!()), Register(pop!())))
         }
@@ -474,39 +473,39 @@ pub(crate) fn bytecode<K: SourceKind>(
             }
             assign_reg!(
                 [push!()] = RValue::Data {
-                    op: DataOp::VecPack,
+                    op: DataOp::VecPack(bx.0.clone()),
                     args,
                 }
             )
         }
 
-        IB::VecLen(_rc) => {
-            assign_reg!([push!()] = data_op!(DataOp::VecLen, Register(pop!())))
+        IB::VecLen(rc_type) => {
+            assign_reg!([push!()] = data_op!(DataOp::VecLen(rc_type.clone()), Register(pop!())))
         }
 
-        IB::VecImmBorrow(_rc) => {
+        IB::VecImmBorrow(rc_type) => {
             assign_reg!(
-                [push!()] = data_op!(DataOp::VecImmBorrow, Register(pop!()), Register(pop!()))
+                [push!()] = data_op!(DataOp::VecImmBorrow(rc_type.clone()), Register(pop!()), Register(pop!()))
             )
         }
 
-        IB::VecMutBorrow(_rc) => {
+        IB::VecMutBorrow(rc_type) => {
             assign_reg!(
-                [push!()] = data_op!(DataOp::VecMutBorrow, Register(pop!()), Register(pop!()))
+                [push!()] = data_op!(DataOp::VecMutBorrow(rc_type.clone()), Register(pop!()), Register(pop!()))
             )
         }
 
         // TODO check if this is ok for the SSA
-        IB::VecPushBack(_rc) => {
-            assign_reg!([] = data_op!(DataOp::VecPushBack, Register(pop!()), Register(pop!())))
+        IB::VecPushBack(rc_type) => {
+            assign_reg!([] = data_op!(DataOp::VecPushBack(rc_type.clone()), Register(pop!()), Register(pop!())))
         }
 
-        IB::VecPopBack(_rc) => {
-            assign_reg!([push!()] = data_op!(DataOp::VecPopBack, Register(pop!())))
+        IB::VecPopBack(rc_type) => {
+            assign_reg!([push!()] = data_op!(DataOp::VecPopBack(rc_type.clone()), Register(pop!())))
         }
 
         IB::VecUnpack(bx) => {
-            let rhs = data_op!(DataOp::VecUnpack, Register(pop!()));
+            let rhs = data_op!(DataOp::VecUnpack(bx.0.clone()), Register(pop!()));
             let mut lhs = vec![];
             // Actually VecUnpack is only generated on empty vectors, so bx.1 is always 0
             for _i in 0..bx.1 {
@@ -515,11 +514,11 @@ pub(crate) fn bytecode<K: SourceKind>(
             Instruction::AssignReg { rhs, lhs }
         }
 
-        IB::VecSwap(_rc) => {
+        IB::VecSwap(rc_type) => {
             let args = make_vec!(3, Register(pop!()));
             Instruction::AssignReg {
                 rhs: RValue::Data {
-                    op: DataOp::VecSwap,
+                    op: DataOp::VecSwap(rc_type.clone()),
                     args,
                 },
                 // TODO check if this is ok for the SSA
@@ -550,14 +549,14 @@ pub(crate) fn bytecode<K: SourceKind>(
             Instruction::AssignReg {
                 lhs: vec![push!()],
                 rhs: RValue::Data {
-                    op: DataOp::PackVariant,
+                    op: DataOp::PackVariant(bx.clone()),
                     args,
                 },
             }
         }
         IB::UnpackVariant(bx) => {
             let rhs = RValue::Data {
-                op: DataOp::UnpackVariant,
+                op: DataOp::UnpackVariant(bx.clone()),
                 args: vec![Register(pop!())],
             };
             let lhs = make_vec!(bx.variant.fields.0.len(), push!());
@@ -566,7 +565,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::UnpackVariantImmRef(bx) => {
             let rhs = RValue::Data {
-                op: DataOp::UnpackVariantImmRef,
+                op: DataOp::UnpackVariantImmRef(bx.clone()),
                 args: vec![Register(pop!())],
             };
             let lhs = make_vec!(bx.variant.fields.0.len(), push!());
@@ -575,7 +574,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::UnpackVariantMutRef(bx) => {
             let rhs = RValue::Data {
-                op: DataOp::UnpackVariant,
+                op: DataOp::UnpackVariant(bx.clone()),
                 args: vec![Register(pop!())],
             };
             let lhs = make_vec!(bx.variant.fields.0.len(), push!());
@@ -589,7 +588,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                     .iter()
                     .map(|offset| *offset as usize)
                     .collect::<Vec<_>>(),
-                target: Register(pop!()),
+                subject: Register(pop!()),
             }
         }
 
