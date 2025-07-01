@@ -45,7 +45,7 @@ use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
-use typed_store::rocksdb::MergeOperands;
+use typed_store::rocksdb::{MergeOperands, WriteOptions};
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
@@ -53,6 +53,14 @@ use typed_store::TypedStoreError;
 const CURRENT_DB_VERSION: u64 = 3;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
+
+// WriteOptions with WAL disabled for bulk loading performance
+fn write_options_no_wal() -> WriteOptions {
+    let mut opts = WriteOptions::default();
+    opts.disable_wal(true);
+    opts.set_sync(false);
+    opts
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -486,7 +494,9 @@ impl IndexStoreTables {
             self.index_epoch(&checkpoint_data, &mut batch)?;
             self.index_transactions(&checkpoint_data, &mut batch)?;
 
-            batch.write().map_err(StorageError::from)
+            batch
+                .write_opt(&write_options_no_wal())
+                .map_err(StorageError::from)
         })?;
 
         info!(
@@ -514,7 +524,7 @@ impl IndexStoreTables {
             [(Watermark::Pruned, pruned_checkpoint_watermark)],
         )?;
 
-        batch.write()
+        batch.write_opt(&write_options_no_wal())
     }
 
     /// Index a Checkpoint
@@ -1024,7 +1034,7 @@ impl RpcIndexStore {
             "commit_update_for_checkpoint must be called in order"
         );
 
-        Ok(batch.write()?)
+        Ok(batch.write_opt(&write_options_no_wal())?)
     }
 
     pub fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>, TypedStoreError> {
@@ -1305,7 +1315,8 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
         // If the batch size grows to greater that 128MB then write out to the DB so that the
         // data we need to hold in memory doesn't grown unbounded.
         if self.batch.size_in_bytes() >= 1 << 27 {
-            std::mem::replace(&mut self.batch, self.tables.owner.batch()).write()?;
+            std::mem::replace(&mut self.batch, self.tables.owner.batch())
+                .write_opt(&write_options_no_wal())?;
         }
 
         Ok(())
@@ -1316,7 +1327,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             &self.tables.balance,
             std::mem::take(&mut self.balance_changes),
         )?;
-        self.batch.write()?;
+        self.batch.write_opt(&write_options_no_wal())?;
         Ok(())
     }
 }

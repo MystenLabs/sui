@@ -357,6 +357,37 @@ impl Database {
         ret
     }
 
+    pub fn write_opt(
+        &self,
+        batch: StorageWriteBatch,
+        write_options: &rocksdb::WriteOptions,
+    ) -> Result<(), TypedStoreError> {
+        fail_point!("batch-write-before");
+        let ret = match (&self.storage, batch) {
+            (Storage::Rocks(rocks), StorageWriteBatch::Rocks(batch)) => rocks
+                .underlying
+                .write_opt(batch, write_options)
+                .map_err(typed_store_err_from_rocks_err),
+            (Storage::InMemory(db), StorageWriteBatch::InMemory(batch)) => {
+                // InMemory doesn't support write options, just write normally
+                db.write(batch);
+                Ok(())
+            }
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), StorageWriteBatch::TideHunter(batch)) => {
+                // TideHunter doesn't support write options, just write normally
+                db.write_batch(batch)
+                    .map_err(typed_store_error_from_th_error)
+            }
+            _ => Err(TypedStoreError::RocksDBError(
+                "using invalid batch type for the database".to_string(),
+            )),
+        };
+        fail_point!("batch-write-after");
+        #[allow(clippy::let_and_return)]
+        ret
+    }
+
     pub fn compact_range_cf<K: AsRef<[u8]>>(
         &self,
         cf_name: &str,
@@ -1136,6 +1167,52 @@ impl DBBatch {
             None
         };
         self.database.write(self.batch)?;
+        self.db_metrics
+            .op_metrics
+            .rocksdb_batch_commit_bytes
+            .with_label_values(&[&db_name])
+            .observe(batch_size as f64);
+
+        if perf_ctx.is_some() {
+            self.db_metrics
+                .write_perf_ctx_metrics
+                .report_metrics(&db_name);
+        }
+        let elapsed = timer.stop_and_record();
+        if elapsed > 1.0 {
+            warn!(?elapsed, ?db_name, "very slow batch write");
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_count
+                .with_label_values(&[&db_name])
+                .inc();
+            self.db_metrics
+                .op_metrics
+                .rocksdb_very_slow_batch_writes_duration_ms
+                .with_label_values(&[&db_name])
+                .inc_by((elapsed * 1000.0) as u64);
+        }
+        Ok(())
+    }
+
+    /// Consume the batch and write its operations to the database with custom write options
+    #[instrument(level = "trace", skip_all, err)]
+    pub fn write_opt(self, write_options: &rocksdb::WriteOptions) -> Result<(), TypedStoreError> {
+        let db_name = self.database.db_name();
+        let timer = self
+            .db_metrics
+            .op_metrics
+            .rocksdb_batch_commit_latency_seconds
+            .with_label_values(&[&db_name])
+            .start_timer();
+        let batch_size = self.size_in_bytes();
+
+        let perf_ctx = if self.write_sample_interval.sample() {
+            Some(RocksDBPerfContext)
+        } else {
+            None
+        };
+        self.database.write_opt(self.batch, write_options)?;
         self.db_metrics
             .op_metrics
             .rocksdb_batch_commit_bytes
