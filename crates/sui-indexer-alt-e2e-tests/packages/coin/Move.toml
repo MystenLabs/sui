@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2024.beta"
 
 [dependencies]
-Sui = { local = "../../../../sui-framework/packages/sui-framework" }
+Sui = { local = "../../../sui-framework/packages/sui-framework" }
 
 [addresses]
-examples = "0x0"
+coin = "0x0"

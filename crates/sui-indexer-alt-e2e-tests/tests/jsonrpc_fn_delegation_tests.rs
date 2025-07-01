@@ -559,7 +559,7 @@ async fn test_get_balance() {
 
     // Publish another coin to better test the API.
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.extend(["tests", "test_move_code", "coin"]);
+    path.extend(["packages", "coin"]);
     let publish_transaction = make_publish_transaction(wallet, path).await;
     let owner_address = publish_transaction.data().transaction_data().sender();
 

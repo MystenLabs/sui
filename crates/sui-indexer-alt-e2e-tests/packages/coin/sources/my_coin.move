@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module examples::my_coin;
+module coin::my_coin;
 
 use sui::coin::{Self, TreasuryCap};
 
