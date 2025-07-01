@@ -65,10 +65,15 @@ mod refine {
     fn argument(used: &mut BTreeSet<T::Location>, arg: &mut T::Argument) {
         let usage = match &mut arg.value.0 {
             T::Argument__::Use(u) | T::Argument__::Read(u) => u,
-            T::Argument__::Borrow(_, _) => return,
+            T::Argument__::Borrow(_, loc) => {
+                // mark location as used
+                used.insert(*loc);
+                return;
+            }
         };
         match &usage {
             T::Usage::Move(loc) => {
+                // mark location as used
                 used.insert(*loc);
             }
             T::Usage::Copy { location, borrowed } => {
@@ -236,12 +241,21 @@ mod verify {
         value: Value,
         ty: &Type,
     ) -> Result<(), ExecutionError> {
-        if !ty.abilities().has_drop() && !Mode::allow_arbitrary_values() {
-            return Err(ExecutionErrorKind::UnusedValueWithoutDrop {
-                result_idx: i as u16,
-                secondary_idx: j as u16,
-            }
-            .into());
+        let abilities = ty.abilities();
+        if !abilities.has_drop() && !Mode::allow_arbitrary_values() {
+            let msg = if abilities.has_copy() {
+                "The value has copy, but not drop. \
+                Its last usage must be by-value so it can be taken."
+            } else {
+                "Unused value without drop"
+            };
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::UnusedValueWithoutDrop {
+                    result_idx: i as u16,
+                    secondary_idx: j as u16,
+                },
+                msg,
+            ));
         }
         consume_value(value);
         Ok(())
