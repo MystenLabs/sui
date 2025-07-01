@@ -194,12 +194,12 @@ fn move_call<Mode: ExecutionMode>(
     } = call;
     check_signature::<Mode>(function)?;
     check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
-    let (_vis, is_entry) = check_visibility::<Mode>(env, function)?;
+    let (vis, is_entry) = check_visibility::<Mode>(env, function)?;
     let arg_dirties = args
         .iter()
         .map(|arg| argument(env, context, arg))
         .collect::<Vec<_>>();
-    if is_entry {
+    if is_entry && matches!(vis, Visibility::Private) {
         for (idx, &arg_is_dirty) in arg_dirties.iter().enumerate() {
             if arg_is_dirty && !Mode::allow_arbitrary_values() {
                 return Err(command_argument_error(
@@ -208,7 +208,8 @@ fn move_call<Mode: ExecutionMode>(
                 ));
             }
         }
-        // mark args dirty if is entry
+    } else if !is_entry {
+        // mark args dirty if not entry
         for arg in args {
             context.mark_dirty(arg);
         }

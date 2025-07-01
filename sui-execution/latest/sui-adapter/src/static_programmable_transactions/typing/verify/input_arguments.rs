@@ -8,7 +8,7 @@ use crate::{
     static_programmable_transactions::{
         env::Env,
         loading::ast::Type,
-        typing::ast::{self as T, InputArg, ObjectArg},
+        typing::ast::{self as T, BytesConstraint, BytesUsage, InputArg, ObjectArg},
     },
 };
 use sui_types::{
@@ -65,9 +65,14 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
     for (arg, ty) in inputs {
         match ty {
             T::InputType::Bytes(constraints) => {
-                for (constraint, &(command_idx, arg_idx)) in constraints {
-                    check_constraint::<Mode>(arg_idx, arg, constraint)
-                        .map_err(|e| e.with_command_index(command_idx as usize))?;
+                for (constraint, constraint_info) in constraints {
+                    let BytesConstraint {
+                        command,
+                        argument,
+                        usage,
+                    } = *constraint_info;
+                    check_constraint::<Mode>(argument, arg, constraint, usage)
+                        .map_err(|e| e.with_command_index(command as usize))?;
                 }
             }
             T::InputType::Fixed(_) => (),
@@ -88,9 +93,12 @@ fn check_constraint<Mode: ExecutionMode>(
     command_arg_idx: u16,
     arg: &InputArg,
     constraint: &Type,
+    usage: BytesUsage,
 ) -> Result<(), ExecutionError> {
     match arg {
-        InputArg::Pure(bytes) => check_pure_bytes::<Mode>(command_arg_idx, bytes, constraint),
+        InputArg::Pure(bytes) => {
+            check_pure_bytes::<Mode>(command_arg_idx, bytes, constraint, usage)
+        }
         InputArg::Receiving(_) => check_receiving(command_arg_idx, constraint),
         InputArg::Object(
             ObjectArg::ImmObject(_) | ObjectArg::OwnedObject(_) | ObjectArg::SharedObject { .. },
@@ -104,12 +112,13 @@ fn check_pure_bytes<Mode: ExecutionMode>(
     command_arg_idx: u16,
     bytes: &[u8],
     constraint: &Type,
+    usage: BytesUsage,
 ) -> Result<(), ExecutionError> {
+    assert_invariant!(
+        !matches!(constraint, Type::Reference(_, _)),
+        "references should not be added as a constraint"
+    );
     if Mode::allow_arbitrary_values() {
-        assert_invariant!(
-            !matches!(constraint, Type::Reference(_, _)),
-            "references should not be added as a constraint"
-        );
         return Ok(());
     }
     let Some(layout) = primitive_serialization_layout(constraint)? else {
@@ -125,6 +134,18 @@ fn check_pure_bytes<Mode: ExecutionMode>(
             msg,
         ));
     };
+    match usage {
+        BytesUsage::Copied => assert_invariant!(
+            constraint.abilities().has_copy(),
+            "non-fixed bytes used by-value should be copyable. For type {constraint:?}"
+        ),
+        BytesUsage::ByImmRef => assert_invariant!(
+            constraint.abilities().has_drop(),
+            "non-fixed bytes used by-immutable-ref should be droppable since they will be \
+            deserialized, borrowed, but ultimately dropped. For type {constraint:?}"
+        ),
+        BytesUsage::ByMutRef => (),
+    }
     bcs_argument_validate(bytes, command_arg_idx, layout)?;
     Ok(())
 }
