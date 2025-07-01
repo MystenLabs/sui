@@ -62,18 +62,6 @@ pub trait Handler: Processor<Value: FieldCount> {
     /// If there are more than this many rows pending, the committer applies backpressure.
     const MAX_PENDING_ROWS: usize = 5000;
 
-    /// Whether the pruner requires processed values in order to prune.
-    /// This will determine the first checkpoint to process when we start the pipeline.
-    /// If this is true, when the pipeline starts, it will process all checkpoints from the
-    /// pruner watermark, so that the pruner have access to the processed values for any unpruned
-    /// checkpoints.
-    /// If this is false, when the pipeline starts, it will process all checkpoints from the
-    /// committer watermark.
-    // TODO: There are two issues with this:
-    // 1. There is no static guarantee that this flag is set correctly when the pruner needs processed values.
-    // 2. The name is a bit abstract.
-    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = false;
-
     /// Take a chunk of values and commit them to the database, returning the number of rows
     /// affected.
     async fn commit<'a>(
