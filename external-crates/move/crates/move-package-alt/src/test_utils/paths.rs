@@ -10,11 +10,7 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-
-use crate::t;
-use crate::test_utils::panic_error;
 
 /// Path to the test's filesystem scratchpad
 pub fn root() -> PathBuf {

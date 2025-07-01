@@ -12,10 +12,8 @@ mod paths;
 use paths::PathExt;
 use paths::root;
 use std::env;
-use std::ffi::OsStr;
 use std::fmt::Write;
 use std::fs;
-use std::os;
 use std::path::Path;
 use std::path::PathBuf;
 

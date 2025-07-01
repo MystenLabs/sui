@@ -380,13 +380,10 @@ mod tests {
     use super::*;
     use crate::test_utils::basic_manifest;
     use crate::test_utils::git;
-    use crate::test_utils::git::commits;
     use std::collections::BTreeSet;
     use std::fs;
     use std::path::Path;
-    use std::process::Output;
-    use tempfile::{TempDir, tempdir};
-    use test_log::test;
+    use tempfile::tempdir;
     use walkdir::DirEntry;
     use walkdir::WalkDir;
 
