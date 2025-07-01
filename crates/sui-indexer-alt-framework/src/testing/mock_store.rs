@@ -10,6 +10,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use dashmap::DashMap;
+
 use anyhow::ensure;
 use async_trait::async_trait;
 use scoped_futures::ScopedBoxFuture;
@@ -41,9 +43,9 @@ pub struct ConnectionFailure {
     pub connection_attempts: usize,
 }
 
-/// Configuration for simulating transaction failures in tests
+/// Configuration for simulating failures in tests
 #[derive(Default)]
-pub struct TransactionFailures {
+pub struct Failures {
     /// Number of failures to simulate before allowing success
     pub failures: usize,
     /// Counter for tracking total transaction attempts
@@ -62,16 +64,19 @@ pub struct MockStore {
     /// Each entry is the checkpoint number that was processed
     pub sequential_checkpoint_data: Arc<Mutex<Vec<u64>>>,
     /// Controls pruning failure simulation for testing retry behavior.
-    /// Maps from [from_checkpoint, to_checkpoint_exclusive) to number of remaining failure attempts.
-    /// When a prune operation is attempted on a range, if there are remaining failures,
-    /// the operation will fail and the counter will be decremented.
-    pub prune_failure_attempts: Arc<Mutex<HashMap<(u64, u64), usize>>>,
+    /// Maps from [from_checkpoint, to_checkpoint_exclusive) to Failures struct.
+    /// Thread-safe for concurrent access during pruning operations.
+    pub prune_failure_attempts: Arc<DashMap<(u64, u64), Failures>>,
     /// Configuration for simulating connection failures in tests
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
     /// Number of remaining failures for set_reader_watermark operation
     pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
     /// Configuration for simulating transaction failures in tests
-    pub transaction_failures: Arc<TransactionFailures>,
+    pub transaction_failures: Arc<Failures>,
+    /// Configuration for simulating commit failures in tests
+    pub commit_failures: Arc<Failures>,
+    /// Delay in milliseconds for each transaction commit
+    pub commit_delay_ms: u64,
 }
 
 #[derive(Clone)]
@@ -243,14 +248,47 @@ impl MockStore {
 
     /// Helper to configure transaction failure simulation
     pub fn with_transaction_failures(mut self, failures: usize) -> Self {
-        self.transaction_failures = Arc::new(TransactionFailures {
+        self.transaction_failures = Arc::new(Failures {
             failures,
             attempts: AtomicUsize::new(0),
         });
         self
     }
 
-    /// Get the sequential checkpoint data for testing.
+    /// Create a new MockStore with commit delay
+    pub fn with_commit_delay(mut self, delay_ms: u64) -> Self {
+        self.commit_delay_ms = delay_ms;
+        self
+    }
+
+    /// Helper to configure reader watermark failure simulation
+    pub fn with_reader_watermark_failures(self, attempts: usize) -> Self {
+        *self.set_reader_watermark_failure_attempts.lock().unwrap() = attempts;
+        self
+    }
+
+    /// Helper to configure prune failure simulation for a specific range
+    pub fn with_prune_failures(self, from: u64, to_exclusive: u64, failures: usize) -> Self {
+        self.prune_failure_attempts.insert(
+            (from, to_exclusive),
+            Failures {
+                failures,
+                attempts: AtomicUsize::new(0),
+            },
+        );
+        self
+    }
+
+    /// Helper to configure commit failure simulation
+    pub fn with_commit_failures(mut self, failures: usize) -> Self {
+        self.commit_failures = Arc::new(Failures {
+            failures,
+            attempts: AtomicUsize::new(0),
+        });
+        self
+    }
+
+    /// Get the sequential checkpoint data
     pub fn get_sequential_data(&self) -> Vec<u64> {
         self.sequential_checkpoint_data.lock().unwrap().clone()
     }
@@ -277,5 +315,80 @@ impl MockStore {
         })
         .await
         .unwrap();
+    }
+
+    /// Helper to get the number of prune attempts for a specific range
+    pub fn get_prune_attempts(&self, from: u64, to_exclusive: u64) -> usize {
+        self.prune_failure_attempts
+            .get(&(from, to_exclusive))
+            .map(|failures| failures.attempts.load(Ordering::Relaxed))
+            .unwrap_or(0)
+    }
+
+    /// Helper to wait for a specific number of prune attempts with timeout
+    pub async fn wait_for_prune_attempts(
+        &self,
+        from: u64,
+        to_exclusive: u64,
+        expected: usize,
+        timeout: Duration,
+    ) {
+        tokio::time::timeout(timeout, async {
+            loop {
+                if self.get_prune_attempts(from, to_exclusive) >= expected {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    /// Wait for any data to be processed and stored, panicking if timeout is reached
+    pub async fn wait_for_any_data(&self, timeout_duration: Duration) {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout_duration {
+            {
+                let data = self.data.lock().unwrap();
+                if !data.is_empty() {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("Timeout waiting for any data to be processed - pipeline may be stuck");
+    }
+
+    /// Wait for data from a specific checkpoint, panicking if timeout is reached
+    pub async fn wait_for_data(&self, checkpoint: u64, timeout_duration: Duration) -> Vec<u64> {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout_duration {
+            {
+                let data = self.data.lock().unwrap();
+                if let Some(values) = data.get(&checkpoint) {
+                    return values.clone();
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("Timeout waiting for data for checkpoint {}", checkpoint);
+    }
+
+    /// Wait for watermark to reach the expected checkpoint, returning the watermark when reached
+    pub async fn wait_for_watermark(
+        &self,
+        checkpoint: u64,
+        timeout_duration: Duration,
+    ) -> MockWatermark {
+        let start = std::time::Instant::now();
+        while start.elapsed() < timeout_duration {
+            let watermark = self.get_watermark();
+            if watermark.checkpoint_hi_inclusive >= checkpoint {
+                return watermark;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("Timeout waiting for watermark to reach {}", checkpoint);
     }
 }

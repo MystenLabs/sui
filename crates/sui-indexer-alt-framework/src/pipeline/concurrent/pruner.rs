@@ -394,20 +394,15 @@ mod tests {
             to_exclusive: u64,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            let should_fail = conn
-                .0
-                .prune_failure_attempts
-                .lock()
-                .unwrap()
-                .get_mut(&(from, to_exclusive))
-                .is_some_and(|remaining| {
-                    if *remaining > 0 {
-                        *remaining -= 1;
-                        true
-                    } else {
-                        false
-                    }
-                });
+            let should_fail =
+                if let Some(failures) = conn.0.prune_failure_attempts.get(&(from, to_exclusive)) {
+                    let prev = failures
+                        .attempts
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    prev < failures.failures
+                } else {
+                    false
+                };
 
             ensure!(!should_fail, "Pruning failed");
 
@@ -751,13 +746,12 @@ mod tests {
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let remaining_failures = HashMap::from([((1, 2), 1)]);
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
-            prune_failure_attempts: Arc::new(Mutex::new(remaining_failures)),
             ..Default::default()
-        };
+        }
+        .with_prune_failures(1, 2, 1);
 
         // Start the pruner
         let store_clone = store.clone();
