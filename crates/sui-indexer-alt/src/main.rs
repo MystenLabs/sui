@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
             config,
         } => {
             let indexer_config = read_config(&config).await?;
-            info!("Starting indexer with config: {:?}", indexer_config);
+            info!("Starting indexer with config: {:#?}", indexer_config);
 
             let cancel = CancellationToken::new();
 
@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
                 indexer_config =
                     indexer_config.merge(read_config(&file).await.with_context(|| {
                         format!("Failed to read configuration file: {}", file.display())
-                    })?);
+                    })?)?;
             }
 
             let config_toml = toml::to_string_pretty(&indexer_config)

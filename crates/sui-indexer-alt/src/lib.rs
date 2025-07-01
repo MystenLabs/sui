@@ -57,7 +57,7 @@ pub async fn setup_indexer(
         pruner,
         pipeline,
         extra: _,
-    } = indexer_config.finish();
+    } = indexer_config.finish()?;
 
     let PipelineLayer {
         sum_displays,
@@ -82,11 +82,11 @@ pub async fn setup_indexer(
         tx_digests,
         tx_kinds,
         extra: _,
-    } = pipeline.finish();
+    } = pipeline.finish()?;
 
-    let ingestion = ingestion.finish(IngestionConfig::default());
-    let committer = committer.finish(CommitterConfig::default());
-    let pruner = pruner.finish(PrunerConfig::default());
+    let ingestion = ingestion.finish(IngestionConfig::default())?;
+    let committer = committer.finish(CommitterConfig::default())?;
+    let pruner = pruner.finish(PrunerConfig::default())?;
 
     let retry_interval = ingestion.retry_interval();
 
@@ -137,7 +137,7 @@ pub async fn setup_indexer(
                         layer.finish(ConcurrentConfig {
                             committer: committer.clone(),
                             pruner: Some(pruner.clone()),
-                        }),
+                        })?,
                     )
                     .await?
             }
@@ -153,7 +153,7 @@ pub async fn setup_indexer(
                         layer.finish(SequentialConfig {
                             committer: committer.clone(),
                             ..Default::default()
-                        }),
+                        })?,
                     )
                     .await?
             }
