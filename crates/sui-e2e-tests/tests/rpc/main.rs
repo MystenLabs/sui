@@ -4,14 +4,12 @@
 use std::time::Duration;
 
 use prost_types::FieldMask;
-use sui_rpc_api::{
-    field_mask::FieldMaskUtil,
-    proto::rpc::v2beta::{
-        ledger_service_client::LedgerServiceClient,
-        transaction_execution_service_client::TransactionExecutionServiceClient, Bcs,
-        ExecuteTransactionRequest, ExecuteTransactionResponse, ExecutedTransaction,
-        GetTransactionRequest, Transaction, UserSignature,
-    },
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc_api::proto::rpc::v2beta::{
+    ledger_service_client::LedgerServiceClient,
+    transaction_execution_service_client::TransactionExecutionServiceClient, Bcs,
+    ExecuteTransactionRequest, ExecuteTransactionResponse, ExecutedTransaction,
+    GetTransactionRequest, Transaction, UserSignature,
 };
 
 mod client;

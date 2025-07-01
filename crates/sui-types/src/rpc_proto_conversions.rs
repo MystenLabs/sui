@@ -2802,3 +2802,18 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedObject {
         message
     }
 }
+
+//
+// TransactionChecks
+//
+
+impl From<simulate_transaction_request::TransactionChecks>
+    for crate::transaction_executor::TransactionChecks
+{
+    fn from(value: simulate_transaction_request::TransactionChecks) -> Self {
+        match value {
+            simulate_transaction_request::TransactionChecks::Enabled => Self::Enabled,
+            simulate_transaction_request::TransactionChecks::Disabled => Self::Disabled,
+        }
+    }
+}

@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
-use sui_rpc_api::proto::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::{ExecutedTransaction, GasCostSummary};
-use sui_rpc_api::proto::rpc::v2beta2::{GetBalanceRequest, ListBalancesRequest};
+use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::{ExecutedTransaction, GasCostSummary};
+use sui_rpc::proto::sui::rpc::v2beta2::{GetBalanceRequest, ListBalancesRequest};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -116,7 +116,7 @@ async fn test_custom_coin_balance() {
         .changed_objects
         .iter()
         .find_map(|o| {
-            use sui_rpc_api::proto::rpc::v2beta2::changed_object::OutputObjectState;
+            use sui_rpc::proto::sui::rpc::v2beta2::changed_object::OutputObjectState;
             if o.output_state == Some(OutputObjectState::PackageWrite as i32) {
                 o.object_id.clone()
             } else {

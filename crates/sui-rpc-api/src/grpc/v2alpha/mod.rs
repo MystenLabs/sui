@@ -3,7 +3,6 @@
 
 use std::pin::Pin;
 
-use crate::field_mask::FieldMaskTree;
 use crate::proto::rpc::v2alpha::live_data_service_server::LiveDataService;
 use crate::proto::rpc::v2alpha::move_package_service_server::MovePackageService;
 use crate::proto::rpc::v2alpha::signature_verification_service_server::SignatureVerificationService;
@@ -31,6 +30,7 @@ use crate::proto::rpc::v2alpha::{
 };
 use crate::subscription::SubscriptionServiceHandle;
 use crate::RpcService;
+use sui_rpc::field::FieldMaskTree;
 
 #[tonic::async_trait]
 impl SubscriptionService for SubscriptionServiceHandle {

@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::rpc::v2beta2::dynamic_field::DynamicFieldKind;
-use crate::proto::rpc::v2beta2::DynamicField;
-use crate::proto::rpc::v2beta2::ListDynamicFieldsRequest;
-use crate::proto::rpc::v2beta2::ListDynamicFieldsResponse;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use bytes::Bytes;
+use sui_rpc::proto::sui::rpc::v2beta2::dynamic_field::DynamicFieldKind;
+use sui_rpc::proto::sui::rpc::v2beta2::DynamicField;
+use sui_rpc::proto::sui::rpc::v2beta2::ListDynamicFieldsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::ListDynamicFieldsResponse;
 use sui_sdk_types::ObjectId;
 use sui_types::storage::{DynamicFieldIndexInfo, DynamicFieldKey};
 use tap::Pipe;

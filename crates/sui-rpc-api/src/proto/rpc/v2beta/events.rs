@@ -4,9 +4,11 @@
 use super::Bcs;
 use super::Event;
 use super::TransactionEvents;
-use crate::message::MessageMergeFrom;
-use crate::message::{MessageField, MessageFields, MessageMerge};
 use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 
 //
 // Event
@@ -35,13 +37,13 @@ impl MessageFields for Event {
 impl From<sui_sdk_types::Event> for Event {
     fn from(value: sui_sdk_types::Event) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::Event> for Event {
-    fn merge(&mut self, source: sui_sdk_types::Event, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<sui_sdk_types::Event> for Event {
+    fn merge(&mut self, source: sui_sdk_types::Event, mask: &FieldMaskTree) {
         if mask.contains(Self::PACKAGE_ID_FIELD.name) {
             self.package_id = Some(source.package_id.to_string());
         }
@@ -67,8 +69,8 @@ impl MessageMerge<sui_sdk_types::Event> for Event {
     }
 }
 
-impl MessageMerge<&Event> for Event {
-    fn merge(&mut self, source: &Event, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&Event> for Event {
+    fn merge(&mut self, source: &Event, mask: &FieldMaskTree) {
         let Event {
             package_id,
             module,
@@ -180,12 +182,8 @@ impl From<sui_sdk_types::TransactionEvents> for TransactionEvents {
     }
 }
 
-impl MessageMerge<sui_sdk_types::TransactionEvents> for TransactionEvents {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::TransactionEvents,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::TransactionEvents> for TransactionEvents {
+    fn merge(&mut self, source: sui_sdk_types::TransactionEvents, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
             let mut bcs = super::Bcs::serialize(&source).unwrap();
             bcs.name = Some("TransactionEvents".to_owned());
@@ -206,8 +204,8 @@ impl MessageMerge<sui_sdk_types::TransactionEvents> for TransactionEvents {
     }
 }
 
-impl MessageMerge<&TransactionEvents> for TransactionEvents {
-    fn merge(&mut self, source: &TransactionEvents, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&TransactionEvents> for TransactionEvents {
+    fn merge(&mut self, source: &TransactionEvents, mask: &FieldMaskTree) {
         let TransactionEvents {
             bcs,
             digest,

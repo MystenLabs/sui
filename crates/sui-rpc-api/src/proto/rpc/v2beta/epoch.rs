@@ -3,9 +3,10 @@
 
 use super::Epoch;
 use super::ProtocolConfig;
-use crate::message::MessageMerge;
-use crate::message::MessageMergeFrom;
-use crate::message::{MessageField, MessageFields};
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 
 impl Epoch {
     pub const EPOCH_FIELD: &'static MessageField = &MessageField::new("epoch");
@@ -36,8 +37,8 @@ impl MessageFields for Epoch {
     ];
 }
 
-impl MessageMerge<&Epoch> for Epoch {
-    fn merge(&mut self, source: &Epoch, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&Epoch> for Epoch {
+    fn merge(&mut self, source: &Epoch, mask: &FieldMaskTree) {
         let Epoch {
             epoch,
             committee,
@@ -110,8 +111,8 @@ impl MessageFields for ProtocolConfig {
     ];
 }
 
-impl MessageMerge<&ProtocolConfig> for ProtocolConfig {
-    fn merge(&mut self, source: &ProtocolConfig, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&ProtocolConfig> for ProtocolConfig {
+    fn merge(&mut self, source: &ProtocolConfig, mask: &FieldMaskTree) {
         let ProtocolConfig {
             protocol_version,
             feature_flags,
@@ -132,8 +133,8 @@ impl MessageMerge<&ProtocolConfig> for ProtocolConfig {
     }
 }
 
-impl MessageMerge<ProtocolConfig> for ProtocolConfig {
-    fn merge(&mut self, source: ProtocolConfig, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<ProtocolConfig> for ProtocolConfig {
+    fn merge(&mut self, source: ProtocolConfig, mask: &FieldMaskTree) {
         let ProtocolConfig {
             protocol_version,
             feature_flags,

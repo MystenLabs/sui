@@ -609,8 +609,8 @@ async fn party_object_read() {
 /// indexes
 #[sim_test]
 async fn party_object_grpc() {
-    use sui_rpc_api::field_mask::FieldMask;
-    use sui_rpc_api::field_mask::FieldMaskUtil;
+    use sui_rpc::field::FieldMask;
+    use sui_rpc::field::FieldMaskUtil;
     use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
     use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
     use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
@@ -742,8 +742,8 @@ async fn party_object_grpc() {
 /// selection
 #[sim_test]
 async fn party_coin_grpc() {
-    use sui_rpc_api::field_mask::FieldMask;
-    use sui_rpc_api::field_mask::FieldMaskUtil;
+    use sui_rpc::field::FieldMask;
+    use sui_rpc::field::FieldMaskUtil;
     use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
     use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
     use sui_rpc_api::proto::rpc::v2alpha::SimulateTransactionRequest;

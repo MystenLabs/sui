@@ -3,10 +3,10 @@
 
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_macros::sim_test;
-use sui_rpc_api::proto::rpc::v2beta2::signature_verification_service_client::SignatureVerificationServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::Bcs;
-use sui_rpc_api::proto::rpc::v2beta2::UserSignature;
-use sui_rpc_api::proto::rpc::v2beta2::VerifySignatureRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::signature_verification_service_client::SignatureVerificationServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::Bcs;
+use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
+use sui_rpc::proto::sui::rpc::v2beta2::VerifySignatureRequest;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::Signature;

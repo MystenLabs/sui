@@ -7,13 +7,13 @@ use sui_sdk_types::Jwk;
 use sui_sdk_types::JwkId;
 use tap::Pipe;
 
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::signature_verification_service_server::SignatureVerificationService;
-use crate::proto::rpc::v2beta2::VerifySignatureRequest;
-use crate::proto::rpc::v2beta2::VerifySignatureResponse;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::signature_verification_service_server::SignatureVerificationService;
+use sui_rpc::proto::sui::rpc::v2beta2::VerifySignatureRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::VerifySignatureResponse;
 
 #[tonic::async_trait]
 impl SignatureVerificationService for RpcService {

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod google;
+pub use sui_rpc::proto::google;
 pub mod rpc;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;

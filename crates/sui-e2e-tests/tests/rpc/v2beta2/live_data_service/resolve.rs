@@ -4,24 +4,24 @@
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_rpc_api::proto::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::Argument;
-use sui_rpc_api::proto::rpc::v2beta2::Command;
-use sui_rpc_api::proto::rpc::v2beta2::GasPayment;
-use sui_rpc_api::proto::rpc::v2beta2::Input;
-use sui_rpc_api::proto::rpc::v2beta2::MoveCall;
-use sui_rpc_api::proto::rpc::v2beta2::ProgrammableTransaction;
-use sui_rpc_api::proto::rpc::v2beta2::SimulateTransactionRequest;
-use sui_rpc_api::proto::rpc::v2beta2::Transaction;
-use sui_rpc_api::proto::rpc::v2beta2::TransactionKind;
-use sui_rpc_api::proto::rpc::v2beta2::TransferObjects;
+use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::Argument;
+use sui_rpc::proto::sui::rpc::v2beta2::Command;
+use sui_rpc::proto::sui::rpc::v2beta2::GasPayment;
+use sui_rpc::proto::sui::rpc::v2beta2::Input;
+use sui_rpc::proto::sui::rpc::v2beta2::MoveCall;
+use sui_rpc::proto::sui::rpc::v2beta2::ProgrammableTransaction;
+use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+use sui_rpc::proto::sui::rpc::v2beta2::TransactionKind;
+use sui_rpc::proto::sui::rpc::v2beta2::TransferObjects;
 use sui_rpc_api::Client;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use test_cluster::TestClusterBuilder;
 
 fn proto_to_response(
-    proto: sui_rpc_api::proto::rpc::v2beta2::SimulateTransactionResponse,
+    proto: sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse,
 ) -> (
     sui_types::transaction::TransactionData,
     sui_types::effects::TransactionEffects,

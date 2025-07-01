@@ -1,29 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMergeFrom;
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::BatchGetTransactionsRequest;
-use crate::proto::rpc::v2beta2::BatchGetTransactionsResponse;
-use crate::proto::rpc::v2beta2::Event;
-use crate::proto::rpc::v2beta2::ExecutedTransaction;
-use crate::proto::rpc::v2beta2::GetTransactionRequest;
-use crate::proto::rpc::v2beta2::GetTransactionResponse;
-use crate::proto::rpc::v2beta2::GetTransactionResult;
-use crate::proto::rpc::v2beta2::Transaction;
-use crate::proto::rpc::v2beta2::TransactionEffects;
-use crate::proto::rpc::v2beta2::TransactionEvents;
-use crate::proto::rpc::v2beta2::UserSignature;
-use crate::proto::timestamp_ms_to_proto;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::Event;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2beta2::GetTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetTransactionResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetTransactionResult;
+use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
+use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
+use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
+use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::TransactionDigest;
 use sui_types::base_types::ObjectID;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
+
+pub const READ_MASK_DEFAULT: &str = "digest";
 
 #[tracing::instrument(skip(service))]
 pub fn get_transaction(
@@ -47,7 +49,7 @@ pub fn get_transaction(
     let read_mask = {
         let read_mask = request
             .read_mask
-            .unwrap_or_else(|| FieldMask::from_str(GetTransactionRequest::READ_MASK_DEFAULT));
+            .unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask
             .validate::<ExecutedTransaction>()
             .map_err(|path| {
@@ -73,8 +75,7 @@ pub fn batch_get_transactions(
     BatchGetTransactionsRequest { digests, read_mask }: BatchGetTransactionsRequest,
 ) -> Result<BatchGetTransactionsResponse, RpcError> {
     let read_mask = {
-        let read_mask = read_mask
-            .unwrap_or_else(|| FieldMask::from_str(BatchGetTransactionsRequest::READ_MASK_DEFAULT));
+        let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask
             .validate::<ExecutedTransaction>()
             .map_err(|path| {
@@ -114,7 +115,7 @@ pub fn batch_get_transactions(
 fn transaction_to_response(
     service: &RpcService,
     source: crate::reader::TransactionRead,
-    mask: &crate::field_mask::FieldMaskTree,
+    mask: &FieldMaskTree,
 ) -> ExecutedTransaction {
     let mut message = ExecutedTransaction::default();
 
@@ -228,14 +229,4 @@ fn transaction_to_response(
     }
 
     message
-}
-
-impl From<sui_types::balance_change::BalanceChange> for crate::proto::rpc::v2beta2::BalanceChange {
-    fn from(value: sui_types::balance_change::BalanceChange) -> Self {
-        Self {
-            address: Some(value.address.to_string()),
-            coin_type: Some(value.coin_type.to_canonical_string(true)),
-            amount: Some(value.amount.to_string()),
-        }
-    }
 }
