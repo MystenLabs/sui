@@ -5,15 +5,15 @@ title: Module `sui::accumulator`
 
 
 -  [Struct `AccumulatorRoot`](#sui_accumulator_AccumulatorRoot)
--  [Struct `AccumulatorName`](#sui_accumulator_AccumulatorName)
+-  [Struct `Key`](#sui_accumulator_Key)
 -  [Struct `U128`](#sui_accumulator_U128)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#sui_accumulator_create)
--  [Function `accumulator_root_has_balance`](#sui_accumulator_accumulator_root_has_balance)
--  [Function `accumulator_root_add_balance`](#sui_accumulator_accumulator_root_add_balance)
--  [Function `accumulator_root_borrow_balance_mut`](#sui_accumulator_accumulator_root_borrow_balance_mut)
--  [Function `accumulator_root_remove_balance`](#sui_accumulator_accumulator_root_remove_balance)
--  [Function `get_accumulator_field_address`](#sui_accumulator_get_accumulator_field_address)
+-  [Function `root_has_accumulator`](#sui_accumulator_root_has_accumulator)
+-  [Function `root_add_accumulator`](#sui_accumulator_root_add_accumulator)
+-  [Function `root_borrow_accumulator_mut`](#sui_accumulator_root_borrow_accumulator_mut)
+-  [Function `root_remove_accumulator`](#sui_accumulator_root_remove_accumulator)
+-  [Function `accumulator_address`](#sui_accumulator_accumulator_address)
 -  [Function `emit_deposit_event`](#sui_accumulator_emit_deposit_event)
 -  [Function `emit_withdraw_event`](#sui_accumulator_emit_withdraw_event)
 -  [Function `settlement_prologue`](#sui_accumulator_settlement_prologue)
@@ -63,15 +63,16 @@ title: Module `sui::accumulator`
 
 </details>
 
-<a name="sui_accumulator_AccumulatorName"></a>
+<a name="sui_accumulator_Key"></a>
 
-## Struct `AccumulatorName`
+## Struct `Key`
 
 Balance object methods
-The key type to look up a balance object.
+Key is used only for computing the field id of accumulator objects.
+<code>T</code> is the type of the accumulated value, e.g. Balance<SUI>
 
 
-<pre><code><b>public</b> <b>struct</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;<b>phantom</b> T&gt; <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;<b>phantom</b> T&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -170,13 +171,13 @@ to cause an overflow.
 
 </details>
 
-<a name="sui_accumulator_accumulator_root_has_balance"></a>
+<a name="sui_accumulator_root_has_accumulator"></a>
 
-## Function `accumulator_root_has_balance`
+## Function `root_has_accumulator`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_has_balance">accumulator_root_has_balance</a>&lt;K, V: store&gt;(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">sui::accumulator::AccumulatorName</a>&lt;K&gt;): bool
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_has_accumulator">root_has_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): bool
 </code></pre>
 
 
@@ -185,11 +186,8 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_has_balance">accumulator_root_has_balance</a>&lt;K, V: store&gt;(
-    accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
-    name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;K&gt;,
-): bool {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">dynamic_field::exists_with_type</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;K&gt;, V&gt;(&accumulator_root.id, name)
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_has_accumulator">root_has_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;): bool {
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">dynamic_field::exists_with_type</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&accumulator_root.id, name)
 }
 </code></pre>
 
@@ -197,13 +195,13 @@ to cause an overflow.
 
 </details>
 
-<a name="sui_accumulator_accumulator_root_add_balance"></a>
+<a name="sui_accumulator_root_add_accumulator"></a>
 
-## Function `accumulator_root_add_balance`
+## Function `root_add_accumulator`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_add_balance">accumulator_root_add_balance</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">sui::accumulator::AccumulatorName</a>&lt;K&gt;, value: V)
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_add_accumulator">root_add_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;, value: V)
 </code></pre>
 
 
@@ -212,9 +210,9 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_add_balance">accumulator_root_add_balance</a>&lt;K, V: store&gt;(
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_add_accumulator">root_add_accumulator</a>&lt;K, V: store&gt;(
     accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
-    name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;K&gt;,
+    name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;,
     value: V,
 ) {
     <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(&<b>mut</b> accumulator_root.id, name, value);
@@ -225,13 +223,13 @@ to cause an overflow.
 
 </details>
 
-<a name="sui_accumulator_accumulator_root_borrow_balance_mut"></a>
+<a name="sui_accumulator_root_borrow_accumulator_mut"></a>
 
-## Function `accumulator_root_borrow_balance_mut`
+## Function `root_borrow_accumulator_mut`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_borrow_balance_mut">accumulator_root_borrow_balance_mut</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">sui::accumulator::AccumulatorName</a>&lt;K&gt;): &<b>mut</b> V
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator_mut">root_borrow_accumulator_mut</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): &<b>mut</b> V
 </code></pre>
 
 
@@ -240,11 +238,11 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_borrow_balance_mut">accumulator_root_borrow_balance_mut</a>&lt;K, V: store&gt;(
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_borrow_accumulator_mut">root_borrow_accumulator_mut</a>&lt;K, V: store&gt;(
     accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
-    name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;K&gt;,
+    name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;,
 ): &<b>mut</b> V {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
 }
 </code></pre>
 
@@ -252,13 +250,13 @@ to cause an overflow.
 
 </details>
 
-<a name="sui_accumulator_accumulator_root_remove_balance"></a>
+<a name="sui_accumulator_root_remove_accumulator"></a>
 
-## Function `accumulator_root_remove_balance`
+## Function `root_remove_accumulator`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_remove_balance">accumulator_root_remove_balance</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">sui::accumulator::AccumulatorName</a>&lt;K&gt;): V
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_remove_accumulator">root_remove_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">sui::accumulator::Key</a>&lt;K&gt;): V
 </code></pre>
 
 
@@ -267,11 +265,8 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_root_remove_balance">accumulator_root_remove_balance</a>&lt;K, V: store&gt;(
-    accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>,
-    name: <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;K&gt;,
-): V {
-    <a href="../sui/dynamic_field.md#sui_dynamic_field_remove">dynamic_field::remove</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
+<pre><code><b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_root_remove_accumulator">root_remove_accumulator</a>&lt;K, V: store&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">AccumulatorRoot</a>, name: <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;): V {
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_remove">dynamic_field::remove</a>&lt;<a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;K&gt;, V&gt;(&<b>mut</b> accumulator_root.id, name)
 }
 </code></pre>
 
@@ -279,13 +274,13 @@ to cause an overflow.
 
 </details>
 
-<a name="sui_accumulator_get_accumulator_field_address"></a>
+<a name="sui_accumulator_accumulator_address"></a>
 
-## Function `get_accumulator_field_address`
+## Function `accumulator_address`
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_get_accumulator_field_address">get_accumulator_field_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b>
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">accumulator_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b>
 </code></pre>
 
 
@@ -294,8 +289,8 @@ to cause an overflow.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_get_accumulator_field_address">get_accumulator_field_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b> {
-    <b>let</b> key = <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;T&gt; { <b>address</b> };
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_accumulator_address">accumulator_address</a>&lt;T&gt;(<b>address</b>: <b>address</b>): <b>address</b> {
+    <b>let</b> key = <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; { <b>address</b> };
     <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">dynamic_field::hash_type_and_key</a>(sui_accumulator_root_address(), key)
 }
 </code></pre>
@@ -407,15 +402,15 @@ digest.
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui/accumulator.md#sui_accumulator_ENotSystemAddress">ENotSystemAddress</a>);
     // Merge and split should be netted out prior to calling this function.
     <b>assert</b>!((merge == 0 ) != (split == 0), <a href="../sui/accumulator.md#sui_accumulator_EInvalidSplitAmount">EInvalidSplitAmount</a>);
-    <b>let</b> name = <a href="../sui/accumulator.md#sui_accumulator_AccumulatorName">AccumulatorName</a>&lt;T&gt; { <b>address</b>: owner };
-    <b>if</b> (accumulator_root.has_balance&lt;T, <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>&gt;(name)) {
+    <b>let</b> name = <a href="../sui/accumulator.md#sui_accumulator_Key">Key</a>&lt;T&gt; { <b>address</b>: owner };
+    <b>if</b> (accumulator_root.has_accumulator&lt;T, <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>&gt;(name)) {
         <b>let</b> is_zero = {
-            <b>let</b> value: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> = accumulator_root.borrow_balance_mut(name);
+            <b>let</b> value: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> = accumulator_root.borrow_accumulator_mut(name);
             value.value = value.value + merge - split;
             value.value == 0
         };
         <b>if</b> (is_zero) {
-            <b>let</b> <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> { value: _ } = accumulator_root.remove_balance&lt;T, <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>&gt;(
+            <b>let</b> <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> { value: _ } = accumulator_root.remove_accumulator&lt;T, <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a>&gt;(
                 name,
             );
         }
@@ -425,7 +420,7 @@ digest.
         <b>let</b> value = <a href="../sui/accumulator.md#sui_accumulator_U128">U128</a> {
             value: merge,
         };
-        accumulator_root.add_balance(name, value);
+        accumulator_root.add_accumulator(name, value);
     };
 }
 </code></pre>

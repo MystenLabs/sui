@@ -15,7 +15,6 @@ use sui_types::{
     Identifier, TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
     SUI_FRAMEWORK_PACKAGE_ID,
 };
-use tracing::debug;
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
@@ -160,13 +159,10 @@ pub fn create_accumulator_update_transactions(
     ckpt_effects: &[TransactionEffects],
 ) -> Vec<TransactionKind> {
     let epoch = epoch_store.epoch();
-    let Some(accumulator_root_obj_initial_shared_version) = epoch_store
+    let accumulator_root_obj_initial_shared_version = epoch_store
         .epoch_start_config()
         .accumulator_root_obj_initial_shared_version()
-    else {
-        debug!("accumulator root object does not exist, skipping accumulator update");
-        return vec![];
-    };
+        .expect("accumulator root object must exist");
 
     struct Update {
         merge: MergedValueIntermediate,
@@ -231,14 +227,6 @@ pub fn create_accumulator_update_transactions(
         }))
         .unwrap();
 
-    for (accumulator_obj, update) in updates {
-        let Update { merge, split } = update;
-        let address = addresses.get(&accumulator_obj).unwrap();
-        let merged_value = MergedValue::from(merge);
-        let split_value = MergedValue::from(split);
-        MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
-    }
-
     let epoch_arg = builder.pure(epoch).unwrap();
     let checkpoint_height_arg = builder.pure(checkpoint_height).unwrap();
     let idx_arg = builder.pure(0u64).unwrap();
@@ -250,6 +238,14 @@ pub fn create_accumulator_update_transactions(
         vec![],
         vec![epoch_arg, checkpoint_height_arg, idx_arg],
     );
+
+    for (accumulator_obj, update) in updates {
+        let Update { merge, split } = update;
+        let address = addresses.get(&accumulator_obj).unwrap();
+        let merged_value = MergedValue::from(merge);
+        let split_value = MergedValue::from(split);
+        MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
+    }
 
     vec![TransactionKind::ProgrammableSystemTransaction(
         builder.finish(),
