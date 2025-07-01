@@ -25,14 +25,11 @@ pub struct IndexerConfig {
     /// How checkpoints are read by the indexer.
     pub ingestion: IngestionLayer,
 
-    /// Configuration for the retention on consistent pipelines.
-    pub consistency: PrunerLayer,
-
     /// Default configuration for committers that is shared by all pipelines. Pipelines can
     /// override individual settings in their own configuration sections.
     pub committer: CommitterLayer,
 
-    /// Default configuration for pruners that is shared by all concurrent pipelines. Pipelies can
+    /// Default configuration for pruners that is shared by all concurrent pipelines. Pipelines can
     /// override individual settings in their own configuration sections. Concurrent pipelines
     /// still need to specify a pruner configuration (although it can be empty) to indicate that
     /// they want to enable pruning, but when they do, any missing values will be filled in by this
@@ -113,14 +110,12 @@ pub struct PrunerLayer {
 #[derive(Clone, Default, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct PipelineLayer {
-    // Consistent pipelines
-    pub coin_balance_buckets: Option<CommitterLayer>,
-    pub obj_info: Option<CommitterLayer>,
-
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
 
     // All concurrent pipelines
+    pub coin_balance_buckets: Option<ConcurrentLayer>,
+    pub obj_info: Option<ConcurrentLayer>,
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
     pub ev_emit_mod: Option<ConcurrentLayer>,
     pub ev_struct_inst: Option<ConcurrentLayer>,
@@ -151,11 +146,6 @@ impl IndexerConfig {
         let mut example: Self = Default::default();
 
         example.ingestion = IngestionConfig::default().into();
-        example.consistency = PrunerLayer {
-            interval_ms: Some(60_000),
-            retention: Some(4 * 60 * 60),
-            ..Default::default()
-        };
         example.committer = CommitterConfig::default().into();
         example.pruner = PrunerConfig::default().into();
         example.pipeline = PipelineLayer::example();
@@ -177,11 +167,6 @@ impl IndexerConfig {
                 collect_interval_ms: Some(50),
                 watermark_interval_ms: Some(50),
                 write_concurrency: Some(1),
-                ..Default::default()
-            },
-            consistency: PrunerLayer {
-                interval_ms: Some(50),
-                delay_ms: Some(0),
                 ..Default::default()
             },
             pruner: PrunerLayer {
@@ -313,7 +298,6 @@ impl Merge for IndexerConfig {
         check_extra("top-level", other.extra);
         IndexerConfig {
             ingestion: self.ingestion.merge(other.ingestion),
-            consistency: self.consistency.merge(other.consistency),
             committer: self.committer.merge(other.committer),
             pruner: self.pruner.merge(other.pruner),
             pipeline: self.pipeline.merge(other.pipeline),
