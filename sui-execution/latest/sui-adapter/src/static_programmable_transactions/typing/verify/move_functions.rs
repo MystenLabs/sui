@@ -216,8 +216,7 @@ fn move_call<Mode: ExecutionMode>(
             context.mark_dirty(arg);
         }
     }
-    let is_dirty = is_entry || arg_dirties.iter().any(|&d| d);
-    Ok(vec![IsDirty::Fixed { is_dirty }; result.len()])
+    Ok(vec![IsDirty::Fixed { is_dirty: true }; result.len()])
 }
 
 fn check_signature<Mode: ExecutionMode>(
