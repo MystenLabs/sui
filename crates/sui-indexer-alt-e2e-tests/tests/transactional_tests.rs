@@ -15,7 +15,7 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::{header::HeaderName, Client};
 use serde_json::{json, Value};
-use sui_indexer_alt::config::{IndexerConfig, Merge, PrunerLayer};
+use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, Merge, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
@@ -145,9 +145,20 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
 
     // The test config includes every pipeline, we configure its consistent range using the
     // off-chain config that was passed in.
+    let pruner = PrunerLayer {
+        retention: Some(config.snapshot_config.snapshot_min_lag as u64),
+        ..Default::default()
+    };
     let indexer_config = IndexerConfig::for_test().merge(IndexerConfig {
-        consistency: PrunerLayer {
-            retention: Some(config.snapshot_config.snapshot_min_lag as u64),
+        pipeline: PipelineLayer {
+            coin_balance_buckets: Some(ConcurrentLayer {
+                pruner: Some(pruner.clone()),
+                ..Default::default()
+            }),
+            obj_info: Some(ConcurrentLayer {
+                pruner: Some(pruner),
+                ..Default::default()
+            }),
             ..Default::default()
         },
         ..Default::default()

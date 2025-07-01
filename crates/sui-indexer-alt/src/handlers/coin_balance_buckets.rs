@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use diesel::prelude::QueryableByName;
-use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
@@ -153,8 +152,6 @@ impl Processor for CoinBalanceBuckets {
 impl Handler for CoinBalanceBuckets {
     type Store = Db;
 
-    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()
@@ -188,32 +185,22 @@ impl Handler for CoinBalanceBuckets {
             }
         }
 
-        use diesel_async::AsyncConnection;
-        let coin_balance_buckets_count = conn
-            .transaction(|conn| {
-                async move {
-                    let count = diesel::insert_into(coin_balance_buckets::table)
-                        .values(&stored)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .await?;
-                    let deleted_refs = if !references.is_empty() {
-                        diesel::insert_into(coin_balance_buckets_deletion_reference::table)
-                            .values(&references)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .await?
-                    } else {
-                        0
-                    };
-
-                    Ok::<_, anyhow::Error>(count + deleted_refs)
-                }
-                .scope_boxed()
-            })
+        let count = diesel::insert_into(coin_balance_buckets::table)
+            .values(&stored)
+            .on_conflict_do_nothing()
+            .execute(conn)
             .await?;
+        let deleted_refs = if !references.is_empty() {
+            diesel::insert_into(coin_balance_buckets_deletion_reference::table)
+                .values(&references)
+                .on_conflict_do_nothing()
+                .execute(conn)
+                .await?
+        } else {
+            0
+        };
 
-        Ok(coin_balance_buckets_count)
+        Ok(count + deleted_refs)
     }
 
     // TODO: Add tests for this function.
@@ -231,6 +218,10 @@ impl Handler for CoinBalanceBuckets {
         // This works best on under 1.5 million object changes, roughly 15k checkpoints. Performance
         // degrades sharply beyond this, since the planner switches to hash joins and full table
         // scans. A HashAggregate approach interestingly becomes more performant in this scenario.
+        //
+        // If the first call to prune succeeds, subsequent calls will find no records to delete from
+        // coin_balance_buckets_deletion_reference, and consequently no records to delete from the
+        // main table. Pruning is thus idempotent after the initial run.
         //
         // TODO: use sui_sql_macro's query!
         let query = format!(

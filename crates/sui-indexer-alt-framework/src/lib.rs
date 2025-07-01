@@ -194,8 +194,7 @@ impl<S: Store> Indexer<S> {
     where
         H: concurrent::Handler<Store = S> + Send + Sync + 'static,
     {
-        let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
-        let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
+        let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
 
@@ -288,13 +287,8 @@ impl<S: Store> Indexer<S> {
     /// handler `H` (as long as it's enabled). Returns `Ok(None)` if the pipeline is disabled,
     /// `Ok(Some(None))` if the pipeline is enabled but its watermark is not found, and
     /// `Ok(Some(Some(watermark)))` if the pipeline is enabled and the watermark is found.
-    ///
-    /// If `start_from_pruner_watermark` is true, the indexer will start ingestion from just after
-    /// the pruner watermark, so that the pruner have access to the processed values for any
-    /// unpruned checkpoints.
     async fn add_pipeline<P: Processor + 'static>(
         &mut self,
-        start_from_pruner_watermark: bool,
     ) -> Result<Option<Option<CommitterWatermark>>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
@@ -320,21 +314,10 @@ impl<S: Store> Indexer<S> {
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
-        let expected_first_checkpoint = if start_from_pruner_watermark {
-            // If the pruner of this pipeline requires processed values in order to prune,
-            // we must start ingestion from just after the pruner watermark,
-            // so that we can process all values needed by the pruner.
-            conn.pruner_watermark(P::NAME, Default::default())
-                .await
-                .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
-                .map(|w| w.pruner_hi)
-                .unwrap_or_default()
-        } else {
-            watermark
-                .as_ref()
-                .map(|w| w.checkpoint_hi_inclusive + 1)
-                .unwrap_or_default()
-        };
+        let expected_first_checkpoint = watermark
+            .as_ref()
+            .map(|w| w.checkpoint_hi_inclusive + 1)
+            .unwrap_or_default();
 
         self.first_checkpoint_from_watermark =
             expected_first_checkpoint.min(self.first_checkpoint_from_watermark);
@@ -362,7 +345,7 @@ impl<T: TransactionalStore> Indexer<T> {
     where
         H: Handler<Store = T> + Send + Sync + 'static,
     {
-        let Some(watermark) = self.add_pipeline::<H>(false).await? else {
+        let Some(watermark) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
 
