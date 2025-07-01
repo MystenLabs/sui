@@ -1090,6 +1090,11 @@ impl<'env, 'outer> Context<'env, 'outer> {
         }
     }
 
+    // pass in a location for a better error location
+    pub fn update_named_block_type(&mut self, name: BlockLabel, ty: Type) {
+        self.named_block_map.insert(name, ty);
+    }
+
     pub fn named_block_type_opt(&self, name: BlockLabel) -> Option<Type> {
         self.named_block_map.get(&name).cloned()
     }
