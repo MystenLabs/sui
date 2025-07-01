@@ -117,7 +117,7 @@ impl Publish {
         let dep_ids: Vec<ObjectID> = compiled_package
             .dependency_ids()
             .into_iter()
-            .map(|x| x.into())
+            .map(|x| x.0.into())
             .collect();
 
         debug!("Compiled modules {:?}", compiled_modules);
