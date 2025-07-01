@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 86;
+const MAX_PROTOCOL_VERSION: u64 = 87;
 
 // Record history of protocol version allocations here:
 //
@@ -3759,6 +3759,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_party_transfer = true;
                     }
                 }
+                87 => {
+                    // empty version for framework changes
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -3959,6 +3962,10 @@ impl ProtocolConfig {
             aliased,
             allowed_tx_digests,
         });
+    }
+
+    pub fn set_enable_accumulators_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_accumulators = val;
     }
 }
 
