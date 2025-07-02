@@ -194,6 +194,15 @@ impl Project {
         FileBuilder::new(self.root().join(path), body, false).mk()
     }
 
+    pub fn extend_file(&self, path: impl AsRef<Path>, body: &str) {
+        let full = self.root().join(path.as_ref());
+        let mut contents = fs::read_to_string(&full)
+            .unwrap_or_else(|e| panic!("could not read file {}: {}", full.display(), e));
+        contents.push_str(body);
+        fs::write(&full, contents)
+            .unwrap_or_else(|e| panic!("could not write file {}: {}", full.display(), e));
+    }
+
     /// Returns the contents of `Move.lock`.
     pub fn read_lockfile(&self) -> String {
         self.read_file("Move.lock")
