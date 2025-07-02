@@ -36,7 +36,7 @@ impl Build {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         let root_pkg = RootPackage::<Vanilla>::load(path, None).await?;
-        compile::<Vanilla>(root_pkg, self.build_config.clone(), &self.env)
+        compile::<Vanilla>(&root_pkg, &self.build_config, &self.env)
             .await
             .unwrap();
 

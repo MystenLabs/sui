@@ -212,8 +212,8 @@ fn build_docs(
 pub async fn compile<F: MoveFlavor>(
     // TODO: how does this work?
     // vfs_root: Option<&Path>,
-    root_pkg: RootPackage<F>,
-    build_config: BuildConfig,
+    root_pkg: &RootPackage<F>,
+    build_config: &BuildConfig,
     env: &EnvironmentName,
 ) -> Result<CompiledPackage> {
     // TODO: refactor this
@@ -442,7 +442,6 @@ pub async fn compile<F: MoveFlavor>(
             deps_published_ids: published_ids,
             file_map,
             // compiled_docs,
-            // root_pkg,
         };
 
         Ok(compiled_package)
