@@ -405,7 +405,7 @@ integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.13.0"
 tikv-jemalloc-ctl = "^0.5"
-tikv-jemallocator = "^0.5"
+tikv-jemallocator = { version = "^0.5", features = ["profiling"] }
 jsonrpsee = { version = "0.24.9", features = [
   "server",
   "macros",
