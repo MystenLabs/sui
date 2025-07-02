@@ -149,20 +149,23 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         retention: Some(config.snapshot_config.snapshot_min_lag as u64),
         ..Default::default()
     };
-    let indexer_config = IndexerConfig::for_test().merge(IndexerConfig {
-        pipeline: PipelineLayer {
-            coin_balance_buckets: Some(ConcurrentLayer {
-                pruner: Some(pruner.clone()),
+
+    let indexer_config = IndexerConfig::for_test()
+        .merge(IndexerConfig {
+            pipeline: PipelineLayer {
+                coin_balance_buckets: Some(ConcurrentLayer {
+                    pruner: Some(pruner.clone()),
+                    ..Default::default()
+                }),
+                obj_info: Some(ConcurrentLayer {
+                    pruner: Some(pruner),
+                    ..Default::default()
+                }),
                 ..Default::default()
-            }),
-            obj_info: Some(ConcurrentLayer {
-                pruner: Some(pruner),
-                ..Default::default()
-            }),
+            },
             ..Default::default()
-        },
-        ..Default::default()
-    });
+        })
+        .expect("Failed to create indexer config");
 
     let jsonrpc_config = JsonRpcConfig::default();
     let graphql_config = GraphQlConfig::default();
