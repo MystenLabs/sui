@@ -477,7 +477,7 @@ public entry fun update_candidate_validator_worker_pubkey(
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-self.load_system_state_mut().update_candidate_validator_worker_pubkey(worker_pubkey, ctx)
+    self.load_system_state_mut().update_candidate_validator_worker_pubkey(worker_pubkey, ctx)
 }
 
 /// Update a validator's public key of network key.
@@ -518,12 +518,17 @@ public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<addr
 
 /// Calculate the rewards for a given staked SUI object.
 /// Used in the package, and can be dev-inspected.
-public(package) fun calculate_rewards(self: &mut SuiSystemState, staked_sui: &StakedSui, ctx: &TxContext): u64 {
+public(package) fun calculate_rewards(
+    self: &mut SuiSystemState,
+    staked_sui: &StakedSui,
+    ctx: &TxContext,
+): u64 {
     let system_state = self.load_system_state_mut();
     let validator_address = system_state.validator_address_by_pool_id(&staked_sui.pool_id());
 
     system_state
-        .active_validator_by_address(validator_address)
+        .validators()
+        .get_active_validator_ref(validator_address)
         .get_staking_pool_ref()
         .calculate_rewards(staked_sui, ctx.epoch())
 }

@@ -157,6 +157,9 @@ initial_exchange_rate
 check_balance_invariants
 	fun
 	0x3::staking_pool
+calculate_rewards
+	public(package) fun
+	0x3::staking_pool
 ValidatorMetadata
 	public struct
 	0x3::validator
@@ -889,6 +892,9 @@ extract_coin_balance
 store_execution_time_estimates
 	public(package) fun
 	0x3::sui_system_state_inner
+validators
+	public(package) fun
+	0x3::sui_system_state_inner
 SuiSystemState
 	public struct
 	0x3::sui_system
@@ -1011,6 +1017,9 @@ pool_exchange_rates
 	0x3::sui_system
 active_validator_addresses
 	public fun
+	0x3::sui_system
+calculate_rewards
+	public(package) fun
 	0x3::sui_system
 advance_epoch
 	fun
