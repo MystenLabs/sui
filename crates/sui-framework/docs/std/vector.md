@@ -824,7 +824,7 @@ Returns <code>some(index)</code> if such an element is found, otherwise <code>no
 ## Macro function `find_indices`
 
 Finds all indices of elements in the vector <code>v</code> that satisfy the predicate <code>f</code>.
-Returns a vector of indices.
+Returns a vector of indices of all found elements.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_find_indices">find_indices</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u64.md#std_u64">u64</a>&gt;

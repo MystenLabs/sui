@@ -870,7 +870,7 @@ Return <code><b>false</b></code> if the value is <code>None</code>, otherwise re
 ## Macro function `extract_or`
 
 Extract the value inside <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> if it holds one, or <code>default</code> otherwise.
-Similar to <code><a href="../std/option.md#std_option_destroy_or">destroy_or</a></code>, but can be performed on a mutable reference to the option.
+Similar to <code><a href="../std/option.md#std_option_destroy_or">destroy_or</a></code>, but modifying the input <code><a href="../std/option.md#std_option_Option">Option</a></code> via a mutable reference.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_extract_or">extract_or</a>&lt;$T&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $default: $T): $T
