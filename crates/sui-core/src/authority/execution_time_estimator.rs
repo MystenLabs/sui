@@ -9,6 +9,7 @@ use std::{
 };
 
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
+use super::weighted_moving_average::WeightedMovingAverage;
 use crate::consensus_adapter::SubmitToConsensus;
 use governor::{clock::MonotonicClock, Quota, RateLimiter};
 use itertools::Itertools;
@@ -34,7 +35,7 @@ use tracing::{debug, info, trace, warn};
 
 // TODO: Move this into ExecutionTimeObserverConfig, if we switch to a moving average
 // implmentation without the window size in the type.
-const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 20;
+const SMA_LOCAL_OBSERVATION_WINDOW_SIZE: usize = 20;
 const OBJECT_UTILIZATION_METRIC_HASH_MODULUS: u8 = 32;
 
 // Collects local execution time estimates to share via consensus.
@@ -67,11 +68,40 @@ pub struct ExecutionTimeObserver {
 
 #[derive(Debug, Clone)]
 pub struct LocalObservations {
-    moving_average: SingleSumSMA<Duration, u32, LOCAL_OBSERVATION_WINDOW_SIZE>,
+    moving_average: SingleSumSMA<Duration, u32, SMA_LOCAL_OBSERVATION_WINDOW_SIZE>,
+    weighted_moving_average: WeightedMovingAverage,
     last_shared: Option<(Duration, Instant)>,
+    config: ExecutionTimeObserverConfig,
 }
 
 impl LocalObservations {
+    fn new(config: ExecutionTimeObserverConfig, default_duration: Duration) -> Self {
+        let window_size = config.weighted_moving_average_window_size();
+        Self {
+            moving_average: SingleSumSMA::from_zero(Duration::ZERO),
+            weighted_moving_average: WeightedMovingAverage::new(
+                default_duration.as_micros() as u64,
+                window_size,
+            ),
+            last_shared: None,
+            config,
+        }
+    }
+
+    fn add_sample(&mut self, duration: Duration, gas_price: u64) {
+        self.moving_average.add_sample(duration);
+        self.weighted_moving_average
+            .add_sample(duration.as_micros() as u64, gas_price);
+    }
+
+    fn get_average(&self) -> Duration {
+        if self.config.enable_gas_price_weighting() {
+            Duration::from_micros(self.weighted_moving_average.get_weighted_average())
+        } else {
+            self.moving_average.get_average()
+        }
+    }
+
     fn diff_exceeds_threshold(
         &self,
         new_average: Duration,
@@ -157,9 +187,9 @@ impl ExecutionTimeObserver {
                     Some(object_debts) = rx_object_debts.recv() => {
                         observer.update_indebted_objects(object_debts);
                     }
-                    Some((tx, timings, total_duration)) = rx_local_execution_time.recv() => {
+                    Some((tx, timings, total_duration, gas_price)) = rx_local_execution_time.recv() => {
                         observer
-                            .record_local_observations(&tx, &timings, total_duration);
+                            .record_local_observations(&tx, &timings, total_duration, gas_price);
                     }
                     else => { break }
                 }
@@ -173,6 +203,7 @@ impl ExecutionTimeObserver {
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
         observation_sharing_object_utilization_threshold: Duration,
+        enable_gas_price_weighting: bool,
     ) -> Self {
         let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) = epoch_store
             .protocol_config()
@@ -188,6 +219,7 @@ impl ExecutionTimeObserver {
                 observation_sharing_object_utilization_threshold: Some(
                     observation_sharing_object_utilization_threshold,
                 ),
+                enable_gas_price_weighting: Some(enable_gas_price_weighting),
                 ..ExecutionTimeObserverConfig::default()
             },
             local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
@@ -209,6 +241,7 @@ impl ExecutionTimeObserver {
         tx: &ProgrammableTransaction,
         timings: &[ExecutionTiming],
         total_duration: Duration,
+        gas_price: u64,
     ) {
         let _scope = monitored_scope("ExecutionTimeObserver::record_local_observations");
 
@@ -332,23 +365,18 @@ impl ExecutionTimeObserver {
             // This is sort of arbitrary, but hopefully works okay as a heuristic.
             command_duration = command_duration.div_f64(command_length(command).get() as f64);
 
-            // Update moving-average observation for the command.
+            // Update gas-weighted moving-average observation for the command.
             let key = ExecutionTimeObservationKey::from_command(command);
-            let local_observation =
-                self.local_observations
-                    .get_or_insert_mut(key.clone(), || LocalObservations {
-                        moving_average: SingleSumSMA::from_zero(Duration::ZERO),
-                        last_shared: None,
-                    });
-            local_observation
-                .moving_average
-                .add_sample(command_duration);
+            let local_observation = self.local_observations.get_or_insert_mut(key.clone(), || {
+                LocalObservations::new(self.config.clone(), Duration::ZERO)
+            });
+            local_observation.add_sample(command_duration, gas_price);
 
             // Send a new observation through consensus if:
             // - our current moving average differs too much from the last one we shared, and
             // - the tx has at least one mutable shared object with utilization that's too high
             // TODO: Consider only sharing observations that disagree with consensus estimate.
-            let new_average = local_observation.moving_average.get_average();
+            let new_average = local_observation.get_average();
             let mut should_share = false;
 
             // Share upward adjustments if an object is overutilized.
@@ -754,6 +782,7 @@ mod tests {
             epoch_store.clone(),
             Box::new(consensus_adapter.clone()),
             Duration::ZERO, // disable object utilization thresholds for this test
+            false,          // disable gas price weighting for this test
         );
 
         // Create a simple PTB with one move call
@@ -774,7 +803,7 @@ mod tests {
         // Record an observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
         let total_duration = Duration::from_millis(110);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, &timings, total_duration, 1);
 
         let key = ExecutionTimeObservationKey::MoveEntryPoint {
             package,
@@ -786,7 +815,7 @@ mod tests {
         // Check that local observation was recorded and shared
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
-            local_obs.moving_average.get_average(),
+            local_obs.get_average(),
             // 10ms overhead should be entirely apportioned to the one command in the PTB
             Duration::from_millis(110)
         );
@@ -795,12 +824,12 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
         let total_duration = Duration::from_millis(120);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, &timings, total_duration, 1);
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
-            local_obs.moving_average.get_average(),
+            local_obs.get_average(),
             // average of 110ms and 120ms observations
             Duration::from_millis(115)
         );
@@ -810,12 +839,12 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(130);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, &timings, total_duration, 1);
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
-            local_obs.moving_average.get_average(),
+            local_obs.get_average(),
             // average of [110ms, 120ms, 130ms]
             Duration::from_millis(120)
         );
@@ -836,17 +865,111 @@ mod tests {
         // Record last observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(160);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, &timings, total_duration, 1);
 
         // Verify that moving average is the same and a new observation was shared, as
         // enough time has now elapsed
         let local_obs = observer.local_observations.get(&key).unwrap();
         assert_eq!(
-            local_obs.moving_average.get_average(),
+            local_obs.get_average(),
             // average of [110ms, 120ms, 130ms, 160ms]
             Duration::from_millis(130)
         );
         assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(130));
+    }
+
+    #[tokio::test]
+    async fn test_record_local_observations_with_gas_price_weighting() {
+        telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        randomness_scalar: 100,
+                        max_estimate_us: u64::MAX,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: u64::MAX,
+                        stake_weighted_median_threshold: 0,
+                    },
+                ),
+            );
+            config
+        });
+
+        let mock_consensus_client = MockConsensusClient::new();
+        let authority = TestAuthorityBuilder::new().build().await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let consensus_adapter = Arc::new(ConsensusAdapter::new(
+            Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
+            authority.name,
+            Arc::new(ConnectionMonitorStatusForTests {}),
+            100_000,
+            100_000,
+            None,
+            None,
+            ConsensusAdapterMetrics::new_test(),
+            epoch_store.protocol_config().clone(),
+        ));
+        let mut observer = ExecutionTimeObserver::new_for_testing(
+            epoch_store.clone(),
+            Box::new(consensus_adapter.clone()),
+            Duration::ZERO, // disable object utilization thresholds for this test
+            true,           // enable gas price weighting for this test
+        );
+
+        // Create a simple PTB with one move call
+        let package = ObjectID::random();
+        let module = "test_module".to_string();
+        let function = "test_function".to_string();
+        let ptb = ProgrammableTransaction {
+            inputs: vec![],
+            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package,
+                module: module.clone(),
+                function: function.clone(),
+                type_arguments: vec![],
+                arguments: vec![],
+            }))],
+        };
+
+        // Record an observation
+        let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
+        let total_duration = Duration::from_millis(110);
+        observer.record_local_observations(&ptb, &timings, total_duration, 1);
+
+        let key = ExecutionTimeObservationKey::MoveEntryPoint {
+            package,
+            module: module.clone(),
+            function: function.clone(),
+            type_arguments: vec![],
+        };
+
+        // Check that local observation was recorded and shared
+        let local_obs = observer.local_observations.get(&key).unwrap();
+        assert_eq!(
+            local_obs.get_average(),
+            // 10ms overhead should be entirely apportioned to the one command in the PTB
+            Duration::from_millis(110)
+        );
+        assert_eq!(local_obs.last_shared.unwrap().0, Duration::from_millis(110));
+
+        // Record another observation
+        let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
+        let total_duration = Duration::from_millis(120);
+        observer.record_local_observations(&ptb, &timings, total_duration, 2);
+
+        // Check that weighted moving average was updated
+        let local_obs = observer.local_observations.get(&key).unwrap();
+        assert_eq!(
+            local_obs.get_average(),
+            // Our local observation averages are weighted by gas price:
+            // 110ms * 1 + 110ms * 2 / (1 + 2) = 116.666ms
+            Duration::from_micros(116_666)
+        );
     }
 
     #[tokio::test]
@@ -889,6 +1012,7 @@ mod tests {
             epoch_store.clone(),
             Box::new(consensus_adapter.clone()),
             Duration::ZERO, // disable object utilization thresholds for this test
+            false,          // disable gas price weighting for this test
         );
 
         // Create a PTB with multiple commands.
@@ -917,7 +1041,7 @@ mod tests {
             ExecutionTiming::Success(Duration::from_millis(50)),
         ];
         let total_duration = Duration::from_millis(180);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, &timings, total_duration, 1);
 
         // Check that both commands were recorded
         let move_key = ExecutionTimeObservationKey::MoveEntryPoint {
@@ -928,7 +1052,7 @@ mod tests {
         };
         let move_obs = observer.local_observations.get(&move_key).unwrap();
         assert_eq!(
-            move_obs.moving_average.get_average(),
+            move_obs.get_average(),
             // 100/150 == 2/3 of 30ms overhead distributed to Move command
             Duration::from_millis(120)
         );
@@ -938,7 +1062,7 @@ mod tests {
             .get(&ExecutionTimeObservationKey::TransferObjects)
             .unwrap();
         assert_eq!(
-            transfer_obs.moving_average.get_average(),
+            transfer_obs.get_average(),
             // 50ms time before adjustments
             // 50/150 == 1/3 of 30ms overhead distributed to object xfer
             // 60ms adjusetd time / 3 command length == 20ms
@@ -986,6 +1110,7 @@ mod tests {
             epoch_store.clone(),
             Box::new(consensus_adapter.clone()),
             Duration::from_millis(500), // only share observations with excess utilization >= 500ms
+            false,                      // disable gas price weighting for this test
         );
 
         // Create a simple PTB with one move call and one mutable shared input
@@ -1018,7 +1143,7 @@ mod tests {
 
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2), 1);
         assert!(observer
             .local_observations
             .get(&key)
@@ -1028,7 +1153,7 @@ mod tests {
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2), 1);
         assert_eq!(
             observer
                 .local_observations
@@ -1043,7 +1168,7 @@ mod tests {
         // Third execution with significant upward diff and high utilization - should share again
         tokio::time::advance(Duration::from_secs(5)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(3))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(5));
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(5), 1);
         assert_eq!(
             observer
                 .local_observations
@@ -1059,7 +1184,7 @@ mod tests {
         // (downward changes are only shared for indebted objects, not overutilized ones)
         tokio::time::advance(Duration::from_millis(150)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_millis(500));
+        observer.record_local_observations(&ptb, &timings, Duration::from_millis(500), 1);
         assert_eq!(
             observer
                 .local_observations
@@ -1074,7 +1199,7 @@ mod tests {
         // Fifth execution after utilization drops - should not share upward diff since not overutilized
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(11))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(11));
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(11), 1);
         assert_eq!(
             observer
                 .local_observations
@@ -1127,6 +1252,7 @@ mod tests {
             epoch_store.clone(),
             Box::new(consensus_adapter.clone()),
             Duration::from_millis(500), // Low utilization threshold to enable overutilized sharing initially
+            false,                      // disable gas price weighting for this test
         );
 
         // Create a simple PTB with one move call and one mutable shared input
@@ -1159,7 +1285,7 @@ mod tests {
 
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(1));
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(1), 1);
         assert!(observer
             .local_observations
             .get(&key)
@@ -1169,7 +1295,7 @@ mod tests {
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(2))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2), 1);
         assert_eq!(
             observer
                 .local_observations
@@ -1191,7 +1317,7 @@ mod tests {
         // This should share because the object is indebted
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(300))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_millis(300));
+        observer.record_local_observations(&ptb, &timings, Duration::from_millis(300), 1);
 
         // Moving average should be (1s + 2s + 0.3s) / 3 = 1.1s
         // This downward change should have been shared for indebted object
