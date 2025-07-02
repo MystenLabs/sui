@@ -937,6 +937,7 @@ impl RpcIndexStore {
                     // speedup when indexing
                     let mut options = typed_store::rocksdb::Options::default();
                     options.set_unordered_write(true);
+                    options.set_disable_auto_compactions(true);
 
                     // Create column family specific options with compactions disabled
                     let mut table_config_map = BTreeMap::new();
