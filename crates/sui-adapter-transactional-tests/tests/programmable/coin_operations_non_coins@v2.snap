@@ -39,10 +39,10 @@ task 5, lines 40-41:
 //# programmable --sender A --inputs 10000u64
 //> MergeCoins(Gas, [Input(0)])
 Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be instantiated from raw bytes
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidUsageOfPureArg }, source: Some("Non-primitive argument at index 1. If it is an object, it must be populated by an object"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidUsageOfPureArg }, source: Some("Invalid usage of `Pure` argument for a non-primitive argument type at index 1."), command: Some(0) } }
 
 task 6, lines 43-44:
 //# programmable --sender A --inputs 10000u64
 //> MergeCoins(Gas, [Input(0)])
 Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be instantiated from raw bytes
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidUsageOfPureArg }, source: Some("Non-primitive argument at index 1. If it is an object, it must be populated by an object"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidUsageOfPureArg }, source: Some("Invalid usage of `Pure` argument for a non-primitive argument type at index 1."), command: Some(0) } }

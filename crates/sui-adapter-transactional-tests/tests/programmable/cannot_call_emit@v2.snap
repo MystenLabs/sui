@@ -22,7 +22,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 3, lines 18-21:
 //# programmable
 //> 0: test::m1::a();
-// wrong type annotation doesn't matter
+// wrong type annotation did not matter in v1 of PTB execution
 //> sui::event::emit<bool>(Result(0));
 Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
