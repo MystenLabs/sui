@@ -35,6 +35,7 @@ This module defines the Option type and its methods to represent and handle an o
 -  [Macro function `map_ref`](#std_option_map_ref)
 -  [Macro function `filter`](#std_option_filter)
 -  [Macro function `is_some_and`](#std_option_is_some_and)
+-  [Macro function `extract_or`](#std_option_extract_or)
 -  [Macro function `destroy_or`](#std_option_destroy_or)
 
 
@@ -857,6 +858,33 @@ Return <code><b>false</b></code> if the value is <code>None</code>, otherwise re
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_some_and">is_some_and</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <b>let</b> o = $o;
     o.<a href="../std/option.md#std_option_is_some">is_some</a>() && $f(o.<a href="../std/option.md#std_option_borrow">borrow</a>())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_option_extract_or"></a>
+
+## Macro function `extract_or`
+
+Extract the value inside <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> if it holds one, or <code>default</code> otherwise.
+Similar to <code><a href="../std/option.md#std_option_destroy_or">destroy_or</a></code>, but modifying the input <code><a href="../std/option.md#std_option_Option">Option</a></code> via a mutable reference.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_extract_or">extract_or</a>&lt;$T&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $default: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_extract_or">extract_or</a>&lt;$T&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $default: $T): $T {
+    <b>let</b> o = $o;
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) o.<a href="../std/option.md#std_option_extract">extract</a>() <b>else</b> $default
 }
 </code></pre>
 
