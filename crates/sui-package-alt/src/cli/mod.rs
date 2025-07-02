@@ -5,7 +5,7 @@ pub mod build;
 pub mod publish;
 pub mod upgrade;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 
 use crate::{sui_flavor::SuiMetadata, SuiFlavor};
 pub use build::Build;
@@ -155,10 +155,10 @@ pub async fn update_lock_file_for_chain_env(
             lockfile.published.insert(env.to_string(), publication_data);
         }
         LockCommand::Upgrade => {
-            lockfile.published.get_mut(env).map(|pub_data| {
+            if let Some(pub_data) = lockfile.published.get_mut(env) {
                 pub_data.published_at = PublishedID(*published_id);
                 pub_data.metadata.version = Some(version.value());
-            });
+            };
         }
     }
 
@@ -185,7 +185,7 @@ async fn compile_package(
     path: PathBuf,
     env: &String,
     build_config: &BuildConfig,
-    chain_id: &String,
+    chain_id: &str,
 ) -> Result<
     (
         RootPackage<SuiFlavor>,
@@ -200,16 +200,16 @@ async fn compile_package(
     // check if the chain id matches the chian id in the env
     let envs = root_pkg.environments();
     let manifest_env_chain_id = envs.get(env);
-    let cli_chain_id = Some(chain_id.clone());
+    let cli_chain_id = Some(chain_id.to_owned());
 
     if manifest_env_chain_id != cli_chain_id.as_ref() {
-        return Err(anyhow!("The chain id in the environment '{}' does not match the chain id of the connected network. Please check your Move.toml and ensure that the chain id matches the connected network.", env).into());
+        bail!("The chain id in the environment '{}' does not match the chain id of the connected network. Please check your Move.toml and ensure that the chain id matches the connected network.", env)
     }
 
-    let compiled_package = compile::<SuiFlavor>(&root_pkg, build_config, &env).await?;
+    let compiled_package = compile::<SuiFlavor>(&root_pkg, build_config, env).await?;
 
     root_pkg
-        .update_deps_and_write_to_lockfile(&BTreeMap::from([(env.clone(), chain_id.clone())]))
+        .update_deps_and_write_to_lockfile(&BTreeMap::from([(env.clone(), chain_id.to_owned())]))
         .await;
 
     let mut lockfile = root_pkg.load_lockfile().map_err(|e| {
