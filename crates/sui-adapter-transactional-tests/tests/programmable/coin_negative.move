@@ -25,8 +25,8 @@ module test::fake {
 
 //# programmable --sender A --inputs object(2,0) 2 @A
 //> SplitCoins(Input(0), [Input(1)]);
-//> TransferObjects([Result(1)], Input(2))
+//> TransferObjects([Result(0)], Input(2))
 
 //# programmable --sender A --inputs 18446744073709551615 @A  --gas-budget 10000000000
-//> SplitCoins(Gas, [Input(0)])
-//> TransferObjects([Result(1)], Input(1))
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
