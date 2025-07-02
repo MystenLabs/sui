@@ -51,7 +51,7 @@ use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::{CheckpointContentsDigest, CheckpointDigest};
-use sui_types::effects::{ObjectChange, TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
@@ -1845,8 +1845,7 @@ impl CheckpointBuilder {
                 .collect();
 
             let artifacts = CheckpointArtifacts::from(&effects);
-            let artifacts_digest = CheckpointCommitment::from(artifacts.digest());
-            info!("Artifacts digest: {:?}", artifacts_digest);
+            let artifacts_digest = CheckpointCommitment::from(artifacts.digest()?);
 
             let summary = CheckpointSummary::new(
                 self.epoch_store.protocol_config(),

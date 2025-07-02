@@ -390,7 +390,7 @@ pub trait TransactionEffectsAPI {
     fn unsafe_add_object_tombstone_for_testing(&mut self, obj_ref: ObjectRef);
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct ObjectChange {
     pub id: ObjectID,
     pub input_version: Option<SequenceNumber>,

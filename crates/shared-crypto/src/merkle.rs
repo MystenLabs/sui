@@ -69,6 +69,11 @@ pub trait MerkleAuth: Clone + std::fmt::Debug {
         self.compute_root(leaf, leaf_index).as_ref() == Some(root)
     }
 
+    fn verify_proof_with_serialization<T: Serialize>(&self, root: &Node, leaf: &T, leaf_index: usize) -> Result<bool, anyhow::Error> {
+        let bytes = bcs::to_bytes(leaf)?;
+        Ok(self.verify_proof(root, &bytes, leaf_index))
+    }
+
     /// Recomputes the Merkle root from the proof and the provided leaf data.
     ///
     /// Returns `None` if the provided index is too large.
@@ -172,7 +177,7 @@ impl Eq for MerkleProof {}
 #[derive(Serialize, Deserialize)]
 pub struct MerkleNonInclusionProof<L, T = Blake2b256>
 where
-    L: Ord + AsRef<[u8]>, // TODO: Also need PartialEq?
+    L: Ord + Serialize,
 {
     _hash_type: PhantomData<T>,
     pub index: usize,
@@ -182,7 +187,7 @@ where
 
 impl<L, T> core::fmt::Debug for MerkleNonInclusionProof<L, T>
 where
-    L: Debug + Ord + AsRef<[u8]>,
+    L: Debug + Ord + Serialize,
     T: HashFunction<DIGEST_LEN>,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -200,7 +205,7 @@ where
 impl<L, T> MerkleNonInclusionProof<L, T>
 where
     T: HashFunction<DIGEST_LEN>,
-    L: Ord + AsRef<[u8]>,
+    L: Ord + Serialize,
 {
     pub fn new(
         left_leaf: Option<(L, MerkleProof<T>)>,
@@ -222,7 +227,7 @@ where
         neighbor_index: usize,
         root: &Node,
     ) -> bool {
-        proof.verify_proof(root, neighbor.as_ref(), neighbor_index)
+        proof.verify_proof_with_serialization(root, neighbor, neighbor_index).expect("Failed to verify proof")
     }
 
     // Prove non-inclusion of target_leaf in a Merkle tree assuming that the tree is sorted.
@@ -298,15 +303,15 @@ impl<T> core::fmt::Debug for MerkleTree<T> {
     }
 }
 
-pub fn merkle_root<T, I>(iter: I) -> [u8; DIGEST_LEN]
+pub fn merkle_root<T, I>(iter: I) -> Result<[u8; DIGEST_LEN], anyhow::Error>
 where
     I: IntoIterator,
     I::IntoIter: ExactSizeIterator,
-    I::Item: AsRef<[u8]>,
+    I::Item: Serialize,
     T: HashFunction<DIGEST_LEN>,
 {
-    let tree = MerkleTree::<T>::build(iter);
-    tree.root().bytes()
+    let tree = MerkleTree::<T>::build_from_serialized(iter)?;
+    Ok(tree.root().bytes())
 }
 
 impl<T> MerkleTree<T>
@@ -321,6 +326,22 @@ where
         I::Item: AsRef<[u8]>,
     {
         Self::build_from_leaf_hashes(iter.into_iter().map(|leaf| leaf_hash::<T>(leaf.as_ref())))
+    }
+
+    pub fn build_from_serialized<I>(iter: I) -> Result<Self, anyhow::Error>
+    where
+        I: IntoIterator,
+        I::IntoIter: ExactSizeIterator,
+        I::Item: Serialize
+    {
+        let leaf_hashes: Result<Vec<Node>, anyhow::Error> = iter
+            .into_iter()
+            .map(|leaf| {
+                let bytes = bcs::to_bytes(&leaf)?;
+                Ok(leaf_hash::<T>(&bytes))
+            })
+            .collect();
+        Ok(Self::build_from_leaf_hashes(leaf_hashes?))
     }
 
     /// Create the [`MerkleTree`] as a commitment to the provided data hashes.
@@ -413,7 +434,7 @@ where
 
     /// Compute the non-inclusion proof for the target leaf.
     /// Returns an error if the target leaf is already in the tree.
-    pub fn compute_non_inclusion_proof<L: AsRef<[u8]> + Ord + Clone>(
+    pub fn compute_non_inclusion_proof<L: Serialize + Ord + Clone>(
         &self,
         leaves: &[L],
         target_leaf: &L,

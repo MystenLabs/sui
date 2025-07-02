@@ -1,18 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ObjectID;
 use crate::base_types::{
     random_object_ref, ExecutionData, ExecutionDigests, VerifiedExecutionData,
 };
+use crate::base_types::{ObjectID, SequenceNumber};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
-use crate::digests::{Digest, TransactionDigest, TransactionEffectsDigest};
-use crate::effects::{IDOperation, ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
+use crate::digests::{Digest, ObjectDigest};
+use crate::effects::{
+    ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI,
+};
 use crate::error::SuiResult;
+use crate::full_checkpoint_content::CheckpointData;
 use crate::gas::GasCostSummary;
 use crate::global_state_hash::GlobalStateHash;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -23,8 +26,8 @@ use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
-use fastcrypto::hash::MultisetHash;
 use fastcrypto::hash::Blake2b256;
+use fastcrypto::hash::MultisetHash;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
 use prometheus::Histogram;
@@ -33,6 +36,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentScope};
 use shared_crypto::merkle::merkle_root;
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
@@ -123,87 +127,109 @@ impl Default for ECMHLiveObjectSetDigest {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum CheckpointArtifact {
-    // Object state before and after this checkpoint for all touched objects
-    AccumulatedObjectChange(ObjectChange),
-    // Execution digests for all transactions in this checkpoint
-    ExecutionDigests(ExecutionDigests),
-    // More things? Events?
+// // Create a dummy artifact for the given object ID.
+// // This is used to create a non-inclusion proof for an object that is not in the checkpoint.
+// pub fn dummy_object_change(object_id: ObjectID) -> Self {
+//     CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
+//         id: object_id,
+//         input_version: None,
+//         input_digest: Default::default(),
+//         output_version: None,
+//         output_digest: Default::default(),
+//         id_operation: IDOperation::None,
+//     })
+// }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModifiedObjectState {
+    pub id: ObjectID,
+    // TODO: Not sure if we adding version here makes sense.
+    pub version: Option<SequenceNumber>,
+    pub digest: Option<ObjectDigest>,
 }
 
-impl PartialEq for CheckpointArtifact {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (CheckpointArtifact::AccumulatedObjectChange(a), CheckpointArtifact::AccumulatedObjectChange(b)) => {
-                a.id == b.id
-            }
-            (CheckpointArtifact::ExecutionDigests(a), CheckpointArtifact::ExecutionDigests(b)) => {
-                a.transaction == b.transaction
-            }
-            _ => false,
+impl ModifiedObjectState {
+    pub fn new(
+        id: ObjectID,
+        version: Option<SequenceNumber>,
+        digest: Option<ObjectDigest>,
+    ) -> Self {
+        Self {
+            id,
+            version,
+            digest,
         }
     }
 }
 
-impl Eq for CheckpointArtifact {}
+impl From<ObjectChange> for ModifiedObjectState {
+    fn from(object_change: ObjectChange) -> Self {
+        Self {
+            id: object_change.id,
+            version: object_change.output_version,
+            digest: object_change.output_digest,
+        }
+    }
+}
 
-impl PartialOrd for CheckpointArtifact {
+impl PartialEq for ModifiedObjectState {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for ModifiedObjectState {}
+
+impl PartialOrd for ModifiedObjectState {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for CheckpointArtifact {
+impl Ord for ModifiedObjectState {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match (self, other) {
-            // All AccumulatedObjectChange come before any ExecutionDigests
-            (CheckpointArtifact::AccumulatedObjectChange(_), CheckpointArtifact::ExecutionDigests(_)) => {
-                std::cmp::Ordering::Less
-            }
-            (CheckpointArtifact::ExecutionDigests(_), CheckpointArtifact::AccumulatedObjectChange(_)) => {
-                std::cmp::Ordering::Greater
-            }
-            // Within AccumulatedObjectChange, sort by ObjectID
-            (CheckpointArtifact::AccumulatedObjectChange(a), CheckpointArtifact::AccumulatedObjectChange(b)) => {
-                a.id.cmp(&b.id)
-            }
-            // Within ExecutionDigests, sort by TransactionDigest
-            (CheckpointArtifact::ExecutionDigests(a), CheckpointArtifact::ExecutionDigests(b)) => {
-                a.transaction.cmp(&b.transaction)
-            }
-        }
+        self.id.cmp(&other.id)
     }
 }
 
-impl CheckpointArtifact {
-    // Create a dummy artifact for the given object ID. 
-    // This is used to create a non-inclusion proof for an object that is not in the checkpoint.
-    pub fn dummy_object_change(object_id: ObjectID) -> Self {
-        CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
-            id: object_id,
-            input_version: None,
-            input_digest: Default::default(),
-            output_version: None,
-            output_digest: Default::default(),
-            id_operation: IDOperation::None,
-        })
-    }
+#[derive(Debug)]
+pub struct ModifiedObjectStates {
+    pub contents: Vec<ModifiedObjectState>,
+}
 
-    // Create a dummy artifact for the given transaction digest.
-    // This is used to create a non-inclusion proof for a transaction that is not in the checkpoint.
-    pub fn dummy_execution_digest(transaction_digest: TransactionDigest) -> Self {
-        CheckpointArtifact::ExecutionDigests(ExecutionDigests {
-            transaction: transaction_digest,
-            effects: TransactionEffectsDigest::ZERO,
-        })
+impl ModifiedObjectStates {
+    pub fn digest(&self) -> Result<ModifiedObjectStatesDigest, anyhow::Error> {
+        let root = merkle_root::<Blake2b256, _>(self.contents.iter())?;
+        Ok(ModifiedObjectStatesDigest::from(root))
+    }
+}
+
+#[derive(Debug)]
+pub struct ModifiedObjectStatesDigest {
+    pub digest: Digest,
+}
+
+impl From<[u8; 32]> for ModifiedObjectStatesDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self {
+            digest: Digest::new(digest),
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct CheckpointArtifacts {
-    // Always stored in a sorted order (see CheckpointArtifact::cmp)
-    pub contents: Vec<CheckpointArtifact>,
+    pub latest_object_states: ModifiedObjectStates,
+    // Add more.. e.g., execution digests, events, etc.
+}
+
+impl CheckpointArtifacts {
+    pub fn digest(&self) -> Result<CheckpointArtifactsDigest, anyhow::Error> {
+        let latest_object_states_digest = self.latest_object_states.digest()?;
+
+        // When there are more artifacts, we can hash them all into a single digest.
+        Ok(CheckpointArtifactsDigest::from(latest_object_states_digest.digest.into_inner()))
+    }
 }
 
 impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
@@ -213,49 +239,40 @@ impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
             .map(|e| e.object_changes())
             .collect::<Vec<_>>();
 
-        let mut net_object_changes: BTreeMap<ObjectID, ObjectChange> = BTreeMap::new();
+        let mut latest_object_states: BTreeMap<ObjectID, ModifiedObjectState> = BTreeMap::new();
         for object_changes in all_object_changes {
             for object_change in object_changes {
-                if let Some(existing_object_change) = net_object_changes.get(&object_change.id) {
-                    net_object_changes.insert(
-                        object_change.id,
-                        ObjectChange {
-                            id: object_change.id,
-                            input_version: existing_object_change.input_version,
-                            input_digest: existing_object_change.input_digest,
-                            output_version: object_change.output_version,
-                            output_digest: object_change.output_digest,
-                            id_operation: object_change.id_operation,
-                        },
-                    );
-                } else {
-                    net_object_changes.insert(object_change.id, object_change);
+                match latest_object_states.entry(object_change.id) {
+                    Entry::Occupied(mut entry) => {
+                        let existing = entry.get_mut();
+                        *existing = object_change.into();
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(object_change.into());
+                    }
                 }
             }
         }
 
-        let object_artifacts = net_object_changes
-            .into_values()
-            .map(|object_change| CheckpointArtifact::AccumulatedObjectChange(object_change))
-            .collect::<Vec<_>>();
-        let execution_digest_artifacts = effects
-            .iter()
-            .map(|e| CheckpointArtifact::ExecutionDigests(e.execution_digests()))
-            .collect::<Vec<_>>();
-        let mut artifacts = [object_artifacts, execution_digest_artifacts].concat();
-        artifacts.sort();
+        let latest_object_states = ModifiedObjectStates {
+            contents: latest_object_states.into_values().collect::<Vec<_>>(),
+        };
 
-        Self { contents: artifacts }
+        Self {
+            latest_object_states,
+        }
     }
 }
 
-impl CheckpointArtifacts {
-    pub fn digest(&self) -> CheckpointArtifactsDigest {
-        CheckpointArtifactsDigest::from(
-            merkle_root::<Blake2b256, _>(
-                self.contents.iter().map(|a| bcs::to_bytes(a).unwrap()),
-            )
-        )
+impl From<&CheckpointData> for CheckpointArtifacts {
+    fn from(checkpoint_data: &CheckpointData) -> Self {
+        let effects = checkpoint_data
+            .transactions
+            .iter()
+            .map(|tx| tx.effects.clone())
+            .collect::<Vec<_>>();
+
+        Self::from(&effects)
     }
 }
 
@@ -1125,53 +1142,5 @@ mod tests {
             let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
             assert_ne!(c1.digest(), c2.digest());
         }
-    }
-
-    #[test]
-    fn test_artifact_ordering() {
-        let object_change_1 = CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
-            id: ObjectID::from_hex_literal("0x1").unwrap(),
-            input_version: None,
-            input_digest: Default::default(),
-            output_version: None,
-            output_digest: Default::default(),
-            id_operation: IDOperation::None,
-        });
-        let object_change_2 = CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
-            id: ObjectID::from_hex_literal("0x1").unwrap(),
-            input_version: Some(SequenceNumber::from(1)),
-            input_digest: Default::default(),
-            output_version: Some(SequenceNumber::from(3)),
-            output_digest: Default::default(),
-            id_operation: IDOperation::Created,
-        });
-        let object_change_3 = CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
-            id: ObjectID::from_hex_literal("0x2").unwrap(),
-            input_version: Some(SequenceNumber::from(1)),
-            input_digest: Default::default(),
-            output_version: Some(SequenceNumber::from(3)),
-            output_digest: Default::default(),
-            id_operation: IDOperation::Created,
-        });
-        // Equality is defined only by the ObjectIDs.
-        assert!(object_change_1 == object_change_2);
-        assert!(object_change_1 < object_change_3);
-        assert!(object_change_2 < object_change_3);
-
-        let execution_digest_1 = CheckpointArtifact::ExecutionDigests(ExecutionDigests::new(
-            TransactionDigest::new([1; 32]),
-            TransactionEffectsDigest::ZERO,
-        ));
-        let execution_digest_2 = CheckpointArtifact::ExecutionDigests(ExecutionDigests::new(
-            TransactionDigest::new([2; 32]),
-            TransactionEffectsDigest::ZERO,
-        ));
-        assert!(object_change_1 < execution_digest_1);
-        assert!(object_change_2 < execution_digest_1);
-        assert!(object_change_3 < execution_digest_1);
-        assert!(object_change_1 < execution_digest_2);
-        assert!(object_change_2 < execution_digest_2);
-        assert!(object_change_3 < execution_digest_2);
-        assert!(execution_digest_1 < execution_digest_2);
     }
 }
