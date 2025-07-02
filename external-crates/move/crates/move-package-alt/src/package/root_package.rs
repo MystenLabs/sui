@@ -192,55 +192,66 @@ mod tests {
     use super::*;
     use crate::{
         flavor::Vanilla,
-        git::{GitResult, run_git_cmd_with_args},
         schema::LockfileDependencyInfo,
+        test_utils::{
+            self, basic_manifest,
+            git::{self},
+        },
     };
     use move_core_types::identifier::Identifier;
     use std::{fs, path::PathBuf};
-    use tempfile::{TempDir, tempdir};
-    use test_log::test;
-    use tokio::process::Command;
 
-    async fn setup_test_move_project() -> (TempDir, PathBuf) {
-        // Create a temporary directory
-        let temp_dir = tempfile::tempdir().unwrap();
-        let root_path = temp_dir.path().to_path_buf();
-
-        // Create the root directory for the Move project
-        fs::create_dir_all(&root_path).unwrap();
-
-        let packages = ["pkg_a", "pkg_b", "nodeps", "graph", "depends_a_b"];
-
-        let pkgs_paths = packages
-            .iter()
-            .map(|p| root_path.join("packages").join(p))
-            .collect::<Vec<_>>();
-
-        for idx in 0..packages.len() {
-            let name = packages[idx];
-            let path = pkgs_paths[idx].clone();
-            fs::create_dir_all(&path).unwrap();
-            fs::copy(
-                format!("tests/data/basic_move_project/{name}/Move.toml"),
-                path.join("Move.toml"),
+    async fn setup_test_move_project() -> PathBuf {
+        let project = test_utils::project()
+            .file(
+                "packages/pkg_a/Move.toml",
+                &basic_manifest("pkg_a", "0.0.1"),
             )
-            .unwrap();
+            .file(
+                "packages/pkg_b/Move.toml",
+                &basic_manifest("pkg_b", "0.0.1"),
+            )
+            .file(
+                "packages/nodeps/Move.toml",
+                &basic_manifest("nodeps", "0.0.1"),
+            )
+            .file(
+                "packages/graph/Move.toml",
+                &basic_manifest("graph", "0.0.1"),
+            )
+            .file(
+                "packages/depends_a_b/Move.toml",
+                &basic_manifest("depends_a_b", "0.0.1"),
+            );
 
-            if name == "graph" {
-                fs::copy(
-                    format!("tests/data/basic_move_project/{name}/Move.lock"),
-                    path.join("Move.lock"),
-                )
-                .unwrap();
-            }
-        }
+        let project = project.build();
+        project.extend_file(
+            "packages/graph/Move.toml",
+            r#"
+[dependencies]
+nodeps = { local = "../nodeps" }
+depends_a_b = { local = "../depends_a_b" }"#,
+        );
 
-        (temp_dir, root_path)
+        project.extend_file(
+            "packages/depends_a_b/Move.toml",
+            r#"
+[dependencies]
+pkg_a = { local = "../pkg_a" }
+pkg_b = { local = "../pkg_b" }"#,
+        );
+        fs::copy(
+            "tests/data/basic_move_project/graph/Move.lock",
+            project.root().join("packages/graph/Move.lock"),
+        )
+        .unwrap();
+
+        project.root()
     }
 
     #[tokio::test]
     async fn test_load_root_package() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
         let names = &["pkg_a", "pkg_b", "nodeps", "graph"];
 
         for name in names {
@@ -256,7 +267,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_direct_dependencies() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
 
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
@@ -267,13 +278,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_direct_dependencies_no_transitive_deps() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
 
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
         let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
         assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
         assert!(deps.contains_key(&Identifier::new("depends_a_b").unwrap()));
+        // should not contain these transitive deps
         assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
         assert!(!deps.contains_key(&Identifier::new("pkg_a").unwrap()));
         assert!(!deps.contains_key(&Identifier::new("pkg_b").unwrap()));
@@ -281,7 +293,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_direct_dependencies_no_env_in_manifest() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
 
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
@@ -292,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_root_package_operations() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
 
         // Test loading root package with check for environment existing in manifest
         let pkg_path = root_path.join("packages").join("graph");
@@ -310,7 +322,7 @@ mod tests {
     #[tokio::test]
     async fn test_lockfile_deps() {
         // TODO: this should really be an insta test
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
 
         let pkg_path = root_path.join("packages").join("graph");
         let root = RootPackage::<Vanilla>::load(&pkg_path, None).await.unwrap();
@@ -323,7 +335,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_and_check_for_env() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
 
         let path = root_path.join("graph");
         // should fail as devnet does not exist in the manifest
@@ -336,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_non_existent_package() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let root_path = setup_test_move_project().await;
 
         // Test loading non-existent package
         let non_existent_path = root_path.join("non_existent");
@@ -347,112 +359,52 @@ mod tests {
         );
     }
 
-    /// Sets up a test Move project with git repository
-    /// It returns the temporary directory, the root path of the project, and the commits' sha
-    pub async fn run_git_cmd(args: &[&str], repo_path: &PathBuf) -> GitResult<String> {
-        run_git_cmd_with_args(args, Some(repo_path)).await
-    }
+    /// This test creates a git repository with a Move package, and another package that depends on
+    /// this package as a git dependency. It then tests the following
+    /// - direct dependency resolution is correct
+    /// - checkout of git dependency at the requested git sha is correct
+    /// - updating the git dependency to a different sha works as expected
+    /// - updating the git dependency in the manifest and re-pinning works as expected, including
+    /// writing back the deps to a lockfile
+    #[tokio::test]
+    pub async fn test_all() {
+        let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
+            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
+        });
 
-    pub async fn setup_test_move_git_repo() -> (TempDir, PathBuf, Vec<String>) {
-        // Create a temporary directory
-        let temp_dir = tempdir().unwrap();
-        let root_path = temp_dir.path().to_path_buf();
+        pkg_git.change_file("Move.toml", &basic_manifest("pkg_git", "0.0.2"));
+        pkg_git_repo.commit();
+        pkg_git.change_file("Move.toml", &basic_manifest("pkg_git", "0.0.3"));
+        pkg_git_repo.commit();
 
-        debug!("=== setting up test repo ===");
+        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
+            project.file(
+                "Move.toml",
+                r#"[package]
+name = "pkg_dep_on_git"
+edition = "2025"
+license = "Apache-2.0"
+authors = ["Move Team"]
+version = "0.0.1"
 
-        // Create the root directory for the Move project
-        fs::create_dir_all(&root_path).unwrap();
+[dependencies]
+pkg_git = { git = "../pkg_git", rev = "main" }
 
-        let pkg_path = root_path.join("packages").join("pkg_dep_on_git");
-        fs::create_dir_all(&pkg_path).unwrap();
-        fs::copy(
-            "tests/data/basic_move_project/pkg_dep_on_git/Move.toml",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
+[environments]
+mainnet = "35834a8a"
+testnet = "4c78adac"
+"#,
+            )
+        });
 
-        // Create directory structure
-        let pkg_path = root_path.join("packages").join("pkg_git");
-        fs::create_dir_all(&pkg_path).unwrap();
-
-        // Initialize git repository with main as default branch
-        run_git_cmd(&["init", "--initial-branch=main"], &pkg_path).await;
-
-        fs::copy(
-            "tests/data/basic_move_project/config",
-            pkg_path.join(".git").join("config"),
-        )
-        .unwrap();
-
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Initial commit
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Initial commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.1", "-m", "Initial version"], &pkg_path).await;
-
-        // Modify pkg_git and commit
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml.new",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        let cmd = Command::new("cat")
-            .arg(pkg_path.join("Move.toml"))
-            .output()
-            .await
-            .unwrap();
-
-        // Commit updates
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Second commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.2", "-m", "Second version"], &pkg_path).await;
-
-        // Modify pkg_git and commit
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml.new2",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Commit updates
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Third commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.3", "-m", "Third version"], &pkg_path).await;
-
-        // Get commits SHA
-        let commits = run_git_cmd(&["log", "--pretty=format:%H"], &pkg_path)
-            .await
-            .unwrap();
-        let commits: Vec<_> = commits.lines().map(|x| x.to_string()).collect();
-
-        debug!("=== test repo setup complete ===");
-
-        (temp_dir, root_path, commits)
-    }
-
-    #[test(tokio::test)]
-    async fn test_all() {
-        let (temp_dir, root_path, commits) = setup_test_move_git_repo().await;
-        let move_dir = temp_dir.path().join(".move");
-        // TODO: we need to figure a way to allow fetch to work in non ~/.move folder which would
-        // end being the ~/.move folder on the machine, rather than some temp dir.
-
-        let git_repo = root_path.join("packages").join("pkg_git");
-
-        let root_pkg_path = root_path.join("packages").join("pkg_dep_on_git");
+        let root_pkg_path = pkg_dep_on_git.root();
+        let commits = pkg_git.commits();
         let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
 
         // we need to replace this relative path with the actual git repository path, because find_sha
         // function does not take a cwd, so this `git ls-remote` would be called from the cwd and not from the
         // repo path.
-        root_pkg_manifest =
-            root_pkg_manifest.replace("../pkg_git", git_repo.to_path_buf().to_str().unwrap());
+        root_pkg_manifest = root_pkg_manifest.replace("../pkg_git", pkg_git.root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
         let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, None)

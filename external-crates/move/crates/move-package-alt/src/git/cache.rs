@@ -436,7 +436,7 @@ mod tests {
         // Pass in a branch name
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &Some("main".into()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -466,7 +466,7 @@ mod tests {
         // Pass in a commit SHA
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &Some(project.commits().first().unwrap().to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -493,7 +493,7 @@ mod tests {
 
         let git_tree_a = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -502,7 +502,7 @@ mod tests {
 
         let git_tree_b = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &None,
                 Some(PathBuf::from("packages/pkg_b")),
             )
@@ -537,7 +537,7 @@ mod tests {
         // contact the server - we only fail when we try to fetch (which seems reasonable)
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &Some(wrong_sha),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -560,7 +560,7 @@ mod tests {
 
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &Some("nonexisting_branch".to_string()),
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -579,7 +579,7 @@ mod tests {
         let cache = GitCache::new_from_dir(cache_dir.path());
 
         let git_tree = cache
-            .resolve_to_tree(project.root_path(), &None, None)
+            .resolve_to_tree(project.root_path_str(), &None, None)
             .await
             .unwrap();
 
@@ -597,7 +597,7 @@ mod tests {
 
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -625,7 +625,7 @@ mod tests {
 
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -652,7 +652,7 @@ mod tests {
 
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -664,7 +664,7 @@ mod tests {
         // same as above
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
@@ -685,7 +685,7 @@ mod tests {
 
         let git_tree = cache
             .resolve_to_tree(
-                project.root_path(),
+                project.root_path_str(),
                 &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )

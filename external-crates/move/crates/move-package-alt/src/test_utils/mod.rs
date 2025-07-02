@@ -185,13 +185,22 @@ impl Project {
     }
 
     /// Root of the project as a string. This will panic if root does not exist.
-    pub fn root_path(&self) -> &str {
+    pub fn root_path_str(&self) -> &str {
         self.root.to_str().unwrap()
     }
 
     /// Overwrite a file with new content
     pub fn change_file(&self, path: impl AsRef<Path>, body: &str) {
         FileBuilder::new(self.root().join(path), body, false).mk()
+    }
+
+    pub fn extend_file(&self, path: impl AsRef<Path>, body: &str) {
+        let full = self.root().join(path.as_ref());
+        let mut contents = fs::read_to_string(&full)
+            .unwrap_or_else(|e| panic!("could not read file {}: {}", full.display(), e));
+        contents.push_str(body);
+        fs::write(&full, contents)
+            .unwrap_or_else(|e| panic!("could not write file {}: {}", full.display(), e));
     }
 
     /// Returns the contents of `Move.lock`.
