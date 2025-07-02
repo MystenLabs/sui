@@ -17,7 +17,10 @@ pub use fetch::FetchedDependency;
 mod dependency_set;
 pub use dependency_set::DependencySet;
 
-use crate::{errors::FileHandle, schema::EnvironmentName, schema::PublishedID};
+use crate::{
+    errors::FileHandle,
+    schema::{EnvironmentName, PublishedID},
+};
 
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
 /// fields) with additional metadata about how the dependency is used (such as the source file,
@@ -27,7 +30,7 @@ use crate::{errors::FileHandle, schema::EnvironmentName, schema::PublishedID};
 /// (e.g. resolved dependencies have no `External` variant, pinned dependencies have a pinned git
 /// dependency, etc). The `DepInfo` type encapsulates these invariants.
 #[derive(Debug, Clone)]
-struct Dependency<DepInfo> {
+pub struct Dependency<DepInfo> {
     dep_info: DepInfo,
 
     /// The environment in the dependency's namespace to use. For example, given
@@ -61,5 +64,21 @@ impl<T> Dependency<T> {
 
     pub fn use_environment(&self) -> &EnvironmentName {
         &self.use_environment
+    }
+
+    pub fn new(
+        dep_info: T,
+        use_environment: String,
+        published_at: Option<PublishedID>,
+        containing_file: FileHandle,
+        is_override: bool,
+    ) -> Dependency<T> {
+        Dependency {
+            dep_info,
+            use_environment,
+            published_at,
+            containing_file,
+            is_override,
+        }
     }
 }

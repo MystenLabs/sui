@@ -9,7 +9,11 @@ use std::iter::empty;
 
 use serde::{Deserialize, Serialize};
 
-use crate::dependency::{DependencySet, PinnedDependencyInfo};
+use crate::{
+    dependency::{CombinedDependency, DependencySet},
+    errors::FileHandle,
+    schema::EnvironmentID,
+};
 
 use super::MoveFlavor;
 
@@ -24,7 +28,6 @@ pub enum VanillaDep {}
 impl MoveFlavor for Vanilla {
     type PublishedMetadata = ();
     type PackageMetadata = ();
-    type EnvironmentID = String;
     type AddressInfo = ();
 
     fn name() -> String {
@@ -32,9 +35,9 @@ impl MoveFlavor for Vanilla {
     }
 
     fn implicit_deps(
-        &self,
-        environments: impl Iterator<Item = Self::EnvironmentID>,
-    ) -> DependencySet<PinnedDependencyInfo> {
+        file_handle: FileHandle,
+        environments: impl Iterator<Item = EnvironmentID>,
+    ) -> DependencySet<CombinedDependency> {
         empty().collect()
     }
 }

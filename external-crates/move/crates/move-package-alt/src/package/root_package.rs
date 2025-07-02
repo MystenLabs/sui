@@ -146,7 +146,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Note that this will not update the [`dependencies`] field itself.
     pub async fn update_deps_and_write_to_lockfile(
         &self,
-        envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+        envs: &BTreeMap<EnvironmentName, EnvironmentID>,
     ) -> PackageResult<()> {
         let mut lockfile = self.load_lockfile()?;
 
