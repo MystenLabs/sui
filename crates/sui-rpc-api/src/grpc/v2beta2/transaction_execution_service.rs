@@ -143,9 +143,9 @@ pub async fn execute_transaction(
     let executed_transaction = if let Some(mask) =
         read_mask.subtree(ExecuteTransactionResponse::TRANSACTION_FIELD.name)
     {
-        let events = events
-            .map(sui_sdk_types::TransactionEvents::try_from)
-            .transpose()?;
+        let events = mask
+            .subtree(ExecutedTransaction::EVENTS_FIELD)
+            .and_then(|mask| events.map(|e| TransactionEvents::merge_from(e, &mask)));
 
         let input_objects = input_objects.unwrap_or_default();
         let output_objects = output_objects.unwrap_or_default();
@@ -237,9 +237,7 @@ pub async fn execute_transaction(
                 })
                 .unwrap_or_default(),
             effects,
-            events: mask
-                .subtree(ExecutedTransaction::EVENTS_FIELD.name)
-                .and_then(|mask| events.map(|e| TransactionEvents::merge_from(e, &mask))),
+            events,
             checkpoint: None,
             timestamp: None,
             balance_changes,
