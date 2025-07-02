@@ -105,7 +105,7 @@ pub fn verify_function<'env>(
     )?;
 
     if let Some(limit) = verifier_config.max_basic_blocks {
-        if function_context.cfg().blocks().len() > limit {
+        if function_context.cfg().blocks().count() > limit {
             return Err(
                 PartialVMError::new(StatusCode::TOO_MANY_BASIC_BLOCKS).at_code_offset(index, 0)
             );

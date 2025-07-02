@@ -34,6 +34,7 @@ vectors are growable. This module has many native functions.
 -  [Macro function `filter`](#std_vector_filter)
 -  [Macro function `partition`](#std_vector_partition)
 -  [Macro function `find_index`](#std_vector_find_index)
+-  [Macro function `find_indices`](#std_vector_find_indices)
 -  [Macro function `count`](#std_vector_count)
 -  [Macro function `fold`](#std_vector_fold)
 -  [Function `flatten`](#std_vector_flatten)
@@ -811,6 +812,35 @@ Returns <code>some(index)</code> if such an element is found, otherwise <code>no
         v.<a href="../std/vector.md#std_vector_length">length</a>().<a href="../std/vector.md#std_vector_do">do</a>!(|i| <b>if</b> ($f(&v[i])) <b>return</b> '<a href="../std/vector.md#std_vector_find_index">find_index</a> <a href="../std/option.md#std_option_some">option::some</a>(i));
         <a href="../std/option.md#std_option_none">option::none</a>()
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_find_indices"></a>
+
+## Macro function `find_indices`
+
+Finds all indices of elements in the vector <code>v</code> that satisfy the predicate <code>f</code>.
+Returns a vector of indices of all found elements.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_find_indices">find_indices</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u64.md#std_u64">u64</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_find_indices">find_indices</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u64.md#std_u64">u64</a>&gt; {
+    <b>let</b> v = $v;
+    <b>let</b> <b>mut</b> indices = <a href="../std/vector.md#std_vector">vector</a>[];
+    v.<a href="../std/vector.md#std_vector_length">length</a>().<a href="../std/vector.md#std_vector_do">do</a>!(|i| <b>if</b> ($f(&v[i])) indices.<a href="../std/vector.md#std_vector_push_back">push_back</a>(i));
+    indices
 }
 </code></pre>
 

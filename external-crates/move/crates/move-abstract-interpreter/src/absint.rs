@@ -4,11 +4,32 @@
 use crate::control_flow_graph::ControlFlowGraph;
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum JoinResult {
     Changed,
     Unchanged,
 }
+
+#[derive(Debug, Clone)]
+pub enum BlockPostCondition<State> {
+    /// Unprocessed block
+    Unprocessed,
+    /// Block has been processed
+    Processed(State),
+}
+
+#[derive(Debug, Clone)]
+pub struct BlockInvariant<State> {
+    /// Precondition of the block
+    pub pre: State,
+    /// Postcondition of the block
+    pub post: BlockPostCondition<State>,
+}
+
+pub type InvariantMap<A> = BTreeMap<
+    <A as AbstractInterpreter>::BlockId,
+    BlockInvariant<<A as AbstractInterpreter>::State>,
+>;
 
 pub trait AbstractInterpreter {
     type Error;
@@ -18,19 +39,12 @@ pub trait AbstractInterpreter {
     type InstructionIndex: Copy + Ord;
     type Instruction;
 
-    fn start(&mut self) -> Result<(), Self::Error>;
+    /// Joining two states together, this along with `execute` drives the analysis.
     fn join(
         &mut self,
         pre: &mut Self::State,
         post: &Self::State,
     ) -> Result<JoinResult, Self::Error>;
-    fn visit_block_execution(&mut self, block_id: Self::BlockId) -> Result<(), Self::Error>;
-    fn visit_successor(&mut self, block_id: Self::BlockId) -> Result<(), Self::Error>;
-    fn visit_back_edge(
-        &mut self,
-        from: Self::BlockId,
-        to: Self::BlockId,
-    ) -> Result<(), Self::Error>;
 
     /// Execute local@instr found at index local@index in the current basic block from pre-state
     /// local@pre.
@@ -44,11 +58,53 @@ pub trait AbstractInterpreter {
     /// (e.g., normalizing the abstract state before a join).
     fn execute(
         &mut self,
-        state: &mut Self::State,
+        block_id: Self::BlockId,
         bounds: (Self::InstructionIndex, Self::InstructionIndex),
+        state: &mut Self::State,
         offset: Self::InstructionIndex,
         instr: &Self::Instruction,
     ) -> Result<(), Self::Error>;
+
+    /// A visitor for starting the analysis. This is called before any blocks are processed.
+    fn start(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_block_pre_execution(
+        &mut self,
+        _block_id: Self::BlockId,
+        _invariant: &mut BlockInvariant<Self::State>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_block_post_execution(
+        &mut self,
+        _block_id: Self::BlockId,
+        _invariant: &mut BlockInvariant<Self::State>,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_successor(&mut self, _block_id: Self::BlockId) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// A visitor intended for bookkeeping. They should _not_ be used to modify the state in any
+    /// way related to the analysis.
+    fn visit_back_edge(
+        &mut self,
+        _from: Self::BlockId,
+        _to: Self::BlockId,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 /// Analyze procedure local@function_context starting from pre-state local@initial_state.
@@ -57,7 +113,7 @@ pub fn analyze_function<A, CFG>(
     cfg: &CFG,
     code: &<CFG as ControlFlowGraph>::Instructions,
     initial_state: A::State,
-) -> Result<(), A::Error>
+) -> Result<InvariantMap<A>, A::Error>
 where
     A: AbstractInterpreter,
     CFG: ControlFlowGraph<
@@ -70,37 +126,41 @@ where
     let mut inv_map = BTreeMap::new();
     let entry_block_id = cfg.entry_block_id();
     let mut next_block = Some(entry_block_id);
-    inv_map.insert(entry_block_id, initial_state);
+    inv_map.insert(
+        entry_block_id,
+        BlockInvariant {
+            pre: initial_state.clone(),
+            post: BlockPostCondition::Unprocessed,
+        },
+    );
 
     while let Some(block_id) = next_block {
-        let block_invariant = match inv_map.get_mut(&block_id) {
-            Some(invariant) => invariant,
-            None => {
-                // This can only happen when all predecessors have errors,
-                // so skip the block and move on to the next one
-                next_block = cfg.next_block(block_id);
-                continue;
-            }
-        };
+        let block_invariant = inv_map.entry(block_id).or_insert_with(|| BlockInvariant {
+            pre: initial_state.clone(),
+            post: BlockPostCondition::Unprocessed,
+        });
 
-        let pre_state = &block_invariant;
-        // Note: this will stop analysis after the first error occurs, to avoid the risk of
-        // subsequent crashes
+        interpreter.visit_block_pre_execution(block_id, block_invariant)?;
+        let pre_state = &block_invariant.pre;
         let post_state = execute_block(interpreter, cfg, code, block_id, pre_state)?;
+        block_invariant.post = BlockPostCondition::Processed(post_state.clone());
+        interpreter.visit_block_post_execution(block_id, block_invariant)?;
 
         let mut next_block_candidate = cfg.next_block(block_id);
         // propagate postcondition of this block to successor blocks
-        for &successor_block_id in cfg.successors(block_id) {
+        for successor_block_id in cfg.successors(block_id) {
             interpreter.visit_successor(successor_block_id)?;
             match inv_map.get_mut(&successor_block_id) {
                 Some(next_block_invariant) => {
-                    let join_result = interpreter.join(next_block_invariant, &post_state)?;
+                    let join_result =
+                        interpreter.join(&mut next_block_invariant.pre, &post_state)?;
                     match join_result {
                         JoinResult::Unchanged => {
                             // Pre is the same after join. Reanalyzing this block would produce
                             // the same post
                         }
                         JoinResult::Changed => {
+                            next_block_invariant.post = BlockPostCondition::Unprocessed;
                             // If the cur->successor is a back edge, jump back to the beginning
                             // of the loop, instead of the normal next block
                             if cfg.is_back_edge(block_id, successor_block_id) {
@@ -114,13 +174,19 @@ where
                 None => {
                     // Haven't visited the next block yet. Use the post of the current block as
                     // its pre
-                    inv_map.insert(successor_block_id, post_state.clone());
+                    inv_map.insert(
+                        successor_block_id,
+                        BlockInvariant {
+                            pre: post_state.clone(),
+                            post: BlockPostCondition::Unprocessed,
+                        },
+                    );
                 }
             }
         }
         next_block = next_block_candidate;
     }
-    Ok(())
+    Ok(inv_map)
 }
 
 fn execute_block<A, CFG>(
@@ -138,11 +204,10 @@ where
             Instruction = A::Instruction,
         >,
 {
-    interpreter.visit_block_execution(block_id)?;
     let mut state_acc = pre_state.clone();
     let bounds = (cfg.block_start(block_id), cfg.block_end(block_id));
     for (offset, instr) in cfg.instructions(code, block_id) {
-        interpreter.execute(&mut state_acc, bounds, offset, instr)?
+        interpreter.execute(block_id, bounds, &mut state_acc, offset, instr)?
     }
     Ok(state_acc)
 }

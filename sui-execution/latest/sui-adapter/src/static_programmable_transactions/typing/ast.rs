@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{loading::ast as L, spanned::Spanned};
+use crate::static_programmable_transactions::{
+    linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
+};
 use move_vm_types::values::VectorSpecialization;
 use std::{cell::OnceCell, collections::BTreeMap, fmt};
 use sui_types::base_types::ObjectID;
@@ -10,6 +12,7 @@ use sui_types::base_types::ObjectID;
 // AST Nodes
 //**************************************************************************************************
 
+#[derive(Debug)]
 pub struct Transaction {
     pub inputs: Inputs,
     pub commands: Commands,
@@ -25,37 +28,66 @@ pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BytesUsage {
+    /// The bytes are copied
+    Copied,
+    /// The bytes are immutably borrowed, which means they are created once and then dropped
+    ByImmRef,
+    /// The bytes are mutably borrowed, which "fixes" the type
+    ByMutRef,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Information for a given constraint for input bytes
+pub struct BytesConstraint {
+    /// The command that first added this constraint
+    pub command: u16,
+    /// The argument in that command
+    pub argument: u16,
+    /// The type of usage for this bytes constraint
+    pub usage: BytesUsage,
+}
+
+#[derive(Debug)]
 pub enum InputType {
-    Bytes(
-        /* all types that this must satisfy */
-        BTreeMap<Type, /* command, arg idx */ (u16, u16)>,
-    ),
+    /// A series of BCS bytes, and all types that this must satisfy
+    Bytes(BTreeMap<Type, BytesConstraint>),
+    /// A fixed type--the type is known and "fixed" at input
     Fixed(Type),
 }
 pub type ResultType = Vec<Type>;
 
 pub type Command = Spanned<Command_>;
 
+#[derive(Debug)]
 pub enum Command_ {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
     SplitCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
     MergeCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
     MakeMoveVec(/* T for vector<T> */ Type, Vec<Argument>),
-    Publish(Vec<Vec<u8>>, Vec<ObjectID>),
-    Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
+    Publish(Vec<Vec<u8>>, Vec<ObjectID>, ResolvedLinkage),
+    Upgrade(
+        Vec<Vec<u8>>,
+        Vec<ObjectID>,
+        ObjectID,
+        Argument,
+        ResolvedLinkage,
+    ),
 }
 
 pub type LoadedFunctionInstantiation = L::LoadedFunctionInstantiation;
 
 pub type LoadedFunction = L::LoadedFunction;
 
+#[derive(Debug)]
 pub struct MoveCall {
     pub function: LoadedFunction,
     pub arguments: Vec<Argument>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Location {
     GasCoin,
     Input(u16),
@@ -63,7 +95,7 @@ pub enum Location {
 }
 
 // Non borrowing usage of locations, moving or copying
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Usage {
     Move(Location),
     Copy {
@@ -77,7 +109,7 @@ pub enum Usage {
 pub type Argument = Spanned<Argument_>;
 pub type Argument_ = (Argument__, Type);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Argument__ {
     Use(Usage),
     Borrow(/* mut */ bool, Location),

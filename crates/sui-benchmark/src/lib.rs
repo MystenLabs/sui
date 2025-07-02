@@ -340,10 +340,6 @@ impl LocalValidatorAggregatorProxy {
             .submit_transaction(
                 SubmitTxRequest {
                     transaction: tx.clone(),
-                    include_events: true,
-                    include_input_objects: false,
-                    include_output_objects: false,
-                    include_auxiliary_data: false,
                 },
                 SubmitTransactionOptions::default(),
             )
@@ -705,6 +701,10 @@ impl From<CallArg> for BenchMoveCallArg {
                     unimplemented!("Receiving is not supported for benchmarks")
                 }
             },
+            CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Support BalanceWithdraw in benchmarks.
+                todo!("BalanceWithdraw is not supported for benchmarks")
+            }
         }
     }
 }

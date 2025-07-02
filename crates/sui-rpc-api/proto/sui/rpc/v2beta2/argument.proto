@@ -1,0 +1,34 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+// An argument to a programmable transaction command.
+message Argument {
+  enum ArgumentKind {
+    ARGUMENT_KIND_UNKNOWN = 0;
+
+    // The gas coin.
+    GAS = 1;
+
+    // One of the input objects or primitive values (from
+    // `ProgrammableTransaction` inputs).
+    INPUT = 2;
+
+    // The result of another command (from `ProgrammableTransaction` commands).
+    RESULT = 3;
+  }
+
+  optional ArgumentKind kind = 1;
+
+  // Index of an input when `kind` is `INPUT`.
+  optional uint32 input = 2;
+
+  // Index of a result when `kind` is `RESULT`.
+  optional uint32 result = 3;
+
+  // Used to access a nested result when `kind` is `RESULT`.
+  optional uint32 subresult = 4;
+}

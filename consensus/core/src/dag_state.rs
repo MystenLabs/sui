@@ -7,19 +7,18 @@ use std::{
     ops::Bound::{Excluded, Included, Unbounded},
     panic,
     sync::Arc,
+    time::Duration,
     vec,
 };
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round};
 use itertools::Itertools as _;
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace};
 
 use crate::{
-    block::{
-        genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot,
-        VerifiedBlock, GENESIS_ROUND,
-    },
+    block::{genesis_blocks, BlockAPI, Slot, VerifiedBlock, GENESIS_ROUND},
     commit::{
         load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
         CommitRef, CommitVote, TrustedCommit, GENESIS_COMMIT_INDEX,
@@ -286,23 +285,12 @@ impl DagState {
 
         let now = self.context.clock.timestamp_utc_ms();
         if block.timestamp_ms() > now {
-            if self
-                .context
-                .protocol_config
-                .consensus_median_based_commit_timestamp()
-            {
-                trace!(
-                    "Block {:?} with timestamp {} is greater than local timestamp {}.",
-                    block,
-                    block.timestamp_ms(),
-                    now,
-                );
-            } else {
-                panic!(
-                    "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
-                    block, block.timestamp_ms(), now,
-                );
-            }
+            trace!(
+                "Block {:?} with timestamp {} is greater than local timestamp {}.",
+                block,
+                block.timestamp_ms(),
+                now,
+            );
         }
         let hostname = &self.context.committee.authority(block_ref.author).hostname;
         self.context
@@ -343,7 +331,24 @@ impl DagState {
         self.recent_blocks
             .insert(block_ref, BlockInfo::new(block.clone()));
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
-        self.threshold_clock.add_block(block_ref);
+
+        if self.threshold_clock.add_block(block_ref) {
+            // Do not measure quorum delay when no local block is proposed in the round.
+            let last_proposed_block = self.get_last_proposed_block();
+            if last_proposed_block.round() == block_ref.round {
+                let quorum_delay_ms = self
+                    .context
+                    .clock
+                    .timestamp_utc_ms()
+                    .saturating_sub(self.get_last_proposed_block().timestamp_ms());
+                self.context
+                    .metrics
+                    .node_metrics
+                    .quorum_receive_latency
+                    .observe(Duration::from_millis(quorum_delay_ms).as_secs_f64());
+            }
+        }
+
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
             .metrics
@@ -893,8 +898,14 @@ impl DagState {
 
     /// Recovers commits to write from storage, at startup.
     pub(crate) fn recover_commits_to_write(&mut self, commits: Vec<TrustedCommit>) {
-        assert!(self.commits_to_write.is_empty());
         self.commits_to_write.extend(commits);
+    }
+
+    pub(crate) fn ensure_commits_to_write_is_empty(&self) {
+        assert!(
+            self.commits_to_write.is_empty(),
+            "Commits to write should be empty"
+        );
     }
 
     pub(crate) fn add_commit_info(&mut self, reputation_scores: ReputationScores) {
@@ -1213,11 +1224,12 @@ impl BlockInfo {
 mod test {
     use std::vec;
 
+    use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs};
     use parking_lot::RwLock;
 
     use super::*;
     use crate::{
-        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
@@ -2530,38 +2542,9 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic]
-    async fn test_accept_block_panics_when_timestamp_is_ahead() {
-        // GIVEN
-        let (mut context, _) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_median_based_commit_timestamp_for_testing(false);
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Set a timestamp for the block that is ahead of the current time
-        let block_timestamp = context.clock.timestamp_utc_ms() + 5_000;
-
-        let block = VerifiedBlock::new_for_test(
-            TestBlock::new(10, 0)
-                .set_timestamp_ms(block_timestamp)
-                .build(),
-        );
-
-        // Try to accept the block - it will panic as accepted block timestamp is ahead of the current time
-        dag_state.accept_block(block);
-    }
-
-    #[tokio::test]
     async fn test_accept_block_not_panics_when_timestamp_is_ahead_and_median_timestamp() {
         // GIVEN
-        let (mut context, _) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_median_based_commit_timestamp_for_testing(true);
-
+        let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let mut dag_state = DagState::new(context.clone(), store.clone());

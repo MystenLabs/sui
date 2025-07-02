@@ -6,7 +6,7 @@ use crate::{
         Diagnostic, DiagnosticCode,
         codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},
     },
-    shared::{AstDebug, known_attributes},
+    shared::{AstDebug, CompilationEnv, known_attributes},
 };
 use move_symbol_pool::Symbol;
 use std::{
@@ -269,6 +269,16 @@ impl WarningFiltersBuilder {
             filters: BTreeMap::new(),
             for_dependency: true,
         }
+    }
+
+    pub fn new_all_filter_alls(env: &CompilationEnv) -> Self {
+        let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
+        for prefix in env.known_filter_names() {
+            for f in env.filter_from_str(prefix, FILTER_ALL) {
+                all_filter_alls.add(f);
+            }
+        }
+        all_filter_alls
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {

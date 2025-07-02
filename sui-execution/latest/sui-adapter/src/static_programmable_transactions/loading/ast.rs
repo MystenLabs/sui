@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::rc::Rc;
-
-use move_binary_format::file_format::AbilitySet;
+use crate::static_programmable_transactions::linkage::resolved_linkage::{
+    ResolvedLinkage, RootedLinkage,
+};
+use indexmap::IndexSet;
+use move_binary_format::file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
 };
+use std::rc::Rc;
 use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, ObjectRef, RESOLVED_TX_CONTEXT, SequenceNumber, TxContextKind},
@@ -18,6 +21,7 @@ use sui_types::{
 // AST Nodes
 //**************************************************************************************************
 
+#[derive(Debug)]
 pub struct Transaction {
     pub inputs: Inputs,
     pub commands: Commands,
@@ -27,12 +31,14 @@ pub type Inputs = Vec<(InputArg, InputType)>;
 
 pub type Commands = Vec<Command>;
 
+#[derive(Debug)]
 pub enum InputArg {
     Pure(Vec<u8>),
     Receiving(ObjectRef),
     Object(ObjectArg),
 }
 
+#[derive(Debug)]
 pub enum ObjectArg {
     ImmObject(ObjectRef),
     OwnedObject(ObjectRef),
@@ -73,27 +79,36 @@ pub struct Datatype {
     pub type_arguments: Vec<Type>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum InputType {
     Bytes,
     Fixed(Type),
 }
 
+#[derive(Debug)]
 pub enum Command {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
     SplitCoins(Argument, Vec<Argument>),
     MergeCoins(Argument, Vec<Argument>),
     MakeMoveVec(/* T for vector<T> */ Option<Type>, Vec<Argument>),
-    Publish(Vec<Vec<u8>>, Vec<ObjectID>),
-    Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
+    Publish(Vec<Vec<u8>>, Vec<ObjectID>, ResolvedLinkage),
+    Upgrade(
+        Vec<Vec<u8>>,
+        Vec<ObjectID>,
+        ObjectID,
+        Argument,
+        ResolvedLinkage,
+    ),
 }
 
+#[derive(Debug)]
 pub struct LoadedFunctionInstantiation {
     pub parameters: Vec<Type>,
     pub return_: Vec<Type>,
 }
 
+#[derive(Debug)]
 pub struct LoadedFunction {
     pub storage_id: ModuleId,
     pub runtime_id: ModuleId,
@@ -101,8 +116,12 @@ pub struct LoadedFunction {
     pub type_arguments: Vec<Type>,
     pub signature: LoadedFunctionInstantiation,
     pub tx_context: TxContextKind,
+    pub linkage: RootedLinkage,
+    pub instruction_length: CodeOffset,
+    pub definition_index: FunctionDefinitionIndex,
 }
 
+#[derive(Debug)]
 pub struct MoveCall {
     pub function: LoadedFunction,
     pub arguments: Vec<Argument>,
@@ -167,6 +186,22 @@ impl Type {
             TxContextKind::None
         }
     }
+    pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
+        match self {
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address
+            | Type::Signer => IndexSet::new(),
+            Type::Vector(v) => v.element_type.all_addresses(),
+            Type::Reference(_, inner) => inner.all_addresses(),
+            Type::Datatype(dt) => dt.all_addresses(),
+        }
+    }
 }
 
 impl Datatype {
@@ -176,6 +211,15 @@ impl Datatype {
             self.module.name(),
             self.name.as_ident_str(),
         )
+    }
+
+    pub fn all_addresses(&self) -> IndexSet<AccountAddress> {
+        let mut addresses = IndexSet::new();
+        addresses.insert(*self.module.address());
+        for arg in &self.type_arguments {
+            addresses.extend(arg.all_addresses());
+        }
+        addresses
     }
 }
 

@@ -4,6 +4,7 @@
 use tonic::Code;
 
 use crate::proto::google::rpc::{BadRequest, ErrorInfo, RetryInfo};
+pub use crate::proto::rpc::v2beta2::ErrorReason;
 
 pub type Result<T, E = RpcError> = std::result::Result<T, E>;
 
@@ -35,22 +36,25 @@ impl RpcError {
             details: None,
         }
     }
+
+    pub(crate) fn into_status_proto(self) -> crate::proto::google::rpc::Status {
+        crate::proto::google::rpc::Status {
+            code: self.code.into(),
+            message: self.message.unwrap_or_default(),
+            details: self
+                .details
+                .map(ErrorDetails::into_status_details)
+                .unwrap_or_default(),
+        }
+    }
 }
 
 impl From<RpcError> for tonic::Status {
     fn from(value: RpcError) -> Self {
         use prost::Message;
 
-        let status = crate::proto::google::rpc::Status {
-            code: value.code.into(),
-            message: value.message.unwrap_or_default(),
-            details: value
-                .details
-                .map(ErrorDetails::into_status_details)
-                .unwrap_or_default(),
-        };
-
         let code = value.code;
+        let status = value.into_status_proto();
         let details = status.encode_to_vec().into();
         let message = status.message;
 
@@ -189,33 +193,6 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 RpcError::new(Code::Unavailable, "system is overloaded")
             }
         }
-    }
-}
-
-//TODO define proto for this
-pub enum ErrorReason {
-    FieldInvalid,
-    FieldMissing,
-}
-
-impl ErrorReason {
-    fn as_str(&self) -> &'static str {
-        match self {
-            ErrorReason::FieldInvalid => "FIELD_INVALID",
-            ErrorReason::FieldMissing => "FIELD_MISSING",
-        }
-    }
-}
-
-impl AsRef<str> for ErrorReason {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl From<ErrorReason> for String {
-    fn from(value: ErrorReason) -> Self {
-        value.as_ref().into()
     }
 }
 

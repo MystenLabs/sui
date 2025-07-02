@@ -71,6 +71,65 @@ pub struct RegulatedCoinMetadata {
     #[prost(string, optional, tag = "3")]
     pub deny_cap_object: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// Request message for `LiveDataService.GetBalance`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetBalanceRequest {
+    /// Required. The owner's Sui address.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The type names for the coin (e.g., 0x2::sui::SUI).
+    #[prost(string, optional, tag = "2")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Response message for `LiveDataService.GetBalance`.
+/// Return the total coin balance for one coin type, owned by the address owner.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetBalanceResponse {
+    /// The balance information for the requested coin type.
+    #[prost(message, optional, tag = "1")]
+    pub balance: ::core::option::Option<Balance>,
+}
+/// Request message for `LiveDataService.ListBalances`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListBalancesRequest {
+    /// Required. The owner's Sui address.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// The maximum number of balance entries to return. The service may return fewer than this value.
+    /// If unspecified, at most `50` entries will be returned.
+    /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+    #[prost(uint32, optional, tag = "2")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListBalances` call.
+    /// Provide this to retrieve the subsequent page.
+    ///
+    /// When paginating, all other parameters provided to `ListBalances` must
+    /// match the call that provided the page token.
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
+/// Response message for `LiveDataService.ListBalances`.
+/// Return the total coin balance for all coin types, owned by the address owner.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListBalancesResponse {
+    /// The list of coin types and their respective balances.
+    #[prost(message, repeated, tag = "1")]
+    pub balances: ::prost::alloc::vec::Vec<Balance>,
+    /// A token, which can be sent as `page_token` to retrieve the next page.
+    /// If this field is omitted, there are no subsequent pages.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
+/// Balance information for a specific coin type.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Balance {
+    /// The type of the coin (e.g., 0x2::sui::SUI).
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// Shows the total balance of the coin in its smallest unit.
+    #[prost(uint64, optional, tag = "3")]
+    pub balance: ::core::option::Option<u64>,
+}
 /// Request message for `NodeService.ListDynamicFields`
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListDynamicFieldsRequest {
@@ -180,25 +239,81 @@ pub struct SimulateTransactionRequest {
     pub transaction: ::core::option::Option<super::v2beta::Transaction>,
     #[prost(message, optional, tag = "2")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
+    /// Specify whether checks should be ENABLED (default) or DISABLED by the vm while executing the transaction
+    #[prost(enumeration = "simulate_transaction_request::VmChecks", optional, tag = "3")]
+    pub checks: ::core::option::Option<i32>,
+    /// Perform gas selection based on a budget estimation and include the
+    /// selected gas payment and budget in the response.
+    ///
+    /// This option will be ignored if `checks` is `DISABLED`.
+    #[prost(bool, optional, tag = "4")]
+    pub do_gas_selection: ::core::option::Option<bool>,
+}
+/// Nested message and enum types in `SimulateTransactionRequest`.
+pub mod simulate_transaction_request {
+    /// buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum VmChecks {
+        /// VM_CHECKS_UNKNOWN = 0;
+        Enabled = 0,
+        Disabled = 1,
+    }
+    impl VmChecks {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Enabled => "ENABLED",
+                Self::Disabled => "DISABLED",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "ENABLED" => Some(Self::Enabled),
+                "DISABLED" => Some(Self::Disabled),
+                _ => None,
+            }
+        }
+    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimulateTransactionResponse {
     #[prost(message, optional, tag = "1")]
     pub transaction: ::core::option::Option<super::v2beta::ExecutedTransaction>,
+    #[prost(message, repeated, tag = "2")]
+    pub outputs: ::prost::alloc::vec::Vec<CommandResult>,
+}
+/// An intermediate result/output from the execution of a single command
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CommandResult {
+    #[prost(message, repeated, tag = "1")]
+    pub return_values: ::prost::alloc::vec::Vec<CommandOutput>,
+    #[prost(message, repeated, tag = "2")]
+    pub mutated_by_ref: ::prost::alloc::vec::Vec<CommandOutput>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResolveTransactionRequest {
+pub struct CommandOutput {
     #[prost(message, optional, tag = "1")]
-    pub unresolved_transaction: ::core::option::Option<super::v2beta::Transaction>,
+    pub argument: ::core::option::Option<super::v2beta::Argument>,
     #[prost(message, optional, tag = "2")]
-    pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ResolveTransactionResponse {
-    #[prost(message, optional, tag = "1")]
-    pub transaction: ::core::option::Option<super::v2beta::Transaction>,
-    #[prost(message, optional, tag = "2")]
-    pub simulation: ::core::option::Option<SimulateTransactionResponse>,
+    pub value: ::core::option::Option<super::v2beta::Bcs>,
+    /// JSON rendering of the output.
+    #[prost(message, optional, boxed, tag = "3")]
+    pub json: ::core::option::Option<::prost::alloc::boxed::Box<::prost_types::Value>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListOwnedObjectsRequest {
@@ -429,6 +544,58 @@ pub mod live_data_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_balance(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetBalanceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetBalanceResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.LiveDataService/GetBalance",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.LiveDataService", "GetBalance"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_balances(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListBalancesResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.LiveDataService/ListBalances",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sui.rpc.v2alpha.LiveDataService", "ListBalances"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn simulate_transaction(
             &mut self,
             request: impl tonic::IntoRequest<super::SimulateTransactionRequest>,
@@ -454,35 +621,6 @@ pub mod live_data_service_client {
                     GrpcMethod::new(
                         "sui.rpc.v2alpha.LiveDataService",
                         "SimulateTransaction",
-                    ),
-                );
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn resolve_transaction(
-            &mut self,
-            request: impl tonic::IntoRequest<super::ResolveTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ResolveTransactionResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/sui.rpc.v2alpha.LiveDataService/ResolveTransaction",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(
-                    GrpcMethod::new(
-                        "sui.rpc.v2alpha.LiveDataService",
-                        "ResolveTransaction",
                     ),
                 );
             self.inner.unary(req, path, codec).await
@@ -523,18 +661,25 @@ pub mod live_data_service_server {
             tonic::Response<super::GetCoinInfoResponse>,
             tonic::Status,
         >;
+        async fn get_balance(
+            &self,
+            request: tonic::Request<super::GetBalanceRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetBalanceResponse>,
+            tonic::Status,
+        >;
+        async fn list_balances(
+            &self,
+            request: tonic::Request<super::ListBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListBalancesResponse>,
+            tonic::Status,
+        >;
         async fn simulate_transaction(
             &self,
             request: tonic::Request<super::SimulateTransactionRequest>,
         ) -> std::result::Result<
             tonic::Response<super::SimulateTransactionResponse>,
-            tonic::Status,
-        >;
-        async fn resolve_transaction(
-            &self,
-            request: tonic::Request<super::ResolveTransactionRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ResolveTransactionResponse>,
             tonic::Status,
         >;
     }
@@ -751,6 +896,96 @@ pub mod live_data_service_server {
                     };
                     Box::pin(fut)
                 }
+                "/sui.rpc.v2alpha.LiveDataService/GetBalance" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetBalanceSvc<T: LiveDataService>(pub Arc<T>);
+                    impl<
+                        T: LiveDataService,
+                    > tonic::server::UnaryService<super::GetBalanceRequest>
+                    for GetBalanceSvc<T> {
+                        type Response = super::GetBalanceResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetBalanceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as LiveDataService>::get_balance(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetBalanceSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.v2alpha.LiveDataService/ListBalances" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListBalancesSvc<T: LiveDataService>(pub Arc<T>);
+                    impl<
+                        T: LiveDataService,
+                    > tonic::server::UnaryService<super::ListBalancesRequest>
+                    for ListBalancesSvc<T> {
+                        type Response = super::ListBalancesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListBalancesRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as LiveDataService>::list_balances(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListBalancesSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/sui.rpc.v2alpha.LiveDataService/SimulateTransaction" => {
                     #[allow(non_camel_case_types)]
                     struct SimulateTransactionSvc<T: LiveDataService>(pub Arc<T>);
@@ -785,52 +1020,6 @@ pub mod live_data_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = SimulateTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.rpc.v2alpha.LiveDataService/ResolveTransaction" => {
-                    #[allow(non_camel_case_types)]
-                    struct ResolveTransactionSvc<T: LiveDataService>(pub Arc<T>);
-                    impl<
-                        T: LiveDataService,
-                    > tonic::server::UnaryService<super::ResolveTransactionRequest>
-                    for ResolveTransactionSvc<T> {
-                        type Response = super::ResolveTransactionResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::ResolveTransactionRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as LiveDataService>::resolve_transaction(&inner, request)
-                                    .await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = ResolveTransactionSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -911,6 +1100,16 @@ pub struct Package {
     #[prost(message, repeated, tag = "4")]
     pub modules: ::prost::alloc::vec::Vec<Module>,
 }
+/// A simplified representation of a package version
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PackageVersion {
+    /// The storage ID of this package version
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The version number
+    #[prost(uint64, optional, tag = "2")]
+    pub version: ::core::option::Option<u64>,
+}
 /// A Move Module.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Module {
@@ -919,7 +1118,7 @@ pub struct Module {
     pub name: ::core::option::Option<::prost::alloc::string::String>,
     /// List of DataTypes defined by this module.
     #[prost(message, repeated, tag = "3")]
-    pub data_types: ::prost::alloc::vec::Vec<DatatypeDescriptor>,
+    pub datatypes: ::prost::alloc::vec::Vec<DatatypeDescriptor>,
     /// List of Functions defined by this module.
     #[prost(message, repeated, tag = "4")]
     pub functions: ::prost::alloc::vec::Vec<FunctionDescriptor>,
@@ -1004,6 +1203,12 @@ pub mod datatype_descriptor {
             }
         }
     }
+}
+/// A set of abilities for a type parameter
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AbilitySet {
+    #[prost(enumeration = "Ability", repeated, tag = "1")]
+    pub abilities: ::prost::alloc::vec::Vec<i32>,
 }
 /// A generic type parameter used in the declaration of a struct or enum.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1139,8 +1344,9 @@ pub struct FunctionDescriptor {
     #[prost(bool, optional, tag = "6")]
     pub is_entry: ::core::option::Option<bool>,
     /// Ability constraints for type parameters
-    #[prost(enumeration = "Ability", repeated, tag = "7")]
-    pub type_parameters: ::prost::alloc::vec::Vec<i32>,
+    /// Each AbilitySet represents the constraints for one type parameter
+    #[prost(message, repeated, tag = "7")]
+    pub type_parameters: ::prost::alloc::vec::Vec<AbilitySet>,
     /// Formal parameter types.
     #[prost(message, repeated, tag = "8")]
     pub parameters: ::prost::alloc::vec::Vec<OpenSignature>,
@@ -1346,6 +1552,34 @@ pub struct GetFunctionResponse {
     #[prost(message, optional, tag = "1")]
     pub function: ::core::option::Option<FunctionDescriptor>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListPackageVersionsRequest {
+    /// Required. The `storage_id` of any version of the package.
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The maximum number of versions to return. The service may return fewer than this value.
+    /// If unspecified, at most `1000` entries will be returned.
+    /// The maximum value is `10000`; values above `10000` will be coerced to `10000`.
+    #[prost(uint32, optional, tag = "2")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListPackageVersions` call.
+    /// Provide this to retrieve the subsequent page.
+    ///
+    /// When paginating, all other parameters provided to `ListPackageVersions` must
+    /// match the call that provided the page token.
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListPackageVersionsResponse {
+    /// List of all package versions, ordered by version.
+    #[prost(message, repeated, tag = "1")]
+    pub versions: ::prost::alloc::vec::Vec<PackageVersion>,
+    /// A token, which can be sent as `page_token` to retrieve the next page.
+    /// If this field is omitted, there are no subsequent pages.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
 /// Generated client implementations.
 pub mod move_package_service_client {
     #![allow(
@@ -1541,6 +1775,35 @@ pub mod move_package_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn list_package_versions(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListPackageVersionsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListPackageVersionsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.v2alpha.MovePackageService/ListPackageVersions",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.v2alpha.MovePackageService",
+                        "ListPackageVersions",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1582,6 +1845,13 @@ pub mod move_package_service_server {
             request: tonic::Request<super::GetFunctionRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetFunctionResponse>,
+            tonic::Status,
+        >;
+        async fn list_package_versions(
+            &self,
+            request: tonic::Request<super::ListPackageVersionsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListPackageVersionsResponse>,
             tonic::Status,
         >;
     }
@@ -1829,6 +2099,55 @@ pub mod move_package_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetFunctionSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.v2alpha.MovePackageService/ListPackageVersions" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListPackageVersionsSvc<T: MovePackageService>(pub Arc<T>);
+                    impl<
+                        T: MovePackageService,
+                    > tonic::server::UnaryService<super::ListPackageVersionsRequest>
+                    for ListPackageVersionsSvc<T> {
+                        type Response = super::ListPackageVersionsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListPackageVersionsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as MovePackageService>::list_package_versions(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListPackageVersionsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

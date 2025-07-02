@@ -1,0 +1,154 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "sui/rpc/v2beta2/bcs.proto";
+import "sui/rpc/v2beta2/execution_status.proto";
+import "sui/rpc/v2beta2/gas_cost_summary.proto";
+import "sui/rpc/v2beta2/owner.proto";
+
+// The effects of executing a transaction.
+message TransactionEffects {
+  // This TransactionEffects serialized as BCS.
+  optional Bcs bcs = 1;
+
+  // The digest of this TransactionEffects.
+  optional string digest = 2;
+
+  // Version of this TransactionEffects.
+  optional int32 version = 3;
+
+  // The status of the execution.
+  optional ExecutionStatus status = 4;
+
+  // The epoch when this transaction was executed.
+  optional uint64 epoch = 5;
+
+  // The gas used by this transaction.
+  optional GasCostSummary gas_used = 6;
+
+  // The transaction digest.
+  optional string transaction_digest = 7;
+
+  // Information about the gas object. Also present in the `changed_objects` vector.
+  //
+  // System transaction that don't require gas will leave this as `None`.
+  optional ChangedObject gas_object = 8;
+
+  // The digest of the events emitted during execution,
+  // can be `None` if the transaction does not emit any event.
+  optional string events_digest = 9;
+
+  // The set of transaction digests this transaction depends on.
+  repeated string dependencies = 10;
+
+  // The version number of all the written objects (excluding packages) by this transaction.
+  optional uint64 lamport_version = 11;
+
+  // Objects whose state are changed by this transaction.
+  repeated ChangedObject changed_objects = 12;
+
+  // Shared objects that are not mutated in this transaction. Unlike owned objects,
+  // read-only shared objects' version are not committed in the transaction,
+  // and in order for a node to catch up and execute it without consensus sequencing,
+  // the version needs to be committed in the effects.
+  repeated UnchangedSharedObject unchanged_shared_objects = 13;
+
+  // Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
+  // Storing it separately allows us to avoid bloating the effects with data that are not critical.
+  // It also provides more flexibility on the format and type of the data.
+  optional string auxiliary_data_digest = 14;
+}
+
+// Input/output state of an object that was changed during execution.
+message ChangedObject {
+  // ID of the object.
+  optional string object_id = 1;
+
+  enum InputObjectState {
+    INPUT_OBJECT_STATE_UNKNOWN = 0;
+    INPUT_OBJECT_STATE_DOES_NOT_EXIST = 1;
+    INPUT_OBJECT_STATE_EXISTS = 2;
+  }
+
+  optional InputObjectState input_state = 2;
+
+  // Version of the object before this transaction executed.
+  optional uint64 input_version = 3;
+  // Digest of the object before this transaction executed.
+  optional string input_digest = 4;
+  // Owner of the object before this transaction executed.
+  optional Owner input_owner = 5;
+
+  enum OutputObjectState {
+    OUTPUT_OBJECT_STATE_UNKNOWN = 0;
+    OUTPUT_OBJECT_STATE_DOES_NOT_EXIST = 1;
+    OUTPUT_OBJECT_STATE_OBJECT_WRITE = 2;
+    OUTPUT_OBJECT_STATE_PACKAGE_WRITE = 3;
+  }
+
+  optional OutputObjectState output_state = 6;
+  // Version of the object after this transaction executed.
+  optional uint64 output_version = 7;
+  // Digest of the object after this transaction executed.
+  optional string output_digest = 8;
+  // Owner of the object after this transaction executed.
+  optional Owner output_owner = 9;
+
+  enum IdOperation {
+    ID_OPERATION_UNKNOWN = 0;
+    NONE = 1;
+    CREATED = 2;
+    DELETED = 3;
+  }
+
+  // What happened to an `ObjectId` during execution.
+  optional IdOperation id_operation = 10;
+
+  // Type information is not provided by the effects structure but is instead
+  // provided by an indexing layer
+  optional string object_type = 11;
+}
+
+// A shared object that wasn't changed during execution.
+message UnchangedSharedObject {
+  enum UnchangedSharedObjectKind {
+    UNCHANGED_SHARED_OBJECT_KIND_UNKNOWN = 0;
+
+    // Read-only shared object from the input.
+    READ_ONLY_ROOT = 1;
+
+    // Deleted shared objects that appear mutably/owned in the input.
+    MUTATE_DELETED = 2;
+
+    // Deleted shared objects that appear as read-only in the input.
+    READ_DELETED = 3;
+
+    // Shared objects that was congested and resulted in this transaction being
+    // canceled.
+    CANCELED = 4;
+
+    // Read of a per-epoch config object that should remain the same during an
+    // epoch. This optionally will indicate the sequence number of the config
+    // object at the start of the epoch.
+    PER_EPOCH_CONFIG = 5;
+  }
+
+  optional UnchangedSharedObjectKind kind = 1;
+
+  // ObjectId of the shared object.
+  optional string object_id = 2;
+
+  // Version of the shared object.
+  optional uint64 version = 3;
+
+  // Digest of the shared object.
+  optional string digest = 4;
+
+  // Type information is not provided by the effects structure but is instead
+  // provided by an indexing layer
+  optional string object_type = 5;
+}

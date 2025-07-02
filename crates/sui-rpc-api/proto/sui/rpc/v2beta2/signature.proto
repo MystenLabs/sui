@@ -1,0 +1,232 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "sui/rpc/v2beta2/bcs.proto";
+import "sui/rpc/v2beta2/signature_scheme.proto";
+
+// A signature from a user.
+message UserSignature {
+  // This signature serialized as as BCS.
+  //
+  // When provided as input this will support both the form that is length
+  // prefixed as well as not length prefixed.
+  optional Bcs bcs = 1;
+
+  // The signature scheme of this signature.
+  optional SignatureScheme scheme = 2;
+
+  oneof signature {
+    // Simple signature if scheme is ed25519 | secp256k1 | secp256r1.
+    SimpleSignature simple = 3;
+
+    // The multisig aggregated signature if scheme is `MULTISIG`.
+    MultisigAggregatedSignature multisig = 4;
+
+    // The zklogin authenticator if scheme is `ZKLOGIN`.
+    ZkLoginAuthenticator zklogin = 5;
+
+    // The passkey authenticator if scheme is `PASSKEY`.
+    PasskeyAuthenticator passkey = 6;
+  }
+}
+
+// Either an ed25519, secp256k1 or secp256r1 signature
+message SimpleSignature {
+  // The signature scheme of this signature.
+  optional SignatureScheme scheme = 1;
+
+  // Signature bytes
+  optional bytes signature = 2;
+
+  // Public key bytes
+  optional bytes public_key = 3;
+}
+
+// Public key equivalent for zklogin authenticators.
+message ZkLoginPublicIdentifier {
+  optional string iss = 1;
+  // base10 encoded Bn254FieldElement
+  optional string address_seed = 2;
+}
+
+// Set of valid public keys for multisig committee members.
+message MultisigMemberPublicKey {
+  // The signature scheme of this public key.
+  optional SignatureScheme scheme = 1;
+
+  // Public key bytes if scheme is ed25519 | secp256k1 | secp256r1 | passkey.
+  optional bytes public_key = 2;
+
+  // A zklogin public identifier if scheme is zklogin.
+  optional ZkLoginPublicIdentifier zklogin = 3;
+}
+
+// A member in a multisig committee.
+message MultisigMember {
+  // The public key of the committee member.
+  optional MultisigMemberPublicKey public_key = 1;
+  // The weight of this member's signature.
+  optional uint32 weight = 2;
+}
+
+// A multisig committee.
+message MultisigCommittee {
+  // A list of committee members and their corresponding weight.
+  repeated MultisigMember members = 1;
+  // The threshold of signatures needed to validate a signature from
+  // this committee.
+  optional uint32 threshold = 2;
+}
+
+// Aggregated signature from members of a multisig committee.
+message MultisigAggregatedSignature {
+  // The plain signatures encoded with signature scheme.
+  //
+  // The signatures must be in the same order as they are listed in the committee.
+  repeated MultisigMemberSignature signatures = 1;
+
+  // Bitmap indicating which committee members contributed to the
+  // signature.
+  optional uint32 bitmap = 2;
+  // If present, means this signature's on-chain format uses the old
+  // legacy multisig format.
+  repeated uint32 legacy_bitmap = 3;
+  // The committee to use to validate this signature.
+  optional MultisigCommittee committee = 4;
+}
+
+// A signature from a member of a multisig committee.
+message MultisigMemberSignature {
+  // The signature scheme of this signature.
+  optional SignatureScheme scheme = 1;
+
+  // Signature bytes if scheme is ed25519 | secp256k1 | secp256r1.
+  optional bytes signature = 2;
+
+  // The zklogin authenticator if scheme is `ZKLOGIN`.
+  optional ZkLoginAuthenticator zklogin = 3;
+
+  // The passkey authenticator if scheme is `PASSKEY`.
+  optional PasskeyAuthenticator passkey = 4;
+}
+
+// A zklogin authenticator.
+message ZkLoginAuthenticator {
+  // Zklogin proof and inputs required to perform proof verification.
+  optional ZkLoginInputs inputs = 1;
+  // Maximum epoch for which the proof is valid.
+  optional uint64 max_epoch = 2;
+  // User signature with the public key attested to by the provided proof.
+  optional SimpleSignature signature = 3;
+}
+
+// A zklogin groth16 proof and the required inputs to perform proof verification.
+message ZkLoginInputs {
+  optional ZkLoginProof proof_points = 1;
+  optional ZkLoginClaim iss_base64_details = 2;
+  optional string header_base64 = 3;
+  // base10 encoded Bn254FieldElement
+  optional string address_seed = 4;
+}
+
+// A zklogin groth16 proof.
+message ZkLoginProof {
+  optional CircomG1 a = 1;
+  optional CircomG2 b = 2;
+  optional CircomG1 c = 3;
+}
+
+// A claim of the iss in a zklogin proof.
+message ZkLoginClaim {
+  optional string value = 1;
+  optional uint32 index_mod_4 = 2;
+}
+
+// A G1 point.
+message CircomG1 {
+  // base10 encoded Bn254FieldElement
+  optional string e0 = 1;
+  // base10 encoded Bn254FieldElement
+  optional string e1 = 2;
+  // base10 encoded Bn254FieldElement
+  optional string e2 = 3;
+}
+
+// A G2 point.
+message CircomG2 {
+  // base10 encoded Bn254FieldElement
+  optional string e00 = 1;
+  // base10 encoded Bn254FieldElement
+  optional string e01 = 2;
+
+  // base10 encoded Bn254FieldElement
+  optional string e10 = 3;
+  // base10 encoded Bn254FieldElement
+  optional string e11 = 4;
+
+  // base10 encoded Bn254FieldElement
+  optional string e20 = 5;
+  // base10 encoded Bn254FieldElement
+  optional string e21 = 6;
+}
+
+// A passkey authenticator.
+//
+// See
+// [struct.PasskeyAuthenticator](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/struct.PasskeyAuthenticator.html#bcs)
+// for more information on the requirements on the shape of the
+// `client_data_json` field.
+message PasskeyAuthenticator {
+  // Opaque authenticator data for this passkey signature.
+  //
+  // See [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) for
+  // more information on this field.
+  optional bytes authenticator_data = 1;
+
+  // Structured, unparsed, JSON for this passkey signature.
+  //
+  // See [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata)
+  // for more information on this field.
+  optional string client_data_json = 2;
+
+  // A secp256r1 signature.
+  optional SimpleSignature signature = 3;
+}
+
+// The validator set for a particular epoch.
+message ValidatorCommittee {
+  // The epoch where this committee governs.
+  optional uint64 epoch = 1;
+
+  // The committee members.
+  repeated ValidatorCommitteeMember members = 2;
+}
+
+// A member of a validator committee.
+message ValidatorCommitteeMember {
+  // The 96-byte Bls12381 public key for this validator.
+  optional bytes public_key = 1;
+
+  // voting weight this validator possesses.
+  optional uint64 weight = 2;
+}
+
+/// An aggregated signature from multiple validators.
+message ValidatorAggregatedSignature {
+  // The epoch when this signature was produced.
+  //
+  // This can be used to lookup the `ValidatorCommittee` from this epoch
+  // to verify this signature.
+  optional uint64 epoch = 1;
+
+  // The 48-byte Bls12381 aggregated signature.
+  optional bytes signature = 2;
+
+  // Bitmap indicating which members of the committee contributed to
+  // this signature.
+  repeated uint32 bitmap = 3;
+}

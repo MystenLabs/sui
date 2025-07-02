@@ -5,14 +5,9 @@
 use std::path::PathBuf;
 
 use crate::{
-    errors::PackageResult,
-    flavor::Vanilla,
-    graph::PackageGraph,
-    package::{EnvironmentName, Package, paths::PackagePath},
+    errors::PackageResult, flavor::Vanilla, graph::PackageGraph, package::paths::PackagePath,
 };
-use clap::{Command, Parser, Subcommand};
-use petgraph::dot::{Config, Dot};
-use tracing::info;
+use clap::Parser;
 
 /// Build the package
 #[derive(Debug, Clone, Parser)]
@@ -28,9 +23,9 @@ impl Graph {
         let path = path.canonicalize().unwrap();
         let package_path = PackagePath::new(path.clone())?;
 
-        let graph = PackageGraph::<Vanilla>::load(&package_path, &"mainnet".to_string()).await?;
+        let graph = PackageGraph::<Vanilla>::load(&package_path).await?;
 
-        info!("Package graph loaded successfully\n: {:#?}", graph);
+        println!("Package graph: {:?}", graph);
 
         Ok(())
     }

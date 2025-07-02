@@ -3,7 +3,8 @@
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::mock_consensus::with_block_status;
-use consensus_core::{BlockRef, BlockStatus};
+use consensus_core::BlockStatus;
+use consensus_types::block::BlockRef;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use move_core_types::ident_str;
@@ -491,13 +492,11 @@ async fn do_transaction_test_impl(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -552,7 +551,7 @@ async fn do_transaction_test_impl(
             err_check(&err);
 
             // Additionally, if the tx contains access to shared objects, check if Soft Bundle handler returns the same error.
-            if ct.contains_shared_object() {
+            if ct.is_consensus_tx() {
                 epoch_store.clear_signature_cache();
                 let err = client
                     .handle_soft_bundle_certificates_v3(
@@ -1089,13 +1088,11 @@ async fn setup_zklogin_network(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1458,13 +1455,11 @@ async fn do_test_aliased_address(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1579,13 +1574,11 @@ async fn execute_transaction_assert_err(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1636,13 +1629,11 @@ async fn test_oversized_txn() {
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1688,13 +1679,11 @@ async fn test_very_large_certificate() {
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1771,13 +1760,11 @@ async fn test_handle_certificate_errors() {
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1953,7 +1940,7 @@ async fn test_handle_soft_bundle_certificates() {
     let server_handle = server.spawn_for_test().await.unwrap();
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(authority.config.network_key_pair().public().to_owned()),
+        authority.config.network_key_pair().public().to_owned(),
     )
     .await
     .unwrap();
@@ -2107,7 +2094,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
     let server_handle = server.spawn_for_test().await.unwrap();
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(authority.config.network_key_pair().public().to_owned()),
+        authority.config.network_key_pair().public().to_owned(),
     )
     .await
     .unwrap();

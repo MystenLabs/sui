@@ -8,6 +8,7 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
 };
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_sdk_types::CheckpointTimestamp;
 use tap::Pipe;
 
 use crate::{
@@ -67,6 +68,8 @@ struct CheckpointBuilder {
     epoch: u64,
     /// Counter for the total number of transactions added to the builder.
     network_total_transactions: u64,
+    /// Timestamp of the checkpoint.
+    timestamp_ms: CheckpointTimestamp,
     /// Transactions that have been added to the current checkpoint.
     transactions: Vec<CheckpointTransaction>,
     /// The current transaction being built.
@@ -120,6 +123,7 @@ impl TestCheckpointDataBuilder {
                 checkpoint,
                 epoch: 0,
                 network_total_transactions: 0,
+                timestamp_ms: 0,
                 transactions: vec![],
                 next_transaction: None,
             },
@@ -129,6 +133,18 @@ impl TestCheckpointDataBuilder {
     /// Set the epoch for the checkpoint.
     pub fn with_epoch(mut self, epoch: u64) -> Self {
         self.checkpoint_builder.epoch = epoch;
+        self
+    }
+
+    /// Set the network_total_transactions for the checkpoint.
+    pub fn with_network_total_transactions(mut self, network_total_transactions: u64) -> Self {
+        self.checkpoint_builder.network_total_transactions = network_total_transactions;
+        self
+    }
+
+    /// Set the timestamp for the checkpoint.
+    pub fn with_timestamp_ms(mut self, timestamp_ms: CheckpointTimestamp) -> Self {
+        self.checkpoint_builder.timestamp_ms = timestamp_ms;
         self
     }
 
@@ -577,7 +593,7 @@ impl TestCheckpointDataBuilder {
             None,
             Default::default(),
             None,
-            0,
+            self.checkpoint_builder.timestamp_ms,
             vec![],
         );
         let (committee, keys) = Committee::new_simple_test_committee();

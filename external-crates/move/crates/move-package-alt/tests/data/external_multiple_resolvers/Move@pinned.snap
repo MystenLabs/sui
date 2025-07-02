@@ -1,12 +1,39 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-{
-  "mock1": {
-    "local": "for-res-1"
-  },
-  "mock2": {
-    "local": "for-res-2"
-  },
-  "replacements": {}
+DependencySet {
+    inner: {
+        "default": {
+            Identifier(
+                "mock1",
+            ): PinnedDependencyInfo(
+                Dependency {
+                    dep_info: Local(
+                        LocalDepInfo {
+                            local: "for-res-1",
+                        },
+                    ),
+                    use_environment: "default",
+                    is_override: false,
+                    published_at: None,
+                    containing_file: "tests/data/external_multiple_resolvers/Move.toml",
+                },
+            ),
+            Identifier(
+                "mock2",
+            ): PinnedDependencyInfo(
+                Dependency {
+                    dep_info: Local(
+                        LocalDepInfo {
+                            local: "for-res-2",
+                        },
+                    ),
+                    use_environment: "default",
+                    is_override: false,
+                    published_at: None,
+                    containing_file: "tests/data/external_multiple_resolvers/Move.toml",
+                },
+            ),
+        },
+    },
 }

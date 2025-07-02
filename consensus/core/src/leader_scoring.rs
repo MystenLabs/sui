@@ -7,10 +7,11 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::BlockRef;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::{BlockAPI, BlockRef},
+    block::BlockAPI,
     commit::{CommitRange, CommittedSubDag},
     context::Context,
     stake_aggregator::{QuorumThreshold, StakeAggregator},

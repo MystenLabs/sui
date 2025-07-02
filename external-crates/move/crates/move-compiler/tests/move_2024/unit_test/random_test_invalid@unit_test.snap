@@ -21,6 +21,16 @@ error[E02015]: invalid attribute
   │
   = Input values will be randomly generated for this test.
 
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/unit_test/random_test_invalid.move:11:7
+   │
+10 │     #[random_test]
+   │       ----------- Previously annotated here
+11 │     #[test]
+   │       ^^^^ function annotated with duplicate mode 'test'
+   │
+   = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
+
 error[E10004]: invalid usage of known attribute
    ┌─ tests/move_2024/unit_test/random_test_invalid.move:11:7
    │
@@ -37,6 +47,16 @@ error[E10005]: unable to generate test
 15 │     #[test]
 16 │     fun quxz() { }
    │         ---- Error found in this test
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/unit_test/random_test_invalid.move:15:7
+   │
+14 │     #[random_test]
+   │       ----------- Previously annotated here
+15 │     #[test]
+   │       ^^^^ function annotated with duplicate mode 'test'
+   │
+   = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
 error[E10004]: invalid usage of known attribute
    ┌─ tests/move_2024/unit_test/random_test_invalid.move:15:7
@@ -55,13 +75,15 @@ error[E10005]: unable to generate test
 20 │     fun bar() { }
    │         --- Error found in this test
 
-error[E10004]: invalid usage of known attribute
+warning[W10007]: issue with attribute value
    ┌─ tests/move_2024/unit_test/random_test_invalid.move:19:7
    │
 18 │     #[random_test]
    │       ----------- Previously annotated here
 19 │     #[test_only]
-   │       ^^^^^^^^^ function annotated as both #[test_only] and #[random_test]. You need to declare it as either one or the other
+   │       ^^^^^^^^^ function annotated with duplicate mode 'test'
+   │
+   = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
 error[E10005]: unable to generate test
    ┌─ tests/move_2024/unit_test/random_test_invalid.move:24:16

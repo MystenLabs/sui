@@ -39,7 +39,7 @@ use sui_types::quorum_driver_types::{
 };
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{TransactionData, VerifiedTransaction};
-use sui_types::transaction_executor::SimulateTransactionResult;
+use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
@@ -225,7 +225,7 @@ where
     // (and maybe store it for caching purposes)
     pub async fn execute_transaction_impl(
         &self,
-        epoch_store: &AuthorityPerEpochStore,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<(VerifiedTransaction, QuorumDriverResponse), QuorumDriverError> {
@@ -236,7 +236,7 @@ where
         let tx_digest = *transaction.digest();
         debug!(?tx_digest, "TO Received transaction execution request.");
 
-        let (_e2e_latency_timer, _txn_finality_timer) = if transaction.contains_shared_object() {
+        let (_e2e_latency_timer, _txn_finality_timer) = if transaction.is_consensus_tx() {
             (
                 self.metrics.request_latency_shared_obj.start_timer(),
                 self.metrics
@@ -260,7 +260,12 @@ where
         });
 
         let ticket = self
-            .submit(transaction.clone(), request, client_addr)
+            .submit(
+                epoch_store.clone(),
+                transaction.clone(),
+                request,
+                client_addr,
+            )
             .await
             .map_err(|e| {
                 warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
@@ -296,6 +301,7 @@ where
     #[instrument(name = "tx_orchestrator_submit", level = "trace", skip_all)]
     async fn submit(
         &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
@@ -322,7 +328,8 @@ where
         let qd = self.clone_quorum_driver();
         Ok(async move {
             let digests = [tx_digest];
-            let effects_await = cache_reader.notify_read_executed_effects(&digests);
+            let effects_await =
+                epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(&digests));
             // let-and-return necessary to satisfy borrow checker.
             #[allow(clippy::let_and_return)]
             let res = match select(ticket, effects_await.boxed()).await {
@@ -354,7 +361,7 @@ where
                 in_flight.dec();
             });
 
-        let _guard = if transaction.contains_shared_object() {
+        let _guard = if transaction.is_consensus_tx() {
             metrics.local_execution_latency_shared_obj.start_timer()
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
@@ -446,7 +453,7 @@ where
         &'_ self,
         transaction: &VerifiedTransaction,
     ) -> (impl Drop, &'_ GenericCounter<AtomicU64>) {
-        let (in_flight, good_response) = if transaction.contains_shared_object() {
+        let (in_flight, good_response) = if transaction.is_consensus_tx() {
             self.metrics.total_req_received_shared_object.inc();
             (
                 self.metrics.req_in_flight_shared_object.clone(),
@@ -699,7 +706,9 @@ where
     fn simulate_transaction(
         &self,
         transaction: TransactionData,
+        checks: TransactionChecks,
     ) -> Result<SimulateTransactionResult, SuiError> {
-        self.validator_state.simulate_transaction(transaction)
+        self.validator_state
+            .simulate_transaction(transaction, checks)
     }
 }

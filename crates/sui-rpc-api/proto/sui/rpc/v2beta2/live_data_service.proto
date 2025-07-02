@@ -1,0 +1,289 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/struct.proto";
+import "sui/rpc/v2beta2/argument.proto";
+import "sui/rpc/v2beta2/bcs.proto";
+import "sui/rpc/v2beta2/executed_transaction.proto";
+import "sui/rpc/v2beta2/owner.proto";
+import "sui/rpc/v2beta2/transaction.proto";
+
+service LiveDataService {
+  rpc ListDynamicFields(ListDynamicFieldsRequest) returns (ListDynamicFieldsResponse);
+  rpc ListOwnedObjects(ListOwnedObjectsRequest) returns (ListOwnedObjectsResponse);
+  rpc GetCoinInfo(GetCoinInfoRequest) returns (GetCoinInfoResponse);
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+  rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse);
+
+  rpc SimulateTransaction(SimulateTransactionRequest) returns (SimulateTransactionResponse);
+}
+
+// Request message for `NodeService.GetCoinInfo`.
+message GetCoinInfoRequest {
+  // The coin type to request information about
+  optional string coin_type = 1;
+}
+
+// Response message for `NodeService.GetCoinInfo`.
+message GetCoinInfoResponse {
+  // Required. The coin type.
+  optional string coin_type = 1;
+
+  // This field will be populated with information about this coin
+  // type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
+  optional CoinMetadata metadata = 2;
+
+  // This field will be populated with information about this coin
+  // type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
+  optional CoinTreasury treasury = 3;
+
+  // If this coin type is a regulated coin, this field will be
+  // populated with information about its `0x2::coin::RegulatedCoinMetadata`
+  // object.
+  optional RegulatedCoinMetadata regulated_metadata = 4;
+}
+
+// Metadata for a coin type
+message CoinMetadata {
+  // ObjectId of the `0x2::coin::CoinMetadata` object.
+  optional string id = 1;
+  // Number of decimal places to coin uses.
+  optional uint32 decimals = 2;
+  // Name for the token
+  optional string name = 3;
+  // Symbol for the token
+  optional string symbol = 4;
+  // Description of the token
+  optional string description = 5;
+  // URL for the token logo
+  optional string icon_url = 6;
+}
+
+// Information about a coin type's `0x2::coin::TreasuryCap` and its total available supply
+message CoinTreasury {
+  // ObjectId of the `0x2::coin::TreasuryCap` object.
+  optional string id = 1;
+  // Total available supply for this coin type.
+  optional uint64 total_supply = 2;
+}
+
+// Information about a regulated coin, which indicates that it makes use of the transfer deny list.
+message RegulatedCoinMetadata {
+  // ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
+  optional string id = 1;
+  // The ID of the coin's `CoinMetadata` object.
+  optional string coin_metadata_object = 2;
+  // The ID of the coin's `DenyCap` object.
+  optional string deny_cap_object = 3;
+}
+
+// Request message for `LiveDataService.GetBalance`.
+message GetBalanceRequest {
+  // Required. The owner's Sui address.
+  optional string owner = 1;
+
+  // Required. The type names for the coin (e.g., 0x2::sui::SUI).
+  optional string coin_type = 2;
+}
+
+// Response message for `LiveDataService.GetBalance`.
+// Return the total coin balance for one coin type, owned by the address owner.
+message GetBalanceResponse {
+  // The balance information for the requested coin type.
+  optional Balance balance = 1;
+}
+
+// Request message for `LiveDataService.ListBalances`.
+message ListBalancesRequest {
+  // Required. The owner's Sui address.
+  optional string owner = 1;
+
+  // The maximum number of balance entries to return. The service may return fewer than this value.
+  // If unspecified, at most `50` entries will be returned.
+  // The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+  optional uint32 page_size = 2;
+
+  // A page token, received from a previous `ListBalances` call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to `ListBalances` must
+  // match the call that provided the page token.
+  optional bytes page_token = 3;
+}
+
+// Response message for `LiveDataService.ListBalances`.
+// Return the total coin balance for all coin types, owned by the address owner.
+message ListBalancesResponse {
+  // The list of coin types and their respective balances.
+  repeated Balance balances = 1;
+
+  // A token, which can be sent as `page_token` to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  optional bytes next_page_token = 2;
+}
+
+// Balance information for a specific coin type.
+message Balance {
+  // The type of the coin (e.g., 0x2::sui::SUI).
+  optional string coin_type = 1;
+
+  // Shows the total balance of the coin in its smallest unit.
+  optional uint64 balance = 3;
+}
+
+// Request message for `NodeService.ListDynamicFields`
+message ListDynamicFieldsRequest {
+  // Required. The `UID` of the parent, which owns the collections of dynamic fields.
+  optional string parent = 1;
+
+  // The maximum number of dynamic fields to return. The service may return fewer than this value.
+  // If unspecified, at most `50` entries will be returned.
+  // The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+  optional uint32 page_size = 2;
+
+  // A page token, received from a previous `ListDynamicFields` call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to `ListDynamicFields` must
+  // match the call that provided the page token.
+  optional bytes page_token = 3;
+}
+
+// Response message for `NodeService.ListDynamicFields`
+message ListDynamicFieldsResponse {
+  // Page of dynamic fields owned by the specified parent.
+  repeated DynamicField dynamic_fields = 1;
+
+  // A token, which can be sent as `page_token` to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  optional bytes next_page_token = 2;
+}
+
+message DynamicField {
+  enum DynamicFieldKind {
+    DYNAMIC_FIELD_KIND_UNKNOWN = 0;
+    FIELD = 1;
+    OBJECT = 2;
+  }
+
+  optional DynamicFieldKind kind = 1;
+
+  // ObjectId of this dynamic field's parent.
+  optional string parent = 2;
+
+  // ObjectId of this dynamic field.
+  optional string field_id = 3;
+
+  // The type of the dynamic field "name"
+  optional string name_type = 4;
+
+  // The serialized move value of "name"
+  optional bytes name_value = 5;
+
+  // The type of the dynamic field "value".
+  //
+  // If this is a dynamic object field then this is the type of the object
+  // itself (which is a child of this field), otherwise this is the type of the
+  // value of this field.
+  optional string value_type = 6;
+
+  // The ObjectId of the child object when a child is a dynamic
+  // object field.
+  //
+  // The presence or absence of this field can be used to determine if a child
+  // is a dynamic field or a dynamic child object
+  optional string dynamic_object_id = 7;
+}
+
+message SimulateTransactionRequest {
+  optional Transaction transaction = 1;
+  optional google.protobuf.FieldMask read_mask = 2;
+
+  // buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
+  enum TransactionChecks {
+    ENABLED = 0;
+    DISABLED = 1;
+  }
+
+  // Specify whether checks should be ENABLED (default) or DISABLED while executing the transaction
+  optional TransactionChecks checks = 3;
+
+  // Perform gas selection based on a budget estimation and include the
+  // selected gas payment and budget in the response.
+  //
+  // This option will be ignored if `checks` is `DISABLED`.
+  optional bool do_gas_selection = 4;
+}
+
+message SimulateTransactionResponse {
+  optional ExecutedTransaction transaction = 1;
+  repeated CommandResult outputs = 2;
+}
+
+// An intermediate result/output from the execution of a single command
+message CommandResult {
+  repeated CommandOutput return_values = 1;
+  repeated CommandOutput mutated_by_ref = 2;
+}
+
+message CommandOutput {
+  optional Argument argument = 1;
+  optional Bcs value = 2;
+
+  // JSON rendering of the output.
+  optional google.protobuf.Value json = 3;
+}
+
+message ListOwnedObjectsRequest {
+  // Required. The address of the account that owns the objects.
+  optional string owner = 1;
+
+  // Optional type filter to limit the types of objects listed.
+  //
+  // Providing an object type with no type params will return objects of that
+  // type with any type parameter, e.g. `0x2::coin::Coin` will return all
+  // `Coin<T>` objects regardless of the type parameter `T`. Providing a type
+  // with a type param will retrict the returned objects to only those objects
+  // that match the provided type parameters, e.g.
+  // `0x2::coin::Coin<0x2::sui::SUI>` will only return `Coin<SUI>` objects.
+  optional string object_type = 4;
+
+  // The maximum number of entries return. The service may return fewer than this value.
+  // If unspecified, at most `50` entries will be returned.
+  // The maximum value is `1000`; values above `1000` will be coerced to `1000`.
+  optional uint32 page_size = 2;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to `ListOwnedObjects` must
+  // match the call that provided the page token.
+  optional bytes page_token = 3;
+}
+
+message ListOwnedObjectsResponse {
+  // Page of dynamic fields owned by the specified parent.
+  repeated OwnedObject objects = 1;
+
+  // A token, which can be sent as `page_token` to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  optional bytes next_page_token = 2;
+}
+
+message OwnedObject {
+  optional string object_id = 2;
+  optional uint64 version = 3;
+  optional string digest = 4;
+  optional Owner owner = 5;
+  optional string object_type = 6;
+
+  // Current balance if this object is a `0x2::coin::Coin<T>`
+  optional uint64 balance = 200;
+
+  // TODO: Note field numbers match sui.rpc.v2beta2.Object in case we want to just use that message
+}

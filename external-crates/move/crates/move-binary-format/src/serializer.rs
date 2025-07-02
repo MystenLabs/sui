@@ -148,7 +148,7 @@ fn serialize_variant_count(binary: &mut BinaryData, len: usize) -> Result<()> {
 }
 
 fn serialize_variant_tag(binary: &mut BinaryData, tag: u16) -> Result<()> {
-    write_as_uleb128(binary, tag as u64, VARIANT_COUNT_MAX)
+    write_as_uleb128(binary, tag as u64, VARIANT_TAG_MAX_VALUE)
 }
 
 fn serialize_field_offset(binary: &mut BinaryData, offset: u16) -> Result<()> {
@@ -1189,6 +1189,8 @@ impl CommonSerializer {
             self.constant_pool.0,
             self.constant_pool.1,
         )?;
+        // TODO: Should this be disabled? We do not support it on-chain, and perhaps should also
+        // disallow it after a certain version.
         if self.major_version >= VERSION_5 {
             // Metadata was not introduced before v5, so do not generate it for lower versions.
             serialize_table_index(

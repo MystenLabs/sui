@@ -23,10 +23,8 @@
 
 use std::{collections::BTreeMap, env, io::stdin};
 
-use move_package_alt::{
-    dependency::external::{RESOLVE_ARG, RESOLVE_METHOD},
-    jsonrpc::types::{BatchRequest, JsonRpcResult, RequestID, Response, TwoPointZero},
-};
+use jsonrpc::types::{BatchRequest, JsonRpcResult, RequestID, Response, TwoPointZero};
+use move_package_alt::schema::{EXTERNAL_RESOLVE_ARG, EXTERNAL_RESOLVE_METHOD};
 use serde::Deserialize;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
@@ -78,8 +76,8 @@ pub fn main() {
         .init();
 
     assert!(
-        args.len() == 2 && args[1] == RESOLVE_ARG,
-        "External resolver must be called with a single argument `{RESOLVE_ARG}`"
+        args.len() == 2 && args[1] == EXTERNAL_RESOLVE_ARG,
+        "External resolver must be called with a single argument `{EXTERNAL_RESOLVE_ARG}`"
     );
 
     let responses: Vec<Response<serde_json::Value>> = parse_input()
@@ -106,7 +104,7 @@ fn parse_input() -> BTreeMap<RequestID, ResolveRequest> {
     batch
         .into_iter()
         .map(|req| {
-            assert!(req.method == RESOLVE_METHOD);
+            assert!(req.method == EXTERNAL_RESOLVE_METHOD);
             (req.id, req.params)
         })
         .collect()

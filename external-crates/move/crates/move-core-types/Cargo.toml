@@ -30,6 +30,7 @@ bcs.workspace = true
 leb128.workspace = true
 thiserror.workspace = true
 serde_with.workspace = true
+indexmap.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

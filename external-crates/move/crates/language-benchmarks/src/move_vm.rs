@@ -21,8 +21,8 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: move_stdlib::move_stdlib_files(),
-            named_address_map: move_stdlib::move_stdlib_named_addresses(),
+            paths: move_stdlib::source_files(),
+            named_address_map: move_stdlib::named_addresses(),
         }],
         None,
         move_compiler::Flags::empty(),
@@ -58,16 +58,12 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
         edition: Edition::E2024_BETA,
         ..Default::default()
     };
-    let (_files, compiled_units) = Compiler::from_files(
-        None,
-        src_files,
-        vec![],
-        move_stdlib::move_stdlib_named_addresses(),
-    )
-    .set_pre_compiled_lib(Arc::new(PRECOMPILED_MOVE_STDLIB.clone()))
-    .set_default_config(pkg_config)
-    .build_and_report()
-    .expect("Error compiling...");
+    let (_files, compiled_units) =
+        Compiler::from_files(None, src_files, vec![], move_stdlib::named_addresses())
+            .set_pre_compiled_lib(Arc::new(PRECOMPILED_MOVE_STDLIB.clone()))
+            .set_default_config(pkg_config)
+            .build_and_report()
+            .expect("Error compiling...");
     compiled_units
         .into_iter()
         .map(|annot_unit| annot_unit.named_module.module)

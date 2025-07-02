@@ -27,6 +27,9 @@ pub mod vm_status;
 
 pub const VARIANT_COUNT_MAX: u64 = 127;
 
+// Tags are zero-indexed so the max tag value is one less than the max variant count.
+pub const VARIANT_TAG_MAX_VALUE: u64 = VARIANT_COUNT_MAX - 1;
+
 pub(crate) fn fmt_list<T: fmt::Display>(
     f: &mut fmt::Formatter<'_>,
     begin: &str,

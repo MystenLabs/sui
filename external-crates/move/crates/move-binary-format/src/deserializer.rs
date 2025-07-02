@@ -22,7 +22,7 @@ use std::{
 impl CompiledModule {
     /// Deserialize a &[u8] slice into a `CompiledModule` instance.
     pub fn deserialize_with_defaults(binary: &[u8]) -> BinaryLoaderResult<Self> {
-        Self::deserialize_with_config(binary, &BinaryConfig::with_extraneous_bytes_check(false))
+        Self::deserialize_with_config(binary, &BinaryConfig::with_extraneous_bytes_check(true))
     }
 
     /// Deserialize a &[u8] slice into a `CompiledModule` instance with settings
@@ -276,7 +276,7 @@ fn load_field_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {
 }
 
 fn load_variant_tag(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u16> {
-    read_uleb_internal(cursor, VARIANT_COUNT_MAX)
+    read_uleb_internal(cursor, VARIANT_TAG_MAX_VALUE)
 }
 
 fn load_variant_count(cursor: &mut VersionedCursor) -> BinaryLoaderResult<u64> {

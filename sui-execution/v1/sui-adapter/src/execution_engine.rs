@@ -668,6 +668,9 @@ mod checked {
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
                             panic!("EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::AccumulatorRootCreate => {
+                            panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -686,6 +689,9 @@ mod checked {
             }
             TransactionKind::RandomnessStateUpdate(_) => {
                 panic!("RandomnessStateUpdate should not exist in v1");
+            }
+            TransactionKind::ProgrammableSystemTransaction(_) => {
+                panic!("ProgrammableSystemTransaction should not exist in execution layer v1");
             }
         }?;
         temporary_store.check_execution_results_consistency()?;

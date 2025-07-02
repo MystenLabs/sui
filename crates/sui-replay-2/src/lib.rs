@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::Parser;
+use crate::build::BuildCmdConfig;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::str::FromStr;
 use sui_types::supported_protocol_versions::Chain;
 
+pub mod build;
 pub mod data_store;
 pub mod execution;
 pub mod gql_queries;
@@ -26,6 +28,23 @@ pub mod tracing;
     about = "Replay executed transactions.",
     rename_all = "kebab-case"
 )]
+pub struct Config {
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
+    #[command(flatten)]
+    pub replay: ReplayConfig,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum Commands {
+    /// Build and prepare replay data
+    #[clap(alias = "b")]
+    Build(BuildCmdConfig),
+}
+
+/// Arguments for the (implicit) replay command.
+#[derive(Parser, Clone, Debug)]
 pub struct ReplayConfig {
     /// Transaction digest to replay.
     #[arg(long, short)]
@@ -51,9 +70,9 @@ pub struct ReplayConfig {
 #[derive(Clone, Debug)]
 pub enum Node {
     Mainnet,
+    Testnet,
     // TODO: define once we have stable end points.
     //       Use `Custom` for now.
-    // Testnet,
     // Devnet,
     Custom(String),
 }
@@ -62,7 +81,7 @@ impl Node {
     pub fn chain(&self) -> Chain {
         match self {
             Node::Mainnet => Chain::Mainnet,
-            // Node::Testnet => Chain::Testnet,
+            Node::Testnet => Chain::Testnet,
             // Node::Devnet => Chain::Unknown,
             Node::Custom(_) => Chain::Unknown,
         }
@@ -75,7 +94,7 @@ impl FromStr for Node {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "mainnet" => Ok(Node::Mainnet),
-            // "testnet" => Ok(Node::Testnet),
+            "testnet" => Ok(Node::Testnet),
             // "devnet" => Ok(Node::Devnet),
             _ => Ok(Node::Custom(s.to_string())),
         }

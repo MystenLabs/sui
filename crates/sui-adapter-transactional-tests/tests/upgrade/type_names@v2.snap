@@ -1,0 +1,697 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 20 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-16:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6581600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 18-30:
+//# upgrade --package A0 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 7280800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 32-62:
+//# upgrade --package A1 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 9902800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, line 64:
+//# run A2::m::canary --type-args A0::m::A --args true --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 66:
+//# run A2::m::canary --type-args A1::m::B --args true --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 68:
+//# run A2::m::canary --type-args A0::m::A --args false --sender A
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 70:
+//# run A2::m::canary --type-args A1::m::B --args false --sender A
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 72:
+//# run A2::m::canary --type-args A0::m::EA --args true --sender A
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, line 74:
+//# run A2::m::canary --type-args A1::m::EB --args true --sender A
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 76:
+//# run A2::m::canary --type-args A0::m::EA --args false --sender A
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 78:
+//# run A2::m::canary --type-args A1::m::EB --args false --sender A
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2728400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 80:
+//# view-object 4,0
+Owner: Account Address ( A )
+Version: 5
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    addr: vector[
+        57u8,
+        55u8,
+        98u8,
+        99u8,
+        57u8,
+        98u8,
+        98u8,
+        51u8,
+        49u8,
+        56u8,
+        55u8,
+        53u8,
+        52u8,
+        97u8,
+        100u8,
+        53u8,
+        49u8,
+        52u8,
+        98u8,
+        98u8,
+        49u8,
+        99u8,
+        54u8,
+        99u8,
+        52u8,
+        52u8,
+        49u8,
+        98u8,
+        56u8,
+        51u8,
+        97u8,
+        53u8,
+        55u8,
+        57u8,
+        55u8,
+        49u8,
+        98u8,
+        56u8,
+        100u8,
+        56u8,
+        48u8,
+        53u8,
+        52u8,
+        101u8,
+        101u8,
+        99u8,
+        102u8,
+        50u8,
+        98u8,
+        54u8,
+        48u8,
+        98u8,
+        51u8,
+        52u8,
+        54u8,
+        101u8,
+        57u8,
+        99u8,
+        52u8,
+        57u8,
+        57u8,
+        56u8,
+        56u8,
+        99u8,
+    ],
+}
+
+task 13, line 82:
+//# view-object 5,0
+Owner: Account Address ( A )
+Version: 6
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,0),
+        },
+    },
+    addr: vector[
+        57u8,
+        55u8,
+        98u8,
+        99u8,
+        57u8,
+        98u8,
+        98u8,
+        51u8,
+        49u8,
+        56u8,
+        55u8,
+        53u8,
+        52u8,
+        97u8,
+        100u8,
+        53u8,
+        49u8,
+        52u8,
+        98u8,
+        98u8,
+        49u8,
+        99u8,
+        54u8,
+        99u8,
+        52u8,
+        52u8,
+        49u8,
+        98u8,
+        56u8,
+        51u8,
+        97u8,
+        53u8,
+        55u8,
+        57u8,
+        55u8,
+        49u8,
+        98u8,
+        56u8,
+        100u8,
+        56u8,
+        48u8,
+        53u8,
+        52u8,
+        101u8,
+        101u8,
+        99u8,
+        102u8,
+        50u8,
+        98u8,
+        54u8,
+        48u8,
+        98u8,
+        51u8,
+        52u8,
+        54u8,
+        101u8,
+        57u8,
+        99u8,
+        52u8,
+        57u8,
+        57u8,
+        56u8,
+        56u8,
+        99u8,
+    ],
+}
+
+task 14, line 84:
+//# view-object 6,0
+Owner: Account Address ( A )
+Version: 7
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+    addr: vector[
+        57u8,
+        55u8,
+        98u8,
+        99u8,
+        57u8,
+        98u8,
+        98u8,
+        51u8,
+        49u8,
+        56u8,
+        55u8,
+        53u8,
+        52u8,
+        97u8,
+        100u8,
+        53u8,
+        49u8,
+        52u8,
+        98u8,
+        98u8,
+        49u8,
+        99u8,
+        54u8,
+        99u8,
+        52u8,
+        52u8,
+        49u8,
+        98u8,
+        56u8,
+        51u8,
+        97u8,
+        53u8,
+        55u8,
+        57u8,
+        55u8,
+        49u8,
+        98u8,
+        56u8,
+        100u8,
+        56u8,
+        48u8,
+        53u8,
+        52u8,
+        101u8,
+        101u8,
+        99u8,
+        102u8,
+        50u8,
+        98u8,
+        54u8,
+        48u8,
+        98u8,
+        51u8,
+        52u8,
+        54u8,
+        101u8,
+        57u8,
+        99u8,
+        52u8,
+        57u8,
+        57u8,
+        56u8,
+        56u8,
+        99u8,
+    ],
+}
+
+task 15, line 86:
+//# view-object 7,0
+Owner: Account Address ( A )
+Version: 8
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+    addr: vector[
+        54u8,
+        99u8,
+        97u8,
+        49u8,
+        57u8,
+        52u8,
+        98u8,
+        98u8,
+        57u8,
+        54u8,
+        54u8,
+        48u8,
+        48u8,
+        52u8,
+        48u8,
+        101u8,
+        54u8,
+        52u8,
+        102u8,
+        53u8,
+        99u8,
+        49u8,
+        54u8,
+        97u8,
+        53u8,
+        56u8,
+        102u8,
+        49u8,
+        48u8,
+        101u8,
+        97u8,
+        101u8,
+        98u8,
+        54u8,
+        50u8,
+        54u8,
+        48u8,
+        102u8,
+        49u8,
+        99u8,
+        53u8,
+        101u8,
+        55u8,
+        55u8,
+        48u8,
+        56u8,
+        48u8,
+        54u8,
+        55u8,
+        52u8,
+        50u8,
+        101u8,
+        99u8,
+        49u8,
+        52u8,
+        102u8,
+        55u8,
+        102u8,
+        57u8,
+        55u8,
+        101u8,
+        54u8,
+        48u8,
+        56u8,
+    ],
+}
+
+task 16, line 88:
+//# view-object 8,0
+Owner: Account Address ( A )
+Version: 9
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,0),
+        },
+    },
+    addr: vector[
+        57u8,
+        55u8,
+        98u8,
+        99u8,
+        57u8,
+        98u8,
+        98u8,
+        51u8,
+        49u8,
+        56u8,
+        55u8,
+        53u8,
+        52u8,
+        97u8,
+        100u8,
+        53u8,
+        49u8,
+        52u8,
+        98u8,
+        98u8,
+        49u8,
+        99u8,
+        54u8,
+        99u8,
+        52u8,
+        52u8,
+        49u8,
+        98u8,
+        56u8,
+        51u8,
+        97u8,
+        53u8,
+        55u8,
+        57u8,
+        55u8,
+        49u8,
+        98u8,
+        56u8,
+        100u8,
+        56u8,
+        48u8,
+        53u8,
+        52u8,
+        101u8,
+        101u8,
+        99u8,
+        102u8,
+        50u8,
+        98u8,
+        54u8,
+        48u8,
+        98u8,
+        51u8,
+        52u8,
+        54u8,
+        101u8,
+        57u8,
+        99u8,
+        52u8,
+        57u8,
+        57u8,
+        56u8,
+        56u8,
+        99u8,
+    ],
+}
+
+task 17, line 90:
+//# view-object 9,0
+Owner: Account Address ( A )
+Version: 10
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(9,0),
+        },
+    },
+    addr: vector[
+        57u8,
+        55u8,
+        98u8,
+        99u8,
+        57u8,
+        98u8,
+        98u8,
+        51u8,
+        49u8,
+        56u8,
+        55u8,
+        53u8,
+        52u8,
+        97u8,
+        100u8,
+        53u8,
+        49u8,
+        52u8,
+        98u8,
+        98u8,
+        49u8,
+        99u8,
+        54u8,
+        99u8,
+        52u8,
+        52u8,
+        49u8,
+        98u8,
+        56u8,
+        51u8,
+        97u8,
+        53u8,
+        55u8,
+        57u8,
+        55u8,
+        49u8,
+        98u8,
+        56u8,
+        100u8,
+        56u8,
+        48u8,
+        53u8,
+        52u8,
+        101u8,
+        101u8,
+        99u8,
+        102u8,
+        50u8,
+        98u8,
+        54u8,
+        48u8,
+        98u8,
+        51u8,
+        52u8,
+        54u8,
+        101u8,
+        57u8,
+        99u8,
+        52u8,
+        57u8,
+        57u8,
+        56u8,
+        56u8,
+        99u8,
+    ],
+}
+
+task 18, line 92:
+//# view-object 10,0
+Owner: Account Address ( A )
+Version: 11
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,0),
+        },
+    },
+    addr: vector[
+        57u8,
+        55u8,
+        98u8,
+        99u8,
+        57u8,
+        98u8,
+        98u8,
+        51u8,
+        49u8,
+        56u8,
+        55u8,
+        53u8,
+        52u8,
+        97u8,
+        100u8,
+        53u8,
+        49u8,
+        52u8,
+        98u8,
+        98u8,
+        49u8,
+        99u8,
+        54u8,
+        99u8,
+        52u8,
+        52u8,
+        49u8,
+        98u8,
+        56u8,
+        51u8,
+        97u8,
+        53u8,
+        55u8,
+        57u8,
+        55u8,
+        49u8,
+        98u8,
+        56u8,
+        100u8,
+        56u8,
+        48u8,
+        53u8,
+        52u8,
+        101u8,
+        101u8,
+        99u8,
+        102u8,
+        50u8,
+        98u8,
+        54u8,
+        48u8,
+        98u8,
+        51u8,
+        52u8,
+        54u8,
+        101u8,
+        57u8,
+        99u8,
+        52u8,
+        57u8,
+        57u8,
+        56u8,
+        56u8,
+        99u8,
+    ],
+}
+
+task 19, line 94:
+//# view-object 11,0
+Owner: Account Address ( A )
+Version: 12
+Contents: A0::m::Canary {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(11,0),
+        },
+    },
+    addr: vector[
+        54u8,
+        99u8,
+        97u8,
+        49u8,
+        57u8,
+        52u8,
+        98u8,
+        98u8,
+        57u8,
+        54u8,
+        54u8,
+        48u8,
+        48u8,
+        52u8,
+        48u8,
+        101u8,
+        54u8,
+        52u8,
+        102u8,
+        53u8,
+        99u8,
+        49u8,
+        54u8,
+        97u8,
+        53u8,
+        56u8,
+        102u8,
+        49u8,
+        48u8,
+        101u8,
+        97u8,
+        101u8,
+        98u8,
+        54u8,
+        50u8,
+        54u8,
+        48u8,
+        102u8,
+        49u8,
+        99u8,
+        53u8,
+        101u8,
+        55u8,
+        55u8,
+        48u8,
+        56u8,
+        48u8,
+        54u8,
+        55u8,
+        52u8,
+        50u8,
+        101u8,
+        99u8,
+        49u8,
+        52u8,
+        102u8,
+        55u8,
+        102u8,
+        57u8,
+        55u8,
+        101u8,
+        54u8,
+        48u8,
+        56u8,
+    ],
+}

@@ -7,20 +7,15 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
-        data_store::sui_data_store::SuiDataStore,
+        data_store::legacy::sui_data_store::SuiDataStore,
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
             ensure_serialized_size,
         },
         gas_charger::GasCharger,
-        programmable_transactions::{
-            context::*,
-            trace_utils::{
-                trace_move_call_end, trace_move_call_start, trace_ptb_summary, trace_split_coins,
-                trace_transfer,
-            },
-        },
+        programmable_transactions::{context::*, trace_utils},
+        static_programmable_transactions,
         type_resolver::TypeTagResolver,
     };
     use move_binary_format::file_format::AbilitySet;
@@ -74,7 +69,7 @@ mod checked {
             MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
             normalize_deserialized_modules,
         },
-        storage::{PackageObject, get_package_objects},
+        storage::{BackingPackageStore, PackageObject, get_package_objects},
         transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         type_input::{StructInput, TypeInput},
@@ -90,11 +85,26 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
+        package_store: &dyn BackingPackageStore,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+        if protocol_config.enable_ptb_execution_v2() {
+            return static_programmable_transactions::execute::<Mode>(
+                protocol_config,
+                metrics,
+                vm,
+                state_view,
+                package_store,
+                tx_context,
+                gas_charger,
+                pt,
+                trace_builder_opt,
+            );
+        }
+
         let mut timings = vec![];
         let result = execute_inner::<Mode>(
             &mut timings,
@@ -110,7 +120,11 @@ mod checked {
 
         match result {
             Ok(result) => Ok((result, timings)),
-            Err(e) => Err((e, timings)),
+            Err(e) => {
+                trace_utils::trace_execution_error(trace_builder_opt, e.to_string());
+
+                Err((e, timings))
+            }
         }
     }
 
@@ -136,7 +150,7 @@ mod checked {
             inputs,
         )?;
 
-        trace_ptb_summary(trace_builder_opt, &commands)?;
+        trace_utils::trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &commands)?;
 
         // execute commands
         let mut mode_results = Mode::empty_results();
@@ -207,6 +221,9 @@ mod checked {
                 let abilities = context.get_type_abilities(&ty)?;
                 // BCS layout for any empty vector should be the same
                 let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
+
+                trace_utils::trace_make_move_vec(context, trace_builder_opt, vec![], &ty)?;
+
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -222,6 +239,7 @@ mod checked {
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
+                let mut move_values = vec![];
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
                         let tag = to_type_tag(context, tag)?;
@@ -240,6 +258,12 @@ mod checked {
                         let (idx, arg) = arg_iter.next().unwrap();
                         let obj: ObjectValue =
                             context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                        trace_utils::add_move_value_info_from_obj_value(
+                            context,
+                            trace_builder_opt,
+                            &mut move_values,
+                            &obj,
+                        )?;
                         let bound =
                             amplification_bound::<Mode>(context, &obj.type_, &elem_abilities)?;
                         obj.write_bcs_bytes(
@@ -251,6 +275,13 @@ mod checked {
                 };
                 for (idx, arg) in arg_iter {
                     let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    trace_utils::add_move_value_info_from_value(
+                        context,
+                        trace_builder_opt,
+                        &mut move_values,
+                        &elem_ty,
+                        &value,
+                    )?;
                     check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
@@ -262,6 +293,9 @@ mod checked {
                 }
                 let ty = Type::Vector(Box::new(elem_ty));
                 let abilities = context.get_type_abilities(&ty)?;
+
+                trace_utils::trace_make_move_vec(context, trace_builder_opt, move_values, &ty)?;
+
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -283,7 +317,7 @@ mod checked {
                 let addr: SuiAddress =
                     context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
 
-                trace_transfer(context, trace_builder_opt, &objs)?;
+                trace_utils::trace_transfer(context, trace_builder_opt, &objs)?;
 
                 for obj in objs {
                     obj.ensure_public_transfer_eligible()?;
@@ -318,7 +352,13 @@ mod checked {
                     })
                     .collect::<Result<_, ExecutionError>>()?;
 
-                trace_split_coins(context, trace_builder_opt, &obj.type_, coin, &split_coins)?;
+                trace_utils::trace_split_coins(
+                    context,
+                    trace_builder_opt,
+                    &obj.type_,
+                    coin,
+                    &split_coins,
+                )?;
 
                 context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
@@ -340,6 +380,7 @@ mod checked {
                     .enumerate()
                     .map(|(idx, arg)| context.by_value_arg(CommandKind::MergeCoins, idx + 1, arg))
                     .collect::<Result<_, _>>()?;
+                let mut input_infos = vec![];
                 for (idx, coin) in coins.into_iter().enumerate() {
                     if target.type_ != coin.type_ {
                         let e = ExecutionErrorKind::command_argument_error(
@@ -355,9 +396,24 @@ mod checked {
                             This should be a coin"
                         );
                     };
+                    trace_utils::add_coin_obj_info(
+                        trace_builder_opt,
+                        &mut input_infos,
+                        balance.value(),
+                        *id.object_id(),
+                    );
                     context.delete_id(*id.object_id())?;
                     target_coin.add(balance)?;
                 }
+
+                trace_utils::trace_merge_coins(
+                    context,
+                    trace_builder_opt,
+                    &target.type_,
+                    &input_infos,
+                    target_coin,
+                )?;
+
                 context.restore_arg::<Mode>(
                     &mut argument_updates,
                     target_arg,
@@ -373,7 +429,7 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
-                trace_move_call_start(trace_builder_opt);
+                trace_utils::trace_move_call_start(trace_builder_opt);
 
                 let arguments = context.splat_args(0, arguments)?;
 
@@ -405,19 +461,25 @@ mod checked {
                     trace_builder_opt,
                 );
 
-                trace_move_call_end(trace_builder_opt);
+                trace_utils::trace_move_call_end(trace_builder_opt);
 
                 context.linkage_view.reset_linkage()?;
                 return_values?
             }
-            Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
-                context,
-                &mut argument_updates,
-                modules,
-                dep_ids,
-                trace_builder_opt,
-            )?,
+            Command::Publish(modules, dep_ids) => {
+                trace_utils::trace_publish_event(trace_builder_opt)?;
+
+                execute_move_publish::<Mode>(
+                    context,
+                    &mut argument_updates,
+                    modules,
+                    dep_ids,
+                    trace_builder_opt,
+                )?
+            }
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
+                trace_utils::trace_upgrade_event(trace_builder_opt)?;
+
                 let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     context,
@@ -583,7 +645,7 @@ mod checked {
             .gas_charger
             .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
-        let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
+        let mut modules = context.deserialize_modules(&module_bytes)?;
 
         // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
         // runtime does not to know about new packages created, since Move objects and Move packages
@@ -599,7 +661,7 @@ mod checked {
 
         // For newly published packages, runtime ID matches storage ID.
         let storage_id = runtime_id;
-        let dependencies = fetch_packages(context, &dep_ids)?;
+        let dependencies = fetch_packages(&context.state_view, &dep_ids)?;
         let package =
             context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
 
@@ -702,16 +764,16 @@ mod checked {
         }
 
         // Check that this package ID points to a package and get the package we're upgrading.
-        let current_package = fetch_package(context, &upgrade_ticket.package.bytes)?;
+        let current_package = fetch_package(&context.state_view, &upgrade_ticket.package.bytes)?;
 
-        let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
+        let mut modules = context.deserialize_modules(&module_bytes)?;
         let runtime_id = current_package.move_package().original_package_id();
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
         let storage_id = context.tx_context.borrow_mut().fresh_id();
 
-        let dependencies = fetch_packages(context, &dep_ids)?;
+        let dependencies = fetch_packages(&context.state_view, &dep_ids)?;
         let package = context.upgrade_package(
             storage_id,
             current_package.move_package(),
@@ -725,7 +787,7 @@ mod checked {
         res?;
 
         check_compatibility(
-            context,
+            context.protocol_config,
             current_package.move_package(),
             &modules,
             upgrade_ticket.policy,
@@ -742,8 +804,8 @@ mod checked {
         )])
     }
 
-    fn check_compatibility(
-        context: &ExecutionContext,
+    pub fn check_compatibility(
+        protocol_config: &ProtocolConfig,
         existing_package: &MovePackage,
         upgrading_modules: &[CompiledModule],
         policy: u8,
@@ -758,7 +820,7 @@ mod checked {
         };
 
         let pool = &mut normalized::RcPool::new();
-        let binary_config = to_binary_config(context.protocol_config);
+        let binary_config = to_binary_config(protocol_config);
         let Ok(current_normalized) =
             existing_package.normalize(pool, &binary_config, /* include code */ true)
         else {
@@ -767,9 +829,7 @@ mod checked {
 
         let existing_modules_len = current_normalized.len();
         let upgrading_modules_len = upgrading_modules.len();
-        let disallow_new_modules = context
-            .protocol_config
-            .disallow_new_modules_in_deps_only_packages()
+        let disallow_new_modules = protocol_config.disallow_new_modules_in_deps_only_packages()
             && policy as u8 == UpgradePolicy::DEP_ONLY;
 
         if disallow_new_modules && existing_modules_len != upgrading_modules_len {
@@ -832,11 +892,11 @@ mod checked {
         })
     }
 
-    fn fetch_package(
-        context: &ExecutionContext<'_, '_, '_>,
+    pub fn fetch_package(
+        state_view: &impl BackingPackageStore,
         package_id: &ObjectID,
     ) -> Result<PackageObject, ExecutionError> {
-        let mut fetched_packages = fetch_packages(context, vec![package_id])?;
+        let mut fetched_packages = fetch_packages(state_view, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
             "Number of fetched packages must match the number of package object IDs if successful."
@@ -849,12 +909,12 @@ mod checked {
         }
     }
 
-    fn fetch_packages<'ctx, 'vm, 'state, 'a>(
-        context: &'ctx ExecutionContext<'vm, 'state, 'a>,
+    pub fn fetch_packages<'ctx, 'state>(
+        state_view: &'state impl BackingPackageStore,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
     ) -> Result<Vec<PackageObject>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
-        match get_package_objects(&context.state_view, package_ids) {
+        match get_package_objects(state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 e,
@@ -928,29 +988,6 @@ mod checked {
         Ok(result)
     }
 
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn deserialize_modules<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
-        module_bytes: &[Vec<u8>],
-    ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        let binary_config = to_binary_config(context.protocol_config);
-        let modules = module_bytes
-            .iter()
-            .map(|b| {
-                CompiledModule::deserialize_with_config(b, &binary_config)
-                    .map_err(|e| e.finish(Location::Undefined))
-            })
-            .collect::<VMResult<Vec<CompiledModule>>>()
-            .map_err(|e| context.convert_vm_error(e))?;
-
-        assert_invariant!(
-            !modules.is_empty(),
-            "input checker ensures package is not empty"
-        );
-
-        Ok(modules)
-    }
-
     fn publish_and_verify_modules(
         context: &mut ExecutionContext<'_, '_, '_>,
         package_id: ObjectID,
@@ -1009,6 +1046,7 @@ mod checked {
         });
 
         for module_id in modules_to_init {
+            trace_utils::trace_move_call_start(trace_builder_opt);
             let return_values = execute_move_call::<Mode>(
                 context,
                 argument_updates,
@@ -1027,7 +1065,9 @@ mod checked {
             assert_invariant!(
                 return_values.is_empty(),
                 "init should not have return values"
-            )
+            );
+
+            trace_utils::trace_move_call_end(trace_builder_opt);
         }
 
         Ok(())
@@ -1174,13 +1214,15 @@ mod checked {
     }
 
     /// substitutes the type arguments into the parameter and return types
-    fn subst_signature(
+    pub fn subst_signature(
         signature: LoadedFunctionInstantiation,
         type_arguments: &[Type],
     ) -> VMResult<LoadedFunctionInstantiation> {
         let LoadedFunctionInstantiation {
             parameters,
             return_,
+            instruction_length,
+            definition_index,
         } = signature;
         let parameters = parameters
             .into_iter()
@@ -1195,6 +1237,8 @@ mod checked {
         Ok(LoadedFunctionInstantiation {
             parameters,
             return_,
+            instruction_length,
+            definition_index,
         })
     }
 

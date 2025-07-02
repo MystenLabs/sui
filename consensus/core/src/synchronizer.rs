@@ -8,8 +8,10 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 use futures::{stream::FuturesUnordered, StreamExt as _};
 use itertools::Itertools as _;
+use mysten_common::debug_fatal;
 use mysten_metrics::{
     monitored_future,
     monitored_mpsc::{channel, Receiver, Sender},
@@ -32,14 +34,14 @@ use crate::{
     transaction_certifier::TransactionCertifier,
 };
 use crate::{
-    block::{BlockRef, SignedBlock, VerifiedBlock},
+    block::{SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::NetworkClient,
-    BlockAPI, Round,
+    BlockAPI,
 };
 
 /// The number of concurrent fetch blocks requests per authority
@@ -673,7 +675,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             })?;
             let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
-            // Dropping is ok because the block will be refetched.
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
             let now = context.clock.timestamp_utc_ms();
             let drift = verified_block.timestamp_ms().saturating_sub(now) as u64;
@@ -689,20 +690,12 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .with_label_values(&[peer_hostname, "synchronizer"])
                     .inc_by(drift);
 
-                if context
-                    .protocol_config
-                    .consensus_median_based_commit_timestamp()
-                {
-                    trace!("Synced block {} timestamp {} is in the future (now={}). Will not ignore as median based timestamp is enabled.", verified_block.reference(), verified_block.timestamp_ms(), now);
-                } else {
-                    warn!(
-                        "Synced block {} timestamp {} is in the future (now={}). Ignoring.",
-                        verified_block.reference(),
-                        verified_block.timestamp_ms(),
-                        now
-                    );
-                    continue;
-                }
+                trace!(
+                    "Synced block {} timestamp {} is in the future (now={}).",
+                    verified_block.reference(),
+                    verified_block.timestamp_ms(),
+                    now
+                );
             }
 
             verified_blocks.push(verified_block.clone());
@@ -903,6 +896,13 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
     }
 
     async fn start_fetch_missing_blocks_task(&mut self) -> ConsensusResult<()> {
+        if self.context.committee.size() == 1 {
+            trace!(
+                "Only one node in the network, will not try fetching missing blocks from peers."
+            );
+            return Ok(());
+        }
+
         let missing_blocks = self
             .core_dispatcher
             .get_missing_blocks()
@@ -1138,7 +1138,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             .take(2 * MAX_PERIODIC_SYNC_PEERS * context.parameters.max_blocks_per_sync)
             .collect::<Vec<_>>();
 
-        // Determine the number of peers to request missing blocks from.
+        // Maps authorities to the missing blocks they have.
         let mut authorities = BTreeMap::<AuthorityIndex, Vec<BlockRef>>::new();
         for block_ref in &missing_blocks {
             authorities
@@ -1146,11 +1146,11 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 .or_default()
                 .push(*block_ref);
         }
-        // Distribute the same number of authorities with missing blocks into each peer.
-        let num_peers = authorities
+        // Distribute the same number of authorities into each peer to sync.
+        // When running this function, context.committee.size() is always greater than 1.
+        let num_authorities_per_peer = authorities
             .len()
-            .div_ceil((context.committee.size() - 1).div_ceil(MAX_PERIODIC_SYNC_PEERS));
-        let num_authorities_per_peer = authorities.len().div_ceil(num_peers);
+            .div_ceil((context.committee.size() - 1).min(MAX_PERIODIC_SYNC_PEERS));
 
         // Update metrics related to missing blocks.
         let mut missing_blocks_per_authority = vec![0; context.committee.size()];
@@ -1201,9 +1201,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
         // Send the fetch requests
         for batch in authorities.chunks(num_authorities_per_peer) {
-            let peer = peers
-                .next()
-                .expect("Possible misconfiguration as a peer should be found");
+            let Some(peer) = peers.next() else {
+                debug_fatal!("No more peers left to fetch blocks!");
+                break;
+            };
             let peer_hostname = &context.committee.authority(peer).hostname;
             // Fetch from the lowest round missing blocks to ensure progress.
             // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
@@ -1315,6 +1316,7 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_types::block::{BlockDigest, BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
     use tokio::{sync::Mutex, time::sleep};
@@ -1325,7 +1327,7 @@ mod tests {
         transaction_certifier::TransactionCertifier,
     };
     use crate::{
-        block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_vote_monitor::CommitVoteMonitor,

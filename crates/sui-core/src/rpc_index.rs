@@ -6,7 +6,7 @@ use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
@@ -23,6 +23,7 @@ use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
+use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
@@ -31,6 +32,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::object::Data;
 use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::error::Error as StorageError;
@@ -43,11 +45,14 @@ use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
+use typed_store::rocksdb::MergeOperands;
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
 
-const CURRENT_DB_VERSION: u64 = 2;
+const CURRENT_DB_VERSION: u64 = 3;
+// I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
+const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -126,11 +131,100 @@ pub struct CoinIndexKey {
     coin_type: StructTag,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct BalanceKey {
+    pub owner: SuiAddress,
+    pub coin_type: StructTag,
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct CoinIndexInfo {
     pub coin_metadata_object_id: Option<ObjectID>,
     pub treasury_object_id: Option<ObjectID>,
     pub regulated_coin_metadata_object_id: Option<ObjectID>,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
+pub struct BalanceIndexInfo {
+    pub balance_delta: i128,
+}
+
+impl From<u64> for BalanceIndexInfo {
+    fn from(coin_value: u64) -> Self {
+        Self {
+            balance_delta: coin_value as i128,
+        }
+    }
+}
+
+impl BalanceIndexInfo {
+    fn invert(self) -> Self {
+        // Check for potential overflow when negating i128::MIN
+        assert!(
+            self.balance_delta != i128::MIN,
+            "Cannot invert balance_delta: would overflow i128"
+        );
+
+        Self {
+            balance_delta: -self.balance_delta,
+        }
+    }
+
+    fn merge_delta(&mut self, other: &Self) {
+        self.balance_delta += other.balance_delta;
+    }
+}
+
+impl From<BalanceIndexInfo> for sui_types::storage::BalanceInfo {
+    fn from(index_info: BalanceIndexInfo) -> Self {
+        // Note: We represent balance deltas as i128 to simplify merging positive and negative updates.
+        // Be aware: Move doesn’t enforce a one-time-witness (OTW) pattern when creating a Supply<T>.
+        // Anyone can call `sui::balance::create_supply` and mint unbounded supply, potentially pushing
+        // total balances over u64::MAX. To avoid crashing the indexer, we clamp the merged value instead
+        // of panicking on overflow. This has the unfortunate consequence of making bugs in the index
+        // harder to detect, but is a necessary trade-off to avoid creating a DOS attack vector.
+        let balance = index_info.balance_delta.clamp(0, u64::MAX as i128) as u64;
+        sui_types::storage::BalanceInfo { balance }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize, PartialOrd, Ord)]
+pub struct PackageVersionKey {
+    pub original_package_id: ObjectID,
+    pub version: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
+pub struct PackageVersionInfo {
+    pub storage_id: ObjectID,
+}
+
+fn balance_delta_merge_operator(
+    _key: &[u8],
+    existing_val: Option<&[u8]>,
+    operands: &MergeOperands,
+) -> Option<Vec<u8>> {
+    let mut result = existing_val
+        .map(|v| {
+            bcs::from_bytes::<BalanceIndexInfo>(v)
+                .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.")
+        })
+        .unwrap_or_default();
+
+    for operand in operands.iter() {
+        let delta = bcs::from_bytes::<BalanceIndexInfo>(operand)
+            .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.");
+        result.merge_delta(&delta);
+    }
+    Some(
+        bcs::to_bytes(&result)
+            .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption."),
+    )
+}
+
+fn balance_table_options() -> typed_store::rocks::DBOptions {
+    typed_store::rocks::default_db_options()
+        .set_merge_operator_associative("balance_merge", balance_delta_merge_operator)
 }
 
 impl CoinIndexInfo {
@@ -198,17 +292,81 @@ struct IndexStoreTables {
     /// Allows looking up information related to published Coins, like the ObjectID of its
     /// coorisponding CoinMetadata.
     coin: DBMap<CoinIndexKey, CoinIndexInfo>,
+
+    /// An index of Balances.
+    ///
+    /// Allows looking up balances by owner address and coin type.
+    #[default_options_override_fn = "balance_table_options"]
+    balance: DBMap<BalanceKey, BalanceIndexInfo>,
+
+    /// An index of Package versions.
+    ///
+    /// Maps original package ID and version to the storage ID of that version.
+    /// Allows efficient listing of all versions of a package.
+    package_version: DBMap<PackageVersionKey, PackageVersionInfo>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
     // - are prune-able and have corresponding logic in the `prune` function
 }
 
 impl IndexStoreTables {
+    fn track_coin_balance_change(
+        object: &Object,
+        owner: &SuiAddress,
+        is_removal: bool,
+        balance_changes: &mut HashMap<BalanceKey, BalanceIndexInfo>,
+    ) -> Result<(), StorageError> {
+        if let Some((struct_tag, value)) = get_balance_and_type_if_coin(object)? {
+            let key = BalanceKey {
+                owner: *owner,
+                coin_type: struct_tag,
+            };
+
+            let mut delta = BalanceIndexInfo::from(value);
+            if is_removal {
+                delta = delta.invert();
+            }
+
+            balance_changes.entry(key).or_default().merge_delta(&delta);
+        }
+        Ok(())
+    }
+
+    fn extract_version_if_package(
+        object: &Object,
+    ) -> Option<(PackageVersionKey, PackageVersionInfo)> {
+        if let Data::Package(package) = &object.data {
+            let original_id = package.original_package_id();
+            let version = package.version().value();
+            let storage_id = object.id();
+
+            let key = PackageVersionKey {
+                original_package_id: original_id,
+                version,
+            };
+            let info = PackageVersionInfo { storage_id };
+            return Some((key, info));
+        }
+        None
+    }
+
     fn open<P: Into<PathBuf>>(path: P) -> Self {
         IndexStoreTables::open_tables_read_write(
             path.into(),
             MetricConf::new("rpc-index"),
             None,
+            None,
+        )
+    }
+
+    fn open_with_options<P: Into<PathBuf>>(
+        path: P,
+        options: typed_store::rocksdb::Options,
+    ) -> Self {
+        IndexStoreTables::open_tables_read_write(
+            path.into(),
+            MetricConf::new("rpc-index"),
+            Some(options),
             None,
         )
     }
@@ -267,22 +425,27 @@ impl IndexStoreTables {
 
         self.initialize_current_epoch(authority_store, checkpoint_store)?;
 
-        let coin_index = Mutex::new(HashMap::new());
+        // Only index live objects if genesis checkpoint has been executed.
+        // If genesis hasn't been executed yet, the objects will be properly indexed
+        // as checkpoints are processed through the normal checkpoint execution path.
+        if highest_executed_checkpint.is_some() {
+            let coin_index = Mutex::new(HashMap::new());
 
-        let make_live_object_indexer = RpcParLiveObjectSetIndexer {
-            tables: self,
-            coin_index: &coin_index,
-            epoch_store,
-            package_store,
-            object_store: authority_store as _,
-        };
+            let make_live_object_indexer = RpcParLiveObjectSetIndexer {
+                tables: self,
+                coin_index: &coin_index,
+                epoch_store,
+                package_store,
+                object_store: authority_store as _,
+            };
 
-        crate::par_index_live_object_set::par_index_live_object_set(
-            authority_store,
-            &make_live_object_indexer,
-        )?;
+            crate::par_index_live_object_set::par_index_live_object_set(
+                authority_store,
+                &make_live_object_indexer,
+            )?;
 
-        self.coin.multi_insert(coin_index.into_inner().unwrap())?;
+            self.coin.multi_insert(coin_index.into_inner().unwrap())?;
+        }
 
         self.watermark.insert(
             &Watermark::Indexed,
@@ -473,12 +636,21 @@ impl IndexStoreTables {
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
         let mut coin_index: HashMap<CoinIndexKey, CoinIndexInfo> = HashMap::new();
+        let mut balance_changes: HashMap<BalanceKey, BalanceIndexInfo> = HashMap::new();
+        let mut package_version_index: Vec<(PackageVersionKey, PackageVersionInfo)> = vec![];
 
         for tx in &checkpoint.transactions {
             // determine changes from removed objects
             for removed_object in tx.removed_objects_pre_version() {
                 match removed_object.owner() {
-                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                        Self::track_coin_balance_change(
+                            removed_object,
+                            owner,
+                            true,
+                            &mut balance_changes,
+                        )?;
+
                         let owner_key = OwnerIndexKey::from_object(removed_object);
                         batch.delete_batch(&self.owner, [owner_key])?;
                     }
@@ -496,7 +668,14 @@ impl IndexStoreTables {
             for (object, old_object) in tx.changed_objects() {
                 if let Some(old_object) = old_object {
                     match old_object.owner() {
-                        Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+                        Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                            Self::track_coin_balance_change(
+                                old_object,
+                                owner,
+                                true,
+                                &mut balance_changes,
+                            )?;
+
                             let owner_key = OwnerIndexKey::from_object(old_object);
                             batch.delete_batch(&self.owner, [owner_key])?;
                         }
@@ -515,7 +694,13 @@ impl IndexStoreTables {
                 }
 
                 match object.owner() {
-                    Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+                    Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
+                        Self::track_coin_balance_change(
+                            object,
+                            owner,
+                            false,
+                            &mut balance_changes,
+                        )?;
                         let owner_key = OwnerIndexKey::from_object(object);
                         let owner_info = OwnerIndexInfo::new(object);
                         batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
@@ -532,6 +717,9 @@ impl IndexStoreTables {
                         }
                     }
                     Owner::Shared { .. } | Owner::Immutable => {}
+                }
+                if let Some((key, info)) = Self::extract_version_if_package(object) {
+                    package_version_index.push((key, info));
                 }
             }
 
@@ -555,6 +743,8 @@ impl IndexStoreTables {
         }
 
         batch.insert_batch(&self.coin, coin_index)?;
+        batch.partial_merge_batch(&self.balance, balance_changes)?;
+        batch.insert_batch(&self.package_version, package_version_index)?;
 
         Ok(())
     }
@@ -640,6 +830,65 @@ impl IndexStoreTables {
         };
         self.coin.get(&key)
     }
+
+    fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> Result<Option<BalanceIndexInfo>, TypedStoreError> {
+        let key = BalanceKey {
+            owner: owner.to_owned(),
+            coin_type: coin_type.to_owned(),
+        };
+        self.balance.get(&key)
+    }
+
+    fn balance_iter(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<BalanceKey>,
+    ) -> Result<
+        impl Iterator<Item = Result<(BalanceKey, BalanceIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        let lower_bound = cursor.unwrap_or_else(|| BalanceKey {
+            owner,
+            coin_type: "0x0::a::a".parse::<StructTag>().unwrap(),
+        });
+
+        Ok(self
+            .balance
+            .safe_iter_with_bounds(Some(lower_bound), None)
+            .scan((), move |_, item| {
+                match item {
+                    Ok((key, value)) if key.owner == owner => Some(Ok((key, value))),
+                    Ok(_) => None,          // Different owner, stop iteration
+                    Err(e) => Some(Err(e)), // Propagate error
+                }
+            }))
+    }
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<
+        impl Iterator<Item = Result<(PackageVersionKey, PackageVersionInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        let lower_bound = PackageVersionKey {
+            original_package_id: original_id,
+            version: cursor.unwrap_or(0),
+        };
+        let upper_bound = PackageVersionKey {
+            original_package_id: original_id,
+            version: u64::MAX,
+        };
+
+        Ok(self
+            .package_version
+            .safe_iter_with_bounds(Some(lower_bound), Some(upper_bound)))
+    }
 }
 
 pub struct RpcIndexStore {
@@ -673,7 +922,12 @@ impl RpcIndexStore {
                     typed_store::rocks::safe_drop_db(path.clone(), Duration::from_secs(30))
                         .await
                         .expect("unable to destroy old rpc-index db");
-                    IndexStoreTables::open(path)
+
+                    // Open the empty DB with `unordered_write`s enabled in order to get a ~3x
+                    // speedup when indexing
+                    let mut options = typed_store::rocksdb::Options::default();
+                    options.set_unordered_write(true);
+                    IndexStoreTables::open_with_options(&path, options)
                 };
 
                 tables
@@ -684,7 +938,23 @@ impl RpcIndexStore {
                         package_store,
                     )
                     .expect("unable to initialize rpc index from live object set");
-                tables
+
+                let weak_db = Arc::downgrade(&tables.meta.db);
+                drop(tables);
+
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                loop {
+                    if weak_db.strong_count() == 0 {
+                        break;
+                    }
+                    if std::time::Instant::now() > deadline {
+                        panic!("unable to reopen DB after indexing");
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+
+                // Reopen the DB with default options (eg without `unordered_write`s enabled)
+                IndexStoreTables::open(&path)
             } else {
                 tables
             }
@@ -797,6 +1067,36 @@ impl RpcIndexStore {
     ) -> Result<Option<CoinIndexInfo>, TypedStoreError> {
         self.tables.get_coin_info(coin_type)
     }
+
+    pub fn get_balance(
+        &self,
+        owner: &SuiAddress,
+        coin_type: &StructTag,
+    ) -> Result<Option<BalanceIndexInfo>, TypedStoreError> {
+        self.tables.get_balance(owner, coin_type)
+    }
+
+    pub fn balance_iter(
+        &self,
+        owner: SuiAddress,
+        cursor: Option<BalanceKey>,
+    ) -> Result<
+        impl Iterator<Item = Result<(BalanceKey, BalanceIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        self.tables.balance_iter(owner, cursor)
+    }
+
+    pub fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<
+        impl Iterator<Item = Result<(PackageVersionKey, PackageVersionInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
+        self.tables.package_versions_iter(original_id, cursor)
+    }
 }
 
 fn try_create_dynamic_field_info(
@@ -820,10 +1120,16 @@ fn try_create_dynamic_field_info(
         return Ok(None);
     }
 
-    let layout = resolver
-        .get_annotated_layout(&move_object.type_().clone().into())
-        .map_err(StorageError::custom)?
-        .into_layout();
+    let layout = match resolver.get_annotated_layout(&move_object.type_().clone().into()) {
+        Ok(annotated_layout) => annotated_layout.into_layout(),
+        Err(e) => {
+            tracing::error!(
+                "unable to load layout for type `{:?}`: {e}",
+                move_object.type_()
+            );
+            return Ok(None);
+        }
+    };
 
     let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
         .map_err(StorageError::custom)?;
@@ -912,6 +1218,7 @@ struct RpcLiveObjectIndexer<'a> {
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
     resolver: Box<dyn LayoutResolver + 'a>,
     object_store: &'a (dyn ObjectStore + Sync),
+    balance_changes: HashMap<BalanceKey, BalanceIndexInfo>,
 }
 
 impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
@@ -927,6 +1234,7 @@ impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
                 .executor()
                 .type_layout_resolver(Box::new(self.package_store)),
             object_store: self.object_store,
+            balance_changes: HashMap::new(),
         }
     }
 }
@@ -935,11 +1243,27 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
     fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
         match object.owner {
             // Owner Index
-            Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => {
+            Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => {
                 let owner_key = OwnerIndexKey::from_object(&object);
                 let owner_info = OwnerIndexInfo::new(&object);
                 self.batch
                     .insert_batch(&self.tables.owner, [(owner_key, owner_info)])?;
+
+                if let Some((coin_type, value)) = get_balance_and_type_if_coin(&object)? {
+                    let balance_key = BalanceKey { owner, coin_type };
+                    let balance_info = BalanceIndexInfo::from(value);
+                    self.balance_changes
+                        .entry(balance_key)
+                        .or_default()
+                        .merge_delta(&balance_info);
+
+                    if self.balance_changes.len() >= BALANCE_FLUSH_THRESHOLD {
+                        self.batch.partial_merge_batch(
+                            &self.tables.balance,
+                            std::mem::take(&mut self.balance_changes),
+                        )?;
+                    }
+                }
             }
 
             // Dynamic Field Index
@@ -973,6 +1297,11 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             }
         }
 
+        if let Some((key, info)) = IndexStoreTables::extract_version_if_package(&object) {
+            self.batch
+                .insert_batch(&self.tables.package_version, [(key, info)])?;
+        }
+
         // If the batch size grows to greater that 128MB then write out to the DB so that the
         // data we need to hold in memory doesn't grown unbounded.
         if self.batch.size_in_bytes() >= 1 << 27 {
@@ -982,7 +1311,11 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
         Ok(())
     }
 
-    fn finish(self) -> Result<(), StorageError> {
+    fn finish(mut self) -> Result<(), StorageError> {
+        self.batch.partial_merge_batch(
+            &self.tables.balance,
+            std::mem::take(&mut self.balance_changes),
+        )?;
         self.batch.write()?;
         Ok(())
     }
@@ -1049,4 +1382,26 @@ fn sparse_checkpoint_data_for_backfill(
     };
 
     Ok(checkpoint_data)
+}
+
+fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {
+    match Coin::extract_balance_if_coin(object) {
+        Ok(Some((TypeTag::Struct(struct_tag), value))) => Ok(Some((*struct_tag, value))),
+        Ok(Some(_)) => {
+            debug!("Coin object {} has non-struct type tag", object.id());
+            Ok(None)
+        }
+        Ok(None) => {
+            // Not a coin
+            Ok(None)
+        }
+        Err(e) => {
+            // Corrupted coin data
+            Err(StorageError::custom(format!(
+                "Failed to deserialize coin object {}: {}",
+                object.id(),
+                e
+            )))
+        }
+    }
 }

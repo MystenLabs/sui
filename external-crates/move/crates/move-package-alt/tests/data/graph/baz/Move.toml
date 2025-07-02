@@ -1,6 +1,6 @@
 [package]
 name = "baz"
-edition = "2024"
+edition = "2025"
 license = "Apache-2.0"
 authors = ["Move Team"]
 
@@ -9,4 +9,4 @@ mainnet = "35834a8a"
 testnet = "4c78adac"
 
 [dependencies]
-baz = { local = "../bar" }
+bar = { local = "../bar" }

@@ -2,14 +2,14 @@ version: v2
 
 modules:
   - path: proto
-    excludes:
-      - proto/google
     lint:
       use:
         - STANDARD
         # Disallow client streaming apis since many clients (eg grpc-web)
         # cannot properly handle client side streaming requests.
         - RPC_NO_CLIENT_STREAMING
+      ignore:
+        - proto/google
       ignore_only:
         ENUM_VALUE_PREFIX:
           - proto/sui/rpc/v2alpha/live_data_service.proto
@@ -22,8 +22,10 @@ modules:
           - proto/sui/rpc/v2beta/owner.proto
           - proto/sui/rpc/v2beta/signature_scheme.proto
           - proto/sui/rpc/v2beta/transaction.proto
+          - proto/sui/rpc/v2beta2
         ENUM_ZERO_VALUE_SUFFIX:
           - proto/sui/rpc/v2beta/signature_scheme.proto
+          - proto/sui/rpc/v2beta2/signature_scheme.proto
         RPC_RESPONSE_STANDARD_NAME:
           - proto/sui/rpc/v2beta/ledger_service.proto
 

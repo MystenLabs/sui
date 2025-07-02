@@ -1,0 +1,161 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 21 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-18:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 20-28:
+//# upgrade --package Test_DepDepV1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 3, lines 30-41:
+//# upgrade --package Test_DepDepV2 --upgrade-capability 1,1 --sender A
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 6809600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, lines 44-49:
+//# publish --upgradeable --dependencies Test_DepDepV1 --sender A
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 51-59:
+//# upgrade --package Test_DepV1 --upgrade-capability 4,1 --dependencies Test_DepDepV2 --sender A
+created: object(5,0)
+mutated: object(0,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 6551200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, lines 62-69:
+//# publish --upgradeable --dependencies Test_DepV1 Test_DepDepV1 --sender A
+created: object(6,0), object(6,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 71-78:
+//# upgrade --package Test_V1 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV2 --sender A
+created: object(7,0)
+mutated: object(0,0), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 8, lines 80-85:
+//# upgrade --package Test_V2 --upgrade-capability 6,1 --dependencies Test_DepV1 Test_DepDepV3 --sender A
+created: object(8,0)
+mutated: object(0,0), object(6,1)
+gas summary: computation_cost: 1000000, storage_cost: 7030000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 9, line 87:
+//# run Test_V1::M1::baz
+created: object(9,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 10, line 89:
+//# view-object 9,0
+Owner: Shared( 2 )
+Version: 2
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(9,0),
+        },
+    },
+    v: 42u64,
+}
+
+task 11, line 91:
+//# run Test_V2::M1::baz
+created: object(11,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 93:
+//# view-object 11,0
+Owner: Shared( 3 )
+Version: 3
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(11,0),
+        },
+    },
+    v: 7u64,
+}
+
+task 13, line 95:
+//# run Test_V3::M1::baz
+created: object(13,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 97-100:
+//# view-object 13,0
+Owner: Shared( 4 )
+Version: 4
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(13,0),
+        },
+    },
+    v: 0u64,
+}
+
+task 15, lines 101-103:
+//# programmable --sender A
+//> 0: Test_V2::M1::baz();
+//> 1: Test_V3::M1::baz();
+created: object(15,0), object(15,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, line 105:
+//# view-object 15,0
+Owner: Shared( 10 )
+Version: 10
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(15,0),
+        },
+    },
+    v: 7u64,
+}
+
+task 17, lines 107-112:
+//# view-object 15,1
+Owner: Shared( 10 )
+Version: 10
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(15,1),
+        },
+    },
+    v: 0u64,
+}
+
+task 18, lines 114-120:
+//# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepDepV1 --sender A
+Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+
+task 19, lines 122-128:
+//# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 --sender A
+Error: Transaction Effects Status: Publish/Upgrade Error, Missing dependency. A dependency of a published or upgraded package has not been assigned an on-chain address.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeMissingDependency, source: None, command: Some(1) } }
+
+task 20, lines 130-134:
+//# upgrade --package Test_V3 --upgrade-capability 6,1 --dependencies Test_DepV2 Test_DepDepV1 --sender A
+Error: Transaction Effects Status: Publish/Upgrade Error, Dependency downgrade. Indirect (transitive) dependency of published or upgraded package has been assigned an on-chain version that is less than the version required by one of the package's transitive dependencies.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PublishUpgradeDependencyDowngrade, source: None, command: Some(1) } }

@@ -1,0 +1,238 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+// A Move Package
+message Package {
+  // The PackageId of this package
+  //
+  // A package's `storage_id` is the Sui ObjectId of the package on-chain.
+  // Outside of system packages the `storage_id` for every package version is
+  // different.
+  optional string storage_id = 1;
+
+  // The PackageId of the first published version of this package.
+  //
+  // A package's `original_id` (sometimes also called its `runtime_id`) is the
+  // `storage_id` of the first version of this package that has been published.
+  // The `original_id`/`runtime_id` is stable across all versions of the
+  // package and does not ever change.
+  optional string original_id = 2;
+
+  // The version of this package
+  optional uint64 version = 3;
+
+  // The modules defined by this package
+  repeated Module modules = 4;
+
+  // List of datatype origins for mapping datatypes to a package version where
+  // it was first defined
+  repeated TypeOrigin type_origins = 5;
+
+  // The package's transitive dependencies as a mapping from the package's
+  // runtime Id (the Id it is referred to by in other packages) to its
+  // storage Id (the Id it is loaded from on chain).
+  repeated Linkage linkage = 6;
+}
+
+// A Move Module.
+message Module {
+  // Name of this module.
+  optional string name = 1;
+
+  // Serialized bytecode of the module.
+  optional bytes contents = 2;
+
+  // List of DataTypes defined by this module.
+  repeated DatatypeDescriptor datatypes = 3;
+
+  // List of Functions defined by this module.
+  repeated FunctionDescriptor functions = 4;
+
+  // List of Constants defined by this module.
+  // repeated Constant constants = 5;
+}
+
+// Describes a Move Datatype.
+message DatatypeDescriptor {
+  // Fully qualified name of this Datatype.
+  //
+  // This is `<defining_id>::<module>::<name>`
+  optional string type_name = 1;
+
+  // PackageId of the package where this Datatype is defined.
+  //
+  // A type's `defining_id` is the `storage_id` of the package version that first introduced or added that type.
+  optional string defining_id = 2;
+
+  // Name of the module where this Datatype is defined
+  optional string module = 3;
+
+  // Name of this Datatype
+  optional string name = 4;
+
+  // This type's abilities
+  repeated Ability abilities = 5;
+
+  // Ability constraints and phantom status for this type's generic type parameters
+  repeated TypeParameter type_parameters = 6;
+
+  enum DatatypeKind {
+    DATATYPE_KIND_UNKNOWN = 0;
+    STRUCT = 1;
+    ENUM = 2;
+  }
+
+  // Indicates whether this datatype is a 'STRUCT' or an 'ENUM'
+  optional DatatypeKind kind = 7;
+
+  // Set of fields if this Datatype is a struct.
+  //
+  // The order of the entries is the order of how the fields are defined.
+  repeated FieldDescriptor fields = 8;
+
+  // Set of variants if this Datatype is an enum.
+  //
+  // The order of the entries is the order of how the variants are defined.
+  repeated VariantDescriptor variants = 9;
+}
+
+// An `Ability` classifies what operations are permitted for a given type
+enum Ability {
+  ABILITY_UNKNOWN = 0;
+
+  // Allows values of types with this ability to be copied
+  COPY = 1;
+
+  // Allows values of types with this ability to be dropped.
+  DROP = 2;
+
+  // Allows values of types with this ability to exist inside a struct in global storage
+  STORE = 3;
+
+  // Allows the type to serve as a key for global storage operations
+  KEY = 4;
+}
+
+// A generic type parameter used in the declaration of a struct or enum.
+message TypeParameter {
+  // The type parameter constraints
+  repeated Ability constraints = 1;
+
+  // Whether the parameter is declared as phantom
+  optional bool is_phantom = 2;
+}
+
+// Descriptor of a field that belongs to a struct or enum variant
+message FieldDescriptor {
+  // Name of the field
+  optional string name = 1;
+
+  // Order or position of the field in the struct or enum variant definition.
+  optional uint32 position = 2;
+
+  // The type of the field
+  optional OpenSignatureBody type = 3;
+}
+
+// Descriptor of an enum variant
+message VariantDescriptor {
+  // Name of the variant
+  optional string name = 1;
+
+  // Order or position of the variant in the enum definition.
+  optional uint32 position = 2;
+
+  // Set of fields defined by this variant.
+  repeated FieldDescriptor fields = 3;
+}
+
+// Representation of a type signature that could appear as a field type for a struct or enum
+message OpenSignatureBody {
+  enum Type {
+    TYPE_UNKNOWN = 0;
+    ADDRESS = 1;
+    BOOL = 2;
+    U8 = 3;
+    U16 = 4;
+    U32 = 5;
+    U64 = 6;
+    U128 = 7;
+    U256 = 8;
+    VECTOR = 9;
+    DATATYPE = 10;
+    TYPE_PARAMETER = 11;
+  }
+
+  // Type of this signature
+  optional Type type = 1;
+
+  // Fully qualified name of the datatype when `type` is `DATATYPE`
+  optional string type_name = 2;
+
+  // Set when `type` is `VECTOR` or `DATATYPE`
+  repeated OpenSignatureBody type_parameter_instantiation = 3;
+
+  // Position of the type parameter as defined in the containing data type descriptor when `type` is `TYPE_PARAMETER`
+  optional uint32 type_parameter = 4;
+}
+
+// Descriptor of a Move function
+message FunctionDescriptor {
+  // Name of the function
+  optional string name = 1;
+
+  enum Visibility {
+    VISIBILITY_UNKNOWN = 0;
+    PRIVATE = 1;
+    PUBLIC = 2;
+    FRIEND = 3;
+  }
+
+  // Whether the function is `public`, `private` or `public(friend)`
+  optional Visibility visibility = 5;
+
+  // Whether the function is marked `entry` or not.
+  optional bool is_entry = 6;
+
+  // Ability constraints for type parameters
+  repeated TypeParameter type_parameters = 7;
+
+  // Formal parameter types.
+  repeated OpenSignature parameters = 8;
+
+  // Return types.
+  repeated OpenSignature returns = 9;
+}
+
+// Representation of a type signature that could appear as a function parameter or return value.
+message OpenSignature {
+  enum Reference {
+    REFERENCE_UNKNOWN = 0;
+    IMMUTABLE = 1;
+    MUTABLE = 2;
+  }
+
+  optional Reference reference = 1;
+  optional OpenSignatureBody body = 2;
+}
+
+// Identifies a struct and the module it was defined in.
+message TypeOrigin {
+  optional string module_name = 1;
+  optional string datatype_name = 2;
+  optional string package_id = 3;
+}
+
+// Upgraded package info for the linkage table.
+message Linkage {
+  // Id of the original package.
+  optional string original_id = 1;
+  // Id of the upgraded package.
+  optional string upgraded_id = 2;
+  // Version of the upgraded package.
+  optional uint64 upgraded_version = 3;
+}

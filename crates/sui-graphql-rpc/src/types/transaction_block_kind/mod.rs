@@ -8,7 +8,8 @@ use self::{
 };
 use crate::types::transaction_block_kind::{
     authenticator_state_update::AuthenticatorStateUpdateTransaction,
-    end_of_epoch::EndOfEpochTransaction, programmable::ProgrammableTransactionBlock,
+    end_of_epoch::EndOfEpochTransaction,
+    programmable::{ProgrammableSystemTransactionBlock, ProgrammableTransactionBlock},
 };
 use async_graphql::*;
 use sui_types::transaction::TransactionKind as NativeTransactionKind;
@@ -30,6 +31,8 @@ pub(crate) enum TransactionBlockKind {
     AuthenticatorState(AuthenticatorStateUpdateTransaction),
     Randomness(RandomnessStateUpdateTransaction),
     EndOfEpoch(EndOfEpochTransaction),
+    // GraphQL Union does not allow multiple variants with the same type
+    ProgrammableSystem(ProgrammableSystemTransactionBlock),
 }
 
 impl TransactionBlockKind {
@@ -42,6 +45,12 @@ impl TransactionBlockKind {
                 native: pt,
                 checkpoint_viewed_at,
             }),
+            K::ProgrammableSystemTransaction(pt) => {
+                T::ProgrammableSystem(ProgrammableSystemTransactionBlock {
+                    native: pt,
+                    checkpoint_viewed_at,
+                })
+            }
             K::ChangeEpoch(ce) => T::ChangeEpoch(ChangeEpochTransaction {
                 native: ce,
                 checkpoint_viewed_at,

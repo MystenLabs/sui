@@ -1,22 +1,20 @@
 diff --git a/.cargo/config.toml b/.cargo/config.toml
-index ec2c459490..55985cbe9f 100644
+index a342267d27..47fd7e4ee1 100644
 --- a/.cargo/config.toml
 +++ b/.cargo/config.toml
-@@ -25,4 +25,4 @@ move-clippy = [
+@@ -29,4 +29,4 @@ move-clippy = [
  ]
-
+ 
  [build]
 -rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]
 +rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "--cfg", "msim"]
 diff --git a/Cargo.toml b/Cargo.toml
-index c0829bc1b6..4007f97d66 100644
+index 3a9a60d2db..8478f0365e 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -682,5 +682,7 @@ field_names = "0.2.0"
- semver = "1.0.16"
- spinners = "4.1.0"
- include_dir = "0.7.3"
-
- [patch.crates-io]
+@@ -779,3 +779,5 @@ sui-execution = { path = "sui-execution" }
+ async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
+ async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
+ async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
 +tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "cad62679fd180a48c665f842cb80045f8fcfdee9" }
 +futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "cad62679fd180a48c665f842cb80045f8fcfdee9" }

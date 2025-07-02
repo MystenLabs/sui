@@ -19,6 +19,10 @@ message ExecutionError {
   // The command, if any, during which the error occurred.
   optional uint64 command = 1;
 
+  // A human readable description of the error
+  // TODO update field numbering before GA
+  optional string description = 15;
+
   enum ExecutionErrorKind {
     EXECUTION_ERROR_KIND_UNKNOWN = 0;
 
@@ -166,6 +170,8 @@ message ExecutionError {
     MOVE_VECTOR_ELEM_TOO_BIG = 38;
 
     MOVE_RAW_VALUE_TOO_BIG = 39;
+
+    INVALID_LINKAGE = 40;
   }
 
   optional ExecutionErrorKind kind = 2;

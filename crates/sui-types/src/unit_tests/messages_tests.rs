@@ -1023,7 +1023,7 @@ fn verify_sender_signature_correctly_with_flag() {
 #[test]
 fn test_change_epoch_transaction() {
     let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0, 0, vec![]);
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject::SUI_SYSTEM_OBJ
@@ -1043,7 +1043,7 @@ fn test_change_epoch_transaction() {
 #[test]
 fn test_consensus_commit_prologue_transaction() {
     let tx = VerifiedTransaction::new_consensus_commit_prologue(0, 0, 42);
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject {
@@ -1072,7 +1072,7 @@ fn test_consensus_commit_prologue_v2_transaction() {
         42,
         ConsensusCommitDigest::default(),
     );
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject {
@@ -1102,7 +1102,7 @@ fn test_consensus_commit_prologue_v3_transaction() {
         ConsensusCommitDigest::default(),
         ConsensusDeterminedVersionAssignments::empty_for_testing(),
     );
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject {

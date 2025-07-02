@@ -1,14 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus_core::{BlockRef, TransactionIndex};
-use serde::{Deserialize, Serialize};
 use sui_types::{
     committee::EpochId,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::{TransactionEffects, TransactionEvents},
     error::SuiError,
-    messages_consensus::Round,
+    messages_consensus::{ConsensusPosition, Round},
     messages_grpc::{
         RawExecutedData, RawExecutedStatus, RawRejectReason, RawRejectedStatus,
         RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
@@ -16,23 +14,17 @@ use sui_types::{
     object::Object,
 };
 
-/// The position of a transaction in consensus.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub(crate) struct ConsensusTxPosition {
-    pub block: BlockRef,
-    pub index: TransactionIndex,
-}
-
 pub(crate) struct WaitForEffectsRequest {
     pub epoch: EpochId,
     pub transaction_digest: TransactionDigest,
-    pub transaction_position: ConsensusTxPosition,
+    pub transaction_position: ConsensusPosition,
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,
 }
 
-pub(crate) struct ExecutedData {
+#[derive(Clone)]
+pub struct ExecutedData {
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
     pub input_objects: Vec<Object>,
@@ -40,7 +32,7 @@ pub(crate) struct ExecutedData {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum RejectReason {
+pub enum RejectReason {
     // Transaction is not voted to be rejected locally.
     None,
     // Rejected due to lock conflict.
@@ -53,7 +45,21 @@ pub(crate) enum RejectReason {
     CoinDenyList,
 }
 
-pub(crate) enum WaitForEffectsResponse {
+impl std::fmt::Display for RejectReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RejectReason::None => write!(f, "Rejected with no reason"),
+            RejectReason::LockConflict(msg) => write!(f, "Lock conflict: {}", msg),
+            RejectReason::PackageVerification(msg) => {
+                write!(f, "Package verification failed: {}", msg)
+            }
+            RejectReason::Overload(msg) => write!(f, "Overload: {}", msg),
+            RejectReason::CoinDenyList => write!(f, "Coin deny list"),
+        }
+    }
+}
+
+pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,

@@ -236,6 +236,9 @@ pub enum ExecutionFailureStatus {
         value_size: u64,
         max_scaled_size: u64,
     },
+
+    #[error("A valid linkage was unable to be determined for the transaction")]
+    InvalidLinkage,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -251,7 +254,7 @@ pub struct MoveLocation {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct MoveLocationOpt(pub Option<MoveLocation>);
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize, Hash, Error)]
 pub enum CommandArgumentError {
     #[error("The type of the value does not match the expected type")]
     TypeMismatch,
@@ -302,6 +305,15 @@ pub enum CommandArgumentError {
         multiple arguments."
     )]
     InvalidArgumentArity,
+    #[error(
+        "Object passed to TransferObject does not have public transfer, i.e. the `store` \
+        ability"
+    )]
+    InvalidTransferObject,
+    #[error(
+        "First argument to MakeMoveVec is not an object. If no type is specified for MakeMoveVec, all arguments must be the same object type."
+    )]
+    InvalidMakeMoveVecNonObjectArgument,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]

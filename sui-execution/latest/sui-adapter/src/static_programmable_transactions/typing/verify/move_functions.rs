@@ -3,7 +3,6 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::programmable_transactions::execution::check_private_generics;
-
 use crate::static_programmable_transactions::typing::ast::InputArg;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::{CompiledModule, file_format::Visibility};
@@ -68,8 +67,15 @@ impl Context {
         }
     }
 
+    /// Marks mutable usages as dirty. We don't care about `Move` since the value will be moved
+    /// and that location is no longer accessible.
     fn mark_dirty(&mut self, arg: &T::Argument) {
-        self.mark_loc_dirty(arg.value.0.location())
+        match &arg.value.0 {
+            T::Argument__::Borrow(/* mut */ true, loc) => self.mark_loc_dirty(*loc),
+            T::Argument__::Borrow(/* mut */ false, _)
+            | T::Argument__::Use(_)
+            | T::Argument__::Read(_) => (),
+        }
     }
 
     fn mark_loc_dirty(&mut self, location: T::Location) {
@@ -107,7 +113,13 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
     let T::Transaction { inputs, commands } = txn;
     let mut context = Context::new(inputs);
     for (c, result) in commands {
-        command::<Mode>(env, &mut context, c, result)?;
+        let result_dirties = command::<Mode>(env, &mut context, c, result)
+            .map_err(|e| e.with_command_index(c.idx as usize))?;
+        assert_invariant!(
+            result_dirties.len() == result.len(),
+            "result length mismatch"
+        );
+        context.results.push(result_dirties);
     }
     Ok(())
 }
@@ -117,28 +129,20 @@ fn command<Mode: ExecutionMode>(
     context: &mut Context,
     command: &T::Command,
     result: &T::ResultType,
-) -> Result<(), ExecutionError> {
-    match &command.value {
-        T::Command_::MoveCall(call) => {
-            let result_dirties = move_call::<Mode>(env, context, call, result)?;
-            debug_assert!(result_dirties.len() == result.len());
-            context.results.push(result_dirties);
-        }
+) -> Result<Vec<IsDirty>, ExecutionError> {
+    Ok(match &command.value {
+        T::Command_::MoveCall(call) => move_call::<Mode>(env, context, call, result)?,
         T::Command_::TransferObjects(objs, recipient) => {
             arguments(env, context, objs);
             argument(env, context, recipient);
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            vec![]
         }
         T::Command_::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
             debug_assert!(!amounts_are_dirty);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
-            debug_assert!(result.len() == amounts.len());
-            context
-                .results
-                .push(vec![IsDirty::Fixed { is_dirty }; result.len()]);
+            vec![IsDirty::Fixed { is_dirty }; result.len()]
         }
         T::Command_::MergeCoins(_, target, coins) => {
             let is_dirty = arguments(env, context, coins);
@@ -146,25 +150,28 @@ fn command<Mode: ExecutionMode>(
             if is_dirty {
                 context.mark_dirty(target);
             }
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            vec![]
         }
         T::Command_::MakeMoveVec(_, args) => {
             let is_dirty = arguments(env, context, args);
-            debug_assert!(result.len() == 1);
-            context.results.push(vec![IsDirty::Fixed { is_dirty }]);
+            debug_assert_eq!(result.len(), 1);
+            vec![IsDirty::Fixed { is_dirty }]
         }
-        T::Command_::Publish(_, _) => {
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+        T::Command_::Publish(_, _, _) => {
+            debug_assert_eq!(Mode::packages_are_predefined(), result.is_empty());
+            debug_assert_eq!(!Mode::packages_are_predefined(), result.len() == 1);
+            result
+                .iter()
+                .map(|_| IsDirty::Fixed { is_dirty: false })
+                .collect::<Vec<_>>()
         }
-        T::Command_::Upgrade(_, _, _, ticket) => {
+        T::Command_::Upgrade(_, _, _, ticket, _) => {
+            debug_assert_eq!(result.len(), 1);
+            let result = vec![IsDirty::Fixed { is_dirty: false }];
             argument(env, context, ticket);
-            debug_assert!(result.is_empty());
-            context.results.push(vec![]);
+            result
         }
-    }
-    Ok(())
+    })
 }
 
 fn arguments(env: &Env, context: &mut Context, args: &[T::Argument]) -> bool {
@@ -187,12 +194,12 @@ fn move_call<Mode: ExecutionMode>(
     } = call;
     check_signature::<Mode>(function)?;
     check_private_generics(&function.runtime_id, function.name.as_ident_str())?;
-    let (_vis, is_entry) = check_visibility::<Mode>(env, function)?;
+    let (vis, is_entry) = check_visibility::<Mode>(env, function)?;
     let arg_dirties = args
         .iter()
         .map(|arg| argument(env, context, arg))
         .collect::<Vec<_>>();
-    if is_entry {
+    if is_entry && matches!(vis, Visibility::Private) {
         for (idx, &arg_is_dirty) in arg_dirties.iter().enumerate() {
             if arg_is_dirty && !Mode::allow_arbitrary_values() {
                 return Err(command_argument_error(
@@ -201,7 +208,8 @@ fn move_call<Mode: ExecutionMode>(
                 ));
             }
         }
-        // mark args dirty if is entry
+    } else if !is_entry {
+        // mark args dirty if not entry
         for arg in args {
             context.mark_dirty(arg);
         }
@@ -240,7 +248,7 @@ fn check_visibility<Mode: ExecutionMode>(
     env: &Env,
     function: &T::LoadedFunction,
 ) -> Result<(Visibility, /* is_entry */ bool), ExecutionError> {
-    let module = env.module_definition(&function.runtime_id)?;
+    let module = env.module_definition(&function.runtime_id, &function.linkage)?;
     let module: &CompiledModule = module.as_ref();
     let Some((_index, fdef)) = module.find_function_def_by_name(function.name.as_str()) else {
         invariant_violation!(

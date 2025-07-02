@@ -4,9 +4,11 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use consensus_config::{Committee, Stake};
+use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
+use tracing::info;
 
 use crate::{
     block::{BlockTransactionVotes, GENESIS_ROUND},
@@ -15,8 +17,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    BlockAPI as _, BlockRef, CertifiedBlock, CertifiedBlocksOutput, CommitIndex, Round,
-    TransactionIndex, VerifiedBlock,
+    BlockAPI as _, CertifiedBlock, CertifiedBlocksOutput, CommitIndex, VerifiedBlock,
 };
 
 /// TransactionCertifier has the following purposes:
@@ -83,6 +84,12 @@ impl TransactionCertifier {
         last_processed_commit_index: CommitIndex,
     ) {
         let mut certifier_state = self.certifier_state.write();
+        let context = certifier_state.context.clone();
+        if !context.protocol_config.mysticeti_fastpath() {
+            info!("Skipping certifier recovery in non-mysticeti fast path mode");
+            return;
+        }
+
         let dag_state = self.dag_state.read();
         let store = dag_state.store().clone();
 
@@ -111,7 +118,7 @@ impl TransactionCertifier {
         // Starts recovery from the GC round computed from the last processed commit.
         // All blocks from later commits must have rounds >= recovery_start_round.
         let recovery_start_round = certifier_gc_round + 1;
-        tracing::info!(
+        info!(
             "Recovering certifier state from round {}",
             recovery_start_round,
         );
@@ -126,6 +133,11 @@ impl TransactionCertifier {
             let blocks = store
                 .scan_blocks_by_author(authority_index, recovery_start_round)
                 .unwrap();
+            info!(
+                "Recovering {} blocks for authority {}",
+                blocks.len(),
+                context.committee.authority(authority_index).hostname
+            );
             let voted_blocks = blocks
                 .into_iter()
                 .map(|b| {
@@ -342,15 +354,6 @@ impl CertifierState {
             }
         }
 
-        if !certified_blocks.is_empty() {
-            self.context
-                .metrics
-                .node_metrics
-                .certifier_output_blocks
-                .with_label_values(&["proposed"])
-                .inc_by(certified_blocks.len() as u64);
-        }
-
         certified_blocks
     }
 
@@ -412,6 +415,15 @@ impl CertifierState {
                     certified_blocks.push(certified_block);
                 }
             }
+        }
+
+        if !certified_blocks.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .certifier_output_blocks
+                .with_label_values(&["proposed"])
+                .inc_by(certified_blocks.len() as u64);
         }
 
         certified_blocks

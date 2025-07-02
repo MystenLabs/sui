@@ -1,9 +1,0 @@
-[package]
-name = "name"
-edition = "legacy"
-license = "license"
-authors = ["some author"]
-
-[environments]
-mainnet = "35834a8a"
-

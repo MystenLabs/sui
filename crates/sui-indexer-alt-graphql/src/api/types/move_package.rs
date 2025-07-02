@@ -9,7 +9,8 @@ use async_graphql::{
     dataloader::DataLoader,
     Context, InputObject, Object,
 };
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
+use serde::{Deserialize, Serialize};
 use sui_indexer_alt_reader::{
     packages::{
         CheckpointBoundedOriginalPackageKey, PackageOriginalIdKey, VersionedOriginalPackageKey,
@@ -17,6 +18,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
+use sui_pg_db::sql;
 use sui_sql_macro::query;
 use sui_types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
@@ -67,6 +69,24 @@ pub(crate) struct PackageKey {
     pub(crate) at_checkpoint: Option<UInt53>,
 }
 
+/// Filter for paginating packages published within a range of checkpoints.
+#[derive(InputObject, Default, Debug)]
+pub(crate) struct CheckpointFilter {
+    /// Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+    pub(crate) after_checkpoint: Option<UInt53>,
+
+    /// Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+    pub(crate) before_checkpoint: Option<UInt53>,
+}
+
+/// Inner struct for the cursor produced while iterating over all package publishes.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub(crate) struct PackageCursor {
+    pub original_id: Vec<u8>,
+    pub cp_sequence_number: u64,
+    pub package_version: u64,
+}
+
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
     #[error(
@@ -74,6 +94,10 @@ pub(crate) enum Error {
     )]
     OneBound,
 }
+
+/// Cursor for iterating over package publishes. Points to the publish of a particular
+/// version of a package, in a given checkpoint.
+pub(crate) type CPackage = BcsCursor<PackageCursor>;
 
 /// Cursor for iterating over system packages. Points at a particular system package, by its ID.
 pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
@@ -462,6 +486,96 @@ impl MovePackage {
 
         let (prev, next, results) =
             page.paginate_results(results, |p| JsonCursor::new(p.package_version as u64));
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        for (cursor, stored) in results {
+            if let Some(object) = Self::from_stored(scope.clone(), stored)? {
+                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
+            }
+        }
+
+        Ok(conn)
+    }
+
+    /// Paginate through all packages published in a range of checkpoints.
+    pub(crate) async fn paginate_by_checkpoint(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CPackage>,
+        filter: CheckpointFilter,
+    ) -> Result<Connection<String, MovePackage>, RpcError<Error>> {
+        use kv_packages::dsl as p;
+
+        let mut conn = Connection::new(false, false);
+
+        let pg_reader: &PgReader = ctx.data()?;
+
+        let mut query = p::kv_packages
+            .filter(p::cp_sequence_number.le(scope.checkpoint_viewed_at() as i64))
+            .limit(page.limit() as i64 + 2)
+            .into_boxed();
+
+        if let Some(after_cp) = filter.after_checkpoint {
+            query = query.filter(p::cp_sequence_number.gt(i64::from(after_cp)));
+        }
+
+        if let Some(before_cp) = filter.before_checkpoint {
+            query = query.filter(p::cp_sequence_number.lt(i64::from(before_cp)));
+        }
+
+        query = if page.is_from_front() {
+            query
+                .order_by(p::cp_sequence_number)
+                .then_order_by(p::original_id)
+                .then_order_by(p::package_version)
+        } else {
+            query
+                .order_by(p::cp_sequence_number.desc())
+                .then_order_by(p::original_id.desc())
+                .then_order_by(p::package_version.desc())
+        };
+
+        if let Some(after) = page.after() {
+            query = query.filter(sql!(as Bool,
+                "(cp_sequence_number, original_id, package_version) >= ({BigInt}, {Bytea}, {BigInt})",
+                after.cp_sequence_number as i64,
+                after.original_id.as_slice(),
+                after.package_version as i64,
+            ));
+        }
+
+        if let Some(before) = page.before() {
+            query = query.filter(sql!(as Bool,
+                "(cp_sequence_number, original_id, package_version) <= ({BigInt}, {Bytea}, {BigInt})",
+                before.cp_sequence_number as i64,
+                before.original_id.as_slice(),
+                before.package_version as i64,
+            ));
+        }
+
+        let mut c = pg_reader
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
+
+        let mut results: Vec<StoredPackage> = c
+            .results(query)
+            .await
+            .context("Failed to read from database")?;
+
+        if !page.is_from_front() {
+            results.reverse();
+        }
+
+        let (prev, next, results) = page.paginate_results(results, |p| {
+            BcsCursor::new(PackageCursor {
+                original_id: p.original_id.clone(),
+                cp_sequence_number: p.cp_sequence_number as u64,
+                package_version: p.package_version as u64,
+            })
+        });
 
         conn.has_previous_page = prev;
         conn.has_next_page = next;

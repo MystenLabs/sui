@@ -8,7 +8,6 @@ use thiserror::Error;
 use tokio::process::Command;
 
 pub type GitResult<T> = std::result::Result<T, GitError>;
-pub type ShaResult<T> = std::result::Result<T, ShaError>;
 
 #[derive(Error, Debug)]
 pub enum GitError {
@@ -27,15 +26,6 @@ pub enum GitError {
         #[source]
         kind: CommandErrorKind,
     },
-}
-
-#[derive(Error, Debug)]
-pub enum ShaError {
-    #[error("`{input}` is an invalid commit sha; commits must be 40 characters")]
-    WrongLength { input: String },
-
-    #[error("`{input}` is an invalid commit sha; commits must be lowercase hex strings")]
-    InvalidChars { input: String },
 }
 
 #[derive(Error, Debug)]

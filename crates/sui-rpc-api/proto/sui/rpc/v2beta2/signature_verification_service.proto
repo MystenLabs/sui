@@ -1,0 +1,49 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "sui/rpc/v2beta2/bcs.proto";
+import "sui/rpc/v2beta2/signature.proto";
+import "sui/rpc/v2beta2/transaction.proto";
+
+service SignatureVerificationService {
+  // Perform signature verification of a UserSignature against the provided message.
+  rpc VerifySignature(VerifySignatureRequest) returns (VerifySignatureResponse);
+}
+
+message VerifySignatureRequest {
+  // The message to verify against.
+  //
+  // Today the only supported message types are `PersonalMessage` and
+  // `TransactionData` and the `Bcs.name` must be set to indicate which type of
+  // message is being verified.
+  optional Bcs message = 1;
+
+  // The siganture to verify.
+  optional UserSignature signature = 2;
+
+  // Optional. Address to validate against the provided signature.
+  //
+  // If provided, this address will be compared against the the address derived
+  // from the provide signature and a successful response will only be returned
+  // if they match.
+  optional string address = 3;
+
+  // The set of JWKs to use when verifying Zklogin signatures.
+  // If this is empty the current set of valid JWKs stored onchain will be used
+  repeated ActiveJwk jwks = 4;
+
+  // The epoch to use
+  // optional uint64 epoch = 5;
+}
+
+message VerifySignatureResponse {
+  // Indicates if the provided signature was valid given the requested parameters.
+  optional bool is_valid = 1;
+
+  // If `is_valid` is `false`, this is the reason for why the signature verification failed.
+  optional string reason = 2;
+}

@@ -12,6 +12,7 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
+use consensus_types::block::{BlockRef, Round};
 use futures::{stream, Stream, StreamExt as _};
 use mysten_network::{
     callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler},
@@ -35,7 +36,7 @@ use super::{
     BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
-    block::{BlockRef, VerifiedBlock},
+    block::VerifiedBlock,
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
@@ -43,7 +44,7 @@ use crate::{
         tonic_gen::consensus_service_server::ConsensusServiceServer,
         tonic_tls::certificate_server_name,
     },
-    CommitIndex, Round,
+    CommitIndex,
 };
 
 // Maximum bytes size in a single fetch_blocks()response.

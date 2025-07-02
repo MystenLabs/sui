@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rocksdb::{BlockBasedOptions, Cache, ReadOptions};
+use rocksdb::{BlockBasedOptions, Cache, MergeOperands, ReadOptions};
 use std::collections::BTreeMap;
 use std::env;
 use tap::TapFallible;
@@ -265,6 +265,18 @@ impl DBOptions {
     pub fn disable_write_throttling(mut self) -> DBOptions {
         self.options.set_soft_pending_compaction_bytes_limit(0);
         self.options.set_hard_pending_compaction_bytes_limit(0);
+        self
+    }
+
+    pub fn set_merge_operator_associative<F>(mut self, name: &str, merge_fn: F) -> DBOptions
+    where
+        F: Fn(&[u8], Option<&[u8]>, &MergeOperands) -> Option<Vec<u8>>
+            + Send
+            + Sync
+            + Clone
+            + 'static,
+    {
+        self.options.set_merge_operator_associative(name, merge_fn);
         self
     }
 }

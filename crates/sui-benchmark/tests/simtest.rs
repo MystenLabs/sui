@@ -450,6 +450,7 @@ mod test {
             }
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
+        register_fail_point_async("randomness-delay", || delay_failpoint(10..1000, 0.5));
 
         test_simulated_load(test_cluster, 120).await;
     }
@@ -519,6 +520,7 @@ mod test {
                         max_estimate_us: 1_500_000,
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: rng.gen_range(1..=20),
+                        stake_weighted_median_threshold: 0,
                     },
                 ),
             ]
@@ -1065,6 +1067,7 @@ mod test {
         shared_counter_max_tip: u64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
+        party_weight: u32,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1087,6 +1090,8 @@ mod test {
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
                 },
+                // TODO: Set this to 1 once party object is enabled in mainnet protocol config.
+                party_weight: 0,
             }
         }
     }
@@ -1170,6 +1175,7 @@ mod test {
             expected_failure: config.expected_failure_weight,
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
+            party: config.party_weight,
         };
 
         let workload_config = WorkloadConfig {

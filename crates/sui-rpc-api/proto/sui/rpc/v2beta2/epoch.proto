@@ -1,0 +1,34 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta2;
+
+import "google/protobuf/timestamp.proto";
+import "sui/rpc/v2beta2/protocol_config.proto";
+import "sui/rpc/v2beta2/signature.proto";
+import "sui/rpc/v2beta2/system_state.proto";
+
+message Epoch {
+  optional uint64 epoch = 1;
+
+  // The committee governing this epoch.
+  optional ValidatorCommittee committee = 2;
+
+  // Snapshot of Sui's SystemState (`0x3::sui_system::SystemState`) at the
+  // beginning of the epoch, for past epochs, or the current state for the
+  // current epoch.
+  optional SystemState system_state = 3;
+
+  optional uint64 first_checkpoint = 4;
+  optional uint64 last_checkpoint = 5;
+
+  optional google.protobuf.Timestamp start = 6;
+  optional google.protobuf.Timestamp end = 7;
+
+  // Reference gas price denominated in MIST
+  optional uint64 reference_gas_price = 8;
+
+  optional ProtocolConfig protocol_config = 9;
+}

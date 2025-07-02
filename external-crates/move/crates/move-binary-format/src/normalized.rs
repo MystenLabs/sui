@@ -157,6 +157,7 @@ pub struct Function<S: Hash + Eq> {
     pub parameters: Signature<S>,
     pub return_: Signature<S>,
     code_included: bool,
+    locals: Signature<S>,
     jump_tables: Vec<Rc<VariantJumpTable<S>>>,
     code: Vec<Bytecode<S>>,
 }
@@ -867,7 +868,13 @@ impl<S: Hash + Eq> Function<S> {
     ) -> Self {
         let fhandle = m.function_handle_at(def.function);
         let name = pool.intern(m.identifier_at(fhandle.name));
-        let (jump_tables, code) = if include_code {
+        let (locals, jump_tables, code) = if include_code {
+            let locals_index_opt = def.code.as_ref().map(|code| code.locals);
+            let locals = if let Some(locals_index) = locals_index_opt {
+                tables.signatures[locals_index.0 as usize].clone()
+            } else {
+                Rc::new(vec![])
+            };
             let jump_tables = def
                 .code
                 .iter()
@@ -884,9 +891,9 @@ impl<S: Hash + Eq> Function<S> {
                         .collect()
                 })
                 .unwrap_or_default();
-            (jump_tables, code)
+            (locals, jump_tables, code)
         } else {
-            (vec![], vec![])
+            (Rc::new(vec![]), vec![], vec![])
         };
         Function {
             name,
@@ -896,6 +903,7 @@ impl<S: Hash + Eq> Function<S> {
             parameters: tables.signatures[fhandle.parameters.0 as usize].clone(),
             return_: tables.signatures[fhandle.return_.0 as usize].clone(),
             code_included: include_code,
+            locals,
             jump_tables,
             code,
         }
@@ -917,6 +925,7 @@ impl<S: Hash + Eq> Function<S> {
             parameters,
             return_,
             code_included,
+            locals,
             jump_tables,
             code,
         } = self;
@@ -930,6 +939,7 @@ impl<S: Hash + Eq> Function<S> {
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
             && return_ == &other.return_
+            && locals == &other.locals
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
     }

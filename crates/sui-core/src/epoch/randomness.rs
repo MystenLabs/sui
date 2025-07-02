@@ -815,7 +815,8 @@ mod tests {
         epoch::randomness::*,
         mock_consensus::with_block_status,
     };
-    use consensus_core::{BlockRef, BlockStatus};
+    use consensus_core::BlockStatus;
+    use consensus_types::block::BlockRef;
     use std::num::NonZeroUsize;
     use sui_protocol_config::ProtocolConfig;
     use sui_protocol_config::{Chain, ProtocolVersion};
@@ -854,7 +855,12 @@ mod tests {
                     tx_consensus.try_send(transactions.to_vec()).unwrap();
                     true
                 })
-                .returning(|_, _| Ok(with_block_status(BlockStatus::Sequenced(BlockRef::MIN))));
+                .returning(|_, _| {
+                    Ok((
+                        Vec::new(),
+                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
+                });
 
             let state = TestAuthorityBuilder::new()
                 .with_protocol_config(protocol_config.clone())
@@ -1002,9 +1008,10 @@ mod tests {
                     true
                 })
                 .returning(|_, _| {
-                    Ok(with_block_status(consensus_core::BlockStatus::Sequenced(
-                        BlockRef::MIN,
-                    )))
+                    Ok((
+                        Vec::new(),
+                        with_block_status(consensus_core::BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
                 });
 
             let state = TestAuthorityBuilder::new()

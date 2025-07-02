@@ -62,10 +62,10 @@ Implement these features in your wallet class under the `features` property:
 
 ```tsx
 import {
-  ConnectFeature,
-  ConnectMethod,
-  EventsFeature,
-  EventsOnMethod,
+  StandardConnectFeature,
+  StandardConnectMethod,
+  StandardEventsFeature,
+  StandardEventsOnMethod,
   SuiFeatures,
   SuiSignPersonalMessageMethod,
   SuiSignTransactionMethod,
@@ -102,7 +102,7 @@ class YourWallet implements Wallet {
         version: "1.0.0",
         reportTransactionEffects: this.#reportTransactionEffects,
     };
-  },
+  };
 
   #on: EventsOnMethod = () => {
     // Your wallet's events on implementation.

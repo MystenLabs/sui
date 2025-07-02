@@ -1,0 +1,20 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 6-13:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3420000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 14-16:
+//# run Test::M::create --args 10
+Error: Transaction Effects Status: Arity mismatch for Move function. The number of arguments does not match the number of parameters
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: ArityMismatch, source: Some("Expected 2 arguments calling function 'create', but found 1"), command: Some(0) } }
+
+task 3, line 17:
+//# run Test::M::create --args 10 10
+Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be deserialized into a value of the specified type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: Some("Function expects address but provided argument's value does not match"), command: Some(0) } }

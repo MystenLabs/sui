@@ -14,16 +14,19 @@ async-stream.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 eyre.workspace = true
+fastcrypto.workspace = true
 futures.workspace = true
 http.workspace = true
 http-body.workspace = true
 multiaddr.workspace = true
 prometheus.workspace = true
+rand.workspace = true
 serde.workspace = true
 once_cell.workspace = true
 snap.workspace = true
 hyper-rustls.workspace = true
 hyper-util.workspace = true
+rustls.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
@@ -34,3 +37,6 @@ tower-http.workspace = true
 pin-project-lite = "0.2.13"
 tracing.workspace = true
 sui-http.workspace = true
+
+[dev-dependencies]
+sui-tls.workspace = true

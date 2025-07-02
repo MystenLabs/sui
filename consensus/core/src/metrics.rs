@@ -118,6 +118,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
+    pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
@@ -145,7 +146,6 @@ pub(crate) struct NodeMetrics {
     pub(crate) network_excluded_ancestors_count_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
-    pub(crate) rejected_future_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
@@ -166,6 +166,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) missing_blocks_after_fetch_total: IntCounter,
     pub(crate) num_of_bad_nodes: IntGauge,
     pub(crate) quorum_receive_latency: Histogram,
+    pub(crate) block_receive_delay: IntCounterVec,
     pub(crate) reputation_scores: IntGaugeVec,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
@@ -327,6 +328,11 @@ impl NodeMetrics {
                 "broadcaster_rtt_estimate_ms",
                 "Estimated RTT latency per peer authority, for block sending in Broadcaster",
                 &["peer"],
+                registry,
+            ).unwrap(),
+            commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(
+                "commit_observer_last_recovered_commit_index",
+                "The last commit index recovered by the commit observer",
                 registry,
             ).unwrap(),
             core_add_blocks_batch_size: register_histogram_with_registry!(
@@ -494,12 +500,6 @@ impl NodeMetrics {
                 &["reason"],
                 registry,
             ).unwrap(),
-            rejected_future_blocks: register_int_counter_vec_with_registry!(
-                "rejected_future_blocks",
-                "Number of blocks rejected because their timestamp is too far in the future",
-                &["authority"],
-                registry,
-            ).unwrap(),
             subscribed_blocks: register_int_counter_vec_with_registry!(
                 "subscribed_blocks",
                 "Number of blocks received from each peer before verification",
@@ -599,6 +599,12 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            ).unwrap(),
+            block_receive_delay: register_int_counter_vec_with_registry!(
+                "block_receive_delay",
+                "Total delay from the start of the round to receiving the block, in milliseconds per authority",
+                &["authority"],
+                registry,
             ).unwrap(),
             reputation_scores: register_int_gauge_vec_with_registry!(
                 "reputation_scores",

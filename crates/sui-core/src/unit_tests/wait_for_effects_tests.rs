@@ -4,13 +4,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use consensus_core::{BlockRef, TransactionIndex};
+use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
+use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_grpc::RawWaitForEffectsRequest;
 use sui_types::object::Object;
 use sui_types::transaction::VerifiedTransaction;
@@ -20,12 +21,12 @@ use crate::authority::consensus_tx_status_cache::{
     ConsensusTxStatus, CONSENSUS_STATUS_RETENTION_ROUNDS,
 };
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::execution_scheduler::SchedulingSource;
 use crate::wait_for_effects_request::{
-    ConsensusTxPosition, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
+    RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
 };
 
 use super::AuthorityServerHandle;
@@ -54,7 +55,7 @@ impl TestContext {
             .unwrap();
         let client = NetworkAuthorityClient::connect(
             server_handle.address(),
-            Some(state.config.network_key_pair().public().to_owned()),
+            state.config.network_key_pair().public().to_owned(),
         )
         .await
         .unwrap();
@@ -95,11 +96,11 @@ async fn test_wait_for_effects_position_mismatch() {
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
-    let tx_position1 = ConsensusTxPosition {
+    let tx_position1 = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
-    let tx_position2 = ConsensusTxPosition {
+    let tx_position2 = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN + 1,
     };
@@ -120,9 +121,8 @@ async fn test_wait_for_effects_position_mismatch() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()
@@ -140,7 +140,7 @@ async fn test_wait_for_effects_post_commit_rejected() {
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
-    let tx_position = ConsensusTxPosition {
+    let tx_position = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
@@ -186,7 +186,7 @@ async fn test_wait_for_effects_epoch_mismatch() {
     let test_context = TestContext::new().await;
 
     let tx_digest = TransactionDigest::random();
-    let tx_position = ConsensusTxPosition {
+    let tx_position = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
@@ -211,7 +211,7 @@ async fn test_wait_for_effects_timeout() {
     let test_context = TestContext::new().await;
 
     let tx_digest = TransactionDigest::random();
-    let tx_position = ConsensusTxPosition {
+    let tx_position = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
@@ -236,7 +236,7 @@ async fn test_wait_for_effects_quorum_rejected() {
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
-    let tx_position = ConsensusTxPosition {
+    let tx_position = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
@@ -280,7 +280,7 @@ async fn test_wait_for_effects_fastpath_certified() {
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
-    let tx_position = ConsensusTxPosition {
+    let tx_position = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
@@ -303,9 +303,8 @@ async fn test_wait_for_effects_fastpath_certified() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()
@@ -342,7 +341,7 @@ async fn test_wait_for_effects_finalized() {
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
-    let tx_position = ConsensusTxPosition {
+    let tx_position = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
@@ -367,9 +366,8 @@ async fn test_wait_for_effects_finalized() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()
@@ -403,7 +401,7 @@ async fn test_wait_for_effects_expired() {
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
-    let tx_position = ConsensusTxPosition {
+    let tx_position = ConsensusPosition {
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
@@ -431,9 +429,8 @@ async fn test_wait_for_effects_expired() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &epoch_store,
-                SchedulingSource::NonFastPath,
             )
             .await
             .unwrap()

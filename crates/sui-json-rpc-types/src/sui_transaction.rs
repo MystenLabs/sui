@@ -420,6 +420,8 @@ pub enum SuiTransactionBlockKind {
     ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2),
     ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3),
     ConsensusCommitPrologueV4(SuiConsensusCommitPrologueV4),
+
+    ProgrammableSystemTransaction(SuiProgrammableTransactionBlock),
     // .. more transaction types go here
 }
 
@@ -472,6 +474,10 @@ impl Display for SuiTransactionBlockKind {
             }
             Self::ProgrammableTransaction(p) => {
                 write!(writer, "Transaction Kind: Programmable")?;
+                write!(writer, "{}", crate::displays::Pretty(p))?;
+            }
+            Self::ProgrammableSystemTransaction(p) => {
+                write!(writer, "Transaction Kind: Programmable System")?;
                 write!(writer, "{}", crate::displays::Pretty(p))?;
             }
             Self::AuthenticatorStateUpdate(_) => {
@@ -533,7 +539,8 @@ impl SuiTransactionBlockKind {
                     additional_state_digest: p.additional_state_digest,
                 })
             }
-            TransactionKind::ProgrammableTransaction(_) => {
+            TransactionKind::ProgrammableTransaction(_)
+            | TransactionKind::ProgrammableSystemTransaction(_) => {
                 // This case is handled separately by the callers
                 unreachable!()
             }
@@ -592,6 +599,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
                                 SuiEndOfEpochTransactionKind::StoreExecutionTimeObservations
                             }
+                            EndOfEpochTransactionKind::AccumulatorRootCreate => {
+                                SuiEndOfEpochTransactionKind::AccumulatorRootCreate
+                            }
                         })
                         .collect(),
                 })
@@ -616,6 +626,15 @@ impl SuiTransactionBlockKind {
         package_resolver: &Resolver<impl PackageStore>,
     ) -> Result<Self, anyhow::Error> {
         match tx {
+            TransactionKind::ProgrammableSystemTransaction(p) => {
+                Ok(Self::ProgrammableSystemTransaction(
+                    SuiProgrammableTransactionBlock::try_from_with_package_resolver(
+                        p,
+                        package_resolver,
+                    )
+                    .await?,
+                ))
+            }
             TransactionKind::ProgrammableTransaction(p) => Ok(Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from_with_package_resolver(
                     p,
@@ -629,7 +648,9 @@ impl SuiTransactionBlockKind {
 
     pub fn transaction_count(&self) -> usize {
         match self {
-            Self::ProgrammableTransaction(p) => p.commands.len(),
+            Self::ProgrammableTransaction(p) | Self::ProgrammableSystemTransaction(p) => {
+                p.commands.len()
+            }
             _ => 1,
         }
     }
@@ -643,6 +664,7 @@ impl SuiTransactionBlockKind {
             Self::ConsensusCommitPrologueV3(_) => "ConsensusCommitPrologueV3",
             Self::ConsensusCommitPrologueV4(_) => "ConsensusCommitPrologueV4",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+            Self::ProgrammableSystemTransaction(_) => "ProgrammableSystemTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
@@ -1663,6 +1685,7 @@ pub enum SuiEndOfEpochTransactionKind {
     BridgeStateCreate(CheckpointDigest),
     BridgeCommitteeUpdate(SequenceNumber),
     StoreExecutionTimeObservations,
+    AccumulatorRootCreate,
 }
 
 #[serde_as]
@@ -2247,6 +2270,10 @@ impl SuiCallArg {
                     version,
                     digest,
                 })
+            }
+            CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Add support for balance withdraws.
+                todo!("Balance withdraws not yet supported in json rpc types")
             }
         })
     }

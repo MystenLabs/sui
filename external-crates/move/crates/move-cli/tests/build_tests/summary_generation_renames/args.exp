@@ -11,6 +11,10 @@ DA
 address_mapping.json
 External Command `cat package_summaries/A/A.json`:
 {
+  "id": {
+    "address": "A",
+    "name": "A"
+  },
   "doc": null,
   "immediate_dependencies": [
     {
@@ -40,6 +44,10 @@ External Command `cat package_summaries/A/A.json`:
   "enums": {}
 }External Command `cat package_summaries/CA/A.json`:
 {
+  "id": {
+    "address": "CA",
+    "name": "A"
+  },
   "doc": null,
   "immediate_dependencies": [],
   "attributes": [],
@@ -60,6 +68,10 @@ External Command `cat package_summaries/A/A.json`:
   "enums": {}
 }External Command `cat package_summaries/DA/A.json`:
 {
+  "id": {
+    "address": "DA",
+    "name": "A"
+  },
   "doc": null,
   "immediate_dependencies": [],
   "attributes": [],

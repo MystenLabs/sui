@@ -23,6 +23,7 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use consensus_types::block::{BlockRef, Round};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, warn};
@@ -38,11 +39,11 @@ use super::{
     BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
-    block::{BlockRef, VerifiedBlock},
+    block::VerifiedBlock,
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
-    CommitIndex, Round,
+    CommitIndex,
 };
 
 /// Implements Anemo RPC client for Consensus.

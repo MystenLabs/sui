@@ -16,11 +16,20 @@ impl From<sui_sdk_types::ExecutionStatus> for super::ExecutionStatus {
                 error: None,
             },
             sui_sdk_types::ExecutionStatus::Failure { error, command } => {
-                let mut error = super::ExecutionError::from(error);
-                error.command = command;
+                let mut error_message = super::ExecutionError::from(error.clone());
+                error_message.command = command;
+                error_message.description = {
+                    let error = sui_types::execution_status::ExecutionFailureStatus::from(error);
+                    if let Some(command) = command {
+                        format!("{error:?} in command {command}")
+                    } else {
+                        format!("{error:?}")
+                    }
+                }
+                .pipe(Some);
                 Self {
                     success: Some(false),
-                    error: Some(error),
+                    error: Some(error_message),
                 }
             }
         }
@@ -209,6 +218,7 @@ impl From<sui_sdk_types::ExecutionError> for super::ExecutionError {
                 });
                 ExecutionErrorKind::MoveRawValueTooBig
             }
+            InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
         };
 
         message.set_kind(kind);
@@ -224,7 +234,6 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
 
         match value.kind() {
             Unknown => return Err(TryFromProtoError::from_error("unknown ExecutionErrorKind")),
-
             InsufficientGas => Self::InsufficientGas,
             InvalidGasObject => Self::InvalidGasObject,
             InvariantViolation => Self::InvariantViolation,
@@ -393,7 +402,6 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
             ExecutionCanceledDueToRandomnessUnavailable => {
                 Self::ExecutionCanceledDueToRandomnessUnavailable
             }
-
             MoveVectorElemTooBig => {
                 let super::SizeError { size, max_size } = value
                     .size_error
@@ -418,6 +426,7 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
                         .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
                 }
             }
+            InvalidLinkage => Self::InvalidLinkage,
         }
         .pipe(Ok)
     }

@@ -7,8 +7,8 @@ use crate::{
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         warning_filters::{
-            FILTER_ALL, FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters,
-            WarningFiltersBuilder, WarningFiltersTable,
+            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters, WarningFiltersBuilder,
+            WarningFiltersTable,
         },
     },
     editions::{self, Edition, FeatureGate, Flavor},
@@ -96,12 +96,7 @@ impl<'env> Context<'env, '_> {
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
         let mut warning_filters_table = WarningFiltersTable::new();
-        let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
-        for prefix in compilation_env.known_filter_names() {
-            for f in compilation_env.filter_from_str(prefix, FILTER_ALL) {
-                all_filter_alls.add(f);
-            }
-        }
+        let all_filter_alls = WarningFiltersBuilder::new_all_filter_alls(compilation_env);
         let all_filter_alls = warning_filters_table.add(all_filter_alls);
         let reporter = compilation_env.diagnostic_reporter_at_top_level();
         let defn_context = DefnContext {
@@ -636,7 +631,7 @@ pub fn program(
     //
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
-            if !context.env().flags().sources_shadow_deps() {
+            if !context.env().sources_shadow_deps() {
                 duplicate_module(&mut context, &source_module_map, mident, old_loc)
             }
         }

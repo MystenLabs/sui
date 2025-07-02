@@ -103,8 +103,8 @@ impl Context {
         self.graph.borrowed_by(r).map_err(graph_err)
     }
 
-    /// Used for checking if a location is borrowed, primarily for recording this information on
-    /// a specific Copy instance
+    /// Used for checking if a location is borrowed
+    /// Used for updating the borrowed marker in Copy, and for correctness of Move
     fn is_location_borrowed(&self, l: T::Location) -> Result<bool, ExecutionError> {
         let borrowed_by = self.borrowed_by(self.local_root)?;
         Ok(borrowed_by
@@ -207,9 +207,13 @@ impl Context {
 pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(ast)?;
     let commands = &ast.commands;
-    for (c, _t) in commands {
-        let result = command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
-        assert_invariant!(result.len() == _t.len(), "result length mismatch");
+    for (c, t) in commands {
+        let result =
+            command(&mut context, c, t).map_err(|e| e.with_command_index(c.idx as usize))?;
+        assert_invariant!(
+            result.len() == t.len(),
+            "result length mismatch for command. {c:?}"
+        );
         context.results.push(result.into_iter().map(Some).collect());
     }
 
@@ -245,6 +249,7 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
 fn command(
     context: &mut Context,
     sp!(_, command): &T::Command,
+    result_tys: &[T::Type],
 ) -> Result<Vec<Value>, ExecutionError> {
     Ok(match command {
         T::Command_::MoveCall(mc) => {
@@ -275,20 +280,18 @@ fn command(
             let coin_values = arguments(context, coins)?;
             consume_values(context, coin_values)?;
             write_ref(context, 0, target_value)?;
-            vec![Value::NonRef]
+            vec![]
         }
         T::Command_::MakeMoveVec(_, xs) => {
             let vs = arguments(context, xs)?;
             consume_values(context, vs)?;
             vec![Value::NonRef]
         }
-        T::Command_::Publish(_, _) => {
-            vec![]
-        }
-        T::Command_::Upgrade(_, _, _, x) => {
+        T::Command_::Publish(_, _, _) => result_tys.iter().map(|_| Value::NonRef).collect(),
+        T::Command_::Upgrade(_, _, _, x, _) => {
             let v = argument(context, x)?;
             consume_value(context, v)?;
-            vec![]
+            vec![Value::NonRef]
         }
     })
 }
@@ -343,6 +346,13 @@ fn move_value(
     arg_idx: u16,
     l: T::Location,
 ) -> Result<Value, ExecutionError> {
+    if context.is_location_borrowed(l)? {
+        // TODO more specific error
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            arg_idx as usize,
+        ));
+    }
     let Some(value) = context.location(l).take() else {
         return Err(command_argument_error(
             CommandArgumentError::InvalidValueUsage,

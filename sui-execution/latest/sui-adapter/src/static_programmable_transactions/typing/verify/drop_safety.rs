@@ -45,8 +45,8 @@ mod refine {
                 argument(used, target);
             }
             T::Command_::MakeMoveVec(_, xs) => arguments(used, xs),
-            T::Command_::Publish(_, _) => (),
-            T::Command_::Upgrade(_, _, _, x) => argument(used, x),
+            T::Command_::Publish(_, _, _) => (),
+            T::Command_::Upgrade(_, _, _, x, _) => argument(used, x),
         }
     }
 
@@ -121,10 +121,10 @@ mod verify {
     pub fn transaction(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
         let mut context = Context::new(ast)?;
         let commands = &ast.commands;
-        for (c, _t) in commands {
+        for (c, t) in commands {
             let result =
-                command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
-            assert_invariant!(result.len() == _t.len(), "result length mismatch");
+                command(&mut context, c, t).map_err(|e| e.with_command_index(c.idx as usize))?;
+            assert_invariant!(result.len() == t.len(), "result length mismatch");
             context.results.push(result.into_iter().map(Some).collect());
         }
 
@@ -149,6 +149,7 @@ mod verify {
     fn command(
         context: &mut Context,
         sp!(_, command): &T::Command,
+        result_tys: &[Type],
     ) -> Result<Vec<Value>, ExecutionError> {
         Ok(match command {
             T::Command_::MoveCall(mc) => {
@@ -180,20 +181,18 @@ mod verify {
                 let coin_values = arguments(context, coins)?;
                 consume_values(coin_values);
                 consume_value(target_value);
-                vec![Value]
+                vec![]
             }
             T::Command_::MakeMoveVec(_, xs) => {
                 let vs = arguments(context, xs)?;
                 consume_values(vs);
                 vec![Value]
             }
-            T::Command_::Publish(_, _) => {
-                vec![]
-            }
-            T::Command_::Upgrade(_, _, _, x) => {
+            T::Command_::Publish(_, _, _) => result_tys.iter().map(|_| Value).collect(),
+            T::Command_::Upgrade(_, _, _, x, _) => {
                 let v = argument(context, x)?;
                 consume_value(v);
-                vec![]
+                vec![Value]
             }
         })
     }

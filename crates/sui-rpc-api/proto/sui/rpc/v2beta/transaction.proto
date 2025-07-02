@@ -442,6 +442,8 @@ message EndOfEpochTransactionKind {
     string bridge_state_create = 203;
     // Initialize the bridge committee.
     uint64 bridge_committee_init = 204;
+    // Create the accumulator root object.
+    google.protobuf.Empty accumulator_root_create = 205;
   }
 }
 
