@@ -61,6 +61,7 @@ impl Context {
 
     fn is_loc_dirty(&self, location: T::Location) -> bool {
         match location {
+            T::Location::TxContext => false, // TxContext is never dirty
             T::Location::GasCoin => self.gas_coin.is_dirty(),
             T::Location::Input(i) => self.inputs[i as usize].is_dirty(),
             T::Location::Result(i, j) => self.results[i as usize][j as usize].is_dirty(),
@@ -80,6 +81,7 @@ impl Context {
 
     fn mark_loc_dirty(&mut self, location: T::Location) {
         match location {
+            T::Location::TxContext => (), // TxContext is never dirty, so nothing to do
             T::Location::GasCoin => self.gas_coin = IsDirty::Fixed { is_dirty: true },
             T::Location::Input(i) => match &mut self.inputs[i as usize] {
                 // if it needs to be dirtied, it will first be marked as fixed
