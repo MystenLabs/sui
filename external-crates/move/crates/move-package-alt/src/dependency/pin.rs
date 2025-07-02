@@ -94,6 +94,10 @@ impl PinnedDependencyInfo {
     pub fn use_environment(&self) -> &EnvironmentName {
         self.0.use_environment()
     }
+
+    pub fn is_override(&self) -> bool {
+        self.0.is_override
+    }
 }
 
 impl PinnedGitDependency {

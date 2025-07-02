@@ -173,7 +173,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
         let mut output = BTreeMap::new();
         for env in self.environments().keys() {
-            output.extend(self.root.direct_deps(env).await?);
+            output.extend(self.root.direct_deps(env)?.clone());
         }
 
         Ok(output)
@@ -260,7 +260,7 @@ mod tests {
 
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
-        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
+        let deps = package.direct_deps(&"testnet".to_string()).unwrap();
         assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
         assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
     }
@@ -271,7 +271,7 @@ mod tests {
 
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
-        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
+        let deps = package.direct_deps(&"testnet".to_string()).unwrap();
         assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
         assert!(deps.contains_key(&Identifier::new("depends_a_b").unwrap()));
         assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
@@ -286,7 +286,7 @@ mod tests {
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
         // devnet does not exist in the manifest, should error
-        let deps = package.direct_deps(&"devnet".to_string()).await;
+        let deps = package.direct_deps(&"devnet".to_string());
         assert!(deps.is_err());
     }
 

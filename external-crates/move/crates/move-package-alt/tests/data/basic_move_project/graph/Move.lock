@@ -3,7 +3,7 @@
 
 [pinned.mainnet.depends_a_b]
 source = { local = "../depends_a_b" }
-use_environment = "testnet"
+use_environment = "mainnet"
 manifest_digest = "E8E883A2B573B0AF219A311E69A9609C0EB6A7E6CFB92CB87E346EA7F223BFDC"
 deps = { pkg_a = "pkg_a", pkg_b = "pkg_b" }
 
@@ -15,19 +15,19 @@ deps = { depends_a_b = "depends_a_b", nodeps = "nodeps" }
 
 [pinned.mainnet.nodeps]
 source = { local = "../nodeps" }
-use_environment = "testnet"
+use_environment = "mainnet"
 manifest_digest = "8A16FE23CA24BEE47DEDC6E250F238F5A66D52578644BD548466D220340E13B1"
 deps = {}
 
 [pinned.mainnet.pkg_a]
 source = { local = "../pkg_a" }
-use_environment = "testnet"
+use_environment = "mainnet"
 manifest_digest = "D8A8CB1720AEC682BC078516F9DE49E01DD449850AE35407DEE29219F2277BF2"
 deps = {}
 
 [pinned.mainnet.pkg_b]
 source = { local = "../pkg_b" }
-use_environment = "testnet"
+use_environment = "mainnet"
 manifest_digest = "86230A4684CFA24022202FF7E482258F7BBA92B1D24670D0A3537950497E159A"
 deps = {}
 

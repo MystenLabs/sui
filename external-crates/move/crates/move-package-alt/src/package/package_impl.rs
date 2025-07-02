@@ -8,13 +8,14 @@ use super::manifest::Manifest;
 use super::paths::PackagePath;
 use super::published_info::PublishInformation;
 use crate::{
-    dependency::{PinnedDependencyInfo, pin},
+    dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{LocalDepInfo, LockfileDependencyInfo},
+    schema::{LocalDepInfo, LockfileDependencyInfo, Publication},
 };
 use move_core_types::identifier::Identifier;
+use tracing::debug;
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -33,6 +34,9 @@ pub struct Package<F: MoveFlavor> {
     publish_data: BTreeMap<EnvironmentName, PublishInformation<F>>,
     /// The way this package should be serialized to the lockfile
     source: LockfileDependencyInfo,
+
+    /// The pinned direct dependencies for this package
+    deps: DependencySet<PinnedDependencyInfo>,
 }
 
 impl<F: MoveFlavor> Package<F> {
@@ -41,30 +45,33 @@ impl<F: MoveFlavor> Package<F> {
     ///
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
-        let publish_data = Self::load_published_info_from_lockfile(&path)?;
-
-        Ok(Self {
-            manifest,
-            path,
-            publish_data,
-            source: LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }),
-        })
+        let source = LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() });
+        Self::_load(path, source).await
     }
 
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
     pub async fn load(dep: PinnedDependencyInfo) -> PackageResult<Self> {
-        let path = PackagePath::new(dep.fetch().await?)?;
-        let manifest = Manifest::read_from_file(path.manifest_path())?;
+        Self::_load(dep.fetch().await?, dep.into()).await
+    }
+
+    async fn _load(path: impl AsRef<Path>, source: LockfileDependencyInfo) -> PackageResult<Self> {
+        let path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
         let publish_data = Self::load_published_info_from_lockfile(&path)?;
+
+        debug!("pinning deps for {}", manifest.package_name());
+        debug!("manifest: {:#?}", manifest);
+        let deps = pin::<F>(manifest.dependencies().clone(), &manifest.environments()).await?;
+
+        debug!("pinned deps: {:#?}", deps);
 
         Ok(Self {
             manifest,
             path,
             publish_data,
-            source: dep.into(),
+            source,
+            deps,
         })
     }
 
@@ -104,41 +111,39 @@ impl<F: MoveFlavor> Package<F> {
         self.manifest().package_name()
     }
 
-    /// TODO: comment
+    /// The contents of the manifest file for the package
     pub fn manifest(&self) -> &Manifest<F> {
         &self.manifest
     }
 
+    /// A dependency that points to this package.
     pub fn dep_for_self(&self) -> &LockfileDependencyInfo {
         &self.source
     }
 
+    pub fn publication(&self, env: &EnvironmentName) -> Option<Publication<F>> {
+        todo!()
+    }
+
     /// The resolved and pinned dependencies from the manifest for environment `env`
-    pub async fn direct_deps(
+    /// Returns an error if `env` is not declared in the manifest (TODO: remove this restriction?)
+    pub fn direct_deps(
         &self,
         env: &EnvironmentName,
     ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
-        let mut deps = self.manifest.dependencies();
+        debug!(
+            "requested deps for {} in env {}",
+            self.manifest.package_name(),
+            env
+        );
 
-        if self.manifest().environments().get(env).is_none() {
+        if !self.manifest.environments().contains_key(env) {
             return Err(PackageError::Generic(format!(
                 "Package {} does not have `{env}` defined as an environment in its manifest",
                 self.name()
             )));
         }
 
-        let envs: BTreeMap<_, _> = self
-            .manifest()
-            .environments()
-            .iter()
-            .filter(|(e, _)| *e == env)
-            .map(|(env, id)| (env.clone(), id.clone()))
-            .collect();
-        let pinned_deps = pin::<F>(deps.clone(), &envs).await?;
-
-        Ok(pinned_deps
-            .into_iter()
-            .map(|(_, id, dep)| (id, dep))
-            .collect())
+        Ok(self.deps.deps_for(env).cloned().unwrap_or_default())
     }
 }
