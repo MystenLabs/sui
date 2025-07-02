@@ -1886,7 +1886,11 @@ Returns true if the provided staking pool is preactive at the provided epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_calculate_rewards">calculate_rewards</a>(pool: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a>, staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">StakedSui</a>, current_epoch: u64): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/staking_pool.md#sui_system_staking_pool_calculate_rewards">calculate_rewards</a>(
+    pool: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakingPool">StakingPool</a>,
+    staked_sui: &<a href="../sui_system/staking_pool.md#sui_system_staking_pool_StakedSui">StakedSui</a>,
+    current_epoch: u64,
+): u64 {
     <b>let</b> staked_amount = staked_sui.amount();
     <b>let</b> pool_token_withdraw_amount = {
         <b>let</b> exchange_rate_at_staking_epoch = pool.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(staked_sui.<a href="../sui_system/staking_pool.md#sui_system_staking_pool_stake_activation_epoch">stake_activation_epoch</a>);
