@@ -10,7 +10,11 @@ use std::fmt::Debug;
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::dependency::{DependencySet, PinnedDependencyInfo};
+use crate::{
+    dependency::{CombinedDependency, DependencySet},
+    errors::FileHandle,
+    schema,
+};
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
@@ -37,11 +41,10 @@ pub trait MoveFlavor: Debug {
     /// example, an environment ID might be a chain identifier
     //
     // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
-    type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq + Ord + Debug + ToString;
 
     /// Return the implicit dependencies for the environments listed in [environments]
     fn implicit_deps(
-        &self,
-        environments: impl Iterator<Item = Self::EnvironmentID>,
-    ) -> DependencySet<PinnedDependencyInfo>;
+        file_handle: FileHandle,
+        environments: impl Iterator<Item = schema::EnvironmentID>,
+    ) -> DependencySet<CombinedDependency>;
 }

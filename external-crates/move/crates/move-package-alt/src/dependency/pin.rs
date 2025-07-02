@@ -70,6 +70,29 @@ impl PinnedDependencyInfo {
         })
     }
 
+    /// Create a pinned git dependency from a git tree
+    pub fn from_git_tree(
+        containing_file: FileHandle,
+        env: &EnvironmentName,
+        tree: GitTree,
+        is_override: bool,
+    ) -> Self {
+        PinnedDependencyInfo(Dependency {
+            dep_info: Pinned::Git(PinnedGitDependency { inner: tree }),
+            use_environment: env.clone(),
+            is_override,
+            published_at: None, // TODO
+            containing_file,
+        })
+    }
+
+    pub fn as_git_dep(&self) -> Option<&GitTree> {
+        match &self.0.dep_info {
+            Pinned::Git(git) => Some(&git.inner),
+            _ => None,
+        }
+    }
+
     // TODO: replace PackageResult here
     // TODO: move this to fetch.rs
     pub async fn fetch(&self) -> PackageResult<PathBuf> {

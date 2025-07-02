@@ -22,12 +22,18 @@ pub(super) type Combined = ManifestDependencyInfo;
 pub struct CombinedDependency(pub(super) Dependency<Combined>);
 
 impl CombinedDependency {
+    /// Create a new [`CombinedDependency`] from a [`Dependency<Combined>`]
+    pub fn new(dep_info: Dependency<Combined>) -> Self {
+        Self(dep_info)
+    }
+
     /// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
     /// from `file`).
     // TODO: add implicit dependencies here too
     pub fn combine_deps(
         file: FileHandle,
         manifest: &ParsedManifest,
+        implicit_deps: &DependencySet<CombinedDependency>,
     ) -> ManifestResult<DependencySet<Self>> {
         let mut result = DependencySet::new();
 
@@ -58,6 +64,12 @@ impl CombinedDependency {
                     pkg.clone(),
                     Self::from_replacement(file, env.as_ref().clone(), dep.as_ref().clone())?,
                 );
+            }
+
+            if let Some(deps) = implicit_deps.deps_for(env.as_ref()) {
+                for (pkg, dep) in deps {
+                    result.insert(env.as_ref().clone(), pkg.clone(), dep.clone());
+                }
             }
         }
 
