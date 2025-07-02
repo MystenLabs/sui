@@ -10,12 +10,18 @@ use anyhow::anyhow;
 use crate::{sui_flavor::SuiMetadata, SuiFlavor};
 pub use build::Build;
 use move_package_alt::{
-    compilation::build_config::BuildConfig,
+    compilation::{
+        build_config::BuildConfig,
+        compiled_package::{compile, CompiledPackage},
+    },
+    errors::PackageError,
+    flavor::MoveFlavor,
+    package::RootPackage,
     schema::{OriginalID, ParsedLockfile, Publication, PublishedID},
 };
 pub use publish::Publish;
 use shared_crypto::intent::Intent;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::{
     get_new_package_obj_from_response, get_new_package_upgrade_cap_from_response,
@@ -173,4 +179,48 @@ pub async fn update_lock_file_for_chain_env(
 pub fn get_package_digest(compiled_modules: &Vec<Vec<u8>>, object_ids: Vec<&ObjectID>) -> [u8; 32] {
     let hash_modules = true;
     MovePackage::compute_digest_for_modules_and_deps(compiled_modules, object_ids, hash_modules)
+}
+
+async fn compile_package(
+    path: PathBuf,
+    env: &String,
+    build_config: &BuildConfig,
+    chain_id: &String,
+) -> Result<
+    (
+        RootPackage<SuiFlavor>,
+        CompiledPackage,
+        ParsedLockfile<SuiFlavor>,
+        PathBuf,
+    ),
+    anyhow::Error,
+> {
+    let root_pkg = RootPackage::<SuiFlavor>::load(path.clone(), Some(env.clone())).await?;
+
+    // check if the chain id matches the chian id in the env
+    let envs = root_pkg.environments();
+    let manifest_env_chain_id = envs.get(env);
+    let cli_chain_id = Some(chain_id.clone());
+
+    if manifest_env_chain_id != cli_chain_id.as_ref() {
+        return Err(anyhow!("The chain id in the environment '{}' does not match the chain id of the connected network. Please check your Move.toml and ensure that the chain id matches the connected network.", env).into());
+    }
+
+    let compiled_package = compile::<SuiFlavor>(&root_pkg, build_config, &env).await?;
+
+    root_pkg
+        .update_deps_and_write_to_lockfile(&BTreeMap::from([(env.clone(), chain_id.clone())]))
+        .await;
+
+    let mut lockfile = root_pkg.load_lockfile().map_err(|e| {
+        anyhow!(
+            "Failed to load lockfile for package at {}\n: {e}",
+            root_pkg.package_path().path().display()
+        )
+    })?;
+
+    let lockfile_path = root_pkg.package_path().lockfile_path();
+
+    // compile package
+    Ok((root_pkg, compiled_package, lockfile, lockfile_path))
 }

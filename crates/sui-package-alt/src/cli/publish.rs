@@ -10,7 +10,7 @@ use anyhow::anyhow;
 use move_core_types::account_address::AccountAddress;
 
 use crate::{
-    cli::{dry_run_or_execute_or_serialize, update_lock_file_for_chain_env},
+    cli::{compile_package, dry_run_or_execute_or_serialize, update_lock_file_for_chain_env},
     sui_flavor::SuiMetadata,
     SuiFlavor,
 };
@@ -90,28 +90,14 @@ impl Publish {
         if manifest_env_chain_id != cli_chain_id.as_ref() {
             return Err(anyhow!("The chain id in the environment '{}' does not match the chain id of the connected network. Please check your Move.toml and ensure that the chain id matches the connected network.", env).into());
         }
-        // }
-
-        root_pkg
-            .update_deps_and_write_to_lockfile(&BTreeMap::from([(env.clone(), chain_id.clone())]))
-            .await;
-
-        let mut lockfile = root_pkg.load_lockfile().map_err(|e| {
-            anyhow!(
-                "Failed to load lockfile for package at {}\n: {e}",
-                root_pkg.package_path().path().display()
-            )
-        })?;
-
-        let lockfile_path = root_pkg.package_path().lockfile_path();
-
-        // compile package
-        let compiled_package = compile::<SuiFlavor>(
-            root_pkg,
-            build_config.clone(),
-            &self.env.clone().unwrap_or_default(),
-        )
-        .await?;
+        let (root_pkg, compiled_package, mut lockfile, lockfile_path) =
+            compile_package(path, env, &build_config, &chain_id).await?;
+        let compiled_modules = compiled_package.get_package_bytes();
+        let dep_ids: Vec<ObjectID> = compiled_package
+            .dependency_ids()
+            .into_iter()
+            .map(|x| x.0.into())
+            .collect();
 
         let compiled_modules = compiled_package.get_package_bytes();
         let dep_ids: Vec<ObjectID> = compiled_package
