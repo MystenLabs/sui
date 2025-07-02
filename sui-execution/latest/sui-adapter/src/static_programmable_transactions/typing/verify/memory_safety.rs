@@ -31,6 +31,7 @@ enum Value {
 struct Context {
     graph: Graph,
     local_root: Ref,
+    tx_context: Option<Value>,
     gas_coin: Option<Value>,
     inputs: Vec<Option<Value>>,
     results: Vec<Vec<Option<Value>>>,
@@ -81,6 +82,7 @@ impl Context {
         Ok(Self {
             graph,
             local_root,
+            tx_context: Some(Value::NonRef),
             gas_coin: Some(Value::NonRef),
             inputs,
             results: Vec::with_capacity(ast.commands.len()),
@@ -89,6 +91,7 @@ impl Context {
 
     fn location(&mut self, l: T::Location) -> &mut Option<Value> {
         match l {
+            T::Location::TxContext => &mut self.tx_context,
             T::Location::GasCoin => &mut self.gas_coin,
             T::Location::Input(i) => &mut self.inputs[i as usize],
             T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
@@ -242,6 +245,10 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     );
     context.release(context.local_root)?;
     assert_invariant!(context.graph.abstract_size() == 0, "reference not released");
+    assert_invariant!(
+        context.tx_context.is_some(),
+        "tx_context should never be moved"
+    );
 
     Ok(())
 }

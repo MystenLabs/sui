@@ -46,7 +46,7 @@ use sui_move_natives::object_runtime::{
 };
 use sui_types::{
     TypeTag,
-    base_types::{MoveObjectType, ObjectID, TxContext, TxContextKind},
+    base_types::{MoveObjectType, ObjectID, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
     execution_config_utils::to_binary_config,
@@ -124,6 +124,8 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     /// User events are claimed after each Move call
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
+    // A single local for holding the TxContext
+    tx_context_value: Locals,
     /// The runtime value for the Gas coin, None if no gas coin is provided
     gas: Option<Inputs>,
     /// The runtime value for the inputs/call args
@@ -187,6 +189,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context.clone(),
         );
 
+        let tx_context_value = Locals::new(vec![Value::tx_context(tx_context.borrow().digest())?])?;
         Ok(Self {
             env,
             metrics,
@@ -194,6 +197,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context,
             gas_charger,
             user_events: vec![],
+            tx_context_value,
             gas,
             inputs,
             results: vec![],
@@ -202,6 +206,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     pub fn finish<Mode: ExecutionMode>(mut self) -> Result<ExecutionResults, ExecutionError> {
+        assert_invariant!(
+            !self.tx_context_value.local(0)?.is_invalid()?,
+            "tx context value should be present"
+        );
         let gas = std::mem::take(&mut self.gas);
         let inputs = std::mem::replace(&mut self.inputs, Inputs::new([])?);
         let mut loaded_runtime_objects = BTreeMap::new();
@@ -424,6 +432,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         ExecutionError,
     > {
         let v = match location {
+            T::Location::TxContext => {
+                let tx_context_local = self.tx_context_value.local(0)?;
+                LocationValue::Loaded(tx_context_local)
+            }
             T::Location::GasCoin => {
                 let gas_locals = unwrap!(self.gas.as_mut(), "Gas coin not provided");
                 let InputValue::Loaded(gas_local) = gas_locals.get(0)? else {
@@ -594,15 +606,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     pub fn vm_move_call(
         &mut self,
         function: T::LoadedFunction,
-        mut args: Vec<CtxValue>,
+        args: Vec<CtxValue>,
         trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
-        match function.tx_context {
-            TxContextKind::None => (),
-            TxContextKind::Mutable | TxContextKind::Immutable => args.push(CtxValue(
-                Value::tx_context(self.tx_context.borrow().digest())?,
-            )),
-        }
         let result = self.execute_function_bypass_visibility(
             &function.runtime_id,
             &function.name,
@@ -967,6 +973,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             invariant_violation!("Failed to serialize Move value");
         };
         let arg = match location {
+            T::Location::TxContext => return Ok(None),
             T::Location::GasCoin => TxArgument::GasCoin,
             T::Location::Input(i) => TxArgument::Input(i),
             T::Location::Result(i, j) => TxArgument::NestedResult(i, j),
