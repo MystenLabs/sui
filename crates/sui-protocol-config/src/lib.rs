@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 86;
+const MAX_PROTOCOL_VERSION: u64 = 87;
 
 // Record history of protocol version allocations here:
 //
@@ -245,6 +245,7 @@ const MAX_PROTOCOL_VERSION: u64 = 86;
 // Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
 //             Make variant count limit explicit in protocol config.
 //             Enable party transfer in testnet.
+// Version 87: Update `sui-system` package to use `calculate_rewards` function.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3759,6 +3760,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_party_transfer = true;
                     }
                 }
+                87 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
