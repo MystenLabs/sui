@@ -31,7 +31,7 @@ impl Build {
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         let root_pkg = RootPackage::<SuiFlavor>::load(path, None).await?;
-        compile(root_pkg, self.build_config.clone(), &self.env)
+        compile(&root_pkg, &self.build_config, &self.env)
             .await
             .unwrap();
 

@@ -10,7 +10,10 @@ use anyhow::anyhow;
 use move_core_types::account_address::AccountAddress;
 
 use crate::{
-    cli::{dry_run_or_execute_or_serialize, get_package_digest, update_lock_file_for_chain_env},
+    cli::{
+        compile_package, dry_run_or_execute_or_serialize, get_package_digest,
+        update_lock_file_for_chain_env,
+    },
     sui_flavor::SuiMetadata,
     SuiFlavor,
 };
@@ -62,15 +65,10 @@ pub struct Upgrade {
 
 impl Upgrade {
     pub async fn execute(&self, binary_version: &str) -> PackageResult<()> {
-        let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
-
         let config_path = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
         let mut context = WalletContext::new(&config_path)?;
-
         let sender = context.active_address()?;
-
         let client = context.get_client().await?;
-        let set_env = context.get_active_env()?.alias.clone();
         let read_api = client.read_api();
         let chain_id = read_api
             .get_chain_identifier()
@@ -78,51 +76,13 @@ impl Upgrade {
             .map_err(|_| anyhow!("Cannot find the chain identifier, thus cannot publish"))?;
 
         let build_config = self.build_config.clone();
-
+        let set_env = context.get_active_env()?.alias.clone();
         let env = &self.env.clone().unwrap_or(set_env.to_string());
+        let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
         println!("Publishing package to environment: {}", env);
-        let root_pkg = RootPackage::<SuiFlavor>::load(path.clone(), Some(env.clone())).await?;
-        let published_data = root_pkg.root_pkg().publish_data();
 
-        // check if the chain id matches the chian id in the env
-        let envs = root_pkg.environments();
-        let manifest_env_chain_id = envs.get(env);
-        let cli_chain_id = Some(chain_id.clone());
-
-        if manifest_env_chain_id != cli_chain_id.as_ref() {
-            return Err(anyhow!("The chain id in the environment '{}' does not match the chain id of the connected network. Please check your Move.toml and ensure that the chain id matches the connected network.", env).into());
-        }
-        // }
-        let published_info = published_data.get(env).ok_or_else(|| {
-            PackageError::Generic(format!(
-                "Package {} has no published info for environment `{}`",
-                root_pkg.root_pkg().name(),
-                env
-            ))
-        })?;
-        let package_id: ObjectID = published_info.publication.published_at.0.into();
-
-        root_pkg
-            .update_deps_and_write_to_lockfile(&BTreeMap::from([(env.clone(), chain_id.clone())]))
-            .await;
-
-        let mut lockfile = root_pkg.load_lockfile().map_err(|e| {
-            anyhow!(
-                "Failed to load lockfile for package at {}\n: {e}",
-                root_pkg.package_path().path().display()
-            )
-        })?;
-
-        let lockfile_path = root_pkg.package_path().lockfile_path();
-
-        // compile package
-        let compiled_package = compile::<SuiFlavor>(
-            root_pkg,
-            build_config.clone(),
-            &self.env.clone().unwrap_or_default(),
-        )
-        .await?;
-
+        let (root_pkg, compiled_package, mut lockfile, lockfile_path) =
+            compile_package(path, env, &build_config, &chain_id).await?;
         let compiled_modules = compiled_package.get_package_bytes();
         let dep_ids: Vec<ObjectID> = compiled_package
             .dependency_ids()
@@ -157,6 +117,16 @@ impl Upgrade {
         debug!("Compiled modules {:?}", compiled_modules);
         debug!("Dependency IDs {:?}", dep_ids);
         println!("Package compiled successfully.");
+
+        let published_data = root_pkg.root_pkg().publish_data();
+        let published_info = published_data.get(env).ok_or_else(|| {
+            PackageError::Generic(format!(
+                "Package {} has no published info for environment `{}`",
+                root_pkg.root_pkg().name(),
+                env
+            ))
+        })?;
+        let package_id: ObjectID = published_info.publication.published_at.0.into();
 
         // create the publish tx kind
         let tx_kind = client
