@@ -194,6 +194,10 @@ mod tests {
         flavor::Vanilla,
         git::{GitResult, run_git_cmd_with_args},
         schema::LockfileDependencyInfo,
+        test_utils::{
+            self, basic_manifest,
+            git::{self},
+        },
     };
     use move_core_types::identifier::Identifier;
     use std::{fs, path::PathBuf};
@@ -353,99 +357,50 @@ mod tests {
         run_git_cmd_with_args(args, Some(repo_path)).await
     }
 
-    pub async fn setup_test_move_git_repo() -> (TempDir, PathBuf, Vec<String>) {
-        // Create a temporary directory
-        let temp_dir = tempdir().unwrap();
-        let root_path = temp_dir.path().to_path_buf();
+    /// This test creates a git repository with a Move package, and another package that depends on
+    /// this package as a git dependency. It then tests the following
+    /// - direct dependency resolution is correct
+    /// - checkout of git dependency at the requested git sha is correct
+    /// - updating the git dependency to a different sha works as expected
+    /// - updating the git dependency in the manifest and re-pinning works as expected, including
+    /// writing back the deps to a lockfile
+    #[tokio::test]
+    pub async fn test_all() {
+        let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
+            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
+        });
 
-        debug!("=== setting up test repo ===");
+        pkg_git.change_file("Move.toml", &basic_manifest("pkg_git", "0.0.2"));
+        pkg_git_repo.commit();
+        pkg_git.change_file("Move.toml", &basic_manifest("pkg_git", "0.0.3"));
+        pkg_git_repo.commit();
 
-        // Create the root directory for the Move project
-        fs::create_dir_all(&root_path).unwrap();
+        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
+            project.file(
+                "Move.toml",
+                r#"[package]
+name = "pkg_dep_on_git"
+edition = "2025"
+license = "Apache-2.0"
+authors = ["Move Team"]
+version = "0.0.1"
 
-        let pkg_path = root_path.join("packages").join("pkg_dep_on_git");
-        fs::create_dir_all(&pkg_path).unwrap();
-        fs::copy(
-            "tests/data/basic_move_project/pkg_dep_on_git/Move.toml",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
+[dependencies]
+pkg_git = { git = "../pkg_git", rev = "main" }
 
-        // Create directory structure
-        let pkg_path = root_path.join("packages").join("pkg_git");
-        fs::create_dir_all(&pkg_path).unwrap();
+[environments]
+mainnet = "35834a8a"
+testnet = "4c78adac"
+"#,
+            )
+        });
 
-        // Initialize git repository with main as default branch
-        run_git_cmd(&["init", "--initial-branch=main"], &pkg_path).await;
-
-        fs::copy(
-            "tests/data/basic_move_project/config",
-            pkg_path.join(".git").join("config"),
-        )
-        .unwrap();
-
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Initial commit
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Initial commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.1", "-m", "Initial version"], &pkg_path).await;
-
-        // Modify pkg_git and commit
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml.new",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        let cmd = Command::new("cat")
-            .arg(pkg_path.join("Move.toml"))
-            .output()
-            .await
-            .unwrap();
-
-        // Commit updates
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Second commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.2", "-m", "Second version"], &pkg_path).await;
-
-        // Modify pkg_git and commit
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml.new2",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Commit updates
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Third commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.3", "-m", "Third version"], &pkg_path).await;
-
-        // Get commits SHA
-        let commits = run_git_cmd(&["log", "--pretty=format:%H"], &pkg_path)
-            .await
-            .unwrap();
-        let commits: Vec<_> = commits.lines().map(|x| x.to_string()).collect();
-
-        debug!("=== test repo setup complete ===");
-
-        (temp_dir, root_path, commits)
-    }
-
-    #[test(tokio::test)]
-    async fn test_all() {
-        let (temp_dir, root_path, commits) = setup_test_move_git_repo().await;
-        let move_dir = temp_dir.path().join(".move");
         // TODO: we need to figure a way to allow fetch to work in non ~/.move folder which would
         // end being the ~/.move folder on the machine, rather than some temp dir.
 
-        let git_repo = root_path.join("packages").join("pkg_git");
-
-        let root_pkg_path = root_path.join("packages").join("pkg_dep_on_git");
+        let git_repo = pkg_git.root();
+        let root_pkg_path = pkg_dep_on_git.root();
+        let commits = pkg_git.commits();
         let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
 
         // we need to replace this relative path with the actual git repository path, because find_sha
