@@ -7,7 +7,7 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
     use crate::error::{UserInputError, UserInputResult};
-    use crate::gas::{self, GasCostSummary, SuiGasStatusAPI};
+    use crate::gas::{self, GasCostSummary, GasUsageReport, SuiGasStatusAPI};
     use crate::gas_model::gas_predicates::{cost_table_for_version, txn_base_cost_as_multiplier};
     use crate::gas_model::units_types::CostTable;
     use crate::transaction::ObjectReadResult;
@@ -17,6 +17,7 @@ mod checked {
         ObjectID,
     };
     use move_core_types::vm_status::StatusCode;
+    use serde::{Deserialize, Serialize};
     use sui_protocol_config::*;
 
     /// A bucket defines a range of units that will be priced the same.
@@ -144,7 +145,7 @@ mod checked {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct PerObjectStorage {
         /// storage_cost is the total storage gas to charge. This is computed
         /// at the end of execution while determining storage charges.
@@ -520,6 +521,19 @@ mod checked {
         fn adjust_computation_on_out_of_gas(&mut self) {
             self.per_object_storage = Vec::new();
             self.computation_cost = self.gas_budget;
+        }
+
+        fn gas_usage_report(&self) -> GasUsageReport {
+            GasUsageReport {
+                cost_summary: self.summary(),
+                gas_used: self.gas_used(),
+                gas_price: self.gas_price(),
+                reference_gas_price: self.reference_gas_price(),
+                per_object_storage: self.per_object_storage().clone(),
+                gas_budget: self.gas_budget(),
+                storage_gas_price: self.storage_gas_price,
+                rebate_rate: self.rebate_rate,
+            }
         }
     }
 }
