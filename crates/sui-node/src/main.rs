@@ -43,10 +43,6 @@ struct Args {
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
 
-#[cfg(not(target_env = "msvc"))]
-#[global_allocator]
-static JEMALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 fn main() {
     antithesis_sdk::antithesis_init();
 
