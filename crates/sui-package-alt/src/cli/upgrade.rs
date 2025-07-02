@@ -21,10 +21,8 @@ use clap::{Command, Parser, Subcommand};
 use move_package_alt::{
     compilation::{build_config::BuildConfig, compiled_package::compile, lint_flag::LintFlag},
     errors::{PackageError, PackageResult},
-    flavor::Vanilla,
-    package::{Package, RootPackage},
-    schema::{ParsedLockfile, Publication},
 };
+
 use shared_crypto::intent::Intent;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_sdk::{

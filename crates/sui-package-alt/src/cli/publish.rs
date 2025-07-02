@@ -18,9 +18,6 @@ use clap::{Command, Parser, Subcommand};
 use move_package_alt::{
     compilation::{build_config::BuildConfig, compiled_package::compile, lint_flag::LintFlag},
     errors::PackageResult,
-    flavor::Vanilla,
-    package::{Package, RootPackage},
-    schema::{ParsedLockfile, Publication},
 };
 use shared_crypto::intent::Intent;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
@@ -79,17 +76,6 @@ impl Publish {
 
         let env = &self.env.clone().unwrap_or(set_env.to_string());
         println!("Publishing package to environment: {}", env);
-        let root_pkg = RootPackage::<SuiFlavor>::load(path.clone(), Some(env.clone())).await?;
-        let published_data = root_pkg.root_pkg().publish_data(env)?;
-
-        // check if the chain id matches the chian id in the env
-        let envs = root_pkg.environments();
-        let manifest_env_chain_id = envs.get(env);
-        let cli_chain_id = Some(chain_id.clone());
-
-        if manifest_env_chain_id != cli_chain_id.as_ref() {
-            return Err(anyhow!("The chain id in the environment '{}' does not match the chain id of the connected network. Please check your Move.toml and ensure that the chain id matches the connected network.", env).into());
-        }
         let (root_pkg, compiled_package, mut lockfile, lockfile_path) =
             compile_package(path, env, &build_config, &chain_id).await?;
         let compiled_modules = compiled_package.get_package_bytes();
