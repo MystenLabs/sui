@@ -11,8 +11,7 @@ use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -44,7 +43,7 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::{debug, info};
-use typed_store::rocks::{DBMap, MetricConf};
+use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
 use typed_store::rocksdb::{MergeOperands, WriteOptions};
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
@@ -370,12 +369,13 @@ impl IndexStoreTables {
     fn open_with_options<P: Into<PathBuf>>(
         path: P,
         options: typed_store::rocksdb::Options,
+        table_options: Option<DBMapTableConfigMap>,
     ) -> Self {
         IndexStoreTables::open_tables_read_write(
             path.into(),
             MetricConf::new("rpc-index"),
             Some(options),
-            None,
+            table_options,
         )
     }
 
@@ -937,7 +937,52 @@ impl RpcIndexStore {
                     // speedup when indexing
                     let mut options = typed_store::rocksdb::Options::default();
                     options.set_unordered_write(true);
-                    IndexStoreTables::open_with_options(&path, options)
+
+                    // Create column family specific options with compactions disabled
+                    let mut table_config_map = BTreeMap::new();
+
+                    // Create options for balance table with merge operator and compactions disabled
+                    let mut balance_options = typed_store::rocks::default_db_options()
+                        .set_merge_operator_associative(
+                            "balance_merge",
+                            balance_delta_merge_operator,
+                        );
+                    balance_options.options.set_disable_auto_compactions(true);
+
+                    // Create options with compactions disabled
+                    let mut disabled_compaction_options = typed_store::rocks::default_db_options();
+                    disabled_compaction_options
+                        .options
+                        .set_disable_auto_compactions(true);
+
+                    // Apply to all column families
+                    table_config_map
+                        .insert("meta".to_string(), disabled_compaction_options.clone());
+                    table_config_map
+                        .insert("watermark".to_string(), disabled_compaction_options.clone());
+                    table_config_map
+                        .insert("epochs".to_string(), disabled_compaction_options.clone());
+                    table_config_map.insert(
+                        "transactions".to_string(),
+                        disabled_compaction_options.clone(),
+                    );
+                    table_config_map
+                        .insert("owner".to_string(), disabled_compaction_options.clone());
+                    table_config_map.insert(
+                        "dynamic_field".to_string(),
+                        disabled_compaction_options.clone(),
+                    );
+                    table_config_map
+                        .insert("coin".to_string(), disabled_compaction_options.clone());
+                    table_config_map.insert("balance".to_string(), balance_options);
+                    table_config_map
+                        .insert("package_version".to_string(), disabled_compaction_options);
+
+                    IndexStoreTables::open_with_options(
+                        &path,
+                        options,
+                        Some(DBMapTableConfigMap::new(table_config_map)),
+                    )
                 };
 
                 tables
