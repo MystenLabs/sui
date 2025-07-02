@@ -39,7 +39,7 @@ async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectR
 #[sim_test]
 async fn test_deposits() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.set_enable_accumulators_for_testing(true);
+        cfg.enable_accumulators_for_testing();
         cfg
     });
 
@@ -61,7 +61,7 @@ async fn test_deposits() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.set_enable_accumulators_for_testing(true);
+        cfg.enable_accumulators_for_testing();
         cfg
     });
 
@@ -85,7 +85,7 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
 #[ignore(reason = "currently panics")]
 async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.set_enable_accumulators_for_testing(true);
+        cfg.enable_accumulators_for_testing();
         cfg
     });
 
@@ -106,7 +106,7 @@ async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
 #[ignore(reason = "currently panics")]
 async fn test_withdraw_underflow() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.set_enable_accumulators_for_testing(true);
+        cfg.enable_accumulators_for_testing();
         cfg
     });
 

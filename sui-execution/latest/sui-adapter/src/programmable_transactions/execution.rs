@@ -1181,7 +1181,10 @@ mod checked {
                 FunctionKind::NonEntry
             }
             (Visibility::Private | Visibility::Friend, false) => {
-                if cfg!(msim) {
+                if context
+                    .protocol_config
+                    .allow_private_accumulator_entrypoints()
+                {
                     const SEND_TO_ACCOUNT: &IdentStr = ident_str!("send_to_account");
                     const WITHDRAW_FROM_ACCOUNT: &IdentStr = ident_str!("withdraw_from_account");
 
