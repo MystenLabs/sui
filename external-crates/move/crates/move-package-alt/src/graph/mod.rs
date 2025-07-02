@@ -27,7 +27,7 @@ pub struct PackageGraph<F: MoveFlavor> {
 /// A node in the package graph, containing a [Package] in a particular environment
 #[derive(Debug)]
 #[derive_where(Clone)]
-pub struct PackageNode<F: MoveFlavor> {
+struct PackageNode<F: MoveFlavor> {
     package: Arc<Package<F>>,
     use_env: EnvironmentName,
 }
@@ -112,7 +112,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .await
     }
 
-    pub fn nodes(&self) -> impl Iterator<Item = &PackageNode<F>> {
-        self.inner.node_weights()
+    pub fn nodes(&self) -> impl Iterator<Item = &Package<F>> {
+        self.inner.node_weights().map(|x| x.package())
     }
 }

@@ -237,10 +237,10 @@ pub async fn compile<F: MoveFlavor>(
 
     if let Some(dependency_graph) = &root_pkg.dependencies().get(env) {
         for node in dependency_graph.nodes() {
-            if node.package().name() == root_pkg.package_name() {
+            if node.name() == root_pkg.package_name() {
                 continue;
             }
-            let addr = &node.package().publish_data(env)?.publication.published_at;
+            let addr = &node.publish_data(env)?.publication.published_at;
             published_ids.push(addr.clone());
             let addr = NumericalAddress::new(
                 addr.0.into_bytes(),
@@ -250,7 +250,7 @@ pub async fn compile<F: MoveFlavor>(
                 // return one of the standard aliases
                 (*names.get(node.name().as_str()).unwrap()).into()
             } else {
-                node.package().name().as_str().into()
+                node.name().as_str().into()
             };
 
             named_address_map.insert(pkg_name, addr);
@@ -275,19 +275,16 @@ pub async fn compile<F: MoveFlavor>(
 
         // Find the source paths for each dependency and build the PackagePaths
         for node in nodes {
-            println!("Building dependency: {}", node.package().name());
-            let sources = get_sources(node.package().path())?;
-            let is_dependency = node.package().name() != root_pkg.package_name();
+            println!("Building dependency: {}", node.name());
+            let sources = get_sources(node.path())?;
+            let is_dependency = node.name() != root_pkg.package_name();
 
-            debug!(
-                "Node: {:?}, is dependency: {is_dependency}",
-                node.package().name()
-            );
+            debug!("Node: {:?}, is dependency: {is_dependency}", node.name());
 
             // TODO: probably here we need to use a different type than Symbol
             let source_package_paths: PackagePaths<Symbol, Symbol> = PackagePaths {
                 name: Some((
-                    node.package().name().as_str().into(),
+                    node.name().as_str().into(),
                     PackageConfig {
                         is_dependency,
                         warning_filter: WarningFiltersBuilder::new_for_source(),
