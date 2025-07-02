@@ -247,6 +247,15 @@ public macro fun find_index<$T>($v: &vector<$T>, $f: |&$T| -> bool): Option<u64>
     }
 }
 
+/// Finds all indices of elements in the vector `v` that satisfy the predicate `f`.
+/// Returns a vector of indices of all found elements.
+public macro fun find_indices<$T>($v: &vector<$T>, $f: |&$T| -> bool): vector<u64> {
+    let v = $v;
+    let mut indices = vector[];
+    v.length().do!(|i| if ($f(&v[i])) indices.push_back(i));
+    indices
+}
+
 /// Count how many elements in the vector `v` satisfy the predicate `f`.
 public macro fun count<$T>($v: &vector<$T>, $f: |&$T| -> bool): u64 {
     let v = $v;
