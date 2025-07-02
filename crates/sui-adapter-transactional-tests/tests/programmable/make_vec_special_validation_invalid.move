@@ -36,4 +36,4 @@ module test::m1 {
 //# programmable --inputs vector[255u8,157u8,164u8,239u8,184u8,143u8]
 // INVALID string                ^^^ modified the bytes to make an invalid UTF8 string
 //> 0: MakeMoveVec<std::string::String>([Input(0), Input(0)]);
-//> 1: test::m1::vec_string(Result(0));
+//> 1: test::m1::vec_option_string(Result(0));
