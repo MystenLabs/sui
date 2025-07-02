@@ -33,6 +33,7 @@ mod checked {
         language_storage::{ModuleId, StructTag, TypeTag},
         u256::U256,
     };
+    use move_core_types::{ident_str, language_storage::StructTag};
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::{
         move_vm::MoveVM,
@@ -52,6 +53,7 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         SUI_FRAMEWORK_ADDRESS,
+        balance::BALANCE_MODULE_NAME,
         base_types::{
             MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
             RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
@@ -1180,12 +1182,14 @@ mod checked {
             }
             (Visibility::Private | Visibility::Friend, false) => {
                 if cfg!(msim) {
+                    const SEND_TO_ACCOUNT: &IdentStr = ident_str!("send_to_account");
+                    const WITHDRAW_FROM_ACCOUNT: &IdentStr = ident_str!("withdraw_from_account");
+
                     // Allow access to private address balance functions in simtests only.
                     let function = module.function_handle_at(fdef.function);
                     let function_name = module.identifier_at(function.name);
-                    if (function_name.as_str() == "send_to_account"
-                        || function_name.as_str() == "withdraw_from_account")
-                        && module_id.name().as_str() == "balance"
+                    if (function_name == SEND_TO_ACCOUNT || function_name == WITHDRAW_FROM_ACCOUNT)
+                        && module_id.name() == BALANCE_MODULE_NAME
                     {
                         FunctionKind::NonEntry
                     } else {

@@ -49,8 +49,6 @@ fn emit_event(
     // TODO(address-balances): add specific cost for this
     native_charge_gas_early_exit!(context, event_emit_cost_params.event_emit_cost_base);
 
-    let ty = ty_args.pop().unwrap();
-
     let amount = args.pop_back().unwrap().value_as::<u64>().unwrap();
     let recipient = args
         .pop_back()
@@ -64,13 +62,15 @@ fn emit_event(
         .unwrap()
         .into();
 
+    let ty_tag = context.type_to_type_tag(&ty_args.pop().unwrap())?;
+
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
     obj_runtime.emit_accumulator_event(
         accumulator,
         action,
         recipient,
-        ty,
+        ty_tag,
         MoveAccumulatorValue::U64(amount),
     )?;
 

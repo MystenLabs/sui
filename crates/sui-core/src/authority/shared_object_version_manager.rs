@@ -208,11 +208,11 @@ impl SharedObjVerManager {
         )?;
         let mut assigned_versions = Vec::new();
         for assignable in assignables {
-            if matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
-                && !epoch_store.accumulators_enabled()
-            {
-                continue;
-            }
+            assert!(
+                !matches!(assignable, Schedulable::AccumulatorSettlement(_, _))
+                    || epoch_store.accumulators_enabled(),
+                "AccumulatorSettlement should not be scheduled when accumulators are disabled"
+            );
 
             let cert_assigned_versions = Self::assign_versions_for_certificate(
                 epoch_store,

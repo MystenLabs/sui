@@ -3,8 +3,11 @@
 
 use std::collections::HashMap;
 
+use move_core_types::ident_str;
+use move_core_types::identifier::IdentStr;
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
     TransactionEffects, TransactionEffectsAPI,
@@ -44,17 +47,20 @@ impl ClassifiedType {
         };
 
         if struct_tag.address == SUI_FRAMEWORK_ADDRESS
-            && struct_tag.module.as_str() == "balance"
-            && struct_tag.name.as_str() == "Balance"
+            && struct_tag.module.as_ident_str() == BALANCE_MODULE_NAME
+            && struct_tag.name.as_ident_str() == BALANCE_STRUCT_NAME
         {
             return Self::Balance;
         }
 
-        Self::Balance
+        Self::Unknown
     }
 }
 
 impl MergedValue {
+    const ACCUMULATOR_IDENT: &IdentStr = ident_str!("accumulator");
+    const SETTLE_U128_IDENT: &IdentStr = ident_str!("settle_u128");
+
     fn add_move_call(
         merge: Self,
         split: Self,
@@ -83,8 +89,8 @@ impl MergedValue {
                     let split_amount = builder.pure(split_amount).unwrap();
                     builder.programmable_move_call(
                         SUI_FRAMEWORK_PACKAGE_ID,
-                        Identifier::new("accumulator").unwrap(),
-                        Identifier::new("settle_u128").unwrap(),
+                        Self::ACCUMULATOR_IDENT.into(),
+                        Self::SETTLE_U128_IDENT.into(),
                         vec![address.ty.clone()],
                         vec![root, address_arg, merge_amount, split_amount],
                     );

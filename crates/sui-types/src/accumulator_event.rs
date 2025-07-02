@@ -5,12 +5,13 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use mysten_common::fatal;
 
+use crate::balance::Balance;
 use crate::base_types::ObjectID;
 use crate::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
 };
+use crate::gas_coin::GAS;
 use crate::TypeTag;
-use crate::SUI_FRAMEWORK_ADDRESS;
 
 pub const ACCUMULATOR_MODULE_NAME: &IdentStr = ident_str!("accumulator");
 
@@ -43,11 +44,7 @@ impl AccumulatorEvent {
             return (0, 0);
         };
 
-        if !(struct_ty.address == SUI_FRAMEWORK_ADDRESS
-            && struct_ty.module.as_str() == "balance"
-            && struct_ty.name.as_str() == "Balance")
-        {
-            // not a Balance<T>
+        if !Balance::is_balance(struct_ty) {
             return (0, 0);
         }
 
@@ -57,10 +54,7 @@ impl AccumulatorEvent {
             return (0, 0);
         };
 
-        if !(coin_type.address == SUI_FRAMEWORK_ADDRESS
-            && coin_type.module.as_str() == "sui"
-            && coin_type.name.as_str() == "SUI")
-        {
+        if !GAS::is_gas(coin_type) {
             return (0, 0);
         }
 

@@ -2558,12 +2558,13 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// Note: caller usually need to call consensus_message_processed_notify before this call
+    /// Caller must call consensus_message_processed_notify before calling this to ensure that all
+    /// user signatures are available.
     pub fn user_signatures_for_checkpoint(
         &self,
         transactions: &[VerifiedTransaction],
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Vec<GenericSignature>>> {
+    ) -> Vec<Vec<GenericSignature>> {
         assert_eq!(transactions.len(), digests.len());
 
         fn is_signature_expected(transaction: &VerifiedTransaction) -> bool {
@@ -2587,6 +2588,9 @@ impl AuthorityPerEpochStore {
                     // consensus, but have system-generated signatures that are guaranteed to be the same,
                     // so we can just pull them from the transaction.
                     if is_signature_expected(t) {
+                        // Expect is safe as long as consensus_message_processed_notify is called
+                        // before this call, to ensure that all canonical user signatures are
+                        // available.
                         user_sigs.remove(d).expect("signature should be available")
                     } else {
                         t.tx_signatures().to_vec()
@@ -2595,7 +2599,7 @@ impl AuthorityPerEpochStore {
                 .collect()
         };
 
-        Ok(result)
+        result
     }
 
     pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
@@ -3752,7 +3756,7 @@ impl AuthorityPerEpochStore {
                 .push_back(Schedulable::RandomnessStateUpdate(self.epoch(), round));
         }
 
-        if self.protocol_config().enable_accumulators() {
+        if self.accumulators_enabled() {
             let checkpoint_height =
                 self.calculate_pending_checkpoint_height(consensus_commit_info.round);
 

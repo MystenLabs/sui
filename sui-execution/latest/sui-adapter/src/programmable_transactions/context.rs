@@ -943,7 +943,6 @@ mod checked {
             }
 
             finish(
-                vm,
                 protocol_config,
                 state_view,
                 gas_charger,
@@ -1269,7 +1268,6 @@ mod checked {
     }
 
     pub fn finish(
-        vm: &MoveVM,
         protocol_config: &ProtocolConfig,
         state_view: &dyn ExecutionState,
         gas_charger: &mut GasCharger,
@@ -1378,9 +1376,7 @@ mod checked {
                     let value = AccumulatorValue::Integer(amount);
                     let address = AccumulatorAddress::new(
                         accum_event.target_addr.into(),
-                        vm.get_runtime()
-                            .get_type_tag(&accum_event.target_ty)
-                            .unwrap(),
+                        accum_event.target_ty,
                     );
 
                     let write = AccumulatorWriteV1 {
