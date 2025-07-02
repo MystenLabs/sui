@@ -9,10 +9,23 @@ use sui_indexer_alt_jsonrpc::{
     config::RpcLayer,
     start_rpc,
 };
-use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::{uptime, MetricsService};
 use tokio::{fs, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
+
+static VERSION: &str = const_str::concat!(
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_PATCH"),
+    "-",
+    GIT_REVISION
+);
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -65,6 +78,11 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             });
+
+            metrics
+                .registry()
+                .register(uptime(VERSION)?)
+                .context("Failed to register uptime metric.")?;
 
             let h_rpc = start_rpc(
                 Some(database_url),
