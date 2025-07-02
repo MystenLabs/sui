@@ -279,12 +279,16 @@ fun is_some_and() {
 fun destroy_or() {
     assert!(option::none().destroy_or!(10) == 10);
     assert!(option::some(5).destroy_or!(10) == 5);
+
+    let some = option::some(10);
+    assert!(some.destroy_or!(0) == 10);
+    assert!(some.is_some()); // value was copied!
 }
 
 #[test]
 fun destroy_or_no_drop() {
     let none = option::none<NoDrop>().destroy_or!(NoDrop {});
-    let some = option::some(NoDrop {}).destroy_or!(NoDrop {});
+    let some = option::some(NoDrop {}).destroy_or!(abort);
 
     let NoDrop {} = some;
     let NoDrop {} = none;
