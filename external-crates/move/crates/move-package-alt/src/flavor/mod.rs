@@ -38,8 +38,5 @@ pub trait MoveFlavor: Debug {
     fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID>;
 
     /// Return the implicit dependencies for the environments listed in [environments]
-    fn implicit_deps(
-        &self,
-        environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency>;
+    fn implicit_deps(environment: EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency>;
 }

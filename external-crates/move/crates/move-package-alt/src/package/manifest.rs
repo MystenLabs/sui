@@ -149,6 +149,10 @@ impl Manifest {
 
         Ok(())
     }
+
+    pub(crate) fn parsed(&self) -> &ParsedManifest {
+        &self.inner
+    }
 }
 
 impl ManifestError {

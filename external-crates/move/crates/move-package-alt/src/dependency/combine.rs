@@ -28,12 +28,12 @@ pub struct CombinedDependency(pub(super) Dependency<Combined>);
 impl CombinedDependency {
     /// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
     /// from `file`).
-    // TODO: add implicit dependencies here too
     pub fn combine_deps(
         file: FileHandle,
         env: &Environment,
         dep_replacements: &BTreeMap<PackageName, Spanned<ReplacementDependency>>,
         dependencies: &BTreeMap<Spanned<PackageName>, DefaultDependency>,
+        implicit_deps: &BTreeMap<PackageName, ReplacementDependency>,
     ) -> ManifestResult<BTreeMap<PackageName, Self>> {
         let mut result = BTreeMap::new();
 
@@ -57,6 +57,13 @@ impl CombinedDependency {
             result.insert(
                 pkg.clone(),
                 Self::from_replacement(file, env.name().to_string(), dep.into_inner())?,
+            );
+        }
+
+        for (pkg_name, dep) in implicit_deps {
+            result.insert(
+                pkg_name.clone(),
+                Self::from_replacement(file, env.name().to_string(), dep.clone())?,
             );
         }
 

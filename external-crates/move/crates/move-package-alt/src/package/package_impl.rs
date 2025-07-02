@@ -86,7 +86,13 @@ impl<F: MoveFlavor> Package<F> {
 
         // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
+            // TODO check if the environment IDs match
+            // - if there's multiple keys for the same environment ID, we error
+            // - if there is one key for the environment ID, we use that
+            // - if there is no value with the same environment ID, we error
+
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
+            let implicit_deps = F::implicit_deps(env.id().to_string());
 
             // TODO: We should error if there environment is not supported!
             let combined_deps = CombinedDependency::combine_deps(
@@ -97,6 +103,7 @@ impl<F: MoveFlavor> Package<F> {
                     .get(env.name())
                     .unwrap_or(&BTreeMap::new()),
                 manifest.dependencies(),
+                &implicit_deps,
             )?;
 
             let deps = pin::<F>(combined_deps, env.id()).await?;
