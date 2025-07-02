@@ -14,12 +14,26 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::setup_indexer;
 use sui_indexer_alt_framework::postgres::reset_database;
+use sui_indexer_alt_metrics::uptime;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio::fs;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
+
+static VERSION: &str = const_str::concat!(
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_PATCH"),
+    "-",
+    GIT_REVISION
+);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -61,6 +75,11 @@ async fn main() -> Result<()> {
                     }
                 }
             });
+
+            metrics
+                .registry()
+                .register(uptime(VERSION)?)
+                .context("Failed to register uptime metric.")?;
 
             let h_indexer = setup_indexer(
                 database_url,
