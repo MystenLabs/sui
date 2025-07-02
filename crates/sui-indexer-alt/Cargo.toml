@@ -14,7 +14,9 @@ path = "src/main.rs"
 anyhow.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
+bin-version.workspace = true
 clap.workspace = true
+const-str.workspace = true
 dashmap.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
