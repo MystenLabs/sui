@@ -17,7 +17,6 @@ public struct DerivedObjectKey<K: copy + drop + store>(K) has copy, drop, store;
 public fun claim<K: copy + drop + store>(parent: &mut UID, key: K): UID {
     let id = derive_id(parent.to_inner(), key);
 
-    // Prevent duplicate creation of the same UID.
     assert!(!df::exists_(parent, Claimed(id)), EObjectAlreadyExists);
 
     let uid = object::new_uid_from_hash(id.to_address());
