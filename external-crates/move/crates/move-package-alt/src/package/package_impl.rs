@@ -113,8 +113,14 @@ impl<F: MoveFlavor> Package<F> {
         &self.source
     }
 
-    pub fn publish_data(&self) -> &BTreeMap<EnvironmentName, PublishInformation<F>> {
-        &self.publish_data
+    pub fn publish_data(&self, env: &EnvironmentName) -> PackageResult<&PublishInformation<F>> {
+        self.publish_data.get(env).ok_or_else(|| {
+            PackageError::Generic(format!(
+                "Package {} does not have published information for environment `{}`",
+                self.name(),
+                env
+            ))
+        })
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`

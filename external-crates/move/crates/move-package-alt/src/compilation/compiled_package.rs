@@ -240,25 +240,12 @@ pub async fn compile<F: MoveFlavor>(
             if node.package().name() == root_pkg.package_name() {
                 continue;
             }
-            let addr = if let Some(addr) = node
-                .package()
-                .publish_data()
-                .get(env)
-                .map(|data| data.publication.published_at.clone())
-            {
-                published_ids.push(addr.clone());
-                NumericalAddress::new(
-                    addr.0.into_bytes(),
-                    move_compiler::shared::NumberFormat::Hex,
-                )
-            } else {
-                bail!(
-                    "No published address for package {} in env {}",
-                    node.package().name(),
-                    env
-                )
-            };
-
+            let addr = &node.package().publish_data(env)?.publication.published_at;
+            published_ids.push(addr.clone());
+            let addr = NumericalAddress::new(
+                addr.0.into_bytes(),
+                move_compiler::shared::NumberFormat::Hex,
+            );
             let pkg_name: Symbol = if names.contains_key(&node.name().as_str()) {
                 // return one of the standard aliases
                 (*names.get(node.name().as_str()).unwrap()).into()

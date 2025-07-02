@@ -80,7 +80,7 @@ impl Publish {
         let env = &self.env.clone().unwrap_or(set_env.to_string());
         println!("Publishing package to environment: {}", env);
         let root_pkg = RootPackage::<SuiFlavor>::load(path.clone(), Some(env.clone())).await?;
-        let published_data = root_pkg.root_pkg().publish_data();
+        let published_data = root_pkg.root_pkg().publish_data(env)?;
 
         // check if the chain id matches the chian id in the env
         let envs = root_pkg.environments();

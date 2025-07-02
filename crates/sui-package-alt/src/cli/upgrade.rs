@@ -118,15 +118,8 @@ impl Upgrade {
         debug!("Dependency IDs {:?}", dep_ids);
         println!("Package compiled successfully.");
 
-        let published_data = root_pkg.root_pkg().publish_data();
-        let published_info = published_data.get(env).ok_or_else(|| {
-            PackageError::Generic(format!(
-                "Package {} has no published info for environment `{}`",
-                root_pkg.root_pkg().name(),
-                env
-            ))
-        })?;
-        let package_id: ObjectID = published_info.publication.published_at.0.into();
+        let published_data = root_pkg.root_pkg().publish_data(env)?;
+        let package_id: ObjectID = published_data.publication.published_at.0.into();
 
         // create the publish tx kind
         let tx_kind = client
