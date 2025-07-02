@@ -12,8 +12,7 @@ use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,8 +39,9 @@ use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sysinfo::{System, SystemExt};
 use tracing::{debug, info};
-use typed_store::rocks::{DBMap, MetricConf};
+use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
 use typed_store::rocksdb::{MergeOperands, WriteOptions};
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
@@ -355,12 +355,13 @@ impl IndexStoreTables {
     fn open_with_options<P: Into<PathBuf>>(
         path: P,
         options: typed_store::rocksdb::Options,
+        table_options: Option<DBMapTableConfigMap>,
     ) -> Self {
         IndexStoreTables::open_tables_read_write(
             path.into(),
             MetricConf::new("rpc-index"),
             Some(options),
-            None,
+            table_options,
         )
     }
 
@@ -912,7 +913,74 @@ impl RpcIndexStore {
                     // speedup when indexing
                     let mut options = typed_store::rocksdb::Options::default();
                     options.set_unordered_write(true);
-                    IndexStoreTables::open_with_options(&path, options)
+
+                    // Allow CPU-intensive flushing operations to use all CPUs.
+                    options.set_max_background_jobs(num_cpus::get() as i32);
+
+                    // We are disabling compaction for all column families below. This means we can
+                    // also disable the backpressure that slows down writes when the number of L0
+                    // files builds up since we will never compact them anyway.
+                    options.set_level_zero_file_num_compaction_trigger(0);
+                    options.set_level_zero_slowdown_writes_trigger(-1);
+                    options.set_level_zero_stop_writes_trigger(i32::MAX);
+
+                    // This is an upper bound on the amount to of ram the memtables can use across
+                    // all column families.
+                    // Use 90% of system RAM for DB write buffers during bulk indexing.
+                    let mut sys = System::new();
+                    sys.refresh_memory();
+                    let total_memory_bytes = sys.total_memory() * 1024; // Convert from KB to bytes
+                    let db_buffer_size = (total_memory_bytes as f64 * 0.9) as usize;
+                    options.set_db_write_buffer_size(db_buffer_size);
+
+                    // Create column family specific options.
+                    let mut table_config_map = BTreeMap::new();
+
+                    // Create options with compactions disabled and optimized write buffers.
+                    // Each CF can use up to 25% of system RAM, but total is still limited by
+                    // set_db_write_buffer_size (90% of RAM) configured above.
+                    let mut cf_options = typed_store::rocks::default_db_options();
+                    cf_options.options.set_disable_auto_compactions(true);
+
+                    // Calculate buffer configuration: 25% of RAM split across up to 32 buffers
+                    let cf_memory_budget = (total_memory_bytes as f64 * 0.25) as usize;
+                    const MIN_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64MB minimum
+                    const DEFAULT_BUFFER_COUNT: usize = 32;
+
+                    // Aim for 32 buffers, but reduce if it would make buffers too small
+                    //   For example:
+                    // - 128GB RAM system: 32GB per CF / 32 buffers = 1GB each (32 buffers)
+                    // - 16GB RAM system: 4GB per CF / 32 buffers = 128MB each (32 buffers)
+                    // - 4GB RAM system: 1GB per CF / 64MB min = ~16 buffers of 64MB each
+                    let buffer_size =
+                        (cf_memory_budget / DEFAULT_BUFFER_COUNT).max(MIN_BUFFER_SIZE);
+                    let buffer_count = (cf_memory_budget / buffer_size)
+                        .min(DEFAULT_BUFFER_COUNT)
+                        .max(2);
+
+                    cf_options.options.set_write_buffer_size(buffer_size);
+                    cf_options
+                        .options
+                        .set_max_write_buffer_number(buffer_count as i32);
+
+                    // Apply cf_options to all tables except balance (which needs a merge operator)
+                    for (table_name, _) in IndexStoreTables::describe_tables() {
+                        table_config_map.insert(table_name, cf_options.clone());
+                    }
+
+                    // Override Balance options with the merge operator
+                    let mut balance_options = cf_options.clone();
+                    balance_options = balance_options.set_merge_operator_associative(
+                        "balance_merge",
+                        balance_delta_merge_operator,
+                    );
+                    table_config_map.insert("balance".to_string(), balance_options);
+
+                    IndexStoreTables::open_with_options(
+                        &path,
+                        options,
+                        Some(DBMapTableConfigMap::new(table_config_map)),
+                    )
                 };
 
                 tables

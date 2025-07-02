@@ -13807,6 +13807,7 @@ dependencies = [
  "sui-tls",
  "sui-transaction-checks",
  "sui-types",
+ "sysinfo",
  "tap",
  "telemetry-subscribers",
  "tempfile",
