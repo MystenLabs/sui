@@ -149,6 +149,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         retention: Some(config.snapshot_config.snapshot_min_lag as u64),
         ..Default::default()
     };
+
     let indexer_config = IndexerConfig::for_test()
         .merge(IndexerConfig {
             pipeline: PipelineLayer {
