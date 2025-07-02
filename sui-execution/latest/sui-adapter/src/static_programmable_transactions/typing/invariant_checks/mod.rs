@@ -8,6 +8,7 @@ use crate::{
 use sui_types::error::ExecutionError;
 
 pub mod defining_ids_in_types;
+pub mod type_check;
 
 pub fn transaction<Mode: ExecutionMode>(
     env: &env::Env,
