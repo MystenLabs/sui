@@ -397,10 +397,6 @@ testnet = "4c78adac"
             )
         });
 
-        // TODO: we need to figure a way to allow fetch to work in non ~/.move folder which would
-        // end being the ~/.move folder on the machine, rather than some temp dir.
-
-        let git_repo = pkg_git.root();
         let root_pkg_path = pkg_dep_on_git.root();
         let commits = pkg_git.commits();
         let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
@@ -408,8 +404,7 @@ testnet = "4c78adac"
         // we need to replace this relative path with the actual git repository path, because find_sha
         // function does not take a cwd, so this `git ls-remote` would be called from the cwd and not from the
         // repo path.
-        root_pkg_manifest =
-            root_pkg_manifest.replace("../pkg_git", git_repo.to_path_buf().to_str().unwrap());
+        root_pkg_manifest = root_pkg_manifest.replace("../pkg_git", pkg_git.root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
         let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, None)

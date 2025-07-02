@@ -185,7 +185,7 @@ impl Project {
     }
 
     /// Root of the project as a string. This will panic if root does not exist.
-    pub fn root_path(&self) -> &str {
+    pub fn root_path_str(&self) -> &str {
         self.root.to_str().unwrap()
     }
 
