@@ -22,14 +22,22 @@ fun create(ctx: &TxContext) {
     })
 }
 
-/// Balance object methods
+// === Accumulator address computation ===
 
-/// Key is used only for computing the field id of accumulator objects.
-/// `T` is the type of the accumulated value, e.g. Balance<SUI>
+/// `Key` is used only for computing the field id of accumulator objects.
+/// `T` is the type of the accumulated value, e.g. `Balance<SUI>`
 public struct Key<phantom T> has copy, drop, store {
     address: address,
 }
 
+public(package) fun accumulator_address<T>(address: address): address {
+    let key = Key<T> { address };
+    dynamic_field::hash_type_and_key(sui_accumulator_root_address(), key)
+}
+
+// === Methods for adding, removing, and mutating accumulator objects ===
+
+/// Balance object methods
 fun root_has_accumulator<K, V: store>(accumulator_root: &AccumulatorRoot, name: Key<K>): bool {
     dynamic_field::exists_with_type<Key<K>, V>(&accumulator_root.id, name)
 }
@@ -61,34 +69,22 @@ fun root_remove_accumulator<K, V: store>(accumulator_root: &mut AccumulatorRoot,
 
 use fun root_remove_accumulator as AccumulatorRoot.remove_accumulator;
 
-public(package) fun accumulator_address<T>(address: address): address {
-    let key = Key<T> { address };
-    dynamic_field::hash_type_and_key(sui_accumulator_root_address(), key)
-}
+// === Settlement storage types and entry points ===
 
-public(package) native fun emit_deposit_event<T>(
-    accumulator: address,
-    recipient: address,
-    amount: u64,
-);
-public(package) native fun emit_withdraw_event<T>(
-    accumulator: address,
-    owner: address,
-    amount: u64,
-);
+/// Storage for 128-bit accumulator values.
+///
+/// Currently only used to represent the sum of 64 bit values (such as `Balance<T>`).
+/// The additional bits are necessary to prevent overflow, as it would take 2^64 deposits of U64_MAX
+/// to cause an overflow.
+public struct U128 has store {
+    value: u128,
+}
 
 /// Called by settlement transactions to ensure that the settlement transaction has a unique
 /// digest.
 #[allow(unused_function)]
 fun settlement_prologue(_epoch: u64, _checkpoint_height: u64, _idx: u64, ctx: &TxContext) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
-}
-
-/// A value type for storing any type that is represented in move as a u64.
-/// The additional bits are to prevent overflow, as it would take 2^64 deposits of U64_MAX
-/// to cause an overflow.
-public struct U128 has store {
-    value: u128,
 }
 
 #[allow(unused_function)]
@@ -128,3 +124,16 @@ fun settle_u128<T>(
         accumulator_root.add_accumulator(name, value);
     };
 }
+
+// === Natives for emitting accumulator events ===
+
+public(package) native fun emit_deposit_event<T>(
+    accumulator: address,
+    recipient: address,
+    amount: u64,
+);
+public(package) native fun emit_withdraw_event<T>(
+    accumulator: address,
+    owner: address,
+    amount: u64,
+);

@@ -357,7 +357,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         }
 
         legacy_ptb::context::finish(
-            env.vm,
             env.protocol_config,
             env.state_view,
             gas_charger,
