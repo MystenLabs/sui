@@ -404,8 +404,7 @@ insta-cmd = "0.6.0"
 integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.13.0"
-tikv-jemalloc-ctl = "^0.5"
-tikv-jemallocator = "^0.5"
+jemalloc-ctl = "^0.5"
 jsonrpsee = { version = "0.24.9", features = [
   "server",
   "macros",

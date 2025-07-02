@@ -40,7 +40,7 @@ sui-package-management.workspace = true
 better_any = "0.1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemalloc-ctl.workspace = true
+jemalloc-ctl.workspace = true
 
 [dev-dependencies]
 futures.workspace = true
@@ -56,7 +56,7 @@ mysten-metrics.workspace = true
 sui-macros.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["tikv-jemalloc-ctl"]
+normal = ["jemalloc-ctl"]
 
 [lints]
 workspace = true
