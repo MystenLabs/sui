@@ -57,7 +57,7 @@ impl MoveFlavor for SuiFlavor {
                     env.clone(),
                     None, // TODO: is this correct? We don't have this information
                     // here
-                    file_handle.clone(),
+                    file_handle,
                     true,
                 ));
 
