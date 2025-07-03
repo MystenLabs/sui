@@ -235,6 +235,8 @@ pub async fn compile<F: MoveFlavor>(
 
     let mut published_ids = vec![];
 
+    // this should go away because we need a named address map for each package (on its  own
+    // direct deps)
     if let Some(dependency_graph) = &root_pkg.dependencies().get(env) {
         for node in dependency_graph.nodes() {
             if node.name() == root_pkg.package_name() {
@@ -268,6 +270,7 @@ pub async fn compile<F: MoveFlavor>(
     );
 
     debug!("Named address map: {:#?}", named_address_map);
+// each node should have its own named address map
 
     if let Some(dependency_graph) = &root_pkg.dependencies().get(env) {
         let mut dependencies_paths = vec![];
