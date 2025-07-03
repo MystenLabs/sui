@@ -15,8 +15,8 @@ fun test_create_predefined_account() {
     let key = b"demo".to_string();
     let another_key = b"another_demo".to_string();
 
-    let derived_id = derived_object::derive_id(registry.id.to_inner(), key);
-    let another_derived_id = derived_object::derive_id(registry.id.to_inner(), another_key);
+    let derived_id = derived_object::derive_address(registry.id.to_inner(), key);
+    let another_derived_id = derived_object::derive_address(registry.id.to_inner(), another_key);
 
     let derived_uid = derived_object::claim(&mut registry.id, key);
     let another_derived_uid = derived_object::claim(&mut registry.id, another_key);
@@ -24,8 +24,8 @@ fun test_create_predefined_account() {
     assert!(derived_object::exists(&registry.id, key));
     assert!(derived_object::exists(&registry.id, another_key));
 
-    assert!(derived_uid.to_inner() == derived_id);
-    assert!(another_derived_uid.to_inner() == another_derived_id);
+    assert!(derived_uid.to_address() == derived_id);
+    assert!(another_derived_uid.to_address() == another_derived_id);
 
     derived_object::delete(&mut registry.id, derived_uid);
     derived_object::delete(&mut registry.id, another_derived_uid);

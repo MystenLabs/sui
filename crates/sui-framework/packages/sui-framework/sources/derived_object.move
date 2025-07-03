@@ -15,11 +15,12 @@ public struct DerivedObjectKey<K: copy + drop + store>(K) has copy, drop, store;
 
 /// Claim a derived UID, using the parent's UID & any key
 public fun claim<K: copy + drop + store>(parent: &mut UID, key: K): UID {
-    let id = derive_id(parent.to_inner(), key);
+    let addr = derive_address(parent.to_inner(), key);
+    let id = addr.to_id();
 
     assert!(!df::exists_(parent, Claimed(id)), EObjectAlreadyExists);
 
-    let uid = object::new_uid_from_hash(id.to_address());
+    let uid = object::new_uid_from_hash(addr);
 
     df::add(parent, Claimed(id), true);
 
@@ -37,15 +38,10 @@ public fun delete(parent: &mut UID, uid: UID) {
 }
 
 public fun exists<K: copy + drop + store>(parent: &UID, key: K): bool {
-    let id = derive_id(parent.to_inner(), key);
-    df::exists_(parent, Claimed(id))
-}
-
-public fun derive_id<K: copy + drop + store>(parent: ID, key: K): ID {
-    let hash = df::hash_type_and_key(parent.to_address(), DerivedObjectKey(key));
-    hash.to_id()
+    let addr = derive_address(parent.to_inner(), key);
+    df::exists_(parent, Claimed(addr.to_id()))
 }
 
 public fun derive_address<K: copy + drop + store>(parent: ID, key: K): address {
-    derive_id(parent, key).to_address()
+    df::hash_type_and_key(parent.to_address(), DerivedObjectKey(key))
 }
