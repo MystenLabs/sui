@@ -1405,6 +1405,18 @@ fn join<T: ToString, F: FnOnce() -> T>(
     }
 }
 
+fn join_named_block_type<T: ToString, F: FnOnce() -> T>(
+    context: &mut Context,
+    name: BlockLabel,
+    loc: Loc,
+    msg: F,
+    exp_type: Type,
+) {
+    let block_ty = context.named_block_type(name, loc);
+    let loop_ty = join(context, loc, msg, exp_type, block_ty);
+    context.update_named_block_type(name, loop_ty);
+}
+
 fn invariant_no_report(
     context: &mut Context,
     pre_lhs: Type,
@@ -1744,11 +1756,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 eb.ty.clone(),
                 Type_::bool(bloc),
             );
-            let (_has_break, ty, body) = loop_body(context, eloc, name, false, nloop);
+            let (_has_break, ty, body) =
+                loop_body(context, eloc, name, /* while_loop */ true, nloop);
             (sp(eloc, ty.value), TE::While(name, eb, body))
         }
         NE::Loop(name, nloop) => {
-            let (has_break, ty, body) = loop_body(context, eloc, name, true, nloop);
+            let (has_break, ty, body) =
+                loop_body(context, eloc, name, /* while_loop */ false, nloop);
             let eloop = TE::Loop {
                 name,
                 has_break,
@@ -1833,13 +1847,12 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
         NE::Give(usage, name, rhs) => {
             let break_rhs = exp(context, rhs);
-            let loop_ty = context.named_block_type(name, eloc);
-            subtype(
+            join_named_block_type(
                 context,
+                name,
                 eloc,
                 || format!("Invalid {usage}"),
                 break_rhs.ty.clone(),
-                loop_ty,
             );
             (sp(eloc, Type_::Anything), TE::Give(name, break_rhs))
         }
@@ -2170,11 +2183,11 @@ fn loop_body(
     context: &mut Context,
     eloc: Loc,
     name: BlockLabel,
-    is_loop: bool,
+    while_loop: bool,
     nloop: Box<N::Exp>,
 ) -> (bool, Type, Box<T::Exp>) {
     // set while break to ()
-    if !is_loop {
+    if while_loop {
         let while_loop_type = context.named_block_type(name, eloc);
         // while loop breaks must break with unit
         subtype(

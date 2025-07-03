@@ -40,25 +40,14 @@ error[E04007]: incompatible types
    │ ╰─────────^ Incompatible branches
 
 error[E04007]: incompatible types
-   ┌─ tests/move_check/typing/break_with_value_invalid.move:19:9
-   │
-18 │     fun t3(cond: bool): bool {
-   │                         ---- Expected: 'bool'
-19 │         while (cond) { break true } 
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │
-   │         Invalid return expression
-   │         Given: '()'
-
-error[E04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:19:24
    │
 19 │         while (cond) { break true } 
    │         ---------------^^^^^^^^^^--
    │         │              │     │
-   │         │              │     Given: 'bool'
+   │         │              │     Found: 'bool'. It is not compatible with the other type.
    │         │              Invalid break
-   │         Expected: '()'
+   │         Found: '()'. It is not compatible with the other type.
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:23:24
@@ -66,9 +55,9 @@ error[E04007]: incompatible types
 23 │         while (cond) { break true }; 
    │         ---------------^^^^^^^^^^--
    │         │              │     │
-   │         │              │     Given: 'bool'
+   │         │              │     Found: 'bool'. It is not compatible with the other type.
    │         │              Invalid break
-   │         Expected: '()'
+   │         Found: '()'. It is not compatible with the other type.
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:23:36
