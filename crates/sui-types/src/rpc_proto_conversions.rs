@@ -1058,26 +1058,26 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
 
 impl From<crate::execution_status::CommandArgumentError> for CommandArgumentError {
     fn from(value: crate::execution_status::CommandArgumentError) -> Self {
-        use crate::execution_status::CommandArgumentError::*;
+        use crate::execution_status::CommandArgumentError as E;
         use command_argument_error::CommandArgumentErrorKind;
 
         let mut message = Self::default();
 
         let kind = match value {
-            TypeMismatch => CommandArgumentErrorKind::TypeMismatch,
-            InvalidBCSBytes => CommandArgumentErrorKind::InvalidBcsBytes,
-            InvalidUsageOfPureArg => CommandArgumentErrorKind::InvalidUsageOfPureArgument,
-            InvalidArgumentToPrivateEntryFunction => {
+            E::TypeMismatch => CommandArgumentErrorKind::TypeMismatch,
+            E::InvalidBCSBytes => CommandArgumentErrorKind::InvalidBcsBytes,
+            E::InvalidUsageOfPureArg => CommandArgumentErrorKind::InvalidUsageOfPureArgument,
+            E::InvalidArgumentToPrivateEntryFunction => {
                 CommandArgumentErrorKind::InvalidArgumentToPrivateEntryFunction
             }
-            IndexOutOfBounds { idx } => {
+            E::IndexOutOfBounds { idx } => {
                 message.index_error = Some(IndexError {
                     index: Some(idx.into()),
                     subresult: None,
                 });
                 CommandArgumentErrorKind::IndexOutOfBounds
             }
-            SecondaryIndexOutOfBounds {
+            E::SecondaryIndexOutOfBounds {
                 result_idx,
                 secondary_idx,
             } => {
@@ -1087,26 +1087,26 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
                 });
                 CommandArgumentErrorKind::SecondaryIndexOutOfBounds
             }
-            InvalidResultArity { result_idx } => {
+            E::InvalidResultArity { result_idx } => {
                 message.index_error = Some(IndexError {
                     index: Some(result_idx.into()),
                     subresult: None,
                 });
                 CommandArgumentErrorKind::InvalidResultArity
             }
-            InvalidGasCoinUsage => CommandArgumentErrorKind::InvalidGasCoinUsage,
-            InvalidValueUsage => CommandArgumentErrorKind::InvalidValueUsage,
-            InvalidObjectByValue => CommandArgumentErrorKind::InvalidObjectByValue,
-            InvalidObjectByMutRef => CommandArgumentErrorKind::InvalidObjectByMutRef,
-            SharedObjectOperationNotAllowed => {
+            E::InvalidGasCoinUsage => CommandArgumentErrorKind::InvalidGasCoinUsage,
+            E::InvalidValueUsage => CommandArgumentErrorKind::InvalidValueUsage,
+            E::InvalidObjectByValue => CommandArgumentErrorKind::InvalidObjectByValue,
+            E::InvalidObjectByMutRef => CommandArgumentErrorKind::InvalidObjectByMutRef,
+            E::SharedObjectOperationNotAllowed => {
                 CommandArgumentErrorKind::SharedObjectOperationNotAllowed
             }
-            InvalidArgumentArity => CommandArgumentErrorKind::InvalidArgumentArity,
+            E::InvalidArgumentArity => CommandArgumentErrorKind::InvalidArgumentArity,
 
             //TODO
-            InvalidTransferObject => CommandArgumentErrorKind::Unknown,
+            E::InvalidTransferObject => CommandArgumentErrorKind::Unknown,
             //TODO
-            InvalidMakeMoveVecNonObjectArgument => CommandArgumentErrorKind::Unknown,
+            E::InvalidMakeMoveVecNonObjectArgument => CommandArgumentErrorKind::Unknown,
         };
 
         message.set_kind(kind);
@@ -1137,32 +1137,32 @@ impl From<crate::execution_status::TypeArgumentError>
 
 impl From<crate::execution_status::PackageUpgradeError> for PackageUpgradeError {
     fn from(value: crate::execution_status::PackageUpgradeError) -> Self {
-        use crate::execution_status::PackageUpgradeError::*;
+        use crate::execution_status::PackageUpgradeError as E;
         use package_upgrade_error::PackageUpgradeErrorKind;
 
         let mut message = Self::default();
 
         let kind = match value {
-            UnableToFetchPackage { package_id } => {
+            E::UnableToFetchPackage { package_id } => {
                 message.package_id = Some(package_id.to_string());
                 PackageUpgradeErrorKind::UnableToFetchPackage
             }
-            NotAPackage { object_id } => {
+            E::NotAPackage { object_id } => {
                 message.package_id = Some(object_id.to_string());
                 PackageUpgradeErrorKind::NotAPackage
             }
-            IncompatibleUpgrade => PackageUpgradeErrorKind::IncompatibleUpgrade,
-            DigestDoesNotMatch { digest } => {
+            E::IncompatibleUpgrade => PackageUpgradeErrorKind::IncompatibleUpgrade,
+            E::DigestDoesNotMatch { digest } => {
                 message.digest = crate::digests::Digest::try_from(digest)
                     .ok()
                     .map(|d| d.to_string());
-                PackageUpgradeErrorKind::DigetsDoesNotMatch
+                PackageUpgradeErrorKind::DigestDoesNotMatch
             }
-            UnknownUpgradePolicy { policy } => {
+            E::UnknownUpgradePolicy { policy } => {
                 message.policy = Some(policy.into());
                 PackageUpgradeErrorKind::UnknownUpgradePolicy
             }
-            PackageIDDoesNotMatch {
+            E::PackageIDDoesNotMatch {
                 package_id,
                 ticket_id,
             } => {

@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use prost_types::FieldMask;
 use std::path::PathBuf;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::changed_object::{IdOperation, OutputObjectState};
 use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
 use sui_rpc::proto::sui::rpc::v2beta2::{
@@ -31,6 +33,7 @@ async fn test_indexing_with_tto() {
     let objects = client
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(address.to_string()),
+            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
             ..Default::default()
         })
         .await
@@ -281,6 +284,7 @@ async fn test_filter_by_type() {
     let objects = client
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(address.to_string()),
+            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
             ..Default::default()
         })
         .await
@@ -394,6 +398,7 @@ async fn test_filter_by_type() {
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(address.to_string()),
             object_type: Some(treasury_cap_type.clone()),
+            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
             ..Default::default()
         })
         .await
@@ -464,6 +469,7 @@ async fn test_filter_by_type() {
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(address.to_string()),
             object_type: Some(trusted_coin.clone()),
+            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
             ..Default::default()
         })
         .await
@@ -480,6 +486,7 @@ async fn test_filter_by_type() {
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(address.to_string()),
             object_type: Some("0x2::coin::Coin".to_owned()),
+            read_mask: Some(FieldMask::from_str("object_id,version,digest,object_type")),
             ..Default::default()
         })
         .await
@@ -526,6 +533,9 @@ async fn test_reverse_sorted_coins_by_balance() {
     let objects = client
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(address.to_string()),
+            read_mask: Some(FieldMask::from_str(
+                "object_id,version,digest,object_type,balance",
+            )),
             ..Default::default()
         })
         .await
