@@ -163,6 +163,13 @@ impl CertLockGuard {
 
 type JwkAggregator = GenericMultiStakeAggregator<(JwkId, JWK), true>;
 
+type LocalExecutionTimeData = (
+    ProgrammableTransaction,
+    Vec<ExecutionTiming>,
+    Duration,
+    u64, // gas_price
+);
+
 pub enum CancelConsensusCertificateReason {
     CongestionOnObjects(Vec<ObjectID>),
     DkgFailed,
@@ -405,8 +412,7 @@ pub struct AuthorityPerEpochStore {
 
     /// Manages recording execution time observations and generating estimates.
     execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
-    tx_local_execution_time:
-        OnceCell<mpsc::Sender<(ProgrammableTransaction, Vec<ExecutionTiming>, Duration)>>,
+    tx_local_execution_time: OnceCell<mpsc::Sender<LocalExecutionTimeData>>,
     tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
@@ -1421,6 +1427,7 @@ impl AuthorityPerEpochStore {
             ProgrammableTransaction,
             Vec<ExecutionTiming>,
             Duration,
+            u64, // gas_price
         )>,
         tx_object_debts: mpsc::Sender<Vec<ObjectID>>,
     ) {
@@ -1462,7 +1469,12 @@ impl AuthorityPerEpochStore {
             return;
         }
 
-        if let Err(e) = tx_local_execution_time.try_send((ptb.clone(), timings, total_duration)) {
+        if let Err(e) = tx_local_execution_time.try_send((
+            ptb.clone(),
+            timings,
+            total_duration,
+            tx.gas_data().price,
+        )) {
             // This channel should not overflow, but if it does, don't wait; just log an error
             // and drop the observation.
             self.metrics.epoch_execution_time_measurements_dropped.inc();
