@@ -153,11 +153,11 @@ pub struct Function<S: Hash + Eq> {
     pub name: S,
     pub visibility: Visibility,
     pub is_entry: bool,
+    pub locals: Signature<S>,
     pub type_parameters: Vec<AbilitySet>,
     pub parameters: Signature<S>,
     pub return_: Signature<S>,
     code_included: bool,
-    locals: Signature<S>,
     jump_tables: Vec<Rc<VariantJumpTable<S>>>,
     code: Vec<Bytecode<S>>,
 }
@@ -969,9 +969,9 @@ impl<S: Hash + Eq> Function<S> {
             is_entry,
             type_parameters,
             parameters,
+            locals,
             return_,
             code_included,
-            locals,
             jump_tables,
             code,
         } = self;
@@ -984,8 +984,8 @@ impl<S: Hash + Eq> Function<S> {
             && is_entry == &other.is_entry
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
-            && return_ == &other.return_
             && locals == &other.locals
+            && return_ == &other.return_
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
     }
