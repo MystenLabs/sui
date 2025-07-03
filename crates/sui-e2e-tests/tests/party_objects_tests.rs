@@ -611,11 +611,11 @@ async fn party_object_read() {
 async fn party_object_grpc() {
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
-    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
-    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
-    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
-    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
-    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
+    use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
 
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -652,7 +652,9 @@ async fn party_object_grpc() {
         })
         .await
         .unwrap()
-        .into_inner();
+        .into_inner()
+        .object
+        .unwrap();
     let original_owner = resp.owner.unwrap();
     assert_eq!(original_owner.kind(), OwnerKind::ConsensusAddress);
     assert!(original_owner.address.is_some());
@@ -707,7 +709,9 @@ async fn party_object_grpc() {
         })
         .await
         .unwrap()
-        .into_inner();
+        .into_inner()
+        .object
+        .unwrap();
     let new_owner = resp.owner.unwrap();
     assert_eq!(new_owner.kind(), OwnerKind::ConsensusAddress);
     assert_eq!(new_owner.address, Some(SuiAddress::ZERO.to_string()));
@@ -744,19 +748,19 @@ async fn party_object_grpc() {
 async fn party_coin_grpc() {
     use sui_rpc::field::FieldMask;
     use sui_rpc::field::FieldMaskUtil;
-    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
-    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
-    use sui_rpc_api::proto::rpc::v2alpha::SimulateTransactionRequest;
-    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
-    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
-    use sui_rpc_api::proto::rpc::v2beta::Argument;
-    use sui_rpc_api::proto::rpc::v2beta::Command;
-    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
-    use sui_rpc_api::proto::rpc::v2beta::Input;
-    use sui_rpc_api::proto::rpc::v2beta::MoveCall;
-    use sui_rpc_api::proto::rpc::v2beta::ProgrammableTransaction;
-    use sui_rpc_api::proto::rpc::v2beta::Transaction;
-    use sui_rpc_api::proto::rpc::v2beta::TransactionKind;
+    use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
+    use sui_rpc::proto::sui::rpc::v2beta2::Argument;
+    use sui_rpc::proto::sui::rpc::v2beta2::Command;
+    use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::Input;
+    use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::MoveCall;
+    use sui_rpc::proto::sui::rpc::v2beta2::ProgrammableTransaction;
+    use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+    use sui_rpc::proto::sui::rpc::v2beta2::TransactionKind;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
     use sui_types::Identifier;
@@ -835,7 +839,9 @@ async fn party_coin_grpc() {
         })
         .await
         .unwrap()
-        .into_inner();
+        .into_inner()
+        .object
+        .unwrap();
     let actual_owner = resp.owner.unwrap();
     assert_eq!(actual_owner.kind(), OwnerKind::ConsensusAddress);
     assert_eq!(actual_owner.address(), recipient.to_string());
