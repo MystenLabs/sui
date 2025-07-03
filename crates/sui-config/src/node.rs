@@ -275,6 +275,22 @@ pub struct ExecutionTimeObserverConfig {
     ///
     /// If unspecified, this will default to `100` observations.
     pub observation_sharing_burst_limit: Option<NonZeroU32>,
+
+    /// Whether to use gas price weighting in execution time estimates.
+    /// When enabled, samples with higher gas prices have more influence on the
+    /// execution time estimates, providing protection against volume-based
+    /// manipulation attacks.
+    ///
+    /// If unspecified, this will default to `false`.
+    pub enable_gas_price_weighting: Option<bool>,
+
+    /// Size of the weighted moving average window for execution time observations.
+    /// This determines how many recent observations are kept in the weighted moving average
+    /// calculation for each execution time observation key.
+    /// Note that this is independent of the window size for the simple moving average.
+    ///
+    /// If unspecified, this will default to `20`.
+    pub weighted_moving_average_window_size: Option<usize>,
 }
 
 impl ExecutionTimeObserverConfig {
@@ -324,6 +340,14 @@ impl ExecutionTimeObserverConfig {
     pub fn observation_sharing_burst_limit(&self) -> NonZeroU32 {
         self.observation_sharing_burst_limit
             .unwrap_or(nonzero!(100u32))
+    }
+
+    pub fn enable_gas_price_weighting(&self) -> bool {
+        self.enable_gas_price_weighting.unwrap_or(false)
+    }
+
+    pub fn weighted_moving_average_window_size(&self) -> usize {
+        self.weighted_moving_average_window_size.unwrap_or(20)
     }
 }
 
