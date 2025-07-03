@@ -165,6 +165,7 @@ public fun deny_cap<T>(coin_data: &CoinData<T>): Option<ID> {
     }
 }
 
+// TODO: kill
 public fun is_fixed_supply<T>(coin_data: &CoinData<T>): bool {
     match (coin_data.supply.borrow()) {
         SupplyState::Fixed(_) => true,
@@ -178,10 +179,6 @@ public fun exists<T>(registry: &CoinRegistry): bool {
 
 public fun inner<T>(init: &InitCoinData<T>): &CoinData<T> {
     &init.data
-}
-
-public fun inner_mut<T>(init: &mut InitCoinData<T>): &mut CoinData<T> {
-    &mut init.data
 }
 
 // === Internal registration functions  ===
@@ -231,6 +228,10 @@ public(package) fun register_coin_data<T>(registry: &mut CoinRegistry, data: Coi
     assert!(!registry.exists<T>(), ECoinDataAlreadyExists);
 
     registry.id.add_dof(CoinDataKey<T>(), data);
+}
+
+public(package) fun inner_mut<T>(init: &mut InitCoinData<T>): &mut CoinData<T> {
+    &mut init.data
 }
 
 public(package) fun create_coin_data_init<T>(

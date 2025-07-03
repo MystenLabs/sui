@@ -5,13 +5,6 @@ type AccumulatorRootCreateTransaction {
 	_: Boolean
 }
 
-type CoinRegistryCreateTransaction {
-	"""
-	A workaround to define an empty variant of a GraphQL union.
-	"""
-	_: Boolean
-}
-
 type ActiveJwk {
 	"""
 	The string (Issuing Authority) that identifies the OIDC provider.
@@ -840,6 +833,13 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	The overall quantity of tokens that will be issued.
 	"""
 	supply: BigInt
+}
+
+type CoinRegistryCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 """
