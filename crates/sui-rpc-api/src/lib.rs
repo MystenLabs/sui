@@ -125,7 +125,7 @@ impl RpcService {
             let live_data_service2 =
                 sui_rpc::proto::sui::rpc::v2beta2::live_data_service_server::LiveDataServiceServer::new(
                     self.clone(),
-                );
+                ).send_compressed(tonic::codec::CompressionEncoding::Zstd);
             let signature_verification_service2 = sui_rpc::proto::sui::rpc::v2beta2::signature_verification_service_server::SignatureVerificationServiceServer::new(self.clone());
             let move_package_service2 = sui_rpc::proto::sui::rpc::v2beta2::move_package_service_server::MovePackageServiceServer::new(self.clone());
 
