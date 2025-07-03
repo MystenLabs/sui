@@ -513,6 +513,33 @@ impl<S> Datatype<S> {
         }
     }
 
+    /// Case for generating a `Datatype` to write down on a Struct or Enum definition
+    pub fn new_for_data_definition<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        idx: DatatypeHandleIndex,
+    ) -> Self {
+        let datatype_handle = m.datatype_handle_at(idx);
+        let defining_module_handle = m.module_handle_at(datatype_handle.module);
+        let datatype_name = pool.intern(m.identifier_at(datatype_handle.name));
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let type_arguments = datatype_handle
+            .type_parameters
+            .iter()
+            .enumerate()
+            .map(|(ndx, _)| Type::TypeParameter(ndx as u16))
+            .collect();
+        Datatype {
+            module: ModuleId {
+                address: defining_module_address,
+                name: defining_module_name,
+            },
+            name: datatype_name,
+            type_arguments,
+        }
+    }
+
     pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> StructTag {
         let Datatype {
             module,
