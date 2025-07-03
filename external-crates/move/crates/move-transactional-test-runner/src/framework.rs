@@ -5,10 +5,10 @@
 #![forbid(unsafe_code)]
 
 use crate::tasks::{
-    taskify, InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice,
-    TaskCommand, TaskInput,
+    InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice, TaskCommand,
+    TaskInput, taskify,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
@@ -20,13 +20,13 @@ use move_command_line_common::{
     testing::InstaOptions,
 };
 use move_compiler::{
+    CompiledModuleInfoMap,
     command_line::compiler::CompiledModuleInfo,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
+    diagnostics::{Diagnostics, warning_filters::WarningFiltersBuilder},
     editions::{Edition, Flavor},
     expansion::ast::ModuleIdent,
-    shared::{files::MappedFiles, NumericalAddress, PackageConfig},
-    CompiledModuleInfoMap,
+    shared::{NumericalAddress, PackageConfig, files::MappedFiles},
 };
 use move_core_types::parsing::{
     address::ParsedAddress,
@@ -683,7 +683,7 @@ pub fn compile_source_units(
             if let Some(pre_compiled_module_infos) = state.pre_compiled_module_infos_opt.clone() {
                 for (_, module_info) in pre_compiled_module_infos.iter() {
                     files.add(
-                        module_info.naming_info.defined_loc.file_hash(),
+                        module_info.info.defined_loc.file_hash(),
                         module_info.file_name,
                         module_info.file_content.clone(),
                     );
