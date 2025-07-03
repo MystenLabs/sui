@@ -27,7 +27,9 @@ use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::message_envelope::Message;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -39,6 +41,7 @@ use sui_types::storage::BackingPackageStore;
 use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
+use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -1451,12 +1454,81 @@ fn sparse_checkpoint_data_for_backfill(
         .map(|maybe_effects| maybe_effects.ok_or_else(|| StorageError::custom("missing effects")))
         .collect::<Result<Vec<_>, _>>()?;
 
+    // Collect all object keys from all transactions' effects for batch reading
+    let mut all_object_keys = Vec::new();
+
+    for fx in &effects {
+        // Input objects: modified_at_versions
+        let input_keys = fx
+            .modified_at_versions()
+            .into_iter()
+            .map(|(object_id, version)| ObjectKey(object_id, version));
+        all_object_keys.extend(input_keys);
+
+        // Output objects: all_changed_objects
+        let output_keys = fx
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref));
+        all_object_keys.extend(output_keys);
+    }
+
+    // Perform single batch read for all objects
+    let all_objects = authority_store
+        .multi_get_objects_by_key(&all_object_keys)
+        .map_err(|e| StorageError::custom(format!("Failed to batch read objects: {}", e)))?;
+
+    // Build HashMap for O(1) lookups
+    let mut object_map = std::collections::HashMap::new();
+    for (key, maybe_object) in all_object_keys.iter().cloned().zip(all_objects.into_iter()) {
+        if let Some(object) = maybe_object {
+            object_map.insert(key, object);
+        }
+    }
+
     let mut full_transactions = Vec::with_capacity(transactions.len());
     for (tx, fx) in transactions.into_iter().zip(effects) {
-        let input_objects =
-            sui_types::storage::get_transaction_input_objects(authority_store, &fx)?;
-        let output_objects =
-            sui_types::storage::get_transaction_output_objects(authority_store, &fx)?;
+        // Get input objects from HashMap
+        let input_object_keys: Vec<_> = fx
+            .modified_at_versions()
+            .into_iter()
+            .map(|(object_id, version)| ObjectKey(object_id, version))
+            .collect();
+
+        let input_objects = input_object_keys
+            .iter()
+            .map(|key| {
+                object_map.get(key).cloned().ok_or_else(|| {
+                    StorageError::custom(format!(
+                        "missing input object key {:?} from tx {} effects {}",
+                        key,
+                        fx.transaction_digest(),
+                        fx.digest()
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Get output objects from HashMap
+        let output_object_keys: Vec<_> = fx
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+            .collect();
+
+        let output_objects = output_object_keys
+            .iter()
+            .map(|key| {
+                object_map.get(key).cloned().ok_or_else(|| {
+                    StorageError::custom(format!(
+                        "missing output object key {:?} from tx {} effects {}",
+                        key,
+                        fx.transaction_digest(),
+                        fx.digest()
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         let full_transaction = CheckpointTransaction {
             transaction: tx.into(),
