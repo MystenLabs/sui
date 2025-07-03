@@ -3962,6 +3962,10 @@ impl ProtocolConfig {
             allowed_tx_digests,
         });
     }
+
+    pub fn set_enable_accumulators_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_accumulators = val;
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;

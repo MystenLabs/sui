@@ -7,24 +7,33 @@ use crate::{
         shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
-    execution_scheduler::{ExecutingGuard, PendingCertificateStats},
+    execution_scheduler::{
+        balance_withdraw_scheduler::{
+            scheduler::BalanceWithdrawScheduler, BalanceSettlement, ScheduleStatus,
+            TxBalanceWithdraw,
+        },
+        ExecutingGuard, PendingCertificateStats,
+    },
 };
+use futures::stream::{FuturesUnordered, StreamExt};
+use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
-    base_types::FullObjectID,
+    base_types::{FullObjectID, SequenceNumber},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     storage::InputKey,
-    transaction::{SenderSignedData, TransactionDataAPI},
+    transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
-use tracing::{debug, warn};
+use tracing::{debug, error};
 
 use super::{overload_tracker::OverloadTracker, ExecutionSchedulerAPI, PendingCertificate};
 
@@ -34,6 +43,7 @@ pub struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
+    balance_withdraw_scheduler: Option<Arc<BalanceWithdrawScheduler>>,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -72,14 +82,28 @@ impl ExecutionScheduler {
         object_cache_read: Arc<dyn ObjectCacheRead>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
+        balance_accumulator_enabled: bool,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
+        let balance_withdraw_scheduler = if balance_accumulator_enabled {
+            let starting_accumulator_version = object_cache_read
+                .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .expect("Accumulator root object must be present if balance accumulator is enabled")
+                .version();
+            Some(BalanceWithdrawScheduler::new(
+                Arc::new(object_cache_read.clone()),
+                starting_accumulator_version,
+            ))
+        } else {
+            None
+        };
         Self {
             object_cache_read,
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
+            balance_withdraw_scheduler,
             metrics,
         }
     }
@@ -91,6 +115,9 @@ impl ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         let enqueue_time = Instant::now();
+        let tx_digest = cert.digest();
+        let digests = [*tx_digest];
+
         let tx_data = cert.transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
@@ -121,11 +148,9 @@ impl ExecutionScheduler {
         .concat();
 
         let epoch = epoch_store.epoch();
-        let digest = cert.digest();
-        let digests = [*digest];
-        debug!(?digest, "Scheduled transaction in execution scheduler");
+        debug!(?tx_digest, "Scheduled transaction in execution scheduler");
         tracing::trace!(
-            ?digests,
+            ?tx_digest,
             "Waiting for input objects: {:?}",
             input_and_receiving_keys
         );
@@ -146,7 +171,7 @@ impl ExecutionScheduler {
                 .transaction_manager_num_enqueued_certificates
                 .with_label_values(&["ready"])
                 .inc();
-            debug!(?digest, "Input objects already available");
+            debug!(?tx_digest, "Input objects already available");
             self.send_transaction_for_execution(&cert, execution_env, enqueue_time);
             return;
         }
@@ -163,7 +188,7 @@ impl ExecutionScheduler {
                     self.metrics
                         .transaction_manager_transaction_queue_age_s
                         .observe(enqueue_time.elapsed().as_secs_f64());
-                    debug!(?digest, "Input objects available");
+                    debug!(?tx_digest, "Input objects available");
                     // TODO: Eventually we could fold execution_driver into the scheduler.
                     self.send_transaction_for_execution(
                         &cert,
@@ -172,7 +197,7 @@ impl ExecutionScheduler {
                     );
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
-                debug!(?digests, "Transaction already executed");
+                debug!(?tx_digest, "Transaction already executed");
             }
         };
     }
@@ -199,6 +224,115 @@ impl ExecutionScheduler {
         };
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
+
+    fn schedule_balance_withdraws(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, SequenceNumber, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if certs.is_empty() {
+            return;
+        }
+        let scheduler = self
+            .balance_withdraw_scheduler
+            .as_ref()
+            .expect("Balance withdraw scheduler must be enabled if there are withdraws");
+        let mut withdraws = BTreeMap::new();
+        let mut prev_version = None;
+        for (cert, version, _) in &certs {
+            let tx_withdraws = cert
+                .transaction_data()
+                .process_balance_withdraws()
+                .expect("Balance withdraws should have already been checked");
+            assert!(!tx_withdraws.is_empty());
+            if let Some(prev_version) = prev_version {
+                // Transactions must be in order.
+                assert!(prev_version <= *version);
+            }
+            prev_version = Some(*version);
+            let tx_digest = *cert.digest();
+            withdraws
+                .entry(*version)
+                .or_insert(Vec::new())
+                .push(TxBalanceWithdraw {
+                    tx_digest,
+                    reservations: tx_withdraws,
+                });
+        }
+        let mut receivers = FuturesUnordered::new();
+        for (version, tx_withdraws) in withdraws {
+            receivers.extend(scheduler.schedule_withdraws(version, tx_withdraws));
+        }
+        let scheduler = self.clone();
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+            let mut cert_map = HashMap::new();
+            for (cert, _, env) in certs {
+                cert_map.insert(*cert.digest(), (cert, env));
+            }
+            while let Some(result) = receivers.next().await {
+                match result {
+                    Ok(result) => match result.status {
+                        ScheduleStatus::InsufficientBalance => {
+                            let tx_digest = result.tx_digest;
+                            debug!(
+                                ?tx_digest,
+                                "Balance withdraw scheduling result: Insufficient balance"
+                            );
+                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            let env = env.with_insufficient_balance();
+                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                        }
+                        ScheduleStatus::SufficientBalance => {
+                            let tx_digest = result.tx_digest;
+                            debug!(?tx_digest, "Balance withdraw scheduling result: Success");
+                            let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
+                            let env = env.with_sufficient_balance();
+                            scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
+                        }
+                        ScheduleStatus::AlreadyScheduled => {
+                            let tx_digest = result.tx_digest;
+                            debug!(?tx_digest, "Withdraw already scheduled or executed");
+                        }
+                    },
+                    Err(e) => {
+                        error!("Withdraw scheduler stopped: {:?}", e);
+                    }
+                }
+            }
+        }));
+    }
+
+    fn schedule_tx_keys(
+        &self,
+        tx_with_keys: Vec<(TransactionKey, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if tx_with_keys.is_empty() {
+            return;
+        }
+
+        let scheduler = self.clone();
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+            let tx_keys: Vec<_> = tx_with_keys.iter().map(|(key, _)| key).cloned().collect();
+            let digests = epoch_store
+                .notify_read_tx_key_to_digest(&tx_keys)
+                .await
+                .expect("db error");
+            let transactions = scheduler
+                .transaction_cache_read
+                .multi_get_transaction_blocks(&digests)
+                .into_iter()
+                .map(|tx| {
+                    let tx = tx.expect("tx must exist").as_ref().clone();
+                    VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
+                })
+                .zip(tx_with_keys.into_iter().map(|(_, env)| env))
+                .collect::<Vec<_>>();
+            scheduler.enqueue_transactions(transactions, &epoch_store);
+        }));
+    }
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
@@ -208,47 +342,27 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) {
         // schedule all transactions immediately
-        let mut txns = Vec::with_capacity(certs.len());
-        let mut rest = Vec::new();
+        let mut ordinary_txns = Vec::with_capacity(certs.len());
+        let mut tx_with_keys = Vec::new();
+        let mut tx_with_withdraws = Vec::new();
 
         for (schedulable, env) in certs {
-            if let Schedulable::Transaction(tx) = schedulable {
-                txns.push((tx, env));
-            } else {
-                rest.push((schedulable, env));
+            match schedulable {
+                Schedulable::Transaction(tx) => {
+                    ordinary_txns.push((tx, env));
+                }
+                s @ Schedulable::RandomnessStateUpdate(..) => {
+                    tx_with_keys.push((s.key(), env));
+                }
+                Schedulable::Withdraw(tx, version) => {
+                    tx_with_withdraws.push((tx, version, env));
+                }
             }
         }
 
-        self.enqueue_transactions(txns, epoch_store);
-
-        if rest.is_empty() {
-            return;
-        }
-
-        let rest_keys = rest
-            .iter()
-            .map(|(schedulable, _)| schedulable.key())
-            .collect::<Vec<_>>();
-
-        let scheduler = self.clone();
-        let epoch_store = epoch_store.clone();
-        spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-            let rest_digests = epoch_store
-                .notify_read_tx_key_to_digest(&rest_keys)
-                .await
-                .expect("db error");
-            let rest_transactions = scheduler
-                .transaction_cache_read
-                .multi_get_transaction_blocks(&rest_digests)
-                .into_iter()
-                .map(|tx| {
-                    let tx = tx.expect("tx must exist").as_ref().clone();
-                    VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
-                })
-                .zip(rest.into_iter().map(|(_, env)| env))
-                .collect::<Vec<_>>();
-            scheduler.enqueue_transactions(rest_transactions, &epoch_store);
-        }));
+        self.enqueue_transactions(ordinary_txns, epoch_store);
+        self.schedule_tx_keys(tx_with_keys, epoch_store);
+        self.schedule_balance_withdraws(tx_with_withdraws, epoch_store);
     }
 
     fn enqueue_transactions(
@@ -263,8 +377,8 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                 if cert.0.epoch() == epoch_store.epoch() {
                     Some(cert)
                 } else {
-                    warn!(
-                        "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
+                    debug_fatal!(
+                        "We should never enqueue certificate from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
                         cert.0.epoch(),
                     );
@@ -306,6 +420,13 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .transaction_manager_num_enqueued_certificates
             .with_label_values(&["already_executed"])
             .inc_by(already_executed_certs_num);
+    }
+
+    fn settle_balances(&self, settlement: BalanceSettlement) {
+        self.balance_withdraw_scheduler
+            .as_ref()
+            .expect("Balance withdraw scheduler must be enabled if there are settlements")
+            .settle_balances(settlement);
     }
 
     fn check_execution_overload(
@@ -381,6 +502,7 @@ mod test {
                 state.get_object_cache_reader().clone(),
                 state.get_transaction_cache_reader().clone(),
                 tx_ready_certificates,
+                false,
                 state.metrics.clone(),
             ));
 
