@@ -850,6 +850,13 @@ async fn party_coin_grpc() {
     let objects = live_data_service_client
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(recipient.to_string()),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
             ..Default::default()
         })
         .await

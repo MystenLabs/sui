@@ -6,6 +6,7 @@ use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
+use itertools::Itertools;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -25,9 +26,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
-use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
-use sui_types::dynamic_field::visitor as DFV;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -37,10 +36,8 @@ use sui_types::object::Object;
 use sui_types::object::Owner;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::BackingPackageStore;
-use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
-use sui_types::storage::ObjectStore;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tracing::{debug, info};
@@ -106,22 +103,12 @@ impl OwnerIndexKey {
 pub struct OwnerIndexInfo {
     // object_id and type of this object are a part of the key
     pub version: SequenceNumber,
-    pub digest: ObjectDigest,
-    // If this is a ConsensusAddressOwner, this is the start version
-    pub start_version: Option<SequenceNumber>,
 }
 
 impl OwnerIndexInfo {
     pub fn new(object: &Object) -> Self {
-        let start_version = match object.owner() {
-            Owner::AddressOwner(_) => None,
-            Owner::ConsensusAddressOwner { start_version, .. } => Some(*start_version),
-            _ => panic!("cannot create OwnerIndexInfo if object is not address-owned"),
-        };
         Self {
             version: object.version(),
-            digest: object.digest(),
-            start_version,
         }
     }
 }
@@ -285,7 +272,7 @@ struct IndexStoreTables {
     ///
     /// Allows an efficient iterator to list all of the dynamic fields owned by a particular
     /// ObjectID.
-    dynamic_field: DBMap<DynamicFieldKey, DynamicFieldIndexInfo>,
+    dynamic_field: DBMap<DynamicFieldKey, ()>,
 
     /// An index of Coin Types
     ///
@@ -394,8 +381,8 @@ impl IndexStoreTables {
         &mut self,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
-        epoch_store: &AuthorityPerEpochStore,
-        package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        _epoch_store: &AuthorityPerEpochStore,
+        _package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
     ) -> Result<(), StorageError> {
         info!("Initializing RPC indexes");
 
@@ -434,9 +421,6 @@ impl IndexStoreTables {
             let make_live_object_indexer = RpcParLiveObjectSetIndexer {
                 tables: self,
                 coin_index: &coin_index,
-                epoch_store,
-                package_store,
-                object_store: authority_store as _,
             };
 
             crate::par_index_live_object_set::par_index_live_object_set(
@@ -521,7 +505,7 @@ impl IndexStoreTables {
     fn index_checkpoint(
         &self,
         checkpoint: &CheckpointData,
-        resolver: &mut dyn LayoutResolver,
+        _resolver: &mut dyn LayoutResolver,
     ) -> Result<typed_store::rocks::DBBatch, StorageError> {
         debug!(
             checkpoint = checkpoint.checkpoint_summary.sequence_number,
@@ -532,7 +516,7 @@ impl IndexStoreTables {
 
         self.index_epoch(checkpoint, &mut batch)?;
         self.index_transactions(checkpoint, &mut batch)?;
-        self.index_objects(checkpoint, resolver, &mut batch)?;
+        self.index_objects(checkpoint, &mut batch)?;
 
         batch.insert_batch(
             &self.watermark,
@@ -632,7 +616,6 @@ impl IndexStoreTables {
     fn index_objects(
         &self,
         checkpoint: &CheckpointData,
-        resolver: &mut dyn LayoutResolver,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
         let mut coin_index: HashMap<CoinIndexKey, CoinIndexInfo> = HashMap::new();
@@ -706,14 +689,9 @@ impl IndexStoreTables {
                         batch.insert_batch(&self.owner, [(owner_key, owner_info)])?;
                     }
                     Owner::ObjectOwner(parent) => {
-                        if let Some(field_info) = try_create_dynamic_field_info(
-                            object,
-                            resolver,
-                            &tx.output_objects.as_slice() as _,
-                        )? {
+                        if should_index_dynamic_field(object) {
                             let field_key = DynamicFieldKey::new(*parent, object.id());
-
-                            batch.insert_batch(&self.dynamic_field, [(field_key, field_info)])?;
+                            batch.insert_batch(&self.dynamic_field, [(field_key, ())])?;
                         }
                     }
                     Owner::Shared { .. } | Owner::Immutable => {}
@@ -809,15 +787,14 @@ impl IndexStoreTables {
         &self,
         parent: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> Result<
-        impl Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>> + '_,
-        TypedStoreError,
-    > {
+    ) -> Result<impl Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_, TypedStoreError>
+    {
         let lower_bound = DynamicFieldKey::new(parent, cursor.unwrap_or(ObjectID::ZERO));
         let upper_bound = DynamicFieldKey::new(parent, ObjectID::MAX);
         let iter = self
             .dynamic_field
-            .safe_iter_with_bounds(Some(lower_bound), Some(upper_bound));
+            .safe_iter_with_bounds(Some(lower_bound), Some(upper_bound))
+            .map_ok(|(key, ())| key);
         Ok(iter)
     }
 
@@ -1054,10 +1031,8 @@ impl RpcIndexStore {
         &self,
         parent: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> Result<
-        impl Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>> + '_,
-        TypedStoreError,
-    > {
+    ) -> Result<impl Iterator<Item = Result<DynamicFieldKey, TypedStoreError>> + '_, TypedStoreError>
+    {
         self.tables.dynamic_field_iter(parent, cursor)
     }
 
@@ -1099,64 +1074,18 @@ impl RpcIndexStore {
     }
 }
 
-fn try_create_dynamic_field_info(
-    object: &Object,
-    resolver: &mut dyn LayoutResolver,
-    object_store: &dyn ObjectStore,
-) -> Result<Option<DynamicFieldIndexInfo>, StorageError> {
-    // Skip if not a move object
-    let Some(move_object) = object.data.try_as_move() else {
-        return Ok(None);
-    };
-
+fn should_index_dynamic_field(object: &Object) -> bool {
     // Skip any objects that aren't of type `Field<Name, Value>`
     //
     // All dynamic fields are of type:
     //   - Field<Name, Value> for dynamic fields
-    //   - Field<Wrapper<Name, ID>> for dynamic field objects where the ID is the id of the pointed
+    //   - Field<Wrapper<Name>, ID>> for dynamic field objects where the ID is the id of the pointed
     //   to object
     //
-    if !move_object.type_().is_dynamic_field() {
-        return Ok(None);
-    }
-
-    let layout = match resolver.get_annotated_layout(&move_object.type_().clone().into()) {
-        Ok(annotated_layout) => annotated_layout.into_layout(),
-        Err(e) => {
-            tracing::error!(
-                "unable to load layout for type `{:?}`: {e}",
-                move_object.type_()
-            );
-            return Ok(None);
-        }
-    };
-
-    let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
-        .map_err(StorageError::custom)?;
-
-    let (value_type, dynamic_object_id) = match field
-        .value_metadata()
-        .map_err(StorageError::custom)?
-    {
-        DFV::ValueMetadata::DynamicField(type_tag) => (type_tag, None),
-        DFV::ValueMetadata::DynamicObjectField(object_id) => {
-            let type_tag = object_store
-                .get_object(&object_id)
-                .ok_or_else(|| StorageError::custom(format!("missing dynamic object {object_id}")))?
-                .struct_tag()
-                .ok_or_else(|| StorageError::custom("dynamic object field cannot be a package"))?
-                .into();
-            (type_tag, Some(object_id))
-        }
-    };
-
-    Ok(Some(DynamicFieldIndexInfo {
-        name_type: field.name_layout.into(),
-        name_value: field.name_bytes.to_owned(),
-        value_type,
-        dynamic_field_kind: field.kind,
-        dynamic_object_id,
-    }))
+    object
+        .data
+        .try_as_move()
+        .is_some_and(|move_object| move_object.type_().is_dynamic_field())
 }
 
 fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinIndexInfo)> {
@@ -1207,17 +1136,12 @@ fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinInde
 struct RpcParLiveObjectSetIndexer<'a> {
     tables: &'a IndexStoreTables,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
-    epoch_store: &'a AuthorityPerEpochStore,
-    package_store: &'a Arc<dyn BackingPackageStore + Send + Sync>,
-    object_store: &'a (dyn ObjectStore + Sync),
 }
 
 struct RpcLiveObjectIndexer<'a> {
     tables: &'a IndexStoreTables,
     batch: typed_store::rocks::DBBatch,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
-    resolver: Box<dyn LayoutResolver + 'a>,
-    object_store: &'a (dyn ObjectStore + Sync),
     balance_changes: HashMap<BalanceKey, BalanceIndexInfo>,
 }
 
@@ -1229,11 +1153,6 @@ impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
             tables: self.tables,
             batch: self.tables.owner.batch(),
             coin_index: self.coin_index,
-            resolver: self
-                .epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(self.package_store)),
-            object_store: self.object_store,
             balance_changes: HashMap::new(),
         }
     }
@@ -1268,15 +1187,10 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 
             // Dynamic Field Index
             Owner::ObjectOwner(parent) => {
-                if let Some(field_info) = try_create_dynamic_field_info(
-                    &object,
-                    self.resolver.as_mut(),
-                    self.object_store,
-                )? {
+                if should_index_dynamic_field(&object) {
                     let field_key = DynamicFieldKey::new(parent, object.id());
-
                     self.batch
-                        .insert_batch(&self.tables.dynamic_field, [(field_key, field_info)])?;
+                        .insert_batch(&self.tables.dynamic_field, [(field_key, ())])?;
                 }
             }
 

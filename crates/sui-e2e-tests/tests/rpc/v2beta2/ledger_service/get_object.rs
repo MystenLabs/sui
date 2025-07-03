@@ -36,6 +36,7 @@ async fn get_object() {
         previous_transaction,
         storage_rebate,
         json,
+        ..
     } = client
         .get_object(GetObjectRequest {
             object_id: Some(id.to_string()),
@@ -78,6 +79,7 @@ async fn get_object() {
         previous_transaction,
         storage_rebate,
         json,
+        ..
     } = client
         .get_object(GetObjectRequest {
             object_id: Some(id.to_string()),
@@ -136,6 +138,7 @@ async fn get_object() {
         previous_transaction,
         storage_rebate,
         json,
+        ..
     } = &response;
 
     assert!(object_id.is_some());
