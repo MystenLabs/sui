@@ -945,6 +945,7 @@ impl RpcIndexStore {
                     options.set_level_zero_slowdown_writes_trigger(-1);
                     options.set_level_zero_stop_writes_trigger(i32::MAX);
                     options.set_use_direct_io_for_flush_and_compaction(true);
+                    options.set_max_open_files(10_000);
 
                     // Create column family specific options with compactions disabled
                     let mut table_config_map = BTreeMap::new();
