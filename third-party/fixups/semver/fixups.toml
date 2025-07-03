@@ -1,0 +1,4 @@
+cargo_env = true
+
+[[buildscript]]
+[buildscript.rustc_flags]
