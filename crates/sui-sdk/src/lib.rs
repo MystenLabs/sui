@@ -70,8 +70,10 @@
 //! For detailed examples, please check the APIs docs and the examples folder
 //! in the [main repository](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples).
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -81,6 +83,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use reqwest::header::HeaderName;
 use serde_json::Value;
 
 use move_core_types::language_storage::StructTag;
@@ -144,6 +147,7 @@ pub struct SuiClientBuilder {
     ws_url: Option<String>,
     ws_ping_interval: Option<Duration>,
     basic_auth: Option<(String, String)>,
+    headers: Option<HashMap<String, String>>,
 }
 
 impl Default for SuiClientBuilder {
@@ -154,6 +158,7 @@ impl Default for SuiClientBuilder {
             ws_url: None,
             ws_ping_interval: None,
             basic_auth: None,
+            headers: None,
         }
     }
 }
@@ -186,6 +191,12 @@ impl SuiClientBuilder {
     /// Set the basic auth credentials for the HTTP client
     pub fn basic_auth(mut self, username: impl AsRef<str>, password: impl AsRef<str>) -> Self {
         self.basic_auth = Some((username.as_ref().to_string(), password.as_ref().to_string()));
+        self
+    }
+
+    /// Set custom headers for the HTTP client
+    pub fn custom_headers(mut self, headers: HashMap<String, String>) -> Self {
+        self.headers = Some(headers);
         self
     }
 
@@ -228,6 +239,17 @@ impl SuiClientBuilder {
                 // reqwest::header::AUTHORIZATION,
                 HeaderValue::from_str(&format!("Basic {}", auth)).unwrap(),
             );
+        }
+
+        if let Some(custom_headers) = self.headers {
+            for (key, value) in custom_headers {
+                let header_name = HeaderName::from_str(&key)
+                    .map_err(|e| Error::CustomHeadersError(e.to_string()))?;
+
+                let header_value = HeaderValue::from_str(&value)
+                    .map_err(|e| Error::CustomHeadersError(e.to_string()))?;
+                headers.insert(header_name, header_value);
+            }
         }
 
         let ws = if let Some(url) = self.ws_url {
