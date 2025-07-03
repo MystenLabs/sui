@@ -561,6 +561,9 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
             }
             UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+            UnchangedSharedKind::PerEpochConfigWithSequenceNumber { version: _ } => {
+                unreachable!("TODO fill this in when we add per epoch stable sequence numbers on the sui side")
+            }
         }
     }
 }
@@ -1443,6 +1446,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             ) => Self::StoreExecutionTimeObservations(stored_execution_time_observations.into()),
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
                 Self::AccumulatorRootCreate
+            }
+            crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
+                Self::CoinRegistryCreate
             }
         }
     }

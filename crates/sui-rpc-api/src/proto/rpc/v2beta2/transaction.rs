@@ -280,6 +280,9 @@ impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
 
         let kind = match value {
             ProgrammableTransaction(ptb) => Kind::ProgrammableTransaction(ptb.into()),
+            ProgrammableSystemTransaction(_ptb) => {
+                unreachable!("TODO fill this in when we add programmable system transactions")
+            }
             ChangeEpoch(change_epoch) => Kind::ChangeEpoch(change_epoch.into()),
             Genesis(genesis) => Kind::Genesis(genesis.into()),
             ConsensusCommitPrologue(prologue) => Kind::ConsensusCommitPrologueV1(prologue.into()),
@@ -1117,6 +1120,7 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
                 Kind::ExecutionTimeObservations(observations.into())
             }
             AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
+            CoinRegistryCreate => Kind::CoinRegistryCreate(()),
         };
 
         Self { kind: Some(kind) }
@@ -1151,6 +1155,7 @@ impl TryFrom<&super::EndOfEpochTransactionKind> for sui_sdk_types::EndOfEpochTra
                 Self::StoreExecutionTimeObservations(execution_time_observations.try_into()?)
             }
             Kind::AccumulatorRootCreate(()) => Self::AccumulatorRootCreate,
+            Kind::CoinRegistryCreate(()) => Self::CoinRegistryCreate,
         }
         .pipe(Ok)
     }

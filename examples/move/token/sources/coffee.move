@@ -37,6 +37,7 @@ public struct CoffeeShop has key {
 /// the customer ID.
 public struct CoffeePurchased has copy, drop, store {}
 
+#[allow(deprecated_usage)]
 // Create and share the `CoffeeShop` object.
 fun init(otw: COFFEE, ctx: &mut TxContext) {
     let (coffee_points, metadata) = coin::create_currency(
