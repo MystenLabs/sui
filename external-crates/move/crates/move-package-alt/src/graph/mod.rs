@@ -6,6 +6,9 @@ mod builder;
 mod linkage;
 mod to_lockfile;
 
+#[cfg(test)]
+mod test_utils;
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{

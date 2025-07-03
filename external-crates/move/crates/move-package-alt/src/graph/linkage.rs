@@ -155,74 +155,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{flavor::Vanilla, graph::PackageGraph};
-
-    struct TestPackageGraph;
-    struct NodeBuilder;
-    struct EdgeBuilder;
-    struct Scenario;
-
-    impl TestPackageGraph {
-        fn new(nodes: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
-            todo!()
-        }
-
-        fn add_deps(
-            self,
-            edges: impl IntoIterator<Item = (impl AsRef<str>, impl AsRef<str>)>,
-        ) -> Self {
-            todo!();
-            self
-        }
-
-        fn add_node(
-            self,
-            node: impl AsRef<str>,
-            build: impl FnOnce(NodeBuilder) -> NodeBuilder,
-        ) -> Self {
-            todo!();
-            self
-        }
-
-        fn add_dep(
-            self,
-            source: impl AsRef<str>,
-            target: impl AsRef<str>,
-            build: impl FnOnce(EdgeBuilder) -> EdgeBuilder,
-        ) -> Self {
-            todo!();
-            self
-        }
-
-        fn build(self) -> Scenario {
-            todo!()
-        }
-    }
-
-    impl NodeBuilder {
-        fn original_id(self, addr: u64) -> Self {
-            todo!();
-            self
-        }
-
-        fn published_at(self, addr: u64) -> Self {
-            todo!();
-            self
-        }
-    }
-
-    impl EdgeBuilder {
-        fn set_override(self) -> Self {
-            todo!();
-            self
-        }
-    }
-
-    impl Scenario {
-        fn graph_for(&self, root: impl AsRef<str>) -> PackageGraph<Vanilla> {
-            todo!()
-        }
-    }
+    use crate::graph::test_utils::TestPackageGraph;
 
     /// `root` depends on `a` depends on `b` and `c`, both of which depend on `d`
     /// Computing linkage for both `root` and `a` should succeed
