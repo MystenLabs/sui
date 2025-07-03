@@ -482,61 +482,24 @@ impl IndexStoreTables {
         checkpoint_store: &CheckpointStore,
         checkpoint_range: std::ops::RangeInclusive<u64>,
     ) -> Result<(), StorageError> {
-        let total_checkpoints = checkpoint_range.size_hint().0;
         info!(
             "Indexing {} checkpoints in range {checkpoint_range:?}",
-            total_checkpoints
+            checkpoint_range.size_hint().0
         );
         let start_time = Instant::now();
 
-        let checkpoints_processed = std::sync::atomic::AtomicU64::new(0);
-        let total_sparse_time = std::sync::atomic::AtomicU64::new(0);
-        let total_write_time = std::sync::atomic::AtomicU64::new(0);
-        let last_log_time = std::sync::Mutex::new(Instant::now());
-
         checkpoint_range.into_par_iter().try_for_each(|seq| {
-            let checkpoint_start = Instant::now();
-            
-            let sparse_start = Instant::now();
             let checkpoint_data =
                 sparse_checkpoint_data_for_backfill(authority_store, checkpoint_store, seq)?;
-            let sparse_duration = sparse_start.elapsed();
 
             let mut batch = self.transactions.batch();
 
             self.index_epoch(&checkpoint_data, &mut batch)?;
             self.index_transactions(&checkpoint_data, &mut batch)?;
 
-            let write_start = Instant::now();
             batch
                 .write_opt(&write_options_no_wal())
-                .map_err(StorageError::from)?;
-            let write_duration = write_start.elapsed();
-            
-            // Update stats
-            total_sparse_time.fetch_add(sparse_duration.as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
-            total_write_time.fetch_add(write_duration.as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
-            let processed = checkpoints_processed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            
-            // Log progress every 1000 checkpoints or every 10 seconds
-            let mut last_log = last_log_time.lock().unwrap();
-            if processed % 1000 == 0 || last_log.elapsed() > Duration::from_secs(10) {
-                let avg_sparse = total_sparse_time.load(std::sync::atomic::Ordering::Relaxed) as f64 / processed as f64;
-                let avg_write = total_write_time.load(std::sync::atomic::Ordering::Relaxed) as f64 / processed as f64;
-                info!(
-                    "Processed {}/{} checkpoints. Avg times: sparse_data={:.1}ms, write={:.1}ms, total={:.1}ms. Last checkpoint {} took {:.1}ms",
-                    processed,
-                    total_checkpoints,
-                    avg_sparse,
-                    avg_write,
-                    avg_sparse + avg_write,
-                    seq,
-                    checkpoint_start.elapsed().as_millis()
-                );
-                *last_log = Instant::now();
-            }
-            
-            Ok::<(), StorageError>(())
+                .map_err(StorageError::from)
         })?;
 
         info!(
@@ -1466,22 +1429,17 @@ fn sparse_checkpoint_data_for_backfill(
 ) -> Result<CheckpointData, StorageError> {
     use sui_types::full_checkpoint_content::CheckpointTransaction;
 
-    let t1 = Instant::now();
     let summary = checkpoint_store
         .get_checkpoint_by_sequence_number(checkpoint)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
-    let t2 = Instant::now();
-    
     let contents = checkpoint_store
         .get_checkpoint_contents(&summary.content_digest)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
-    let t3 = Instant::now();
 
     let transaction_digests = contents
         .iter()
         .map(|execution_digests| execution_digests.transaction)
         .collect::<Vec<_>>();
-    
     let transactions = authority_store
         .multi_get_transaction_blocks(&transaction_digests)?
         .into_iter()
@@ -1489,30 +1447,12 @@ fn sparse_checkpoint_data_for_backfill(
             maybe_transaction.ok_or_else(|| StorageError::custom("missing transaction"))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let t4 = Instant::now();
 
     let effects = authority_store
         .multi_get_executed_effects(&transaction_digests)?
         .into_iter()
         .map(|maybe_effects| maybe_effects.ok_or_else(|| StorageError::custom("missing effects")))
         .collect::<Result<Vec<_>, _>>()?;
-    let t5 = Instant::now();
-    
-    // Log slow operations
-    if t2.duration_since(t1) > Duration::from_millis(50) {
-        debug!("Checkpoint {} slow summary fetch: {:?}", checkpoint, t2.duration_since(t1));
-    }
-    if t3.duration_since(t2) > Duration::from_millis(50) {
-        debug!("Checkpoint {} slow contents fetch: {:?}", checkpoint, t3.duration_since(t2));
-    }
-    if t4.duration_since(t3) > Duration::from_millis(100) {
-        debug!("Checkpoint {} slow transactions fetch ({} txns): {:?}", 
-            checkpoint, transaction_digests.len(), t4.duration_since(t3));
-    }
-    if t5.duration_since(t4) > Duration::from_millis(100) {
-        debug!("Checkpoint {} slow effects fetch ({} effects): {:?}", 
-            checkpoint, transaction_digests.len(), t5.duration_since(t4));
-    }
 
     // Collect all object keys from all transactions' effects for batch reading
     let mut all_object_keys = Vec::new();
@@ -1534,12 +1474,9 @@ fn sparse_checkpoint_data_for_backfill(
     }
 
     // Perform single batch read for all objects
-    let t6 = Instant::now();
-    let num_object_keys = all_object_keys.len();
     let all_objects = authority_store
         .multi_get_objects_by_key(&all_object_keys)
         .map_err(|e| StorageError::custom(format!("Failed to batch read objects: {}", e)))?;
-    let t7 = Instant::now();
 
     // Build HashMap for O(1) lookups
     let mut object_map = std::collections::HashMap::new();
@@ -1547,12 +1484,6 @@ fn sparse_checkpoint_data_for_backfill(
         if let Some(object) = maybe_object {
             object_map.insert(key, object);
         }
-    }
-    let t8 = Instant::now();
-    
-    if t7.duration_since(t6) > Duration::from_millis(200) {
-        debug!("Checkpoint {} slow batch object read ({} objects): {:?}", 
-            checkpoint, num_object_keys, t7.duration_since(t6));
     }
 
     let mut full_transactions = Vec::with_capacity(transactions.len());
@@ -1615,20 +1546,6 @@ fn sparse_checkpoint_data_for_backfill(
         checkpoint_contents: contents,
         transactions: full_transactions,
     };
-    
-    let total_time = t1.elapsed();
-    if total_time > Duration::from_millis(500) {
-        info!("Checkpoint {} total sparse_data time: {:.1}ms (summary: {:.1}ms, contents: {:.1}ms, txns: {:.1}ms, effects: {:.1}ms, batch_read: {:.1}ms, build_map: {:.1}ms)",
-            checkpoint, 
-            total_time.as_secs_f64() * 1000.0,
-            t2.duration_since(t1).as_secs_f64() * 1000.0,
-            t3.duration_since(t2).as_secs_f64() * 1000.0,
-            t4.duration_since(t3).as_secs_f64() * 1000.0,
-            t5.duration_since(t4).as_secs_f64() * 1000.0,
-            t7.duration_since(t6).as_secs_f64() * 1000.0,
-            t8.duration_since(t7).as_secs_f64() * 1000.0
-        );
-    }
 
     Ok(checkpoint_data)
 }
