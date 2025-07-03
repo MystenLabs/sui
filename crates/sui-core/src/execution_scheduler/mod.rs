@@ -4,7 +4,6 @@
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        epoch_start_configuration::EpochStartConfigTrait,
         shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
@@ -131,11 +130,7 @@ impl ExecutionSchedulerWrapper {
             chain != Chain::Mainnet
         };
         if enable_execution_scheduler {
-            let enable_accumulators = epoch_store.protocol_config().enable_accumulators()
-                && epoch_store
-                    .epoch_start_config()
-                    .accumulator_root_obj_initial_shared_version()
-                    .is_some();
+            let enable_accumulators = epoch_store.accumulators_enabled();
             Self::ExecutionScheduler(ExecutionScheduler::new(
                 object_cache_read,
                 transaction_cache_read,
