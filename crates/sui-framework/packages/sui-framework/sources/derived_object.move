@@ -10,10 +10,10 @@ const EInvalidParent: u64 = 1;
 /// Added as a DF to the parent's UID, to mark an ID as claimed.
 public struct Claimed(ID) has copy, drop, store;
 
-/// An internal key to protect from generating the same UID twice.
+/// An internal key to protect from generating the same UID twice (e..g collide with DFs)
 public struct DerivedObjectKey<K: copy + drop + store>(K) has copy, drop, store;
 
-/// Claim a derived UID, using the parent's UID & a key
+/// Claim a derived UID, using the parent's UID & any key
 public fun claim<K: copy + drop + store>(parent: &mut UID, key: K): UID {
     let id = derive_id(parent.to_inner(), key);
 
