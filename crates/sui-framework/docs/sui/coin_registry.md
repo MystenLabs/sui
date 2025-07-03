@@ -35,7 +35,6 @@ registry.
 -  [Function `is_fixed_supply`](#sui_coin_registry_is_fixed_supply)
 -  [Function `exists`](#sui_coin_registry_exists)
 -  [Function `inner`](#sui_coin_registry_inner)
--  [Function `inner_mut`](#sui_coin_registry_inner_mut)
 -  [Function `register_supply`](#sui_coin_registry_register_supply)
 -  [Function `register_regulated`](#sui_coin_registry_register_regulated)
 -  [Function `set_decimals`](#sui_coin_registry_set_decimals)
@@ -43,6 +42,7 @@ registry.
 -  [Function `set_regulated`](#sui_coin_registry_set_regulated)
 -  [Function `data_mut`](#sui_coin_registry_data_mut)
 -  [Function `register_coin_data`](#sui_coin_registry_register_coin_data)
+-  [Function `inner_mut`](#sui_coin_registry_inner_mut)
 -  [Function `create_coin_data_init`](#sui_coin_registry_create_coin_data_init)
 -  [Function `create_coin_data`](#sui_coin_registry_create_coin_data)
 -  [Function `empty`](#sui_coin_registry_empty)
@@ -921,30 +921,6 @@ Enables a metadata cap holder to update a coin's icon URL.
 
 </details>
 
-<a name="sui_coin_registry_inner_mut"></a>
-
-## Function `inner_mut`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_inner_mut">inner_mut</a>&lt;T&gt;(init: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_InitCoinData">sui::coin_registry::InitCoinData</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinData">sui::coin_registry::CoinData</a>&lt;T&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_inner_mut">inner_mut</a>&lt;T&gt;(init: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_InitCoinData">InitCoinData</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinData">CoinData</a>&lt;T&gt; {
-    &<b>mut</b> init.<a href="../sui/coin_registry.md#sui_coin_registry_data">data</a>
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_coin_registry_register_supply"></a>
 
 ## Function `register_supply`
@@ -1124,6 +1100,30 @@ Enables a metadata cap holder to update a coin's icon URL.
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_register_coin_data">register_coin_data</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">CoinRegistry</a>, <a href="../sui/coin_registry.md#sui_coin_registry_data">data</a>: <a href="../sui/coin_registry.md#sui_coin_registry_CoinData">CoinData</a>&lt;T&gt;) {
     <b>assert</b>!(!registry.<a href="../sui/coin_registry.md#sui_coin_registry_exists">exists</a>&lt;T&gt;(), <a href="../sui/coin_registry.md#sui_coin_registry_ECoinDataAlreadyExists">ECoinDataAlreadyExists</a>);
     registry.<a href="../sui/coin_registry.md#sui_coin_registry_id">id</a>.add_dof(<a href="../sui/coin_registry.md#sui_coin_registry_CoinDataKey">CoinDataKey</a>&lt;T&gt;(), <a href="../sui/coin_registry.md#sui_coin_registry_data">data</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_registry_inner_mut"></a>
+
+## Function `inner_mut`
+
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_inner_mut">inner_mut</a>&lt;T&gt;(init: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_InitCoinData">sui::coin_registry::InitCoinData</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinData">sui::coin_registry::CoinData</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/coin_registry.md#sui_coin_registry_inner_mut">inner_mut</a>&lt;T&gt;(init: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_InitCoinData">InitCoinData</a>&lt;T&gt;): &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinData">CoinData</a>&lt;T&gt; {
+    &<b>mut</b> init.<a href="../sui/coin_registry.md#sui_coin_registry_data">data</a>
 }
 </code></pre>
 

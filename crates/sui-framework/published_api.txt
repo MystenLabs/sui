@@ -2281,9 +2281,6 @@ exists
 inner
 	public fun
 	0x2::coin_registry
-inner_mut
-	public fun
-	0x2::coin_registry
 register_supply
 	public(package) fun
 	0x2::coin_registry
@@ -2303,6 +2300,9 @@ data_mut
 	public(package) fun
 	0x2::coin_registry
 register_coin_data
+	public(package) fun
+	0x2::coin_registry
+inner_mut
 	public(package) fun
 	0x2::coin_registry
 create_coin_data_init
