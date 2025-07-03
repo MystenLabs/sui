@@ -32,6 +32,7 @@ use crate::{
         shared_object_version_manager::Schedulable,
     },
     execution_cache::ObjectCacheRead,
+    execution_scheduler::balance_withdraw_scheduler::BalanceSettlement,
 };
 use crate::{
     authority::{AuthorityMetrics, ExecutionEnv},
@@ -732,6 +733,10 @@ impl ExecutionSchedulerAPI for TransactionManager {
             .set(inner.pending_certificates.len() as i64);
 
         inner.maybe_reserve_capacity();
+    }
+
+    fn settle_balances(&self, _: BalanceSettlement) {
+        unimplemented!("balance withdraw scheduler not implemented for TransactionManager");
     }
 
     fn check_execution_overload(
