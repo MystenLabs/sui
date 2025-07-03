@@ -6,7 +6,7 @@ use crate::schema::Publication;
 use crate::{flavor::MoveFlavor, schema::EnvironmentID};
 
 /// Publish information for a package in a specific environment.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PublishInformation<F: MoveFlavor> {
     /// This is usually the `chain_id`. We need to decide if we really want to abstract the concept of "environments".
     pub environment: EnvironmentID,

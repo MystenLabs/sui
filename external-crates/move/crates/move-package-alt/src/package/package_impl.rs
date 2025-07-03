@@ -12,7 +12,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{LocalDepInfo, LockfileDependencyInfo, Publication},
+    schema::{LocalDepInfo, LockfileDependencyInfo, OriginalID, PublishedID},
 };
 use move_core_types::identifier::Identifier;
 use tracing::debug;
@@ -121,7 +121,11 @@ impl<F: MoveFlavor> Package<F> {
         &self.source
     }
 
-    pub fn publication(&self, env: &EnvironmentName) -> Option<Publication<F>> {
+    pub fn published_at(&self, env: &EnvironmentName) -> Option<PublishedID> {
+        todo!()
+    }
+
+    pub fn original_id(&self, env: &EnvironmentName) -> Option<OriginalID> {
         todo!()
     }
 

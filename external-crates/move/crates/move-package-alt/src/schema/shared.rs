@@ -9,7 +9,7 @@ pub type PackageName = Identifier;
 #[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PublishedID(pub AccountAddress);
 
-#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OriginalID(pub AccountAddress);
 
 /// A serialized dependency of the form `{ local = <path> }`

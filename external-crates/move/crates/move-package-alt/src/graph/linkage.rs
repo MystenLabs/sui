@@ -2,8 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use itertools::Itertools;
 use petgraph::{
     algo::{Cycle, toposort},
     graph::NodeIndex,
@@ -67,74 +68,33 @@ pub enum LinkageError {
 
 pub type LinkageResult<T> = Result<T, LinkageError>;
 
-/// Mapping from original ID to the package to use for that address
+/// Mapping from original ID to the package node to use for that address
 type LinkageTable = BTreeMap<OriginalID, NodeIndex>;
 
 impl<F: MoveFlavor> PackageGraph<F> {
     /// Construct and return a linkage table for the root package of `self`
     pub fn linkage(&self, env: &EnvironmentName) -> LinkageResult<LinkageTable> {
-        // TODO: method too big
         let sorted = toposort(&self.inner, None).map_err(LinkageError::CyclicDependencies)?;
 
         let mut linkages: BTreeMap<NodeIndex, LinkageTable> = BTreeMap::new();
         for node in sorted.iter().rev() {
             // note: since we are iterating in reverse topological order, the linkages for the
             // dependencies have already been computed
-            let transitive_deps = self
+            let transitive_deps: HashMap<&OriginalID, Vec<&NodeIndex>> = self
                 .inner
                 .neighbors(*node)
-                .flat_map(|n| linkages[&n].iter());
+                .flat_map(|n| linkages[&n].iter())
+                .into_group_map();
 
             // compute the linkage for `node` by iterating all transitive deps and looking for
             // duplicates
-            let overrides = self.overrides(env, *node);
             let mut linkage = LinkageTable::new();
-            for (original_id, pkg) in transitive_deps {
-                let Some(old_pkg) = linkage.insert(original_id.clone(), *pkg) else {
-                    continue;
-                };
-
-                // pkg and old_pkg both have the same original id: resolve the conflict
-
-                // same node? no problem
-                if old_pkg == *pkg {
-                    continue;
-                }
-
-                // overridden? use that
-                if let Some(pkg) = overrides.get(original_id) {
-                    linkage.insert(original_id.clone(), *pkg);
-                    continue;
-                }
-
-                // otherwise, it's a genuine conflict*
-                let old_addr = self.inner[old_pkg]
-                    .package
-                    .publication(env) // TODO: this is the wrong env - should edge target env
-                    .expect("original_ids of unpublished packages don't collide")
-                    .published_at;
-
-                let new_addr = self.inner[*pkg]
-                    .package
-                    .publication(env) // TODO: this is the wrong env
-                    .expect("original_ids of unpublished packages don't collide")
-                    .published_at;
-
-                if new_addr == old_addr {
-                    // [*] we can probably just continue here, but it's unclear what will go
-                    // wrong in the compiler
-                    return Err(LinkageError::InconsistentLinkage {
-                        root: *node,
-                        node1: old_pkg,
-                        node2: *pkg,
-                    });
-                } else {
-                    return Err(LinkageError::MultipleImplementations {
-                        root: *node,
-                        node1: old_pkg,
-                        node2: *pkg,
-                    });
-                }
+            let overrides = self.overrides(env, *node);
+            for (original_id, nodes) in transitive_deps.into_iter() {
+                linkage.insert(
+                    original_id.clone(),
+                    self.select_dep(node, original_id, nodes, &overrides)?,
+                );
             }
 
             // TODO: add self to linkage
@@ -143,7 +103,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         }
 
         Ok(linkages
-            .remove(&sorted[0])
+            .remove(&sorted[0]) // root package is first in topological order
             .expect("all linkages have been computed"))
     }
 
@@ -164,12 +124,43 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 (
                     self.inner[edge.target()]
                         .package
-                        .publication(env)
-                        .expect("TODO")
-                        .original_id,
+                        .original_id(env)
+                        .expect("TODO"),
                     edge.target(),
                 )
             })
             .collect()
+    }
+
+    /// Given a (nonempty) set of transitive dependencies all having `original_id`, choose the correct one (or
+    /// produce an error).
+    fn select_dep(
+        &self,
+        root: &NodeIndex,
+        original_id: &OriginalID,
+        nodes: Vec<&NodeIndex>,
+        overrides: &BTreeMap<OriginalID, NodeIndex>,
+    ) -> LinkageResult<NodeIndex> {
+        if let Some(result) = overrides.get(original_id) {
+            return Ok(*result);
+        }
+
+        let result = *nodes.first().expect("nodes is nonempty");
+        for node in nodes {
+            if node != result {
+                // TODO: possibly look at nodes to see which is newer to produce an error message
+                // suggestion
+                //
+                // TODO: possibly allow overlaps if the published-at fields are the same (e.g. to
+                // handle bytecode and source packages for the same on-chain package)
+                return Err(LinkageError::MultipleImplementations {
+                    root: *root,
+                    node1: *result,
+                    node2: *node,
+                });
+            }
+        }
+
+        Ok(*result)
     }
 }
