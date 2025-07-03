@@ -65,10 +65,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             debug_print!(context.debug().type_elaboration, ("resolved" => replacement));
             let replacement = match replacement {
                 sp!(loc, Var(_)) => {
-                    let diag = ice!((
-                        ty.loc,
-                        "ICE unfold_type_base failed to expand type inf. var"
-                    ));
+                    let diag = ice!((ty.loc, "ICE unfold_type failed to expand type inf. var"));
                     context.add_diag(diag);
                     sp(loc, UnresolvedError)
                 }

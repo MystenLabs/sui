@@ -5,10 +5,6 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04010]: cannot infer type
- = Compiler Error -- no location information for error:
-     Could not infer this type. Try adding an annotation
-
 warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:3:9
   │

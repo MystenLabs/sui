@@ -5,10 +5,20 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09005]: dead or unreachable code
+error[E04003]: built-in operation not supported
   ┌─ tests/move_check/parser/return_in_binop.move:3:9
   │
 3 │         return >> 0;
-  │         ^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │         ^^^^^^
+  │         │
+  │         Invalid argument to '>>'
+  │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+  ┌─ tests/move_check/parser/return_in_binop.move:4:9
   │
-  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+4 │         return << 0;
+  │         ^^^^^^
+  │         │
+  │         Invalid argument to '<<'
+  │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

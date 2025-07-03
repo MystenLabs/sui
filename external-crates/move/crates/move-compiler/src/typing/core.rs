@@ -1084,7 +1084,8 @@ impl<'env, 'outer> Context<'env, 'outer> {
         if let Some(ty) = self.named_block_map.get(&name) {
             ty.clone()
         } else {
-            let new_type = make_tvar(self, loc);
+            // A named block may diverge
+            let new_type = make_divergent_tvar(self, loc);
             self.named_block_map.insert(name, new_type.clone());
             new_type
         }
@@ -1277,6 +1278,7 @@ pub struct Subst {
 // This will eventually hold constraints like `Void` and `String` as well
 pub enum VarConstraint {
     Num(Loc),
+    Divergent(Loc),
 }
 
 impl Subst {
@@ -1309,6 +1311,16 @@ impl Subst {
         tvar
     }
 
+    pub fn new_divergent_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
+        let tvar = counter.next();
+        assert!(
+            self.var_constraints
+                .insert(tvar, VarConstraint::Divergent(loc))
+                .is_none()
+        );
+        tvar
+    }
+
     pub fn set_constraint_opt(&mut self, tvar: TVar, constraint_opt: Option<VarConstraint>) {
         if let Some(constraint) = constraint_opt {
             assert!(self.tvar_constraints.insert(tvar, constraint).is_none());
@@ -1325,14 +1337,13 @@ impl Subst {
 
 impl VarConstraint {
     pub fn is_num_var(&self) -> bool {
-        match self {
-            VarConstraint::Num(_) => true,
-        }
+        matches!(self, VarConstraint::Num(_))
     }
 
     pub fn loc(&self) -> Loc {
         match self {
             VarConstraint::Num(loc) => *loc,
+            VarConstraint::Divergent(loc) => *loc,
         }
     }
 }
@@ -1354,14 +1365,14 @@ impl ast_debug::AstDebug for Subst {
                 w.new_line();
             }
         });
-        w.write("num_vars:");
+        w.write("var_constraints:");
         w.indent(4, |w| {
             let mut num_vars = var_constraints.keys().collect::<Vec<_>>();
             num_vars.sort();
             for tvar in num_vars {
                 w.writeln(format!("{:?}", tvar))
             }
-        })
+        });
     }
 }
 
@@ -1537,6 +1548,13 @@ fn debug_abilities_info(context: &mut Context, ty: &Type) -> (Option<Loc>, Abili
         }
         T::Fun(_, _) => (None, AbilitySet::functions(loc), vec![]),
     }
+}
+
+pub fn make_divergent_tvar(context: &mut Context, loc: Loc) -> Type {
+    let tvar = context
+        .subst
+        .new_divergent_var(&mut context.tvar_counter, loc);
+    sp(loc, Type_::Var(tvar))
 }
 
 pub fn make_num_tvar(context: &mut Context, loc: Loc) -> Type {
@@ -2226,6 +2244,13 @@ pub fn solve_constraints(context: &mut Context) {
                         subst = next_subst;
                     }
                     _ => (),
+                }
+            }
+            VarConstraint::Divergent(loc) => {
+                let last_tvar = forward_tvar(&subst, var);
+                if subst.get(last_tvar).is_none() {
+                    join_bind_tvar(&mut subst, loc, last_tvar, sp(loc, Type_::Unit))
+                        .expect("ICE failed handling unbound divergent type");
                 }
             }
         }
@@ -3072,10 +3097,18 @@ pub fn join_var_constraints(
     lhs: Option<VarConstraint>,
     rhs: Option<VarConstraint>,
 ) -> Result<Option<VarConstraint>, TypingError> {
+    use VarConstraint as C;
     match (&lhs, &rhs) {
-        (Some(VarConstraint::Num(_)), Some(VarConstraint::Num(_))) => Ok(rhs),
-        (Some(VarConstraint::Num(_)), None) => Ok(lhs),
-        (None, Some(VarConstraint::Num(_))) => Ok(rhs),
+        // divergnce propagates only if both arms are divergent; otherwise, use the other constraint
+        (Some(C::Divergent(_)), Some(C::Divergent(_))) => Ok(rhs),
+        (Some(C::Divergent(_)), other) | (other, Some(C::Divergent(_))) => Ok(other.clone()),
+
+        // number constraints propagates if either arms is numeric
+        (Some(C::Num(_)), Some(C::Num(_))) => Ok(rhs),
+        (Some(C::Num(_)), None) => Ok(lhs),
+        (None, Some(C::Num(_))) => Ok(rhs),
+
+        // none case
         (None, None) => Ok(None),
     }
 }
@@ -3149,25 +3182,17 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
         "ICE join_bind_tvar called on bound tvar"
     );
 
-    fn used_tvars(used: &mut BTreeMap<TVar, Loc>, sp!(loc, t_): &Type) {
+    fn occurs_check(target_tvar: &TVar, sp!(_, t_): &Type) -> bool {
         use Type_ as T;
         match t_ {
-            T::Var(v) => {
-                used.insert(*v, *loc);
-            }
-            T::Ref(_, inner) => used_tvars(used, inner),
-            T::Apply(_, _, inners) => inners
-                .iter()
-                .rev()
-                .for_each(|inner| used_tvars(used, inner)),
+            T::Var(v) => v == target_tvar,
+            T::Ref(_, inner) => occurs_check(target_tvar, inner),
+            T::Apply(_, _, inners) => inners.iter().any(|inner| occurs_check(target_tvar, inner)),
             T::Fun(inner_args, inner_ret) => {
-                inner_args
-                    .iter()
-                    .rev()
-                    .for_each(|inner| used_tvars(used, inner));
-                used_tvars(used, inner_ret)
+                inner_args.iter().any(|arg| occurs_check(target_tvar, arg))
+                    || occurs_check(target_tvar, inner_ret)
             }
-            T::Unit | T::Param(_) | T::Anything | T::UnresolvedError => (),
+            T::Unit | T::Param(_) | T::Anything | T::UnresolvedError => false,
         }
     }
 
@@ -3176,9 +3201,7 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
         return Ok(false);
     }
 
-    let used = &mut BTreeMap::new();
-    used_tvars(used, &ty);
-    if let Some(_rec_loc) = used.get(&tvar) {
+    if occurs_check(&tvar, &ty) {
         return Err(TypingError::RecursiveType(loc));
     }
 
