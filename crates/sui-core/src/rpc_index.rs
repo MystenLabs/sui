@@ -937,9 +937,9 @@ impl RpcIndexStore {
                     // speedup when indexing
                     let mut options = typed_store::rocksdb::Options::default();
                     options.set_unordered_write(true);
-                    options.set_max_background_jobs(16);
+                    options.set_max_background_jobs(32);
                     options.set_write_buffer_size(1024 * 1024 * 1024);
-                    options.set_max_write_buffer_number(16);
+                    options.set_max_write_buffer_number(32);
                     options.set_min_write_buffer_number_to_merge(2);
                     options.set_level_zero_file_num_compaction_trigger(0);
                     options.set_level_zero_slowdown_writes_trigger(-1);
