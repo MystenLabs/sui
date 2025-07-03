@@ -938,8 +938,8 @@ impl RpcIndexStore {
                     let mut options = typed_store::rocksdb::Options::default();
                     options.set_unordered_write(true);
                     options.set_max_background_jobs(32);
-                    options.set_write_buffer_size(1024 * 1024 * 1024);
-                    options.set_max_write_buffer_number(32);
+                    // options.set_write_buffer_size(1024 * 1024 * 1024);
+                    // options.set_max_write_buffer_number(32);
                     options.set_level_zero_file_num_compaction_trigger(0);
                     options.set_level_zero_slowdown_writes_trigger(-1);
                     options.set_level_zero_stop_writes_trigger(i32::MAX);
@@ -955,12 +955,30 @@ impl RpcIndexStore {
                             balance_delta_merge_operator,
                         );
                     balance_options.options.set_disable_auto_compactions(true);
+                    // Set write buffer options to prevent stalls
+                    balance_options
+                        .options
+                        .set_write_buffer_size(512 * 1024 * 1024); // 512MB
+                    balance_options.options.set_max_write_buffer_number(6); // Increase from default 2
+                    balance_options
+                        .options
+                        .set_min_write_buffer_number_to_merge(2);
 
-                    // Create options with compactions disabled
+                    // Create options with compactions disabled and optimized write buffers
                     let mut disabled_compaction_options = typed_store::rocks::default_db_options();
                     disabled_compaction_options
                         .options
                         .set_disable_auto_compactions(true);
+                    // Set write buffer options to prevent stalls
+                    disabled_compaction_options
+                        .options
+                        .set_write_buffer_size(512 * 1024 * 1024); // 512MB
+                    disabled_compaction_options
+                        .options
+                        .set_max_write_buffer_number(6); // Increase from default 2
+                    disabled_compaction_options
+                        .options
+                        .set_min_write_buffer_number_to_merge(2);
 
                     // Apply to all column families
                     table_config_map
