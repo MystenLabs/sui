@@ -940,10 +940,10 @@ impl RpcIndexStore {
                     options.set_max_background_jobs(16);
                     options.set_write_buffer_size(1024 * 1024 * 1024);
                     options.set_max_write_buffer_number(16);
+                    options.set_min_write_buffer_number_to_merge(2);
                     options.set_level_zero_file_num_compaction_trigger(0);
                     options.set_level_zero_slowdown_writes_trigger(-1);
                     options.set_level_zero_stop_writes_trigger(i32::MAX);
-                    options.set_allow_concurrent_memtable_write(true);
                     options.set_use_direct_io_for_flush_and_compaction(true);
 
                     // Create column family specific options with compactions disabled
