@@ -20,7 +20,7 @@ function version(path: string, args?: readonly string[]): string | null {
         path, args, { encoding: 'utf8' },
     );
     // Need the null check as despite stdout in TS technically being only
-    // of type String, it can actually also be undefined
+    // of type `string`, it can actually also be undefined
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     return versionString.stdout ?? null;
 }
