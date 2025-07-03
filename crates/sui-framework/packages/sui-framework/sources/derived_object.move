@@ -26,6 +26,8 @@ public fun claim<K: copy + drop + store>(parent: &mut UID, key: K): UID {
     uid
 }
 
+/// Allows deleting a UID that has been derived by a parent, making the
+/// UID available again for claim.
 public fun delete(parent: &mut UID, uid: UID) {
     let claimed = Claimed(uid.to_inner());
     assert!(df::exists_(parent, claimed), EInvalidParent);
