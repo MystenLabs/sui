@@ -113,6 +113,7 @@ pub fn get_checkpoint(
     Ok(checkpoint)
 }
 
+#[allow(unused)]
 pub(crate) fn checkpoint_data_to_checkpoint_proto(
     checkpoint_data: sui_types::full_checkpoint_content::CheckpointData,
     read_mask: &FieldMaskTree,
