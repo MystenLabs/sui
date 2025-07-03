@@ -938,12 +938,12 @@ impl RpcIndexStore {
                     let mut options = typed_store::rocksdb::Options::default();
                     options.set_unordered_write(true);
                     options.set_max_background_jobs(32);
-                    // options.set_write_buffer_size(1024 * 1024 * 1024);
-                    // options.set_max_write_buffer_number(32);
+                    // These level0 settings are DBOptions and do apply at the database level
                     options.set_level_zero_file_num_compaction_trigger(0);
                     options.set_level_zero_slowdown_writes_trigger(-1);
                     options.set_level_zero_stop_writes_trigger(i32::MAX);
                     options.set_use_direct_io_for_flush_and_compaction(true);
+                    options.set_db_write_buffer_size(100 * 1024 * 1024 * 1024); // 100GB total limit
 
                     // Create column family specific options with compactions disabled
                     let mut table_config_map = BTreeMap::new();
@@ -955,11 +955,11 @@ impl RpcIndexStore {
                             balance_delta_merge_operator,
                         );
                     balance_options.options.set_disable_auto_compactions(true);
-                    // Set write buffer options to prevent stalls
+                    // Set write buffer options to prevent stalls - use 1GB buffers as recommended
                     balance_options
                         .options
-                        .set_write_buffer_size(512 * 1024 * 1024); // 512MB
-                    balance_options.options.set_max_write_buffer_number(6); // Increase from default 2
+                        .set_write_buffer_size(1024 * 1024 * 1024); // 1GB
+                    balance_options.options.set_max_write_buffer_number(32); // Increase to 32 as recommended
                     balance_options
                         .options
                         .set_min_write_buffer_number_to_merge(2);
@@ -969,16 +969,20 @@ impl RpcIndexStore {
                     disabled_compaction_options
                         .options
                         .set_disable_auto_compactions(true);
-                    // Set write buffer options to prevent stalls
+                    // Set write buffer options to prevent stalls - use 1GB buffers as recommended
                     disabled_compaction_options
                         .options
-                        .set_write_buffer_size(512 * 1024 * 1024); // 512MB
+                        .set_write_buffer_size(1024 * 1024 * 1024); // 1GB
                     disabled_compaction_options
                         .options
-                        .set_max_write_buffer_number(6); // Increase from default 2
+                        .set_max_write_buffer_number(32); // Increase to 32 as recommended
                     disabled_compaction_options
                         .options
                         .set_min_write_buffer_number_to_merge(2);
+
+                    // CRITICAL: Configure the default column family to prevent stalls
+                    table_config_map
+                        .insert("default".to_string(), disabled_compaction_options.clone());
 
                     // Apply to all column families
                     table_config_map
@@ -992,16 +996,25 @@ impl RpcIndexStore {
                         disabled_compaction_options.clone(),
                     );
                     table_config_map
-                        .insert("owner".to_string(), disabled_compaction_options.clone());
-                    table_config_map.insert(
-                        "dynamic_field".to_string(),
-                        disabled_compaction_options.clone(),
-                    );
-                    table_config_map
                         .insert("coin".to_string(), disabled_compaction_options.clone());
                     table_config_map.insert("balance".to_string(), balance_options);
                     table_config_map
                         .insert("package_version".to_string(), disabled_compaction_options);
+
+                    // Create options with compactions disabled and optimized write buffers for hot CFs
+                    let mut hot_cf_options = typed_store::rocks::default_db_options();
+                    hot_cf_options.options.set_disable_auto_compactions(true);
+                    // Set write buffer options to prevent stalls - use 1GB buffers as recommended
+                    hot_cf_options
+                        .options
+                        .set_write_buffer_size(1024 * 1024 * 1024); // 1GB
+                    hot_cf_options.options.set_max_write_buffer_number(32); // Increase to 32 as recommended
+                    hot_cf_options
+                        .options
+                        .set_min_write_buffer_number_to_merge(2);
+
+                    table_config_map.insert("owner".to_string(), hot_cf_options.clone());
+                    table_config_map.insert("dynamic_field".to_string(), hot_cf_options);
 
                     IndexStoreTables::open_with_options(
                         &path,
