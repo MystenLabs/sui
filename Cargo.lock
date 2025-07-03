@@ -8218,7 +8218,6 @@ dependencies = [
  "jsonrpc",
  "move-command-line-common",
  "move-core-types",
- "move-package",
  "once_cell",
  "path-clean",
  "petgraph 0.8.1",
