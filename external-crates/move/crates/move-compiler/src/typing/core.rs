@@ -1084,7 +1084,8 @@ impl<'env, 'outer> Context<'env, 'outer> {
         if let Some(ty) = self.named_block_map.get(&name) {
             ty.clone()
         } else {
-            let new_type = make_tvar(self, loc);
+            // A named block may diverge
+            let new_type = make_divergent_tvar(self, loc);
             self.named_block_map.insert(name, new_type.clone());
             new_type
         }
@@ -1271,6 +1272,7 @@ impl TVarCounter {
 pub struct Subst {
     tvars: HashMap<TVar, Type>,
     num_vars: HashMap<TVar, Loc>,
+    divergent_vars: HashMap<TVar, Loc>,
 }
 
 impl Subst {
@@ -1278,6 +1280,7 @@ impl Subst {
         Self {
             tvars: HashMap::new(),
             num_vars: HashMap::new(),
+            divergent_vars: HashMap::new(),
         }
     }
 
@@ -1306,11 +1309,31 @@ impl Subst {
     pub fn is_num_var(&self, tvar: TVar) -> bool {
         self.num_vars.contains_key(&tvar)
     }
+
+    pub fn new_divergent_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
+        let tvar = counter.next();
+        assert!(self.divergent_vars.insert(tvar, loc).is_none());
+        tvar
+    }
+
+    pub fn set_divergent_var(&mut self, tvar: TVar, loc: Loc) {
+        // No need to recur down setting divergence, as it is only applied if it is a new variable
+        // or it is the join of two that are both divergent.
+        self.divergent_vars.entry(tvar).or_insert(loc);
+    }
+
+    pub fn is_divergent_var(&self, tvar: TVar) -> bool {
+        self.divergent_vars.contains_key(&tvar)
+    }
 }
 
 impl ast_debug::AstDebug for Subst {
     fn ast_debug(&self, w: &mut ast_debug::AstWriter) {
-        let Subst { tvars, num_vars } = self;
+        let Subst {
+            tvars,
+            num_vars,
+            divergent_vars,
+        } = self;
 
         w.write("tvars:");
         w.indent(4, |w| {
@@ -1327,6 +1350,14 @@ impl ast_debug::AstDebug for Subst {
             let mut num_vars = num_vars.keys().collect::<Vec<_>>();
             num_vars.sort();
             for tvar in num_vars {
+                w.writeln(format!("{:?}", tvar))
+            }
+        });
+        w.write("divergent_vars:");
+        w.indent(4, |w| {
+            let mut divergent_vars = divergent_vars.keys().collect::<Vec<_>>();
+            divergent_vars.sort();
+            for tvar in divergent_vars {
                 w.writeln(format!("{:?}", tvar))
             }
         })
@@ -1505,6 +1536,13 @@ fn debug_abilities_info(context: &mut Context, ty: &Type) -> (Option<Loc>, Abili
         }
         T::Fun(_, _) => (None, AbilitySet::functions(loc), vec![]),
     }
+}
+
+pub fn make_divergent_tvar(context: &mut Context, loc: Loc) -> Type {
+    let tvar = context
+        .subst
+        .new_divergent_var(&mut context.tvar_counter, loc);
+    sp(loc, Type_::Var(tvar))
 }
 
 pub fn make_num_tvar(context: &mut Context, loc: Loc) -> Type {
@@ -2177,8 +2215,10 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
 
 pub fn solve_constraints(context: &mut Context) {
     use BuiltinTypeName_ as BT;
-    let num_vars = context.subst.num_vars.clone();
+
     let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
+
+    let num_vars = subst.num_vars.clone();
     for (num_var, loc) in num_vars {
         let tvar = sp(loc, Type_::Var(num_var));
         match unfold_type(&subst, tvar.clone()).value {
@@ -2191,6 +2231,16 @@ pub fn solve_constraints(context: &mut Context) {
             _ => (),
         }
     }
+
+    let divergent_vars = subst.divergent_vars.clone();
+    for (divergent_var, loc) in divergent_vars {
+        let last_tvar = forward_tvar(&subst, divergent_var);
+        if subst.get(last_tvar).is_none() {
+            join_bind_tvar(&mut subst, loc, last_tvar, sp(loc, Type_::Unit))
+                .expect("ICE failed handling unbound divergent type");
+        }
+    }
+
     context.subst = subst;
 
     let constraints = std::mem::take(&mut context.constraints);
@@ -3059,6 +3109,12 @@ fn join_tvar(
         }
         _ => (),
     }
+    let divergent_loc_1 = subst.divergent_vars.get(&last_id1);
+    let divergent_loc_2 = subst.divergent_vars.get(&last_id2);
+    if let (Some(_), Some(nloc)) = (divergent_loc_1, divergent_loc_2) {
+        let nloc = *nloc;
+        subst.set_divergent_var(new_tvar, nloc);
+    }
     subst.insert(last_id1, sp(loc1, Var(new_tvar)));
     subst.insert(last_id2, sp(loc2, Var(new_tvar)));
 
@@ -3099,25 +3155,17 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
         "ICE join_bind_tvar called on bound tvar"
     );
 
-    fn used_tvars(used: &mut BTreeMap<TVar, Loc>, sp!(loc, t_): &Type) {
+    fn occurs_check(target_tvar: &TVar, sp!(_, t_): &Type) -> bool {
         use Type_ as T;
         match t_ {
-            T::Var(v) => {
-                used.insert(*v, *loc);
-            }
-            T::Ref(_, inner) => used_tvars(used, inner),
-            T::Apply(_, _, inners) => inners
-                .iter()
-                .rev()
-                .for_each(|inner| used_tvars(used, inner)),
+            T::Var(v) => v == target_tvar,
+            T::Ref(_, inner) => occurs_check(target_tvar, inner),
+            T::Apply(_, _, inners) => inners.iter().any(|inner| occurs_check(target_tvar, inner)),
             T::Fun(inner_args, inner_ret) => {
-                inner_args
-                    .iter()
-                    .rev()
-                    .for_each(|inner| used_tvars(used, inner));
-                used_tvars(used, inner_ret)
+                inner_args.iter().any(|arg| occurs_check(target_tvar, arg))
+                    || occurs_check(target_tvar, inner_ret)
             }
-            T::Unit | T::Param(_) | T::Anything | T::UnresolvedError => (),
+            T::Unit | T::Param(_) | T::Anything | T::UnresolvedError => false,
         }
     }
 
@@ -3126,9 +3174,7 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
         return Ok(false);
     }
 
-    let used = &mut BTreeMap::new();
-    used_tvars(used, &ty);
-    if let Some(_rec_loc) = used.get(&tvar) {
+    if occurs_check(&tvar, &ty) {
         return Err(TypingError::RecursiveType(loc));
     }
 

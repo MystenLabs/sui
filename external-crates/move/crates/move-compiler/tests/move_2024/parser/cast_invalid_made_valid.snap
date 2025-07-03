@@ -5,4 +5,56 @@ info:
   edition: 2024.alpha
   lint: false
 ---
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:11:10
+   │
+11 │         (return) as u32;
+   │          ^^^^^^
+   │          │
+   │          Invalid argument to 'as'
+   │          Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:12:10
+   │
+12 │         (return as u32);
+   │          ^^^^^^
+   │          │
+   │          Invalid argument to 'as'
+   │          Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:14:14
+   │
+14 │             (break) as u32;
+   │              ^^^^^
+   │              │
+   │              Invalid argument to 'as'
+   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:15:14
+   │
+15 │             (break as u32);
+   │              ^^^^^
+   │              │
+   │              Invalid argument to 'as'
+   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:16:14
+   │
+16 │             (continue) as u32;
+   │              ^^^^^^^^
+   │              │
+   │              Invalid argument to 'as'
+   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:17:14
+   │
+17 │             (continue as u32);
+   │              ^^^^^^^^
+   │              │
+   │              Invalid argument to 'as'
+   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
