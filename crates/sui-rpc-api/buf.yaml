@@ -12,8 +12,6 @@ modules:
         - proto/google
       ignore_only:
         ENUM_VALUE_PREFIX:
-          - proto/sui/rpc/v2alpha/live_data_service.proto
-          - proto/sui/rpc/v2alpha/move_package.proto
           - proto/sui/rpc/v2beta/argument.proto
           - proto/sui/rpc/v2beta/checkpoint_summary.proto
           - proto/sui/rpc/v2beta/effects.proto
