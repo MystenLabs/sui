@@ -551,12 +551,6 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_naming_info(&self, info: &program_info::NamingProgramInfo) {
-        for hook in &self.save_hooks {
-            hook.save_naming_info(info)
-        }
-    }
-
     pub fn save_typing_ast(&self, ast: &T::Program) {
         for hook in &self.save_hooks {
             hook.save_typing_ast(ast)
@@ -1021,7 +1015,6 @@ pub(crate) struct SavedInfo {
     parser: Option<P::Program>,
     expansion: Option<E::Program>,
     naming: Option<N::Program>,
-    naming_info: Option<program_info::NamingProgramInfo>,
     typing: Option<T::Program>,
     typing_info: Option<Arc<program_info::TypingProgramInfo>>,
     hlir: Option<H::Program>,
@@ -1042,7 +1035,6 @@ pub enum SaveFlag {
     Parser,
     Expansion,
     Naming,
-    NamingInfo,
     Typing,
     TypingInfo,
     HLIR,
@@ -1066,7 +1058,6 @@ impl SaveHook {
             parser: None,
             expansion: None,
             naming: None,
-            naming_info: None,
             typing: None,
             typing_info: None,
             hlir: None,
@@ -1101,13 +1092,6 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.naming.is_none() && r.flags.contains(&SaveFlag::Naming) {
             r.naming = Some(ast.clone())
-        }
-    }
-
-    pub(crate) fn save_naming_info(&self, info: &program_info::NamingProgramInfo) {
-        let mut r = self.0.lock().unwrap();
-        if r.naming_info.is_none() && r.flags.contains(&SaveFlag::NamingInfo) {
-            r.naming_info = Some(info.clone())
         }
     }
 
@@ -1239,15 +1223,6 @@ impl SaveHook {
             "Naming AST not saved. Please set the flag when creating the SaveHook"
         );
         r.naming.take().unwrap()
-    }
-
-    pub fn take_naming_info(&self) -> program_info::NamingProgramInfo {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::NamingInfo),
-            "Naming info not saved. Please set the flag when creating the SaveHook"
-        );
-        r.naming_info.take().unwrap()
     }
 
     pub fn take_typing_ast(&self) -> T::Program {

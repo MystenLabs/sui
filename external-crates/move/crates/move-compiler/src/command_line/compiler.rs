@@ -138,10 +138,7 @@ pub struct CompiledModuleInfo {
     /// to extract macros in typing/translate.rs (need function bodies for this)
     pub macro_infos: Option<(UseFuns, UniqueMap<FunctionName, Function>)>,
     /// to construct program infos in shared/program_info.rs
-    /// (need both because typing info drops some info present at naming,
-    /// such as abilities, and naming info does not have all the types resolved)
-    pub naming_info: ModuleInfo,
-    pub typing_info: ModuleInfo,
+    pub info: ModuleInfo,
     /// to process private transfers in sui_mode/info.rs
     pub private_transfers: BTreeMap<DatatypeName, TransferKind>,
     /// to process modules in to_bytecode/translate.rs
@@ -677,7 +674,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
     vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<CompiledModuleInfoMap, (MappedFiles, Diagnostics)>> {
     let hook = SaveHook::new([
-        SaveFlag::NamingInfo,
         SaveFlag::TypingInfo,
         SaveFlag::ModuleNameAddresses,
         SaveFlag::ModuleMembers,
@@ -709,8 +705,7 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
     match run(&compilation_env, None, start, PASS_COMPILATION) {
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, mod_idents, _)) => {
-            let naming_info = hook.take_naming_info();
-            let typing_info = hook.take_typing_info();
+            let program_info = hook.take_typing_info();
             let mut module_named_addresses = hook.take_module_named_addresses();
             let mut module_members = hook.take_module_members();
             let mut module_resolved_members = hook.take_module_resolved_members();
@@ -780,17 +775,13 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                 .zip(compiled)
                 .collect::<BTreeMap<_, _>>();
 
-            let precompiled_modules: CompiledModuleInfoMap = naming_info
+            let precompiled_modules: CompiledModuleInfoMap = program_info
                  .modules
                  .iter()
-                 .map(|(loc, mod_ident_key, naming_module_info)| -> anyhow::Result<(ModuleIdent, Arc<CompiledModuleInfo>)> {
+                 .map(|(loc, mod_ident_key, typing_module_info)| -> anyhow::Result<(ModuleIdent, Arc<CompiledModuleInfo>)> {
                      let mod_ident = sp(loc, *mod_ident_key);
 
-                     let Some(typing_module_info) = typing_info.modules.get(&mod_ident) else {
-                        return Err(anyhow::anyhow!("typing info not found for module: {:?}", mod_ident));
-                     };
-
-                     let Some((file_name, file_content)) = files.get(&naming_module_info.defined_loc.file_hash()) else {
+                     let Some((file_name, file_content)) = files.get(&typing_module_info.defined_loc.file_hash()) else {
                         return Err(anyhow::anyhow!("file name not found for module: {:?}", mod_ident));
                      };
 
@@ -825,8 +816,7 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                              member_kinds,
                              resolved_members,
                              macro_infos,
-                             naming_info: naming_module_info.clone(),
-                             typing_info: typing_module_info.clone(),
+                             info: typing_module_info.clone(),
                              private_transfers,
                              dependency_order,
                              cfgir_datatype_decls,
@@ -1093,7 +1083,6 @@ impl PassResult {
             }
             PassResult::Naming(prog) => {
                 compilation_env.save_naming_ast(prog);
-                compilation_env.save_naming_info(&prog.info);
             }
             PassResult::Typing(prog) => {
                 compilation_env.save_typing_ast(prog);
