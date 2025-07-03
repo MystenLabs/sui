@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/loop_break_invalid_2.move:7:5
+  │
+3 │ fun test(): u64 {
+  │             --- Expected: 'u64'
+4 │     let x = loop {
+5 │         break 0u8
+  │               --- Given: 'u8'
+6 │     };
+7 │     x
+  │     ^ Invalid return expression

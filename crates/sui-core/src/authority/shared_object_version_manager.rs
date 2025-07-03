@@ -46,6 +46,9 @@ impl AssignedTxAndVersions {
 pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
     RandomnessStateUpdate(EpochId, RandomnessRound),
+    // For a transaction that has withdraw reservations,
+    // pass the transaction and the accumulator version it depends on.
+    Withdraw(T, SequenceNumber),
 }
 
 impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
@@ -80,6 +83,7 @@ impl Schedulable<&'_ VerifiedExecutableTransaction> {
             Schedulable::RandomnessStateUpdate(epoch, round) => {
                 Schedulable::RandomnessStateUpdate(*epoch, *round)
             }
+            Schedulable::Withdraw(tx, version) => Schedulable::Withdraw((*tx).clone(), *version),
         }
     }
 }
@@ -90,7 +94,7 @@ impl<T> Schedulable<T> {
         T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => Some(tx.as_tx()),
+            Schedulable::Transaction(tx) | Schedulable::Withdraw(tx, _) => Some(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => None,
         }
     }
@@ -103,7 +107,9 @@ impl<T> Schedulable<T> {
         T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => Either::Left(tx.as_tx().shared_input_objects()),
+            Schedulable::Transaction(tx) | Schedulable::Withdraw(tx, _) => {
+                Either::Left(tx.as_tx().shared_input_objects())
+            }
             Schedulable::RandomnessStateUpdate(_, _) => {
                 Either::Right(std::iter::once(SharedInputObject {
                     id: SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -122,8 +128,10 @@ impl<T> Schedulable<T> {
         T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => transaction_non_shared_input_object_keys(tx.as_tx())
-                .expect("Transaction input should have been verified"),
+            Schedulable::Transaction(tx) | Schedulable::Withdraw(tx, _) => {
+                transaction_non_shared_input_object_keys(tx.as_tx())
+                    .expect("Transaction input should have been verified")
+            }
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
         }
     }
@@ -133,7 +141,9 @@ impl<T> Schedulable<T> {
         T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
+            Schedulable::Transaction(tx) | Schedulable::Withdraw(tx, _) => {
+                transaction_receiving_object_keys(tx.as_tx())
+            }
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
         }
     }
@@ -143,7 +153,7 @@ impl<T> Schedulable<T> {
         T: AsTx,
     {
         match self {
-            Schedulable::Transaction(tx) => tx.as_tx().key(),
+            Schedulable::Transaction(tx) | Schedulable::Withdraw(tx, _) => tx.as_tx().key(),
             Schedulable::RandomnessStateUpdate(epoch, round) => {
                 TransactionKey::RandomnessRound(*epoch, *round)
             }

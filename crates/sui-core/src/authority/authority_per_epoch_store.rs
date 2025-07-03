@@ -2752,7 +2752,7 @@ impl AuthorityPerEpochStore {
     fn process_user_signatures<'a>(&self, certificates: impl Iterator<Item = &'a Schedulable>) {
         let sigs: Vec<_> = certificates
             .filter_map(|s| match s {
-                Schedulable::Transaction(certificate) => {
+                Schedulable::Transaction(certificate) | Schedulable::Withdraw(certificate, _) => {
                     Some((*certificate.digest(), certificate.tx_signatures().to_vec()))
                 }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
