@@ -198,7 +198,7 @@ members = [
   "crates/sui-verifier-transactional-tests",
   "crates/suins-indexer",
   "crates/telemetry-subscribers",
-  "crates/test-cluster",
+  "crates/test-cluster", "crates/tokio_select_example",
   "crates/transaction-fuzzer",
   "crates/typed-store",
   "crates/typed-store-derive",

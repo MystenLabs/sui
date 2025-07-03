@@ -17458,6 +17458,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio_select_example"
+version = "1.52.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "toml"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,14 @@
+[package]
+name = "tokio_select_example"
+edition = "2024"
+version.workspace = true
+
+[[bin]]
+name = "tokio_select_example"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true
