@@ -130,7 +130,7 @@ pub struct CompiledModuleInfo {
     /// to compute address conflicts in expansion/translate.rs
     /// (address map "inlined" into the module so that
     /// modules are separated)
-    pub named_address_map: NamedAddressMap,
+    pub named_address_map: Arc<NamedAddressMap>,
     /// to create context in expansion/translate.rs
     pub member_kinds: BTreeMap<Name, ModuleMemberKind>,
     /// to build context in naming/translate.rs
@@ -812,7 +812,7 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                          Arc::new(CompiledModuleInfo {
                              file_name,
                              file_content,
-                             named_address_map,
+                             named_address_map: Arc::new(named_address_map),
                              member_kinds,
                              resolved_members,
                              macro_infos,
