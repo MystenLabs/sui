@@ -5,5 +5,5 @@
 mod node;
 
 #[cfg(msim)]
-#[path = "tests/simtests.rs"]
-mod simtests;
+#[path = "tests/consensus_tests.rs"]
+mod consensus_tests;
