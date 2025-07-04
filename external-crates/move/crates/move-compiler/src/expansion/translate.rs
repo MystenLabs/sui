@@ -404,7 +404,7 @@ fn compute_address_conflicts(
     let all_addrs = prog.named_address_maps.all().iter().chain(
         pre_compiled_module_infos
             .iter()
-            .flat_map(|module_infos| module_infos.iter().map(|(_, m)| &m.named_address_map)),
+            .flat_map(|module_infos| module_infos.iter().map(|(_, m)| &*m.named_address_map)),
     );
     for map in all_addrs {
         for (n, addr) in map {
