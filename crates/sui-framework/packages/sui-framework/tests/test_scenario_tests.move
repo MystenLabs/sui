@@ -1122,3 +1122,15 @@ fun test_events() {
     assert_eq(effects.num_user_events(), 1);
     assert_eq(event::num_events(), 0);
 }
+
+#[test]
+fun test_tx_context() {
+    use sui::test_utils::assert_eq;
+
+    let mut scenario = test_scenario::begin(@0x0);
+    let ctx = scenario.ctx();
+    // values below as coming from TxContext::new(...)
+    assert_eq(ctx.reference_gas_price(), 600);
+    assert_eq(ctx.gas_price(), 700);
+    scenario.end();
+}

@@ -33,6 +33,7 @@ pub mod checked {
         fn summary(&self) -> GasCostSummary;
         fn gas_budget(&self) -> u64;
         fn gas_price(&self) -> u64;
+        fn reference_gas_price(&self) -> u64;
         fn storage_gas_units(&self) -> u64;
         fn storage_rebate(&self) -> u64;
         fn unmetered_storage_rebate(&self) -> u64;

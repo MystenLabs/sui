@@ -246,6 +246,7 @@ const MAX_PROTOCOL_VERSION: u64 = 87;
 //             Make variant count limit explicit in protocol config.
 //             Enable party transfer in testnet.
 // Version 87: Update `sui-system` package to use `calculate_rewards` function.
+//             Define the cost for the native Move function `rgp`.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1226,6 +1227,7 @@ pub struct ProtocolConfig {
     tx_context_epoch_cost_base: Option<u64>,
     tx_context_epoch_timestamp_ms_cost_base: Option<u64>,
     tx_context_sponsor_cost_base: Option<u64>,
+    tx_context_rgp_cost_base: Option<u64>,
     tx_context_gas_price_cost_base: Option<u64>,
     tx_context_gas_budget_cost_base: Option<u64>,
     tx_context_ids_created_cost_base: Option<u64>,
@@ -2366,6 +2368,7 @@ impl ProtocolConfig {
             tx_context_epoch_cost_base: None,
             tx_context_epoch_timestamp_ms_cost_base: None,
             tx_context_sponsor_cost_base: None,
+            tx_context_rgp_cost_base: None,
             tx_context_gas_price_cost_base: None,
             tx_context_gas_budget_cost_base: None,
             tx_context_ids_created_cost_base: None,
@@ -3755,7 +3758,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_party_transfer = true;
                     }
                 }
-                87 => {}
+                87 => {
+                    cfg.tx_context_rgp_cost_base = Some(30);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
