@@ -524,10 +524,21 @@ impl IndexStoreTables {
         );
         let start_time = Instant::now();
 
-        // Channels
-        let (io_tx, io_rx) = bounded::<Result<RawCheckpointData, StorageError>>(1000);
+        // Channels - configurable via env vars
+        let io_channel_size = std::env::var("SUI_INDEX_IO_CHANNEL_SIZE")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(1000);
+        let compute_channel_size = std::env::var("SUI_INDEX_COMPUTE_CHANNEL_SIZE")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(100);
+        
+        info!("Channel sizes - I/O: {}, Compute: {}", io_channel_size, compute_channel_size);
+        
+        let (io_tx, io_rx) = bounded::<Result<RawCheckpointData, StorageError>>(io_channel_size);
         let (compute_tx, compute_rx) =
-            bounded::<Result<ProcessedCheckpointData, StorageError>>(100);
+            bounded::<Result<ProcessedCheckpointData, StorageError>>(compute_channel_size);
 
         // Shared error flag
         let error_flag = Arc::new(AtomicBool::new(false));
@@ -539,35 +550,66 @@ impl IndexStoreTables {
 
         let mut write_error = None;
 
+        // Convert range to vector for parallel iteration
+        let checkpoint_vec: Vec<u64> = checkpoint_range.collect();
+        
         // Use crossbeam scope to handle lifetime issues
         crossbeam::scope(|s| {
-            // I/O Thread
-            let error_flag_clone = error_flag.clone();
-            let checkpoints_fetched_clone = checkpoints_fetched.clone();
-            s.spawn(move |_| {
-                for seq in checkpoint_range {
-                    if error_flag_clone.load(Ordering::Relaxed) {
-                        break;
-                    }
-
-                    match fetch_checkpoint_data_io(authority_store, checkpoint_store, seq) {
-                        Ok(data) => {
-                            checkpoints_fetched_clone.fetch_add(1, Ordering::Relaxed);
-                            if io_tx.send(Ok(data)).is_err() {
-                                break; // Receiver dropped
-                            }
-                        }
-                        Err(e) => {
-                            error_flag_clone.store(true, Ordering::Relaxed);
-                            let _ = io_tx.send(Err(e));
+            // Multiple I/O Threads - configurable via env var
+            let num_io_threads = std::env::var("SUI_INDEX_IO_THREADS")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(16);
+            info!("Using {} I/O threads for indexing", num_io_threads);
+            
+            let chunk_size = (checkpoint_vec.len() + num_io_threads - 1) / num_io_threads;
+            
+            for thread_idx in 0..num_io_threads {
+                let start_idx = thread_idx * chunk_size;
+                let end_idx = ((thread_idx + 1) * chunk_size).min(checkpoint_vec.len());
+                
+                if start_idx >= checkpoint_vec.len() {
+                    break;
+                }
+                
+                let thread_checkpoints = checkpoint_vec[start_idx..end_idx].to_vec();
+                let error_flag_clone = error_flag.clone();
+                let checkpoints_fetched_clone = checkpoints_fetched.clone();
+                let io_tx_clone = io_tx.clone();
+                
+                s.spawn(move |_| {
+                    for seq in thread_checkpoints {
+                        if error_flag_clone.load(Ordering::Relaxed) {
                             break;
                         }
-                    }
-                }
-            });
 
-            // Compute Pool
-            let num_compute_threads = num_cpus::get();
+                        match fetch_checkpoint_data_io(authority_store, checkpoint_store, seq) {
+                            Ok(data) => {
+                                checkpoints_fetched_clone.fetch_add(1, Ordering::Relaxed);
+                                if io_tx_clone.send(Ok(data)).is_err() {
+                                    break; // Receiver dropped
+                                }
+                            }
+                            Err(e) => {
+                                error_flag_clone.store(true, Ordering::Relaxed);
+                                let _ = io_tx_clone.send(Err(e));
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Drop original io_tx after spawning all I/O threads
+            drop(io_tx);
+
+            // Compute Pool - configurable via env var
+            let num_compute_threads = std::env::var("SUI_INDEX_COMPUTE_THREADS")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or_else(num_cpus::get);
+            info!("Using {} compute threads for indexing", num_compute_threads);
+            
             for _ in 0..num_compute_threads {
                 let io_rx = io_rx.clone();
                 let compute_tx = compute_tx.clone();
@@ -607,8 +649,13 @@ impl IndexStoreTables {
             drop(io_rx);
             drop(compute_tx);
 
-            // Writer Thread (using main thread) with batching
-            let batch_size = 10; // Write in batches of 10 checkpoints
+            // Writer Thread (using main thread) with batching - configurable via env var
+            let batch_size = std::env::var("SUI_INDEX_WRITE_BATCH_SIZE")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(100);
+            info!("Using write batch size of {} for indexing", batch_size);
+            
             let mut pending_writes = Vec::with_capacity(batch_size);
 
             loop {
