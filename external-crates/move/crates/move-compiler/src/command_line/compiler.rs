@@ -15,7 +15,7 @@ use crate::{
         *,
     },
     editions::Edition,
-    expansion::{self, ast::ModuleIdent, name_validation::ModuleMemberKind},
+    expansion::{self, ast::ModuleIdent},
     hlir, interface_generator,
     naming::{
         self,
@@ -28,9 +28,8 @@ use crate::{
         *,
     },
     shared::{
-        CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, Name,
-        NamedAddressMap, NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag,
-        SaveHook,
+        CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
+        NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
         files::{FilesSourceText, MappedFiles},
         program_info::ModuleInfo,
         unique_map::UniqueMap,
@@ -131,8 +130,6 @@ pub struct CompiledModuleInfo {
     /// (address map "inlined" into the module so that
     /// modules are separated)
     pub named_address_map: Arc<NamedAddressMap>,
-    /// to create context in expansion/translate.rs
-    pub member_kinds: BTreeMap<Name, ModuleMemberKind>,
     /// to build context in naming/translate.rs
     pub resolved_members: BTreeMap<Symbol, ResolvedModuleMember>,
     /// to extract macros in typing/translate.rs (need function bodies for this)
@@ -707,7 +704,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
         Ok(PassResult::Compilation(compiled, mod_idents, _)) => {
             let program_info = hook.take_typing_info();
             let mut module_named_addresses = hook.take_module_named_addresses();
-            let mut module_members = hook.take_module_members();
             let mut module_resolved_members = hook.take_module_resolved_members();
             let mut macro_infos = hook.take_macro_infos();
             let private_transfers = hook.take_private_transfers();
@@ -787,8 +783,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
 
                      let named_address_map = module_named_addresses.remove(&mod_ident).unwrap_or_default();
 
-                     let member_kinds = module_members.remove(&mod_ident).unwrap_or_default();
-
                      let resolved_members = module_resolved_members.remove(&mod_ident).unwrap_or_default();
 
                      let macro_infos = macro_infos.remove(&mod_ident);
@@ -813,7 +807,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                              file_name,
                              file_content,
                              named_address_map: Arc::new(named_address_map),
-                             member_kinds,
                              resolved_members,
                              macro_infos,
                              info: typing_module_info.clone(),

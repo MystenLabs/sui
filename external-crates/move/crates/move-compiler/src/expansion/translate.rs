@@ -42,6 +42,7 @@ use crate::{
     shared::{
         ide::{IDEAnnotation, IDEInfo},
         known_attributes::{AttributeKind_, AttributePosition},
+        program_info::ModuleInfo,
         string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
         *,
@@ -533,13 +534,11 @@ pub fn program(
 
         if let Some(pre_compiled_module_infos) = pre_compiled_module_infos.clone() {
             for (mident, module_info) in pre_compiled_module_infos.iter() {
-                let _ = members.add(*mident, module_info.member_kinds.clone());
+                let _ = members.add(*mident, module_info_to_member_kinds(&module_info.info));
             }
         }
         members
     };
-
-    compilation_env.save_module_members(&module_members);
 
     let address_conflicts = member_computation_context.address_conflicts;
 
@@ -675,6 +674,23 @@ pub fn program(
         warning_filters_table: Arc::new(context.finish()),
         modules: module_map,
     }
+}
+
+fn module_info_to_member_kinds(module_info: &ModuleInfo) -> BTreeMap<Name, ModuleMemberKind> {
+    let mut member_kinds = BTreeMap::new();
+    for (loc, name, _) in module_info.structs.iter() {
+        member_kinds.insert(sp(loc, *name), ModuleMemberKind::Struct);
+    }
+    for (loc, name, _) in module_info.enums.iter() {
+        member_kinds.insert(sp(loc, *name), ModuleMemberKind::Enum);
+    }
+    for (loc, name, _) in module_info.functions.iter() {
+        member_kinds.insert(sp(loc, *name), ModuleMemberKind::Function);
+    }
+    for (loc, name, _) in module_info.constants.iter() {
+        member_kinds.insert(sp(loc, *name), ModuleMemberKind::Constant);
+    }
+    member_kinds
 }
 
 fn definition(
