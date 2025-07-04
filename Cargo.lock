@@ -13735,6 +13735,7 @@ dependencies = [
  "consensus-types",
  "count-min-sketch",
  "criterion",
+ "crossbeam",
  "dashmap",
  "diffy",
  "either",

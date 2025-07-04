@@ -6,14 +6,14 @@ use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
+use crossbeam::channel::bounded;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -29,8 +29,8 @@ use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::message_envelope::Message;
 use sui_types::layout_resolver::LayoutResolver;
+use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Data;
@@ -62,6 +62,25 @@ fn write_options_no_wal() -> WriteOptions {
     opts.disable_wal(true);
     opts.set_sync(false);
     opts
+}
+
+// Raw data from I/O operations
+#[derive(Debug)]
+struct RawCheckpointData {
+    checkpoint_seq: u64,
+    summary: sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+    contents: CheckpointContents,
+    transactions: Vec<sui_types::transaction::VerifiedTransaction>,
+    effects: Vec<sui_types::effects::TransactionEffects>,
+    objects: HashMap<ObjectKey, Object>,
+}
+
+// Processed data ready for writing
+#[derive(Debug)]
+struct ProcessedCheckpointData {
+    #[allow(dead_code)]
+    checkpoint_seq: u64,
+    checkpoint_data: CheckpointData,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -475,6 +494,22 @@ impl IndexStoreTables {
         Ok(())
     }
 
+    fn write_processed_checkpoints(
+        &mut self,
+        checkpoints: Vec<ProcessedCheckpointData>,
+    ) -> Result<(), StorageError> {
+        let mut batch = self.transactions.batch();
+
+        for processed in checkpoints {
+            self.index_epoch(&processed.checkpoint_data, &mut batch)?;
+            self.index_transactions(&processed.checkpoint_data, &mut batch)?;
+        }
+
+        batch
+            .write_opt(&write_options_no_wal())
+            .map_err(StorageError::from)
+    }
+
     #[tracing::instrument(skip(self, authority_store, checkpoint_store))]
     fn index_existing_transactions(
         &mut self,
@@ -482,25 +517,169 @@ impl IndexStoreTables {
         checkpoint_store: &CheckpointStore,
         checkpoint_range: std::ops::RangeInclusive<u64>,
     ) -> Result<(), StorageError> {
+        let total_checkpoints = checkpoint_range.size_hint().0;
         info!(
             "Indexing {} checkpoints in range {checkpoint_range:?}",
-            checkpoint_range.size_hint().0
+            total_checkpoints
         );
         let start_time = Instant::now();
 
-        checkpoint_range.into_par_iter().try_for_each(|seq| {
-            let checkpoint_data =
-                sparse_checkpoint_data_for_backfill(authority_store, checkpoint_store, seq)?;
+        // Channels
+        let (io_tx, io_rx) = bounded::<Result<RawCheckpointData, StorageError>>(1000);
+        let (compute_tx, compute_rx) =
+            bounded::<Result<ProcessedCheckpointData, StorageError>>(100);
 
-            let mut batch = self.transactions.batch();
+        // Shared error flag
+        let error_flag = Arc::new(AtomicBool::new(false));
 
-            self.index_epoch(&checkpoint_data, &mut batch)?;
-            self.index_transactions(&checkpoint_data, &mut batch)?;
+        // Progress tracking
+        let checkpoints_fetched = Arc::new(AtomicU64::new(0));
+        let checkpoints_processed = Arc::new(AtomicU64::new(0));
+        let checkpoints_written = Arc::new(AtomicU64::new(0));
 
-            batch
-                .write_opt(&write_options_no_wal())
-                .map_err(StorageError::from)
-        })?;
+        let mut write_error = None;
+
+        // Use crossbeam scope to handle lifetime issues
+        crossbeam::scope(|s| {
+            // I/O Thread
+            let error_flag_clone = error_flag.clone();
+            let checkpoints_fetched_clone = checkpoints_fetched.clone();
+            s.spawn(move |_| {
+                for seq in checkpoint_range {
+                    if error_flag_clone.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    match fetch_checkpoint_data_io(authority_store, checkpoint_store, seq) {
+                        Ok(data) => {
+                            checkpoints_fetched_clone.fetch_add(1, Ordering::Relaxed);
+                            if io_tx.send(Ok(data)).is_err() {
+                                break; // Receiver dropped
+                            }
+                        }
+                        Err(e) => {
+                            error_flag_clone.store(true, Ordering::Relaxed);
+                            let _ = io_tx.send(Err(e));
+                            break;
+                        }
+                    }
+                }
+            });
+
+            // Compute Pool
+            let num_compute_threads = num_cpus::get();
+            for _ in 0..num_compute_threads {
+                let io_rx = io_rx.clone();
+                let compute_tx = compute_tx.clone();
+                let error_flag_clone = error_flag.clone();
+                let checkpoints_processed_clone = checkpoints_processed.clone();
+
+                s.spawn(move |_| {
+                    while let Ok(result) = io_rx.recv() {
+                        if error_flag_clone.load(Ordering::Relaxed) {
+                            break;
+                        }
+
+                        match result {
+                            Ok(raw_data) => match process_checkpoint_data(raw_data) {
+                                Ok(processed) => {
+                                    checkpoints_processed_clone.fetch_add(1, Ordering::Relaxed);
+                                    if compute_tx.send(Ok(processed)).is_err() {
+                                        break;
+                                    }
+                                }
+                                Err(e) => {
+                                    error_flag_clone.store(true, Ordering::Relaxed);
+                                    let _ = compute_tx.send(Err(e));
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                let _ = compute_tx.send(Err(e));
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Drop original channels to signal completion
+            drop(io_rx);
+            drop(compute_tx);
+
+            // Writer Thread (using main thread) with batching
+            let batch_size = 10; // Write in batches of 10 checkpoints
+            let mut pending_writes = Vec::with_capacity(batch_size);
+
+            loop {
+                // Try to fill the batch
+                while pending_writes.len() < batch_size {
+                    match compute_rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                        Ok(Ok(processed)) => {
+                            pending_writes.push(processed);
+                        }
+                        Ok(Err(e)) => {
+                            write_error = Some(e);
+                            break;
+                        }
+                        Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
+                            // Timeout - write what we have if anything
+                            break;
+                        }
+                        Err(crossbeam::channel::RecvTimeoutError::Disconnected) => {
+                            // Channel closed - process remaining and exit
+                            break;
+                        }
+                    }
+                }
+
+                // Write the batch if we have data
+                if !pending_writes.is_empty() {
+                    let batch_to_write = std::mem::take(&mut pending_writes);
+                    let batch_count = batch_to_write.len();
+
+                    if let Err(e) = self.write_processed_checkpoints(batch_to_write) {
+                        error_flag.store(true, Ordering::Relaxed);
+                        write_error = Some(e);
+                        break;
+                    }
+
+                    let previously_written =
+                        checkpoints_written.fetch_add(batch_count as u64, Ordering::Relaxed);
+                    let written = previously_written + batch_count as u64;
+
+                    // Progress logging
+                    if written % 1000 == 0 || written == total_checkpoints as u64 {
+                        let fetched = checkpoints_fetched.load(Ordering::Relaxed);
+                        let processed = checkpoints_processed.load(Ordering::Relaxed);
+                        info!(
+                            "Progress: fetched={}/{}, processed={}, written={}",
+                            fetched, total_checkpoints, processed, written
+                        );
+                    }
+                }
+
+                // Check if we're done
+                if write_error.is_some()
+                    || checkpoints_written.load(Ordering::Relaxed) >= total_checkpoints as u64
+                {
+                    break;
+                }
+
+                // If channel is disconnected and no pending writes, we're done
+                if compute_rx.is_empty() && pending_writes.is_empty() {
+                    match compute_rx.try_recv() {
+                        Err(crossbeam::channel::TryRecvError::Disconnected) => break,
+                        _ => continue,
+                    }
+                }
+            }
+        })
+        .unwrap();
+
+        if let Some(e) = write_error {
+            return Err(e);
+        }
 
         info!(
             "Indexing checkpoints took {} seconds",
@@ -1422,6 +1601,9 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 // make it possible.
 //
 // Load a CheckpointData struct without event data
+// NOTE: This function is kept for backwards compatibility but is no longer used in favor of
+// the split fetch_checkpoint_data_io and process_checkpoint_data functions
+#[allow(dead_code)]
 fn sparse_checkpoint_data_for_backfill(
     authority_store: &AuthorityStore,
     checkpoint_store: &CheckpointStore,
@@ -1548,6 +1730,153 @@ fn sparse_checkpoint_data_for_backfill(
     };
 
     Ok(checkpoint_data)
+}
+
+// I/O only - no processing
+fn fetch_checkpoint_data_io(
+    authority_store: &AuthorityStore,
+    checkpoint_store: &CheckpointStore,
+    checkpoint_seq: u64,
+) -> Result<RawCheckpointData, StorageError> {
+    let summary = checkpoint_store
+        .get_checkpoint_by_sequence_number(checkpoint_seq)?
+        .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint_seq}")))?;
+    let contents = checkpoint_store
+        .get_checkpoint_contents(&summary.content_digest)?
+        .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint_seq}")))?;
+
+    let transaction_digests = contents
+        .iter()
+        .map(|execution_digests| execution_digests.transaction)
+        .collect::<Vec<_>>();
+
+    let transactions = authority_store
+        .multi_get_transaction_blocks(&transaction_digests)?
+        .into_iter()
+        .map(|maybe_transaction| {
+            maybe_transaction.ok_or_else(|| StorageError::custom("missing transaction"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let effects = authority_store
+        .multi_get_executed_effects(&transaction_digests)?
+        .into_iter()
+        .map(|maybe_effects| maybe_effects.ok_or_else(|| StorageError::custom("missing effects")))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Collect all object keys from all transactions' effects for batch reading
+    let mut all_object_keys = Vec::new();
+
+    for fx in &effects {
+        // Input objects: modified_at_versions
+        let input_keys = fx
+            .modified_at_versions()
+            .into_iter()
+            .map(|(object_id, version)| ObjectKey(object_id, version));
+        all_object_keys.extend(input_keys);
+
+        // Output objects: all_changed_objects
+        let output_keys = fx
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref));
+        all_object_keys.extend(output_keys);
+    }
+
+    // Perform single batch read for all objects
+    let all_objects = authority_store
+        .multi_get_objects_by_key(&all_object_keys)
+        .map_err(|e| StorageError::custom(format!("Failed to batch read objects: {}", e)))?;
+
+    // Build HashMap for O(1) lookups
+    let mut object_map = HashMap::new();
+    for (key, maybe_object) in all_object_keys.iter().cloned().zip(all_objects.into_iter()) {
+        if let Some(object) = maybe_object {
+            object_map.insert(key, object);
+        }
+    }
+
+    Ok(RawCheckpointData {
+        checkpoint_seq,
+        summary: summary.into(),
+        contents,
+        transactions,
+        effects,
+        objects: object_map,
+    })
+}
+
+// Compute only - no I/O
+fn process_checkpoint_data(
+    raw_data: RawCheckpointData,
+) -> Result<ProcessedCheckpointData, StorageError> {
+    use sui_types::full_checkpoint_content::CheckpointTransaction;
+
+    let mut full_transactions = Vec::with_capacity(raw_data.transactions.len());
+    for (tx, fx) in raw_data.transactions.into_iter().zip(raw_data.effects) {
+        // Get input objects from HashMap
+        let input_object_keys: Vec<_> = fx
+            .modified_at_versions()
+            .into_iter()
+            .map(|(object_id, version)| ObjectKey(object_id, version))
+            .collect();
+
+        let input_objects = input_object_keys
+            .iter()
+            .map(|key| {
+                raw_data.objects.get(key).cloned().ok_or_else(|| {
+                    StorageError::custom(format!(
+                        "missing input object key {:?} from tx {} effects {}",
+                        key,
+                        fx.transaction_digest(),
+                        fx.digest()
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Get output objects from HashMap
+        let output_object_keys: Vec<_> = fx
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+            .collect();
+
+        let output_objects = output_object_keys
+            .iter()
+            .map(|key| {
+                raw_data.objects.get(key).cloned().ok_or_else(|| {
+                    StorageError::custom(format!(
+                        "missing output object key {:?} from tx {} effects {}",
+                        key,
+                        fx.transaction_digest(),
+                        fx.digest()
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let full_transaction = CheckpointTransaction {
+            transaction: tx.into(),
+            effects: fx,
+            events: None,
+            input_objects,
+            output_objects,
+        };
+
+        full_transactions.push(full_transaction);
+    }
+
+    let checkpoint_data = CheckpointData {
+        checkpoint_summary: raw_data.summary,
+        checkpoint_contents: raw_data.contents,
+        transactions: full_transactions,
+    };
+
+    Ok(ProcessedCheckpointData {
+        checkpoint_seq: raw_data.checkpoint_seq,
+        checkpoint_data,
+    })
 }
 
 fn get_balance_and_type_if_coin(object: &Object) -> Result<Option<(StructTag, u64)>, StorageError> {

@@ -23,6 +23,7 @@ consensus-core.workspace = true
 consensus-config.workspace = true
 consensus-types.workspace = true
 count-min-sketch.workspace = true
+crossbeam = "0.8"
 dashmap.workspace = true
 diffy = { version = "0.3", default-features = false }
 either.workspace = true
