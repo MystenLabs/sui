@@ -676,6 +676,7 @@ pub fn program(
     }
 }
 
+/// Convert a module info to a map of member kinds.
 fn module_info_to_member_kinds(module_info: &ModuleInfo) -> BTreeMap<Name, ModuleMemberKind> {
     let mut member_kinds = BTreeMap::new();
     for (loc, name, _) in module_info.structs.iter() {

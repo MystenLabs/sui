@@ -16,7 +16,7 @@ use crate::{
     },
     ice,
     naming::{
-        ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
+        ast::{self as N, BlockLabel, NominalBlockUsage, StructFields, TParamID, VariantFields},
         fake_natives,
         syntax_methods::resolve_syntax_attributes,
     },
@@ -25,7 +25,7 @@ use crate::{
     },
     shared::{
         ide::{EllipsisMatchEntries, IDEAnnotation, IDEInfo},
-        program_info::NamingProgramInfo,
+        program_info::{ModuleInfo, NamingProgramInfo},
         unique_map::UniqueMap,
         *,
     },
@@ -508,14 +508,100 @@ pub fn build_member_map(
     }
 
     if let Some(pre_compiled_module_infos) = pre_compiled_module_infos {
-        all_members.extend(
-            pre_compiled_module_infos
-                .iter()
-                .map(|(mident, minfo)| (*mident, minfo.resolved_members.clone())),
-        );
+        all_members.extend(pre_compiled_module_infos.iter().map(|(mident, minfo)| {
+            (
+                *mident,
+                module_info_to_resolved_members(*mident, &minfo.info),
+            )
+        }));
     }
 
     all_members
+}
+
+/// Convert a module info to a map of resolved members.
+fn module_info_to_resolved_members(
+    mident: ModuleIdent,
+    module_info: &ModuleInfo,
+) -> BTreeMap<Symbol, ResolvedModuleMember> {
+    let mut resolved_members = BTreeMap::new();
+    for (loc, name, sdef) in module_info.structs.iter() {
+        let field_info = match &sdef.fields {
+            StructFields::Defined(positional, fields) => {
+                if *positional {
+                    FieldInfo::Positional(fields.len())
+                } else {
+                    FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
+                }
+            }
+            StructFields::Native(_) => FieldInfo::Empty,
+        };
+        let resolved_struct = ResolvedStruct {
+            mident,
+            name: DatatypeName(sp(loc, *name)),
+            decl_loc: sdef.loc,
+            tyarg_arity: sdef.type_parameters.len(),
+            field_info,
+        };
+        resolved_members.insert(
+            *name,
+            ResolvedModuleMember::Datatype(ResolvedDatatype::Struct(Box::new(resolved_struct))),
+        );
+    }
+    for (eloc, ename, edef) in module_info.enums.iter() {
+        let mut variants = UniqueMap::new();
+        for (vloc, vname, vdef) in edef.variants.iter() {
+            let field_info = match &vdef.fields {
+                VariantFields::Defined(positional, fields) => {
+                    if *positional {
+                        FieldInfo::Positional(fields.len())
+                    } else {
+                        FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
+                    }
+                }
+                VariantFields::Empty => FieldInfo::Empty,
+            };
+            let name = VariantName(sp(vloc, *vname));
+            let resolved_variant = ResolvedVariant {
+                mident,
+                enum_name: DatatypeName(sp(eloc, *ename)),
+                tyarg_arity: edef.type_parameters.len(),
+                name,
+                decl_loc: vdef.loc,
+                field_info,
+            };
+            let _ = variants.add(name, resolved_variant);
+        }
+        let resolved_enum = ResolvedEnum {
+            mident,
+            name: DatatypeName(sp(eloc, *ename)),
+            decl_loc: edef.loc,
+            tyarg_arity: edef.type_parameters.len(),
+            variants,
+        };
+        resolved_members.insert(
+            *ename,
+            ResolvedModuleMember::Datatype(ResolvedDatatype::Enum(Box::new(resolved_enum))),
+        );
+    }
+    for (loc, name, finfo) in module_info.functions.iter() {
+        let fun_def = ResolvedModuleFunction {
+            mident,
+            name: FunctionName(sp(loc, *name)),
+            tyarg_arity: finfo.signature.type_parameters.len(),
+            arity: finfo.signature.parameters.len(),
+        };
+        resolved_members.insert(*name, ResolvedModuleMember::Function(Box::new(fun_def)));
+    }
+    for (loc, name, cinfo) in module_info.constants.iter() {
+        let const_def = ResolvedConstant {
+            mident,
+            name: ConstantName(sp(loc, *name)),
+            decl_loc: cinfo.defined_loc,
+        };
+        resolved_members.insert(*name, ResolvedModuleMember::Constant(Box::new(const_def)));
+    }
+    resolved_members
 }
 
 //**************************************************************************************************
@@ -574,7 +660,6 @@ impl OuterContext {
     ) -> Self {
         use ResolvedType as RT;
         let module_members = build_member_map(compilation_env, pre_compiled_module_infos, prog);
-        compilation_env.save_module_resolved_members(&module_members);
         let unscoped_types = N::BuiltinTypeName_::all_names()
             .iter()
             .map(|s| {

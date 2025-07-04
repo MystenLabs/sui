@@ -19,21 +19,14 @@ use crate::{
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
     expansion::ast::{self as E, ModuleIdent},
     hlir::ast as H,
-    naming::{
-        ast::{self as N, Function, UseFuns},
-        translate::ResolvedModuleMember,
-    },
+    naming::ast::{self as N, Function, UseFuns},
     parser::ast::{self as P, DatatypeName, FunctionName},
     shared::{
         files::{FileName, MappedFiles},
         ide::IDEInfo,
-        program_info::ModuleInfo,
         unique_map::UniqueMap,
     },
-    sui_mode::{
-        self,
-        info::{SuiInfo, TransferKind},
-    },
+    sui_mode::{self, info::TransferKind},
     to_bytecode::context::{DatatypeDeclarations, FunctionDeclaration},
     typing::{
         ast as T,
@@ -581,15 +574,6 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_module_resolved_members(
-        &self,
-        module_resolved_members: &BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>,
-    ) {
-        for hook in &self.save_hooks {
-            hook.save_module_resolved_members(module_resolved_members)
-        }
-    }
-
     pub fn save_macro_infos(
         &self,
         macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
@@ -1008,9 +992,7 @@ pub(crate) struct SavedInfo {
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
     module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
-    module_resolved_members: Option<BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>>,
     macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
-    module_info: Option<BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)>>,
     private_transfers: Option<BTreeMap<(ModuleIdent, DatatypeName), TransferKind>>,
     dependency_order: Option<HashMap<ModuleIdent, usize>>,
     cfgir_datatype_decls: Option<DatatypeDeclarations>,
@@ -1027,7 +1009,6 @@ pub enum SaveFlag {
     HLIR,
     CFGIR,
     ModuleNameAddresses,
-    ModuleMembers,
     ModuleResolvedMembers,
     MacroInfos,
     ModuleInfo,
@@ -1050,9 +1031,7 @@ impl SaveHook {
             hlir: None,
             cfgir: None,
             module_named_addresses: None,
-            module_resolved_members: None,
             macro_infos: None,
-            module_info: None,
             private_transfers: None,
             dependency_order: None,
             cfgir_datatype_decls: None,
@@ -1116,17 +1095,6 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.module_named_addresses.is_none() && r.flags.contains(&SaveFlag::ModuleNameAddresses) {
             r.module_named_addresses = Some(module_named_addresses.clone());
-        }
-    }
-
-    pub(crate) fn save_module_resolved_members(
-        &self,
-        module_resolved_members: &BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>,
-    ) {
-        let mut r = self.0.lock().unwrap();
-        if r.module_resolved_members.is_none() && r.flags.contains(&SaveFlag::ModuleResolvedMembers)
-        {
-            r.module_resolved_members = Some(module_resolved_members.clone());
         }
     }
 
@@ -1246,17 +1214,6 @@ impl SaveHook {
         r.module_named_addresses.take().unwrap()
     }
 
-    pub fn take_module_resolved_members(
-        &self,
-    ) -> BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>> {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::ModuleResolvedMembers),
-            "Resolved module members not saved. Please set the flag when creating the SaveHook"
-        );
-        r.module_resolved_members.take().unwrap()
-    }
-
     pub fn take_macro_infos(
         &self,
     ) -> BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> {
@@ -1266,15 +1223,6 @@ impl SaveHook {
             "Macro infos not saved. Please set the flag when creating the SaveHook"
         );
         r.macro_infos.take().unwrap()
-    }
-
-    pub fn take_module_info(&self) -> BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)> {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::ModuleInfo),
-            "Module info not saved. Please set the flag when creating the SaveHook"
-        );
-        r.module_info.take().unwrap()
     }
 
     pub fn take_private_transfers(&self) -> BTreeMap<(ModuleIdent, DatatypeName), TransferKind> {
