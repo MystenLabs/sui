@@ -19,7 +19,10 @@ function version(path: string, args?: readonly string[]): string | null {
     const versionString = childProcess.spawnSync(
         path, args, { encoding: 'utf8' },
     );
-    return versionString.stdout;
+    // Need the null check as despite stdout in TS technically being only
+    // of type `string`, it can actually also be undefined
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    return versionString.stdout ?? null;
 }
 
 function semanticVersion(versionString: string | null): semver.SemVer | null {
