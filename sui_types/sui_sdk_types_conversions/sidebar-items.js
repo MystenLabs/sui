@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["struct_tag_core_to_sdk","struct_tag_sdk_to_core","type_tag_core_to_sdk","type_tag_sdk_to_core"],"struct":["SdkTypeConversionError"]};

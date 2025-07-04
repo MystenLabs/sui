@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["exchange_rates","exchange_rates_prime_cache"],"static":["EXCHANGE_RATES"],"struct":["GovernanceReadApi"]};

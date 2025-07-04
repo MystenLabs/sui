@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["base_asset_decimals","base_asset_id","base_asset_name","base_asset_symbol","lot_size","min_size","pool_id","pool_name","quote_asset_decimals","quote_asset_id","quote_asset_name","quote_asset_symbol","star","tick_size"]};

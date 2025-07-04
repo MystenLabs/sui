@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["gen_gas_data","gen_object_ref","gen_transaction_expiration","gen_transaction_expiration_with_bound","gen_transaction_kind","transaction_data_gen"],"struct":["TransactionDataGenBuilder"]};

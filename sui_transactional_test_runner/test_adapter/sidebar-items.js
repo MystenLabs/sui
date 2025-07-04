@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FakeID"],"static":["ENABLE_PTB_V2","PRE_COMPILED"],"struct":["OffChainConfig","SuiTestAdapter"]};
