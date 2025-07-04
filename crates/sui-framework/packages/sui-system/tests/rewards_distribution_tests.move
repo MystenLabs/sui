@@ -804,14 +804,35 @@ fun process_pending_stake_withdraw_no_underflow_in_safe_mode_1() {
     let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(99_9999_999);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
+    // store Pool ID to query inactive validator later
+    let pool_id: ID;
+
     runner.system_tx!(|system, _| {
         let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+        pool_id = object::id(pool);
 
         assert_eq!(pool.pending_stake_amount(), 0 * MIST_PER_SUI);
         assert_eq!(pool.pending_stake_withdraw_amount(), 0 * MIST_PER_SUI);
         assert_eq!(pool.pending_pool_token_withdraw_amount(), 0 * MIST_PER_SUI);
-        assert_eq!(pool.sui_balance(), 101 * MIST_PER_SUI);
-        assert_eq!(pool.pool_token_balance(), 101 * MIST_PER_SUI);
+        assert_eq!(pool.sui_balance(), 100 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 100 * MIST_PER_SUI);
+    });
+
+    // validator 1 withdraws its stake and gets back 100 SUI
+    runner.set_sender(VALIDATOR_ADDR_1).unstake(0);
+
+    // advance epoch to 4, no safe mode, no rewards
+    runner.advance_epoch(option::none()).destroy_for_testing();
+
+    // enforce invariant: sui_balance = 0
+    runner.system_tx!(|system, _| {
+        let pool = system
+            .validators()
+            .inactive_validator_by_pool_id(pool_id)
+            .get_staking_pool_ref();
+
+        assert_eq!(pool.sui_balance(), 0 * MIST_PER_SUI);
+        assert_eq!(pool.pool_token_balance(), 0 * MIST_PER_SUI);
     });
 
     runner.finish();

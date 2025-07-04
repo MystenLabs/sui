@@ -106,6 +106,10 @@ public struct FungibleStakedSuiData has key, store {
 // === dynamic field keys ===
 public struct FungibleStakedSuiDataKey has copy, drop, store {}
 
+/// Holds the amount of SUI that was underflowed when withdrawing from the pool
+/// post safe mode. Cleaned up in the same transaction.
+public struct UnderflowSuiBalance has copy, drop, store {}
+
 // ==== initializer ====
 
 /// Create a new, empty staking pool.
@@ -369,6 +373,9 @@ fun process_pending_stake_withdraw(pool: &mut StakingPool) {
     pool.sui_balance = if (pool.sui_balance >= pool.pending_total_sui_withdraw) {
         pool.sui_balance - pool.pending_total_sui_withdraw
     } else {
+        // the diff will be applied in the `process_pending_stake` function.
+        let diff = pool.pending_total_sui_withdraw - pool.sui_balance;
+        pool.extra_fields.add(UnderflowSuiBalance {}, diff);
         0
     };
 
@@ -389,7 +396,15 @@ public(package) fun process_pending_stake(pool: &mut StakingPool) {
         sui_amount: pool.sui_balance,
         pool_token_amount: pool.pool_token_balance,
     };
-    pool.sui_balance = pool.sui_balance + pool.pending_stake;
+
+    // This key is only present if the `sui_balance` underflowed, hence, the current value of `sui_balance`
+    // is `0`. Pool token balance will be recalculated automatically for `0` value.
+    let sui_diff = {
+        let key = UnderflowSuiBalance {};
+        if (pool.extra_fields.contains(key)) pool.extra_fields.remove(key) else 0
+    };
+
+    pool.sui_balance = pool.sui_balance + pool.pending_stake - sui_diff;
     pool.pool_token_balance = latest_exchange_rate.get_token_amount(pool.sui_balance);
     pool.pending_stake = 0;
 }
