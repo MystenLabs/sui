@@ -20,7 +20,6 @@ use crate::{
     naming::{
         self,
         ast::{Function, UseFuns},
-        translate::ResolvedModuleMember,
     },
     parser::{
         self,
@@ -130,8 +129,6 @@ pub struct CompiledModuleInfo {
     /// (address map "inlined" into the module so that
     /// modules are separated)
     pub named_address_map: Arc<NamedAddressMap>,
-    /// to build context in naming/translate.rs
-    pub resolved_members: BTreeMap<Symbol, ResolvedModuleMember>,
     /// to extract macros in typing/translate.rs (need function bodies for this)
     pub macro_infos: Option<(UseFuns, UniqueMap<FunctionName, Function>)>,
     /// to construct program infos in shared/program_info.rs
@@ -673,8 +670,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
     let hook = SaveHook::new([
         SaveFlag::TypingInfo,
         SaveFlag::ModuleNameAddresses,
-        SaveFlag::ModuleMembers,
-        SaveFlag::ModuleResolvedMembers,
         SaveFlag::MacroInfos,
         SaveFlag::PrivateTransfers,
         SaveFlag::DependencyOrder,
@@ -704,7 +699,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
         Ok(PassResult::Compilation(compiled, mod_idents, _)) => {
             let program_info = hook.take_typing_info();
             let mut module_named_addresses = hook.take_module_named_addresses();
-            let mut module_resolved_members = hook.take_module_resolved_members();
             let mut macro_infos = hook.take_macro_infos();
             let private_transfers = hook.take_private_transfers();
             let mut dependency_order = hook.take_dependency_order();
@@ -783,8 +777,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
 
                      let named_address_map = module_named_addresses.remove(&mod_ident).unwrap_or_default();
 
-                     let resolved_members = module_resolved_members.remove(&mod_ident).unwrap_or_default();
-
                      let macro_infos = macro_infos.remove(&mod_ident);
 
                      let private_transfers = private_transfers_by_module.remove(&mod_ident).unwrap_or_default();
@@ -807,7 +799,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                              file_name,
                              file_content,
                              named_address_map: Arc::new(named_address_map),
-                             resolved_members,
                              macro_infos,
                              info: typing_module_info.clone(),
                              private_transfers,
