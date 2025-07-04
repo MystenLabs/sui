@@ -51,7 +51,6 @@ impl BlockRef {
     }
 }
 
-// TODO: re-evaluate formats for production debugging.
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "B{}({},{})", self.round, self.author, self.digest)
