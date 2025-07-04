@@ -1,22 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 #[cfg(msim)]
-mod test {
-    use crate::node::{AuthorityNode, Config};
+mod consensus_tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::{sync::Arc, time::Duration};
+
     use consensus_config::{
         Authority, AuthorityIndex, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair,
         ProtocolKeyPair, Stake,
     };
-    use consensus_core::{
-        BlockAPI, BlockStatus, NoopTransactionVerifier, TransactionVerifier, ValidationError,
-    };
+    use consensus_core::NoopTransactionVerifier;
+    use consensus_core::{BlockAPI, BlockStatus, TransactionVerifier, ValidationError};
+    use consensus_simtests::node::{AuthorityNode, Config};
     use consensus_types::block::TransactionIndex;
     use mysten_metrics::RegistryService;
     use mysten_network::Multiaddr;
     use prometheus::Registry;
     use rand::{rngs::StdRng, Rng, SeedableRng as _};
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::{sync::Arc, time::Duration};
     use sui_config::local_ip_utils;
     use sui_macros::sim_test;
     use sui_protocol_config::ProtocolConfig;
@@ -28,6 +29,7 @@ mod test {
     use tokio::task::JoinSet;
     use tokio::time::{sleep, timeout};
     use typed_store::DBMetrics;
+
     fn test_config() -> SimConfig {
         env_config(
             uniform_latency_ms(10..20),
@@ -391,7 +393,7 @@ mod test {
             let mut rejected_indices = vec![];
 
             // Randomly decide which transactions to reject according to the rejection probability.
-            for (index, transaction) in batch.iter().enumerate() {
+            for (index, _transaction) in batch.iter().enumerate() {
                 let rejected = rand::thread_rng().gen_bool(self.rejection_probability);
                 if rejected {
                     tracing::trace!("Rejecting transaction {index}");

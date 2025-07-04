@@ -1,33 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use arc_swap::ArcSwapOption;
-use mysten_metrics::monitored_mpsc::UnboundedReceiver;
+
 use std::{
     net::{IpAddr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
-use tracing::{info, trace};
 
 use anyhow::Result;
+use arc_swap::ArcSwapOption;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
+use consensus_core::{
+    to_socket_addr, Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag,
+    ConsensusAuthority, TransactionClient, TransactionVerifier,
+};
+use consensus_types::block::BlockTimestampMs;
+use mysten_metrics::monitored_mpsc::unbounded_channel;
+use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tempfile::TempDir;
-
-use consensus_core::network::tonic_network::to_socket_addr;
-use consensus_core::transaction::NoopTransactionVerifier;
-use consensus_core::{
-    Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
-    TransactionClient, TransactionVerifier,
-};
-use consensus_types::block::BlockTimestampMs;
-use mysten_metrics::monitored_mpsc::unbounded_channel;
+use tracing::{info, trace};
 
 #[derive(Clone)]
-#[allow(unused)]
-pub(crate) struct Config {
+pub struct Config {
     pub authority_index: AuthorityIndex,
     pub db_dir: Arc<TempDir>,
     pub committee: Committee,
@@ -39,7 +36,7 @@ pub(crate) struct Config {
     pub transaction_verifier: Arc<dyn TransactionVerifier>,
 }
 
-pub(crate) struct AuthorityNode {
+pub struct AuthorityNode {
     inner: Mutex<Option<AuthorityNodeInner>>,
     config: Config,
     commit_consumer_receiver: Mutex<Option<UnboundedReceiver<CommittedSubDag>>>,

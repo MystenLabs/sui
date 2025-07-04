@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Consensus modules.
 mod ancestor;
 mod authority_node;
 mod authority_service;
@@ -11,6 +12,7 @@ mod block_verifier;
 mod broadcaster;
 mod commit;
 mod commit_consumer;
+mod commit_finalizer;
 mod commit_observer;
 mod commit_syncer;
 mod commit_vote_monitor;
@@ -24,42 +26,36 @@ mod leader_scoring;
 mod leader_timeout;
 mod linearizer;
 mod metrics;
-#[cfg(not(msim))]
 mod network;
-#[cfg(msim)]
-pub mod network;
-
+mod proposed_block_handler;
+mod round_prober;
+mod round_tracker;
 mod stake_aggregator;
 mod storage;
 mod subscriber;
 mod synchronizer;
 mod threshold_clock;
-#[cfg(not(msim))]
 mod transaction;
-#[cfg(msim)]
-pub mod transaction;
-
+mod transaction_certifier;
 mod universal_committer;
 
-#[cfg(test)]
-#[path = "tests/randomized_tests.rs"]
-mod randomized_tests;
-
-mod commit_finalizer;
-mod proposed_block_handler;
-mod round_prober;
-mod round_tracker;
+/// Consensus test utilities.
 #[cfg(test)]
 mod test_dag;
 #[cfg(test)]
 mod test_dag_builder;
 #[cfg(test)]
 mod test_dag_parser;
-mod transaction_certifier;
 
-/// Exported consensus API.
+/// Consensus integration tests.
+#[cfg(test)]
+#[path = "tests/randomized_tests.rs"]
+mod randomized_tests;
+
+/// Exported Consensus API.
 pub use authority_node::ConsensusAuthority;
 pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};
+
 /// Exported API for testing.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
 pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
@@ -68,10 +64,13 @@ pub use context::Clock;
 pub use network::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus},
     metrics::{MetricsMakeCallbackHandler, NetworkRouteMetrics, QuinnConnectionMetrics},
-    tonic_network::to_socket_addr,
 };
-#[cfg(msim)]
-pub use transaction::NoopTransactionVerifier;
 pub use transaction::{
     BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
 };
+
+// Exported API for simtests.
+#[cfg(msim)]
+pub use network::tonic_network::to_socket_addr;
+#[cfg(msim)]
+pub use transaction::NoopTransactionVerifier;
