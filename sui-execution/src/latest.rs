@@ -187,6 +187,7 @@ impl executor::Executor for Executor {
             epoch_timestamp_ms,
             // genesis transaction: RGP: 1, budget: 1M, sponsor: None
             1,
+            1,
             1_000_000,
             None,
             protocol_config,
