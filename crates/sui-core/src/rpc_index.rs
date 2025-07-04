@@ -7,8 +7,6 @@ use crate::checkpoints::CheckpointStore;
 use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -27,6 +25,7 @@ use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::visitor as DFV;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -39,6 +38,7 @@ use sui_types::storage::BackingPackageStore;
 use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
+use sui_types::storage::ObjectKey;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -517,6 +517,14 @@ impl IndexStoreTables {
             pool_size as f64 / num_cpus as f64
         );
 
+        // Get buffer size from environment variable
+        let buffer_size = std::env::var("CHECKPOINT_PREFETCH_BUFFER")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(20);
+        
+        info!("Using checkpoint prefetch buffer size: {}", buffer_size);
+
         // Calculate ranges for each thread
         let start = *checkpoint_range.start();
         let end = *checkpoint_range.end();
@@ -543,128 +551,265 @@ impl IndexStoreTables {
         let epochs_ref = &self.epochs;
 
         pool.install(|| {
-            thread_ranges
-                .into_par_iter()
-                .try_for_each(|range| -> Result<(), StorageError> {
-                    info!("Thread processing range {:?}", range);
+            use rayon::prelude::*;
+            use sui_types::full_checkpoint_content::CheckpointTransaction;
+            use typed_store::traits::Map;
+            use std::sync::mpsc::sync_channel;
+            use std::thread;
 
-                    // Process checkpoints incrementally using range iterator
-                    use sui_types::full_checkpoint_content::CheckpointTransaction;
-                    use typed_store::traits::Map;
+            // Create channels for the pipeline stages
+            let (summary_tx, summary_rx) = sync_channel(buffer_size);
+            let (loaded_tx, loaded_rx) = sync_channel(buffer_size);
 
-                    // Get iterator over checkpoint range - this is efficient for sequential access
-                    let checkpoint_iter = checkpoint_store
-                        .tables
-                        .certified_checkpoints
-                        .safe_range_iter(range);
+            // Spawn threads for each pipeline stage
+            let result = thread::scope(|s| {
+                // Stage 1: Read checkpoint summaries from disk
+                let summary_producer = s.spawn(move || {
+                    thread_ranges
+                        .into_par_iter()
+                        .try_for_each(|range| -> Result<(), StorageError> {
+                            info!("Thread processing range {:?}", range);
 
-                    // Process each checkpoint as we iterate - no batching needed
-                    for item in checkpoint_iter {
-                        let (seq_num, trusted_checkpoint) = item?;
-                        let summary = trusted_checkpoint.into_inner();
+                            // Get iterator over checkpoint range
+                            let checkpoint_iter = checkpoint_store
+                                .tables
+                                .certified_checkpoints
+                                .safe_range_iter(range);
 
-                        // Individual get for contents (random access by digest)
-                        let contents = checkpoint_store
-                            .get_checkpoint_contents(&summary.content_digest)?
-                            .ok_or_else(|| {
-                                StorageError::missing(format!(
-                                    "missing checkpoint contents for {}",
-                                    seq_num
-                                ))
-                            })?;
+                            // Send summaries to the next stage
+                            for item in checkpoint_iter {
+                                let (seq_num, trusted_checkpoint) = item?;
+                                let summary = trusted_checkpoint.into_inner();
+                                
+                                if summary_tx.send((seq_num, summary)).is_err() {
+                                    // Receiver dropped, exit early
+                                    break;
+                                }
+                            }
+                            Ok(())
+                        })
+                });
 
-                        // Load transactions and effects for this checkpoint
-                        let transaction_digests: Vec<_> = contents
-                            .iter()
-                            .map(|execution_digests| execution_digests.transaction)
+                // Stage 2: Load checkpoint contents and transaction data in parallel
+                let loader = s.spawn(move || {
+                    // Process summaries in chunks for better parallelism
+                    let chunk_size = std::cmp::min(buffer_size / 2, 10);
+                    let mut chunk = Vec::with_capacity(chunk_size);
+                    
+                    loop {
+                        // Collect a chunk of summaries
+                        chunk.clear();
+                        for _ in 0..chunk_size {
+                            match summary_rx.recv() {
+                                Ok(item) => chunk.push(item),
+                                Err(_) => break, // Channel closed
+                            }
+                        }
+                        
+                        if chunk.is_empty() {
+                            break;
+                        }
+
+                        // Process chunk in parallel
+                        let loaded_batch: Result<Vec<_>, StorageError> = chunk
+                            .par_iter()
+                            .map(|(seq_num, summary)| -> Result<_, StorageError> {
+                                // Load contents
+                                let contents = checkpoint_store
+                                    .get_checkpoint_contents(&summary.content_digest)?
+                                    .ok_or_else(|| {
+                                        StorageError::missing(format!(
+                                            "missing checkpoint contents for {}",
+                                            seq_num
+                                        ))
+                                    })?;
+
+                                // Collect transaction digests
+                                let transaction_digests: Vec<_> = contents
+                                    .iter()
+                                    .map(|execution_digests| execution_digests.transaction)
+                                    .collect();
+
+                                // Batch load transactions and effects
+                                let transactions = authority_store
+                                    .multi_get_transaction_blocks(&transaction_digests)?;
+                                
+                                let effects = authority_store
+                                    .multi_get_executed_effects(&transaction_digests)?;
+
+                                // Now load all objects for this checkpoint in parallel
+                                let mut all_object_keys = Vec::new();
+                                
+                                // Collect all object keys we need to load
+                                for (fx_opt, tx_opt) in effects.iter().zip(transactions.iter()) {
+                                    if let (Some(fx), Some(_tx)) = (fx_opt, tx_opt) {
+                                        // Input objects
+                                        all_object_keys.extend(
+                                            fx.modified_at_versions()
+                                                .into_iter()
+                                                .map(|(id, ver)| ObjectKey(id, ver))
+                                        );
+                                        
+                                        // Output objects
+                                        all_object_keys.extend(
+                                            fx.all_changed_objects()
+                                                .into_iter()
+                                                .map(|(obj_ref, _, _)| ObjectKey::from(obj_ref))
+                                        );
+                                    }
+                                }
+
+                                // Batch load all objects
+                                let all_objects = authority_store.multi_get_objects_by_key(&all_object_keys)
+                                    .map_err(|e| StorageError::custom(format!("Failed to load objects: {}", e)))?;
+
+                                // Build full transactions
+                                let mut full_transactions = Vec::with_capacity(transactions.len());
+                                let mut object_idx = 0;
+                                
+                                for (tx_opt, fx_opt) in transactions.into_iter().zip(effects) {
+                                    let tx = tx_opt.ok_or_else(|| StorageError::custom("missing transaction"))?;
+                                    let fx = fx_opt.ok_or_else(|| StorageError::custom("missing effects"))?;
+
+                                    // Get input objects - they were loaded in the same order
+                                    let num_input_objects = fx.modified_at_versions().len();
+                                    let input_objects: Vec<_> = all_objects[object_idx..object_idx + num_input_objects]
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(i, obj_opt)| {
+                                            obj_opt.as_ref()
+                                                .ok_or_else(|| {
+                                                    let (id, ver) = fx.modified_at_versions()[i];
+                                                    StorageError::custom(format!("missing input object {:?}", ObjectKey(id, ver)))
+                                                })
+                                                .map(|obj| obj.clone())
+                                        })
+                                        .collect::<Result<Vec<_>, _>>()?;
+                                    object_idx += num_input_objects;
+
+                                    // Get output objects - they were loaded in the same order
+                                    let num_output_objects = fx.all_changed_objects().len();
+                                    let output_objects: Vec<_> = all_objects[object_idx..object_idx + num_output_objects]
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(i, obj_opt)| {
+                                            obj_opt.as_ref()
+                                                .ok_or_else(|| {
+                                                    let (obj_ref, _, _) = &fx.all_changed_objects()[i];
+                                                    StorageError::custom(format!("missing output object {:?}", ObjectKey::from(obj_ref)))
+                                                })
+                                                .map(|obj| obj.clone())
+                                        })
+                                        .collect::<Result<Vec<_>, _>>()?;
+                                    object_idx += num_output_objects;
+
+                                    let full_transaction = CheckpointTransaction {
+                                        transaction: tx.into(),
+                                        effects: fx,
+                                        events: None,
+                                        input_objects,
+                                        output_objects,
+                                    };
+
+                                    full_transactions.push(full_transaction);
+                                }
+
+                                let checkpoint_data = CheckpointData {
+                                    checkpoint_summary: summary.clone().into(),
+                                    checkpoint_contents: contents,
+                                    transactions: full_transactions,
+                                };
+
+                                Ok((*seq_num, checkpoint_data))
+                            })
                             .collect();
 
-                        let transactions = authority_store
-                            .multi_get_transaction_blocks(&transaction_digests)?
-                            .into_iter()
-                            .map(|maybe_transaction| {
-                                maybe_transaction
-                                    .ok_or_else(|| StorageError::custom("missing transaction"))
-                            })
-                            .collect::<Result<Vec<_>, _>>()?;
-
-                        let effects = authority_store
-                            .multi_get_executed_effects(&transaction_digests)?
-                            .into_iter()
-                            .map(|maybe_effects| {
-                                maybe_effects.ok_or_else(|| StorageError::custom("missing effects"))
-                            })
-                            .collect::<Result<Vec<_>, _>>()?;
-
-                        // Build checkpoint data
-                        let mut full_transactions = Vec::with_capacity(transactions.len());
-                        for (tx, fx) in transactions.into_iter().zip(effects) {
-                            let input_objects = sui_types::storage::get_transaction_input_objects(
-                                authority_store,
-                                &fx,
-                            )?;
-                            let output_objects =
-                                sui_types::storage::get_transaction_output_objects(
-                                    authority_store,
-                                    &fx,
-                                )?;
-
-                            let full_transaction = CheckpointTransaction {
-                                transaction: tx.into(),
-                                effects: fx,
-                                events: None,
-                                input_objects,
-                                output_objects,
-                            };
-
-                            full_transactions.push(full_transaction);
-                        }
-
-                        let checkpoint_data = CheckpointData {
-                            checkpoint_summary: summary.into(),
-                            checkpoint_contents: contents,
-                            transactions: full_transactions,
-                        };
-
-                        // Process and write this checkpoint immediately
-                        let mut batch = transactions_ref.batch();
-
-                        // Index epoch data
-                        if let Some(epoch_info) = checkpoint_data.epoch_info()? {
-                            if epoch_info.epoch > 0 {
-                                let prev_epoch = epoch_info.epoch - 1;
-                                let mut current_epoch =
-                                    epochs_ref.get(&prev_epoch)?.unwrap_or_default();
-                                current_epoch.epoch = prev_epoch;
-                                current_epoch.end_timestamp_ms = epoch_info.start_timestamp_ms;
-                                current_epoch.end_checkpoint =
-                                    epoch_info.start_checkpoint.map(|sq| sq - 1);
-                                batch.insert_batch(epochs_ref, [(prev_epoch, current_epoch)])?;
+                        // Send loaded checkpoints to consumer
+                        match loaded_batch {
+                            Ok(batch) => {
+                                for item in batch {
+                                    if loaded_tx.send(item).is_err() {
+                                        return Err(StorageError::custom("Consumer died"));
+                                    }
+                                }
                             }
-                            batch.insert_batch(epochs_ref, [(epoch_info.epoch, epoch_info)])?;
+                            Err(e) => return Err(e),
                         }
-
-                        // Index transactions
-                        for tx in &checkpoint_data.transactions {
-                            let info = TransactionInfo::new(
-                                tx.transaction.transaction_data(),
-                                &tx.effects,
-                                &tx.input_objects,
-                                &tx.output_objects,
-                                checkpoint_data.checkpoint_summary.sequence_number,
-                            );
-
-                            let digest = tx.transaction.digest();
-                            batch.insert_batch(transactions_ref, [(digest, info)])?;
-                        }
-
-                        batch
-                            .write_opt(&write_options_no_wal())
-                            .map_err(StorageError::from)?;
                     }
+                    
+                    Ok::<(), StorageError>(())
+                });
 
-                    Ok(())
-                })
+                // Stage 3: Index checkpoints (consumer) - process in parallel
+                let consumer = s.spawn(move || {
+                    use rayon::iter::{ParallelBridge, ParallelIterator};
+                    
+                    // Convert receiver to iterator then parallelize
+                    let receiver_iter = std::iter::from_fn(move || {
+                        match loaded_rx.recv() {
+                            Ok(item) => Some(item),
+                            Err(_) => None,
+                        }
+                    });
+                    
+                    receiver_iter
+                        .par_bridge()
+                        .try_for_each(|(_seq_num, checkpoint_data)| -> Result<(), StorageError> {
+                            
+                            // Process and write this checkpoint
+                            let mut batch = transactions_ref.batch();
+
+                            // Index epoch data
+                            if let Some(epoch_info) = checkpoint_data.epoch_info()? {
+                                if epoch_info.epoch > 0 {
+                                    let prev_epoch = epoch_info.epoch - 1;
+                                    let mut current_epoch =
+                                        epochs_ref.get(&prev_epoch)?.unwrap_or_default();
+                                    current_epoch.epoch = prev_epoch;
+                                    current_epoch.end_timestamp_ms = epoch_info.start_timestamp_ms;
+                                    current_epoch.end_checkpoint =
+                                        epoch_info.start_checkpoint.map(|sq| sq - 1);
+                                    batch.insert_batch(epochs_ref, [(prev_epoch, current_epoch)])?;
+                                }
+                                batch.insert_batch(epochs_ref, [(epoch_info.epoch, epoch_info)])?;
+                            }
+
+                            // Index transactions
+                            for tx in &checkpoint_data.transactions {
+                                let info = TransactionInfo::new(
+                                    tx.transaction.transaction_data(),
+                                    &tx.effects,
+                                    &tx.input_objects,
+                                    &tx.output_objects,
+                                    checkpoint_data.checkpoint_summary.sequence_number,
+                                );
+
+                                let digest = tx.transaction.digest();
+                                batch.insert_batch(transactions_ref, [(digest, info)])?;
+                            }
+
+                            batch
+                                .write_opt(&write_options_no_wal())
+                                .map_err(StorageError::from)?;
+                            
+                            Ok(())
+                        })
+                });
+
+                // Wait for all stages to complete
+                let summary_result = summary_producer.join().unwrap();
+                // summary_tx is already dropped when producer thread ends
+                
+                let loader_result = loader.join().unwrap();
+                // loaded_tx is already dropped when loader thread ends
+                
+                let consumer_result = consumer.join().unwrap();
+
+                // Return first error if any
+                summary_result.and(loader_result).and(consumer_result)
+            });
+
+            result
         })?;
 
         info!(
