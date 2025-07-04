@@ -494,8 +494,13 @@ impl IndexStoreTables {
             .unwrap_or(16);
 
         // Create channel for communication between I/O and compute threads
-        // Buffer size of 100 to allow I/O threads to get ahead
-        let (io_tx, io_rx) = bounded::<Result<CheckpointIoData, Arc<StorageError>>>(100);
+        // Get buffer size from environment variable, default to 1000
+        let channel_buffer_size = std::env::var("SUI_INDEX_CHANNEL_BUFFER")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(1000);
+        let (io_tx, io_rx) =
+            bounded::<Result<CheckpointIoData, Arc<StorageError>>>(channel_buffer_size);
 
         // Shared error flag for coordinated shutdown
         let error_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -507,7 +512,8 @@ impl IndexStoreTables {
         let tables = &*self;
         let process_result: Result<(), StorageError> = crossbeam::scope(|s| {
             // Use atomic counter to avoid allocating huge Vec for millions of checkpoints
-            let next_checkpoint = Arc::new(std::sync::atomic::AtomicU64::new(*checkpoint_range.start()));
+            let next_checkpoint =
+                Arc::new(std::sync::atomic::AtomicU64::new(*checkpoint_range.start()));
             let end_checkpoint = *checkpoint_range.end();
 
             // Spawn I/O threads
@@ -526,7 +532,8 @@ impl IndexStoreTables {
                         }
 
                         // Get next checkpoint to process
-                        let checkpoint_num = next_checkpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let checkpoint_num =
+                            next_checkpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         if checkpoint_num > end_checkpoint {
                             break; // No more checkpoints to process
                         }
