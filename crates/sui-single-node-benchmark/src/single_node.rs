@@ -3,7 +3,7 @@
 
 use crate::command::Component;
 use crate::mock_storage::InMemoryObjectStore;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
@@ -231,7 +231,7 @@ impl SingleValidator {
                 self.epoch_store.protocol_config(),
                 self.get_validator().metrics.limits_metrics.clone(),
                 false,
-                &HashSet::new(),
+                None,
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,

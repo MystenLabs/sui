@@ -44,6 +44,7 @@ pub mod deny_list_v2;
 pub mod digests;
 pub mod display;
 pub mod dynamic_field;
+pub mod early_execution_error;
 pub mod effects;
 pub mod epoch_data;
 pub mod event;

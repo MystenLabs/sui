@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
 use sui_config::{
@@ -140,8 +140,8 @@ impl EpochState {
                 store.backing_store(),
                 &self.protocol_config,
                 self.limits_metrics.clone(),
-                false,           // enable_expensive_checks
-                &HashSet::new(), // certificate_deny_set
+                false, // enable_expensive_checks
+                None,  // early_execution_error
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,

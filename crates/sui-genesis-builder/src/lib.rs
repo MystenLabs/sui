@@ -912,7 +912,6 @@ fn create_genesis_transaction(
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let certificate_deny_set = HashSet::new();
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, mut gas_data) = transaction_data.execution_parts();
         gas_data.payment = vec![];
@@ -923,7 +922,7 @@ fn create_genesis_transaction(
                 protocol_config,
                 metrics,
                 expensive_checks,
-                &certificate_deny_set,
+                None,
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,

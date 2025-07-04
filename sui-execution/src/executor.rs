@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_trace_format::format::MoveTraceBuilder;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::error::ExecutionErrorKind;
 use sui_types::execution::ExecutionTiming;
 use sui_types::storage::BackingStore;
 use sui_types::transaction::GasData;
@@ -30,7 +31,7 @@ pub trait Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        early_execution_error: Option<ExecutionErrorKind>,
         // Epoch
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
@@ -59,7 +60,7 @@ pub trait Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        early_execution_error: Option<ExecutionErrorKind>,
         // Epoch
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
