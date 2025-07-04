@@ -6,9 +6,8 @@ use crate::authority::AuthorityStore;
 use crate::checkpoints::CheckpointStore;
 use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
+use crossbeam::channel::bounded;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -29,8 +28,8 @@ use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::message_envelope::Message;
 use sui_types::layout_resolver::LayoutResolver;
+use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Data;
@@ -488,19 +487,150 @@ impl IndexStoreTables {
         );
         let start_time = Instant::now();
 
-        checkpoint_range.into_par_iter().try_for_each(|seq| {
-            let checkpoint_data =
-                sparse_checkpoint_data_for_backfill(authority_store, checkpoint_store, seq)?;
+        // Get number of I/O threads from environment variable, default to 16
+        let io_thread_count = std::env::var("SUI_INDEX_IO_THREADS")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(16);
 
-            let mut batch = self.transactions.batch();
+        // Create channel for communication between I/O and compute threads
+        // Buffer size of 100 to allow I/O threads to get ahead
+        let (io_tx, io_rx) = bounded::<Result<CheckpointIoData, Arc<StorageError>>>(100);
 
-            self.index_epoch(&checkpoint_data, &mut batch)?;
-            self.index_transactions(&checkpoint_data, &mut batch)?;
+        // Shared error flag for coordinated shutdown
+        let error_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
-            batch
-                .write_opt(&write_options_no_wal())
-                .map_err(StorageError::from)
-        })?;
+        // Shared error storage for proper error propagation
+        let shared_error: Arc<Mutex<Option<Arc<StorageError>>>> = Arc::new(Mutex::new(None));
+
+        // Process checkpoints using crossbeam scope
+        let tables = &*self;
+        let process_result: Result<(), StorageError> = crossbeam::scope(|s| {
+            // Spawn I/O threads within the scope
+            let checkpoints: Vec<u64> = checkpoint_range.collect();
+            let chunk_size = checkpoints.len().div_ceil(io_thread_count);
+
+            for chunk in checkpoints.chunks(chunk_size) {
+                let chunk = chunk.to_vec();
+                let io_tx = io_tx.clone();
+
+                let error_flag = error_flag.clone();
+                let shared_error = shared_error.clone();
+
+                s.spawn(move |_| {
+                    for checkpoint_num in chunk {
+                        // Check error flag before processing
+                        if error_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                            break;
+                        }
+
+                        let result = fetch_checkpoint_data_io(
+                            authority_store,
+                            checkpoint_store,
+                            checkpoint_num,
+                        );
+
+                        // Convert to Arc for sharing
+                        let arc_result = result.map_err(Arc::new);
+
+                        // If fetch failed, set error flag and store the error
+                        if let Err(ref e) = arc_result {
+                            error_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                            let mut guard = shared_error.lock().unwrap();
+                            if guard.is_none() {
+                                *guard = Some(Arc::clone(e));
+                            }
+                        }
+
+                        if io_tx.send(arc_result).is_err() {
+                            // Receiver has been dropped, stop sending
+                            break;
+                        }
+                    }
+                });
+            }
+
+            // Drop the original sender so the channel will close when all I/O threads finish
+            drop(io_tx);
+
+            // Spawn compute thread that processes items as they arrive
+            let error_flag_compute = error_flag.clone();
+            let shared_error_compute = shared_error.clone();
+            let compute_handle = s.spawn(move |_| {
+                // Process items immediately as they arrive - no batching
+                rayon::scope(|rayon_scope| {
+                    while let Ok(io_result) = io_rx.recv() {
+                        // Check error flag
+                        if error_flag_compute.load(std::sync::atomic::Ordering::Relaxed) {
+                            break;
+                        }
+
+                        let io_data = match io_result {
+                            Ok(data) => data,
+                            Err(e) => {
+                                error_flag_compute
+                                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                                // e is already Arc<StorageError> from the channel
+                                return Err(Arc::try_unwrap(e)
+                                    .unwrap_or_else(|arc| StorageError::custom(arc.to_string())));
+                            }
+                        };
+
+                        let error_flag = error_flag_compute.clone();
+                        let shared_error = shared_error_compute.clone();
+                        let tables = tables;
+
+                        rayon_scope.spawn(move |_| {
+                            // Check error flag before processing
+                            if error_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                                return;
+                            }
+
+                            let result = (|| {
+                                let checkpoint_data = process_checkpoint_data(io_data)?;
+
+                                let mut batch = tables.transactions.batch();
+                                tables.index_epoch(&checkpoint_data, &mut batch)?;
+                                tables.index_transactions(&checkpoint_data, &mut batch)?;
+
+                                batch
+                                    .write_opt(&write_options_no_wal())
+                                    .map_err(StorageError::from)
+                            })();
+
+                            if let Err(e) = result {
+                                error_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                                // Store the first error that occurs
+                                let mut shared_err = shared_error.lock().unwrap();
+                                if shared_err.is_none() {
+                                    *shared_err = Some(Arc::new(e));
+                                }
+                            }
+                        });
+                    }
+                    Ok(())
+                })
+            });
+
+            // Safely handle the join result
+            match compute_handle.join() {
+                Ok(inner_res) => inner_res?,
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+
+            // Check if any errors occurred and return the actual error
+            if let Some(err_arc) = shared_error.lock().unwrap().take() {
+                return Err(match Arc::try_unwrap(err_arc) {
+                    Ok(err) => err,
+                    Err(arc) => StorageError::custom(arc.to_string()),
+                });
+            }
+
+            Ok(())
+        })
+        .unwrap();
+
+        process_result?;
 
         info!(
             "Indexing checkpoints took {} seconds",
@@ -1418,17 +1548,23 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
     }
 }
 
-// TODO figure out a way to dedup this logic. Today we'd need to do quite a bit of refactoring to
-// make it possible.
-//
-// Load a CheckpointData struct without event data
-fn sparse_checkpoint_data_for_backfill(
+// Struct to hold intermediate I/O data for a checkpoint
+#[derive(Debug)]
+struct CheckpointIoData {
+    checkpoint_num: u64,
+    summary: sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+    contents: CheckpointContents,
+    transactions: Vec<sui_types::transaction::VerifiedTransaction>,
+    effects: Vec<sui_types::effects::TransactionEffects>,
+    object_map: std::collections::HashMap<ObjectKey, Object>,
+}
+
+// Phase 1: Pure I/O - fetches all data from stores
+fn fetch_checkpoint_data_io(
     authority_store: &AuthorityStore,
     checkpoint_store: &CheckpointStore,
     checkpoint: u64,
-) -> Result<CheckpointData, StorageError> {
-    use sui_types::full_checkpoint_content::CheckpointTransaction;
-
+) -> Result<CheckpointIoData, StorageError> {
     let summary = checkpoint_store
         .get_checkpoint_by_sequence_number(checkpoint)?
         .ok_or_else(|| StorageError::missing(format!("missing checkpoint {checkpoint}")))?;
@@ -1486,6 +1622,29 @@ fn sparse_checkpoint_data_for_backfill(
         }
     }
 
+    Ok(CheckpointIoData {
+        checkpoint_num: checkpoint,
+        summary: summary.into(),
+        contents,
+        transactions,
+        effects,
+        object_map,
+    })
+}
+
+// Phase 2: Pure compute - transforms I/O data into CheckpointData
+fn process_checkpoint_data(io_data: CheckpointIoData) -> Result<CheckpointData, StorageError> {
+    use sui_types::full_checkpoint_content::CheckpointTransaction;
+
+    let CheckpointIoData {
+        checkpoint_num: _checkpoint,
+        summary,
+        contents,
+        transactions,
+        effects,
+        object_map,
+    } = io_data;
+
     let mut full_transactions = Vec::with_capacity(transactions.len());
     for (tx, fx) in transactions.into_iter().zip(effects) {
         // Get input objects from HashMap
@@ -1542,7 +1701,7 @@ fn sparse_checkpoint_data_for_backfill(
     }
 
     let checkpoint_data = CheckpointData {
-        checkpoint_summary: summary.into(),
+        checkpoint_summary: summary,
         checkpoint_contents: contents,
         transactions: full_transactions,
     };
