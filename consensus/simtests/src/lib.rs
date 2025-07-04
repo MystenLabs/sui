@@ -2,8 +2,4 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(msim)]
-mod node;
-
-#[cfg(msim)]
-#[path = "tests/consensus_tests.rs"]
-mod consensus_tests;
+pub mod node;

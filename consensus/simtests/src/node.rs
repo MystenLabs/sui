@@ -11,8 +11,8 @@ use anyhow::Result;
 use arc_swap::ArcSwapOption;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{
-    Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority,
-    TransactionClient, TransactionVerifier, to_socket_addr, NoopTransactionVerifier,
+    to_socket_addr, Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag,
+    ConsensusAuthority, TransactionClient, TransactionVerifier,
 };
 use consensus_types::block::BlockTimestampMs;
 use mysten_metrics::monitored_mpsc::unbounded_channel;
