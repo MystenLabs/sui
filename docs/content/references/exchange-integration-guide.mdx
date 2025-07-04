@@ -47,7 +47,7 @@ Run the command in this section using the same branch of the repository for each
     ```
 1.  Download the genesis.blob file:
     ```sh
-    $ wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
+    $ wget https://github.com/MystenLabs/sui-genesis/blob/main/mainnet/genesis.blob
     ```
 1.  Start the Full node. The -d switch starts it in the background (detached mode).
     ```sh
@@ -74,7 +74,7 @@ Use the steps in this section to install and configure a Sui Full node directly 
     ```
 1.  Download the genesis.blob file:
     ```sh
-    $ wget https://github.com/MystenLabs/sui-genesis/raw/main/branch-name/genesis.blob
+    $ wget https://github.com/MystenLabs/sui-genesis/blob/main/mainnet/genesis.blob
     ```
     Change branch-name to the same branch you used for previous commands.
 1.  Optionally, if you installed Sui to a path other than the default, modify the fullnode.yaml file to use the path you used. Update the path to the folder where you installed sui-fullnode for the `db-path` and `genesis-file-location` as appropriate:
