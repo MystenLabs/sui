@@ -17,10 +17,7 @@ use crate::{
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
-    expansion::{
-        ast::{self as E, ModuleIdent},
-        name_validation::ModuleMemberKind,
-    },
+    expansion::ast::{self as E, ModuleIdent},
     hlir::ast as H,
     naming::{
         ast::{self as N, Function, UseFuns},
@@ -584,15 +581,6 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_module_members(
-        &self,
-        module_members: &UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>>,
-    ) {
-        for hook in &self.save_hooks {
-            hook.save_module_members(module_members)
-        }
-    }
-
     pub fn save_module_resolved_members(
         &self,
         module_resolved_members: &BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>,
@@ -1020,7 +1008,6 @@ pub(crate) struct SavedInfo {
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
     module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
-    module_members: Option<UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>>>,
     module_resolved_members: Option<BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>>,
     macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
     module_info: Option<BTreeMap<ModuleIdent, (ModuleInfo, Option<SuiInfo>)>>,
@@ -1063,7 +1050,6 @@ impl SaveHook {
             hlir: None,
             cfgir: None,
             module_named_addresses: None,
-            module_members: None,
             module_resolved_members: None,
             macro_infos: None,
             module_info: None,
@@ -1130,16 +1116,6 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.module_named_addresses.is_none() && r.flags.contains(&SaveFlag::ModuleNameAddresses) {
             r.module_named_addresses = Some(module_named_addresses.clone());
-        }
-    }
-
-    pub(crate) fn save_module_members(
-        &self,
-        module_members: &UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>>,
-    ) {
-        let mut r = self.0.lock().unwrap();
-        if r.module_members.is_none() && r.flags.contains(&SaveFlag::ModuleMembers) {
-            r.module_members = Some(module_members.clone());
         }
     }
 
@@ -1268,15 +1244,6 @@ impl SaveHook {
             "Module named addresses not saved. Please set the flag when creating the SaveHook"
         );
         r.module_named_addresses.take().unwrap()
-    }
-
-    pub fn take_module_members(&self) -> UniqueMap<ModuleIdent, BTreeMap<Name, ModuleMemberKind>> {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::ModuleMembers),
-            "Module members not saved. Please set the flag when creating the SaveHook"
-        );
-        r.module_members.take().unwrap()
     }
 
     pub fn take_module_resolved_members(
