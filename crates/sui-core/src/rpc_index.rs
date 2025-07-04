@@ -506,22 +506,29 @@ impl IndexStoreTables {
         // Process checkpoints using crossbeam scope
         let tables = &*self;
         let process_result: Result<(), StorageError> = crossbeam::scope(|s| {
-            // Spawn I/O threads within the scope
-            let checkpoints: Vec<u64> = checkpoint_range.collect();
-            let chunk_size = checkpoints.len().div_ceil(io_thread_count);
+            // Use atomic counter to avoid allocating huge Vec for millions of checkpoints
+            let next_checkpoint = Arc::new(std::sync::atomic::AtomicU64::new(*checkpoint_range.start()));
+            let end_checkpoint = *checkpoint_range.end();
 
-            for chunk in checkpoints.chunks(chunk_size) {
-                let chunk = chunk.to_vec();
+            // Spawn I/O threads
+            for _ in 0..io_thread_count {
                 let io_tx = io_tx.clone();
+                let next_checkpoint = next_checkpoint.clone();
 
                 let error_flag = error_flag.clone();
                 let shared_error = shared_error.clone();
 
                 s.spawn(move |_| {
-                    for checkpoint_num in chunk {
+                    loop {
                         // Check error flag before processing
                         if error_flag.load(std::sync::atomic::Ordering::Relaxed) {
                             break;
+                        }
+
+                        // Get next checkpoint to process
+                        let checkpoint_num = next_checkpoint.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if checkpoint_num > end_checkpoint {
+                            break; // No more checkpoints to process
                         }
 
                         let result = fetch_checkpoint_data_io(
