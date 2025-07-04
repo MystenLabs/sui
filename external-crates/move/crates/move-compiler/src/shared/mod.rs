@@ -17,15 +17,17 @@ use crate::{
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
-    expansion::ast as E,
+    expansion::ast::{self as E, ModuleIdent},
     hlir::ast as H,
-    naming::ast as N,
-    parser::ast as P,
+    naming::ast::{self as N, Function, UseFuns},
+    parser::ast::{self as P, DatatypeName, FunctionName},
     shared::{
         files::{FileName, MappedFiles},
         ide::IDEInfo,
+        unique_map::UniqueMap,
     },
-    sui_mode,
+    sui_mode::{self, info::TransferKind},
+    to_bytecode::context::{DatatypeDeclarations, FunctionDeclaration},
     typing::{
         ast as T,
         visitor::{TypingVisitor, TypingVisitorObj},
@@ -38,7 +40,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt,
     hash::Hash,
     path::PathBuf,
@@ -176,7 +178,7 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct NamedAddressMapIndex(usize);
+pub struct NamedAddressMapIndex(pub usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);
@@ -563,6 +565,54 @@ impl CompilationEnv {
         }
     }
 
+    pub fn save_module_named_addresses(
+        &self,
+        module_named_addresses: &BTreeMap<ModuleIdent, NamedAddressMap>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_module_named_addresses(module_named_addresses)
+        }
+    }
+
+    pub fn save_macro_infos(
+        &self,
+        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_macro_infos(macro_infos)
+        }
+    }
+
+    pub fn save_private_transfers(
+        &self,
+        private_transfers: &BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_private_transfers(private_transfers)
+        }
+    }
+
+    pub fn save_dependency_order(&self, dependency_order: &HashMap<ModuleIdent, usize>) {
+        for hook in &self.save_hooks {
+            hook.save_dependency_order(dependency_order)
+        }
+    }
+
+    pub fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
+        for hook in &self.save_hooks {
+            hook.save_cfgir_datatype_decls(cfgir_datatype_decls)
+        }
+    }
+
+    pub fn save_cfgir_fun_decls(
+        &self,
+        cfgir_fun_decls: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_cfgir_fun_decls(cfgir_fun_decls)
+        }
+    }
+
     // -- Flag Information --
 
     pub fn sources_shadow_deps(&self) -> bool {
@@ -941,6 +991,12 @@ pub(crate) struct SavedInfo {
     typing_info: Option<Arc<program_info::TypingProgramInfo>>,
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
+    module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
+    macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
+    private_transfers: Option<BTreeMap<(ModuleIdent, DatatypeName), TransferKind>>,
+    dependency_order: Option<HashMap<ModuleIdent, usize>>,
+    cfgir_datatype_decls: Option<DatatypeDeclarations>,
+    cfgir_fun_decls: Option<HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>>,
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -952,6 +1008,14 @@ pub enum SaveFlag {
     TypingInfo,
     HLIR,
     CFGIR,
+    ModuleNameAddresses,
+    ModuleResolvedMembers,
+    MacroInfos,
+    ModuleInfo,
+    PrivateTransfers,
+    DependencyOrder,
+    CFGIRDatatypeDecls,
+    CFGIRFunDecls,
 }
 
 impl SaveHook {
@@ -966,6 +1030,12 @@ impl SaveHook {
             typing_info: None,
             hlir: None,
             cfgir: None,
+            module_named_addresses: None,
+            macro_infos: None,
+            private_transfers: None,
+            dependency_order: None,
+            cfgir_datatype_decls: None,
+            cfgir_fun_decls: None,
         })))
     }
 
@@ -1015,6 +1085,60 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
             r.cfgir = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_module_named_addresses(
+        &self,
+        module_named_addresses: &BTreeMap<ModuleIdent, NamedAddressMap>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.module_named_addresses.is_none() && r.flags.contains(&SaveFlag::ModuleNameAddresses) {
+            r.module_named_addresses = Some(module_named_addresses.clone());
+        }
+    }
+
+    pub(crate) fn save_macro_infos(
+        &self,
+        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.macro_infos.is_none() && r.flags.contains(&SaveFlag::MacroInfos) {
+            r.macro_infos = Some(macro_infos.clone());
+        }
+    }
+
+    pub(crate) fn save_private_transfers(
+        &self,
+        private_transfers: &BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.private_transfers.is_none() && r.flags.contains(&SaveFlag::PrivateTransfers) {
+            r.private_transfers = Some(private_transfers.clone());
+        }
+    }
+
+    pub(crate) fn save_dependency_order(&self, dependency_order: &HashMap<ModuleIdent, usize>) {
+        let mut r = self.0.lock().unwrap();
+        if r.dependency_order.is_none() && r.flags.contains(&SaveFlag::DependencyOrder) {
+            r.dependency_order = Some(dependency_order.clone());
+        }
+    }
+
+    pub(crate) fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
+        let mut r = self.0.lock().unwrap();
+        if r.cfgir_datatype_decls.is_none() && r.flags.contains(&SaveFlag::CFGIRDatatypeDecls) {
+            r.cfgir_datatype_decls = Some(cfgir_datatype_decls.clone());
+        }
+    }
+
+    pub(crate) fn save_cfgir_fun_decls(
+        &self,
+        cfgir_fun_decls: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.cfgir_fun_decls.is_none() && r.flags.contains(&SaveFlag::CFGIRFunDecls) {
+            r.cfgir_fun_decls = Some(cfgir_fun_decls.clone());
         }
     }
 
@@ -1079,6 +1203,64 @@ impl SaveHook {
             "CFGIR AST not saved. Please set the flag when creating the SaveHook"
         );
         r.cfgir.take().unwrap()
+    }
+
+    pub fn take_module_named_addresses(&self) -> BTreeMap<ModuleIdent, NamedAddressMap> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::ModuleNameAddresses),
+            "Module named addresses not saved. Please set the flag when creating the SaveHook"
+        );
+        r.module_named_addresses.take().unwrap()
+    }
+
+    pub fn take_macro_infos(
+        &self,
+    ) -> BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::MacroInfos),
+            "Macro infos not saved. Please set the flag when creating the SaveHook"
+        );
+        r.macro_infos.take().unwrap()
+    }
+
+    pub fn take_private_transfers(&self) -> BTreeMap<(ModuleIdent, DatatypeName), TransferKind> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::PrivateTransfers),
+            "Private transfers not saved. Please set the flag when creating the SaveHook"
+        );
+        r.private_transfers.take().unwrap()
+    }
+
+    pub fn take_dependency_order(&self) -> HashMap<ModuleIdent, usize> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::DependencyOrder),
+            "Dependency order not saved. Please set the flag when creating the SaveHook"
+        );
+        r.dependency_order.take().unwrap()
+    }
+
+    pub fn take_cfgir_datatype_decls(&self) -> DatatypeDeclarations {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIRDatatypeDecls),
+            "CFGIR datatype decls not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir_datatype_decls.take().unwrap()
+    }
+
+    pub fn take_cfgir_fun_decls(
+        &self,
+    ) -> HashMap<(ModuleIdent, FunctionName), FunctionDeclaration> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIRFunDecls),
+            "CFGIR fun decls not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir_fun_decls.take().unwrap()
     }
 }
 
