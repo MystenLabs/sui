@@ -2636,6 +2636,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 4.5.28",
+ "datatest-stable",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-model",
+ "move-model-2",
+ "move-package",
+ "move-stackless-bytecode",
+ "move-stdlib",
+ "move-symbol-pool",
+ "move-vm-runtime",
+ "tempfile",
+]
+
+[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
