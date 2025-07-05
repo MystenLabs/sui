@@ -1133,6 +1133,15 @@ impl TxContext {
         }
     }
 
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: TX_CONTEXT_MODULE_NAME.to_owned(),
+            name: TX_CONTEXT_STRUCT_NAME.to_owned(),
+            type_params: vec![],
+        }
+    }
+
     pub fn epoch(&self) -> EpochId {
         self.epoch
     }

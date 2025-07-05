@@ -92,6 +92,7 @@ mod verify {
     struct Value;
 
     struct Context {
+        tx_context: Option<Value>,
         gas_coin: Option<Value>,
         inputs: Vec<Option<Value>>,
         results: Vec<Vec<Option<Value>>>,
@@ -101,6 +102,7 @@ mod verify {
         fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
             let inputs = ast.inputs.iter().map(|_| Some(Value)).collect();
             Ok(Self {
+                tx_context: Some(Value),
                 gas_coin: Some(Value),
                 inputs,
                 results: Vec::with_capacity(ast.commands.len()),
@@ -109,6 +111,7 @@ mod verify {
 
         fn location(&mut self, l: T::Location) -> &mut Option<Value> {
             match l {
+                T::Location::TxContext => &mut self.tx_context,
                 T::Location::GasCoin => &mut self.gas_coin,
                 T::Location::Input(i) => &mut self.inputs[i as usize],
                 T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
@@ -129,6 +132,7 @@ mod verify {
         }
 
         let Context {
+            tx_context,
             gas_coin,
             inputs,
             results,
@@ -143,6 +147,7 @@ mod verify {
                 drop_value_opt((i, j), vopt, ty)?;
             }
         }
+        assert_invariant!(tx_context.is_some(), "tx_context should never be moved");
         Ok(())
     }
 

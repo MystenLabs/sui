@@ -103,6 +103,7 @@ impl Context {
             T::Location::Result(i, j) => {
                 LocationType::Fixed(self.results[i as usize][j as usize].clone())
             }
+            T::Location::TxContext => LocationType::Fixed(env.tx_context_type()?),
         })
     }
 }
@@ -144,7 +145,8 @@ fn command<Mode: ExecutionMode>(
                 arguments: largs,
             } = *lmc;
             let arg_locs = locations(context, 0, largs)?;
-            let parameter_tys = match function.tx_context {
+            let tx_context_kind = tx_context_kind(&function);
+            let parameter_tys = match tx_context_kind {
                 TxContextKind::None => &function.signature.parameters,
                 TxContextKind::Mutable | TxContextKind::Immutable => {
                     let n = function.signature.parameters.len();
@@ -166,7 +168,23 @@ fn command<Mode: ExecutionMode>(
                     ),
                 ));
             }
-            let args = arguments(env, context, 0, arg_locs, parameter_tys.iter().cloned())?;
+            let mut args = arguments(env, context, 0, arg_locs, parameter_tys.iter().cloned())?;
+            match tx_context_kind {
+                TxContextKind::None => (),
+                TxContextKind::Mutable | TxContextKind::Immutable => {
+                    let is_mut = match tx_context_kind {
+                        TxContextKind::Mutable => true,
+                        TxContextKind::Immutable => false,
+                        TxContextKind::None => unreachable!(),
+                    };
+                    // TODO this is out of bounds of the original PTB arguments... what do we
+                    // do here?
+                    let idx = args.len() as u16;
+                    let arg__ = T::Argument__::Borrow(is_mut, T::Location::TxContext);
+                    let ty = Type::Reference(is_mut, Rc::new(env.tx_context_type()?));
+                    args.push(sp(idx, (arg__, ty)));
+                }
+            }
             let result = function.signature.return_.clone();
             (
                 T::Command_::MoveCall(Box::new(T::MoveCall {
@@ -294,6 +312,13 @@ fn command<Mode: ExecutionMode>(
             )
         }
     })
+}
+
+fn tx_context_kind(function: &L::LoadedFunction) -> TxContextKind {
+    match function.signature.parameters.last() {
+        Some(ty) => ty.is_tx_context(),
+        None => TxContextKind::None,
+    }
 }
 
 fn one_location(

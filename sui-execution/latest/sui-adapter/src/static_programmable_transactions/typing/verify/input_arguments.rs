@@ -277,7 +277,7 @@ fn check_obj_by_mut_ref(
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
-        T::Location::GasCoin | T::Location::Result(_, _) => Ok(()),
+        T::Location::GasCoin | T::Location::Result(_, _) | T::Location::TxContext => Ok(()),
         T::Location::Input(idx) => match &context.inputs[*idx as usize] {
             None
             | Some(ObjectUsage {
@@ -302,7 +302,7 @@ fn check_by_value(
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
-        T::Location::GasCoin | T::Location::Result(_, _) => Ok(()),
+        T::Location::TxContext | T::Location::GasCoin | T::Location::Result(_, _) => Ok(()),
         T::Location::Input(idx) => match &context.inputs[*idx as usize] {
             None
             | Some(ObjectUsage {
@@ -343,6 +343,6 @@ fn check_gas_by_value_loc(idx: u16, location: &T::Location) -> Result<(), Execut
             CommandArgumentError::InvalidGasCoinUsage,
             idx as usize,
         )),
-        T::Location::Input(_) | T::Location::Result(_, _) => Ok(()),
+        T::Location::TxContext | T::Location::Input(_) | T::Location::Result(_, _) => Ok(()),
     }
 }

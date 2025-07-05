@@ -115,7 +115,6 @@ pub struct LoadedFunction {
     pub name: Identifier,
     pub type_arguments: Vec<Type>,
     pub signature: LoadedFunctionInstantiation,
-    pub tx_context: TxContextKind,
     pub linkage: RootedLinkage,
     pub instruction_length: CodeOffset,
     pub definition_index: FunctionDefinitionIndex,
