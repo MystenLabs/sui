@@ -93,15 +93,81 @@ pub struct ConsensusCommitPrologueV2 {
     pub consensus_commit_digest: ConsensusCommitDigest,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
+pub struct BigSequenceNumber(
+    #[serde(serialize_with = "serialize_big_sequence_number")]
+    #[serde(deserialize_with = "deserialize_big_sequence_number")]
+    pub SequenceNumber,
+);
+
+impl BigSequenceNumber {
+    pub const fn from_u64(u: u64) -> Self {
+        BigSequenceNumber(SequenceNumber::from_u64(u))
+    }
+
+    pub const fn value(&self) -> u64 {
+        self.0.value()
+    }
+}
+
+impl From<u64> for BigSequenceNumber {
+    fn from(value: u64) -> Self {
+        Self(SequenceNumber::from_u64(value))
+    }
+}
+
+impl From<SequenceNumber> for BigSequenceNumber {
+    fn from(value: SequenceNumber) -> Self {
+        Self(value)
+    }
+}
+
+impl From<BigSequenceNumber> for u64 {
+    fn from(value: BigSequenceNumber) -> Self {
+        value.value()
+    }
+}
+
+fn serialize_big_sequence_number<S>(
+    value: &SequenceNumber,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::ser::Serializer,
+{
+    value.value().to_string().serialize(serializer)
+}
+
+fn deserialize_big_sequence_number<'de, D>(deserializer: D) -> Result<SequenceNumber, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    SequenceNumber::deserialize(deserializer).or_else(|err| {
+        let s = err
+            .to_string()
+            .split("string \"")
+            .last()
+            .unwrap_or_else(|| panic!("Could not find 'string \"' in the error message"))
+            .split("\", expected u64")
+            .next()
+            .unwrap_or_else(|| panic!("Could not find '\", expected u64' in the error message"))
+            .parse::<u64>()
+            .unwrap_or_else(|_| panic!("Could not parse u64 from string in the error message"));
+
+        Ok(SequenceNumber::from_u64(s))
+    })
+}
+
 /// Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum ConsensusDeterminedVersionAssignments {
     // Cancelled transaction version assignment.
-    CancelledTransactions(Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>),
+    CancelledTransactions(Vec<(TransactionDigest, Vec<(ObjectID, BigSequenceNumber)>)>),
     CancelledTransactionsV2(
         Vec<(
             TransactionDigest,
-            Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+            Vec<(ConsensusObjectSequenceKey, BigSequenceNumber)>,
         )>,
     ),
 }

@@ -134,6 +134,7 @@ pub trait ConciseableName<'a> {
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
 pub struct ObjectID(
     #[schemars(with = "Hex")]
     #[serde_as(as = "Readable<HexAccountAddress, _>")]
