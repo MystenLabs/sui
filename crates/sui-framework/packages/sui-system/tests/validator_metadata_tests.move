@@ -4,11 +4,8 @@
 #[test_only]
 module sui_system::validator_metadata_tests;
 
-use sui::balance;
-use sui::coin;
 use sui::test_scenario::{Self, Scenario};
 use sui::url;
-use sui_system::governance_test_utils::{advance_epoch, create_sui_system_state_for_testing};
 use sui_system::sui_system::SuiSystemState;
 use sui_system::test_runner::{Self, TestRunner};
 use sui_system::validator::{Self, Validator};
@@ -44,43 +41,31 @@ fun active_validator_update_metadata() {
     let new_pop1 =
         x"b61913eb4dc7ea1d92f174e1a3c6cad3f49ae8de40b13b69046ce072d8d778bfe87e734349c7394fd1543fff0cb6e2d0";
 
-    let mut scenario_val = test_scenario::begin(validator_addr);
-    let scenario = &mut scenario_val;
+    let validator = validator_builder::preset()
+        .sui_address(validator_addr)
+        .protocol_pubkey_bytes(pubkey)
+        // prettier-ignore
+        .network_pubkey_bytes(vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62])
+        // prettier-ignore
+        .worker_pubkey_bytes(vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25])
+        .proof_of_possession(pop)
+        .name(b"ValidatorName")
+        .description(b"description")
+        .image_url(b"image_url")
+        .project_url(b"project_url")
+        .net_address(b"/ip4/127.0.0.1/tcp/80")
+        .initial_stake(100);
 
-    // Set up SuiSystemState with an active validator
-    let mut validators = vector[];
-    let ctx = scenario.ctx();
-    // prettier-ignore
-    let validator = validator::new_for_testing(
-        validator_addr,
-        pubkey,
-        vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-        vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
-        pop,
-        b"ValidatorName",
-        b"description",
-        b"image_url",
-        b"project_url",
-        b"/ip4/127.0.0.1/tcp/80",
-        b"/ip4/127.0.0.1/udp/80",
-        b"/ip4/127.0.0.1/udp/80",
-        b"/ip4/127.0.0.1/udp/80",
-        option::some(balance::create_for_testing(100_000_000_000)),
-        1,
-        0,
-        true,
-        ctx,
-    );
-    validators.push_back(validator);
-    create_sui_system_state_for_testing(validators, 1000, 0, ctx);
+    let mut runner = test_runner::new()
+        .validators(vector[validator])
+        .storage_fund_amount(0)
+        .sui_supply_amount(1000)
+        .build();
 
-    scenario.next_tx(validator_addr);
+    // ===
 
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-
-    // Test active validator metadata changes
-    scenario.next_tx(validator_addr);
-    {
+    runner.set_sender(validator_addr).scenario_fn!(|scenario| {
+        let mut system_state = scenario.take_shared<SuiSystemState>();
         // prettier-ignore
         update_metadata(
             scenario,
@@ -93,68 +78,61 @@ fun active_validator_update_metadata() {
             vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
             vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
         );
-    };
 
-    scenario.next_tx(validator_addr);
-    let validator = system_state.active_validator_by_address(validator_addr);
+        let validator = system_state.active_validator_by_address(validator_addr);
 
-    // prettier-ignore
-    verify_metadata(
-        validator,
-        b"validator_new_name",
-        pubkey,
-        pop,
-        b"/ip4/127.0.0.1/tcp/80",
-        b"/ip4/127.0.0.1/udp/80",
-        vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-        vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
-        pubkey1,
-        pop1,
-        b"/ip4/42.42.42.42/tcp/80",
-        b"/ip4/43.43.43.43/udp/80",
-        vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
-        vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
-    );
-
-    test_scenario::return_shared(system_state);
-    scenario_val.end();
-
-    // Test pending validator metadata changes
-    let mut scenario_val = test_scenario::begin(new_validator_addr);
-    let scenario = &mut scenario_val;
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    scenario.next_tx(new_validator_addr);
-    {
-        let ctx = scenario.ctx();
         // prettier-ignore
-        system_state.request_add_validator_candidate(
-            new_pubkey,
-            vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-            vector[69, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
-            new_pop,
-            b"ValidatorName2",
-            b"description2",
-            b"image_url2",
-            b"project_url2",
-            b"/ip4/127.0.0.2/tcp/80",
-            b"/ip4/127.0.0.2/udp/80",
+        verify_metadata(
+            validator,
+            b"validator_new_name",
+            pubkey,
+            pop,
+            b"/ip4/127.0.0.1/tcp/80",
             b"/ip4/127.0.0.1/udp/80",
-            b"/ip4/127.0.0.1/udp/80",
-            1,
-            0,
-            ctx,
+            vector[32, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[68, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+            pubkey1,
+            pop1,
+            b"/ip4/42.42.42.42/tcp/80",
+            b"/ip4/43.43.43.43/udp/80",
+            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
         );
-        let staked_sui = system_state.request_add_stake_non_entry(
-            coin::mint_for_testing(100_000_000_000, ctx),
-            new_validator_addr,
-            ctx,
-        );
-        transfer::public_transfer(staked_sui, @0x0);
-        system_state.request_add_validator_for_testing(ctx);
-    };
 
-    scenario.next_tx(new_validator_addr);
-    {
+        test_scenario::return_shared(system_state);
+    });
+
+    // === Test pending validator metadata changes ===
+
+    runner.set_sender(new_validator_addr); // required for `.build()` to work
+
+    let validator = validator_builder::preset()
+        .sui_address(new_validator_addr)
+        .protocol_pubkey_bytes(new_pubkey)
+        // prettier-ignore
+        .network_pubkey_bytes(vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62])
+        // prettier-ignore
+        .worker_pubkey_bytes(vector[69, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25])
+        .proof_of_possession(new_pop)
+        .name(b"ValidatorName2")
+        .description(b"description2")
+        .image_url(b"image_url2")
+        .project_url(b"project_url2")
+        .net_address(b"/ip4/127.0.0.2/tcp/80")
+        .p2p_address(b"/ip4/127.0.0.2/udp/80")
+        .primary_address(b"/ip4/127.0.0.1/udp/80")
+        .worker_address(b"/ip4/127.0.0.1/udp/80")
+        .gas_price(1)
+        .commission_rate(0)
+        .is_active_at_genesis(false)
+        .build(runner.ctx());
+
+    runner.set_sender(new_validator_addr).add_validator_candidate(validator);
+    runner.set_sender(new_validator_addr).stake_with(new_validator_addr, 100);
+    runner.set_sender(new_validator_addr).add_validator();
+
+    runner.scenario_fn!(|scenario| {
+        let mut system_state = scenario.take_shared<SuiSystemState>();
         // prettier-ignore
         update_metadata(
             scenario,
@@ -167,65 +145,64 @@ fun active_validator_update_metadata() {
             vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
             vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
         );
-    };
 
-    scenario.next_tx(new_validator_addr);
-    let validator = system_state.pending_validator_by_address(new_validator_addr);
-    // prettier-ignore
-    verify_metadata(
-        validator,
-        b"new_validator_new_name",
-        new_pubkey,
-        new_pop,
-        b"/ip4/127.0.0.2/tcp/80",
-        b"/ip4/127.0.0.2/udp/80",
-        vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
-        vector[69, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
-        new_pubkey1,
-        new_pop1,
-        b"/ip4/66.66.66.66/tcp/80",
-        b"/ip4/77.77.77.77/udp/80",
-        vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
-        vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
-    );
+        let validator = system_state.pending_validator_by_address(new_validator_addr);
 
-    test_scenario::return_shared(system_state);
+        // prettier-ignore
+        verify_metadata(
+            validator,
+            b"new_validator_new_name",
+            new_pubkey,
+            new_pop,
+            b"/ip4/127.0.0.2/tcp/80",
+            b"/ip4/127.0.0.2/udp/80",
+            vector[33, 219, 38, 23, 242, 109, 116, 235, 225, 192, 219, 45, 40, 124, 162, 25, 33, 68, 52, 41, 123, 9, 98, 11, 184, 150, 214, 62, 60, 210, 121, 62],
+            vector[69, 55, 206, 25, 199, 14, 169, 53, 68, 92, 142, 136, 174, 149, 54, 215, 101, 63, 249, 206, 197, 98, 233, 80, 60, 12, 183, 32, 216, 88, 103, 25],
+            new_pubkey1,
+            new_pop1,
+            b"/ip4/66.66.66.66/tcp/80",
+            b"/ip4/77.77.77.77/udp/80",
+            vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+            vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+        );
 
-    // Advance epoch to effectuate the metadata changes.
-    scenario.next_tx(new_validator_addr);
-    advance_epoch(scenario);
+        test_scenario::return_shared(system_state);
+    });
 
-    // Now both validators are active, verify their metadata.
-    scenario.next_tx(new_validator_addr);
-    let mut system_state = scenario.take_shared<SuiSystemState>();
-    let validator = system_state.active_validator_by_address(validator_addr);
-    // prettier-ignore
-    verify_metadata_after_advancing_epoch(
-        validator,
-        b"validator_new_name",
-        pubkey1,
-        pop1,
-        b"/ip4/42.42.42.42/tcp/80",
-        b"/ip4/43.43.43.43/udp/80",
-        vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
-        vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
-    );
+    // === Advance epoch to effectuate the metadata changes ===
 
-    let validator = system_state.active_validator_by_address(new_validator_addr);
-    // prettier-ignore
-    verify_metadata_after_advancing_epoch(
-        validator,
-        b"new_validator_new_name",
-        new_pubkey1,
-        new_pop1,
-        b"/ip4/66.66.66.66/tcp/80",
-        b"/ip4/77.77.77.77/udp/80",
-        vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
-        vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
-    );
+    let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(99_9999_999);
+    runner.advance_epoch(option::some(opts)).destroy_for_testing();
 
-    test_scenario::return_shared(system_state);
-    scenario_val.end();
+    runner.system_tx!(|system, _| {
+        let validator = system.active_validator_by_address(validator_addr);
+        // prettier-ignore
+        verify_metadata_after_advancing_epoch(
+            validator,
+            b"validator_new_name",
+            pubkey1,
+            pop1,
+            b"/ip4/42.42.42.42/tcp/80",
+            b"/ip4/43.43.43.43/udp/80",
+            vector[148, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+            vector[215, 64, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+        );
+
+        let validator = system.active_validator_by_address(new_validator_addr);
+        // prettier-ignore
+        verify_metadata_after_advancing_epoch(
+            validator,
+            b"new_validator_new_name",
+            new_pubkey1,
+            new_pop1,
+            b"/ip4/66.66.66.66/tcp/80",
+            b"/ip4/77.77.77.77/udp/80",
+            vector[215, 65, 85, 185, 231, 116, 69, 151, 97, 79, 4, 183, 20, 70, 84, 51, 211, 162, 115, 221, 73, 241, 240, 171, 192, 25, 232, 106, 175, 162, 176, 43],
+            vector[149, 117, 212, 171, 44, 104, 167, 11, 177, 100, 4, 55, 17, 235, 117, 45, 117, 84, 159, 49, 14, 159, 239, 246, 237, 21, 83, 166, 112, 53, 62, 199],
+        );
+    });
+
+    runner.finish();
 }
 
 #[test]
