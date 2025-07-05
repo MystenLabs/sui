@@ -14462,6 +14462,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-consistent-store"
+version = "1.54.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "bincode",
+ "ouroboros 0.17.2",
+ "rocksdb",
+ "serde",
+ "sui-default-config",
+ "sui-indexer-alt-framework",
+ "tempfile",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "sui-indexer-alt-e2e-tests"
 version = "0.1.0"
 dependencies = [
