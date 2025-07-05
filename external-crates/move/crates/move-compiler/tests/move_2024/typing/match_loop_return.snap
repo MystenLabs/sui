@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/typing/match_loop_return.move:6:23
+   │  
+ 6 │               match (v) {
+   │ ╭───────────────────────^
+ 7 │ │                 255 => return 'search false,
+ 8 │ │                 0 => return 'search true,
+ 9 │ │                 _ => return 'search true,
+10 │ │             }
+   │ ╰─────────────^ Expected a value. Any code surrounding or after this expression will not be reached
+   │  
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09012]: unused 'mut' modifiers
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/macros.move:88:13
+   │
+88 │     let mut i = $start;
+   │         --- ^ The variable 'i' is never used mutably
+   │         │    
+   │         Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
