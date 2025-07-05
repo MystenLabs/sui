@@ -337,6 +337,10 @@ impl MultiSig {
         &self.sigs
     }
 
+    pub fn get_bitmap(&self) -> u16 {
+        self.bitmap
+    }
+
     pub fn get_zklogin_sigs(&self) -> Result<Vec<ZkLoginAuthenticator>, SuiError> {
         let authenticator_as_bytes: Vec<_> = self
             .sigs

@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::load_package;
-use crate::{
-    proto::google::rpc::bad_request::FieldViolation,
-    proto::rpc::v2beta2::{
-        ListPackageVersionsRequest, ListPackageVersionsResponse, PackageVersion,
-    },
-    ErrorReason, Result, RpcError, RpcService,
-};
+use crate::{ErrorReason, Result, RpcError, RpcService};
 use bytes::Bytes;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::{
+    ListPackageVersionsRequest, ListPackageVersionsResponse, PackageVersion,
+};
 use sui_types::base_types::ObjectID;
 use tap::Pipe;
 

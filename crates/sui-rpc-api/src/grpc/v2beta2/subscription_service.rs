@@ -3,11 +3,13 @@
 
 use std::pin::Pin;
 
-use crate::field_mask::FieldMaskTree;
-use crate::proto::rpc::v2beta2::subscription_service_server::SubscriptionService;
-use crate::proto::rpc::v2beta2::SubscribeCheckpointsRequest;
-use crate::proto::rpc::v2beta2::SubscribeCheckpointsResponse;
 use crate::subscription::SubscriptionServiceHandle;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc::v2beta2::subscription_service_server::SubscriptionService;
+use sui_rpc::proto::sui::rpc::v2beta2::Checkpoint;
+use sui_rpc::proto::sui::rpc::v2beta2::SubscribeCheckpointsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::SubscribeCheckpointsResponse;
 
 #[tonic::async_trait]
 impl SubscriptionService for SubscriptionServiceHandle {
@@ -36,17 +38,10 @@ impl SubscriptionService for SubscriptionServiceHandle {
             while let Some(checkpoint) = receiver.recv().await {
                 let cursor = checkpoint.checkpoint_summary.sequence_number;
 
-                let checkpoint = match super::ledger_service::get_checkpoint::checkpoint_data_to_checkpoint_proto(
+                let checkpoint = Checkpoint::merge_from(
                     checkpoint.as_ref().to_owned(), // TODO optimize so checkpoint isn't cloned
                     &read_mask
-                ) {
-                    Ok(checkpoint) => checkpoint,
-                    Err(e) => {
-                        tracing::error!("unable to convert checkpoint to proto: {e:?}");
-                        yield Err(tonic::Status::internal("unable to convert checkpoint to proto {e:?}"));
-                        break;
-                    }
-                };
+                );
 
                 let response = SubscribeCheckpointsResponse {
                     cursor: Some(cursor),

@@ -772,6 +772,12 @@ impl TransactionEventsDigest {
     }
 }
 
+impl fmt::Display for TransactionEventsDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
 impl fmt::Debug for TransactionEventsDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("TransactionEventsDigest")
@@ -835,6 +841,12 @@ impl EffectsAuxDataDigest {
 
     pub fn into_inner(self) -> [u8; 32] {
         self.0.into_inner()
+    }
+}
+
+impl fmt::Display for EffectsAuxDataDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
     }
 }
 

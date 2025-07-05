@@ -119,6 +119,10 @@ impl TransactionEffectsV1 {
     pub fn wrapped(&self) -> &[ObjectRef] {
         &self.wrapped
     }
+
+    pub fn shared_objects(&self) -> &[ObjectRef] {
+        &self.shared_objects
+    }
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV1 {

@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::move_package_service_server::MovePackageService;
-use crate::proto::rpc::v2beta2::{
+use crate::{ErrorReason, Result, RpcError, RpcService};
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::move_package_service_server::MovePackageService;
+use sui_rpc::proto::sui::rpc::v2beta2::{
     GetDatatypeRequest, GetDatatypeResponse, GetFunctionRequest, GetFunctionResponse,
     GetPackageRequest, GetPackageResponse, ListPackageVersionsRequest, ListPackageVersionsResponse,
 };
-use crate::{ErrorReason, Result, RpcError, RpcService};
 use sui_types::{base_types::ObjectID, move_package::MovePackage};
 
 mod conversions;

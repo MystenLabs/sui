@@ -3,10 +3,10 @@
 
 use std::str::FromStr;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
+use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
+use sui_rpc::merge::Merge;
 use sui_rpc_api::proto::rpc::v2beta::{BatchGetTransactionsRequest, BatchGetTransactionsResponse};
 use sui_rpc_api::{
-    field_mask::{FieldMask, FieldMaskTree, FieldMaskUtil},
-    message::MessageMergeFrom,
     proto::google::rpc::bad_request::FieldViolation,
     proto::rpc::v2beta::{
         ExecutedTransaction, GetTransactionRequest, Transaction, TransactionEffects,

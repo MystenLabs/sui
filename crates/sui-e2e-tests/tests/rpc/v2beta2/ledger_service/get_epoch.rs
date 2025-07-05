@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::sim_test;
-use sui_rpc_api::field_mask::FieldMask;
-use sui_rpc_api::field_mask::FieldMaskUtil;
-use sui_rpc_api::proto::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::GetEpochRequest;
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::GetEpochRequest;
 use test_cluster::TestClusterBuilder;
 
 #[sim_test]

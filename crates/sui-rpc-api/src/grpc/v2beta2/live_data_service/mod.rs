@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::rpc::v2beta2::live_data_service_server::LiveDataService;
-use crate::proto::rpc::v2beta2::GetBalanceRequest;
-use crate::proto::rpc::v2beta2::GetBalanceResponse;
-use crate::proto::rpc::v2beta2::GetCoinInfoRequest;
-use crate::proto::rpc::v2beta2::GetCoinInfoResponse;
-use crate::proto::rpc::v2beta2::ListBalancesRequest;
-use crate::proto::rpc::v2beta2::ListBalancesResponse;
-use crate::proto::rpc::v2beta2::ListDynamicFieldsRequest;
-use crate::proto::rpc::v2beta2::ListDynamicFieldsResponse;
-use crate::proto::rpc::v2beta2::ListOwnedObjectsRequest;
-use crate::proto::rpc::v2beta2::ListOwnedObjectsResponse;
-use crate::proto::rpc::v2beta2::SimulateTransactionRequest;
-use crate::proto::rpc::v2beta2::SimulateTransactionResponse;
 use crate::RpcService;
+use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_server::LiveDataService;
+use sui_rpc::proto::sui::rpc::v2beta2::GetBalanceRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetBalanceResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::ListBalancesRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::ListBalancesResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::ListDynamicFieldsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::ListDynamicFieldsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionResponse;
 
 mod get_balance;
 mod get_coin_info;
