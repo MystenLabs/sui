@@ -8,14 +8,13 @@ info:
 error[E04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:15:10
    │
+14 │     macro fun return_imm($f: || -> &u64) {
+   │                                    ---- Given: '&u64'
 15 │         *$f() = 0;
    │          ^^^^
    │          │
    │          Invalid mutation. Expected a mutable reference
    │          Expected: '&mut _'
-   ·
-24 │         return_imm!(|| &mut x);
-   │                        ------ Given: '&u64'
 
 error[E04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:20:24
