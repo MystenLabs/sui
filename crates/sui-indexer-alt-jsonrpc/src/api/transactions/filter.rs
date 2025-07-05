@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::HashMap, time::Duration};
+
 use anyhow::Context as _;
 use diesel::{
     expression::{
@@ -19,6 +21,7 @@ use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_indexer_alt_schema::schema::{
     tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
 };
+use sui_indexer_alt_schema::transactions::StoredTxDigest;
 use sui_json_rpc_types::{Page as PageResponse, SuiTransactionBlockResponseOptions};
 use sui_sql_macro::sql;
 use sui_types::{
@@ -394,11 +397,28 @@ async fn from_sequence_numbers(
         .transpose()
         .context("Failed to encode next cursor")?;
 
-    let digests = ctx
-        .pg_loader()
-        .load_many(rows.iter().map(|&seq| TxDigestKey(seq as u64)))
-        .await
-        .context("Failed to load transaction digests")?;
+    // Get digests from the table and retry if any of the digests are not found.
+    let retries = ctx.config().transactions.tx_digest_retry_count;
+    let retry_interval =
+        Duration::from_millis(ctx.config().transactions.tx_digest_retry_interval_ms);
+    let mut digests: HashMap<TxDigestKey, StoredTxDigest> = HashMap::new();
+    for _ in 0..retries {
+        digests = ctx
+            .pg_loader()
+            .load_many(rows.iter().map(|&seq| TxDigestKey(seq as u64)))
+            .await
+            .context("Failed to load transaction digests")?;
+
+        // Only retry if the number of digests is less than the number of rows.
+        if digests.len() == rows.len() {
+            break;
+        }
+        ctx.metrics()
+            .read_retries
+            .with_label_values(&["tx_digest"])
+            .inc();
+        tokio::time::sleep(retry_interval).await;
+    }
 
     let mut data = Vec::with_capacity(rows.len());
     for seq in rows {
