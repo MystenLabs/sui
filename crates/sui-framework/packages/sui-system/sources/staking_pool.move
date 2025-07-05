@@ -666,7 +666,7 @@ public(package) fun calculate_rewards(
     } else 0;
     reward_withdraw_amount = reward_withdraw_amount.min(pool.rewards_pool.value());
 
-    staked_amount + reward_withdraw_amount
+    reward_withdraw_amount
 }
 
 // ==== test-related functions ====

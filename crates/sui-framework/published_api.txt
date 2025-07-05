@@ -553,6 +553,9 @@ validator_address_by_pool_id
 pool_exchange_rates
 	public(package) fun
 	0x3::validator_set
+validator_by_pool_id
+	public(package) fun
+	0x3::validator_set
 next_epoch_validator_count
 	public(package) fun
 	0x3::validator_set
@@ -893,6 +896,9 @@ store_execution_time_estimates
 	public(package) fun
 	0x3::sui_system_state_inner
 validators
+	public(package) fun
+	0x3::sui_system_state_inner
+validators_mut
 	public(package) fun
 	0x3::sui_system_state_inner
 SuiSystemState

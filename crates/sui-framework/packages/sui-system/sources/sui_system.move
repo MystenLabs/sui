@@ -524,11 +524,10 @@ public(package) fun calculate_rewards(
     ctx: &TxContext,
 ): u64 {
     let system_state = self.load_system_state_mut();
-    let validator_address = system_state.validator_address_by_pool_id(&staked_sui.pool_id());
 
     system_state
-        .validators()
-        .get_active_validator_ref(validator_address)
+        .validators_mut()
+        .validator_by_pool_id(&staked_sui.pool_id())
         .get_staking_pool_ref()
         .calculate_rewards(staked_sui, ctx.epoch())
 }

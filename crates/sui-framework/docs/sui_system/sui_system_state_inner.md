@@ -68,6 +68,7 @@ title: Module `sui_system::sui_system_state_inner`
 -  [Function `extract_coin_balance`](#sui_system_sui_system_state_inner_extract_coin_balance)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_state_inner_store_execution_time_estimates)
 -  [Function `validators`](#sui_system_sui_system_state_inner_validators)
+-  [Function `validators_mut`](#sui_system_sui_system_state_inner_validators_mut)
 -  [Macro function `mul_div`](#sui_system_sui_system_state_inner_mul_div)
 
 
@@ -2771,6 +2772,30 @@ Return the current validator set
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &ValidatorSet {
     &self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_validators_mut"></a>
+
+## Function `validators_mut`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators_mut">validators_mut</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>): &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators_mut">validators_mut</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &<b>mut</b> ValidatorSet {
+    &<b>mut</b> self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
 }
 </code></pre>
 
