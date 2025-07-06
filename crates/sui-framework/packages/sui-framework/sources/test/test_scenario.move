@@ -103,6 +103,146 @@ public fun begin(sender: address): Scenario {
     }
 }
 
+/// Update the `Scenario` context to use `ids_created` as the number of IDs created
+public fun with_ids_created(
+    scenario: &mut Scenario,
+    ids_created: u64,
+): &mut Scenario {
+    let ctx = &scenario.ctx;
+    scenario.ctx = tx_context::create(
+        ctx.sender(),
+        *ctx.digest(),
+        ctx.epoch(),
+        ctx.epoch_timestamp_ms(),
+        ids_created,
+        ctx.reference_gas_price(),
+        ctx.gas_price(),
+        ctx.gas_budget(),
+        ctx.sponsor(),
+    );
+    scenario
+}
+
+/// Update the `Scenario` context to use `rgp` as the reference gas price
+public fun with_reference_gas_price(
+    scenario: &mut Scenario,
+    rgp: u64,
+): &mut Scenario {
+    let ctx = &scenario.ctx;
+    scenario.ctx = tx_context::create(
+        ctx.sender(),
+        *ctx.digest(),
+        ctx.epoch(),
+        ctx.epoch_timestamp_ms(),
+        ctx.ids_created(),
+        rgp,
+        ctx.gas_price(),
+        ctx.gas_budget(),
+        ctx.sponsor(),
+    );
+    scenario
+}
+
+/// Update the `Scenario` context to use `gas_price` as the gas price
+public fun with_gas_price(
+    scenario: &mut Scenario,
+    gas_price: u64,
+): &mut Scenario {
+    let ctx = &scenario.ctx;
+    scenario.ctx = tx_context::create(
+        ctx.sender(),
+        *ctx.digest(),
+        ctx.epoch(),
+        ctx.epoch_timestamp_ms(),
+        ctx.ids_created(),
+        ctx.reference_gas_price(),
+        gas_price,
+        ctx.gas_budget(),
+        ctx.sponsor(),
+    );
+    scenario
+}
+
+/// Update the `Scenario` context to use `gas_budget` as the gas budget
+public fun with_gas_budget(
+    scenario: &mut Scenario,
+    gas_budget: u64,
+): &mut Scenario {
+    let ctx = &scenario.ctx;
+    scenario.ctx = tx_context::create(
+        ctx.sender(),
+        *ctx.digest(),
+        ctx.epoch(),
+        ctx.epoch_timestamp_ms(),
+        ctx.ids_created(),
+        ctx.reference_gas_price(),
+        ctx.gas_price(),
+        gas_budget,
+        ctx.sponsor(),
+    );
+    scenario
+}
+
+/// Update the `Scenario` context to use `sponsor` as the transaction sponsor
+public fun with_sponsor(
+    scenario: &mut Scenario,
+    sponsor: Option<address>,
+): &mut Scenario {
+    let ctx = &scenario.ctx;
+    scenario.ctx = tx_context::create(
+        ctx.sender(),
+        *ctx.digest(),
+        ctx.epoch(),
+        ctx.epoch_timestamp_ms(),
+        ctx.ids_created(),
+        ctx.reference_gas_price(),
+        ctx.gas_price(),
+        ctx.gas_budget(),
+        sponsor,
+    );
+    scenario
+}
+
+/// Increment the epoch number in the `Scenario` context by `inc`
+public fun increment_epoch(
+    scenario: &mut Scenario,
+    inc: u64
+): &mut Scenario {
+    let ctx = &scenario.ctx;
+    scenario.ctx = tx_context::create(
+        ctx.sender(),
+        *ctx.digest(),
+        ctx.epoch() + inc,
+        ctx.epoch_timestamp_ms(),
+        ctx.ids_created(),
+        ctx.reference_gas_price(),
+        ctx.gas_price(),
+        ctx.gas_budget(),
+        ctx.sponsor(),
+    );
+    scenario
+}
+
+/// Increment the epoch timestamp in the `Scenario` context by `inc` milliseconds
+public fun increment_epoch_timestamp(
+    scenario: &mut Scenario,
+    inc: u64
+): &mut Scenario {
+    let ctx = &scenario.ctx;
+    scenario.ctx = tx_context::create(
+        ctx.sender(),
+        *ctx.digest(),
+        ctx.epoch(),
+        ctx.epoch_timestamp_ms() + inc,
+        ctx.ids_created(),
+        ctx.reference_gas_price(),
+        ctx.gas_price(),
+        ctx.gas_budget(),
+        ctx.sponsor(),
+    );
+    scenario
+}
+
 /// Advance the scenario to a new transaction where `sender` is the transaction sender
 /// All objects transferred will be moved into the inventories of the account or the global
 /// inventory. In other words, in order to access an object with one of the various "take"

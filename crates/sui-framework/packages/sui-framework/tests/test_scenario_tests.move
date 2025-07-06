@@ -1127,10 +1127,65 @@ fun test_events() {
 fun test_tx_context() {
     use sui::test_utils::assert_eq;
 
-    let mut scenario = test_scenario::begin(@0x0);
+    // check default values for context
+    let mut scenario = test_scenario::begin(@0xA);
     let ctx = scenario.ctx();
-    // values below as coming from TxContext::new(...)
+    assert_eq(ctx.sender(), @0xA);
+    assert_eq(ctx.epoch(), 0);
+    assert_eq(ctx.epoch_timestamp_ms(), 0);
+    assert!(ctx.sponsor().is_none());
+    assert_eq(ctx.reference_gas_price(), 0);
+    assert_eq(ctx.gas_price(), 0);
+    assert_eq(ctx.gas_budget(), 0);
+    assert_eq(ctx.ids_created(), 0);
+
+    // check explicit setup for context
+    scenario.next_tx(@0xB);
+    scenario
+        .increment_epoch(42)
+        .increment_epoch_timestamp(1_000_000_000)
+        .with_reference_gas_price(600)
+        .with_ids_created(3)
+        .with_gas_price(700)
+        .with_gas_budget(100_000);
+    let ctx = scenario.ctx();
+    assert_eq(ctx.sender(), @0xB);
+    assert_eq(ctx.epoch(), 42);
+    assert_eq(ctx.epoch_timestamp_ms(), 1_000_000_000);
+    assert!(ctx.sponsor().is_none());
     assert_eq(ctx.reference_gas_price(), 600);
     assert_eq(ctx.gas_price(), 700);
+    assert_eq(ctx.gas_budget(), 100_000);
+    assert_eq(ctx.ids_created(), 3);
+
+    // check that the context setup holds across transactions
+    scenario.next_tx(@0xC);
+    let ctx = scenario.ctx();
+    assert_eq(ctx.sender(), @0xC);
+    assert_eq(ctx.epoch(), 42);
+    assert_eq(ctx.epoch_timestamp_ms(), 1_000_000_000);
+    assert!(ctx.sponsor().is_none());
+    assert_eq(ctx.reference_gas_price(), 600);
+    assert_eq(ctx.gas_price(), 700);
+    assert_eq(ctx.gas_budget(), 100_000);
+    assert_eq(ctx.ids_created(), 0); // ids reset after each transaction
+
+    // add sponsor and change few values
+    scenario.next_tx(@0xC);
+    scenario
+        .with_sponsor(option::some(@0xD))
+        .with_ids_created(5)
+        .with_gas_price(800)
+        .increment_epoch_timestamp(100);
+    let ctx = scenario.ctx();
+    assert_eq(ctx.sender(), @0xC);
+    assert_eq(ctx.epoch(), 42);
+    assert_eq(ctx.epoch_timestamp_ms(), 1_000_000_100);
+    assert_eq(ctx.sponsor().extract(), @0xD);
+    assert_eq(ctx.reference_gas_price(), 600);
+    assert_eq(ctx.gas_price(), 800);
+    assert_eq(ctx.gas_budget(), 100_000);
+    assert_eq(ctx.ids_created(), 5);
+
     scenario.end();
 }
