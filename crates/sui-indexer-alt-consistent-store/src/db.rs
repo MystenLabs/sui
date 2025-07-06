@@ -4,6 +4,7 @@
 
 use std::{
     collections::BTreeMap,
+    ops::{Bound, RangeBounds},
     path::Path,
     sync::{Arc, RwLock},
 };
@@ -13,6 +14,7 @@ use rocksdb::AsColumnFamilyRef;
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::key;
+use crate::{error::Error, iter};
 
 /// Name of the column family the database adds, to manage the checkpoint watermark.
 const WATERMARK_CF: &str = "$watermark";
@@ -83,26 +85,13 @@ struct Inner {
     snapshots: BTreeMap<u64, Arc<rocksdb::Snapshot<'this>>>,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
-    #[error("BCS error: {0}")]
-    Bcs(#[from] bcs::Error),
-
-    #[error("Bincode error: {0}")]
-    Bincode(#[from] bincode::Error),
-
-    #[error("Database has no capacity for snapshots")]
-    Empty,
-
-    #[error("Internal error: {0:?}")]
-    Internal(#[from] anyhow::Error),
-
-    #[error("Checkpoint {checkpoint} not in consistent range")]
-    NotInRange { checkpoint: u64 },
-
-    #[error("Storage error: {0}")]
-    Storage(#[from] rocksdb::Error),
-}
+/// A raw iterator along with its encoded upper and lower bounds.
+#[derive(Default)]
+struct IterBounds<'d>(
+    Option<Vec<u8>>,
+    Option<Vec<u8>>,
+    Option<rocksdb::DBRawIterator<'d>>,
+);
 
 impl Db {
     /// Open the database at `path`, with the given `capacity` for snapshots.
@@ -235,6 +224,60 @@ impl Db {
             .collect())
     }
 
+    /// Create a forward iterator over the values in column family `cf` at the given `checkpoint`,
+    /// optionally bounding the keys on either side by the given `range`. A forward iterator yields
+    /// keys in ascending bincoded lexicographic order.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn iter<K, V>(
+        &self,
+        checkpoint: u64,
+        cf: &impl AsColumnFamilyRef,
+        range: impl RangeBounds<K>,
+    ) -> Result<iter::FwdIter<'_, K, V>, Error>
+    where
+        K: Serialize,
+    {
+        let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
+            return Ok(iter::FwdIter::new(None));
+        };
+
+        if let Some(lo) = &lo {
+            inner.seek(lo);
+        } else {
+            inner.seek_to_first();
+        }
+
+        Ok(iter::FwdIter::new(Some(inner)))
+    }
+
+    /// Create a reverse iterator over the values in column family `cf` at the given `checkpoint`,
+    /// optionally bounding the keys on either side by the given `range`. A reverse iterator yields
+    /// keys in descending bincoded lexicographic order.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn iter_rev<K, V>(
+        &self,
+        checkpoint: u64,
+        cf: &impl AsColumnFamilyRef,
+        range: impl RangeBounds<K>,
+    ) -> Result<iter::RevIter<'_, K, V>, Error>
+    where
+        K: Serialize,
+    {
+        let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
+            return Ok(iter::RevIter::new(None));
+        };
+
+        if let Some(hi) = &hi {
+            inner.seek_for_prev(hi);
+        } else {
+            inner.seek_to_last();
+        }
+
+        Ok(iter::RevIter::new(Some(inner)))
+    }
+
     #[inline]
     fn at_snapshot(&self, checkpoint: u64) -> Result<Arc<rocksdb::Snapshot<'_>>, Error> {
         self.0.read().expect("poisoned").with(|f| {
@@ -252,6 +295,72 @@ impl Db {
 
             Ok(snapshot)
         })
+    }
+
+    #[inline]
+    fn iter_raw<K>(
+        &self,
+        checkpoint: u64,
+        cf: &impl AsColumnFamilyRef,
+        range: impl RangeBounds<K>,
+    ) -> Result<IterBounds<'_>, Error>
+    where
+        K: Serialize,
+    {
+        let s = self.at_snapshot(checkpoint)?;
+
+        let lo = match range.start_bound() {
+            Bound::Unbounded => None,
+            Bound::Included(start) => Some(key::encode(start)),
+            Bound::Excluded(start) => {
+                let mut start = key::encode(start);
+                if !key::next(&mut start) {
+                    return Ok(IterBounds::default());
+                }
+                Some(start)
+            }
+        };
+
+        let hi = match range.end_bound() {
+            Bound::Unbounded => None,
+            Bound::Included(end) => {
+                let mut end = key::encode(end);
+                key::next(&mut end).then_some(end)
+            }
+            Bound::Excluded(end) => {
+                let end = key::encode(end);
+                if end.iter().all(|&b| b == 0) {
+                    return Ok(IterBounds::default());
+                }
+                Some(end)
+            }
+        };
+
+        let mut opts = rocksdb::ReadOptions::default();
+
+        if let Some(lo) = &lo {
+            opts.set_iterate_lower_bound(lo.clone());
+        }
+
+        if let Some(hi) = &hi {
+            opts.set_iterate_upper_bound(hi.clone());
+        }
+
+        // SAFETY: Decouple the lifetime of the DBRawIterator from the lifetime of the reference
+        // into the snapshot that it came from.
+        //
+        // The lifetime annotation is used to couple the lifetime of the iterator with that of the
+        // database it is from, (via its snapshot). The iterator internally keeps the snapshot it
+        // is from alive, so it is safe to extend its lifetime to that of `self` (which owns the
+        // database, through `Inner`), using `transmute`.
+        //
+        // The lifetime annotation on Snapshot couples its lifetime with the DB it came from,
+        // which is owned by `self` through `Inner`, so it is safe to extend the lifetime of
+        // the column family from that of the read guard, to that of `self` using `transmute`.
+        let inner: rocksdb::DBRawIterator<'_> =
+            unsafe { std::mem::transmute(s.raw_iterator_cf_opt(cf, opts)) };
+
+        Ok(IterBounds(lo, hi, Some(inner)))
     }
 }
 
@@ -535,5 +644,442 @@ mod tests {
             db.snapshot(1);
             assert_eq!(db.get(1, &cf, &42u64).unwrap(), Some(43u64));
         }
+    }
+
+    #[test]
+    fn test_forward_iteration() {
+        use Bound::{Excluded as E, Unbounded as U};
+
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
+        }
+
+        db.write("test", 0, batch).unwrap();
+        db.snapshot(0);
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
+            "full range"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 4..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(4, 5), (6, 7), (8, 9)],
+            "exact match, inclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 3..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(4, 5), (6, 7), (8, 9)],
+            "inexact match, inclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, (E(4), U)).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(6, 7), (8, 9)],
+            "exact match, exclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, (E(3), U)).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(4, 5), (6, 7), (8, 9)],
+            "inexact match, exclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 0..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
+            "redundant inclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 100..).unwrap().collect();
+        assert_eq!(actual.unwrap(), vec![], "empty inclusive lowerbound");
+
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(0, &cf, (E(u64::MAX), U)).unwrap().collect();
+        assert_eq!(actual.unwrap(), vec![], "vacuous exclusive lowerbound");
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..=4).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5)],
+            "exact match, inclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..=5).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5)],
+            "inexact match, inclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..4).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3)],
+            "exact match, exclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..5).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5)],
+            "inexact match, exclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..0).unwrap().collect();
+        assert_eq!(actual.unwrap(), vec![], "vacuous exclusive upperbound");
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..100).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
+            "non-filtering exclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(0, &cf, ..=u64::MAX).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
+            "redundant inclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 0..4).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3)],
+            "bounded above and below"
+        );
+    }
+
+    #[test]
+    fn test_forward_iteration_seek() {
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
+        }
+
+        db.write("test", 0, batch).unwrap();
+        db.snapshot(0);
+
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        iter.seek(&4u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "exact seek");
+
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        iter.seek(&3u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "inexact seek");
+
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
+        assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
+        iter.seek(&2u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (2, 3), "rewind");
+
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
+        assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
+        iter.seek(&7u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (8, 9), "fast forward");
+
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4..8).unwrap();
+        iter.seek(&1u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "underflow");
+
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4..8).unwrap();
+        iter.seek(&8u64);
+        assert!(iter.next().is_none(), "overflow");
+    }
+
+    #[test]
+    fn test_iteration_consistency() {
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
+        }
+
+        db.write("test", 0, batch).unwrap();
+        db.snapshot(0);
+
+        // Create an iterator from the first snapshot.
+        let mut i0: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+
+        // Start iterating through it.
+        let kv0: Result<Vec<(u64, u64)>, Error> = (&mut i0).take(3).collect();
+        assert_eq!(kv0.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "i0: first 3");
+
+        // Write some more data, in the next snapshot.
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
+        }
+
+        db.write("test", 1, batch).unwrap();
+        db.snapshot(1);
+
+        // Create an iterator from the next snapshot.
+        let mut i1: iter::FwdIter<u64, u64> = db.iter(1, &cf, ..).unwrap();
+
+        // Finish iterating through the first iterator.
+        let kv0: Result<Vec<(u64, u64)>, Error> = (&mut i0).collect();
+        assert_eq!(kv0.unwrap(), vec![(6, 7), (8, 9)], "i0: rest");
+
+        // Start iterating through the second iterator.
+        let kv1: Result<Vec<(u64, u64)>, Error> = (&mut i1).take(3).collect();
+        assert_eq!(kv1.unwrap(), vec![(0, 1), (1, 0), (2, 3)], "i1: first 3");
+
+        // Delete the data from the original batch.
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.delete_cf(&cf, key::encode(&i));
+        }
+
+        db.write("test", 2, batch).unwrap();
+        db.snapshot(2);
+
+        // Finish iterating through the second iterator.
+        let kv1: Result<Vec<(u64, u64)>, Error> = (&mut i1).collect();
+        assert_eq!(
+            kv1.unwrap(),
+            vec![(3, 2), (4, 5), (5, 4), (6, 7), (7, 6), (8, 9), (9, 8)],
+            "i1: rest"
+        );
+
+        // Create new iterators at each snapshot, and ensure they still yield the same results.
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..).unwrap().collect();
+        let expect: Vec<_> = (0..10).step_by(2).map(|i| (i, i + 1)).collect();
+        assert_eq!(actual.unwrap(), expect, "i0: full");
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(1, &cf, ..).unwrap().collect();
+        let expect: Vec<_> = (0..10)
+            .step_by(2)
+            .flat_map(|i| [(i, i + 1), (i + 1, i)])
+            .collect();
+        assert_eq!(actual.unwrap(), expect, "i1: full");
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(2, &cf, ..).unwrap().collect();
+        let expect: Vec<_> = (0..10).step_by(2).map(|i| (i + 1, i)).collect();
+        assert_eq!(actual.unwrap(), expect, "i2: full");
+    }
+
+    #[test]
+    fn test_iteration_snapshot_keepalive() {
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
+        }
+
+        db.write("test", 0, batch).unwrap();
+        db.snapshot(0);
+
+        // Create an iterator from the first snapshot.
+        let iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+
+        // Create more snapshots...
+        for i in 1..5 {
+            db.snapshot(i);
+        }
+
+        // ...such that the first snapshot gets dropped.
+        assert!(matches!(
+            db.get::<u64, u64>(0, &cf, &0u64).unwrap_err(),
+            Error::NotInRange { checkpoint: 0 },
+        ));
+
+        // Iterate through the iterator, which should have kept the snapshot alive.
+        let actual: Result<Vec<(u64, u64)>, Error> = iter.collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
+        );
+    }
+
+    #[test]
+    fn test_reverse_iteration() {
+        use Bound::{Excluded as E, Unbounded as U};
+
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
+        }
+
+        db.write("test", 0, batch).unwrap();
+        db.snapshot(0);
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6), (5, 4), (3, 2), (1, 0)],
+            "full range"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 5..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6), (5, 4)],
+            "exact match, inclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 4..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6), (5, 4)],
+            "inexact match, inclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, (E(5), U)).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6)],
+            "exact match, exclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, (E(4), U)).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6), (5, 4)],
+            "inexact match, exclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 0..).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6), (5, 4), (3, 2), (1, 0)],
+            "redundant inclusive lowerbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 100..).unwrap().collect();
+        assert_eq!(actual.unwrap(), vec![], "empty inclusive lowerbound");
+
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, (E(u64::MAX), U)).unwrap().collect();
+        assert_eq!(actual.unwrap(), vec![], "vacuous exclusive lowerbound");
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..=5).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(5, 4), (3, 2), (1, 0)],
+            "exact match, inclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..=6).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(5, 4), (3, 2), (1, 0)],
+            "inexact match, inclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..5).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(3, 2), (1, 0)],
+            "exact match, exclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..6).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(5, 4), (3, 2), (1, 0)],
+            "inexact match, exclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..0).unwrap().collect();
+        assert_eq!(actual.unwrap(), vec![], "vacuous exclusive upperbound");
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..100).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6), (5, 4), (3, 2), (1, 0)],
+            "non-filtering exclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, ..=u64::MAX).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(9, 8), (7, 6), (5, 4), (3, 2), (1, 0)],
+            "redundant inclusive upperbound"
+        );
+
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 0..5).unwrap().collect();
+        assert_eq!(
+            actual.unwrap(),
+            vec![(3, 2), (1, 0)],
+            "bounded above and below"
+        );
+    }
+
+    #[test]
+    fn test_reverse_iteration_seek() {
+        let d = tempfile::tempdir().unwrap();
+        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let cf = db.cf("test").unwrap();
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for i in (0u64..10).step_by(2) {
+            batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
+        }
+
+        db.write("test", 0, batch).unwrap();
+        db.snapshot(0);
+
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        iter.seek(&5u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "exact seek");
+
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        iter.seek(&6u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "inexact seek");
+
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
+        assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
+        iter.seek(&7u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (7, 6), "rewind");
+
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
+        assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
+        iter.seek(&1u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (1, 0), "fast forward");
+
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3..7).unwrap();
+        iter.seek(&9u64);
+        assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "underflow");
+
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3..7).unwrap();
+        iter.seek(&1u64);
+        assert!(iter.next().is_none(), "overflow");
     }
 }
