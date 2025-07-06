@@ -31,7 +31,7 @@ mod slow_future_monitor;
 #[cfg(test)]
 mod test_utils;
 
-#[derive(clap::Args, Clone, Debug)]
+#[derive(clap::Args, Clone, Debug, Default)]
 #[group(required = true)]
 pub struct ClientArgs {
     /// Remote Store to fetch checkpoints from.
@@ -226,10 +226,7 @@ mod tests {
         IngestionService::new(
             ClientArgs {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
-                local_ingestion_path: None,
-                rpc_api_url: None,
-                rpc_username: None,
-                rpc_password: None,
+                ..Default::default()
             },
             IngestionConfig {
                 checkpoint_buffer_size,
