@@ -23,7 +23,7 @@ const WATERMARK_CF: &str = "$watermark";
 /// specify the checkpoint they want to read from). Keys and values are encoded (using Bincode and
 /// BCS respectively) to provide a type-safe API.
 ///
-/// ## Watermarks
+/// ## Watermarks and Atomicity
 ///
 /// Every write is associated with a watermark -- the checkpoint that the write corresponds to and
 /// a label for the pipeline that the write is associated with -- which is written atomically to
@@ -49,11 +49,6 @@ const WATERMARK_CF: &str = "$watermark";
 /// ## Persistence
 ///
 /// Writes and watermarks persist between sessions, but snapshots do not.
-///
-/// ## Atomicity
-///
-/// Writes are applied atomically, with a watermark update attached, to ensure updates remain
-/// fault-tolerant in the event of a crash.
 ///
 /// ## Concurrency
 ///
@@ -104,7 +99,7 @@ impl Db {
         path: impl AsRef<Path>,
         mut options: rocksdb::Options,
         cfs: impl IntoIterator<Item = (&'c str, rocksdb::Options)>,
-    ) -> Result<Arc<Self>, Error> {
+    ) -> Result<Self, Error> {
         // Add a column family for watermarks, which are managed by the database.
         let mut cfs: Vec<_> = cfs.into_iter().collect();
         cfs.push((WATERMARK_CF, rocksdb::Options::default()));
@@ -118,7 +113,7 @@ impl Db {
             BTreeMap::new(),
         )?;
 
-        Ok(Arc::new(Self(RwLock::new(inner))))
+        Ok(Self(RwLock::new(inner)))
     }
 
     /// Write a batch of updates to the database atomically, along with a watermark with key
@@ -174,6 +169,8 @@ impl Db {
     }
 
     /// Point look-up at `checkpoint` for the given `key`, in the column family `cf`.
+    ///
+    /// Fails if the database does not have a snapshot at `checkpoint`.
     pub(crate) fn get<K, V>(
         &self,
         checkpoint: u64,
@@ -195,6 +192,8 @@ impl Db {
     }
 
     /// Multi-point look-up at `checkpoint` for the given `key`, in the column family `cf`.
+    ///
+    /// Fails if the database does not have a snapshot at `checkpoint`.
     pub(crate) fn multi_get<'k, K, V>(
         &self,
         checkpoint: u64,
@@ -229,14 +228,14 @@ impl Db {
     /// keys in ascending bincoded lexicographic order.
     ///
     /// This operation can fail if the database does not have a snapshot at `checkpoint`.
-    pub(crate) fn iter<K, V>(
+    pub(crate) fn iter<J, K, V>(
         &self,
         checkpoint: u64,
         cf: &impl AsColumnFamilyRef,
-        range: impl RangeBounds<K>,
+        range: impl RangeBounds<J>,
     ) -> Result<iter::FwdIter<'_, K, V>, Error>
     where
-        K: Serialize,
+        J: Serialize,
     {
         let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
             return Ok(iter::FwdIter::new(None));
@@ -256,14 +255,14 @@ impl Db {
     /// keys in descending bincoded lexicographic order.
     ///
     /// This operation can fail if the database does not have a snapshot at `checkpoint`.
-    pub(crate) fn iter_rev<K, V>(
+    pub(crate) fn iter_rev<J, K, V>(
         &self,
         checkpoint: u64,
         cf: &impl AsColumnFamilyRef,
-        range: impl RangeBounds<K>,
+        range: impl RangeBounds<J>,
     ) -> Result<iter::RevIter<'_, K, V>, Error>
     where
-        K: Serialize,
+        J: Serialize,
     {
         let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
             return Ok(iter::RevIter::new(None));
@@ -298,14 +297,14 @@ impl Db {
     }
 
     #[inline]
-    fn iter_raw<K>(
+    fn iter_raw<J>(
         &self,
         checkpoint: u64,
         cf: &impl AsColumnFamilyRef,
-        range: impl RangeBounds<K>,
+        range: impl RangeBounds<J>,
     ) -> Result<IterBounds<'_>, Error>
     where
-        K: Serialize,
+        J: Serialize,
     {
         let s = self.at_snapshot(checkpoint)?;
 
@@ -662,87 +661,90 @@ mod tests {
         db.write("test", 0, batch).unwrap();
         db.snapshot(0);
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(0, &cf, (U::<u64>, U)).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
             "full range"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 4..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 4u64..).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(4, 5), (6, 7), (8, 9)],
             "exact match, inclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 3..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 3u64..).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(4, 5), (6, 7), (8, 9)],
             "inexact match, inclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, (E(4), U)).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(0, &cf, (E(4u64), U)).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(6, 7), (8, 9)],
             "exact match, exclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, (E(3), U)).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(0, &cf, (E(3u64), U)).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(4, 5), (6, 7), (8, 9)],
             "inexact match, exclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 0..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 0u64..).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
             "redundant inclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 100..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 100u64..).unwrap().collect();
         assert_eq!(actual.unwrap(), vec![], "empty inclusive lowerbound");
 
         let actual: Result<Vec<(u64, u64)>, Error> =
             db.iter(0, &cf, (E(u64::MAX), U)).unwrap().collect();
         assert_eq!(actual.unwrap(), vec![], "vacuous exclusive lowerbound");
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..=4).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..=4u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3), (4, 5)],
             "exact match, inclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..=5).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..=5u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3), (4, 5)],
             "inexact match, inclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..4).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..4u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3)],
             "exact match, exclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..5).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..5u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3), (4, 5)],
             "inexact match, exclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..0).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..0u64).unwrap().collect();
         assert_eq!(actual.unwrap(), vec![], "vacuous exclusive upperbound");
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..100).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..100u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)],
@@ -757,7 +759,7 @@ mod tests {
             "redundant inclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 0..4).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, 0u64..4).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(0, 1), (2, 3)],
@@ -767,6 +769,8 @@ mod tests {
 
     #[test]
     fn test_forward_iteration_seek() {
+        use Bound::Unbounded as U;
+
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
         let cf = db.cf("test").unwrap();
@@ -779,37 +783,39 @@ mod tests {
         db.write("test", 0, batch).unwrap();
         db.snapshot(0);
 
-        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(&4u64);
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "exact seek");
 
-        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(&3u64);
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "inexact seek");
 
-        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
         iter.seek(&2u64);
         assert_eq!(iter.next().unwrap().unwrap(), (2, 3), "rewind");
 
-        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
         iter.seek(&7u64);
         assert_eq!(iter.next().unwrap().unwrap(), (8, 9), "fast forward");
 
-        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4..8).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4u64..8).unwrap();
         iter.seek(&1u64);
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "underflow");
 
-        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4..8).unwrap();
+        let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4u64..8).unwrap();
         iter.seek(&8u64);
         assert!(iter.next().is_none(), "overflow");
     }
 
     #[test]
     fn test_iteration_consistency() {
+        use Bound::Unbounded as U;
+
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
         let cf = db.cf("test").unwrap();
@@ -823,7 +829,7 @@ mod tests {
         db.snapshot(0);
 
         // Create an iterator from the first snapshot.
-        let mut i0: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let mut i0: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
 
         // Start iterating through it.
         let kv0: Result<Vec<(u64, u64)>, Error> = (&mut i0).take(3).collect();
@@ -839,7 +845,7 @@ mod tests {
         db.snapshot(1);
 
         // Create an iterator from the next snapshot.
-        let mut i1: iter::FwdIter<u64, u64> = db.iter(1, &cf, ..).unwrap();
+        let mut i1: iter::FwdIter<u64, u64> = db.iter(1, &cf, (U::<u64>, U)).unwrap();
 
         // Finish iterating through the first iterator.
         let kv0: Result<Vec<(u64, u64)>, Error> = (&mut i0).collect();
@@ -867,24 +873,29 @@ mod tests {
         );
 
         // Create new iterators at each snapshot, and ensure they still yield the same results.
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(0, &cf, ..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(0, &cf, (U::<u64>, U)).unwrap().collect();
         let expect: Vec<_> = (0..10).step_by(2).map(|i| (i, i + 1)).collect();
         assert_eq!(actual.unwrap(), expect, "i0: full");
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(1, &cf, ..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(1, &cf, (U::<u64>, U)).unwrap().collect();
         let expect: Vec<_> = (0..10)
             .step_by(2)
             .flat_map(|i| [(i, i + 1), (i + 1, i)])
             .collect();
         assert_eq!(actual.unwrap(), expect, "i1: full");
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter(2, &cf, ..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter(2, &cf, (U::<u64>, U)).unwrap().collect();
         let expect: Vec<_> = (0..10).step_by(2).map(|i| (i + 1, i)).collect();
         assert_eq!(actual.unwrap(), expect, "i2: full");
     }
 
     #[test]
     fn test_iteration_snapshot_keepalive() {
+        use Bound::Unbounded as U;
+
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
         let cf = db.cf("test").unwrap();
@@ -898,7 +909,7 @@ mod tests {
         db.snapshot(0);
 
         // Create an iterator from the first snapshot.
-        let iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, ..).unwrap();
+        let iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
 
         // Create more snapshots...
         for i in 1..5 {
@@ -935,21 +946,22 @@ mod tests {
         db.write("test", 0, batch).unwrap();
         db.snapshot(0);
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, (U::<u64>, U)).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(9, 8), (7, 6), (5, 4), (3, 2), (1, 0)],
             "full range"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 5..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 5u64..).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(9, 8), (7, 6), (5, 4)],
             "exact match, inclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 4..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 4u64..).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(9, 8), (7, 6), (5, 4)],
@@ -957,7 +969,7 @@ mod tests {
         );
 
         let actual: Result<Vec<(u64, u64)>, Error> =
-            db.iter_rev(0, &cf, (E(5), U)).unwrap().collect();
+            db.iter_rev(0, &cf, (E(5u64), U)).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(9, 8), (7, 6)],
@@ -965,59 +977,63 @@ mod tests {
         );
 
         let actual: Result<Vec<(u64, u64)>, Error> =
-            db.iter_rev(0, &cf, (E(4), U)).unwrap().collect();
+            db.iter_rev(0, &cf, (E(4u64), U)).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(9, 8), (7, 6), (5, 4)],
             "inexact match, exclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 0..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 0u64..).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(9, 8), (7, 6), (5, 4), (3, 2), (1, 0)],
             "redundant inclusive lowerbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 100..).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, 100u64..).unwrap().collect();
         assert_eq!(actual.unwrap(), vec![], "empty inclusive lowerbound");
 
         let actual: Result<Vec<(u64, u64)>, Error> =
             db.iter_rev(0, &cf, (E(u64::MAX), U)).unwrap().collect();
         assert_eq!(actual.unwrap(), vec![], "vacuous exclusive lowerbound");
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..=5).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, ..=5u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(5, 4), (3, 2), (1, 0)],
             "exact match, inclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..=6).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, ..=6u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(5, 4), (3, 2), (1, 0)],
             "inexact match, inclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..5).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..5u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(3, 2), (1, 0)],
             "exact match, exclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..6).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..6u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(5, 4), (3, 2), (1, 0)],
             "inexact match, exclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..0).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..0u64).unwrap().collect();
         assert_eq!(actual.unwrap(), vec![], "vacuous exclusive upperbound");
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, ..100).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, ..100u64).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(9, 8), (7, 6), (5, 4), (3, 2), (1, 0)],
@@ -1032,7 +1048,8 @@ mod tests {
             "redundant inclusive upperbound"
         );
 
-        let actual: Result<Vec<(u64, u64)>, Error> = db.iter_rev(0, &cf, 0..5).unwrap().collect();
+        let actual: Result<Vec<(u64, u64)>, Error> =
+            db.iter_rev(0, &cf, 0u64..5).unwrap().collect();
         assert_eq!(
             actual.unwrap(),
             vec![(3, 2), (1, 0)],
@@ -1042,6 +1059,8 @@ mod tests {
 
     #[test]
     fn test_reverse_iteration_seek() {
+        use Bound::Unbounded as U;
+
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
         let cf = db.cf("test").unwrap();
@@ -1054,31 +1073,31 @@ mod tests {
         db.write("test", 0, batch).unwrap();
         db.snapshot(0);
 
-        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(&5u64);
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "exact seek");
 
-        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         iter.seek(&6u64);
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "inexact seek");
 
-        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
         iter.seek(&7u64);
         assert_eq!(iter.next().unwrap().unwrap(), (7, 6), "rewind");
 
-        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, ..).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
         iter.seek(&1u64);
         assert_eq!(iter.next().unwrap().unwrap(), (1, 0), "fast forward");
 
-        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3..7).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3u64..7).unwrap();
         iter.seek(&9u64);
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "underflow");
 
-        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3..7).unwrap();
+        let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3u64..7).unwrap();
         iter.seek(&1u64);
         assert!(iter.next().is_none(), "overflow");
     }
