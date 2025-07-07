@@ -9,7 +9,7 @@ use crate::file_format::{
     StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
     VariantDefinition, VariantHandleIndex, VariantInstantiationHandleIndex, VariantTag, Visibility,
 };
-use indexmap::IndexMap;
+use indexmap::{Equivalent, IndexMap};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -126,6 +126,7 @@ pub struct Struct<S: Hash + Eq> {
     // Defining module name
     pub defining_module: ModuleId<S>,
     pub name: S,
+    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub fields: Fields<S>,
@@ -172,6 +173,7 @@ pub struct Enum<S: Hash + Eq> {
     // Defining module name
     pub defining_module: ModuleId<S>,
     pub name: S,
+    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub variants: IndexMap<S, Rc<Variant<S>>>,
@@ -830,6 +832,7 @@ impl<S: Hash + Eq> Struct<S> {
         Struct {
             defining_module,
             name,
+            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             fields,
@@ -846,6 +849,7 @@ impl<S: Hash + Eq> Struct<S> {
         let Self {
             defining_module,
             name,
+            datatype,
             abilities,
             type_parameters,
             fields,
@@ -972,6 +976,7 @@ impl<S: Hash + Eq> Function<S> {
             is_entry: def.is_entry,
             type_parameters: fhandle.type_parameters.clone(),
             parameters: tables.signatures[fhandle.parameters.0 as usize].clone(),
+            locals,
             return_: tables.signatures[fhandle.return_.0 as usize].clone(),
             code_included: include_code,
             locals,
@@ -995,6 +1000,7 @@ impl<S: Hash + Eq> Function<S> {
             is_entry,
             type_parameters,
             parameters,
+            locals,
             return_,
             code_included,
             locals: _,
@@ -1010,6 +1016,7 @@ impl<S: Hash + Eq> Function<S> {
             && is_entry == &other.is_entry
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
+            && locals == &other.locals
             && return_ == &other.return_
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
@@ -1031,7 +1038,6 @@ impl<S: Hash + Eq> Enum<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.enum_handle);
-
         let name = pool.intern(m.identifier_at(handle.name));
 
         let defining_module_handle = m.module_handle_at(handle.module);
@@ -1053,6 +1059,7 @@ impl<S: Hash + Eq> Enum<S> {
         Enum {
             defining_module,
             name,
+            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             variants,
@@ -1065,6 +1072,7 @@ impl<S: Hash + Eq> Enum<S> {
         let Self {
             defining_module,
             name,
+            datatype,
             abilities,
             type_parameters,
             variants,
