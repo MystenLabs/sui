@@ -27,6 +27,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::str::FromStr;
 use std::{convert::TryInto, env};
+use sui_test_transaction_builder::TestTransactionBuilder;
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
@@ -6698,4 +6699,55 @@ async fn test_single_authority_reconfigure() {
     assert_eq!(state.epoch_store_for_testing().epoch(), 0);
     state.reconfigure_for_testing().await;
     assert_eq!(state.epoch_store_for_testing().epoch(), 1);
+}
+
+#[tokio::test]
+async fn test_insufficient_balance_for_withdraw_early_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let state = TestAuthorityBuilder::new()
+        .with_starting_objects(&[gas_object])
+        .build()
+        .await;
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+
+    let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, 1000)
+        .transfer_sui(None, sender)
+        .build();
+
+    let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
+
+    // Create an execution environment with insufficient balance status
+    let mut execution_env =
+        ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath);
+    execution_env.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+
+    // Test that the transaction fails with InsufficientBalanceForWithdraw error
+    let result = state
+        .try_execute_immediately(&certificate, execution_env, &epoch_store)
+        .await
+        .unwrap();
+
+    let (effects, execution_error) = result;
+
+    // Check that we got an execution error due to insufficient balance
+    assert!(execution_error.is_some());
+    let error = execution_error.unwrap();
+    assert_eq!(
+        error.kind(),
+        &ExecutionFailureStatus::InsufficientBalanceForWithdraw
+    );
+
+    // Check that the transaction status shows failure
+    assert!(effects.status().is_err());
+    if let ExecutionStatus::Failure { error, .. } = effects.status() {
+        assert_eq!(
+            error,
+            &ExecutionFailureStatus::InsufficientBalanceForWithdraw
+        );
+    } else {
+        panic!("Expected execution status to be Failure");
+    }
 }

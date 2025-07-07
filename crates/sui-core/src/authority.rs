@@ -1803,6 +1803,7 @@ impl AuthorityState {
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        insufficient_balance_for_withdraw: bool,
     ) -> SuiResult<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
@@ -1836,6 +1837,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            insufficient_balance_for_withdraw,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -1955,6 +1957,7 @@ impl AuthorityState {
             input_objects,
             None,
             epoch_store,
+            false, // insufficient_balance_for_withdraw - not applicable in this context
         )?;
         Ok((transaction_outputs, execution_error_opt))
     }
@@ -2093,6 +2096,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            false, // insufficient_balance_for_withdraw
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2298,6 +2303,8 @@ impl AuthorityState {
             &transaction.digest(),
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            false, // insufficient_balance_for_withdraw
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2495,6 +2502,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            false, // insufficient_balance_for_withdraw
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -5481,6 +5490,7 @@ impl AuthorityState {
             input_objects,
             None,
             epoch_store,
+            false, // insufficient_balance_for_withdraw - not applicable in this test context
         )?;
         let system_obj = get_sui_system_state(&transaction_outputs.written)
             .expect("change epoch tx must write to system object");
