@@ -53,9 +53,6 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::TransactionDataAPI;
-use sui_types::transaction::TransactionKey;
-use sui_types::transaction::TransactionKind;
 use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
 use tokio::sync::oneshot;
@@ -850,12 +847,6 @@ impl SuiNode {
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
         let validator_components = if state.is_validator(&epoch_store) {
-            {
-                let state = state.clone();
-                let epoch_store = epoch_store.clone();
-                spawn_monitored_task!(Self::recover_missing_tx_keys(&state, &epoch_store));
-            }
-
             let (components, _) = futures::join!(
                 Self::construct_validator_components(
                     config.clone(),
@@ -931,89 +922,6 @@ impl SuiNode {
         });
 
         Ok(node)
-    }
-
-    async fn recover_missing_tx_keys(
-        state: &Arc<AuthorityState>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        info!("recovering all missing tx keys");
-
-        let Some(last_built_checkpoint) =
-            epoch_store.last_built_checkpoint_builder_summary().unwrap()
-        else {
-            info!("no last built checkpoint found");
-            return;
-        };
-
-        let first_sequence_number = last_built_checkpoint.summary.sequence_number;
-
-        let Some(last_sequence_number) = state
-            .checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap()
-        else {
-            error!("no last executed checkpoint found");
-            return;
-        };
-
-        if first_sequence_number > last_sequence_number {
-            warn!("all executed checkpoints have already been built");
-            return;
-        }
-
-        let cache = state.get_transaction_cache_reader();
-        info!(
-            "recovering tx keys for checkpoints {}..={}",
-            first_sequence_number, last_sequence_number
-        );
-        for sequence_number in first_sequence_number..=last_sequence_number {
-            tokio::task::yield_now().await;
-            info!("processing checkpoint {}", sequence_number);
-            let Some(checkpoint) = state
-                .checkpoint_store
-                .get_checkpoint_by_sequence_number(sequence_number)
-                .unwrap()
-            else {
-                error!("checkpoint {} not found", sequence_number);
-                continue;
-            };
-
-            let Some(checkpoint_contents) = state
-                .checkpoint_store
-                .get_checkpoint_contents(&checkpoint.content_digest)
-                .unwrap()
-            else {
-                error!(
-                    "checkpoint contents not found for checkpoint {}",
-                    sequence_number
-                );
-                continue;
-            };
-
-            let tx_digests = checkpoint_contents
-                .iter()
-                .map(|tx| tx.transaction)
-                .collect::<Vec<_>>();
-
-            let transactions = cache.multi_get_transaction_blocks(&tx_digests);
-
-            for tx in transactions.iter().flatten() {
-                let data = tx.transaction_data();
-                if matches!(data.kind(), TransactionKind::RandomnessStateUpdate(_)) {
-                    let key = tx.key();
-                    if matches!(key, TransactionKey::Digest(_)) {
-                        error!("randomness state update transaction should not have digest key");
-                        continue;
-                    }
-
-                    info!("inserting tx key {:?}", key);
-                    epoch_store
-                        .insert_tx_key_only_for_recovery(&key, tx.digest())
-                        .unwrap();
-                }
-            }
-        }
     }
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
