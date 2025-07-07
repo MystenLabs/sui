@@ -1904,7 +1904,7 @@ Returns true if the provided staking pool is preactive at the provided epoch.
         total_sui_withdraw_amount - staked_amount
     } <b>else</b> 0;
     reward_withdraw_amount = reward_withdraw_amount.min(pool.rewards_pool.value());
-    staked_amount + reward_withdraw_amount
+    reward_withdraw_amount
 }
 </code></pre>
 
