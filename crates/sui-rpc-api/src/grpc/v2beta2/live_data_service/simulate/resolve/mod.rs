@@ -81,6 +81,7 @@ pub fn resolve_transaction(
         &ptb.inputs,
         commands,
         unresolved_transaction.gas_payment.as_ref(),
+        unresolved_transaction.expiration.as_ref(),
     )
 }
 
@@ -159,6 +160,7 @@ fn resolve_unresolved_transaction(
     unresolved_inputs: &[sui_rpc::proto::sui::rpc::v2beta2::Input],
     commands: Vec<Command>,
     gas_payment: Option<&sui_rpc::proto::sui::rpc::v2beta2::GasPayment>,
+    expiration: Option<&sui_rpc::proto::sui::rpc::v2beta2::TransactionExpiration>,
 ) -> Result<TransactionData> {
     let gas_data = if let Some(unresolved_gas_payment) = gas_payment {
         let payment = unresolved_gas_payment
@@ -185,8 +187,15 @@ fn resolve_unresolved_transaction(
         }
     };
 
-    //TODO handle expiration unresolved_transaction.expiration.into();
-    let expiration = sui_types::transaction::TransactionExpiration::None;
+    let expiration = expiration
+        .map(sui_types::transaction::TransactionExpiration::try_from)
+        .transpose()
+        .map_err(|e| {
+            FieldViolation::new("expiration")
+                .with_description(e)
+                .with_reason(ErrorReason::FieldInvalid)
+        })?
+        .unwrap_or(sui_types::transaction::TransactionExpiration::None);
     let ptb = resolve_ptb(reader, called_packages, unresolved_inputs, commands)?;
     Ok(TransactionData::V1(
         sui_types::transaction::TransactionDataV1 {
