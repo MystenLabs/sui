@@ -12,9 +12,7 @@ Response: {
         {
           "digest": "EoFwLKRy23XKLkWZbBLiqjTV2vsKPsmpW6dV2caK8ZDH",
           "sender": null,
-          "signatures": [
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-          ],
+          "signatures": [],
           "gasInput": {
             "gasSponsor": {
               "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -1481,9 +1479,7 @@ Response: {
         {
           "digest": "DPq7c2A5SyX36jGrNW6QNstAzSxtFPai1SZj4eF7oFDR",
           "sender": null,
-          "signatures": [
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-          ],
+          "signatures": [],
           "gasInput": {
             "gasSponsor": {
               "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -1570,9 +1566,7 @@ Response: {
         {
           "digest": "7DAjo9h158tzbXvCrom8WztDe2k7WDpQiierJWGRE4vA",
           "sender": null,
-          "signatures": [
-            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
-          ],
+          "signatures": [],
           "gasInput": {
             "gasSponsor": {
               "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
