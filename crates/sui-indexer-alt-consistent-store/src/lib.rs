@@ -3,6 +3,7 @@
 
 mod config;
 mod db;
+mod db_map;
 mod error;
 mod iter;
 mod key;

@@ -12,6 +12,9 @@ pub(crate) enum Error {
     #[error("Internal error: {0:?}")]
     Internal(#[from] anyhow::Error),
 
+    #[error("No such column family: {0:?}")]
+    NoColumnFamily(String),
+
     #[error("Checkpoint {checkpoint} not in consistent range")]
     NotInRange { checkpoint: u64 },
 
