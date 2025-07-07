@@ -15465,6 +15465,7 @@ dependencies = [
  "move-package-alt",
  "serde",
  "sui-package-management",
+ "tempfile",
 ]
 
 [[package]]

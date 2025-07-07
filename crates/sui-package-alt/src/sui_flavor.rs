@@ -75,3 +75,54 @@ impl MoveFlavor for SuiFlavor {
         deps
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use move_core_types::identifier::Identifier;
+    use move_package_alt::package::manifest::Manifest;
+
+    #[test]
+    fn test_implicit_deps() {
+        let implicit_deps = ["Sui", "MoveStdlib", "SuiSystem", "Bridge"];
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let pkg_manifest_path = temp_dir.path().join("Move.toml");
+
+        std::fs::write(
+            &pkg_manifest_path,
+            r#"
+        [package]
+        name = "test"
+        version = "1"
+        authors = []
+        edition = "2025"
+
+        [environments]
+        mainnet = "35834a8a"
+        testnet = "4c78adac"
+    "#,
+        );
+
+        let pkg_graph = Manifest::<SuiFlavor>::read_from_file(&pkg_manifest_path)
+            .expect("should read manifest");
+
+        let deps = pkg_graph.dependencies();
+
+        for e in ["mainnet", "testnet"] {
+            for i in implicit_deps {
+                assert!(
+                    deps.contains(&e.to_string(), &Identifier::new(i).unwrap()),
+                    "Dependency {} not found in manifest",
+                    i
+                );
+            }
+
+            assert!(
+                !deps.contains(&e.to_string(), &Identifier::new("DeepBook").unwrap()),
+                "Dependency DeepBook should not be in the implicit dependencies"
+            );
+        }
+    }
+}
