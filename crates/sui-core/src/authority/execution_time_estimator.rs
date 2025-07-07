@@ -3,6 +3,7 @@
 
 use std::{
     collections::HashMap,
+    hash::{Hash, Hasher},
     num::NonZeroUsize,
     sync::{Arc, Weak},
     time::Duration,
@@ -13,8 +14,9 @@ use crate::consensus_adapter::SubmitToConsensus;
 use governor::{clock::MonotonicClock, Quota, RateLimiter};
 use itertools::Itertools;
 use lru::LruCache;
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::{assert_reachable, debug_fatal, in_antithesis, in_test_configuration};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use rand::{random, rngs, Rng, SeedableRng};
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
@@ -212,6 +214,15 @@ impl ExecutionTimeObserver {
     ) {
         let _scope = monitored_scope("ExecutionTimeObserver::record_local_observations");
 
+        // Simulate real total duration timing in SIM and antithesis tests to trigger overutilization.
+        // Commands are executed serially, so we multiply
+        // the duration by the number of commands as a rough heuristic.
+        let total_duration = if in_antithesis() || cfg!(msim) {
+            self.get_test_duration(None) * tx.commands.len() as u32
+        } else {
+            total_duration
+        };
+
         assert!(tx.commands.len() >= timings.len());
 
         let Some(epoch_store) = self.epoch_store.upgrade() else {
@@ -334,6 +345,13 @@ impl ExecutionTimeObserver {
 
             // Update moving-average observation for the command.
             let key = ExecutionTimeObservationKey::from_command(command);
+
+            // Simulate duration in tests to trigger occational
+            // congestion control & defer/cancel some transactions
+            if in_antithesis() || cfg!(msim) {
+                command_duration = self.get_test_duration(Some(&key));
+            }
+
             let local_observation =
                 self.local_observations
                     .get_or_insert_mut(key.clone(), || LocalObservations {
@@ -395,6 +413,31 @@ impl ExecutionTimeObserver {
 
         // Share new observations.
         self.share_observations(to_share);
+    }
+
+    fn get_test_duration(&self, key: Option<&ExecutionTimeObservationKey>) -> Duration {
+        if !in_test_configuration() {
+            panic!("get_test_duration called in non-test configuration");
+        }
+
+        thread_local! {
+            static PER_TEST_SEED: u64 = random::<u64>();
+        }
+        PER_TEST_SEED.with(|seed| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            seed.hash(&mut hasher);
+            if let Some(key) = key {
+                key.hash(&mut hasher); // Use command key for variation if provided
+            }
+            let seed_value = hasher.finish();
+            let mut rng = rngs::StdRng::seed_from_u64(seed_value);
+
+            // Normal duration range
+            let mut test_duration =
+                rng.gen_range(Duration::from_millis(400)..Duration::from_millis(600));
+            test_duration += rng.gen_range(Duration::from_micros(0)..Duration::from_micros(1000));
+            test_duration
+        })
     }
 
     fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
