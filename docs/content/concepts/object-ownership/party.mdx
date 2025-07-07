@@ -20,8 +20,8 @@ Currently, single ownership is the only supported mode for party objects. This d
 You can use one of the following functions (defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move)) to create party objects.
 
 ```move
-public fun party_transfer<T: key>(obj: T, recipient: address)
-public fun public_party_transfer<T: key + store>(obj: T, recipient: address)
+public fun party_transfer<T: key>(obj: T, party: sui::party::Party)
+public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Party)
 ```
 
 Use the `sui::transfer::party_transfer` function if you are defining a [custom transfer policy](../transfers/custom-rules.mdx) for the object. Use the `sui::transfer::public_party_transfer` function to create a party object if the object has the `store` capability.
