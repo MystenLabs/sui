@@ -65,7 +65,7 @@ pub struct NodeConfig {
     pub json_rpc_address: SocketAddr,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rpc: Option<sui_rpc_api::Config>,
+    pub rpc: Option<crate::RpcConfig>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,
@@ -792,7 +792,7 @@ impl NodeConfig {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
     }
 
-    pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
+    pub fn rpc(&self) -> Option<&crate::RpcConfig> {
         self.rpc.as_ref()
     }
 }

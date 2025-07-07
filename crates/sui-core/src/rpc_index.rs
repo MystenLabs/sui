@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
+use sui_config::RpcIndexInitConfig;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -894,6 +895,7 @@ impl RpcIndexStore {
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        index_config: Option<RpcIndexInitConfig>,
     ) -> Self {
         let path = Self::db_path(dir);
 
@@ -915,7 +917,11 @@ impl RpcIndexStore {
                     options.set_unordered_write(true);
 
                     // Allow CPU-intensive flushing operations to use all CPUs.
-                    options.set_max_background_jobs(num_cpus::get() as i32);
+                    let max_background_jobs = index_config
+                        .as_ref()
+                        .and_then(|c| c.max_background_jobs)
+                        .unwrap_or_else(|| num_cpus::get() as i32);
+                    options.set_max_background_jobs(max_background_jobs);
 
                     // We are disabling compaction for all column families below. This means we can
                     // also disable the backpressure that slows down writes when the number of L0
@@ -926,11 +932,17 @@ impl RpcIndexStore {
 
                     // This is an upper bound on the amount to of ram the memtables can use across
                     // all column families.
-                    // Use 90% of system RAM for DB write buffers during bulk indexing.
                     let mut sys = System::new();
                     sys.refresh_memory();
                     let total_memory_bytes = sys.total_memory() * 1024; // Convert from KB to bytes
-                    let db_buffer_size = (total_memory_bytes as f64 * 0.9) as usize;
+
+                    let db_buffer_size = index_config
+                        .as_ref()
+                        .and_then(|c| c.db_write_buffer_size)
+                        .unwrap_or({
+                            // Default to 90% of system RAM
+                            (total_memory_bytes as f64 * 0.9) as usize
+                        });
                     options.set_db_write_buffer_size(db_buffer_size);
 
                     // Create column family specific options.
@@ -942,26 +954,40 @@ impl RpcIndexStore {
                     let mut cf_options = typed_store::rocks::default_db_options();
                     cf_options.options.set_disable_auto_compactions(true);
 
-                    // Calculate buffer configuration: 25% of RAM split across up to 32 buffers
-                    let cf_memory_budget = (total_memory_bytes as f64 * 0.25) as usize;
-                    const MIN_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64MB minimum
-                    const DEFAULT_BUFFER_COUNT: usize = 32;
+                    // Handle config overrides for column family options
+                    let (buffer_size, buffer_count) = match (
+                        index_config.as_ref().and_then(|c| c.cf_write_buffer_size),
+                        index_config
+                            .as_ref()
+                            .and_then(|c| c.cf_max_write_buffer_number),
+                    ) {
+                        (Some(size), Some(count)) => (size, count),
+                        (None, None) => {
+                            // No overrides, use default logic
+                            // Calculate buffer configuration: 25% of RAM split across up to 32 buffers
+                            let cf_memory_budget = (total_memory_bytes as f64 * 0.25) as usize;
+                            const MIN_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64MB minimum
+                            const DEFAULT_BUFFER_COUNT: usize = 32;
 
-                    // Aim for 32 buffers, but reduce if it would make buffers too small
-                    //   For example:
-                    // - 128GB RAM system: 32GB per CF / 32 buffers = 1GB each (32 buffers)
-                    // - 16GB RAM system: 4GB per CF / 32 buffers = 128MB each (32 buffers)
-                    // - 4GB RAM system: 1GB per CF / 64MB min = ~16 buffers of 64MB each
-                    let buffer_size =
-                        (cf_memory_budget / DEFAULT_BUFFER_COUNT).max(MIN_BUFFER_SIZE);
-                    let buffer_count = (cf_memory_budget / buffer_size)
-                        .min(DEFAULT_BUFFER_COUNT)
-                        .max(2);
+                            // Aim for 32 buffers, but reduce if it would make buffers too small
+                            //   For example:
+                            // - 128GB RAM system: 32GB per CF / 32 buffers = 1GB each (32 buffers)
+                            // - 16GB RAM system: 4GB per CF / 32 buffers = 128MB each (32 buffers)
+                            // - 4GB RAM system: 1GB per CF / 64MB min = ~16 buffers of 64MB each
+                            let buffer_size =
+                                (cf_memory_budget / DEFAULT_BUFFER_COUNT).max(MIN_BUFFER_SIZE);
+                            let buffer_count = (cf_memory_budget / buffer_size)
+                                .clamp(2, DEFAULT_BUFFER_COUNT)
+                                as i32;
+                            (buffer_size, buffer_count)
+                        }
+                        _ => {
+                            panic!("indexing-cf-write-buffer-size and indexing-cf-max-write-buffer-number must both be specified or both be omitted");
+                        }
+                    };
 
                     cf_options.options.set_write_buffer_size(buffer_size);
-                    cf_options
-                        .options
-                        .set_max_write_buffer_number(buffer_count as i32);
+                    cf_options.options.set_max_write_buffer_number(buffer_count);
 
                     // Apply cf_options to all tables except balance (which needs a merge operator)
                     for (table_name, _) in IndexStoreTables::describe_tables() {
