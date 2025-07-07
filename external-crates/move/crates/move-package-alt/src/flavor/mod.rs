@@ -37,11 +37,6 @@ pub trait MoveFlavor: Debug {
     /// An [AddressInfo] should give a unique identifier for a compiled package
     type AddressInfo: Debug + Serialize + DeserializeOwned + Clone;
 
-    /// An [EnvironmentID] uniquely identifies a place that a package can be published. For
-    /// example, an environment ID might be a chain identifier
-    //
-    // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
-
     /// Return the implicit dependencies for the environments listed in [environments]
     fn implicit_deps(
         file_handle: FileHandle,
