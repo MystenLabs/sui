@@ -1,9 +1,4 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod config;
 mod db;
-mod db_map;
-mod error;
-mod iter;
-mod key;
