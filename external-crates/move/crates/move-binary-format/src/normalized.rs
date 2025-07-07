@@ -9,7 +9,7 @@ use crate::file_format::{
     StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
     VariantDefinition, VariantHandleIndex, VariantInstantiationHandleIndex, VariantTag, Visibility,
 };
-use indexmap::IndexMap;
+use indexmap::{Equivalent, IndexMap};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -118,12 +118,12 @@ pub struct Constant<S> {
     pub data: Vec<u8>,
 }
 
-/// Normalized version of a `StructDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// Normalized version of a `StructDefinition`.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Struct<S: Hash + Eq> {
     pub name: S,
+    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub fields: Fields<S>,
@@ -154,6 +154,7 @@ pub struct Function<S: Hash + Eq> {
     pub visibility: Visibility,
     pub is_entry: bool,
     pub type_parameters: Vec<AbilitySet>,
+    pub locals: Signature<S>,
     pub parameters: Signature<S>,
     pub return_: Signature<S>,
     code_included: bool,
@@ -161,12 +162,12 @@ pub struct Function<S: Hash + Eq> {
     code: Vec<Bytecode<S>>,
 }
 
-/// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// Normalized version of a `EnumDefinition`.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Enum<S: Hash + Eq> {
     pub name: S,
+    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub variants: IndexMap<S, Rc<Variant<S>>>,
@@ -504,6 +505,33 @@ impl<S> Datatype<S> {
         }
     }
 
+    /// Case for generating a `Datatype` to write down on a Struct or Enum definition
+    pub fn new_for_data_definition<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        idx: DatatypeHandleIndex,
+    ) -> Self {
+        let datatype_handle = m.datatype_handle_at(idx);
+        let defining_module_handle = m.module_handle_at(datatype_handle.module);
+        let datatype_name = pool.intern(m.identifier_at(datatype_handle.name));
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let type_arguments = datatype_handle
+            .type_parameters
+            .iter()
+            .enumerate()
+            .map(|(ndx, _)| Type::TypeParameter(ndx as u16))
+            .collect();
+        Datatype {
+            module: ModuleId {
+                address: defining_module_address,
+                name: defining_module_name,
+            },
+            name: datatype_name,
+            type_arguments,
+        }
+    }
+
     pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> StructTag {
         let Datatype {
             module,
@@ -779,9 +807,11 @@ impl<S: Hash + Eq> Struct<S> {
             }
             StructFieldInformation::Declared(fields) => Fields::new(pool, m, fields),
         };
+        let datatype = Datatype::new_for_data_definition(pool, m, def.struct_handle);
         let name = pool.intern(m.identifier_at(handle.name));
         Struct {
             name,
+            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             fields,
@@ -795,14 +825,31 @@ impl<S: Hash + Eq> Struct<S> {
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             name,
+            datatype,
             abilities,
             type_parameters,
             fields,
         } = self;
         name == &other.name
+            && datatype.equivalent(&other.datatype)
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && fields.equivalent(&other.fields)
+    }
+}
+
+impl<S: Hash + Eq + Clone> Struct<S> {
+    pub fn subst_signature(&self, signature: Signature<S>) -> Type<S> {
+        let tys: Vec<Type<S>> = signature
+            .iter()
+            .map(|ty| (**ty).clone())
+            .collect::<Vec<_>>();
+        self.subst(&tys)
+    }
+
+    pub fn subst(&self, type_args: &[Type<S>]) -> Type<S> {
+        let base_ty = Type::Datatype(Box::new(self.datatype.clone()));
+        base_ty.subst(type_args)
     }
 }
 
@@ -867,26 +914,24 @@ impl<S: Hash + Eq> Function<S> {
     ) -> Self {
         let fhandle = m.function_handle_at(def.function);
         let name = pool.intern(m.identifier_at(fhandle.name));
-        let (jump_tables, code) = if include_code {
-            let jump_tables = def
-                .code
-                .iter()
-                .flat_map(|code| code.jump_tables.iter())
-                .map(|jt| Rc::new(VariantJumpTable::new(tables, jt)))
-                .collect::<Vec<_>>();
-            let code = def
-                .code
-                .as_ref()
-                .map(|code| {
-                    code.code
+        let (locals, jump_tables, code) = {
+            match &def.code {
+                Some(code) if include_code => {
+                    let locals = tables.signatures[code.locals.0 as usize].clone();
+                    let jump_tables = code
+                        .jump_tables
+                        .iter()
+                        .map(|jt| Rc::new(VariantJumpTable::new(tables, jt)))
+                        .collect::<Vec<_>>();
+                    let bytecode = code
+                        .code
                         .iter()
                         .map(|bytecode| Bytecode::new(tables, pool, m, bytecode, &jump_tables))
-                        .collect()
-                })
-                .unwrap_or_default();
-            (jump_tables, code)
-        } else {
-            (vec![], vec![])
+                        .collect();
+                    (locals, jump_tables, bytecode)
+                }
+                _ => (tables.empty_signature.clone(), vec![], vec![]),
+            }
         };
         Function {
             name,
@@ -894,6 +939,7 @@ impl<S: Hash + Eq> Function<S> {
             is_entry: def.is_entry,
             type_parameters: fhandle.type_parameters.clone(),
             parameters: tables.signatures[fhandle.parameters.0 as usize].clone(),
+            locals,
             return_: tables.signatures[fhandle.return_.0 as usize].clone(),
             code_included: include_code,
             jump_tables,
@@ -915,6 +961,7 @@ impl<S: Hash + Eq> Function<S> {
             is_entry,
             type_parameters,
             parameters,
+            locals,
             return_,
             code_included,
             jump_tables,
@@ -929,6 +976,7 @@ impl<S: Hash + Eq> Function<S> {
             && is_entry == &other.is_entry
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
+            && locals == &other.locals
             && return_ == &other.return_
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
@@ -950,6 +998,7 @@ impl<S: Hash + Eq> Enum<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.enum_handle);
+        let datatype = Datatype::new_for_data_definition(pool, m, def.enum_handle);
         let name = pool.intern(m.identifier_at(handle.name));
         let variants = def
             .variants
@@ -961,6 +1010,7 @@ impl<S: Hash + Eq> Enum<S> {
             .collect();
         Enum {
             name,
+            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             variants,
@@ -970,14 +1020,31 @@ impl<S: Hash + Eq> Enum<S> {
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             name,
+            datatype,
             abilities,
             type_parameters,
             variants,
         } = self;
         name == &other.name
+            && datatype.equivalent(&other.datatype)
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && map_ordered_equivalent(variants, &other.variants, |v1, v2| v1.equivalent(v2))
+    }
+}
+
+impl<S: Hash + Eq + Clone> Enum<S> {
+    pub fn subst_signature(&self, signature: Signature<S>) -> Type<S> {
+        let tys: Vec<Type<S>> = signature
+            .iter()
+            .map(|ty| (**ty).clone())
+            .collect::<Vec<_>>();
+        self.subst(&tys)
+    }
+
+    pub fn subst(&self, type_args: &[Type<S>]) -> Type<S> {
+        let base_ty = Type::Datatype(Box::new(self.datatype.clone()));
+        base_ty.subst(type_args)
     }
 }
 

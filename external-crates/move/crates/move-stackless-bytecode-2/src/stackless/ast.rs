@@ -24,6 +24,7 @@ pub struct Package {
 pub struct Module {
     pub name: Symbol,
     pub functions: BTreeMap<Symbol, Function>,
+    // pub datatypes: BTreeMap<Symbol, Rc<Type<Symbol>>>
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +45,7 @@ pub struct BasicBlock {
 pub enum Instruction {
     Return(Vec<Trivial>),
     AssignReg {
-        lhs: Vec<RegId>,
+        lhs: Vec<Register>,
         rhs: RValue,
     },
     StoreLoc {
@@ -63,22 +64,22 @@ pub enum Instruction {
         cases: Vec<Label>,
         subject: Trivial,
     },
-    Drop(RegId), // Drop an operand in the case of a Pop operation
+    Drop(Register), // Drop an operand in the case of a Pop operation
     NotImplemented(String),
 }
 
 #[derive(Debug, Clone)]
 pub enum Trivial {
-    Register(RegId),
+    Register(Register),
     Immediate(Value),
 }
 
-// TODO use the substitution
-// #[derive(Debug, Clone)]
-// struct Register {
-//   name: RegId,
-//   ty: Rc<Type>
-// }
+// TODO use the substitution on generic types
+#[derive(Debug, Clone)]
+pub struct Register {
+    pub(crate) name: RegId,
+    pub(crate) ty: Rc<Type<Symbol>>,
+}
 
 #[derive(Debug, Clone)]
 pub enum RValue {
@@ -264,10 +265,7 @@ impl std::fmt::Display for Instruction {
             Instruction::AssignReg { lhs, rhs } => write!(
                 f,
                 "{}{}{}",
-                lhs.iter()
-                    .map(|id| format!("reg_{id}"))
-                    .collect::<Vec<_>>()
-                    .join(", "),
+                comma_separated(lhs),
                 if lhs.is_empty() { "" } else { " = " },
                 rhs
             ),
@@ -281,18 +279,16 @@ impl std::fmt::Display for Instruction {
                 else_label,
             } => write!(f, "JumpIf({condition}, LBL_{then_label}, LBL_{else_label})"),
             Instruction::Abort(trivial) => write!(f, "Abort({trivial})"),
-            Instruction::VariantSwitch { cases, subject } => {
-                write!(f, "VariantSwitch(SUBJECT({subject}), ")?;
-                for (i, case) in cases.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", LBL_({case})")?;
-                    } else {
-                        write!(f, "LBL_({case})")?;
-                    }
-                }
-                write!(f, ")")
-            }
-            Instruction::Drop(reg_id) => write!(f, "Drop({reg_id})"),
+            Instruction::VariantSwitch { cases, subject } => write!(
+                f,
+                "VariantSwitch(SUBJECT({subject}), {})",
+                cases
+                    .iter()
+                    .map(|case| format!("LBL_({case})"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Instruction::Drop(reg) => write!(f, "Drop({reg})"),
             Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
         }
@@ -302,9 +298,15 @@ impl std::fmt::Display for Instruction {
 impl std::fmt::Display for Trivial {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Trivial::Register(reg_id) => write!(f, "reg_{reg_id}"),
+            Trivial::Register(reg) => write!(f, "{reg}",),
             Trivial::Immediate(val) => write!(f, "Immediate({val})"),
         }
+    }
+}
+
+impl std::fmt::Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "reg_{}<{}>", self.name, self.ty)
     }
 }
 
