@@ -37,7 +37,7 @@ impl CombinedDependency {
     ) -> ManifestResult<DependencySet<Self>> {
         let mut result = DependencySet::new();
 
-        for env in manifest.environments.keys() {
+        for (env, env_id) in &manifest.environments {
             let mut replacements = manifest
                 .dep_replacements
                 .get(env.as_ref())
@@ -66,7 +66,7 @@ impl CombinedDependency {
                 );
             }
 
-            if let Some(deps) = implicit_deps.deps_for(env.as_ref()) {
+            if let Some(deps) = implicit_deps.deps_for(env_id.as_ref()) {
                 for (pkg, dep) in deps {
                     result.insert(env.as_ref().clone(), pkg.clone(), dep.clone());
                 }

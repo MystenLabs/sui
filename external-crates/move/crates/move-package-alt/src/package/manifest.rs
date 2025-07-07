@@ -83,7 +83,7 @@ impl<F: MoveFlavor> Manifest<F> {
         let parsed: ParsedManifest =
             toml_edit::de::from_str(file_id.source()).map_err(ManifestError::from_toml(file_id))?;
 
-        let environments = parsed.environments.keys().map(|id| id.as_ref().clone());
+        let environments = parsed.environments.values().map(|id| id.as_ref().clone());
 
         let flavor_implicit_deps = F::implicit_deps(file_id, environments);
         let dependencies =
