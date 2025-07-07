@@ -51,12 +51,6 @@ impl<'a, K: SourceKind> Context<'a, K> {
         new_reg
     }
 
-    pub fn last_register(&self) -> &Register {
-        self.logical_stack
-            .last()
-            .expect("Tried to get last register but stack is empty")
-    }
-
     pub fn nth_register(&self, n: usize) -> &Register {
         self.logical_stack
             .get(self.logical_stack.len() - n)
@@ -73,8 +67,8 @@ impl<'a, K: SourceKind> Context<'a, K> {
 
     pub fn get_local_type(&self, loc: usize) -> &Rc<Type<Symbol>> {
         self.locals_types
-        .get(&loc)
-        .expect(&format!("Local {} not found", loc))
+            .get(&loc)
+            .unwrap_or_else(|| panic!("Local {} not found", loc))
     }
 }
 

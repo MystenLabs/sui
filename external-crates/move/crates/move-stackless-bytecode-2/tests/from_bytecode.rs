@@ -19,7 +19,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     .expect("Failed to find bytecode files");
 
     let mut modules = Vec::new();
-    
+
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()
         .collect::<Result<Vec<_>, _>>()?;
@@ -27,7 +27,7 @@ fn lib_test(file_path: &Path) -> datatest_stable::Result<()> {
     if test_module_names.contains(&String::from("skip")) {
         return Ok(());
     }
-    
+
     for bytecode_file in &bytecode_files {
         let bytes = std::fs::read(bytecode_file)?;
         let module = CompiledModule::deserialize_with_defaults(&bytes)?;
