@@ -27,6 +27,7 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 use reqwest::StatusCode;
+use sui_replay_2 as SR2;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
@@ -645,13 +646,19 @@ pub enum SuiClientCommands {
         #[arg(long)]
         ptb_info: bool,
 
-        /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
-        #[arg(long, short, allow_hyphen_values = true)]
-        executor_version: Option<i64>,
+        /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
 
-        /// Optional protocol version to use, if not specified defaults to the one originally used for the transaction.
-        #[arg(long, short, allow_hyphen_values = true)]
-        protocol_version: Option<i64>,
+        /// Whether to trace the transaction execution. Generated traces will be saved in the output
+        /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
+        #[arg(long = "trace", default_value = "false")]
+        trace: bool,
+
+        /// Whether existing artifacts that were generated from a previous replay of the transaction
+        /// should be overwritten or an error raised if they already exist.
+        #[arg(long, default_value = "false")]
+        overwrite_existing: bool,
     },
 
     /// Replay transactions listed in a file.
@@ -664,6 +671,20 @@ pub enum SuiClientCommands {
         /// If an error is encountered during a transaction, this specifies whether to terminate or continue
         #[arg(long, short)]
         terminate_early: bool,
+
+        /// Whether to trace the transaction execution. Generated traces will be saved in the output
+        /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
+        #[arg(long = "trace", default_value = "false")]
+        trace: bool,
+
+        /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
+        #[arg(long, short)]
+        output_dir: Option<PathBuf>,
+
+        /// Whether existing artifacts that were generated from a previous replay of the transaction
+        /// should be overwritten or an error raised if they already exist.
+        #[arg(long, default_value = "false")]
+        overwrite_existing: bool,
     },
 
     /// Replay all transactions in a range of checkpoints.
@@ -791,38 +812,62 @@ impl SuiClientCommands {
                 tx_digest,
                 gas_info: _,
                 ptb_info: _,
-                executor_version,
-                protocol_version,
+                output_dir,
+                trace,
+                overwrite_existing,
             } => {
-                let cmd = ReplayToolCommand::ReplayTransaction {
-                    tx_digest,
-                    show_effects: true,
-                    executor_version,
-                    protocol_version,
-                    config_objects: None,
+                let node = get_replay_node(context).await?;
+                let cmd2 = SR2::ReplayConfig {
+                    digest: Some(tx_digest.clone()),
+                    digests_path: None,
+                    node,
+                    trace,
+                    terminate_early: false,
+                    output_dir,
+                    show_effects: false,
+                    overwrite_existing,
                 };
 
-                let rpc = context.get_active_env()?.rpc.clone();
-                let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
-                        .await?;
+                let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
+
+                // show effects and gas
+                SR2::print_effects_or_fork(
+                    &tx_digest,
+                    &artifact_path,
+                    true,
+                    &mut std::io::stdout(),
+                )?;
+
                 // this will be displayed via trace info, so no output is needed here
                 SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ReplayBatch {
                 path,
                 terminate_early,
+                trace,
+                output_dir,
+                overwrite_existing,
             } => {
-                let cmd = ReplayToolCommand::ReplayBatch {
-                    path,
+                let node = get_replay_node(context).await?;
+                let cmd2 = SR2::ReplayConfig {
+                    digest: None,
+                    digests_path: Some(path),
+                    node,
+                    trace,
                     terminate_early,
-                    num_tasks: 16,
-                    persist_path: None,
+                    output_dir,
+                    show_effects: false,
+                    overwrite_existing,
                 };
-                let rpc = context.get_active_env()?.rpc.clone();
-                let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
-                        .await?;
+
+                let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
+
+                println!(
+                    "Replayed transactions from {}. Artifacts stored under {}",
+                    cmd2.digests_path.as_ref().unwrap().display(),
+                    artifact_path.display()
+                );
+
                 // this will be displayed via trace info, so no output is needed here
                 SuiClientCommandResult::NoOutput
             }
@@ -3548,4 +3593,20 @@ pub(crate) async fn pkg_tree_shake(
     });
 
     Ok(())
+}
+
+async fn get_replay_node(context: &mut WalletContext) -> Result<SR2::Node, anyhow::Error> {
+    let chain_id = context
+        .get_client()
+        .await?
+        .read_api()
+        .get_chain_identifier()
+        .await?;
+    let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
+        .ok_or_else(|| anyhow::anyhow!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently: {chain_id}"))?;
+    Ok(match chain_id.chain() {
+        Chain::Mainnet => SR2::Node::Mainnet,
+        Chain::Testnet => SR2::Node::Testnet,
+        Chain::Unknown => bail!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently"),
+    })
 }

@@ -16,7 +16,7 @@ use anyhow::Context;
 use cynic::GraphQlResponse;
 use cynic::Operation;
 use reqwest::header::USER_AGENT;
-use std::{cell::RefCell, collections::BTreeMap};
+use std::{collections::BTreeMap, sync::RwLock};
 use sui_types::{
     base_types::ObjectID,
     committee::ProtocolVersion,
@@ -39,7 +39,7 @@ pub struct DataStore {
     rpc: reqwest::Url,
     node: Node,
     // Keep the epoch data considering its small size and footprint
-    epoch_map: RefCell<BTreeMap<EpochId, EpochData>>,
+    epoch_map: RwLock<BTreeMap<EpochId, EpochData>>,
     // TODO: define a system package map?
     /// The binary's version passed to the User-Agent header in GQL query requests
     version: String,
@@ -68,12 +68,13 @@ impl TransactionStore for DataStore {
 
 impl EpochStore for DataStore {
     fn epoch_info(&self, epoch: u64) -> Result<EpochData, anyhow::Error> {
-        if let Some(epoch_data) = self.epoch_map.borrow().get(&epoch) {
+        if let Some(epoch_data) = self.epoch_map.read().unwrap().get(&epoch) {
             return Ok(epoch_data.clone());
         }
         let epoch_data = block_on!(self.epoch(epoch))?;
         self.epoch_map
-            .borrow_mut()
+            .write()
+            .unwrap()
             .insert(epoch, epoch_data.clone());
         Ok(epoch_data)
     }
@@ -106,7 +107,7 @@ impl DataStore {
         };
         let rpc =
             reqwest::Url::parse(url).context(format!("Failed to parse GQL RPC URL {}", url))?;
-        let epoch_map = RefCell::new(BTreeMap::new());
+        let epoch_map = RwLock::new(BTreeMap::new());
         debug!("End stores creation");
 
         Ok(Self {
