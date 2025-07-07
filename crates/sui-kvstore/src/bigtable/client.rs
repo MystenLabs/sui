@@ -34,7 +34,7 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Streaming;
 use tracing::error;
 
-use super::proto::bigtable::v2::row_filter::Filter;
+use super::proto::bigtable::v2::row_filter::{Chain, Filter};
 use super::proto::bigtable::v2::RowFilter;
 
 const OBJECTS_TABLE: &str = "objects";
@@ -597,6 +597,17 @@ impl BigTableClient {
         keys: Vec<Vec<u8>>,
         filter: Option<RowFilter>,
     ) -> Result<Vec<Vec<(Bytes, Bytes)>>> {
+        let version_filter = RowFilter {
+            filter: Some(Filter::CellsPerColumnLimitFilter(1)),
+        };
+        let filter = Some(match filter {
+            Some(filter) => RowFilter {
+                filter: Some(Filter::Chain(Chain {
+                    filters: vec![filter, version_filter],
+                })),
+            },
+            None => version_filter,
+        });
         let request = ReadRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
             rows_limit: keys.len() as i64,
