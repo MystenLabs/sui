@@ -7,7 +7,7 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
-        data_store::legacy::sui_data_store::SuiDataStore,
+        data_store::{PackageStore, legacy::sui_data_store::SuiDataStore},
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
@@ -27,11 +27,10 @@ mod checked {
         file_format_common::VERSION_6,
         normalized,
     };
-    use move_core_types::language_storage::StructTag;
     use move_core_types::{
         account_address::AccountAddress,
         identifier::{IdentStr, Identifier},
-        language_storage::{ModuleId, TypeTag},
+        language_storage::{ModuleId, StructTag, TypeTag},
         u256::U256,
     };
     use move_trace_format::format::MoveTraceBuilder;
@@ -62,7 +61,7 @@ mod checked {
         error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         execution::{ExecutionTiming, ResultWithTimings},
         execution_config_utils::to_binary_config,
-        execution_status::{CommandArgumentError, PackageUpgradeError},
+        execution_status::{CommandArgumentError, PackageUpgradeError, TypeArgumentError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
@@ -207,7 +206,7 @@ mod checked {
                     );
                 };
 
-                let tag = to_type_tag(context, tag)?;
+                let tag = to_type_tag(context, tag, 0)?;
 
                 let elem_ty = context.load_type(&tag).map_err(|e| {
                     if context.protocol_config.convert_type_argument_error() {
@@ -242,7 +241,7 @@ mod checked {
                 let mut move_values = vec![];
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
-                        let tag = to_type_tag(context, tag)?;
+                        let tag = to_type_tag(context, tag, 0)?;
                         let elem_ty = context.load_type(&tag).map_err(|e| {
                             if context.protocol_config.convert_type_argument_error() {
                                 context.convert_type_argument_error(0, e)
@@ -439,7 +438,7 @@ mod checked {
                 // Convert type arguments to `Type`s
                 let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
                 for (ix, type_arg) in type_arguments.into_iter().enumerate() {
-                    let type_arg = to_type_tag(context, type_arg)?;
+                    let type_arg = to_type_tag(context, type_arg, ix)?;
                     let ty = context
                         .load_type(&type_arg)
                         .map_err(|e| context.convert_type_argument_error(ix, e))?;
@@ -1575,15 +1574,25 @@ mod checked {
     fn to_type_tag(
         context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
+        idx: usize,
     ) -> Result<TypeTag, ExecutionError> {
-        let type_tag_no_def_ids = to_type_tag_(context, type_input)?;
+        let type_tag_no_def_ids = to_type_tag_(context, type_input, idx)?;
         if context
             .protocol_config
             .resolve_type_input_ids_to_defining_id()
         {
+            let ix = if context
+                .protocol_config
+                .better_adapter_type_resolution_errors()
+            {
+                idx
+            } else {
+                0
+            };
+
             let ty = context
                 .load_type(&type_tag_no_def_ids)
-                .map_err(|e| context.convert_type_argument_error(0, e))?;
+                .map_err(|e| context.convert_type_argument_error(ix, e))?;
             context.get_type_tag(&ty)
         } else {
             Ok(type_tag_no_def_ids)
@@ -1593,11 +1602,56 @@ mod checked {
     fn to_type_tag_(
         context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
+        idx: usize,
     ) -> Result<TypeTag, ExecutionError> {
         use TypeInput as I;
         use TypeTag as T;
+        Ok(match type_input {
+            I::Bool => T::Bool,
+            I::U8 => T::U8,
+            I::U16 => T::U16,
+            I::U32 => T::U32,
+            I::U64 => T::U64,
+            I::U128 => T::U128,
+            I::U256 => T::U256,
+            I::Address => T::Address,
+            I::Signer => T::Signer,
+            I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t, idx)?)),
+            I::Struct(s) => {
+                let StructInput {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = *s;
+                let type_params = type_params
+                    .into_iter()
+                    .map(|t| to_type_tag_(context, t, idx))
+                    .collect::<Result<_, _>>()?;
+                let (module, name) = resolve_datatype_names(context, address, module, name, idx)?;
+                T::Struct(Box::new(StructTag {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                }))
+            }
+        })
+    }
+
+    fn resolve_datatype_names(
+        context: &ExecutionContext<'_, '_, '_>,
+        addr: AccountAddress,
+        module: String,
+        name: String,
+        idx: usize,
+    ) -> Result<(Identifier, Identifier), ExecutionError> {
         let validate_identifiers = context.protocol_config.validate_identifier_inputs();
-        let to_ident = |s: String| {
+        let better_resolution_errors = context
+            .protocol_config
+            .better_adapter_type_resolution_errors();
+
+        let to_ident = |s| {
             if validate_identifiers {
                 Identifier::new(s).map_err(|e| {
                     ExecutionError::new_with_source(
@@ -1612,36 +1666,26 @@ mod checked {
             }
         };
 
-        Ok(match type_input {
-            I::Bool => T::Bool,
-            I::U8 => T::U8,
-            I::U16 => T::U16,
-            I::U32 => T::U32,
-            I::U64 => T::U64,
-            I::U128 => T::U128,
-            I::U256 => T::U256,
-            I::Address => T::Address,
-            I::Signer => T::Signer,
-            I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t)?)),
-            I::Struct(s) => {
-                let StructInput {
-                    address,
-                    module,
-                    name,
-                    type_params,
-                } = *s;
-                let type_params = type_params
-                    .into_iter()
-                    .map(|t| to_type_tag_(context, t))
-                    .collect::<Result<_, _>>()?;
-                T::Struct(Box::new(StructTag {
-                    address,
-                    module: to_ident(module)?,
-                    name: to_ident(name)?,
-                    type_params,
-                }))
-            }
-        })
+        let module_ident = to_ident(module.clone())?;
+        let name_ident = to_ident(name.clone())?;
+
+        if better_resolution_errors
+            && context
+                .linkage_view
+                .get_package(&addr.into())
+                .ok()
+                .flatten()
+                .is_none_or(|pkg| !pkg.type_origin_map().contains_key(&(module, name)))
+        {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::TypeArgumentError {
+                    argument_idx: idx as u16,
+                    kind: TypeArgumentError::TypeNotFound,
+                },
+            ));
+        }
+
+        Ok((module_ident, name_ident))
     }
 
     fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {

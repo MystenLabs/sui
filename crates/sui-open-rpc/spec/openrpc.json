@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "87",
+              "maxSupportedProtocolVersion": "88",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1305,6 +1305,7 @@
                 "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,
                 "ban_entry_init": false,
+                "better_adapter_type_resolution_errors": false,
                 "bridge": false,
                 "commit_root_state_digest": false,
                 "consensus_batched_block_sync": false,
