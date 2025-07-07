@@ -59,6 +59,7 @@ title: Module `bridge::bridge`
 <b>use</b> <a href="../sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../sui/clock.md#sui_clock">sui::clock</a>;
 <b>use</b> <a href="../sui/coin.md#sui_coin">sui::coin</a>;
+<b>use</b> <a href="../sui/coin_registry.md#sui_coin_registry">sui::coin_registry</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;

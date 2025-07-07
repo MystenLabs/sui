@@ -11,7 +11,7 @@ expression: common_costs_actual
   },
   "Publish": {
     "computationCost": "1000000",
-    "storageCost": "13505200",
+    "storageCost": "15450800",
     "storageRebate": "0",
     "nonRefundableStorageFee": "0"
   },
