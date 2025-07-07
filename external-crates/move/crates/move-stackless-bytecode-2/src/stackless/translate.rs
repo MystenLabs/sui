@@ -799,4 +799,3 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
     }
 }
-
