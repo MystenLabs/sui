@@ -81,6 +81,7 @@ pub fn resolve_transaction(
         &ptb.inputs,
         commands,
         unresolved_transaction.gas_payment.as_ref(),
+        unresolved_transaction.expiration.as_ref(),
     )
 }
 
@@ -159,13 +160,20 @@ fn resolve_unresolved_transaction(
     unresolved_inputs: &[sui_rpc::proto::sui::rpc::v2beta2::Input],
     commands: Vec<Command>,
     gas_payment: Option<&sui_rpc::proto::sui::rpc::v2beta2::GasPayment>,
+    expiration: Option<&sui_rpc::proto::sui::rpc::v2beta2::TransactionExpiration>,
 ) -> Result<TransactionData> {
     let gas_data = if let Some(unresolved_gas_payment) = gas_payment {
-        let payment = unresolved_gas_payment
+        let gas_coins = unresolved_gas_payment
             .objects
             .iter()
-            .map(|unresolved| resolve_object_reference(reader, unresolved.try_into()?))
+            .map(|unresolved| resolve_gas_object_reference(reader, unresolved.try_into()?))
             .collect::<Result<Vec<_>>>()?;
+        let payment = gas_coins.iter().map(|(r, _)| *r).collect::<Vec<_>>();
+        let max_gas_budget = if payment.is_empty() {
+            max_gas_budget
+        } else {
+            gas_coins.iter().map(|(_, value)| *value).sum()
+        };
         GasData {
             payment,
             owner: unresolved_gas_payment.owner().parse().map_err(|e| {
@@ -185,8 +193,15 @@ fn resolve_unresolved_transaction(
         }
     };
 
-    //TODO handle expiration unresolved_transaction.expiration.into();
-    let expiration = sui_types::transaction::TransactionExpiration::None;
+    let expiration = expiration
+        .map(sui_types::transaction::TransactionExpiration::try_from)
+        .transpose()
+        .map_err(|e| {
+            FieldViolation::new("expiration")
+                .with_description(e)
+                .with_reason(ErrorReason::FieldInvalid)
+        })?
+        .unwrap_or(sui_types::transaction::TransactionExpiration::None);
     let ptb = resolve_ptb(reader, called_packages, unresolved_inputs, commands)?;
     Ok(TransactionData::V1(
         sui_types::transaction::TransactionDataV1 {
@@ -196,6 +211,26 @@ fn resolve_unresolved_transaction(
             expiration,
         },
     ))
+}
+
+fn resolve_gas_object_reference(
+    reader: &StateReader,
+    unresolved_object_reference: UnresolvedObjectReference,
+) -> Result<(ObjectRef, u64)> {
+    let object = reader
+        .inner()
+        .get_object(&(unresolved_object_reference.object_id.into()))
+        .ok_or_else(|| ObjectNotFoundError::new(unresolved_object_reference.object_id))?;
+
+    let Ok(gas_coin) = sui_types::gas_coin::GasCoin::try_from(&object) else {
+        return Err(FieldViolation::new("payment")
+            .with_description(format!("object {} is not a valid gas coin", object.id()))
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
+    };
+
+    resolve_object_reference_with_object(&object, unresolved_object_reference)
+        .map(|r| (r, gas_coin.value()))
 }
 
 fn resolve_object_reference(

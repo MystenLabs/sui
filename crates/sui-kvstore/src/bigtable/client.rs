@@ -34,7 +34,7 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Streaming;
 use tracing::error;
 
-use super::proto::bigtable::v2::row_filter::Filter;
+use super::proto::bigtable::v2::row_filter::{Chain, Filter};
 use super::proto::bigtable::v2::RowFilter;
 
 const OBJECTS_TABLE: &str = "objects";
@@ -71,6 +71,7 @@ pub struct BigTableClient {
     client: BigtableInternalClient<AuthChannel>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
+    app_profile_id: Option<String>,
 }
 
 #[async_trait]
@@ -364,6 +365,7 @@ impl BigTableClient {
             client: BigtableInternalClient::new(auth_channel),
             client_name: "local".to_string(),
             metrics: None,
+            app_profile_id: None,
         })
     }
 
@@ -373,6 +375,7 @@ impl BigTableClient {
         timeout: Option<Duration>,
         client_name: String,
         registry: Option<&Registry>,
+        app_profile_id: Option<String>,
     ) -> Result<Self> {
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
@@ -406,6 +409,7 @@ impl BigTableClient {
             client: BigtableInternalClient::new(auth_channel),
             client_name,
             metrics: registry.map(KvMetrics::new),
+            app_profile_id,
         })
     }
 
@@ -418,8 +422,11 @@ impl BigTableClient {
 
     pub async fn read_rows(
         &mut self,
-        request: ReadRowsRequest,
+        mut request: ReadRowsRequest,
     ) -> Result<Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>> {
+        if let Some(ref app_profile_id) = self.app_profile_id {
+            request.app_profile_id = app_profile_id.clone();
+        }
         let mut result = vec![];
         let mut response = self.client.read_rows(request).await?.into_inner();
 
@@ -590,6 +597,17 @@ impl BigTableClient {
         keys: Vec<Vec<u8>>,
         filter: Option<RowFilter>,
     ) -> Result<Vec<Vec<(Bytes, Bytes)>>> {
+        let version_filter = RowFilter {
+            filter: Some(Filter::CellsPerColumnLimitFilter(1)),
+        };
+        let filter = Some(match filter {
+            Some(filter) => RowFilter {
+                filter: Some(Filter::Chain(Chain {
+                    filters: vec![filter, version_filter],
+                })),
+            },
+            None => version_filter,
+        });
         let request = ReadRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
             rows_limit: keys.len() as i64,

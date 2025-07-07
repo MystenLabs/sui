@@ -1815,6 +1815,20 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
     }
 }
 
+impl TryFrom<&TransactionExpiration> for crate::transaction::TransactionExpiration {
+    type Error = &'static str;
+
+    fn try_from(value: &TransactionExpiration) -> Result<Self, Self::Error> {
+        use transaction_expiration::TransactionExpirationKind;
+
+        Ok(match value.kind() {
+            TransactionExpirationKind::Unknown => return Err("unknown TransactionExpirationKind"),
+            TransactionExpirationKind::None => Self::None,
+            TransactionExpirationKind::Epoch => Self::Epoch(value.epoch()),
+        })
+    }
+}
+
 //
 // TransactionKind
 //
