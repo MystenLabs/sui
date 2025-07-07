@@ -11,7 +11,8 @@ use std::{
 
 use anyhow::Context;
 use rocksdb::AsColumnFamilyRef;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use sui_indexer_alt_framework::store::CommitterWatermark;
 
 use self::error::Error;
 
@@ -62,6 +63,14 @@ const WATERMARK_CF: &str = "$watermark";
 /// is only required to create a new snapshot, reads and writes to RocksDB can proceed
 /// concurrently.
 pub(crate) struct Db(RwLock<Inner>);
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Watermark {
+    pub epoch_hi_inclusive: u64,
+    pub checkpoint_hi_inclusive: u64,
+    pub tx_hi: u64,
+    pub timestamp_ms_hi_inclusive: u64,
+}
 
 /// Database internals in a self-referential struct that owns the database as well as handles from
 /// that databases (for column families and snapshots). This data structure is not inherently
@@ -121,15 +130,15 @@ impl Db {
         Ok(Self(RwLock::new(inner)))
     }
 
-    /// Write a batch of updates to the database atomically, along with a watermark with key
-    /// `pipeline` and value `checkpoint`.
+    /// Write a batch of updates to the database atomically, along with a `watermark` with key
+    /// `pipeline`.
     pub(crate) fn write(
         &self,
         pipeline: &str,
-        checkpoint: u64,
+        watermark: Watermark,
         mut batch: rocksdb::WriteBatch,
     ) -> Result<(), Error> {
-        let checkpoint = bcs::to_bytes(&checkpoint).context("Failed to serialize watermark")?;
+        let checkpoint = bcs::to_bytes(&watermark).context("Failed to serialize watermark")?;
 
         let i = self.0.read().expect("poisoned");
         batch.put_cf(i.borrow_watermark_cf(), pipeline.as_bytes(), checkpoint);
@@ -160,16 +169,17 @@ impl Db {
         unsafe { std::mem::transmute(i.borrow_db().cf_handle(name)) }
     }
 
-    /// Return the last checkpoint that was written for the given `pipeline`, or `None` if no
-    /// checkpoint has been written for that pipeline yet.
-    pub(crate) fn last_checkpoint(&self, pipeline: &str) -> Result<Option<u64>, Error> {
+    /// Return the watermark that was written for the given `pipeline`, or `None` if no checkpoint
+    /// has been written for that pipeline yet.
+    pub(crate) fn watermark(&self, pipeline: &str) -> Result<Option<Watermark>, Error> {
         self.0.read().expect("poisoned").with(|f| {
-            let Some(cp) = f.db.get_pinned_cf(f.watermark_cf, pipeline.as_bytes())? else {
+            let Some(watermark) = f.db.get_pinned_cf(f.watermark_cf, pipeline.as_bytes())? else {
                 return Ok(None);
             };
 
-            let cp = bcs::from_bytes(&cp).context("Failed to deserialize checkpoint")?;
-            Ok(Some(cp))
+            Ok(Some(
+                bcs::from_bytes(&watermark).context("Failed to deserialize watermark")?,
+            ))
         })
     }
 
@@ -372,8 +382,19 @@ impl Db {
 unsafe impl std::marker::Sync for Db {}
 unsafe impl std::marker::Send for Db {}
 
+impl From<Watermark> for CommitterWatermark {
+    fn from(w: Watermark) -> Self {
+        Self {
+            epoch_hi_inclusive: w.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            tx_hi: w.tx_hi,
+            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
+        }
+    }
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn cfs() -> Vec<(&'static str, rocksdb::Options)> {
@@ -384,6 +405,15 @@ mod tests {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
         opts
+    }
+
+    pub(crate) fn wm(cp: u64) -> Watermark {
+        Watermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: cp,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+        }
     }
 
     #[test]
@@ -464,7 +494,7 @@ mod tests {
         // Write a value.
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k), bcs::to_bytes(&v0).unwrap());
-        db.write("test", 1, batch).unwrap();
+        db.write("test", wm(1), batch).unwrap();
 
         {
             // The snapshot that the write would be in has not been taken yet -- attempting to read it
@@ -495,7 +525,7 @@ mod tests {
 
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k), bcs::to_bytes(&v1).unwrap());
-        db.write("test", 2, batch).unwrap();
+        db.write("test", wm(2), batch).unwrap();
         db.snapshot(2);
 
         {
@@ -522,7 +552,7 @@ mod tests {
         batch.put_cf(&cf, key::encode(&k0), bcs::to_bytes(&v0).unwrap());
         batch.put_cf(&cf, key::encode(&k2), bcs::to_bytes(&v2).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
-        db.write("test", 0, batch).unwrap();
+        db.write("test", wm(0), batch).unwrap();
         db.snapshot(0);
 
         let mut res = db
@@ -544,7 +574,7 @@ mod tests {
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&cf, key::encode(&k1), bcs::to_bytes(&v1).unwrap());
         batch.put_cf(&cf, key::encode(&k3), bcs::to_bytes(&v3).unwrap());
-        db.write("test", 1, batch).unwrap();
+        db.write("test", wm(1), batch).unwrap();
         db.snapshot(1);
 
         let mut res = db
@@ -573,7 +603,7 @@ mod tests {
     }
 
     #[test]
-    fn test_last_checkpoint() {
+    fn test_watermark() {
         let cfs = vec![
             ("p0", rocksdb::Options::default()),
             ("p1", rocksdb::Options::default()),
@@ -585,27 +615,27 @@ mod tests {
         let p1 = db.cf("p1").unwrap();
 
         // Haven't written anything yet, so no last checkpoint.
-        assert_eq!(db.last_checkpoint("p0").unwrap(), None);
-        assert_eq!(db.last_checkpoint("p1").unwrap(), None);
+        assert_eq!(db.watermark("p0").unwrap(), None);
+        assert_eq!(db.watermark("p1").unwrap(), None);
 
         // Write a batch for the pipeline p0.
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&p0, key::encode(&42u64), bcs::to_bytes(&43u64).unwrap());
-        db.write("p0", 0, batch).unwrap();
+        db.write("p0", wm(0), batch).unwrap();
 
         // Wrote to one pipeline, but not the other, unlike the data itself, watermarks are not
         // read from snapshots.
-        assert_eq!(db.last_checkpoint("p0").unwrap(), Some(0));
-        assert_eq!(db.last_checkpoint("p1").unwrap(), None);
+        assert_eq!(db.watermark("p0").unwrap(), Some(wm(0)));
+        assert_eq!(db.watermark("p1").unwrap(), None);
 
         // Write a batch for the pipeline p1.
         let mut batch = rocksdb::WriteBatch::default();
         batch.put_cf(&p1, key::encode(&44u64), bcs::to_bytes(&45u64).unwrap());
-        db.write("p1", 1, batch).unwrap();
+        db.write("p1", wm(1), batch).unwrap();
 
         // Wrote to both pipelines.
-        assert_eq!(db.last_checkpoint("p0").unwrap(), Some(0));
-        assert_eq!(db.last_checkpoint("p1").unwrap(), Some(1));
+        assert_eq!(db.watermark("p0").unwrap(), Some(wm(0)));
+        assert_eq!(db.watermark("p1").unwrap(), Some(wm(1)));
     }
 
     #[test]
@@ -619,10 +649,10 @@ mod tests {
 
             let mut batch = rocksdb::WriteBatch::default();
             batch.put_cf(&cf, key::encode(&42u64), bcs::to_bytes(&43u64).unwrap());
-            db.write("test", 1, batch).unwrap();
+            db.write("test", wm(1), batch).unwrap();
 
             // Check that the watermark was written.
-            assert_eq!(db.last_checkpoint("test").unwrap(), Some(1));
+            assert_eq!(db.watermark("test").unwrap(), Some(wm(1)));
 
             // ...and once there is a snapshot, the data can be read.
             db.snapshot(1);
@@ -634,8 +664,8 @@ mod tests {
             let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
             let cf = db.cf("test").unwrap();
 
-            // The `last_checkpoint` persists.
-            assert_eq!(db.last_checkpoint("test").unwrap(), Some(1));
+            // The `watermark` persists.
+            assert_eq!(db.watermark("test").unwrap(), Some(wm(1)));
 
             // The snapshots do not, however, so reads will fail.
             let err = db.get::<u64, u64>(1, &cf, &42u64).unwrap_err();
@@ -663,7 +693,7 @@ mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", 0, batch).unwrap();
+        db.write("test", wm(0), batch).unwrap();
         db.snapshot(0);
 
         let actual: Result<Vec<(u64, u64)>, Error> =
@@ -785,7 +815,7 @@ mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", 0, batch).unwrap();
+        db.write("test", wm(0), batch).unwrap();
         db.snapshot(0);
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
@@ -830,7 +860,7 @@ mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", 0, batch).unwrap();
+        db.write("test", wm(0), batch).unwrap();
         db.snapshot(0);
 
         // Create an iterator from the first snapshot.
@@ -846,7 +876,7 @@ mod tests {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
 
-        db.write("test", 1, batch).unwrap();
+        db.write("test", wm(1), batch).unwrap();
         db.snapshot(1);
 
         // Create an iterator from the next snapshot.
@@ -866,7 +896,7 @@ mod tests {
             batch.delete_cf(&cf, key::encode(&i));
         }
 
-        db.write("test", 2, batch).unwrap();
+        db.write("test", wm(2), batch).unwrap();
         db.snapshot(2);
 
         // Finish iterating through the second iterator.
@@ -910,7 +940,7 @@ mod tests {
             batch.put_cf(&cf, key::encode(&i), bcs::to_bytes(&(i + 1)).unwrap());
         }
 
-        db.write("test", 0, batch).unwrap();
+        db.write("test", wm(0), batch).unwrap();
         db.snapshot(0);
 
         // Create an iterator from the first snapshot.
@@ -948,7 +978,7 @@ mod tests {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
 
-        db.write("test", 0, batch).unwrap();
+        db.write("test", wm(0), batch).unwrap();
         db.snapshot(0);
 
         let actual: Result<Vec<(u64, u64)>, Error> =
@@ -1075,7 +1105,7 @@ mod tests {
             batch.put_cf(&cf, key::encode(&(i + 1)), bcs::to_bytes(&i).unwrap());
         }
 
-        db.write("test", 0, batch).unwrap();
+        db.write("test", wm(0), batch).unwrap();
         db.snapshot(0);
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();

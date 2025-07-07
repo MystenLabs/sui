@@ -154,7 +154,7 @@ where
 mod tests {
     use super::*;
 
-    use crate::db::Db;
+    use crate::db::{tests::wm, Db};
 
     #[test]
     fn test_no_such_column_family() {
@@ -188,13 +188,13 @@ mod tests {
         let mut batch = rocksdb::WriteBatch::default();
         map.insert(42, 43, &mut batch).unwrap();
         map.insert(44, 45, &mut batch).unwrap();
-        db.write("batch", 0, batch).unwrap();
+        db.write("batch", wm(0), batch).unwrap();
         db.snapshot(0);
 
         let mut batch = rocksdb::WriteBatch::default();
         map.remove(42, &mut batch);
         map.insert(43, 42, &mut batch).unwrap();
-        db.write("batch", 1, batch).unwrap();
+        db.write("batch", wm(1), batch).unwrap();
         db.snapshot(1);
 
         // Point look-ups
@@ -287,20 +287,20 @@ mod tests {
         // Successfully perform a merge to counts.
         let mut batch = rocksdb::WriteBatch::default();
         counts.merge(42, 1, &mut batch).unwrap();
-        db.write("counts", 0, batch).unwrap();
+        db.write("counts", wm(0), batch).unwrap();
         db.snapshot(0);
 
         // Merges allow for the accumulation of values.
         let mut batch = rocksdb::WriteBatch::default();
         counts.merge(42, 2, &mut batch).unwrap();
-        db.write("counts", 1, batch).unwrap();
+        db.write("counts", wm(1), batch).unwrap();
         db.snapshot(1);
 
         // A single batch can include multiple merges for the same key.
         let mut batch = rocksdb::WriteBatch::default();
         counts.merge(42, 3, &mut batch).unwrap();
         counts.merge(42, 4, &mut batch).unwrap();
-        db.write("counts", 2, batch).unwrap();
+        db.write("counts", wm(2), batch).unwrap();
         db.snapshot(2);
 
         assert_eq!(counts.get(0, 42).unwrap(), Some(1));
@@ -322,17 +322,17 @@ mod tests {
 
         let mut batch = rocksdb::WriteBatch::default();
         values.insert(42, 1, &mut batch).unwrap();
-        db.write("values", 0, batch).unwrap();
+        db.write("values", wm(0), batch).unwrap();
 
         // Trying to merge to a map that has not had a merge operator set-up will fail.
         let mut batch = rocksdb::WriteBatch::default();
         values.merge(42, 2, &mut batch).unwrap();
-        assert!(db.write("values", 0, batch).is_err());
+        assert!(db.write("values", wm(0), batch).is_err());
 
         // Subsequent writes will also fail, as the invalid merge has been written to the database.
         let mut batch = rocksdb::WriteBatch::default();
         values.insert(43, 3, &mut batch).unwrap();
-        assert!(db.write("values", 1, batch).is_err());
+        assert!(db.write("values", wm(1), batch).is_err());
     }
 
     #[test]
@@ -353,7 +353,7 @@ mod tests {
         map.insert(0x0000_0003, 30, &mut batch).unwrap();
         map.insert(0xffff_0004, 40, &mut batch).unwrap();
         map.insert(0x0000_0005, 50, &mut batch).unwrap();
-        db.write("batch", 0, batch).unwrap();
+        db.write("batch", wm(0), batch).unwrap();
         db.snapshot(0);
 
         // Range iteration can be used to bound key prefixes, without having to supply bytes for
