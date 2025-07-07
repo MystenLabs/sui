@@ -30,6 +30,8 @@ struct App {
     tls_cert: String,
     #[clap(long = "tls-key", default_value = "")]
     tls_key: String,
+    #[clap(long = "app-profile-id")]
+    app_profile_id: Option<String>,
 }
 
 async fn health_check() -> &'static str {
@@ -47,7 +49,13 @@ async fn main() -> Result<()> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
-    let server = KvRpcServer::new(app.instance_id, server_version, &registry).await?;
+    let server = KvRpcServer::new(
+        app.instance_id,
+        app.app_profile_id,
+        server_version,
+        &registry,
+    )
+    .await?;
     let addr = app.address.parse()?;
     let mut builder = Server::builder();
     if !app.tls_cert.is_empty() && !app.tls_key.is_empty() {

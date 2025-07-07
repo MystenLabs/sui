@@ -30,6 +30,7 @@ pub struct KvRpcServer {
 impl KvRpcServer {
     pub async fn new(
         instance_id: String,
+        app_profile_id: Option<String>,
         server_version: Option<ServerVersion>,
         registry: &Registry,
     ) -> anyhow::Result<Self> {
@@ -39,6 +40,7 @@ impl KvRpcServer {
             None,
             "sui-kv-rpc".to_string(),
             Some(registry),
+            app_profile_id,
         )
         .await?;
         let genesis = client

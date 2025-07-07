@@ -52,6 +52,7 @@ async fn main() -> Result<()> {
                 None,
                 "ingestion".to_string(),
                 None,
+                None,
             )
             .await?;
             let (_exit_sender, exit_receiver) = oneshot::channel();
@@ -73,9 +74,15 @@ async fn main() -> Result<()> {
                 .await?;
         }
         Some(Command::Fetch { entry }) => {
-            let mut client =
-                BigTableClient::new_remote(app.instance_id, true, None, "cli".to_string(), None)
-                    .await?;
+            let mut client = BigTableClient::new_remote(
+                app.instance_id,
+                true,
+                None,
+                "cli".to_string(),
+                None,
+                None,
+            )
+            .await?;
             let result = match entry {
                 Entry::Epoch { id } => client.get_epoch(id).await?.map(|e| bcs::to_bytes(&e)),
                 Entry::Object { id, version } => {
