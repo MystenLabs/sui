@@ -13,8 +13,13 @@ use anyhow::Context;
 use rocksdb::AsColumnFamilyRef;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::key;
-use crate::{error::Error, iter};
+use self::error::Error;
+
+mod config;
+mod error;
+mod iter;
+mod key;
+mod map;
 
 /// Name of the column family the database adds, to manage the checkpoint watermark.
 const WATERMARK_CF: &str = "$watermark";

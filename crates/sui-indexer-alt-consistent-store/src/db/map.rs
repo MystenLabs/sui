@@ -6,7 +6,7 @@ use std::{borrow::Borrow, marker::PhantomData, ops::RangeBounds, sync::Arc};
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{db::Db, error::Error, iter, key};
+use super::{error::Error, iter, key, Db};
 
 /// A structured representation of a single RocksDB column family, providing snapshot-based reads
 /// and a transactional write API.
