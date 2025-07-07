@@ -69,7 +69,7 @@ impl IndexerClusterBuilder {
 
     /// Set the PostgreSQL database connection URL (required).
     ///
-    /// This should be a valid PostgreSQL connection string, e.g.:
+    /// This should be a valid PostgreSQL connection urls, e.g.:
     /// - `postgres://user:password@host:5432/mydb`
     pub fn with_database_url(mut self, url: Url) -> Self {
         self.database_url = Some(url);
@@ -78,14 +78,19 @@ impl IndexerClusterBuilder {
 
     /// Configure database connection parameters such as pool size, connection timeout, etc.
     ///
-    /// Defaults to `DbArgs::default()` if not specified, which provides reasonable defaults
+    /// Defaults to [`DbArgs::default()`] if not specified, which provides reasonable defaults
     /// for most use cases.
     pub fn with_db_args(mut self, args: DbArgs) -> Self {
         self.db_args = args;
         self
     }
 
-    /// Set the main indexer cluster's configuration arguments (required)
+    /// Set the main indexer cluster's configuration arguments (required).
+    ///
+    /// This bundles all configuration needed for the indexer:
+    /// - `IndexerArgs`: Controls what to index (checkpoint range, which pipelines to run, watermark behavior)
+    /// - `ClientArgs`: Specifies where to fetch checkpoint data from (remote store, local path, or RPC)
+    /// - `MetricsArgs`: Configures how to expose Prometheus metrics (address to serve on)
     pub fn with_args(mut self, args: Args) -> Self {
         self.args = Some(args);
         self
