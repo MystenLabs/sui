@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 87;
+const MAX_PROTOCOL_VERSION: u64 = 88;
 
 // Record history of protocol version allocations here:
 //
@@ -245,7 +245,8 @@ const MAX_PROTOCOL_VERSION: u64 = 87;
 // Version 86: Use type tags in the object runtime and adapter instead of `Type`s.
 //             Make variant count limit explicit in protocol config.
 //             Enable party transfer in testnet.
-// Version 87: Update `sui-system` package to use `calculate_rewards` function.
+// Version 87: Enable better type resolution errors in the adapter.
+// Version 88: Update `sui-system` package to use `calculate_rewards` function.
 //             Define the cost for the native Move function `rgp`.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -722,6 +723,10 @@ struct FeatureFlags {
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
+
+    // Provide better type resolution errors in the adapter.
+    #[serde(skip_serializing_if = "is_false")]
+    better_adapter_type_resolution_errors: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2067,6 +2072,10 @@ impl ProtocolConfig {
 
     pub fn enable_ptb_execution_v2(&self) -> bool {
         self.feature_flags.enable_ptb_execution_v2
+    }
+
+    pub fn better_adapter_type_resolution_errors(&self) -> bool {
+        self.feature_flags.better_adapter_type_resolution_errors
     }
 }
 
@@ -3759,6 +3768,9 @@ impl ProtocolConfig {
                     }
                 }
                 87 => {
+                    cfg.feature_flags.better_adapter_type_resolution_errors = true;
+                }
+                88 => {
                     cfg.tx_context_rgp_cost_base = Some(30);
                 }
                 // Use this template when making changes:
