@@ -940,8 +940,8 @@ impl RpcIndexStore {
                         .as_ref()
                         .and_then(|c| c.db_write_buffer_size)
                         .unwrap_or({
-                            // Default to 90% of system RAM
-                            (total_memory_bytes as f64 * 0.9) as usize
+                            // Default to 80% of system RAM
+                            (total_memory_bytes as f64 * 0.8) as usize
                         });
                     options.set_db_write_buffer_size(db_buffer_size);
 
