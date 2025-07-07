@@ -351,7 +351,6 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use anyhow::ensure;
     use async_trait::async_trait;
     use prometheus::Registry;
     use sui_types::full_checkpoint_content::CheckpointData;
@@ -394,28 +393,7 @@ mod tests {
             to_exclusive: u64,
             conn: &mut MockConnection<'a>,
         ) -> anyhow::Result<usize> {
-            let should_fail = conn
-                .0
-                .prune_failure_attempts
-                .lock()
-                .unwrap()
-                .get_mut(&(from, to_exclusive))
-                .is_some_and(|remaining| {
-                    if *remaining > 0 {
-                        *remaining -= 1;
-                        true
-                    } else {
-                        false
-                    }
-                });
-
-            ensure!(!should_fail, "Pruning failed");
-
-            let mut data = conn.0.data.lock().unwrap();
-            for cp_sequence_number in from..to_exclusive {
-                data.remove(&cp_sequence_number);
-            }
-            Ok((to_exclusive - from) as usize)
+            conn.0.prune_data(from, to_exclusive)
         }
     }
 
@@ -751,13 +729,12 @@ mod tests {
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let remaining_failures = HashMap::from([((1, 2), 1)]);
         let store = MockStore {
             watermarks: Arc::new(Mutex::new(watermark)),
             data: Arc::new(Mutex::new(test_data.clone())),
-            prune_failure_attempts: Arc::new(Mutex::new(remaining_failures)),
             ..Default::default()
-        };
+        }
+        .with_prune_failures(1, 2, 1);
 
         // Start the pruner
         let store_clone = store.clone();
