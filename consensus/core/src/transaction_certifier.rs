@@ -521,8 +521,9 @@ impl VoteInfo {
             }
         }
         // The block is certified.
-        tracing::debug!(
-            "Block tx count: {} & rejected txn count: {}",
+        tracing::trace!(
+            "Block {} accepted tx count: {} & rejected txn count: {}",
+            block.reference(),
             block.transactions().len(),
             rejected.len()
         );

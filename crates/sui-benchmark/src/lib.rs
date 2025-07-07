@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::drivers::bench_driver::ClientType;
+
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+
 use anyhow::bail;
 use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use rand::Rng;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
@@ -50,7 +51,9 @@ use sui_types::{
     execution_status::ExecutionFailureStatus,
 };
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
+
+use crate::drivers::bench_driver::ClientType;
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -383,12 +386,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+        let tx_digest = *tx.digest();
         if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
             if let Ok(tx_driver_percentage) = v.parse::<u8>() {
                 if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
                     let random_value = rand::thread_rng().gen_range(1..=100);
                     if random_value <= tx_driver_percentage {
-                        info!("Using TransactionDriver for transaction {:?}", tx.digest());
+                        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
                         return (
                             ClientType::TransactionDriver,
                             self.submit_transaction_block(tx).await,
@@ -398,8 +402,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             }
         }
 
-        let tx_digest = *tx.digest();
-        info!("Using QuorumDriver for transaction {tx_digest:?}");
+        debug!("Using QuorumDriver for transaction {tx_digest:?}");
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
             let ticket = match self

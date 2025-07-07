@@ -706,7 +706,7 @@ async fn spawn_bench_workers(
 
 async fn run_bench_worker(
     barrier: Arc<Barrier>,
-    metrics_cloned: Arc<BenchMetrics>,
+    metrics: Arc<BenchMetrics>,
     tx_cloned: Sender<Stats>,
     cloned_token: CancellationToken,
     stat_delay_micros: u64,
@@ -762,20 +762,20 @@ async fn run_bench_worker(
                 let latency = start.elapsed();
                 let time_from_start = total_benchmark_start_time.elapsed();
 
-                metrics_cloned
+                metrics
                     .benchmark_duration
                     .set(time_from_start.as_secs() as i64);
 
                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
-                metrics_cloned
+                metrics
                     .latency_s
                     .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .observe(latency.as_secs_f64());
-                metrics_cloned
+                metrics
                     .latency_squared_s
                     .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .inc_by(square_latency_ms);
-                metrics_cloned
+                metrics
                     .num_in_flight
                     .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .dec();
@@ -784,16 +784,16 @@ async fn run_bench_worker(
                     transaction.data().transaction_data().kind().num_commands() as u16;
 
                 if effects.is_ok() {
-                    metrics_cloned
+                    metrics
                         .num_success
                         .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                         .inc();
-                    metrics_cloned
+                    metrics
                         .num_success_cmds
                         .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                         .inc_by(num_commands as u64);
                 } else {
-                    metrics_cloned
+                    metrics
                         .num_error
                         .with_label_values(&[
                             &payload.to_string(),
@@ -805,7 +805,7 @@ async fn run_bench_worker(
 
                 if let Some(sig_info) = effects.quorum_sig() {
                     sig_info.authorities(&committee).for_each(|name| {
-                        metrics_cloned
+                        metrics
                             .validators_in_effects_cert
                             .with_label_values(&[&name.unwrap().to_string()])
                             .inc()
@@ -831,7 +831,7 @@ async fn run_bench_worker(
                         panic!("Transaction failed unexpectedly");
                     }
                     Some(_) => {
-                        metrics_cloned
+                        metrics
                             .num_expected_error
                             .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                             .inc();
@@ -854,7 +854,7 @@ async fn run_bench_worker(
                         {
                             NextOp::Failure
                         } else {
-                            metrics_cloned
+                            metrics
                                 .num_error
                                 .with_label_values(&[
                                     &payload.to_string(),
@@ -959,14 +959,14 @@ async fn run_bench_worker(
                         None => num_error_txes += 1,
                     }
                     num_submitted += 1;
-                    let metrics_cloned_cloned = Arc::clone(&metrics_cloned);
+                    let metrics = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let start = Arc::new(Instant::now());
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move  {
-                            metrics_cloned_cloned.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                            metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
                         });
                     futures.push(Box::pin(res));
@@ -982,14 +982,14 @@ async fn run_bench_worker(
                     num_submitted += 1;
                     let tx = payload.make_transaction();
                     let start = Arc::new(Instant::now());
-                    let metrics_cloned_cloned = Arc::clone(&metrics_cloned);
+                    let metrics = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                     .then(|(client_type, res)| async move {
-                        metrics_cloned_cloned.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
-                        metrics_cloned_cloned.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                        metrics.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                        metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                         handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
                     });
                     futures.push(Box::pin(res));

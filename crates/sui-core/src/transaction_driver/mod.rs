@@ -125,7 +125,7 @@ where
             client.submit_transaction(raw_request, options.forwarded_client_addr),
         )
         .await
-        .map_err(|_| TransactionDriverError::TimeoutGettingConsensusPosition)?
+        .map_err(|_| TransactionDriverError::TimeoutSubmittingTransaction)?
         .map_err(|e| {
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
