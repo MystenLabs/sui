@@ -1,13 +1,13 @@
 ---
 title: Object Ownership Basics
-description: On Sui object ownership can be represented in a number of different ways. Weigh the benefits of each to decide the best approach for your project.
+description: On Sui, object ownership can be represented in different ways. Weigh the benefits of each to decide the best approach for your project.
 ---
 
 Objects on Sui can be versioned either through the fastpath, or through consensus. The choice between these two paths affects your options for object ownership, as well as the performance and operational complexity of your application. Many applications can be built using a solution that either uses consensus objects or only fastpath objects, with trade-offs for each that need to be weighed.
 
 Fastpath objects must be owned by a single address (or immutable). This makes it complicated to write some applications that require multiple parties or nodes to access the same object. Access to very hot fastpath objects needs to be coordinated off-chain. However, transactions that use the fastpath benefit from very low latency to finality.
 
-Consensus objects can be owned by a single address (party objects) or globally accessible for read and writes by any transaction (shared objects). Transactions that access one or more consensus objects require consensus to sequence reads and writes to those objects. This makes version management simpler, especially for very hot objects, but results in a slightly higher gas cost and latency.
+Consensus objects can be owned by a single address (party objects) or globally accessible for read and writes by any transaction (shared objects). Transactions that access one or more consensus objects require consensus to sequence reads and writes to those objects. This makes version management simpler, especially for heavily accessed objects, but results in a slightly higher gas cost and latency.
 
 Transactions that access multiple consensus objects, or particularly popular objects, might have increases in latency due to contention. However, the advantage of using consensus objects lies in the flexibility of allowing multiple addresses to access the same object in a coordinated manner.
 
