@@ -18,6 +18,7 @@ pub fn get_early_execution_error(
     transaction_digest: &TransactionDigest,
     input_objects: &CheckedInputObjects,
     config_certificate_deny_set: &HashSet<TransactionDigest>,
+    insufficient_balance_for_withdraw: bool,
 ) -> Option<ExecutionErrorKind> {
     if is_certificate_denied(transaction_digest, config_certificate_deny_set) {
         return Some(ExecutionErrorKind::CertificateDenied);
@@ -45,6 +46,10 @@ pub fn get_early_execution_error(
             }
             _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
         }
+    }
+
+    if insufficient_balance_for_withdraw {
+        return Some(ExecutionErrorKind::InsufficientBalanceForWithdraw);
     }
 
     None
@@ -87,4 +92,100 @@ fn is_certificate_denied(
 ) -> bool {
     certificate_deny_set.contains(transaction_digest)
         || get_denied_certificates().contains(transaction_digest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        base_types::ObjectID,
+        transaction::{
+            CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
+            ObjectReadResultKind,
+        },
+    };
+
+    fn create_test_input_objects() -> CheckedInputObjects {
+        let input_objects = InputObjects::new(vec![]);
+        CheckedInputObjects::new_for_replay(input_objects)
+    }
+
+    #[test]
+    fn test_early_execution_error_insufficient_balance() {
+        let tx_digest = crate::digests::TransactionDigest::random();
+        let input_objects = create_test_input_objects();
+        let deny_set = HashSet::new();
+
+        // Test with insufficient balance = true
+        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, true);
+        assert_eq!(
+            result,
+            Some(ExecutionErrorKind::InsufficientBalanceForWithdraw)
+        );
+
+        // Test with insufficient balance = false
+        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, false);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_early_execution_error_precedence() {
+        let tx_digest = crate::digests::TransactionDigest::random();
+        let input_objects = create_test_input_objects();
+
+        // Test that certificate denial takes precedence over insufficient balance
+        let mut deny_set = HashSet::new();
+        deny_set.insert(tx_digest);
+        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, true);
+        assert_eq!(result, Some(ExecutionErrorKind::CertificateDenied));
+
+        // Test that deleted input objects take precedence over insufficient balance
+        let input_objects = InputObjects::new(vec![
+            // canceled object
+            ObjectReadResult {
+                input_object_kind: InputObjectKind::SharedMoveObject {
+                    id: ObjectID::random(),
+                    initial_shared_version: SequenceNumber::MIN,
+                    mutable: false,
+                },
+                object: ObjectReadResultKind::ObjectConsensusStreamEnded(
+                    SequenceNumber::MIN, // doesn't matter
+                    tx_digest,
+                ),
+            },
+        ]);
+        deny_set.clear();
+        let result = get_early_execution_error(
+            &tx_digest,
+            &CheckedInputObjects::new_for_replay(input_objects),
+            &deny_set,
+            true,
+        );
+        assert_eq!(result, Some(ExecutionErrorKind::InputObjectDeleted));
+
+        // Test that canceled takes precedence over insufficient balance
+        let input_objects = InputObjects::new(vec![
+            // canceled object
+            ObjectReadResult {
+                input_object_kind: InputObjectKind::SharedMoveObject {
+                    id: ObjectID::random(),
+                    initial_shared_version: SequenceNumber::MIN,
+                    mutable: false,
+                },
+                object: ObjectReadResultKind::CancelledTransactionSharedObject(
+                    SequenceNumber::CONGESTED,
+                ),
+            },
+        ]);
+        let result = get_early_execution_error(
+            &tx_digest,
+            &CheckedInputObjects::new_for_replay(input_objects),
+            &deny_set,
+            true,
+        );
+        assert!(matches!(
+            result,
+            Some(ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. })
+        ));
+    }
 }

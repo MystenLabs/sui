@@ -1432,6 +1432,10 @@ impl AuthorityState {
                 epoch_store.get_signed_effects_digest(tx_digest)?;
         }
 
+        let insufficient_balance_for_withdraw = matches!(
+            execution_env.withdraw_status,
+            BalanceWithdrawStatus::InsufficientBalance
+        );
         let (effects, execution_error_opt) = self
             .process_certificate(
                 execution_start_time,
@@ -1441,6 +1445,7 @@ impl AuthorityState {
                 execution_env.expected_effects_digest,
                 epoch_store,
                 execution_env.scheduling_source,
+                insufficient_balance_for_withdraw,
             )
             .tap_err(|e| info!("process_certificate failed: {e}"))
             .tap_ok(|(fx, _)| {
@@ -1556,6 +1561,7 @@ impl AuthorityState {
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         scheduling_source: SchedulingSource,
+        insufficient_balance_for_withdraw: bool,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let process_certificate_start_time = tokio::time::Instant::now();
         let tx_digest = *certificate.digest();
@@ -1601,6 +1607,7 @@ impl AuthorityState {
             input_objects,
             expected_effects_digest,
             epoch_store,
+            insufficient_balance_for_withdraw,
         ) {
             Err(e) => {
                 info!(name = ?self.name, ?tx_digest, "Error executing transaction: {e}");
@@ -1799,6 +1806,7 @@ impl AuthorityState {
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        insufficient_balance_for_withdraw: bool,
     ) -> SuiResult<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
@@ -1832,6 +1840,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            insufficient_balance_for_withdraw,
         );
 
         #[allow(unused_mut)]
@@ -1947,6 +1956,7 @@ impl AuthorityState {
             input_objects,
             None,
             epoch_store,
+            false, // insufficient_balance_for_withdraw - not applicable in this context
         )?;
         Ok((transaction_outputs, execution_error_opt))
     }
@@ -2085,6 +2095,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            false, // insufficient_balance_for_withdraw
         );
         let (inner_temp_store, _, effects, _timings, execution_error) = executor
             .execute_transaction_to_effects(
@@ -2286,6 +2298,8 @@ impl AuthorityState {
             &transaction.digest(),
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            false, // insufficient_balance_for_withdraw
         );
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
@@ -2479,6 +2493,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            false, // insufficient_balance_for_withdraw
         );
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
@@ -5487,6 +5503,7 @@ impl AuthorityState {
             input_objects,
             None,
             epoch_store,
+            false, // insufficient_balance_for_withdraw - not applicable in this test context
         )?;
         let system_obj = get_sui_system_state(&transaction_outputs.written)
             .expect("change epoch tx must write to system object");

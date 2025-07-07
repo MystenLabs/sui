@@ -239,6 +239,9 @@ pub enum ExecutionFailureStatus {
 
     #[error("A valid linkage was unable to be determined for the transaction")]
     InvalidLinkage,
+
+    #[error("Insufficient balance for transaction withdrawal")]
+    InsufficientBalanceForWithdraw,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

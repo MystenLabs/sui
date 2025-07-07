@@ -783,7 +783,7 @@ impl LocalExec {
         };
         let checked_input_objects = CheckedInputObjects::new_for_replay(input_objects.clone());
         let early_execution_error =
-            get_early_execution_error(tx_digest, &checked_input_objects, &HashSet::new());
+            get_early_execution_error(tx_digest, &checked_input_objects, &HashSet::new(), false);
         let (inner_store, gas_status, effects, _timings, result) = executor
             .execute_transaction_to_effects(
                 &self,
@@ -850,8 +850,12 @@ impl LocalExec {
             budget: tx_info.gas_budget,
         };
         let checked_input_objects = CheckedInputObjects::new_for_replay(input_objects.clone());
-        let early_execution_error =
-            get_early_execution_error(&tx_info.tx_digest, &checked_input_objects, &HashSet::new());
+        let early_execution_error = get_early_execution_error(
+            &tx_info.tx_digest,
+            &checked_input_objects,
+            &HashSet::new(),
+            false,
+        );
         if let ProgrammableTransaction(pt) = transaction_kind {
             trace!(
                 target: "replay_ptb_info",
@@ -958,7 +962,7 @@ impl LocalExec {
         let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
         let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
         let early_execution_error =
-            get_early_execution_error(executable.digest(), &input_objects, &HashSet::new());
+            get_early_execution_error(executable.digest(), &input_objects, &HashSet::new(), false);
         let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
             &store,
             &protocol_config,

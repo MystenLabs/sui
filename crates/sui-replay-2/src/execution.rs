@@ -111,8 +111,9 @@ pub fn execute_transaction_to_effects(
         object_cache: RefCell::new(object_cache),
     };
     let input_objects = CheckedInputObjects::new_for_replay(input_objects);
+    // TODO(address-balances): Get withdraw status from effects.
     let early_execution_error =
-        get_early_execution_error(&digest, &input_objects, &config_certificate_deny_set);
+        get_early_execution_error(&digest, &input_objects, &config_certificate_deny_set, false);
     let (inner_store, gas_status, effects, _execution_timing, result) =
         executor.executor.execute_transaction_to_effects(
             &store,
