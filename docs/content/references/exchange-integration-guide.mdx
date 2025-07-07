@@ -49,6 +49,11 @@ Run the command in this section using the same branch of the repository for each
     ```sh
     $ wget https://github.com/MystenLabs/sui-genesis/blob/main/mainnet/genesis.blob
     ```
+    :::info
+    
+    Replace `mainnet` in the URL with the desired target branch if necessary. For example, `https://github.com/MystenLabs/sui-genesis/blob/main/testnet/genesis.blob` for Testnet.
+
+    :::
 1.  Start the Full node. The -d switch starts it in the background (detached mode).
     ```sh
     $ docker-compose up -d
