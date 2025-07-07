@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::{error::Error, key};
+use super::{error::Error, key};
 
 /// An iterator that scans through elements in increasing key order.
 pub(crate) struct FwdIter<'d, K, V> {
