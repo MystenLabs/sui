@@ -103,9 +103,33 @@ impl QueryTransactionsApiServer for QueryTransactions {
 
         let options = query.options.unwrap_or_default();
 
-        let tx_futures = digests
-            .iter()
-            .map(|d| response::transaction(ctx, *d, &options));
+        let tx_futures = digests.iter().map(|d| {
+            let options = options.clone();
+            async move {
+                let mut tx = response::transaction(ctx, *d, &options).await;
+
+                let config = &ctx.config().transactions;
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(
+                    config.tx_digest_retry_interval_ms,
+                ));
+
+                for _ in 0..config.tx_digest_retry_count {
+                    // Retry only if the error is an invalid params error, which can only be due to
+                    // the transaction not being found in the kv store or tx balance changes table.
+                    if let Err(RpcError::InvalidParams(_)) = tx {
+                        interval.tick().await;
+                        tx = response::transaction(ctx, *d, &options).await;
+                        ctx.metrics()
+                            .read_retries
+                            .with_label_values(&["kv_tx"])
+                            .inc();
+                    } else {
+                        break;
+                    }
+                }
+                tx
+            }
+        });
 
         let data = future::join_all(tx_futures)
             .await

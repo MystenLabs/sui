@@ -31,8 +31,12 @@ pub(crate) async fn load_live(
 
     // Read from kv store and retry if the object is not found.
     let mut object = None;
-    let retry_interval = Duration::from_millis(ctx.config().objects.kv_retry_interval_ms);
-    for _ in 0..ctx.config().objects.kv_retry_count {
+    let config = &ctx.config().objects;
+    let mut interval = tokio::time::interval(Duration::from_millis(config.kv_retry_interval_ms));
+
+    for _ in 0..config.kv_retry_count {
+        interval.tick().await;
+
         object = ctx
             .kv_loader()
             .load_one_object(object_id, latest_version.object_version as u64)
@@ -46,7 +50,6 @@ pub(crate) async fn load_live(
             .read_retries
             .with_label_values(&["kv_object"])
             .inc();
-        tokio::time::sleep(retry_interval).await;
     }
 
     Ok(object)

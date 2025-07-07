@@ -60,7 +60,7 @@ pub(super) async fn transaction(
         .transpose()
         .context("Failed to fetch balance changes from store")?
     {
-        Some(None) => return Err(invalid_params(Error::PrunedBalanceChanges(digest))),
+        Some(None) => return Err(invalid_params(Error::BalanceChangesNotFound(digest))),
         Some(changes) => changes,
         None => None,
     };

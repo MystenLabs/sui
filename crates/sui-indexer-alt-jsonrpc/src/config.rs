@@ -143,6 +143,13 @@ pub struct TransactionsConfig {
 
     /// The interval between tx_digest retry attempts in milliseconds.
     pub tx_digest_retry_interval_ms: u64,
+
+    /// The number of times to retry a kv get operation to the transaction table. Retry is needed when a transaction
+    /// is not yet found in the kv store due to the kv being behind the pg table's checkpoint watermark.
+    pub kv_retry_count: usize,
+
+    /// The interval between kv retry attempts in milliseconds.
+    pub kv_retry_interval_ms: u64,
 }
 
 #[DefaultConfig]
@@ -152,6 +159,8 @@ pub struct TransactionsLayer {
     pub max_page_size: Option<usize>,
     pub tx_digest_retry_count: Option<usize>,
     pub tx_digest_retry_interval_ms: Option<u64>,
+    pub kv_retry_count: Option<usize>,
+    pub kv_retry_interval_ms: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -296,6 +305,10 @@ impl TransactionsLayer {
             tx_digest_retry_interval_ms: self
                 .tx_digest_retry_interval_ms
                 .unwrap_or(base.tx_digest_retry_interval_ms),
+            kv_retry_count: self.kv_retry_count.unwrap_or(base.kv_retry_count),
+            kv_retry_interval_ms: self
+                .kv_retry_interval_ms
+                .unwrap_or(base.kv_retry_interval_ms),
         }
     }
 }
@@ -406,6 +419,8 @@ impl Default for TransactionsConfig {
             max_page_size: 100,
             tx_digest_retry_count: 5,
             tx_digest_retry_interval_ms: 100,
+            kv_retry_count: 5,
+            kv_retry_interval_ms: 100,
         }
     }
 }
@@ -481,6 +496,8 @@ impl From<TransactionsConfig> for TransactionsLayer {
             max_page_size: Some(config.max_page_size),
             tx_digest_retry_count: Some(config.tx_digest_retry_count),
             tx_digest_retry_interval_ms: Some(config.tx_digest_retry_interval_ms),
+            kv_retry_count: Some(config.kv_retry_count),
+            kv_retry_interval_ms: Some(config.kv_retry_interval_ms),
             extra: Default::default(),
         }
     }

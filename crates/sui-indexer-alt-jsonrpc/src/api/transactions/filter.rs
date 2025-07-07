@@ -397,27 +397,32 @@ async fn from_sequence_numbers(
         .transpose()
         .context("Failed to encode next cursor")?;
 
-    // Get digests from the table and retry if any of the digests are not found.
-    let retries = ctx.config().transactions.tx_digest_retry_count;
-    let retry_interval =
-        Duration::from_millis(ctx.config().transactions.tx_digest_retry_interval_ms);
+    // Get digests from the table and retry any of the digests that are not found.
+    let config = &ctx.config().transactions;
+    let retries = config.tx_digest_retry_count;
+    let mut retry_interval =
+        tokio::time::interval(Duration::from_millis(config.tx_digest_retry_interval_ms));
+    let mut keys: Vec<_> = rows.iter().map(|&seq| TxDigestKey(seq as u64)).collect();
     let mut digests: HashMap<TxDigestKey, StoredTxDigest> = HashMap::new();
     for _ in 0..retries {
-        digests = ctx
-            .pg_loader()
-            .load_many(rows.iter().map(|&seq| TxDigestKey(seq as u64)))
-            .await
-            .context("Failed to load transaction digests")?;
+        retry_interval.tick().await;
 
-        // Only retry if the number of digests is less than the number of rows.
-        if digests.len() == rows.len() {
+        digests.extend(
+            ctx.pg_loader()
+                .load_many(keys.clone())
+                .await
+                .context("Failed to load transaction digests")?,
+        );
+
+        // Only retry the keys that are not found.
+        keys.retain(|key| !digests.contains_key(key));
+        if keys.is_empty() {
             break;
         }
         ctx.metrics()
             .read_retries
             .with_label_values(&["tx_digest"])
             .inc();
-        tokio::time::sleep(retry_interval).await;
     }
 
     let mut data = Vec::with_capacity(rows.len());
