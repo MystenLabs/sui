@@ -1,0 +1,8 @@
+warning[Lint W04013]: unnecessary mutable parameters
+  ┌─ tests/linter/incorrect_unnecessary_mut_params.move:8:33
+  │
+8 │     public fun not_modify_param(person: &mut Person) {
+  │                                 ^^^^^^ Parameter 'person' is marked as mutable but never modified
+  │
+  = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

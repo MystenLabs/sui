@@ -1,0 +1,40 @@
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/false_negative_unnecessary_mut_params.move:10:34
+   │
+10 │     public fun indirect_mutation(person: &mut Person) {
+   │                                  ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/false_negative_unnecessary_mut_params.move:14:27
+   │
+14 │     fun nested_helper_one(person: &mut Person) {
+   │                           ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/false_negative_unnecessary_mut_params.move:23:43
+   │
+23 │     public fun generic_mutation<T: store>(value: &mut T) {
+   │                                           ^^^^^ Parameter 'value' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/linter/false_negative_unnecessary_mut_params.move:23:43
+   │
+23 │     public fun generic_mutation<T: store>(value: &mut T) {
+   │                                           ^^^^^ Unused parameter 'value'. Consider removing or prefixing with an underscore: '_value'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/false_negative_unnecessary_mut_params.move:28:33
+   │
+28 │     public fun dynamic_mutation(person: &mut Person, should_modify: bool) {
+   │                                 ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
