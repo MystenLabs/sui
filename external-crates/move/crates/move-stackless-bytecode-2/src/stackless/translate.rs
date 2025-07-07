@@ -99,17 +99,21 @@ pub(crate) fn function<K: SourceKind>(
         });
     }
     let cfg = StacklessControlFlowGraph::new(code, function.jump_tables());
-    
-    let locals_types = function.parameters.iter().enumerate()
+
+    let locals_types = function
+        .parameters
+        .iter()
+        .enumerate()
         .chain(
-            function.locals.iter()
-            .enumerate()
-            .map(|(i, ty)| (function.parameters.len() + i, ty))
+            function
+                .locals
+                .iter()
+                .enumerate()
+                .map(|(i, ty)| (function.parameters.len() + i, ty)),
         )
         .map(|(idx, ty)| (idx, ty.clone()))
         .collect::<BTreeMap<_, _>>();
     ctxt.set_locals_types(locals_types);
-
 
     let mut basic_blocks = BTreeMap::new();
 
@@ -256,8 +260,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::CopyLoc(loc) => {
             let local_idx = *loc as usize;
-            let local_type = ctxt.get_local_type(local_idx)
-                .clone();
+            let local_type = ctxt.get_local_type(local_idx).clone();
             assign_reg!(
                 //TODO subst type here
                 [push!(local_type)] = RValue::Local {
@@ -269,8 +272,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::MoveLoc(loc) => {
             let local_idx = *loc as usize;
-            let local_type = ctxt.get_local_type(local_idx)
-                .clone();
+            let local_type = ctxt.get_local_type(local_idx).clone();
             assign_reg!(
                 //TODO subst type here
                 [push!(local_type)] = RValue::Local {
@@ -314,8 +316,12 @@ pub(crate) fn bytecode<K: SourceKind>(
                 });
 
             let args = make_vec!(function.parameters.len(), Register(pop!()));
-            
-            let type_params = function_ref.type_arguments.iter().map(|ty| ty.as_ref().clone()).collect::<Vec<_>>();
+
+            let type_params = function_ref
+                .type_arguments
+                .iter()
+                .map(|ty| ty.as_ref().clone())
+                .collect::<Vec<_>>();
             // TODO check push type
             let lhs = function
                 .return_
@@ -377,8 +383,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::MutBorrowLoc(loc) => {
             let local_idx = *loc as usize;
-            let local_type = ctxt.get_local_type(local_idx)
-                .clone();
+            let local_type = ctxt.get_local_type(local_idx).clone();
             assign_reg!(
                 [push!(local_type)] = RValue::Local {
                     op: LocOp::Borrow(ast::Mutability::Mutable),
@@ -389,8 +394,7 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::ImmBorrowLoc(loc) => {
             let local_idx = *loc as usize;
-            let local_type = ctxt.get_local_type(local_idx)
-                .clone();
+            let local_type = ctxt.get_local_type(local_idx).clone();
             assign_reg!(
                 [push!(local_type)] = RValue::Local {
                     op: LocOp::Borrow(ast::Mutability::Immutable),
@@ -618,16 +622,14 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::Shl => {
             let ty = ctxt.nth_register(2).ty.clone();
             assign_reg!(
-                [push!(ty)] =
-                    primitive_op!(Op::ShiftLeft, Register(pop!()), Register(pop!()))
+                [push!(ty)] = primitive_op!(Op::ShiftLeft, Register(pop!()), Register(pop!()))
             )
         }
 
         IB::Shr => {
             let ty = ctxt.nth_register(2).ty.clone();
             assign_reg!(
-                [push!(ty)] =
-                    primitive_op!(Op::ShiftRight, Register(pop!()), Register(pop!()))
+                [push!(ty)] = primitive_op!(Op::ShiftRight, Register(pop!()), Register(pop!()))
             )
         }
 
@@ -798,11 +800,3 @@ pub(crate) fn bytecode<K: SourceKind>(
     }
 }
 
-
-fn debug_fun(
-    op: &IB<Symbol>,
-    pc: usize,
-    function: &N::Function<Symbol>,
-) -> String {
-    format!("Bytecode: {:?} at pc: {} in function: {}\nCode: {:?}\nLocals: {:?}", op, pc, function.name, function.code(), function.locals)
-}
