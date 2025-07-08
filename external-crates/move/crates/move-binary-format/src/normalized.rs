@@ -118,11 +118,14 @@ pub struct Constant<S> {
     pub data: Vec<u8>,
 }
 
-/// Normalized version of a `StructDefinition`.
+/// Normalized version of a `StructDefinition`. Not safe to compare without an associated
+/// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Struct<S: Hash + Eq> {
     pub name: S,
+    /// Uninstantiated datatype. The parameters here are simply the type parameters, so that we can
+    /// instantiate this type.
     pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
@@ -162,11 +165,14 @@ pub struct Function<S: Hash + Eq> {
     code: Vec<Bytecode<S>>,
 }
 
-/// Normalized version of a `EnumDefinition`.
+/// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
+/// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Enum<S: Hash + Eq> {
     pub name: S,
+    /// Uninstantiated datatype. The parameters here are simply the type parameters, so that we can
+    /// instantiate this type.
     pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
@@ -431,6 +437,10 @@ impl<S> Type<S> {
 
     pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: &StructTag) -> Self {
         Type::Datatype(Box::new(Datatype::from_struct_tag(pool, tag)))
+    }
+
+    pub fn from_datatype(datatype: Datatype<S>) -> Self {
+        Type::Datatype(Box::new(datatype))
     }
 
     /// Return true if `self` is a closed type with no free type variables
@@ -822,16 +832,17 @@ impl<S: Hash + Eq> Struct<S> {
         self.type_parameters.iter().map(|param| &param.constraints)
     }
 
+    // Checks equivalence, omitting the datatype to avoid module name comparisons. Comparing the
+    // datatypes might lead to odd compatibility issues due to module self-addressing, etc.
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             name,
-            datatype,
+            datatype: _,
             abilities,
             type_parameters,
             fields,
         } = self;
         name == &other.name
-            && datatype.equivalent(&other.datatype)
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && fields.equivalent(&other.fields)
@@ -839,17 +850,10 @@ impl<S: Hash + Eq> Struct<S> {
 }
 
 impl<S: Hash + Eq + Clone> Struct<S> {
-    pub fn subst_signature(&self, signature: Signature<S>) -> Type<S> {
-        let tys: Vec<Type<S>> = signature
-            .iter()
-            .map(|ty| (**ty).clone())
-            .collect::<Vec<_>>();
-        self.subst(&tys)
-    }
-
-    pub fn subst(&self, type_args: &[Type<S>]) -> Type<S> {
-        let base_ty = Type::Datatype(Box::new(self.datatype.clone()));
-        base_ty.subst(type_args)
+    /// Returns an (uninstantiated) datatype signature token. Here, the arguments are just
+    /// `TyParam(0), ..., TyParam(n)`, waiting to be substituted.
+    pub fn datatype(&self) -> Datatype<S> {
+        self.datatype.clone()
     }
 }
 
@@ -1020,16 +1024,17 @@ impl<S: Hash + Eq> Enum<S> {
         }
     }
 
+    // Checks equivalence, omitting the datatype to avoid module name comparisons. Comparing the
+    // datatypes might lead to odd compatibility issues due to module self-addressing, etc.
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             name,
-            datatype,
+            datatype: _,
             abilities,
             type_parameters,
             variants,
         } = self;
         name == &other.name
-            && datatype.equivalent(&other.datatype)
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
             && map_ordered_equivalent(variants, &other.variants, |v1, v2| v1.equivalent(v2))
@@ -1037,17 +1042,10 @@ impl<S: Hash + Eq> Enum<S> {
 }
 
 impl<S: Hash + Eq + Clone> Enum<S> {
-    pub fn subst_signature(&self, signature: Signature<S>) -> Type<S> {
-        let tys: Vec<Type<S>> = signature
-            .iter()
-            .map(|ty| (**ty).clone())
-            .collect::<Vec<_>>();
-        self.subst(&tys)
-    }
-
-    pub fn subst(&self, type_args: &[Type<S>]) -> Type<S> {
-        let base_ty = Type::Datatype(Box::new(self.datatype.clone()));
-        base_ty.subst(type_args)
+    /// Returns an (uninstantiated) datatype signature token. Here, the arguments are just
+    /// `TyParam(0), ..., TyParam(n)`, waiting to be substituted.
+    pub fn datatype(&self) -> Datatype<S> {
+        self.datatype.clone()
     }
 }
 
