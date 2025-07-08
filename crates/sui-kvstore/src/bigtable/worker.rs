@@ -31,7 +31,9 @@ impl Worker for KvWorker {
             }
             transactions.push(full_transaction);
         }
-        client.save_objects(&objects).await?;
+        client
+            .save_objects(&objects, checkpoint.checkpoint_summary.timestamp_ms)
+            .await?;
         client.save_transactions(&transactions).await?;
         client.save_checkpoint(checkpoint).await?;
         if let Some(epoch_info) = checkpoint.epoch_info()? {
