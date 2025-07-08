@@ -14,8 +14,8 @@ pub(super) enum Error {
     #[error("Pagination issue: {0}")]
     Pagination(#[from] crate::paginate::Error),
 
-    #[error("Balance changes for transaction {0} have been pruned")]
-    PrunedBalanceChanges(TransactionDigest),
+    #[error("Balance changes for transaction {0} are either pruned or not yet available")]
+    BalanceChangesNotFound(TransactionDigest),
 
     #[error(
         "Transaction {0} affected object {} pruned at version {2}",
