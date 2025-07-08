@@ -399,12 +399,12 @@ async fn from_sequence_numbers(
 
     // Get digests from the table and retry any of the digests that are not found.
     let config = &ctx.config().transactions;
-    let retries = config.tx_digest_retry_count;
+    let retries = config.tx_retry_count;
     let mut retry_interval =
-        tokio::time::interval(Duration::from_millis(config.tx_digest_retry_interval_ms));
+        tokio::time::interval(Duration::from_millis(config.tx_retry_interval_ms));
     let mut keys: Vec<_> = rows.iter().map(|&seq| TxDigestKey(seq as u64)).collect();
     let mut digests: HashMap<TxDigestKey, StoredTxDigest> = HashMap::new();
-    for _ in 0..retries {
+    for _ in 0..=retries {
         retry_interval.tick().await;
 
         digests.extend(

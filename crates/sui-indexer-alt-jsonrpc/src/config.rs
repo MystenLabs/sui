@@ -84,10 +84,10 @@ pub struct ObjectsConfig {
 
     /// The number of times to retry a kv get operation. Retry is needed when a version of the object
     /// is not yet found in the kv store due to the kv being behind the pg table's checkpoint watermark.
-    pub kv_retry_count: usize,
+    pub obj_retry_count: usize,
 
     /// The interval between kv retry attempts in milliseconds.
-    pub kv_retry_interval_ms: u64,
+    pub obj_retry_interval_ms: u64,
 }
 
 #[DefaultConfig]
@@ -101,8 +101,8 @@ pub struct ObjectsLayer {
     pub max_filter_depth: Option<usize>,
     pub max_type_filters: Option<usize>,
     pub filter_scan_size: Option<usize>,
-    pub kv_retry_count: Option<usize>,
-    pub kv_retry_interval_ms: Option<u64>,
+    pub obj_retry_count: Option<usize>,
+    pub obj_retry_interval_ms: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -137,19 +137,12 @@ pub struct TransactionsConfig {
     /// this is a user error.
     pub max_page_size: usize,
 
-    /// The number of times to retry a read from the tx_digest table. Retry is needed when a tx digest
-    /// is not yet found in the table due to the tx_digest table being behind other tx table's checkpoint watermark.
-    pub tx_digest_retry_count: usize,
+    /// The number of times to retry a read from kv or pg transaction tables. Retry is needed when a tx digest
+    /// is not yet found in the table due to it being behind other transaction table's checkpoint watermark.
+    pub tx_retry_count: usize,
 
     /// The interval between tx_digest retry attempts in milliseconds.
-    pub tx_digest_retry_interval_ms: u64,
-
-    /// The number of times to retry a kv get operation to the transaction table. Retry is needed when a transaction
-    /// is not yet found in the kv store due to the kv being behind the pg table's checkpoint watermark.
-    pub kv_retry_count: usize,
-
-    /// The interval between kv retry attempts in milliseconds.
-    pub kv_retry_interval_ms: u64,
+    pub tx_retry_interval_ms: u64,
 }
 
 #[DefaultConfig]
@@ -157,10 +150,8 @@ pub struct TransactionsConfig {
 pub struct TransactionsLayer {
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
-    pub tx_digest_retry_count: Option<usize>,
-    pub tx_digest_retry_interval_ms: Option<u64>,
-    pub kv_retry_count: Option<usize>,
-    pub kv_retry_interval_ms: Option<u64>,
+    pub tx_retry_count: Option<usize>,
+    pub tx_retry_interval_ms: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -275,10 +266,10 @@ impl ObjectsLayer {
             max_filter_depth: self.max_filter_depth.unwrap_or(base.max_filter_depth),
             max_type_filters: self.max_type_filters.unwrap_or(base.max_type_filters),
             filter_scan_size: self.filter_scan_size.unwrap_or(base.filter_scan_size),
-            kv_retry_count: self.kv_retry_count.unwrap_or(base.kv_retry_count),
-            kv_retry_interval_ms: self
-                .kv_retry_interval_ms
-                .unwrap_or(base.kv_retry_interval_ms),
+            obj_retry_count: self.obj_retry_count.unwrap_or(base.obj_retry_count),
+            obj_retry_interval_ms: self
+                .obj_retry_interval_ms
+                .unwrap_or(base.obj_retry_interval_ms),
         }
     }
 }
@@ -299,16 +290,10 @@ impl TransactionsLayer {
         TransactionsConfig {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
-            tx_digest_retry_count: self
-                .tx_digest_retry_count
-                .unwrap_or(base.tx_digest_retry_count),
-            tx_digest_retry_interval_ms: self
-                .tx_digest_retry_interval_ms
-                .unwrap_or(base.tx_digest_retry_interval_ms),
-            kv_retry_count: self.kv_retry_count.unwrap_or(base.kv_retry_count),
-            kv_retry_interval_ms: self
-                .kv_retry_interval_ms
-                .unwrap_or(base.kv_retry_interval_ms),
+            tx_retry_count: self.tx_retry_count.unwrap_or(base.tx_retry_count),
+            tx_retry_interval_ms: self
+                .tx_retry_interval_ms
+                .unwrap_or(base.tx_retry_interval_ms),
         }
     }
 }
@@ -397,8 +382,8 @@ impl Default for ObjectsConfig {
             max_filter_depth: 3,
             max_type_filters: 10,
             filter_scan_size: 200,
-            kv_retry_count: 5,
-            kv_retry_interval_ms: 100,
+            obj_retry_count: 5,
+            obj_retry_interval_ms: 100,
         }
     }
 }
@@ -417,10 +402,8 @@ impl Default for TransactionsConfig {
         Self {
             default_page_size: 50,
             max_page_size: 100,
-            tx_digest_retry_count: 5,
-            tx_digest_retry_interval_ms: 100,
-            kv_retry_count: 5,
-            kv_retry_interval_ms: 100,
+            tx_retry_count: 5,
+            tx_retry_interval_ms: 100,
         }
     }
 }
@@ -472,8 +455,8 @@ impl From<ObjectsConfig> for ObjectsLayer {
             max_filter_depth: Some(config.max_filter_depth),
             max_type_filters: Some(config.max_type_filters),
             filter_scan_size: Some(config.filter_scan_size),
-            kv_retry_count: Some(config.kv_retry_count),
-            kv_retry_interval_ms: Some(config.kv_retry_interval_ms),
+            obj_retry_count: Some(config.obj_retry_count),
+            obj_retry_interval_ms: Some(config.obj_retry_interval_ms),
             extra: Default::default(),
         }
     }
@@ -494,10 +477,8 @@ impl From<TransactionsConfig> for TransactionsLayer {
         Self {
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
-            tx_digest_retry_count: Some(config.tx_digest_retry_count),
-            tx_digest_retry_interval_ms: Some(config.tx_digest_retry_interval_ms),
-            kv_retry_count: Some(config.kv_retry_count),
-            kv_retry_interval_ms: Some(config.kv_retry_interval_ms),
+            tx_retry_count: Some(config.tx_retry_count),
+            tx_retry_interval_ms: Some(config.tx_retry_interval_ms),
             extra: Default::default(),
         }
     }
