@@ -922,7 +922,7 @@ impl RpcIndexStore {
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
-        index_config: Option<RpcIndexInitConfig>,
+        index_config: Option<&RpcIndexInitConfig>,
     ) -> Self {
         let path = Self::db_path(dir);
 
