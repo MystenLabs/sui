@@ -34,7 +34,6 @@ use crate::{
     block_manager::BlockManager,
     commit::{
         CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
-        GENESIS_COMMIT_INDEX,
     },
     commit_observer::CommitObserver,
     context::Context,
@@ -701,9 +700,7 @@ impl Core {
         }
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
-        // Commits cannot be persisted before being finalized. It is ok for the block to contain
-        // votes for unpersisted commits.
-        self.dag_state.write().flush(GENESIS_COMMIT_INDEX);
+        self.dag_state.write().flush();
 
         // Now acknowledge the transactions for their inclusion to block
         ack_transactions(verified_block.reference());
