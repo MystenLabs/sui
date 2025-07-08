@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName, digests::TransactionDigest, messages_consensus::ConsensusPosition,
     messages_grpc::RawSubmitTxRequest,
@@ -17,6 +19,7 @@ use crate::{
     transaction_driver::{
         error::TransactionDriverError, SubmitTransactionOptions, TransactionDriverMetrics,
     },
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
 const SUBMIT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(2);
@@ -34,6 +37,7 @@ impl TransactionSubmitter {
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
@@ -48,7 +52,12 @@ impl TransactionSubmitter {
         loop {
             attempts += 1;
             match self
-                .submit_transaction_once(authority_aggregator, &raw_request, options)
+                .submit_transaction_once(
+                    authority_aggregator,
+                    client_monitor,
+                    &raw_request,
+                    options,
+                )
                 .await
             {
                 Ok(consensus_position) => {
@@ -75,27 +84,74 @@ impl TransactionSubmitter {
     async fn submit_transaction_once<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         raw_request: &RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<ConsensusPosition, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let clients = authority_aggregator
-            .authority_clients
-            .iter()
-            .collect::<Vec<_>>();
-        let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
+        // Select validator based on performance
+        let selected_validator =
+            client_monitor.select_preferred_validator(&authority_aggregator.committee);
 
-        let consensus_position = timeout(
+        // Record selection in metrics
+        self.metrics
+            .validator_selections
+            .with_label_values(&[&selected_validator.concise().to_string()])
+            .inc();
+
+        let client = authority_aggregator
+            .authority_clients
+            .get(&selected_validator)
+            .expect("Selected validator not in authority clients")
+            .as_ref();
+
+        let submit_start = Instant::now();
+        let consensus_position = match timeout(
             SUBMIT_TRANSACTION_TIMEOUT,
             client.submit_transaction(raw_request.clone(), options.forwarded_client_addr),
         )
         .await
-        .map_err(|_| TransactionDriverError::TimeoutSubmittingTransaction)?
-        .map_err(|e| {
-            TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
-        })?;
+        {
+            Ok(Ok(pos)) => {
+                let latency = submit_start.elapsed();
+                client_monitor.record_interaction_result(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency: Some(latency),
+                    success: true,
+                });
+                pos
+            }
+            Ok(Err(e)) => {
+                let latency = submit_start.elapsed();
+                client_monitor.record_interaction_result(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency: Some(latency),
+                    // submit_transaction may return errors if the transaction is invalid,
+                    // but we still want to record the feedback.
+                    // TODO(mysticeti-fastpath): If we check transaction validity
+                    // on the fullnode first, we can then utilize the error info.
+                    success: true,
+                });
+                return Err(TransactionDriverError::RpcFailure(
+                    selected_validator.concise().to_string(),
+                    e.to_string(),
+                ));
+            }
+            Err(_) => {
+                // Timeout - don't include latency as it would pollute the numbers
+                client_monitor.record_interaction_result(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency: None,
+                    success: false,
+                });
+                return Err(TransactionDriverError::TimeoutSubmittingTransaction);
+            }
+        };
 
         Ok(consensus_position)
     }

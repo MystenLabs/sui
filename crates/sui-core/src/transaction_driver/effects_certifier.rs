@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
@@ -25,10 +29,11 @@ use crate::{
         error::TransactionDriverError, metrics::TransactionDriverMetrics,
         QuorumTransactionResponse, SubmitTransactionOptions,
     },
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
     wait_for_effects_request::{ExecutedData, WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
-const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(2);
+const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct EffectsCertifier {
     metrics: Arc<TransactionDriverMetrics>,
@@ -43,6 +48,7 @@ impl EffectsCertifier {
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
         epoch: EpochId,
@@ -54,6 +60,7 @@ impl EffectsCertifier {
         let (acknowledgments_result, mut full_effects_result) = join!(
             self.wait_for_acknowledgments_with_retry(
                 authority_aggregator,
+                client_monitor,
                 tx_digest,
                 consensus_position,
                 epoch,
@@ -135,7 +142,8 @@ impl EffectsCertifier {
         // TODO(fastpath): only retry transient (RPC) errors. aggregate permanent errors on a higher level.
         loop {
             attempts += 1;
-            // TODO(fastpath): pick target with performance metrics.
+            // TODO(fastpath): pick target with performance metrics,
+            // put the transaction submitted validator at the top of the list.
             let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
 
             match timeout(
@@ -205,6 +213,7 @@ impl EffectsCertifier {
     async fn wait_for_acknowledgments_with_retry<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
         epoch: EpochId,
@@ -235,14 +244,43 @@ impl EffectsCertifier {
             let future = async move {
                 // Keep retrying transient errors until cancellation.
                 loop {
-                    if let Ok(Ok(response)) = timeout(
+                    let effects_start = Instant::now();
+                    match timeout(
                         WAIT_FOR_EFFECTS_TIMEOUT,
                         client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
                     )
                     .await
                     {
-                        return (name, response);
+                        Ok(Ok(response)) => {
+                            let latency = effects_start.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: true,
+                            });
+                            return (name, response);
+                        }
+                        Ok(Err(_)) => {
+                            let latency = effects_start.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: false,
+                            });
+                        }
+                        Err(_) => {
+                            // Timeout - don't include latency as it would pollute the numbers
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: None,
+                                success: false,
+                            });
+                        }
                     };
+
                     let delay_ms = rand::thread_rng().gen_range(1000..2000);
                     sleep(Duration::from_millis(delay_ms)).await;
                 }
