@@ -10,5 +10,3 @@ mod root_package;
 pub use package_impl::*;
 pub use root_package::RootPackage;
 pub mod layout;
-
-mod published_info;
