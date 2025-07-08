@@ -45,22 +45,16 @@ fn extract_decls(
     DatatypeDeclarations,
     HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
+    // pre-compiled modules contain ProgramInfo computed at typing which does contains
+    // dependency order so unwrap below is safe
     let pre_compiled_dependency_orders = || {
         pre_compiled_module_infos.iter().flat_map(|module_infos| {
             module_infos
                 .iter()
                 .filter(|(mident, _)| !prog.modules.contains_key(mident))
-                .map(|(mident, minfo)| (*mident, minfo.dependency_order))
+                .map(|(mident, minfo)| (*mident, minfo.info.dependency_order.unwrap()))
         })
     };
-
-    let all_dependency_orders = prog
-        .modules
-        .key_cloned_iter()
-        .map(|(m, mdef)| (m, mdef.dependency_order))
-        .chain(pre_compiled_dependency_orders())
-        .collect::<HashMap<_, _>>();
-    compilation_env.save_dependency_order(&all_dependency_orders);
 
     let mut max_ordering = 0;
     let mut orderings: HashMap<ModuleIdent, usize> = pre_compiled_dependency_orders()

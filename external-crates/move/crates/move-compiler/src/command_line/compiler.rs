@@ -135,8 +135,6 @@ pub struct CompiledModuleInfo {
     pub info: ModuleInfo,
     /// to process private transfers in sui_mode/info.rs
     pub private_transfers: BTreeMap<DatatypeName, TransferKind>,
-    /// to process modules in to_bytecode/translate.rs
-    pub dependency_order: usize,
     pub cfgir_datatype_decls:
         BTreeMap<DatatypeName, (BTreeSet<Ability>, Vec<DatatypeTypeParameter>)>,
     pub cfgir_fun_decls: BTreeMap<FunctionName, FunctionDeclaration>,
@@ -672,7 +670,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
         SaveFlag::ModuleNameAddresses,
         SaveFlag::MacroInfos,
         SaveFlag::PrivateTransfers,
-        SaveFlag::DependencyOrder,
         SaveFlag::CFGIRDatatypeDecls,
         SaveFlag::CFGIRFunDecls,
     ]);
@@ -701,7 +698,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
             let mut module_named_addresses = hook.take_module_named_addresses();
             let mut macro_infos = hook.take_macro_infos();
             let private_transfers = hook.take_private_transfers();
-            let mut dependency_order = hook.take_dependency_order();
             let cfgir_datatype_decls = hook.take_cfgir_datatype_decls();
             let cfgir_fun_decls = hook.take_cfgir_fun_decls();
 
@@ -781,10 +777,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
 
                      let private_transfers = private_transfers_by_module.remove(&mod_ident).unwrap_or_default();
 
-                     let Some(dependency_order) = dependency_order.remove(&mod_ident) else {
-                        return Err(anyhow::anyhow!("dependency order not found for module: {:?}", mod_ident));
-                     };
-
                      let cfgir_datatype_decls = cfgir_datatype_decls_by_module.remove(&mod_ident).unwrap_or_default();
 
                      let cfgir_fun_decls = cfgir_fun_decls_by_module.remove(&mod_ident).unwrap_or_default();
@@ -802,7 +794,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                              macro_infos,
                              info: typing_module_info.clone(),
                              private_transfers,
-                             dependency_order,
                              cfgir_datatype_decls,
                              cfgir_fun_decls,
                              compiled_unit,
