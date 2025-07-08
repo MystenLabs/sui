@@ -58,18 +58,18 @@ A Full node that starts from scratch can replay (and thus re-verify) transaction
 
 A Sui Full node that fails to retrieve checkpoints from its peers via state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a Full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
-## Sui Full node pruning policies
+## Sui node pruning policies
 
-As described previously, sustainable disk usage requires Sui Full nodes to prune the information about historic object versions as well as historic transactions with the corresponding effects and events, including old checkpoint data.
+As described previously, sustainable disk usage requires Sui nodes (validators and full nodes) to prune the information about historic object versions as well as historic transactions with the corresponding effects and events, including old checkpoint data.
 
 Both transaction and object pruners run in the background. The logical deletion of entries from RocksDB ultimately triggers the physical compaction of data on disk, which is governed by RocksDB background jobs: the pruning effect on disk usage is not immediate and might take multiple days.
 
-To learn more about object pruning policies, see [Object pruning](#object-pruning). You can configure the pruner in three modes:
+To learn more about object pruning policies, see [Object pruning](#object-pruning). You can configure the pruner in two modes:
 * **aggressive pruning** (`num-epochs-to-retain: 0`): Sui prunes old object versions as soon as possible. This mode should only be used when the node does not serve read queries.
 * **epoch-based pruning** (`num-epochs-to-retain: X`): Sui prunes old object versions after X epochs.
 
 :::tip 
-Keeping some history (5 epochs) provides better RPC performance on the full node as it allows more lookups to happen from local disk rather than from remote storage.
+Keeping some history (5 epochs) provides better RPC performance on full nodes as it allows more lookups to happen from local disk rather than from remote storage.
 :::
 
 To learn more about transaction pruning policies, see [Transaction pruning](#transaction-pruning). To configure transaction pruning, specify the `num-epochs-to-retain-for-checkpoints: X` config option. The checkpoints, including their transactions, effects and events are pruned up to X epochs ago. We suggest setting transaction pruning to 2 epochs.
