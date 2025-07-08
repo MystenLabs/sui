@@ -520,7 +520,7 @@ strum_macros = "0.27.1"
 syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
 # syn = { version = "2", features = ["full", "fold", "extra-traits"] }
 synstructure = "0.12"
-sysinfo = "0.27.5"
+sysinfo = "0.35.2"
 tabled = { version = "0.12" }
 tap = "1.0.1"
 tar = "0.4.40"
