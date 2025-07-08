@@ -122,7 +122,7 @@ public fun create(
         rgp,
         gas_price,
         gas_budget,
-        option::to_vec(sponsor),
+        sponsor.to_vec(),
     );
     TxContext {
         sender: @0x0,
@@ -178,7 +178,7 @@ public fun dummy(): TxContext {
 #[test_only]
 /// Utility for creating 256 unique input hashes.
 /// These hashes are guaranteed to be unique given a unique `hint: u64`
-fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
+public fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
     let mut tx_hash = std::bcs::to_bytes(&hint);
     while (tx_hash.length() < TX_HASH_LENGTH) tx_hash.push_back(0);
     tx_hash
