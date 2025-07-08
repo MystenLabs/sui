@@ -9,7 +9,7 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{ExecutingGuard, PendingCertificateStats},
 };
-use futures::{stream::FuturesUnordered, StreamExt};
+use mysten_common::fatal;
 use mysten_metrics::spawn_monitored_task;
 use std::{
     collections::{BTreeSet, HashSet},
@@ -228,7 +228,6 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
     ) {
         let mut txns = Vec::with_capacity(certs.len());
         let mut randomness_txns = Vec::new();
-        let mut settlement_txns = Vec::new();
 
         for (schedulable, env) in certs {
             match schedulable {
@@ -239,7 +238,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     randomness_txns.push((schedulable.key(), env));
                 }
                 Schedulable::AccumulatorSettlement(_, _) => {
-                    settlement_txns.push((schedulable.key(), env));
+                    fatal!("cannot enqueue accumulator settlement");
                 }
             }
         }
@@ -263,32 +262,6 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     .zip(randomness_txns.into_iter().map(|(_, env)| env))
                     .collect::<Vec<_>>();
                 scheduler.enqueue_transactions(randomness_transactions, &epoch_store);
-            }));
-        }
-
-        if !settlement_txns.is_empty() {
-            let scheduler = self.clone();
-            let epoch_store = epoch_store.clone();
-
-            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                let mut futures: FuturesUnordered<_> =
-                        settlement_txns
-                            .into_iter()
-                            .map(|(key, env)| {
-                                let epoch_store = epoch_store.clone();
-                                async move {
-                                    (epoch_store.wait_for_settlement_transactions(key).await, env)
-                                }
-                            })
-                            .collect();
-
-                while let Some((txns, env)) = futures.next().await {
-                    let txns = txns
-                        .into_iter()
-                        .map(|tx| (tx, env.clone()))
-                        .collect::<Vec<_>>();
-                    scheduler.enqueue_transactions(txns, &epoch_store);
-                }
             }));
         }
     }

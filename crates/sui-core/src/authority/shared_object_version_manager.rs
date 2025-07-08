@@ -28,7 +28,7 @@ pub struct SharedObjVerManager {}
 
 pub type AssignedVersions = Vec<(ConsensusObjectSequenceKey, SequenceNumber)>;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct AssignedTxAndVersions(pub Vec<(TransactionKey, AssignedVersions)>);
 
 impl AssignedTxAndVersions {
@@ -43,7 +43,7 @@ impl AssignedTxAndVersions {
 
 /// A wrapper around things that can be scheduled for execution by the assigning of
 /// shared object versions.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
     RandomnessStateUpdate(EpochId, RandomnessRound),

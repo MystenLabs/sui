@@ -7,7 +7,7 @@ mod checkpoint_output;
 mod metrics;
 
 use crate::accumulators::create_accumulator_update_transactions;
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
 use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
@@ -17,6 +17,7 @@ pub use crate::checkpoints::checkpoint_output::{
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
+use crate::execution_scheduler::ExecutionSchedulerAPI;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
@@ -91,28 +92,23 @@ pub struct EpochStats {
     pub total_gas_reward: u64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
     pub last_of_epoch: bool,
     pub checkpoint_height: CheckpointHeight,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PendingCheckpoint {
-    pub roots: Vec<TransactionDigest>,
-    pub details: PendingCheckpointInfo,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum PendingCheckpointV2 {
     // This is an enum for future upgradability, though at the moment there is only one variant.
     V2(PendingCheckpointV2Contents),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PendingCheckpointV2Contents {
     pub roots: Vec<TransactionKey>,
+    pub settlement_env: Option<ExecutionEnv>,
     pub details: PendingCheckpointInfo,
 }
 
@@ -126,18 +122,6 @@ impl PendingCheckpointV2 {
     pub fn into_v2(self) -> PendingCheckpointV2Contents {
         match self {
             PendingCheckpointV2::V2(contents) => contents,
-        }
-    }
-
-    pub fn expect_v1(self) -> PendingCheckpoint {
-        let v2 = self.into_v2();
-        PendingCheckpoint {
-            roots: v2
-                .roots
-                .into_iter()
-                .map(|root| *root.unwrap_digest())
-                .collect(),
-            details: v2.details,
         }
     }
 
@@ -1228,8 +1212,9 @@ impl CheckpointBuilder {
     async fn construct_and_execute_settlement_transactions(
         &self,
         sorted_tx_effects_included_in_checkpoint: &[TransactionEffects],
+        env: ExecutionEnv,
         checkpoint_height: CheckpointHeight,
-    ) -> (TransactionKey, Vec<TransactionDigest>) {
+    ) -> (TransactionKey, Vec<TransactionEffects>) {
         let _scope =
             monitored_scope("CheckpointBuilder::construct_and_execute_settlement_transactions");
 
@@ -1244,14 +1229,17 @@ impl CheckpointBuilder {
         )
         .into_iter()
         .map(|tx| {
-            VerifiedExecutableTransaction::new_system(
-                VerifiedTransaction::new_system_transaction(tx),
-                self.epoch_store.epoch(),
+            (
+                VerifiedExecutableTransaction::new_system(
+                    VerifiedTransaction::new_system_transaction(tx),
+                    self.epoch_store.epoch(),
+                ),
+                env.clone(),
             )
         })
         .collect();
 
-        let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+        let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.0.digest()).collect();
 
         debug!(
             ?settlement_digests,
@@ -1259,8 +1247,9 @@ impl CheckpointBuilder {
             "created settlement transactions"
         );
 
-        self.epoch_store
-            .notify_settlement_transactions_ready(tx_key, settlement_txns);
+        self.state
+            .execution_scheduler()
+            .enqueue_transactions(settlement_txns, &self.epoch_store);
 
         let settlement_effects = loop {
             match tokio::time::timeout(Duration::from_secs(5), async {
@@ -1289,7 +1278,7 @@ impl CheckpointBuilder {
             );
         }
 
-        (tx_key, settlement_digests)
+        (tx_key, settlement_effects)
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -1325,33 +1314,13 @@ impl CheckpointBuilder {
                 pending.roots,
             );
 
-            if let Some(TransactionKey::AccumulatorSettlement(..)) = pending.roots.last() {
-                assert!(self.epoch_store.accumulators_enabled());
-
-                let (tx_key, settlement_digests) = self
-                    .construct_and_execute_settlement_transactions(
-                        &sorted_tx_effects_included_in_checkpoint,
-                        pending.details.checkpoint_height,
-                    )
-                    .await;
-                debug!(?tx_key, "executed settlement transactions");
-
-                let last_key = pending.roots.pop().unwrap();
-                assert_eq!(last_key, tx_key);
-
-                // Replace the key with the actual settlement digests
-                pending
-                    .roots
-                    .extend(settlement_digests.into_iter().map(TransactionKey::Digest));
-            }
-
-            let roots = &pending.roots;
+            let roots = &mut pending.roots;
 
             self.metrics
                 .checkpoint_roots_count
                 .inc_by(roots.len() as u64);
 
-            let root_digests = self
+            let mut root_digests = self
                 .epoch_store
                 .notify_read_tx_key_to_digest(roots)
                 .in_monitored_scope("CheckpointNotifyDigests")
@@ -1415,6 +1384,24 @@ impl CheckpointBuilder {
                 sorted.push(ccp_effects);
             }
             sorted.extend(CausalOrder::causal_sort(unsorted));
+
+            if let Some(env) = pending.settlement_env {
+                assert!(self.epoch_store.accumulators_enabled());
+
+                let (tx_key, settlement_effects) = self
+                    .construct_and_execute_settlement_transactions(
+                        &sorted,
+                        env,
+                        pending.details.checkpoint_height,
+                    )
+                    .await;
+                debug!(?tx_key, "executed settlement transactions");
+
+                root_digests.extend(settlement_effects.iter().map(|e| *e.transaction_digest()));
+
+                // Replace the key with the actual settlement digests
+                sorted.extend(settlement_effects.into_iter());
+            }
 
             #[cfg(msim)]
             {
@@ -2857,26 +2844,7 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
     }
 }
 
-impl PendingCheckpoint {
-    pub fn height(&self) -> CheckpointHeight {
-        self.details.checkpoint_height
-    }
-}
-
 impl PendingCheckpointV2 {}
-
-impl From<PendingCheckpoint> for PendingCheckpointV2 {
-    fn from(value: PendingCheckpoint) -> Self {
-        PendingCheckpointV2::V2(PendingCheckpointV2Contents {
-            roots: value
-                .roots
-                .into_iter()
-                .map(TransactionKey::Digest)
-                .collect(),
-            details: value.details,
-        })
-    }
-}
 
 pin_project! {
     pub struct PollCounter<Fut> {
@@ -3273,6 +3241,7 @@ mod tests {
                 .into_iter()
                 .map(|t| TransactionKey::Digest(d(t)))
                 .collect(),
+            settlement_env: None,
             details: PendingCheckpointInfo {
                 timestamp_ms,
                 last_of_epoch: false,

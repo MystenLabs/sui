@@ -75,7 +75,7 @@ use sui_types::transaction::{
     VerifiedCertificate, VerifiedSignedTransaction, VerifiedTransaction,
 };
 use tap::TapOptional;
-use tokio::sync::{mpsc, oneshot, OnceCell};
+use tokio::sync::{mpsc, OnceCell};
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf};
@@ -98,8 +98,8 @@ use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIM
 use crate::authority::shared_object_version_manager::{
     AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
-use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
+use crate::authority::{AuthorityMetrics, ExecutionEnv};
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
     PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
@@ -412,15 +412,6 @@ pub struct AuthorityPerEpochStore {
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 
     pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
-
-    /// Waiters for settlement transactions. Used by execution scheduler to wait for
-    /// settlement transaction keys to resolve to transactions.
-    /// Stored in AuthorityPerEpochStore so that it is automatically cleaned up at the end of the epoch.
-    settlement_registrations: Arc<Mutex<HashMap<TransactionKey, SettlementRegistration>>>,
-}
-enum SettlementRegistration {
-    Ready(Vec<VerifiedExecutableTransaction>),
-    Waiting(oneshot::Sender<Vec<VerifiedExecutableTransaction>>),
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -1152,7 +1143,6 @@ impl AuthorityPerEpochStore {
             tx_object_debts: OnceCell::new(),
             end_of_epoch_execution_time_observations: OnceCell::new(),
             consensus_tx_status_cache,
-            settlement_registrations: Default::default(),
         });
 
         s.update_buffer_stake_metric();
@@ -1669,44 +1659,6 @@ impl AuthorityPerEpochStore {
         } else {
             Ok(tables.transaction_key_to_digest.get(key).expect("db error"))
         }
-    }
-
-    pub(crate) fn notify_settlement_transactions_ready(
-        &self,
-        tx_key: TransactionKey,
-        txns: Vec<VerifiedExecutableTransaction>,
-    ) {
-        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
-        let mut registrations = self.settlement_registrations.lock();
-        if let Some(registration) = registrations.remove(&tx_key) {
-            let SettlementRegistration::Waiting(tx) = registration else {
-                fatal!("Settlement registration should be waiting");
-            };
-            tx.send(txns).unwrap();
-        } else {
-            registrations.insert(tx_key, SettlementRegistration::Ready(txns));
-        }
-    }
-
-    pub(crate) async fn wait_for_settlement_transactions(
-        &self,
-        key: TransactionKey,
-    ) -> Vec<VerifiedExecutableTransaction> {
-        let rx = {
-            let mut registrations = self.settlement_registrations.lock();
-            if let Some(registration) = registrations.remove(&key) {
-                let SettlementRegistration::Ready(txns) = registration else {
-                    fatal!("Settlement registration should be ready");
-                };
-                return txns;
-            } else {
-                let (tx, rx) = oneshot::channel();
-                registrations.insert(key, SettlementRegistration::Waiting(tx));
-                rx
-            }
-        };
-
-        rx.await.unwrap()
     }
 
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
@@ -3296,7 +3248,7 @@ impl AuthorityPerEpochStore {
             lock,
             final_round,
             consensus_commit_prologue_root,
-            assigned_versions,
+            mut assigned_versions,
         ) = self
             .process_consensus_transactions(
                 &mut output,
@@ -3375,6 +3327,35 @@ impl AuthorityPerEpochStore {
                 ));
             }
 
+            let (non_randomness_settlement_env, randomness_settlement_env) = if self
+                .accumulators_enabled()
+            {
+                let randomness_settlement_env = randomness_round.map(|_| {
+                    let randomness_versions = assigned_versions.0.pop().unwrap();
+                    assert_eq!(
+                        randomness_versions.0,
+                        TransactionKey::AccumulatorSettlement(self.epoch(), checkpoint_height + 1)
+                    );
+                    ExecutionEnv::new().with_assigned_versions(randomness_versions.1)
+                });
+
+                let non_randomness_versions = assigned_versions.0.pop().unwrap();
+                assert_eq!(
+                    non_randomness_versions.0,
+                    TransactionKey::AccumulatorSettlement(self.epoch(), checkpoint_height)
+                );
+
+                let non_randomness_settlement_env =
+                    ExecutionEnv::new().with_assigned_versions(non_randomness_versions.1);
+
+                (
+                    Some(non_randomness_settlement_env),
+                    randomness_settlement_env,
+                )
+            } else {
+                (None, None)
+            };
+
             // Determine whether to write pending checkpoint for user tx with randomness.
             // - If randomness is not generated for this commit, we will skip the
             //   checkpoint with the associated height. Therefore checkpoint heights may
@@ -3386,8 +3367,10 @@ impl AuthorityPerEpochStore {
 
             let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                 roots: non_randomness_roots,
+                settlement_env: non_randomness_settlement_env,
                 details: PendingCheckpointInfo {
                     timestamp_ms: consensus_commit_info.timestamp,
+
                     last_of_epoch: final_round && !should_write_random_checkpoint,
                     checkpoint_height,
                 },
@@ -3397,6 +3380,7 @@ impl AuthorityPerEpochStore {
             if should_write_random_checkpoint {
                 let pending_checkpoint = PendingCheckpointV2::V2(PendingCheckpointV2Contents {
                     roots: randomness_roots.into_iter().collect(),
+                    settlement_env: randomness_settlement_env,
                     details: PendingCheckpointInfo {
                         timestamp_ms: consensus_commit_info.timestamp,
                         last_of_epoch: final_round,
@@ -3545,11 +3529,13 @@ impl AuthorityPerEpochStore {
         non_randomness_transactions: &[Schedulable],
         randomness_transactions: &[Schedulable],
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        settlements: &[Schedulable],
         output: &mut ConsensusCommitOutput,
     ) -> SuiResult<AssignedTxAndVersions> {
         let all_certs = non_randomness_transactions
             .iter()
-            .chain(randomness_transactions.iter());
+            .chain(randomness_transactions.iter())
+            .chain(settlements.iter());
 
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
@@ -3620,6 +3606,7 @@ impl AuthorityPerEpochStore {
             &transactions,
             &[],
             &BTreeMap::new(),
+            &[],
             &mut output,
         )?;
         let mut batch = self.db_batch()?;
@@ -3675,7 +3662,7 @@ impl AuthorityPerEpochStore {
         Option<RwLockWriteGuard<ReconfigState>>,
         bool,                   // true if final round
         Option<TransactionKey>, // consensus commit prologue root
-        AssignedTxAndVersions,
+        AssignedTxAndVersions,  // user transaction versions
     )> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transactions");
 
@@ -3711,23 +3698,6 @@ impl AuthorityPerEpochStore {
         if let Some(round) = randomness_round {
             verified_randomness_certificates
                 .push_back(Schedulable::RandomnessStateUpdate(self.epoch(), round));
-        }
-
-        if self.accumulators_enabled() {
-            let checkpoint_height =
-                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
-
-            let non_random_settlement =
-                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
-            non_randomness_roots.insert(non_random_settlement.key());
-            verified_non_randomness_certificates.push_back(non_random_settlement);
-
-            if randomness_round.is_some() {
-                let randomness_settlement =
-                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
-                randomness_roots.insert(randomness_settlement.key());
-                verified_randomness_certificates.push_back(randomness_settlement);
-            }
         }
 
         for entry in non_randomness_transactions
@@ -3883,11 +3853,35 @@ impl AuthorityPerEpochStore {
             verified_non_randomness_certificates.into();
         let verified_randomness_certificates: Vec<_> = verified_randomness_certificates.into();
 
+        let settlements = self
+            .accumulators_enabled()
+            .then(|| {
+                let checkpoint_height =
+                    self.calculate_pending_checkpoint_height(consensus_commit_info.round);
+
+                let mut settlements = vec![Schedulable::AccumulatorSettlement(
+                    self.epoch(),
+                    checkpoint_height,
+                )];
+
+                if randomness_round.is_some() {
+                    settlements.push(Schedulable::AccumulatorSettlement(
+                        self.epoch(),
+                        checkpoint_height + 1,
+                    ));
+                }
+
+                debug!(?settlements, "settlements");
+                settlements
+            })
+            .unwrap_or_default();
+
         let assigned_tx_and_versions = self.process_consensus_transaction_shared_object_versions(
             cache_reader,
             &verified_non_randomness_certificates,
             &verified_randomness_certificates,
             &cancelled_txns,
+            &settlements,
             output,
         )?;
 
