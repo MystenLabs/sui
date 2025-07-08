@@ -273,9 +273,14 @@ fn check_obj_usage(context: &mut Context, arg: &T::Argument) -> Result<(), Execu
     match &arg.value.0 {
         T::Argument__::Borrow(true, l) => check_obj_by_mut_ref(context, arg.idx, l),
         T::Argument__::Use(T::Usage::Move(l)) => check_by_value(context, arg.idx, l),
+        // We do not care about
+        // - immutable object borrowing
+        // - copying/read ref (since you cannot copy objects)
+        // - freeze (since an input object cannot be a reference without a borrow)
         T::Argument__::Borrow(false, _)
         | T::Argument__::Use(T::Usage::Copy { .. })
-        | T::Argument__::Read(_) => Ok(()),
+        | T::Argument__::Read(_)
+        | T::Argument__::Freeze(_) => Ok(()),
     }
 }
 
@@ -340,9 +345,11 @@ fn check_gas_by_values(arguments: &[T::Argument]) -> Result<(), ExecutionError> 
 fn check_gas_by_value(arg: &T::Argument) -> Result<(), ExecutionError> {
     match &arg.value.0 {
         T::Argument__::Use(T::Usage::Move(l)) => check_gas_by_value_loc(arg.idx, l),
+        // We do not care about the read/freeze case since they cannot move an object input
         T::Argument__::Borrow(_, _)
         | T::Argument__::Use(T::Usage::Copy { .. })
-        | T::Argument__::Read(_) => Ok(()),
+        | T::Argument__::Read(_)
+        | T::Argument__::Freeze(_) => Ok(()),
     }
 }
 

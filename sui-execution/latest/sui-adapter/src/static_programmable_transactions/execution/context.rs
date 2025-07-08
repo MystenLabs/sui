@@ -524,6 +524,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     fn argument_value(&mut self, sp!(_, (arg_, ty)): T::Argument) -> Result<Value, ExecutionError> {
         match arg_ {
             T::Argument__::Use(usage) => self.location_usage(usage, ty),
+            // freeze is a no-op for references since the value does not track mutability
+            T::Argument__::Freeze(usage) => self.location_usage(usage, ty),
             T::Argument__::Borrow(is_mut, location) => {
                 let ty = match ty {
                     Type::Reference(_, inner) => (*inner).clone(),
@@ -985,6 +987,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             T::Argument__::Borrow(_, _) => {
                 // value is not a reference, nothing to do
                 value
+            }
+            T::Argument__::Freeze(_) => {
+                invariant_violation!("freeze should not be used for a mutable reference")
             }
             T::Argument__::Read(_) => {
                 invariant_violation!("read should not return a reference")

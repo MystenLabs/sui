@@ -112,9 +112,14 @@ pub type Argument_ = (Argument__, Type);
 
 #[derive(Clone, Debug)]
 pub enum Argument__ {
+    /// Move or copy a value
     Use(Usage),
+    /// Borrow a value, i.e. `&x` or `&mut x`
     Borrow(/* mut */ bool, Location),
+    /// Read a value from a reference, i.e. `*&x`
     Read(Usage),
+    /// Freeze a mutable reference, making an `&t` from `&mut t`
+    Freeze(Usage),
 }
 
 //**************************************************************************************************
@@ -154,6 +159,7 @@ impl Argument__ {
         match self {
             Self::Use(usage) | Self::Read(usage) => usage.location(),
             Self::Borrow(_, location) => *location,
+            Self::Freeze(usage) => usage.location(),
         }
     }
 }

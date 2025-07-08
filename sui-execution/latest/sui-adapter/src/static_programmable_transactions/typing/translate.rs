@@ -440,14 +440,14 @@ fn argument_(
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
         (LocationType::Fixed(Type::Reference(a_is_mut, a)), Type::Reference(b_is_mut, b)) => {
-            match (a_is_mut, b_is_mut) {
+            let needs_freeze = match (a_is_mut, b_is_mut) {
                 // same mutability
-                (true, true) | (false, false) => (),
+                (true, true) | (false, false) => false,
                 // mut *can* be used as imm
-                (true, false) => (),
+                (true, false) => true,
                 // imm cannot be used as mut
                 (false, true) => return Err(CommandArgumentError::TypeMismatch.into()),
-            }
+            };
             debug_assert!(expected_ty.abilities().has_copy());
             // unused since the type is fixed
             let unused_constraint = BytesConstraint {
@@ -456,7 +456,11 @@ fn argument_(
                 usage: BytesUsage::Copied,
             };
             check_type(unused_constraint, LocationType::Fixed((*a).clone()), b)?;
-            T::Argument__::new_copy(location)
+            if needs_freeze {
+                T::Argument__::Freeze(T::Usage::new_copy(location))
+            } else {
+                T::Argument__::new_copy(location)
+            }
         }
         (LocationType::Fixed(Type::Reference(_, a)), b) => {
             // unused since the type is fixed
@@ -721,7 +725,7 @@ mod scope_references {
 
     fn argument(used: &mut BTreeSet<(u16, u16)>, sp!(_, (arg_, ty)): &mut T::Argument) {
         let usage = match arg_ {
-            T::Argument__::Use(u) | T::Argument__::Read(u) => u,
+            T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
             T::Argument__::Borrow(_, _) => return,
         };
         match (&usage, ty) {
