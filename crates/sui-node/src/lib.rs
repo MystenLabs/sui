@@ -640,6 +640,7 @@ impl SuiNode {
                     &checkpoint_store,
                     &epoch_store,
                     &cache_traits.backing_package_store,
+                    config.rpc().and_then(|c| c.index_initialization_config()),
                 )
                 .await,
             ))
