@@ -64,6 +64,13 @@ pub struct RpcConfig {
     /// Defaults to the number of CPU cores if not specified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub indexing_max_background_jobs: Option<i32>,
+
+    /// Override for the batch size limit during bulk indexing.
+    /// This controls how much data is accumulated in memory before flushing to disk.
+    ///
+    /// Defaults to half the write buffer size or 128MB, whichever is smaller.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexing_batch_size_limit: Option<usize>,
 }
 
 impl RpcConfig {
@@ -90,6 +97,7 @@ impl RpcConfig {
             cf_write_buffer_size: self.indexing_cf_write_buffer_size,
             cf_max_write_buffer_number: self.indexing_cf_max_write_buffer_number.map(|n| n.min(32)),
             max_background_jobs: self.indexing_max_background_jobs,
+            batch_size_limit: self.indexing_batch_size_limit,
         }
     }
 }
@@ -129,4 +137,7 @@ pub struct RpcIndexInitConfig {
 
     /// Override for the number of background jobs during bulk indexing.
     pub max_background_jobs: Option<i32>,
+
+    /// Override for the batch size limit during bulk indexing.
+    pub batch_size_limit: Option<usize>,
 }

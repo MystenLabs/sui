@@ -416,6 +416,7 @@ impl IndexStoreTables {
         checkpoint_store: &CheckpointStore,
         _epoch_store: &AuthorityPerEpochStore,
         _package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        batch_size_limit: usize,
     ) -> Result<(), StorageError> {
         info!("Initializing RPC indexes");
 
@@ -454,6 +455,7 @@ impl IndexStoreTables {
             let make_live_object_indexer = RpcParLiveObjectSetIndexer {
                 tables: self,
                 coin_index: &coin_index,
+                batch_size_limit,
             };
 
             crate::par_index_live_object_set::par_index_live_object_set(
@@ -930,6 +932,9 @@ impl RpcIndexStore {
             // If the index tables are uninitialized or on an older version then we need to
             // populate them
             if tables.needs_to_do_initialization(checkpoint_store) {
+                // Calculate batch size limit before the inner block
+                let batch_size_limit;
+
                 let mut tables = {
                     drop(tables);
                     typed_store::rocks::safe_drop_db(path.clone(), Duration::from_secs(30))
@@ -942,10 +947,19 @@ impl RpcIndexStore {
                     options.set_unordered_write(true);
 
                     // Allow CPU-intensive flushing operations to use all CPUs.
-                    let max_background_jobs = index_config
-                        .as_ref()
-                        .and_then(|c| c.max_background_jobs)
-                        .unwrap_or_else(|| num_cpus::get() as i32);
+                    let max_background_jobs = if let Some(jobs) =
+                        index_config.as_ref().and_then(|c| c.max_background_jobs)
+                    {
+                        debug!("Using config override for max_background_jobs: {}", jobs);
+                        jobs
+                    } else {
+                        let jobs = num_cpus::get() as i32;
+                        debug!(
+                            "Calculated max_background_jobs: {} (based on CPU count)",
+                            jobs
+                        );
+                        jobs
+                    };
                     options.set_max_background_jobs(max_background_jobs);
 
                     // We are disabling compaction for all column families below. This means we can
@@ -959,13 +973,23 @@ impl RpcIndexStore {
                     // all column families.
                     let total_memory_bytes = get_available_memory();
 
-                    let db_buffer_size = index_config
-                        .as_ref()
-                        .and_then(|c| c.db_write_buffer_size)
-                        .unwrap_or({
-                            // Default to 80% of system RAM
-                            (total_memory_bytes as f64 * 0.8) as usize
-                        });
+                    let db_buffer_size = if let Some(size) =
+                        index_config.as_ref().and_then(|c| c.db_write_buffer_size)
+                    {
+                        debug!(
+                            "Using config override for db_write_buffer_size: {} bytes",
+                            size
+                        );
+                        size
+                    } else {
+                        // Default to 80% of system RAM
+                        let size = (total_memory_bytes as f64 * 0.8) as usize;
+                        debug!(
+                            "Calculated db_write_buffer_size: {} bytes (80% of {} total bytes)",
+                            size, total_memory_bytes
+                        );
+                        size
+                    };
                     options.set_db_write_buffer_size(db_buffer_size);
 
                     // Create column family specific options.
@@ -984,24 +1008,39 @@ impl RpcIndexStore {
                             .as_ref()
                             .and_then(|c| c.cf_max_write_buffer_number),
                     ) {
-                        (Some(size), Some(count)) => (size, count),
+                        (Some(size), Some(count)) => {
+                            debug!(
+                                "Using config overrides - buffer_size: {} bytes, buffer_count: {}",
+                                size, count
+                            );
+                            (size, count)
+                        }
                         (None, None) => {
                             // No overrides, use default logic
-                            // Calculate buffer configuration: 25% of RAM split across up to 32 buffers
+                            // Calculate buffer configuration: 25% of RAM split across buffers
                             let cf_memory_budget = (total_memory_bytes as f64 * 0.25) as usize;
+                            debug!(
+                                "Column family memory budget: {} bytes (25% of {} total bytes)",
+                                cf_memory_budget, total_memory_bytes
+                            );
                             const MIN_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64MB minimum
-                            const DEFAULT_BUFFER_COUNT: usize = 32;
 
-                            // Aim for 32 buffers, but reduce if it would make buffers too small
+                            // Target number of buffers based on CPU count
+                            // More CPUs = more parallel flushing capability
+                            let target_buffer_count = num_cpus::get().max(2);
+
+                            // Aim for CPU-based buffer count, but reduce if it would make buffers too small
                             //   For example:
-                            // - 128GB RAM system: 32GB per CF / 32 buffers = 1GB each (32 buffers)
-                            // - 16GB RAM system: 4GB per CF / 32 buffers = 128MB each (32 buffers)
-                            // - 4GB RAM system: 1GB per CF / 64MB min = ~16 buffers of 64MB each
+                            // - 128GB RAM, 32 CPUs: 32GB per CF / 32 buffers = 1GB each
+                            // - 16GB RAM, 8 CPUs: 4GB per CF / 8 buffers = 512MB each
+                            // - 4GB RAM, 8 CPUs: 1GB per CF / 64MB min = ~16 buffers of 64MB each
                             let buffer_size =
-                                (cf_memory_budget / DEFAULT_BUFFER_COUNT).max(MIN_BUFFER_SIZE);
+                                (cf_memory_budget / target_buffer_count).max(MIN_BUFFER_SIZE);
                             let buffer_count = (cf_memory_budget / buffer_size)
-                                .clamp(2, DEFAULT_BUFFER_COUNT)
+                                .clamp(2, target_buffer_count)
                                 as i32;
+                            debug!("Calculated buffer_size: {} bytes, buffer_count: {} (based on {} CPUs)", 
+                                buffer_size, buffer_count, target_buffer_count);
                             (buffer_size, buffer_count)
                         }
                         _ => {
@@ -1011,6 +1050,24 @@ impl RpcIndexStore {
 
                     cf_options.options.set_write_buffer_size(buffer_size);
                     cf_options.options.set_max_write_buffer_number(buffer_count);
+
+                    // Calculate batch size limit: default to half the buffer size or 128MB, whichever is smaller
+                    batch_size_limit = if let Some(limit) =
+                        index_config.as_ref().and_then(|c| c.batch_size_limit)
+                    {
+                        debug!(
+                            "Using config override for batch_size_limit: {} bytes",
+                            limit
+                        );
+                        limit
+                    } else {
+                        let half_buffer = buffer_size / 2;
+                        let default_limit = 1 << 27; // 128MB (same as the original constant)
+                        let limit = half_buffer.min(default_limit);
+                        debug!("Calculated batch_size_limit: {} bytes (min of half_buffer={} and default_limit={})", 
+                            limit, half_buffer, default_limit);
+                        limit
+                    };
 
                     // Apply cf_options to all tables except balance (which needs a merge operator)
                     for (table_name, _) in IndexStoreTables::describe_tables() {
@@ -1038,6 +1095,7 @@ impl RpcIndexStore {
                         checkpoint_store,
                         epoch_store,
                         package_store,
+                        batch_size_limit,
                     )
                     .expect("unable to initialize rpc index from live object set");
 
@@ -1261,6 +1319,7 @@ fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinInde
 struct RpcParLiveObjectSetIndexer<'a> {
     tables: &'a IndexStoreTables,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
+    batch_size_limit: usize,
 }
 
 struct RpcLiveObjectIndexer<'a> {
@@ -1268,6 +1327,7 @@ struct RpcLiveObjectIndexer<'a> {
     batch: typed_store::rocks::DBBatch,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
     balance_changes: HashMap<BalanceKey, BalanceIndexInfo>,
+    batch_size_limit: usize,
 }
 
 impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
@@ -1279,6 +1339,7 @@ impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
             batch: self.tables.owner.batch(),
             coin_index: self.coin_index,
             balance_changes: HashMap::new(),
+            batch_size_limit: self.batch_size_limit,
         }
     }
 }
@@ -1341,9 +1402,9 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                 .insert_batch(&self.tables.package_version, [(key, info)])?;
         }
 
-        // If the batch size grows to greater that 128MB then write out to the DB so that the
-        // data we need to hold in memory doesn't grown unbounded.
-        if self.batch.size_in_bytes() >= 1 << 27 {
+        // If the batch size grows to greater than the limit then write out to the DB so that the
+        // data we need to hold in memory doesn't grow unbounded.
+        if self.batch.size_in_bytes() >= self.batch_size_limit {
             std::mem::replace(&mut self.batch, self.tables.owner.batch())
                 .write_opt(&bulk_ingestion_write_options())?;
         }
