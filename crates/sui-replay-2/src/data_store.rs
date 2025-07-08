@@ -25,7 +25,6 @@ use sui_types::{
     supported_protocol_versions::{Chain, ProtocolConfig},
     transaction::TransactionData,
 };
-use tokio::runtime::Runtime;
 use tracing::debug;
 
 //
@@ -38,7 +37,6 @@ type EpochId = u64;
 pub struct DataStore {
     client: reqwest::Client,
     rpc: reqwest::Url,
-    rt: Runtime,
     node: Node,
     // Keep the epoch data considering its small size and footprint
     epoch_map: RefCell<BTreeMap<EpochId, EpochData>>,
@@ -47,12 +45,24 @@ pub struct DataStore {
     version: String,
 }
 
+macro_rules! block_on {
+    ($expr:expr) => {{
+        // TODO: Use this (and remove the `futures` `block_on` below) once simtest support
+        // `block_in_place`.
+        // tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on($expr))
+        #[allow(clippy::disallowed_methods, clippy::result_large_err)]
+        {
+            futures::executor::block_on($expr)
+        }
+    }};
+}
+
 impl TransactionStore for DataStore {
     fn transaction_data_and_effects(
         &self,
         digest: &str,
     ) -> Result<(TransactionData, TransactionEffects, u64), anyhow::Error> {
-        self.rt.block_on(self.transaction(digest))
+        block_on!(self.transaction(digest))
     }
 }
 
@@ -61,7 +71,7 @@ impl EpochStore for DataStore {
         if let Some(epoch_data) = self.epoch_map.borrow().get(&epoch) {
             return Ok(epoch_data.clone());
         }
-        let epoch_data = self.rt.block_on(self.epoch(epoch))?;
+        let epoch_data = block_on!(self.epoch(epoch))?;
         self.epoch_map
             .borrow_mut()
             .insert(epoch, epoch_data.clone());
@@ -80,8 +90,7 @@ impl EpochStore for DataStore {
 
 impl ObjectStore for DataStore {
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<Object>>, anyhow::Error> {
-        let objects = self.rt.block_on(self.objects(keys));
-        objects
+        block_on!(self.objects(keys))
     }
 }
 
@@ -97,13 +106,11 @@ impl DataStore {
         };
         let rpc =
             reqwest::Url::parse(url).context(format!("Failed to parse GQL RPC URL {}", url))?;
-        let rt = Runtime::new().unwrap();
         let epoch_map = RefCell::new(BTreeMap::new());
         debug!("End stores creation");
 
         Ok(Self {
             client,
-            rt,
             node,
             epoch_map,
             rpc,
