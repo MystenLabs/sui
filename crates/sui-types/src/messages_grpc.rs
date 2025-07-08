@@ -351,3 +351,114 @@ pub struct HandleSoftBundleCertificatesRequestV3 {
     pub include_output_objects: bool,
     pub include_auxiliary_data: bool,
 }
+
+/// Raw protobuf request for validator health information (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorHealthRequest {
+    /// Reserved for future use - empty request is intentional for now
+    #[prost(bytes = "bytes", tag = "1")]
+    pub reserved: Bytes,
+}
+
+/// Raw protobuf response with validator health metrics (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorHealthResponse {
+    /// Number of pending certificates
+    #[prost(uint64, optional, tag = "1")]
+    pub pending_certificates: Option<u64>,
+    /// Number of in-flight consensus messages
+    #[prost(uint64, optional, tag = "2")]
+    pub inflight_consensus_messages: Option<u64>,
+    /// Current consensus round
+    #[prost(uint64, optional, tag = "3")]
+    pub consensus_round: Option<u64>,
+    /// Current checkpoint sequence number
+    #[prost(uint64, optional, tag = "4")]
+    pub checkpoint_sequence: Option<u64>,
+    /// Transaction execution queue size
+    #[prost(uint64, optional, tag = "5")]
+    pub tx_queue_size: Option<u64>,
+    /// Available system memory in bytes (optional)
+    #[prost(uint64, optional, tag = "6")]
+    pub available_memory: Option<u64>,
+    /// CPU usage percentage 0-100 as integer (multiplied by 100)
+    #[prost(uint32, optional, tag = "7")]
+    pub cpu_usage_percent_x100: Option<u32>,
+}
+
+/// Request for validator health information
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorHealthRequest {}
+
+/// Response with validator health metrics
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorHealthResponse {
+    /// Number of pending certificates
+    pub pending_certificates: u64,
+    /// Number of in-flight consensus messages
+    pub inflight_consensus_messages: u64,
+    /// Current consensus round
+    pub consensus_round: u64,
+    /// Current checkpoint sequence number
+    pub checkpoint_sequence: u64,
+    /// Transaction execution queue size
+    pub tx_queue_size: u64,
+    /// Available system memory in bytes (optional)
+    pub available_memory: Option<u64>,
+    /// CPU usage percentage 0-100 (optional)
+    pub cpu_usage: Option<f32>,
+}
+
+impl TryFrom<ValidatorHealthRequest> for RawValidatorHealthRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(_value: ValidatorHealthRequest) -> Result<Self, Self::Error> {
+        // Empty request - reserved field is intentionally empty for now
+        Ok(Self {
+            reserved: Bytes::new(),
+        })
+    }
+}
+
+impl TryFrom<RawValidatorHealthRequest> for ValidatorHealthRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(_value: RawValidatorHealthRequest) -> Result<Self, Self::Error> {
+        // Empty request - ignore reserved field for now
+        Ok(Self {})
+    }
+}
+
+impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: ValidatorHealthResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            pending_certificates: Some(value.pending_certificates),
+            inflight_consensus_messages: Some(value.inflight_consensus_messages),
+            consensus_round: Some(value.consensus_round),
+            checkpoint_sequence: Some(value.checkpoint_sequence),
+            tx_queue_size: Some(value.tx_queue_size),
+            available_memory: value.available_memory,
+            cpu_usage_percent_x100: value.cpu_usage.map(|usage| (usage * 100.0) as u32),
+        })
+    }
+}
+
+impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawValidatorHealthResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            pending_certificates: value.pending_certificates.unwrap_or(0),
+            inflight_consensus_messages: value.inflight_consensus_messages.unwrap_or(0),
+            consensus_round: value.consensus_round.unwrap_or(0),
+            checkpoint_sequence: value.checkpoint_sequence.unwrap_or(0),
+            tx_queue_size: value.tx_queue_size.unwrap_or(0),
+            available_memory: value.available_memory,
+            cpu_usage: value
+                .cpu_usage_percent_x100
+                .map(|usage| usage as f32 / 100.0),
+        })
+    }
+}

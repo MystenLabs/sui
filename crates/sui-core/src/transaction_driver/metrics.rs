@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{register_histogram_vec_with_registry, HistogramVec, Registry};
+use prometheus::{
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
+    IntCounterVec, Registry,
+};
 
 const FINALITY_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85,
@@ -14,6 +17,7 @@ const FINALITY_LATENCY_SEC_BUCKETS: &[f64] = &[
 #[derive(Clone)]
 pub struct TransactionDriverMetrics {
     pub(crate) settlement_finality_latency: HistogramVec,
+    pub(crate) validator_selections: IntCounterVec,
 }
 
 impl TransactionDriverMetrics {
@@ -24,6 +28,13 @@ impl TransactionDriverMetrics {
                 "Settlement finality latency observed from transaction driver",
                 &["tx_type"],
                 FINALITY_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            validator_selections: register_int_counter_vec_with_registry!(
+                "transaction_driver_validator_selections",
+                "Number of times each validator was selected for transaction submission",
+                &["validator"],
                 registry,
             )
             .unwrap(),

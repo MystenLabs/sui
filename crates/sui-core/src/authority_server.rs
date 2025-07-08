@@ -1459,6 +1459,54 @@ impl ValidatorService {
         Ok((tonic::Response::new(response), Weight::one()))
     }
 
+    async fn validator_health_impl(
+        &self,
+        _request: tonic::Request<sui_types::messages_grpc::RawValidatorHealthRequest>,
+    ) -> WrappedServiceResponse<sui_types::messages_grpc::RawValidatorHealthResponse> {
+        let state = &self.state;
+
+        // Get pending certificates count (approximation)
+        let pending_certificates = 0u64; // TODO: Get real count from authority state
+
+        // Get consensus round (approximation)
+        let consensus_round = 0u64; // TODO: Get real consensus round
+
+        // Get checkpoint sequence
+        let checkpoint_sequence = match state
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint()
+        {
+            Ok(Some(checkpoint)) => checkpoint.data().sequence_number,
+            _ => 0,
+        };
+
+        // Get transaction queue size (approximation)
+        let tx_queue_size = 0u64; // TODO: Get real queue size
+
+        // TODO: Add real system metrics collection
+        // For now, return None for optional fields
+        let available_memory = None;
+        let cpu_usage = None;
+
+        let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+            pending_certificates,
+            inflight_consensus_messages: 0, // TODO: Get from consensus adapter
+            consensus_round,
+            checkpoint_sequence,
+            tx_queue_size,
+            available_memory,
+            cpu_usage,
+        };
+
+        let raw_response = typed_response
+            .try_into()
+            .map_err(|e: sui_types::error::SuiError| {
+                tonic::Status::internal(format!("Failed to serialize health response: {}", e))
+            })?;
+
+        Ok((tonic::Response::new(raw_response), Weight::one()))
+    }
+
     fn get_client_ip_addr<T>(
         &self,
         request: &tonic::Request<T>,
@@ -1774,5 +1822,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
         handle_with_decoration!(self, get_system_state_object_impl, request)
+    }
+
+    async fn validator_health(
+        &self,
+        request: tonic::Request<sui_types::messages_grpc::RawValidatorHealthRequest>,
+    ) -> Result<tonic::Response<sui_types::messages_grpc::RawValidatorHealthResponse>, tonic::Status>
+    {
+        handle_with_decoration!(self, validator_health_impl, request)
     }
 }

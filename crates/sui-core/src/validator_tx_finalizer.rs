@@ -440,6 +440,28 @@ mod tests {
         ) -> Result<SuiSystemState, SuiError> {
             unimplemented!()
         }
+
+        async fn validator_health(
+            &self,
+            _request: sui_types::messages_grpc::RawValidatorHealthRequest,
+        ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+            let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+                pending_certificates: 0,
+                inflight_consensus_messages: 0,
+                consensus_round: 1000,
+                checkpoint_sequence: 500,
+                tx_queue_size: 0,
+                available_memory: Some(8_000_000_000),
+                cpu_usage: Some(20.0),
+            };
+
+            typed_response.try_into().map_err(|e| {
+                sui_types::error::SuiError::GrpcMessageSerializeError {
+                    type_info: "ValidatorHealthResponse".to_string(),
+                    error: format!("Failed to convert to raw response: {}", e),
+                }
+            })
+        }
     }
 
     #[sim_test]
