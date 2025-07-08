@@ -100,7 +100,7 @@ enable-index-processing: false
 
 ```
 
-By default, your Full node will retain `14` days of gRPC index data. You can customize this retention window with the following config:
+You can configure the data retention window for the gRPC index data on a Full node using the following config:
 
 ```sh
 
@@ -110,7 +110,7 @@ authority-store-pruning-config:
 
 ```
 
-Adjust the gRPC retention period as needed based on your Full node’s resource profile and depending on if you've disabled JSON-RPC or not. In any case, be sure to test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
+Adjust the gRPC data retention period as needed, based on your Full node’s resource profile and depending on if you've disabled JSON-RPC or not. In any case, be sure to test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
 
 We strongly recommend enabling gRPC beta support on your Full nodes as early as possible to help developers evaluate and integrate the API before general availability. Refer to [Sui's data serving roadmap](/guides/developer/getting-started/data-serving.mdx#grpc-api) for guidance on the upcoming transition from JSON-RPC.
 
