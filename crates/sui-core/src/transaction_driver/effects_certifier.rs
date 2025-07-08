@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
@@ -34,6 +38,7 @@ use crate::{
         ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
         WaitForEffectsRequest, WaitForEffectsResponse,
     },
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
@@ -51,6 +56,7 @@ impl EffectsCertifier {
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
@@ -81,6 +87,7 @@ impl EffectsCertifier {
         let (acknowledgments_result, mut full_effects_result) = join!(
             self.wait_for_acknowledgments(
                 authority_aggregator,
+                client_monitor,
                 tx_digest,
                 consensus_position,
                 options,
@@ -198,6 +205,7 @@ impl EffectsCertifier {
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
@@ -224,6 +232,7 @@ impl EffectsCertifier {
             let name = *name;
             let raw_request = raw_request.clone();
             let future = async move {
+                let effects_start = Instant::now();
                 // This loop can only retry RPC errors, timeouts, and other errors retriable
                 // without new submission.
                 let backoff = ExponentialBackoff::from_millis(100)
@@ -238,9 +247,23 @@ impl EffectsCertifier {
                     .await;
                     match result {
                         Ok(Ok(response)) => {
+                            let latency = effects_start.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: true,
+                            });
                             return (name, Ok(response));
                         }
                         Ok(Err(e)) => {
+                            let latency = effects_start.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: false,
+                            });
                             if !matches!(e, SuiError::RpcError(_, _)) {
                                 return (name, Err(e));
                             }
@@ -251,6 +274,12 @@ impl EffectsCertifier {
                             );
                         }
                         Err(_) => {
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: None,
+                                success: false,
+                            });
                             tracing::trace!(
                                 ?name,
                                 "Wait for effects acknowledgement (attempt {attempt}): timeout"

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use rand::seq::SliceRandom as _;
 use sui_types::base_types::AuthorityName;
@@ -14,6 +14,7 @@ use crate::{
         aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
         TransactionRequestError,
     },
+    validator_client_monitor::ValidatorClientMonitor,
 };
 
 /// Provides the next target validator to retry operations,
@@ -25,20 +26,22 @@ use crate::{
 ///
 /// This component helps to manager this retry pattern.
 pub(crate) struct RequestRetrier<A: Clone> {
-    remaining_clients: Vec<(AuthorityName, Arc<SafeClient<A>>)>,
+    remaining_clients: VecDeque<(AuthorityName, Arc<SafeClient<A>>)>,
     non_retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
     retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
 }
 
 impl<A: Clone> RequestRetrier<A> {
-    pub(crate) fn new(auth_agg: &Arc<AuthorityAggregator<A>>) -> Self {
-        // TODO(fastpath): select and order targets based on performance metrics.
-        let mut remaining_clients = auth_agg
-            .authority_clients
-            .iter()
-            .map(|(name, client)| (*name, client.clone()))
-            .collect::<Vec<_>>();
-        remaining_clients.shuffle(&mut rand::thread_rng());
+    pub(crate) fn new(
+        auth_agg: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
+    ) -> Self {
+        let selected_validators = client_monitor
+            .select_preferred_validators(&auth_agg.committee, auth_agg.committee.num_members() / 3);
+        let remaining_clients = selected_validators
+            .into_iter()
+            .map(|name| (name, auth_agg.authority_clients[&name].clone()))
+            .collect::<VecDeque<_>>();
         let non_retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         let retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         Self {
@@ -52,7 +55,7 @@ impl<A: Clone> RequestRetrier<A> {
     pub(crate) fn next_target(
         &mut self,
     ) -> Result<(AuthorityName, Arc<SafeClient<A>>), TransactionDriverError> {
-        if let Some((name, client)) = self.remaining_clients.pop() {
+        if let Some((name, client)) = self.remaining_clients.pop_front() {
             return Ok((name, client));
         };
 
