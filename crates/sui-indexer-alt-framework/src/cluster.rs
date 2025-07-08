@@ -50,68 +50,116 @@ pub struct IndexerCluster {
     cancel: CancellationToken,
 }
 
-impl IndexerCluster {
-    /// Create a new cluster with most of the configuration set to its default value. Use
-    /// [Self::new_with_configs] to construct a cluster with full customization.
-    pub async fn new(
-        database_url: Url,
-        args: Args,
-        migrations: Option<&'static EmbeddedMigrations>,
-    ) -> Result<Self> {
-        Self::new_with_configs(
-            database_url,
-            DbArgs::default(),
-            args,
-            IngestionConfig::default(),
-            migrations,
-            None,
-        )
-        .await
+/// Builder for creating an IndexerCluster with a fluent API
+#[derive(Default)]
+pub struct IndexerClusterBuilder {
+    database_url: Option<Url>,
+    db_args: DbArgs,
+    args: Option<Args>,
+    ingestion_config: IngestionConfig,
+    migrations: Option<&'static EmbeddedMigrations>,
+    metric_label: Option<String>,
+}
+
+impl IndexerClusterBuilder {
+    /// Create a new builder instance
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    /// Create a new cluster.
+    /// Set the PostgreSQL database connection URL (required).
     ///
-    /// - `database_url` and `db_args` configure its database connection.
-    /// - `args` configures where checkpoints are come from, what is indexed and metrics.
-    /// - `ingestion_config` controls how the ingestion service is set-up (its concurrency, polling
-    ///    intervals, etc).
-    /// - `migrations` are any database migrations the indexer needs to run before starting to
-    ///   ensure the database schema is ready for the data that is about to be committed.
-    /// - `metric_label` is an optional custom label to add to metrics reported by this service.
-    pub async fn new_with_configs(
-        database_url: Url,
-        db_args: DbArgs,
-        args: Args,
-        ingestion_config: IngestionConfig,
-        migrations: Option<&'static EmbeddedMigrations>,
-        metric_label: Option<String>,
-    ) -> Result<Self> {
+    /// This should be a valid PostgreSQL connection urls, e.g.:
+    /// - `postgres://user:password@host:5432/mydb`
+    pub fn with_database_url(mut self, url: Url) -> Self {
+        self.database_url = Some(url);
+        self
+    }
+
+    /// Configure database connection parameters such as pool size, connection timeout, etc.
+    ///
+    /// Defaults to [`DbArgs::default()`] if not specified, which provides reasonable defaults
+    /// for most use cases.
+    pub fn with_db_args(mut self, args: DbArgs) -> Self {
+        self.db_args = args;
+        self
+    }
+
+    /// Set the main indexer cluster's configuration arguments (required).
+    ///
+    /// This bundles all configuration needed for the indexer:
+    /// - `IndexerArgs`: Controls what to index (checkpoint range, which pipelines to run, watermark behavior)
+    /// - `ClientArgs`: Specifies where to fetch checkpoint data from (remote store, local path, or RPC)
+    /// - `MetricsArgs`: Configures how to expose Prometheus metrics (address to serve on)
+    pub fn with_args(mut self, args: Args) -> Self {
+        self.args = Some(args);
+        self
+    }
+
+    /// Set the ingestion configuration, which controls how the ingestion service is
+    /// set-up (its concurrency, polling, intervals, etc).
+    pub fn with_ingestion_config(mut self, config: IngestionConfig) -> Self {
+        self.ingestion_config = config;
+        self
+    }
+
+    /// Set database migrations to run.
+    ///
+    /// See the [Diesel migration guide](https://diesel.rs/guides/migration_guide.html) for more information.
+    pub fn with_migrations(mut self, migrations: &'static EmbeddedMigrations) -> Self {
+        self.migrations = Some(migrations);
+        self
+    }
+
+    /// Add a custom label to all metrics reported by this indexer instance.
+    pub fn with_metric_label(mut self, label: impl Into<String>) -> Self {
+        self.metric_label = Some(label.into());
+        self
+    }
+
+    /// Build the IndexerCluster instance.
+    ///
+    /// Returns an error if:
+    /// - Required fields are missing
+    /// - Database connection cannot be established
+    /// - Metrics registry creation fails
+    pub async fn build(self) -> Result<IndexerCluster> {
+        let database_url = self.database_url.context("database_url is required")?;
+        let args = self.args.context("args is required")?;
+
         tracing_subscriber::fmt::init();
 
         let cancel = CancellationToken::new();
 
-        let registry = Registry::new_custom(metric_label, None)
+        let registry = Registry::new_custom(self.metric_label, None)
             .context("Failed to create Prometheus registry.")?;
 
         let metrics = MetricsService::new(args.metrics_args, registry, cancel.child_token());
 
         let indexer = Indexer::new_from_pg(
             database_url,
-            db_args,
+            self.db_args,
             args.indexer_args,
             args.client_args,
-            ingestion_config,
-            migrations,
+            self.ingestion_config,
+            self.migrations,
             metrics.registry(),
             cancel.child_token(),
         )
         .await?;
 
-        Ok(Self {
+        Ok(IndexerCluster {
             indexer,
             metrics,
             cancel,
         })
+    }
+}
+
+impl IndexerCluster {
+    /// Create a new builder for constructing an IndexerCluster.
+    pub fn builder() -> IndexerClusterBuilder {
+        IndexerClusterBuilder::new()
     }
 
     /// Access to the indexer's metrics. This can be cloned before a call to [Self::run], to retain
@@ -289,7 +337,12 @@ mod tests {
             metrics_args: MetricsArgs { metrics_address },
         };
 
-        let mut indexer = IndexerCluster::new(url.clone(), args, None).await.unwrap();
+        let mut indexer = IndexerCluster::builder()
+            .with_database_url(url.clone())
+            .with_args(args)
+            .build()
+            .await
+            .unwrap();
 
         indexer
             .concurrent_pipeline(TxCounts, ConcurrentConfig::default())

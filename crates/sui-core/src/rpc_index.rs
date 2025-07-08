@@ -12,14 +12,14 @@ use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
+use sui_config::RpcIndexInitConfig;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -40,9 +40,10 @@ use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
-use typed_store::rocks::{DBMap, MetricConf};
-use typed_store::rocksdb::MergeOperands;
+use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
+use typed_store::rocksdb::{MergeOperands, WriteOptions};
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
@@ -50,6 +51,37 @@ use typed_store::TypedStoreError;
 const CURRENT_DB_VERSION: u64 = 3;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
+
+fn bulk_ingestion_write_options() -> WriteOptions {
+    let mut opts = WriteOptions::default();
+    opts.disable_wal(true);
+    opts
+}
+
+/// Get available memory, respecting cgroup limits in containerized environments
+fn get_available_memory() -> u64 {
+    // RefreshKind::nothing().with_memory() avoids collecting other, slower stats
+    let mut sys = System::new_with_specifics(
+        RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
+    );
+    sys.refresh_memory();
+
+    // Check if we have cgroup limits
+    if let Some(cgroup_limits) = sys.cgroup_limits() {
+        let memory_limit = cgroup_limits.total_memory;
+        // cgroup_limits.total_memory is 0 when there's no limit
+        if memory_limit > 0 {
+            debug!("Using cgroup memory limit: {} bytes", memory_limit);
+            return memory_limit;
+        }
+    }
+
+    // Fall back to system memory if no cgroup limits found
+    // sysinfo 0.35 already reports bytes (not KiB like older versions)
+    let total_memory_bytes = sys.total_memory();
+    debug!("Using system memory: {} bytes", total_memory_bytes);
+    total_memory_bytes
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -349,12 +381,13 @@ impl IndexStoreTables {
     fn open_with_options<P: Into<PathBuf>>(
         path: P,
         options: typed_store::rocksdb::Options,
+        table_options: Option<DBMapTableConfigMap>,
     ) -> Self {
         IndexStoreTables::open_tables_read_write(
             path.into(),
             MetricConf::new("rpc-index"),
             Some(options),
-            None,
+            table_options,
         )
     }
 
@@ -383,6 +416,7 @@ impl IndexStoreTables {
         checkpoint_store: &CheckpointStore,
         _epoch_store: &AuthorityPerEpochStore,
         _package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        batch_size_limit: usize,
     ) -> Result<(), StorageError> {
         info!("Initializing RPC indexes");
 
@@ -421,6 +455,7 @@ impl IndexStoreTables {
             let make_live_object_indexer = RpcParLiveObjectSetIndexer {
                 tables: self,
                 coin_index: &coin_index,
+                batch_size_limit,
             };
 
             crate::par_index_live_object_set::par_index_live_object_set(
@@ -470,7 +505,9 @@ impl IndexStoreTables {
             self.index_epoch(&checkpoint_data, &mut batch)?;
             self.index_transactions(&checkpoint_data, &mut batch)?;
 
-            batch.write().map_err(StorageError::from)
+            batch
+                .write_opt(&(bulk_ingestion_write_options()))
+                .map_err(StorageError::from)
         })?;
 
         info!(
@@ -885,6 +922,7 @@ impl RpcIndexStore {
         checkpoint_store: &CheckpointStore,
         epoch_store: &AuthorityPerEpochStore,
         package_store: &Arc<dyn BackingPackageStore + Send + Sync>,
+        index_config: Option<&RpcIndexInitConfig>,
     ) -> Self {
         let path = Self::db_path(dir);
 
@@ -894,6 +932,8 @@ impl RpcIndexStore {
             // If the index tables are uninitialized or on an older version then we need to
             // populate them
             if tables.needs_to_do_initialization(checkpoint_store) {
+                let batch_size_limit;
+
                 let mut tables = {
                     drop(tables);
                     typed_store::rocks::safe_drop_db(path.clone(), Duration::from_secs(30))
@@ -904,7 +944,145 @@ impl RpcIndexStore {
                     // speedup when indexing
                     let mut options = typed_store::rocksdb::Options::default();
                     options.set_unordered_write(true);
-                    IndexStoreTables::open_with_options(&path, options)
+
+                    // Allow CPU-intensive flushing operations to use all CPUs.
+                    let max_background_jobs = if let Some(jobs) =
+                        index_config.as_ref().and_then(|c| c.max_background_jobs)
+                    {
+                        debug!("Using config override for max_background_jobs: {}", jobs);
+                        jobs
+                    } else {
+                        let jobs = num_cpus::get() as i32;
+                        debug!(
+                            "Calculated max_background_jobs: {} (based on CPU count)",
+                            jobs
+                        );
+                        jobs
+                    };
+                    options.set_max_background_jobs(max_background_jobs);
+
+                    // We are disabling compaction for all column families below. This means we can
+                    // also disable the backpressure that slows down writes when the number of L0
+                    // files builds up since we will never compact them anyway.
+                    options.set_level_zero_file_num_compaction_trigger(0);
+                    options.set_level_zero_slowdown_writes_trigger(-1);
+                    options.set_level_zero_stop_writes_trigger(i32::MAX);
+
+                    let total_memory_bytes = get_available_memory();
+                    // This is an upper bound on the amount to of ram the memtables can use across
+                    // all column families.
+                    let db_buffer_size = if let Some(size) =
+                        index_config.as_ref().and_then(|c| c.db_write_buffer_size)
+                    {
+                        debug!(
+                            "Using config override for db_write_buffer_size: {} bytes",
+                            size
+                        );
+                        size
+                    } else {
+                        // Default to 80% of system RAM
+                        let size = (total_memory_bytes as f64 * 0.8) as usize;
+                        debug!(
+                            "Calculated db_write_buffer_size: {} bytes (80% of {} total bytes)",
+                            size, total_memory_bytes
+                        );
+                        size
+                    };
+                    options.set_db_write_buffer_size(db_buffer_size);
+
+                    // Create column family specific options.
+                    let mut table_config_map = BTreeMap::new();
+
+                    // Create options with compactions disabled and large write buffers.
+                    // Each CF can use up to 25% of system RAM, but total is still limited by
+                    // set_db_write_buffer_size configured above.
+                    let mut cf_options = typed_store::rocks::default_db_options();
+                    cf_options.options.set_disable_auto_compactions(true);
+
+                    let (buffer_size, buffer_count) = match (
+                        index_config.as_ref().and_then(|c| c.cf_write_buffer_size),
+                        index_config
+                            .as_ref()
+                            .and_then(|c| c.cf_max_write_buffer_number),
+                    ) {
+                        (Some(size), Some(count)) => {
+                            debug!(
+                                "Using config overrides - buffer_size: {} bytes, buffer_count: {}",
+                                size, count
+                            );
+                            (size, count)
+                        }
+                        (None, None) => {
+                            // Calculate buffer configuration: 25% of RAM split across buffers
+                            let cf_memory_budget = (total_memory_bytes as f64 * 0.25) as usize;
+                            debug!(
+                                "Column family memory budget: {} bytes (25% of {} total bytes)",
+                                cf_memory_budget, total_memory_bytes
+                            );
+                            const MIN_BUFFER_SIZE: usize = 64 * 1024 * 1024; // 64MB minimum
+
+                            // Target number of buffers based on CPU count
+                            // More CPUs = more parallel flushing capability
+                            let target_buffer_count = num_cpus::get().max(2);
+
+                            // Aim for CPU-based buffer count, but reduce if it would make buffers too small
+                            //   For example:
+                            // - 128GB RAM, 32 CPUs: 32GB per CF / 32 buffers = 1GB each
+                            // - 16GB RAM, 8 CPUs: 4GB per CF / 8 buffers = 512MB each
+                            // - 4GB RAM, 8 CPUs: 1GB per CF / 64MB min = ~16 buffers of 64MB each
+                            let buffer_size =
+                                (cf_memory_budget / target_buffer_count).max(MIN_BUFFER_SIZE);
+                            let buffer_count = (cf_memory_budget / buffer_size)
+                                .clamp(2, target_buffer_count)
+                                as i32;
+                            debug!("Calculated buffer_size: {} bytes, buffer_count: {} (based on {} CPUs)", 
+                                buffer_size, buffer_count, target_buffer_count);
+                            (buffer_size, buffer_count)
+                        }
+                        _ => {
+                            panic!("indexing-cf-write-buffer-size and indexing-cf-max-write-buffer-number must both be specified or both be omitted");
+                        }
+                    };
+
+                    cf_options.options.set_write_buffer_size(buffer_size);
+                    cf_options.options.set_max_write_buffer_number(buffer_count);
+
+                    // Calculate batch size limit: default to half the buffer size or 128MB, whichever is smaller
+                    batch_size_limit = if let Some(limit) =
+                        index_config.as_ref().and_then(|c| c.batch_size_limit)
+                    {
+                        debug!(
+                            "Using config override for batch_size_limit: {} bytes",
+                            limit
+                        );
+                        limit
+                    } else {
+                        let half_buffer = buffer_size / 2;
+                        let default_limit = 1 << 27; // 128MB
+                        let limit = half_buffer.min(default_limit);
+                        debug!("Calculated batch_size_limit: {} bytes (min of half_buffer={} and default_limit={})", 
+                            limit, half_buffer, default_limit);
+                        limit
+                    };
+
+                    // Apply cf_options to all tables
+                    for (table_name, _) in IndexStoreTables::describe_tables() {
+                        table_config_map.insert(table_name, cf_options.clone());
+                    }
+
+                    // Override Balance options with the merge operator
+                    let mut balance_options = cf_options.clone();
+                    balance_options = balance_options.set_merge_operator_associative(
+                        "balance_merge",
+                        balance_delta_merge_operator,
+                    );
+                    table_config_map.insert("balance".to_string(), balance_options);
+
+                    IndexStoreTables::open_with_options(
+                        &path,
+                        options,
+                        Some(DBMapTableConfigMap::new(table_config_map)),
+                    )
                 };
 
                 tables
@@ -913,8 +1091,18 @@ impl RpcIndexStore {
                         checkpoint_store,
                         epoch_store,
                         package_store,
+                        batch_size_limit,
                     )
                     .expect("unable to initialize rpc index from live object set");
+
+                // Flush all data to disk before dropping tables.
+                // This is critical because WAL is disabled during bulk indexing.
+                // Note we only need to call flush on one table because all tables share the same
+                // underlying database.
+                tables
+                    .meta
+                    .flush()
+                    .expect("Failed to flush RPC index tables to disk");
 
                 let weak_db = Arc::downgrade(&tables.meta.db);
                 drop(tables);
@@ -931,7 +1119,21 @@ impl RpcIndexStore {
                 }
 
                 // Reopen the DB with default options (eg without `unordered_write`s enabled)
-                IndexStoreTables::open(&path)
+                let reopened_tables = IndexStoreTables::open(&path);
+
+                // Sanity check: verify the database version was persisted correctly
+                let stored_version = reopened_tables
+                    .meta
+                    .get(&())
+                    .expect("Failed to read metadata from reopened database")
+                    .expect("Metadata not found in reopened database");
+                assert_eq!(
+                    stored_version.version, CURRENT_DB_VERSION,
+                    "Database version mismatch after flush and reopen: expected {}, found {}",
+                    CURRENT_DB_VERSION, stored_version.version
+                );
+
+                reopened_tables
             } else {
                 tables
             }
@@ -1136,6 +1338,7 @@ fn try_create_coin_index_info(object: &Object) -> Option<(CoinIndexKey, CoinInde
 struct RpcParLiveObjectSetIndexer<'a> {
     tables: &'a IndexStoreTables,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
+    batch_size_limit: usize,
 }
 
 struct RpcLiveObjectIndexer<'a> {
@@ -1143,6 +1346,7 @@ struct RpcLiveObjectIndexer<'a> {
     batch: typed_store::rocks::DBBatch,
     coin_index: &'a Mutex<HashMap<CoinIndexKey, CoinIndexInfo>>,
     balance_changes: HashMap<BalanceKey, BalanceIndexInfo>,
+    batch_size_limit: usize,
 }
 
 impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
@@ -1154,6 +1358,7 @@ impl<'a> ParMakeLiveObjectIndexer for RpcParLiveObjectSetIndexer<'a> {
             batch: self.tables.owner.batch(),
             coin_index: self.coin_index,
             balance_changes: HashMap::new(),
+            batch_size_limit: self.batch_size_limit,
         }
     }
 }
@@ -1216,10 +1421,11 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                 .insert_batch(&self.tables.package_version, [(key, info)])?;
         }
 
-        // If the batch size grows to greater that 128MB then write out to the DB so that the
-        // data we need to hold in memory doesn't grown unbounded.
-        if self.batch.size_in_bytes() >= 1 << 27 {
-            std::mem::replace(&mut self.batch, self.tables.owner.batch()).write()?;
+        // If the batch size grows to greater than the limit then write out to the DB so that the
+        // data we need to hold in memory doesn't grow unbounded.
+        if self.batch.size_in_bytes() >= self.batch_size_limit {
+            std::mem::replace(&mut self.batch, self.tables.owner.batch())
+                .write_opt(&bulk_ingestion_write_options())?;
         }
 
         Ok(())
@@ -1230,7 +1436,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             &self.tables.balance,
             std::mem::take(&mut self.balance_changes),
         )?;
-        self.batch.write()?;
+        self.batch.write_opt(&bulk_ingestion_write_options())?;
         Ok(())
     }
 }

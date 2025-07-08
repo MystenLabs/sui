@@ -26,6 +26,7 @@ use sui_types::base_types::{EpochId, ObjectID, TransactionDigest};
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
+use sui_types::messages_consensus::TimestampMs;
 use sui_types::object::Object;
 use sui_types::storage::{EpochInfo, ObjectKey};
 use tonic::body::BoxBody;
@@ -76,7 +77,7 @@ pub struct BigTableClient {
 
 #[async_trait]
 impl KeyValueStoreWriter for BigTableClient {
-    async fn save_objects(&mut self, objects: &[&Object]) -> Result<()> {
+    async fn save_objects(&mut self, objects: &[&Object], timestamp_ms: TimestampMs) -> Result<()> {
         let mut items = Vec::with_capacity(objects.len());
         for object in objects {
             let object_key = ObjectKey(object.id(), object.version());
@@ -85,12 +86,15 @@ impl KeyValueStoreWriter for BigTableClient {
                 vec![(DEFAULT_COLUMN_QUALIFIER, bcs::to_bytes(object)?)],
             ));
         }
-        self.multi_set(OBJECTS_TABLE, items).await
+        self.multi_set(OBJECTS_TABLE, items, Some(timestamp_ms))
+            .await
     }
 
     async fn save_transactions(&mut self, transactions: &[TransactionData]) -> Result<()> {
         let mut items = Vec::with_capacity(transactions.len());
+        let mut timestamp_ms = None;
         for transaction in transactions {
+            timestamp_ms = Some(transaction.timestamp);
             let cells = vec![
                 (
                     TRANSACTION_COLUMN_QUALIFIER,
@@ -112,11 +116,13 @@ impl KeyValueStoreWriter for BigTableClient {
             ];
             items.push((transaction.transaction.digest().inner().to_vec(), cells));
         }
-        self.multi_set(TRANSACTIONS_TABLE, items).await
+        self.multi_set(TRANSACTIONS_TABLE, items, timestamp_ms)
+            .await
     }
 
     async fn save_checkpoint(&mut self, checkpoint: &CheckpointData) -> Result<()> {
         let summary = &checkpoint.checkpoint_summary.data();
+        let timestamp = summary.timestamp_ms;
         let contents = &checkpoint.checkpoint_contents;
         let signatures = &checkpoint.checkpoint_summary.auth_sig();
         let key = summary.sequence_number.to_be_bytes().to_vec();
@@ -131,7 +137,7 @@ impl KeyValueStoreWriter for BigTableClient {
                 bcs::to_bytes(contents)?,
             ),
         ];
-        self.multi_set(CHECKPOINTS_TABLE, [(key.clone(), cells)])
+        self.multi_set(CHECKPOINTS_TABLE, [(key.clone(), cells)], Some(timestamp))
             .await?;
         self.multi_set(
             CHECKPOINTS_BY_DIGEST_TABLE,
@@ -139,6 +145,7 @@ impl KeyValueStoreWriter for BigTableClient {
                 checkpoint.checkpoint_summary.digest().inner().to_vec(),
                 vec![(DEFAULT_COLUMN_QUALIFIER, key)],
             )],
+            Some(timestamp),
         )
         .await
     }
@@ -148,6 +155,7 @@ impl KeyValueStoreWriter for BigTableClient {
         self.multi_set(
             WATERMARK_TABLE,
             [(key, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
+            None,
         )
         .await
     }
@@ -160,6 +168,7 @@ impl KeyValueStoreWriter for BigTableClient {
                 key,
                 vec![(DEFAULT_COLUMN_QUALIFIER, bcs::to_bytes(&epoch)?)],
             )],
+            epoch.end_timestamp_ms.or(epoch.start_timestamp_ms),
         )
         .await
     }
@@ -486,9 +495,10 @@ impl BigTableClient {
         &mut self,
         table_name: &str,
         values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
+        timestamp_ms: Option<TimestampMs>,
     ) -> Result<()> {
         for chunk in values.into_iter().collect::<Vec<_>>().chunks(50_000) {
-            self.multi_set_internal(table_name, chunk.iter().cloned())
+            self.multi_set_internal(table_name, chunk.iter().cloned(), timestamp_ms)
                 .await?;
         }
         Ok(())
@@ -498,8 +508,16 @@ impl BigTableClient {
         &mut self,
         table_name: &str,
         values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
+        timestamp_ms: Option<TimestampMs>,
     ) -> Result<()> {
         let mut entries = vec![];
+        let timestamp_micros = timestamp_ms
+            .map(|tst| {
+                tst.checked_mul(1000)
+                    .expect("timestamp multiplication overflow") as i64
+            })
+            // default to -1 for current Bigtable server time
+            .unwrap_or(-1);
         for (row_key, cells) in values {
             let mutations = cells
                 .into_iter()
@@ -508,8 +526,7 @@ impl BigTableClient {
                         family_name: COLUMN_FAMILY_NAME.to_string(),
                         column_qualifier: column_name.to_owned().into_bytes(),
                         // The timestamp of the cell into which new data should be written.
-                        // Use -1 for current Bigtable server time.
-                        timestamp_micros: -1,
+                        timestamp_micros,
                         value,
                     })),
                 })
