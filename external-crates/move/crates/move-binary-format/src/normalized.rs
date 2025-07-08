@@ -9,7 +9,7 @@ use crate::file_format::{
     StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
     VariantDefinition, VariantHandleIndex, VariantInstantiationHandleIndex, VariantTag, Visibility,
 };
-use indexmap::{Equivalent, IndexMap};
+use indexmap::IndexMap;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -119,14 +119,13 @@ pub struct Constant<S> {
 }
 
 /// Normalized version of a `StructDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// `ModuleId` or `Module` to ensure the two types are defined at the same place.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Struct<S: Hash + Eq> {
+    // Defining module name
+    pub defining_module: ModuleId<S>,
     pub name: S,
-    /// Uninstantiated datatype. The parameters here are simply the type parameters, so that we can
-    /// instantiate this type.
-    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub fields: Fields<S>,
@@ -166,14 +165,13 @@ pub struct Function<S: Hash + Eq> {
 }
 
 /// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
-/// `ModuleId` or `Module`.
+/// `ModuleId` or `Module` to ensure the two types are defined at the same place.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
 pub struct Enum<S: Hash + Eq> {
+    // Defining module name
+    pub defining_module: ModuleId<S>,
     pub name: S,
-    /// Uninstantiated datatype. The parameters here are simply the type parameters, so that we can
-    /// instantiate this type.
-    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub variants: IndexMap<S, Rc<Variant<S>>>,
@@ -810,6 +808,17 @@ impl<S: Hash + Eq> Struct<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.struct_handle);
+
+        let name = pool.intern(m.identifier_at(handle.name));
+
+        let defining_module_handle = m.module_handle_at(handle.module);
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let defining_module = ModuleId {
+            address: defining_module_address,
+            name: defining_module_name,
+        };
+
         let fields = match &def.field_information {
             StructFieldInformation::Native => {
                 // Pretend for compatibility checking no fields
@@ -817,11 +826,10 @@ impl<S: Hash + Eq> Struct<S> {
             }
             StructFieldInformation::Declared(fields) => Fields::new(pool, m, fields),
         };
-        let datatype = Datatype::new_for_data_definition(pool, m, def.struct_handle);
-        let name = pool.intern(m.identifier_at(handle.name));
+
         Struct {
+            defining_module,
             name,
-            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             fields,
@@ -832,12 +840,12 @@ impl<S: Hash + Eq> Struct<S> {
         self.type_parameters.iter().map(|param| &param.constraints)
     }
 
-    // Checks equivalence, omitting the datatype to avoid module name comparisons. Comparing the
-    // datatypes might lead to odd compatibility issues due to module self-addressing, etc.
+    // Checks equivalence, omitting the defining module to avoid module name comparisons (which may
+    // be invalid during publication, etc).
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
+            defining_module: _,
             name,
-            datatype: _,
             abilities,
             type_parameters,
             fields,
@@ -850,10 +858,22 @@ impl<S: Hash + Eq> Struct<S> {
 }
 
 impl<S: Hash + Eq + Clone> Struct<S> {
-    /// Returns an (uninstantiated) datatype signature token. Here, the arguments are just
-    /// `TyParam(0), ..., TyParam(n)`, waiting to be substituted.
-    pub fn datatype(&self) -> Datatype<S> {
-        self.datatype.clone()
+    /// Returns a instantiated datatype signature token, using the provided types. The module
+    /// address and name are the definining ID. Note that the address may be `0` if this module is
+    /// unpublished.
+    ///
+    /// Returns `None` if an incorrect number of arguments is provided.
+    /// Does not check type abilities.
+    pub fn datatype(&self, args: Vec<Type<S>>) -> Option<Datatype<S>> {
+        if self.type_parameters.len() != args.len() {
+            return None;
+        };
+        let datatype = Datatype {
+            module: self.defining_module.clone(),
+            name: self.name.clone(),
+            type_arguments: args.into_iter().collect(),
+        };
+        Some(datatype)
     }
 }
 
@@ -1005,8 +1025,17 @@ impl<S: Hash + Eq> Enum<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.enum_handle);
-        let datatype = Datatype::new_for_data_definition(pool, m, def.enum_handle);
+
         let name = pool.intern(m.identifier_at(handle.name));
+
+        let defining_module_handle = m.module_handle_at(handle.module);
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let defining_module = ModuleId {
+            address: defining_module_address,
+            name: defining_module_name,
+        };
+
         let variants = def
             .variants
             .iter()
@@ -1016,20 +1045,20 @@ impl<S: Hash + Eq> Enum<S> {
             })
             .collect();
         Enum {
+            defining_module,
             name,
-            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             variants,
         }
     }
 
-    // Checks equivalence, omitting the datatype to avoid module name comparisons. Comparing the
-    // datatypes might lead to odd compatibility issues due to module self-addressing, etc.
+    // Checks equivalence, omitting the defining module to avoid module name comparisons (which may
+    // be invalid during publication, etc).
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
+            defining_module: _,
             name,
-            datatype: _,
             abilities,
             type_parameters,
             variants,
@@ -1042,10 +1071,22 @@ impl<S: Hash + Eq> Enum<S> {
 }
 
 impl<S: Hash + Eq + Clone> Enum<S> {
-    /// Returns an (uninstantiated) datatype signature token. Here, the arguments are just
-    /// `TyParam(0), ..., TyParam(n)`, waiting to be substituted.
-    pub fn datatype(&self) -> Datatype<S> {
-        self.datatype.clone()
+    /// Returns a instantiated datatype signature token, using the provided types. The module
+    /// address and name are the definining ID. Note that the address may be `0` if this module is
+    /// unpublished.
+    ///
+    /// Returns `None` if an incorrect number of arguments is provided.
+    /// Does not check type abilities.
+    pub fn datatype(&self, args: Vec<Type<S>>) -> Option<Datatype<S>> {
+        if self.type_parameters.len() != args.len() {
+            return None;
+        };
+        let datatype = Datatype {
+            module: self.defining_module.clone(),
+            name: self.name.clone(),
+            type_arguments: args.into_iter().collect(),
+        };
+        Some(datatype)
     }
 }
 
