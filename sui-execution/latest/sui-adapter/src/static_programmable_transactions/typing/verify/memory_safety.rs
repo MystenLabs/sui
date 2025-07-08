@@ -344,6 +344,7 @@ fn argument(context: &mut Context, x: &T::Argument) -> Result<Value, ExecutionEr
             borrow_location(context, x.idx, *is_mut, *location)
         }
         T::Argument__::Read(usage) => read_ref(context, x.idx, usage),
+        T::Argument__::Freeze(usage) => freeze_ref(context, x.idx, usage),
     }
 }
 
@@ -416,6 +417,20 @@ fn borrow_location(
         "type checking should guarantee no borrowing of references"
     );
     let new_r = context.extend_by_label(context.local_root, is_mut, l)?;
+    Ok(Value::Ref(new_r))
+}
+
+/// Creates an alias to the reference, but one that is immutable
+fn freeze_ref(context: &mut Context, arg_idx: u16, u: &T::Usage) -> Result<Value, ExecutionError> {
+    let value = match u {
+        T::Usage::Move(l) => move_value(context, arg_idx, *l)?,
+        T::Usage::Copy { location, borrowed } => copy_value(context, arg_idx, *location, borrowed)?,
+    };
+    let Some(r) = value.to_ref() else {
+        invariant_violation!("type checking should guarantee FreezeRef is used on only references")
+    };
+    let new_r = context.extend_by_epsilon(r, /* is_mut */ false)?;
+    consume_value(context, value)?;
     Ok(Value::Ref(new_r))
 }
 

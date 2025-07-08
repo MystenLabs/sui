@@ -64,7 +64,7 @@ mod refine {
 
     fn argument(used: &mut BTreeSet<T::Location>, arg: &mut T::Argument) {
         let usage = match &mut arg.value.0 {
-            T::Argument__::Use(u) | T::Argument__::Read(u) => u,
+            T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
             T::Argument__::Borrow(_, loc) => {
                 // mark location as used
                 used.insert(*loc);
@@ -271,6 +271,7 @@ mod verify {
             T::Argument__::Use(T::Usage::Copy { location, .. }) => copy_value(context, *location),
             T::Argument__::Borrow(_, location) => borrow_location(context, *location),
             T::Argument__::Read(usage) => read_ref(context, usage),
+            T::Argument__::Freeze(usage) => freeze_ref(context, usage),
         }
     }
 
@@ -298,6 +299,15 @@ mod verify {
     }
 
     fn read_ref(context: &mut Context, u: &T::Usage) -> Result<Value, ExecutionError> {
+        let value = match u {
+            T::Usage::Move(l) => move_value(context, *l)?,
+            T::Usage::Copy { location, .. } => copy_value(context, *location)?,
+        };
+        consume_value(value);
+        Ok(Value)
+    }
+
+    fn freeze_ref(context: &mut Context, u: &T::Usage) -> Result<Value, ExecutionError> {
         let value = match u {
             T::Usage::Move(l) => move_value(context, *l)?,
             T::Usage::Copy { location, .. } => copy_value(context, *location)?,
