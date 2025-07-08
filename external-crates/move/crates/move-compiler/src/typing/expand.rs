@@ -56,7 +56,7 @@ fn types(context: &mut Context, ss: &mut Vec<Type>) {
 pub fn type_(context: &mut Context, ty: &mut Type) {
     use Type_::*;
     match &mut ty.value {
-        Anything | UnresolvedError | Param(_) | Unit => (),
+        Anything | UnresolvedError | Param(_) | Unit | Void => (),
         Ref(_, b) => type_(context, b),
         Var(tvar) => {
             debug_print!(context.debug().type_elaboration, ("before" => Var(*tvar)));
@@ -406,7 +406,8 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
                 | Type_::Fun(_, _)
                 | Type_::Var(_)
                 | Type_::Anything
-                | Type_::UnresolvedError => &p.ty,
+                | Type_::UnresolvedError
+                | Type_::Void => &p.ty,
             };
             if let Some(value) = inferred_numerical_value(context, p.pat.loc, *v, num_ty) {
                 p.pat.value = P::Literal(sp(*vloc, value));

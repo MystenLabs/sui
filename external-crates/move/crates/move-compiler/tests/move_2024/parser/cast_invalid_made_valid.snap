@@ -12,7 +12,7 @@ error[E04003]: built-in operation not supported
    │          ^^^^^^
    │          │
    │          Invalid argument to 'as'
-   │          Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:12:10
@@ -21,7 +21,7 @@ error[E04003]: built-in operation not supported
    │          ^^^^^^
    │          │
    │          Invalid argument to 'as'
-   │          Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │          Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:14:14
@@ -30,7 +30,7 @@ error[E04003]: built-in operation not supported
    │              ^^^^^
    │              │
    │              Invalid argument to 'as'
-   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │              Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:15:14
@@ -39,7 +39,7 @@ error[E04003]: built-in operation not supported
    │              ^^^^^
    │              │
    │              Invalid argument to 'as'
-   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │              Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:16:14
@@ -48,7 +48,7 @@ error[E04003]: built-in operation not supported
    │              ^^^^^^^^
    │              │
    │              Invalid argument to 'as'
-   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │              Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/cast_invalid_made_valid.move:17:14
@@ -57,4 +57,4 @@ error[E04003]: built-in operation not supported
    │              ^^^^^^^^
    │              │
    │              Invalid argument to 'as'
-   │              Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │              Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'

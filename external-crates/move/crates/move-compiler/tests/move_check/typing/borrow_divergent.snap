@@ -5,29 +5,26 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04004]: expected a single non-reference type
-  ┌─ tests/move_check/typing/borrow_divergent.move:4:12
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/borrow_divergent.move:4:13
   │
 4 │            &break;
-  │            ^^^^^^
-  │            ││
-  │            │Expected a single non-reference type, but found: '()'
-  │            Invalid borrow
+  │             ^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04004]: expected a single non-reference type
-  ┌─ tests/move_check/typing/borrow_divergent.move:9:9
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/borrow_divergent.move:9:12
   │
 9 │         &{ return };
-  │         ^^^^^^^^^^^
-  │         │  │
-  │         │  Expected a single non-reference type, but found: '()'
-  │         Invalid borrow
+  │            ^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E04004]: expected a single non-reference type
-   ┌─ tests/move_check/typing/borrow_divergent.move:13:9
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/typing/borrow_divergent.move:13:11
    │
 13 │         &(if (cond) return else return);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │                       │
-   │         │                       Expected a single non-reference type, but found: '()'
-   │         Invalid borrow
+   │           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

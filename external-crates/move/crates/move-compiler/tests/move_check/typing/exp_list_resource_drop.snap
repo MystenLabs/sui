@@ -31,15 +31,14 @@ error[E05001]: ability constraint not satisfied
 9 │         (0, S{ }, Box { f: abort 0 });
   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │         │   │
-  │         │   The type '(u64, 0x8675309::M::S, 0x8675309::M::Box<()>)' can have the ability 'drop' but the type argument '0x8675309::M::S' does not have the required ability 'drop'
+  │         │   The type '(u64, 0x8675309::M::S, 0x8675309::M::Box<_>)' can have the ability 'drop' but the type argument '0x8675309::M::S' does not have the required ability 'drop'
   │         Cannot ignore values without the 'drop' ability. The value must be used
-  │         The type '(u64, 0x8675309::M::S, 0x8675309::M::Box<()>)' does not have the ability 'drop'
+  │         The type '(u64, 0x8675309::M::S, 0x8675309::M::Box<_>)' does not have the ability 'drop'
 
-error[E04004]: expected a single non-reference type
-  ┌─ tests/move_check/typing/exp_list_resource_drop.move:9:19
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/exp_list_resource_drop.move:9:28
   │
 9 │         (0, S{ }, Box { f: abort 0 });
-  │                   ^^^^^^^^^^^^^^^^^^
-  │                   │        │
-  │                   │        Expected a single non-reference type, but found: '()'
-  │                   Invalid type argument
+  │                            ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

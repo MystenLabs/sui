@@ -1101,7 +1101,7 @@ fn visit_type_params(
                 f,
             )
         }
-        Type_::Var(_) | Type_::Anything | Type_::UnresolvedError => {}
+        Type_::Var(_) | Type_::Anything | Type_::Void | Type_::UnresolvedError => {}
         Type_::Unit => {}
     }
 }
@@ -1160,7 +1160,7 @@ fn has_unresolved_error_type(ty: &Type) -> bool {
         Type_::Fun(args, result) => {
             args.iter().any(has_unresolved_error_type) || has_unresolved_error_type(result)
         }
-        Type_::Param(_) | Type_::Var(_) | Type_::Anything | Type_::Unit => false,
+        Type_::Param(_) | Type_::Var(_) | Type_::Anything | Type_::Void | Type_::Unit => false,
     }
 }
 
@@ -3125,7 +3125,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
 
     match ty {
         sp!(_, T::UnresolvedError) => None,
-        sp!(tloc, T::Anything) => {
+        sp!(tloc, T::Anything | T::Void) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -3989,7 +3989,7 @@ fn type_to_type_name_(
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
         t => {
             let msg = match t {
-                Ty::Anything => {
+                Ty::Anything | Ty::Void => {
                     format!("Unable to infer type for {error_msg}. Try annotating this type")
                 }
                 Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) | Ty::Fun(_, _) => {

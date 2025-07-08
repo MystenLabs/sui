@@ -39,7 +39,7 @@ error[E04003]: built-in operation not supported
   │         ^^^^^^^
   │         │
   │         Invalid argument to 'as'
-  │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │         Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E01015]: ambiguous 'as'
   ┌─ tests/move_2024/parser/cast_invalid.move:7:9
@@ -66,7 +66,7 @@ error[E04003]: built-in operation not supported
   │         ^^^^^^
   │         │
   │         Invalid argument to 'as'
-  │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │         Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E01015]: ambiguous 'as'
    ┌─ tests/move_2024/parser/cast_invalid.move:11:13
@@ -81,7 +81,7 @@ error[E04003]: built-in operation not supported
    │             ^^^^^
    │             │
    │             Invalid argument to 'as'
-   │             Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │             Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E01015]: ambiguous 'as'
    ┌─ tests/move_2024/parser/cast_invalid.move:12:13
@@ -96,7 +96,7 @@ error[E04003]: built-in operation not supported
    │             ^^^^^^^^
    │             │
    │             Invalid argument to 'as'
-   │             Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   │             Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E01015]: ambiguous 'as'
    ┌─ tests/move_2024/parser/cast_invalid.move:14:9

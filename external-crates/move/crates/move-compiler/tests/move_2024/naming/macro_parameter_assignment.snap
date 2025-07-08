@@ -25,14 +25,6 @@ error[E02010]: invalid name
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
-error[E04005]: expected a single type
-  ┌─ tests/move_2024/naming/macro_parameter_assignment.move:3:9
-  │
-3 │         f = abort 0;
-  │         ^   ------- Expected a single type, but found expression list type: '()'
-  │         │    
-  │         Invalid type for local
-
 error[E04029]: invalid function call
   ┌─ tests/move_2024/naming/macro_parameter_assignment.move:5:9
   │

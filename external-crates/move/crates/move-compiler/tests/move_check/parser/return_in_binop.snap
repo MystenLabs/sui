@@ -12,7 +12,7 @@ error[E04003]: built-in operation not supported
   │         ^^^^^^
   │         │
   │         Invalid argument to '>>'
-  │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │         Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E04003]: built-in operation not supported
   ┌─ tests/move_check/parser/return_in_binop.move:4:9
@@ -21,4 +21,4 @@ error[E04003]: built-in operation not supported
   │         ^^^^^^
   │         │
   │         Invalid argument to '<<'
-  │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+  │         Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
