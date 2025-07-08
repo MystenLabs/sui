@@ -1095,6 +1095,15 @@ impl RpcIndexStore {
                     )
                     .expect("unable to initialize rpc index from live object set");
 
+                // Flush all data to disk before dropping tables.
+                // This is critical because WAL is disabled during bulk indexing.
+                // Note we only need to call flush on one table because all tables share the same
+                // underlying database.
+                tables
+                    .meta
+                    .flush()
+                    .expect("Failed to flush RPC index tables to disk");
+
                 let weak_db = Arc::downgrade(&tables.meta.db);
                 drop(tables);
 
@@ -1110,7 +1119,21 @@ impl RpcIndexStore {
                 }
 
                 // Reopen the DB with default options (eg without `unordered_write`s enabled)
-                IndexStoreTables::open(&path)
+                let reopened_tables = IndexStoreTables::open(&path);
+
+                // Sanity check: verify the database version was persisted correctly
+                let stored_version = reopened_tables
+                    .meta
+                    .get(&())
+                    .expect("Failed to read metadata from reopened database")
+                    .expect("Metadata not found in reopened database");
+                assert_eq!(
+                    stored_version.version, CURRENT_DB_VERSION,
+                    "Database version mismatch after flush and reopen: expected {}, found {}",
+                    CURRENT_DB_VERSION, stored_version.version
+                );
+
+                reopened_tables
             } else {
                 tables
             }

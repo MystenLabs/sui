@@ -157,6 +157,24 @@ impl Database {
         }
     }
 
+    /// Flush all memtables to SST files on disk.
+    pub fn flush(&self) -> Result<(), TypedStoreError> {
+        match &self.storage {
+            Storage::Rocks(rocks_db) => rocks_db.underlying.flush().map_err(|e| {
+                TypedStoreError::RocksDBError(format!("Failed to flush database: {}", e))
+            }),
+            Storage::InMemory(_) => {
+                // InMemory databases don't need flushing
+                Ok(())
+            }
+            #[cfg(tidehunter)]
+            Storage::TideHunter(_) => {
+                // TideHunter doesn't support an explicit flush.
+                Ok(())
+            }
+        }
+    }
+
     fn get<K: AsRef<[u8]>>(
         &self,
         cf: &ColumnFamily,
@@ -608,6 +626,10 @@ impl<K, V> DBMap<K, V> {
             &self.db_metrics,
             &self.write_sample_interval,
         )
+    }
+
+    pub fn flush(&self) -> Result<(), TypedStoreError> {
+        self.db.flush()
     }
 
     pub fn compact_range<J: Serialize>(&self, start: &J, end: &J) -> Result<(), TypedStoreError> {
