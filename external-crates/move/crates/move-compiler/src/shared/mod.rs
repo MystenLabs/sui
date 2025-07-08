@@ -592,12 +592,6 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_dependency_order(&self, dependency_order: &HashMap<ModuleIdent, usize>) {
-        for hook in &self.save_hooks {
-            hook.save_dependency_order(dependency_order)
-        }
-    }
-
     pub fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
         for hook in &self.save_hooks {
             hook.save_cfgir_datatype_decls(cfgir_datatype_decls)
@@ -994,7 +988,6 @@ pub(crate) struct SavedInfo {
     module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
     macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
     private_transfers: Option<BTreeMap<(ModuleIdent, DatatypeName), TransferKind>>,
-    dependency_order: Option<HashMap<ModuleIdent, usize>>,
     cfgir_datatype_decls: Option<DatatypeDeclarations>,
     cfgir_fun_decls: Option<HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>>,
 }
@@ -1013,7 +1006,6 @@ pub enum SaveFlag {
     MacroInfos,
     ModuleInfo,
     PrivateTransfers,
-    DependencyOrder,
     CFGIRDatatypeDecls,
     CFGIRFunDecls,
 }
@@ -1033,7 +1025,6 @@ impl SaveHook {
             module_named_addresses: None,
             macro_infos: None,
             private_transfers: None,
-            dependency_order: None,
             cfgir_datatype_decls: None,
             cfgir_fun_decls: None,
         })))
@@ -1115,13 +1106,6 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.private_transfers.is_none() && r.flags.contains(&SaveFlag::PrivateTransfers) {
             r.private_transfers = Some(private_transfers.clone());
-        }
-    }
-
-    pub(crate) fn save_dependency_order(&self, dependency_order: &HashMap<ModuleIdent, usize>) {
-        let mut r = self.0.lock().unwrap();
-        if r.dependency_order.is_none() && r.flags.contains(&SaveFlag::DependencyOrder) {
-            r.dependency_order = Some(dependency_order.clone());
         }
     }
 
@@ -1232,15 +1216,6 @@ impl SaveHook {
             "Private transfers not saved. Please set the flag when creating the SaveHook"
         );
         r.private_transfers.take().unwrap()
-    }
-
-    pub fn take_dependency_order(&self) -> HashMap<ModuleIdent, usize> {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::DependencyOrder),
-            "Dependency order not saved. Please set the flag when creating the SaveHook"
-        );
-        r.dependency_order.take().unwrap()
     }
 
     pub fn take_cfgir_datatype_decls(&self) -> DatatypeDeclarations {

@@ -53,6 +53,7 @@ pub struct ModuleInfo {
     pub target_kind: TargetKind,
     pub attributes: Attributes,
     pub package: Option<Symbol>,
+    pub dependency_order: Option<usize>,
     pub use_funs: ResolvedUseFuns,
     pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Loc>,
@@ -164,8 +165,16 @@ fn typing_module_info_to_naming(minfo: &ModuleInfo) -> ModuleInfo {
     minfo
 }
 
+fn naming_dependency_order(_mdef: &N::ModuleDefinition) -> Option<usize> {
+    None
+}
+
+fn typing_dependency_order(mdef: &T::ModuleDefinition) -> Option<usize> {
+    Some(mdef.dependency_order)
+}
+
 macro_rules! program_info {
-    ($pre_compiled_module_infos:ident, $converter:expr, $prog:ident, $module_use_funs:ident) => {{
+    ($pre_compiled_module_infos:ident, $converter:expr, $prog:ident, $module_use_funs:ident, $dependency_order:expr) => {{
         let all_modules = $prog.modules.key_cloned_iter();
         let mut modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
             let structs = mdef.structs.clone();
@@ -199,6 +208,7 @@ macro_rules! program_info {
                 target_kind: mdef.target_kind,
                 attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
+                dependency_order: $dependency_order(&mdef),
                 use_funs,
                 syntax_methods: mdef.syntax_methods.clone(),
                 friends: mdef.friends.ref_map(|_, friend| friend.loc),
@@ -240,7 +250,13 @@ impl TypingProgramInfo {
         let mut module_use_funs = Some(&mut module_use_funs);
         let prog = Prog { modules };
         let pcmi = pre_compiled_module_infos.clone();
-        let mut info = program_info!(pcmi, typing_module_info_clone, prog, module_use_funs);
+        let mut info = program_info!(
+            pcmi,
+            typing_module_info_clone,
+            prog,
+            module_use_funs,
+            typing_dependency_order
+        );
         // TODO we should really have an idea of root package flavor here
         // but this feels roughly equivalent
         if env
@@ -268,7 +284,8 @@ impl NamingProgramInfo {
             pre_compiled_module_infos,
             typing_module_info_to_naming,
             prog,
-            module_use_funs
+            module_use_funs,
+            naming_dependency_order
         )
     }
 
