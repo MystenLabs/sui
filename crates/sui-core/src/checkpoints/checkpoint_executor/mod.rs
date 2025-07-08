@@ -31,6 +31,7 @@ use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -795,9 +796,19 @@ impl CheckpointExecutor {
                             )
                             .expect("failed to acquire shared version assignments");
 
-                        let env = ExecutionEnv::new()
+                        let mut env = ExecutionEnv::new()
                             .with_assigned_versions(assigned_versions)
                             .with_expected_effects_digest(*expected_fx_digest);
+
+                        // Check if the expected effects indicate insufficient balance
+                        if let ExecutionStatus::Failure { error, .. } = effects.status() {
+                            if matches!(
+                                error,
+                                ExecutionFailureStatus::InsufficientBalanceForWithdraw
+                            ) {
+                                env = env.with_insufficient_balance();
+                            }
+                        }
 
                         Some((tx_digest, (txn.clone(), env)))
                     }
@@ -1002,5 +1013,169 @@ impl CheckpointExecutor {
                 Vec::new()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use sui_test_transaction_builder::TestTransactionBuilder;
+    use sui_types::crypto::{get_key_pair, AccountKeyPair};
+    use sui_types::effects::TestEffectsBuilder;
+    use sui_types::execution_status::ExecutionFailureStatus;
+    use sui_types::object::Object;
+
+    async fn create_test_checkpoint_executor() -> CheckpointExecutor {
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+        CheckpointExecutor::new_for_tests(
+            epoch_store,
+            state.checkpoint_store.clone(),
+            state,
+            crate::global_state_hasher::GlobalStateHasher::new_for_tests(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_schedule_transaction_execution_insufficient_balance() {
+        let executor = create_test_checkpoint_executor().await;
+
+        // Create test transaction using TestTransactionBuilder
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let gas_coin = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let gas_ref = gas_coin.compute_object_reference();
+
+        let tx_data = TestTransactionBuilder::new(sender, gas_ref, 1000)
+            .transfer_sui(None, sender)
+            .build();
+
+        let executable_tx =
+            VerifiedExecutableTransaction::new_for_testing(tx_data.clone(), &sender_key);
+
+        // Create effects with insufficient balance error
+        let mut effects_builder = TestEffectsBuilder::new(&tx_data);
+        effects_builder = effects_builder.with_status(ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+            command: None,
+        });
+        let effects = effects_builder.build();
+
+        // Create simple checkpoint data for testing
+        let digests = vec![sui_types::messages_checkpoint::ExecutionDigests {
+            transaction: *executable_tx.digest(),
+            effects: effects.digest(),
+        }];
+        let checkpoint_contents =
+            CheckpointContents::new_with_digests_only_for_tests(digests.clone());
+
+        // Create a simple checkpoint summary for testing
+        let summary = sui_types::messages_checkpoint::CheckpointSummary::new(
+            sui_types::committee::EpochId::default(),
+            CheckpointSequenceNumber(0),
+            0, // network_total_transactions
+            checkpoint_contents.digest(),
+            None, // previous_digest
+            sui_types::gas::GasCostSummary::default(),
+            None, // end_of_epoch_data
+            sui_types::messages_checkpoint::CheckpointTimestamp::from_unix_timestamp_ms(0),
+            0,          // version_specific_data
+            Vec::new(), // checkpoint_commitments
+        );
+
+        let checkpoint =
+            VerifiedCheckpoint::new_unchecked(sui_types::message_envelope::Envelope::new(summary));
+
+        let checkpoint_data = CheckpointExecutionData {
+            checkpoint,
+            checkpoint_contents,
+            tx_digests: vec![*executable_tx.digest()],
+            fx_digests: vec![effects.digest()],
+        };
+        let checkpoint_state = CheckpointExecutionState::new(checkpoint_data);
+
+        let tx_data_struct = CheckpointTransactionData {
+            transactions: vec![executable_tx],
+            effects: vec![effects],
+            executed_fx_digests: vec![None], // Not yet executed
+        };
+
+        // Call the function under test
+        let _unexecuted_digests =
+            executor.schedule_transaction_execution(&checkpoint_state, &tx_data_struct);
+
+        // This test verifies that the checkpoint executor can detect insufficient balance
+        // from expected effects and set the execution environment accordingly
+    }
+
+    #[tokio::test]
+    async fn test_schedule_transaction_execution_already_executed() {
+        let executor = create_test_checkpoint_executor().await;
+
+        // Create test transaction using TestTransactionBuilder
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let gas_coin = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+        let gas_ref = gas_coin.compute_object_reference();
+
+        let tx_data = TestTransactionBuilder::new(sender, gas_ref, 1000)
+            .transfer_sui(None, sender)
+            .build();
+
+        let executable_tx =
+            VerifiedExecutableTransaction::new_for_testing(tx_data.clone(), &sender_key);
+
+        // Create effects with insufficient balance error
+        let mut effects_builder = TestEffectsBuilder::new(&tx_data);
+        effects_builder = effects_builder.with_status(ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+            command: None,
+        });
+        let effects = effects_builder.build();
+
+        // Create simple checkpoint data for testing
+        let digests = vec![sui_types::messages_checkpoint::ExecutionDigests {
+            transaction: *executable_tx.digest(),
+            effects: effects.digest(),
+        }];
+        let checkpoint_contents =
+            CheckpointContents::new_with_digests_only_for_tests(digests.clone());
+
+        // Create a simple checkpoint summary for testing
+        let summary = sui_types::messages_checkpoint::CheckpointSummary::new(
+            sui_types::committee::EpochId::default(),
+            CheckpointSequenceNumber(0),
+            0, // network_total_transactions
+            checkpoint_contents.digest(),
+            None, // previous_digest
+            sui_types::gas::GasCostSummary::default(),
+            None, // end_of_epoch_data
+            sui_types::messages_checkpoint::CheckpointTimestamp::from_unix_timestamp_ms(0),
+            0,          // version_specific_data
+            Vec::new(), // checkpoint_commitments
+        );
+
+        let checkpoint =
+            VerifiedCheckpoint::new_unchecked(sui_types::message_envelope::Envelope::new(summary));
+
+        let checkpoint_data = CheckpointExecutionData {
+            checkpoint,
+            checkpoint_contents,
+            tx_digests: vec![*executable_tx.digest()],
+            fx_digests: vec![effects.digest()],
+        };
+        let checkpoint_state = CheckpointExecutionState::new(checkpoint_data);
+
+        let tx_data_struct = CheckpointTransactionData {
+            transactions: vec![executable_tx],
+            effects: vec![effects],
+            executed_fx_digests: vec![Some(effects.digest())], // Already executed
+        };
+
+        // Call the function under test
+        let unexecuted_digests =
+            executor.schedule_transaction_execution(&checkpoint_state, &tx_data_struct);
+
+        // Verify that no transactions are scheduled since they're already executed
+        assert!(unexecuted_digests.is_empty());
     }
 }

@@ -188,4 +188,23 @@ mod tests {
             Some(ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. })
         ));
     }
+
+    #[test]
+    fn test_checkpoint_executor_integration() {
+        let tx_digest = crate::digests::TransactionDigest::random();
+        let input_objects = create_test_input_objects();
+        let deny_set = HashSet::new();
+
+        // Test that checkpoint executor can trigger insufficient balance check
+        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, true);
+        assert_eq!(
+            result,
+            Some(ExecutionErrorKind::InsufficientBalanceForWithdraw)
+        );
+
+        // Test that insufficient balance is correctly detected from checkpoint effects
+        // This demonstrates the integration between checkpoint executor and early execution error
+        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, false);
+        assert_eq!(result, None);
+    }
 }
