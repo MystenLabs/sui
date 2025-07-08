@@ -40,7 +40,7 @@ use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sysinfo::{System, SystemExt};
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
 use typed_store::rocksdb::{MergeOperands, WriteOptions};
@@ -56,6 +56,31 @@ fn bulk_ingestion_write_options() -> WriteOptions {
     let mut opts = WriteOptions::default();
     opts.disable_wal(true);
     opts
+}
+
+/// Get available memory, respecting cgroup limits in containerized environments
+fn get_available_memory() -> u64 {
+    // RefreshKind::nothing().with_memory() avoids collecting other, slower stats
+    let mut sys = System::new_with_specifics(
+        RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
+    );
+    sys.refresh_memory();
+
+    // Check if we have cgroup limits
+    if let Some(cgroup_limits) = sys.cgroup_limits() {
+        let memory_limit = cgroup_limits.total_memory;
+        // cgroup_limits.total_memory is 0 when there's no limit
+        if memory_limit > 0 {
+            debug!("Using cgroup memory limit: {} bytes", memory_limit);
+            return memory_limit;
+        }
+    }
+
+    // Fall back to system memory if no cgroup limits found
+    // sysinfo 0.35 already reports bytes (not KiB like older versions)
+    let total_memory_bytes = sys.total_memory();
+    debug!("Using system memory: {} bytes", total_memory_bytes);
+    total_memory_bytes
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -932,9 +957,7 @@ impl RpcIndexStore {
 
                     // This is an upper bound on the amount to of ram the memtables can use across
                     // all column families.
-                    let mut sys = System::new();
-                    sys.refresh_memory();
-                    let total_memory_bytes = sys.total_memory() * 1024; // Convert from KB to bytes
+                    let total_memory_bytes = get_available_memory();
 
                     let db_buffer_size = index_config
                         .as_ref()
