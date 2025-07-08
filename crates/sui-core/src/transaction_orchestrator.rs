@@ -35,6 +35,7 @@ use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_config::NodeConfig;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
@@ -78,6 +79,7 @@ impl TransactionOrchestrator<NetworkAuthorityClient> {
         reconfig_channel: Receiver<SuiSystemState>,
         parent_path: &Path,
         prometheus_registry: &Registry,
+        node_config: &NodeConfig,
     ) -> Self {
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
@@ -92,6 +94,7 @@ impl TransactionOrchestrator<NetworkAuthorityClient> {
             parent_path,
             prometheus_registry,
             observer,
+            node_config,
         )
     }
 }
@@ -107,6 +110,7 @@ where
         parent_path: &Path,
         prometheus_registry: &Registry,
         reconfig_observer: OnsiteReconfigObserver,
+        node_config: &NodeConfig,
     ) -> Self {
         let metrics = Arc::new(QuorumDriverMetrics::new(prometheus_registry));
         let notifier = Arc::new(NotifyRead::new());
@@ -140,10 +144,15 @@ where
 
         let transaction_driver = if td_percentage > 0 {
             let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
+            let client_metrics = Arc::new(
+                crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
+            );
             Some(TransactionDriver::new(
                 validators.clone(),
                 reconfig_observer.clone(),
                 td_metrics,
+                Some(node_config),
+                client_metrics,
             ))
         } else {
             None

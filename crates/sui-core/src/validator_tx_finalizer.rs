@@ -443,6 +443,25 @@ mod tests {
         ) -> Result<SuiSystemState, SuiError> {
             unimplemented!()
         }
+
+        async fn validator_health(
+            &self,
+            _request: sui_types::messages_grpc::RawValidatorHealthRequest,
+        ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+            let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+                num_inflight_consensus_transactions: 0,
+                num_inflight_execution_transactions: 0,
+                last_committed_leader_round: 1000,
+                last_locally_built_checkpoint: 500,
+            };
+
+            typed_response.try_into().map_err(|e| {
+                sui_types::error::SuiError::GrpcMessageSerializeError {
+                    type_info: "ValidatorHealthResponse".to_string(),
+                    error: format!("Failed to convert to raw response: {}", e),
+                }
+            })
+        }
     }
 
     #[sim_test]
