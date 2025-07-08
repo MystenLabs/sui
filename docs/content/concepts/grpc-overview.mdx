@@ -567,20 +567,4 @@ python client.py
 
 ## Full node operator configuration
 
-To serve builders using the gRPC API, you must enable gRPC on your Full node by indexing gRPC-specific data. Be aware that during the initial indexing phase, your Full node may not be able to handle other traffic — including existing JSON-RPC requests. Plan your rollout carefully and communicate any downtime to your customers and partners in advance. The time needed for this index sync depends on your node’s hardware and software specifications.
-
-Running gRPC alongside JSON-RPC will increase your Full node’s storage usage. While this is expected in the short term, you will be able to reclaim this storage later by disabling JSON-RPC once it is phased out. Builders are expected to migrate to either gRPC directly, or to [GraphQL RPC](./graphql-rpc.mdx) which would rely on gRPC under the hood in future.
-
-By default, your Full node will retain `14` days of gRPC index data. You can configure this retention window using the following settings in your Full node config:
-
-```sh
-
-authority-store-pruning-config:
-  num-epochs-to-retain: 14
-  num-epochs-to-retain-for-checkpoints: 14
-
-```
-
-You can adjust this window based on your infrastructure and data availability requirements, but make sure to benchmark performance and scalability before extending retention and providing to your customers and partners.
-
-To support the ecosystem-wide transition away from JSON-RPC, we strongly recommend that you enable gRPC beta support on your Full node as early as possible. This will give builders sufficient time to test and prepare for full production integration post the gRPC GA release. Refer to [Sui's data serving roadmap](/guides/developer/getting-started/data-serving.mdx#grpc-api) for more details.
+Refer to [Considerations to enable gRPC](/guides/operator/sui-full-node.mdx#considerations-to-enable-grpc-beta).
