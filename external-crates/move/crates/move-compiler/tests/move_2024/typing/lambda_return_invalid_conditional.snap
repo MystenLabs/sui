@@ -19,11 +19,11 @@ error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:8:18
   │
 8 │         call!(|| { if (cond) 1 else return &0 });
-  │         ---------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
-  │         │        │                         │
-  │         │        │                         Found: '&{integer}'. It is not compatible with the other type.
-  │         │        Invalid lambda return
-  │         Found: integer. It is not compatible with the other type.
+  │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │                  │           │             │
+  │                  │           │             Found: '&{integer}'. It is not compatible with the other type.
+  │                  │           Found: integer. It is not compatible with the other type.
+  │                  Invalid lambda return
 
 error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:9:18
@@ -39,11 +39,11 @@ error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:10:18
    │
 10 │         call!(|| { if (cond) 1 else return &0 });
-   │         ---------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
-   │         │        │                         │
-   │         │        │                         Found: '&{integer}'. It is not compatible with the other type.
-   │         │        Invalid lambda return
-   │         Found: integer. It is not compatible with the other type.
+   │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                  │           │             │
+   │                  │           │             Found: '&{integer}'. It is not compatible with the other type.
+   │                  │           Found: integer. It is not compatible with the other type.
+   │                  Invalid lambda return
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_invalid_conditional.move:11:18
