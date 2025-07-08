@@ -3,10 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use checked::*;
+use serde::{Deserialize, Serialize};
+
+use crate::{base_types::ObjectID, gas_model::gas_v2::PerObjectStorage};
 
 #[sui_macros::with_checked_arithmetic]
 pub mod checked {
 
+    use crate::gas::GasUsageReport;
     use crate::gas_model::gas_predicates::gas_price_too_high;
     use crate::{
         effects::{TransactionEffects, TransactionEffectsAPI},
@@ -49,6 +53,7 @@ pub mod checked {
         ) -> u64;
         fn charge_storage_and_rebate(&mut self) -> Result<(), ExecutionError>;
         fn adjust_computation_on_out_of_gas(&mut self);
+        fn gas_usage_report(&self) -> GasUsageReport;
     }
 
     /// Version aware enum for gas status.
@@ -283,4 +288,16 @@ pub mod checked {
             })
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GasUsageReport {
+    pub cost_summary: GasCostSummary,
+    pub gas_used: u64,
+    pub gas_budget: u64,
+    pub gas_price: u64,
+    pub reference_gas_price: u64,
+    pub storage_gas_price: u64,
+    pub rebate_rate: u64,
+    pub per_object_storage: Vec<(ObjectID, PerObjectStorage)>,
 }

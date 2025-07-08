@@ -15699,16 +15699,20 @@ dependencies = [
  "prometheus",
  "reqwest 0.12.9",
  "serde",
+ "serde_json",
  "similar",
  "sui-execution",
  "sui-framework",
+ "sui-json-rpc-types",
  "sui-move-build",
  "sui-package-management",
  "sui-types",
+ "tabled",
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]

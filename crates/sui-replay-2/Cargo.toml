@@ -39,6 +39,10 @@ telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
+sui-json-rpc-types.workspace = true
+serde_json.workspace = true
+zstd.workspace = true
+tabled.workspace = true
 
 [build-dependencies]
 cynic-codegen.workspace = true
