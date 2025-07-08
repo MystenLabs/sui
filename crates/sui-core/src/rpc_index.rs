@@ -932,7 +932,6 @@ impl RpcIndexStore {
             // If the index tables are uninitialized or on an older version then we need to
             // populate them
             if tables.needs_to_do_initialization(checkpoint_store) {
-                // Calculate batch size limit before the inner block
                 let batch_size_limit;
 
                 let mut tables = {
@@ -969,10 +968,9 @@ impl RpcIndexStore {
                     options.set_level_zero_slowdown_writes_trigger(-1);
                     options.set_level_zero_stop_writes_trigger(i32::MAX);
 
+                    let total_memory_bytes = get_available_memory();
                     // This is an upper bound on the amount to of ram the memtables can use across
                     // all column families.
-                    let total_memory_bytes = get_available_memory();
-
                     let db_buffer_size = if let Some(size) =
                         index_config.as_ref().and_then(|c| c.db_write_buffer_size)
                     {
@@ -995,13 +993,12 @@ impl RpcIndexStore {
                     // Create column family specific options.
                     let mut table_config_map = BTreeMap::new();
 
-                    // Create options with compactions disabled and optimized write buffers.
+                    // Create options with compactions disabled and large write buffers.
                     // Each CF can use up to 25% of system RAM, but total is still limited by
-                    // set_db_write_buffer_size (90% of RAM) configured above.
+                    // set_db_write_buffer_size configured above.
                     let mut cf_options = typed_store::rocks::default_db_options();
                     cf_options.options.set_disable_auto_compactions(true);
 
-                    // Handle config overrides for column family options
                     let (buffer_size, buffer_count) = match (
                         index_config.as_ref().and_then(|c| c.cf_write_buffer_size),
                         index_config
@@ -1016,7 +1013,6 @@ impl RpcIndexStore {
                             (size, count)
                         }
                         (None, None) => {
-                            // No overrides, use default logic
                             // Calculate buffer configuration: 25% of RAM split across buffers
                             let cf_memory_budget = (total_memory_bytes as f64 * 0.25) as usize;
                             debug!(
@@ -1062,14 +1058,14 @@ impl RpcIndexStore {
                         limit
                     } else {
                         let half_buffer = buffer_size / 2;
-                        let default_limit = 1 << 27; // 128MB (same as the original constant)
+                        let default_limit = 1 << 27; // 128MB
                         let limit = half_buffer.min(default_limit);
                         debug!("Calculated batch_size_limit: {} bytes (min of half_buffer={} and default_limit={})", 
                             limit, half_buffer, default_limit);
                         limit
                     };
 
-                    // Apply cf_options to all tables except balance (which needs a merge operator)
+                    // Apply cf_options to all tables
                     for (table_name, _) in IndexStoreTables::describe_tables() {
                         table_config_map.insert(table_name, cf_options.clone());
                     }
