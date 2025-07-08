@@ -29,6 +29,7 @@ pub struct RpcMetrics {
     pub requests_failed: IntCounterVec,
 
     pub owned_objects_filter_scans: Histogram,
+    pub read_retries: IntCounterVec,
 }
 
 impl RpcMetrics {
@@ -72,6 +73,14 @@ impl RpcMetrics {
                 "Number of pages of owned objects scanned in response to compound owned object filters",
                 PAGE_SCAN_BUCKETS.to_vec(),
                 registry,
+            )
+            .unwrap(),
+
+            read_retries: register_int_counter_vec_with_registry!(
+                "read_retries",
+                "Number of retries for reads from Bigtable or Postgres tables",
+                &["table"],
+                registry
             )
             .unwrap(),
         })
