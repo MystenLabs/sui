@@ -16,7 +16,9 @@ pub use message_types::*;
 pub use metrics::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
-use sui_types::{committee::EpochId, messages_grpc::RawSubmitTxRequest, transaction::Transaction};
+use sui_types::{
+    committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
+};
 use tokio::task::JoinSet;
 use tracing::instrument;
 pub use transaction_submitter::*;
@@ -71,7 +73,6 @@ where
     ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
-        let transaction = request.transaction.clone();
         let raw_request = request
             .into_raw()
             .map_err(TransactionDriverError::SerializationError)?;
@@ -84,7 +85,7 @@ where
             attempts += 1;
             // TODO(fastpath): Check local state before submitting transaction
             match self
-                .drive_transaction_once(&transaction, raw_request.clone(), &options)
+                .drive_transaction_once(tx_digest, raw_request.clone(), &options)
                 .await
             {
                 Ok(resp) => {
@@ -115,10 +116,10 @@ where
         }
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
     async fn drive_transaction_once(
         &self,
-        transaction: &Transaction,
+        tx_digest: &TransactionDigest,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
@@ -129,12 +130,12 @@ where
         // Get consensus position using TransactionSubmitter
         let consensus_position = self
             .submitter
-            .submit_transaction(&auth_agg, transaction, raw_request, options)
+            .submit_transaction(&auth_agg, tx_digest, raw_request, options)
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .wait_for_quorum_effects(&auth_agg, transaction, consensus_position, epoch, options)
+            .wait_for_quorum_effects(&auth_agg, tx_digest, consensus_position, epoch, options)
             .await
     }
 
