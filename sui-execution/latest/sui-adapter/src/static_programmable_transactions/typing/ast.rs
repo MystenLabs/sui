@@ -89,6 +89,7 @@ pub struct MoveCall {
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Location {
+    TxContext,
     GasCoin,
     Input(u16),
     Result(u16, u16),
@@ -183,6 +184,7 @@ impl TryFrom<Type> for VectorSpecialization {
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Location::TxContext => write!(f, "TxContext"),
             Location::GasCoin => write!(f, "GasCoin"),
             Location::Input(idx) => write!(f, "Input({idx})"),
             Location::Result(result_idx, nested_idx) => {
