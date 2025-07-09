@@ -9,7 +9,7 @@ use move_package_alt::{
 
 /// TODO(manos): Finish these tests here -- right now they only check that there's no
 /// failure, but bring no value checks etc.
-/// 
+///
 /// Will need to build the proper testing on top of the test framework that's being worked on
 /// instead.
 #[tokio::test]
