@@ -31,7 +31,7 @@ impl AnalyticsHandler<PackageBCSEntry> for PackageBCSHandler {
     }
 
     fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::PackageBCS)
+        Ok(FileType::MovePackageBCS)
     }
 
     fn name(&self) -> &'static str {
