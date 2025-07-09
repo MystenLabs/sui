@@ -1307,6 +1307,7 @@ impl Drop for InflightDropGuard<'_> {
             ProcessedMethod::Consensus => "processed_via_consensus",
             ProcessedMethod::Checkpoint => "processed_via_checkpoint",
         };
+
         self.adapter
             .metrics
             .sequencing_certificate_latency

@@ -62,7 +62,8 @@ pub async fn publish_basics_package(
     let transaction = TestTransactionBuilder::new(sender, gas, gas_price)
         .publish_examples("basics")
         .build_and_sign(keypair);
-    let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+    let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+    let effects = execution_result.unwrap();
     effects
         .created()
         .iter()
