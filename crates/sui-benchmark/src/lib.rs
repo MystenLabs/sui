@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+
 use anyhow::bail;
 use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use rand::Rng;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
@@ -49,7 +51,9 @@ use sui_types::{
     execution_status::ExecutionFailureStatus,
 };
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
+
+use crate::drivers::bench_driver::ClientType;
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -238,7 +242,10 @@ pub trait ValidatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
-    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
+    async fn execute_transaction_block(
+        &self,
+        tx: Transaction,
+    ) -> (ClientType, anyhow::Result<ExecutionEffects>);
 
     fn clone_committee(&self) -> Arc<Committee>;
 
@@ -375,20 +382,30 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             .into_sui_system_state_summary())
     }
 
-    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(
+        &self,
+        tx: Transaction,
+    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+        let tx_digest = *tx.digest();
         if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
             if let Ok(tx_driver_percentage) = v.parse::<u8>() {
                 if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                    // TODO(fastpath): Add ability to switch to and from qd based on percentage provided
-                    return self.submit_transaction_block(tx).await;
+                    let random_value = rand::thread_rng().gen_range(1..=100);
+                    if random_value <= tx_driver_percentage {
+                        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
+                        return (
+                            ClientType::TransactionDriver,
+                            self.submit_transaction_block(tx).await,
+                        );
+                    }
                 }
             }
         }
 
-        let tx_digest = *tx.digest();
+        debug!("Using QuorumDriver for transaction {tx_digest:?}");
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
-            let ticket = self
+            let ticket = match self
                 .qd
                 .submit_transaction(
                     sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
@@ -399,7 +416,16 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         include_auxiliary_data: false,
                     },
                 )
-                .await?;
+                .await
+            {
+                Ok(ticket) => ticket,
+                Err(err) => {
+                    return (
+                        ClientType::QuorumDriver,
+                        Err(anyhow::anyhow!("Failed to submit transaction: {}", err)),
+                    );
+                }
+            };
             // The ticket only times out when QuorumDriver exceeds the retry times
             match ticket.await {
                 Ok(resp) => {
@@ -408,17 +434,25 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                         events,
                         ..
                     } = resp;
-                    return Ok(ExecutionEffects::FinalizedTransactionEffects(
-                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                        events.unwrap_or_default(),
-                    ));
+                    return (
+                        ClientType::QuorumDriver,
+                        Ok(ExecutionEffects::FinalizedTransactionEffects(
+                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                            events.unwrap_or_default(),
+                        )),
+                    );
                 }
                 Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
                     warn!(
                         ?tx_digest,
                         retry_cnt, "Transaction failed with non-recoverable err: {:?}", errors
                     );
-                    bail!(QuorumDriverError::NonRecoverableTransactionError { errors });
+                    return (
+                        ClientType::QuorumDriver,
+                        Err(anyhow::anyhow!(
+                            QuorumDriverError::NonRecoverableTransactionError { errors }
+                        )),
+                    );
                 }
                 Err(err) => {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
@@ -434,7 +468,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 }
             }
         }
-        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
+        (
+            ClientType::QuorumDriver,
+            Err(anyhow::anyhow!(
+                "Transaction {:?} failed for {retry_cnt} times",
+                tx_digest
+            )),
+        )
     }
 
     fn clone_committee(&self) -> Arc<Committee> {
@@ -563,7 +603,11 @@ impl ValidatorProxy for FullNodeProxy {
             .await?)
     }
 
-    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+    async fn execute_transaction_block(
+        &self,
+        tx: Transaction,
+    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+        // TODO(fastpath): Add support for TransactionDriver
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 10 {
@@ -580,9 +624,12 @@ impl ValidatorProxy for FullNodeProxy {
                 .await
             {
                 Ok(resp) => {
-                    return Ok(ExecutionEffects::SuiTransactionBlockEffects(
-                        resp.effects.expect("effects field should not be None"),
-                    ));
+                    return (
+                        ClientType::QuorumDriver,
+                        Ok(ExecutionEffects::SuiTransactionBlockEffects(
+                            resp.effects.expect("effects field should not be None"),
+                        )),
+                    );
                 }
                 Err(err) => {
                     warn!(
@@ -593,7 +640,13 @@ impl ValidatorProxy for FullNodeProxy {
                 }
             }
         }
-        bail!("Transaction {:?} failed for {retry_cnt} times", tx_digest);
+        (
+            ClientType::QuorumDriver,
+            Err(anyhow::anyhow!(
+                "Transaction {:?} failed for {retry_cnt} times",
+                tx_digest
+            )),
+        )
     }
 
     fn clone_committee(&self) -> Arc<Committee> {

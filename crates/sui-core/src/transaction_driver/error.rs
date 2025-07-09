@@ -13,6 +13,10 @@ pub enum TransactionDriverError {
     SerializationError(SuiError),
     #[error("Deserialization error: {0}")]
     DeserializationError(SuiError),
+    #[error("Transaction timed out getting consensus position")]
+    TimeoutSubmittingTransaction,
+    #[error("Transaction timed out before getting wait for effects response")]
+    TimeoutWaitingForEffects,
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,
     #[error("Failed to call validator {0}: {1}")]

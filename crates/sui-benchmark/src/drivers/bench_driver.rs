@@ -15,8 +15,10 @@ use prometheus::IntCounterVec;
 use prometheus::Registry;
 use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
 use prometheus::{register_int_counter_vec_with_registry, CounterVec};
-use prometheus::{register_int_gauge_with_registry, GaugeVec};
-use prometheus::{HistogramVec, IntGauge};
+use prometheus::{
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, GaugeVec,
+};
+use prometheus::{HistogramVec, IntGauge, IntGaugeVec};
 use rand::seq::SliceRandom;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::OnceCell;
@@ -29,6 +31,7 @@ use crate::workloads::payload::Payload;
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
+use mysten_metrics::GaugeGuardFutureExt;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
@@ -52,7 +55,7 @@ pub struct BenchMetrics {
     pub num_error: IntCounterVec,
     pub num_expected_error: IntCounterVec,
     pub num_submitted: IntCounterVec,
-    pub num_in_flight: GaugeVec,
+    pub num_in_flight: IntGaugeVec,
     pub latency_s: HistogramVec,
     pub latency_squared_s: CounterVec,
     pub validators_in_tx_cert: IntCounterVec,
@@ -77,39 +80,39 @@ impl BenchMetrics {
             num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             num_expected_error: register_int_counter_vec_with_registry!(
                 "num_expected_error",
                 "Total number of transaction errors that were expected",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             num_success_cmds: register_int_counter_vec_with_registry!(
                 "num_success_cmds",
                 "Total number of commands success",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
             num_error: register_int_counter_vec_with_registry!(
                 "num_error",
                 "Total number of transaction errors",
-                &["workload", "type"],
+                &["workload", "type", "client_type"],
                 registry,
             )
             .unwrap(),
             num_submitted: register_int_counter_vec_with_registry!(
                 "num_submitted",
                 "Total number of transaction submitted to sui",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
-            num_in_flight: register_gauge_vec_with_registry!(
+            num_in_flight: register_int_gauge_vec_with_registry!(
                 "num_in_flight",
                 "Total number of transaction in flight",
                 &["workload"],
@@ -119,7 +122,7 @@ impl BenchMetrics {
             latency_s: register_histogram_vec_with_registry!(
                 "latency_s",
                 "Total time in seconds to return a response",
-                &["workload"],
+                &["workload", "client_type"],
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -127,7 +130,7 @@ impl BenchMetrics {
             latency_squared_s: register_counter_vec_with_registry!(
                 "latency_squared_s",
                 "Square of total time in seconds to return a response",
-                &["workload"],
+                &["workload", "client_type"],
                 registry,
             )
             .unwrap(),
@@ -163,6 +166,22 @@ struct Stats {
     pub num_submitted: u64,
     pub num_in_flight: u64,
     pub bench_stats: BenchmarkStats,
+}
+
+pub enum ClientType {
+    // Used for Mysticeti Fast Path
+    TransactionDriver,
+    // Used for original tx certification then fast path + Mysticeti
+    QuorumDriver,
+}
+
+impl std::fmt::Display for ClientType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientType::TransactionDriver => write!(f, "transaction_driver"),
+            ClientType::QuorumDriver => write!(f, "quorum_driver"),
+        }
+    }
 }
 
 type RetryType = Box<(Transaction, Box<dyn Payload>)>;
@@ -690,7 +709,7 @@ async fn spawn_bench_workers(
 
 async fn run_bench_worker(
     barrier: Arc<Barrier>,
-    metrics_cloned: Arc<BenchMetrics>,
+    metrics: Arc<BenchMetrics>,
     tx_cloned: Sender<Stats>,
     cloned_token: CancellationToken,
     stat_delay_micros: u64,
@@ -734,7 +753,8 @@ async fn run_bench_worker(
                                                start: Arc<Instant>,
                                                transaction: Transaction,
                                                mut payload: Box<dyn Payload>,
-                                               committee: Arc<Committee>|
+                                               committee: Arc<Committee>,
+                                               client_type: ClientType|
      -> NextOp {
         match result {
             Ok(effects) => {
@@ -745,46 +765,46 @@ async fn run_bench_worker(
                 let latency = start.elapsed();
                 let time_from_start = total_benchmark_start_time.elapsed();
 
-                metrics_cloned
+                metrics
                     .benchmark_duration
                     .set(time_from_start.as_secs() as i64);
 
                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
-                metrics_cloned
+                metrics
                     .latency_s
-                    .with_label_values(&[&payload.to_string()])
+                    .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .observe(latency.as_secs_f64());
-                metrics_cloned
+                metrics
                     .latency_squared_s
-                    .with_label_values(&[&payload.to_string()])
+                    .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .inc_by(square_latency_ms);
-                metrics_cloned
-                    .num_in_flight
-                    .with_label_values(&[&payload.to_string()])
-                    .dec();
 
                 let num_commands =
                     transaction.data().transaction_data().kind().num_commands() as u16;
 
                 if effects.is_ok() {
-                    metrics_cloned
+                    metrics
                         .num_success
-                        .with_label_values(&[&payload.to_string()])
+                        .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                         .inc();
-                    metrics_cloned
+                    metrics
                         .num_success_cmds
-                        .with_label_values(&[&payload.to_string()])
+                        .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                         .inc_by(num_commands as u64);
                 } else {
-                    metrics_cloned
+                    metrics
                         .num_error
-                        .with_label_values(&[&payload.to_string(), "execution"])
+                        .with_label_values(&[
+                            &payload.to_string(),
+                            "execution",
+                            &client_type.to_string(),
+                        ])
                         .inc();
                 }
 
                 if let Some(sig_info) = effects.quorum_sig() {
                     sig_info.authorities(&committee).for_each(|name| {
-                        metrics_cloned
+                        metrics
                             .validators_in_effects_cert
                             .with_label_values(&[&name.unwrap().to_string()])
                             .inc()
@@ -801,7 +821,7 @@ async fn run_bench_worker(
             }
             Err(err) => {
                 tracing::error!(
-                    "Transaction execution got error: {}. Transaction digest: {:?}",
+                    "Transaction execution got error: {}. Transaction digest: {:?}. Client type: {client_type}",
                     err,
                     transaction.digest()
                 );
@@ -810,9 +830,9 @@ async fn run_bench_worker(
                         panic!("Transaction failed unexpectedly");
                     }
                     Some(_) => {
-                        metrics_cloned
+                        metrics
                             .num_expected_error
-                            .with_label_values(&[&payload.to_string()])
+                            .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                             .inc();
                         NextOp::Retry(Box::new((transaction, payload)))
                     }
@@ -833,9 +853,13 @@ async fn run_bench_worker(
                         {
                             NextOp::Failure
                         } else {
-                            metrics_cloned
+                            metrics
                                 .num_error
-                                .with_label_values(&[&payload.to_string(), "rpc"])
+                                .with_label_values(&[
+                                    &payload.to_string(),
+                                    "rpc",
+                                    &client_type.to_string(),
+                                ])
                                 .inc();
                             NextOp::Retry(Box::new((transaction, payload)))
                         }
@@ -934,15 +958,19 @@ async fn run_bench_worker(
                         None => num_error_txes += 1,
                     }
                     num_submitted += 1;
-                    metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
+                    let metrics_cloned = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let start = Arc::new(Instant::now());
+                    let payload_str = payload.to_string();
+                    let payload_str_clone = payload_str.clone();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
-                        .then(|res| async move  {
-                             handle_execute_transaction_response(res, start, tx, payload, committee)
-                        });
+                        .then(|(client_type, res)| async move  {
+                            metrics_cloned.num_submitted.with_label_values(&[&payload_str_clone, &client_type.to_string()]).inc();
+                            handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
+                        })
+                        .count_in_flight_with_labels(&metrics.num_in_flight, &[&payload_str]);
                     futures.push(Box::pin(res));
                     continue
                 }
@@ -954,17 +982,20 @@ async fn run_bench_worker(
                     let mut payload = free_pool.pop_front().unwrap();
                     num_in_flight += 1;
                     num_submitted += 1;
-                    metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
-                    metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
                     let tx = payload.make_transaction();
                     let start = Arc::new(Instant::now());
+                    let metrics_cloned = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
+                    let payload_str = payload.to_string();
+                    let payload_str_clone = payload_str.clone();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
-                    .then(|res| async move {
-                        handle_execute_transaction_response(res, start, tx, payload, committee)
-                    });
+                    .then(|(client_type, res)| async move {
+                        metrics_cloned.num_submitted.with_label_values(&[&payload_str_clone, &client_type.to_string()]).inc();
+                        handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
+                    })
+                    .count_in_flight_with_labels(&metrics.num_in_flight, &[&payload_str]);
                     futures.push(Box::pin(res));
                 }
             }
