@@ -33,7 +33,7 @@ pub mod checked {
         fn is_unmetered(&self) -> bool;
         fn move_gas_status(&self) -> &GasStatus;
         fn move_gas_status_mut(&mut self) -> &mut GasStatus;
-        fn bucketize_computation(&mut self) -> Result<(), ExecutionError>;
+        fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError>;
         fn summary(&self) -> GasCostSummary;
         fn gas_budget(&self) -> u64;
         fn gas_price(&self) -> u64;
