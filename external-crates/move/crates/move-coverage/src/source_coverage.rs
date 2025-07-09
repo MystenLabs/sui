@@ -272,6 +272,10 @@ fn merge_spans(cov: FunctionSourceCoverage) -> Vec<Span> {
     covs.sort();
 
     let mut unioned = Vec::new();
+    if covs.is_empty() {
+        return unioned;
+    }
+
     let mut curr = covs.remove(0);
 
     for interval in covs {

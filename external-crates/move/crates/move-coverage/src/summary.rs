@@ -109,12 +109,20 @@ impl ModuleSummary {
             }
         }
 
-        let covered_percentage = (all_covered as f64) / (all_total as f64) * 100f64;
-        writeln!(
-            summary_writer,
-            ">>> % Module coverage: {:.2}",
-            covered_percentage
-        )?;
+        if all_covered == 0 && all_total == 0 {
+            writeln!(
+                summary_writer,
+                ">>> No source code to compute coverage of in module",
+            )?;
+        } else {
+            let covered_percentage = (all_covered as f64) / (all_total as f64) * 100f64;
+            writeln!(
+                summary_writer,
+                ">>> % Module coverage: {:.2}",
+                covered_percentage
+            )?;
+        }
+
         Ok((all_total, all_covered))
     }
 }
