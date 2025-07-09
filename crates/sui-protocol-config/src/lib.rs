@@ -3776,10 +3776,13 @@ impl ProtocolConfig {
                     }
                 }
                 87 => {
-                    cfg.feature_flags.record_time_estimate_processed = true;
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.record_time_estimate_processed = true;
+                    }
                     cfg.feature_flags.better_adapter_type_resolution_errors = true;
                 }
                 88 => {
+                    cfg.feature_flags.record_time_estimate_processed = true;
                     cfg.tx_context_rgp_cost_base = Some(30);
                 }
                 // Use this template when making changes:
