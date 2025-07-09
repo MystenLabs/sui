@@ -182,17 +182,27 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         for (name, dep) in package.direct_deps(env).await?.iter() {
             let fetched = self.cache.fetch(dep).await?;
             let future = self.add_transitive_manifest_deps(
-                fetched,
+                fetched.clone(),
                 dep.use_environment(),
                 graph.clone(),
                 visited.clone(),
             );
             let dep_index = Box::pin(future).await?;
 
+            // TODO(manos): re-check the implementation here -- I may have missed something.
+            // TODO(manos)(2): Do we wanna error for missmatches on legacy packages? Will come on a follow-up.
+            // If we're dealing with legacy packages, we are free to fix the naming in the outgoing edge, to match
+            // our modern system names.
+            let edge_name = if package.is_legacy() && fetched.is_legacy() {
+                fetched.manifest().package_name()
+            } else {
+                name
+            };
+
             graph
                 .lock()
                 .expect("unpoisoned")
-                .add_edge(index, dep_index, name.clone());
+                .add_edge(index, dep_index, edge_name.clone());
         }
 
         graph

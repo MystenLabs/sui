@@ -6,15 +6,14 @@ use crate::{
     compatibility::{
         LegacyAddressDeclarations, LegacyBuildInfo, LegacyDevAddressDeclarations,
         LegacySubstOrRename, LegacySubstitution, LegacyVersion, find_module_name_for_package,
-        legacy::{LegacyData, ManifestPublishInformation},
+        legacy::{LegacyData, LegacyEnvironment, ManifestPublishInformation},
     },
     errors::FileHandle,
-    flavor::MoveFlavor,
     package::{EnvironmentName, PackageName, layout::SourcePackageLayout, paths::PackagePath},
     schema::{
         DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
         ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, ParsedManifest,
-        Publication, PublishedID,
+        PublishedID,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -27,9 +26,6 @@ use std::{
 use toml::Value as TV;
 
 const EMPTY_ADDR_STR: &str = "_";
-
-/// TODO: Fill in the valid editions for this.
-const VALID_LEGACY_EDITIONS: &[&str] = &["2024", "2024.beta", "2024.alpha"];
 
 pub const PACKAGE_NAME: &str = "package";
 const BUILD_NAME: &str = "build";
@@ -53,12 +49,32 @@ const KNOWN_NAMES: &[&str] = &[
 const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 
 pub struct ParsedLegacyPackage {
-    /// A package is `legacy_like`, if it has the proper edition and was parsed successfully.
-    /// If this is true, we need to emit a "legacy" error when parsing, instead of the modern one.
-    pub is_legacy_edition: bool,
     pub parsed_manifest: ParsedManifest,
     pub legacy_data: LegacyData,
     pub file_handle: FileHandle,
+}
+
+/// We try to see if a package is `legacy`-like. That means that we can parse it,
+/// and it has `addresses`, `dev-addresses`, or `dev-dependencies` in it.
+///
+/// This is a "best-effort", but should cover 99% of cases.
+pub fn is_legacy_like(path: &PackagePath) -> bool {
+    let Ok(file_contents) = std::fs::read_to_string(path.manifest_path()) else {
+        return false;
+    };
+
+    let Ok(parsed) = parse_move_manifest_string(file_contents) else {
+        return false;
+    };
+
+    match parsed {
+        TV::Table(table) => {
+            table.get(ADDRESSES_NAME).is_some()
+                || table.get(DEV_ADDRESSES_NAME).is_some()
+                || table.get(DEV_DEPENDENCY_NAME).is_some()
+        }
+        _ => false,
+    }
 }
 
 pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegacyPackage> {
@@ -74,20 +90,16 @@ pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegac
     let (parsed_manifest, legacy_data) =
         parse_source_manifest(parse_move_manifest_string(file_contents)?, path)?;
 
-    let is_legacy_edition =
-        VALID_LEGACY_EDITIONS.contains(&parsed_manifest.package.edition.as_str());
-
     Ok(ParsedLegacyPackage {
-        is_legacy_edition,
         parsed_manifest,
         legacy_data,
         file_handle,
     })
 }
 
-pub fn parse_legacy_lockfile_addresses<F: MoveFlavor>(
+fn parse_legacy_lockfile_addresses(
     path: &PackagePath,
-) -> Result<BTreeMap<EnvironmentName, Publication<F>>> {
+) -> Result<BTreeMap<EnvironmentName, LegacyEnvironment>> {
     // we do not want to error if the lockfile does not exist.
     let file_contents = std::fs::read_to_string(path.lockfile_path())?;
 
@@ -130,15 +142,11 @@ pub fn parse_legacy_lockfile_addresses<F: MoveFlavor>(
         {
             publish_info.insert(
                 env_name,
-                Publication {
+                LegacyEnvironment {
                     published_at: PublishedID(latest_id),
                     original_id: OriginalID(original_id),
                     chain_id,
-
-                    // TODO: Align on how we fill these fields for legacy.
-                    toolchain_version: "".to_string(),
-                    metadata: F::PublishedMetadata::default(),
-                    build_config: toml::Value::String("".to_string()),
+                    version: published_version,
                 },
             );
         }
@@ -155,11 +163,11 @@ fn resolve_move_manifest_path(path: &Path) -> PathBuf {
     }
 }
 
-pub fn parse_move_manifest_string(manifest_string: String) -> Result<TV> {
+fn parse_move_manifest_string(manifest_string: String) -> Result<TV> {
     toml::from_str::<TV>(&manifest_string).context("Unable to parse Move package manifest")
 }
 
-pub fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedManifest, LegacyData)> {
+fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedManifest, LegacyData)> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, REQUIRED_FIELDS)
@@ -249,6 +257,7 @@ pub fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedMani
                     addresses: addresses.unwrap_or_default(),
                     dev_addresses,
                     manifest_address_info,
+                    legacy_environments: parse_legacy_lockfile_addresses(path).unwrap_or_default(),
                 },
             ))
         }
@@ -406,7 +415,7 @@ fn parse_addresses(tval: TV) -> Result<LegacyAddressDeclarations> {
     }
 }
 
-pub fn parse_dev_addresses(tval: TV) -> Result<LegacyDevAddressDeclarations> {
+fn parse_dev_addresses(tval: TV) -> Result<LegacyDevAddressDeclarations> {
     match tval {
         TV::Table(table) => {
             let mut addresses = BTreeMap::new();
@@ -492,7 +501,7 @@ fn parse_external_resolver(resolver_val: &TV) -> Result<ExternalDependency> {
     })
 }
 
-pub fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
+fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
     let Some(table) = tval.as_table_mut() else {
         bail!("Malformed dependency {}", tval);
     };
@@ -598,7 +607,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
 }
 
 // TODO: Figure out how we deal with this (and IF we want to deal with this).
-pub fn parse_substitution(tval: TV) -> Result<LegacySubstitution> {
+fn parse_substitution(tval: TV) -> Result<LegacySubstitution> {
     match tval {
         TV::Table(table) => {
             let mut subst = BTreeMap::new();
@@ -732,7 +741,7 @@ fn temporary_spanned<T>(val: T) -> Spanned<T> {
 ///
 /// 1. The `0x0` address, if using the modern environments on lockfiles
 /// 2. The `name` modules use inside sources (e.g. `module yy::aa;`)
-pub fn derive_modern_name(
+fn derive_modern_name(
     addresses: &Option<BTreeMap<String, Option<AccountAddress>>>,
     path: &PackagePath,
 ) -> Result<PackageName> {

@@ -9,7 +9,7 @@ use super::paths::PackagePath;
 use crate::{
     compatibility::{
         legacy::LegacyData,
-        legacy_parser::{parse_legacy_lockfile_addresses, parse_legacy_manifest_from_file},
+        legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
     dependency::{PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
@@ -50,15 +50,11 @@ impl<F: MoveFlavor> Package<F> {
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
 
-        let (manifest, publish_data, legacy_data) = Self::load_internal(&path).await?;
-
-        Ok(Self {
-            manifest,
+        Self::load_internal(
             path,
-            publish_data,
-            source: LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }),
-            legacy_data,
-        })
+            LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }),
+        )
+        .await
     }
 
     /// Fetch [dep] and load a package from the fetched source
@@ -66,52 +62,46 @@ impl<F: MoveFlavor> Package<F> {
     pub async fn load(dep: PinnedDependencyInfo) -> PackageResult<Self> {
         let path = PackagePath::new(dep.fetch().await?)?;
 
-        let (manifest, publish_data, legacy_data) = Self::load_internal(&path).await?;
-
-        Ok(Self {
-            manifest,
-            path,
-            publish_data,
-            source: dep.into(),
-            legacy_data,
-        })
+        Self::load_internal(path, dep.into()).await
     }
 
     /// Loads a package internally, doing a "best" effort to translate an old-style package into the new one.
     pub async fn load_internal(
-        path: &PackagePath,
-    ) -> PackageResult<(Manifest<F>, PublishData<F>, Option<LegacyData>)> {
+        path: PackagePath,
+        source: LockfileDependencyInfo,
+    ) -> PackageResult<Self> {
         let manifest = Manifest::<F>::read_from_file(path.manifest_path());
 
-        // If our "modern" manifest is OK, we load the modern lockfile and that's it.
+        // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
-            let publish_data = Self::load_published_info_from_lockfile(path)?;
-            return Ok((manifest, publish_data, None));
+            let publish_data = Self::load_published_info_from_lockfile(&path)?;
+            return Ok(Self {
+                manifest,
+                path,
+                publish_data,
+                source,
+                legacy_data: None,
+            });
         }
 
-        // If our "modern" manifest is not OK, we try to parse a legacy manifest.
-        let legacy_manifest = parse_legacy_manifest_from_file(path);
-
-        if let Ok(legacy_manifest) = legacy_manifest {
-            // We might be able to parse a manifest, but the edition is not as expected, which probably means
-            // it is either an "incorrectly" designed modern package OR it's totally wrong.
-            // In both cases, we wanna emit the "modern" error, rather than the legacy one.
-            if legacy_manifest.is_legacy_edition {
-                let publish_data = parse_legacy_lockfile_addresses(path).unwrap_or_default();
-
-                return Ok((
-                    Manifest::try_from_parsed_manifest(
-                        legacy_manifest.parsed_manifest,
-                        legacy_manifest.file_handle,
-                    )?,
-                    publish_data,
-                    Some(legacy_manifest.legacy_data),
-                ));
-            }
+        // If the manifest does not look like a legacy one, we again return early by erroring on the modern errors.
+        if !is_legacy_like(&path) {
+            return Err(PackageError::Manifest(manifest.unwrap_err()));
         }
 
-        // We default to the modern manifest's error.
-        Err(PackageError::Manifest(manifest.unwrap_err()))
+        // Here, that means that we're working on legacy package, so we can throw its errors.
+        let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
+
+        Ok(Self {
+            manifest: Manifest::try_from_parsed_manifest(
+                legacy_manifest.parsed_manifest,
+                legacy_manifest.file_handle,
+            )?,
+            path,
+            publish_data: Default::default(),
+            source,
+            legacy_data: Some(legacy_manifest.legacy_data),
+        })
     }
 
     /// Try to load a lockfile and extract the published information for each environment from it
@@ -151,6 +141,10 @@ impl<F: MoveFlavor> Package<F> {
         &self.source
     }
 
+    pub fn is_legacy(&self) -> bool {
+        self.legacy_data.is_some()
+    }
+
     /// The resolved and pinned dependencies from the manifest for environment `env`
     pub async fn direct_deps(
         &self,
@@ -183,42 +177,33 @@ impl<F: MoveFlavor> Package<F> {
 
     /// Tries to get the `published-at` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn try_get_published_id(&self, env: &EnvironmentName) -> PackageResult<PublishedID> {
+    pub fn published_at(&self, env: &EnvironmentName) -> PackageResult<PublishedID> {
         if let Some(publish_data) = self.publish_data.get(env) {
             return Ok(publish_data.published_at.clone());
         }
 
-        // Handle legacy packages (the ones with `publised-at` in Move.toml files)
-        if let Some(legacy_data) = &self.legacy_data {
-            if let Some(manifest_address_info) = &legacy_data.manifest_address_info {
-                return Ok(manifest_address_info.published_at.clone());
-            }
-        }
-
-        // TODO: Create specific errors when published id is not defined.
-        Err(PackageError::Generic(format!(
-            "Package {} does not have `{env}` published information",
-            self.name()
-        )))
+        self.legacy_data
+            .as_ref()
+            .and_then(|d| d.published_at(env))
+            .ok_or(PackageError::Generic(format!(
+                "Package {} does not have a `published-at` ID for environment: `{env}`",
+                self.name()
+            )))
     }
 
-    /// Tries to get the `published-at` entry for the given package,
+    /// Tries to get the `original-id` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn try_get_original_id(&self, env: &EnvironmentName) -> PackageResult<OriginalID> {
+    pub fn original_id(&self, env: &EnvironmentName) -> PackageResult<OriginalID> {
         if let Some(publish_data) = self.publish_data.get(env) {
             return Ok(publish_data.original_id.clone());
         }
 
-        // Handle legacy packages (the ones with original id being on `[addresses]` in Move.toml files)
-        if let Some(legacy_data) = &self.legacy_data {
-            if let Some(manifest_address_info) = &legacy_data.manifest_address_info {
-                return Ok(manifest_address_info.original_id.clone());
-            }
-        }
-
-        Err(PackageError::Generic(format!(
-            "Package {} does not have `{env}` published information",
-            self.name()
-        )))
+        self.legacy_data
+            .as_ref()
+            .and_then(|d| d.original_id(env))
+            .ok_or(PackageError::Generic(format!(
+                "Package {} does not have an `original-id` for environment: `{env}`",
+                self.name()
+            )))
     }
 }

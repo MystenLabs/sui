@@ -1,2 +1,2 @@
 *.snap.new
-!compatibility/**/*.lock
+!**/*.lock

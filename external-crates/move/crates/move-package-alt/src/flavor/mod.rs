@@ -27,7 +27,7 @@ pub trait MoveFlavor: Debug {
     /// during publication.
     //
     // TODO: should this include object IDs, or is that generic for Move? What about build config?
-    type PublishedMetadata: Debug + Serialize + DeserializeOwned + Clone + Default;
+    type PublishedMetadata: Debug + Serialize + DeserializeOwned + Clone;
 
     /// A [PackageMetadata] encapsulates the additional package information that can be stored in
     /// the `package` section of the manifest
