@@ -62,11 +62,12 @@ module test::m {
 //> test::m::delete(Result(0));
 
 
-// modify returned reference, check should fail
-//# programmable --sender A --dev-inspect --inputs 4
+// Read from the struct again to check that the reference was actually
+// updated, and not just `Result(1)`
+//# programmable --sender A --dev-inspect --inputs 43
 //> 0: test::m::new();
 //> 1: test::m::borrow_f_mut(Result(0));
-//> 2: test::m::read(Result(1));
-//> test::m::inc(Result(1));
-//> test::m::check(Result(1), Result(2));
+//> 2: test::m::inc(Result(1));
+//> 3: test::m::borrow_f(Result(0));
+//> test::m::check(Result(3), Input(0));
 //> test::m::delete(Result(0));
