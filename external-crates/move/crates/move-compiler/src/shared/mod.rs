@@ -20,13 +20,13 @@ use crate::{
     expansion::ast::{self as E, ModuleIdent},
     hlir::ast as H,
     naming::ast::{self as N, Function, UseFuns},
-    parser::ast::{self as P, DatatypeName, FunctionName},
+    parser::ast::{self as P, FunctionName},
     shared::{
         files::{FileName, MappedFiles},
         ide::IDEInfo,
         unique_map::UniqueMap,
     },
-    sui_mode::{self, info::TransferKind},
+    sui_mode,
     to_bytecode::context::{DatatypeDeclarations, FunctionDeclaration},
     typing::{
         ast as T,
@@ -583,15 +583,6 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_private_transfers(
-        &self,
-        private_transfers: &BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
-    ) {
-        for hook in &self.save_hooks {
-            hook.save_private_transfers(private_transfers)
-        }
-    }
-
     pub fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
         for hook in &self.save_hooks {
             hook.save_cfgir_datatype_decls(cfgir_datatype_decls)
@@ -987,7 +978,6 @@ pub(crate) struct SavedInfo {
     cfgir: Option<G::Program>,
     module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
     macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
-    private_transfers: Option<BTreeMap<(ModuleIdent, DatatypeName), TransferKind>>,
     cfgir_datatype_decls: Option<DatatypeDeclarations>,
     cfgir_fun_decls: Option<HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>>,
 }
@@ -1005,7 +995,6 @@ pub enum SaveFlag {
     ModuleResolvedMembers,
     MacroInfos,
     ModuleInfo,
-    PrivateTransfers,
     CFGIRDatatypeDecls,
     CFGIRFunDecls,
 }
@@ -1024,7 +1013,6 @@ impl SaveHook {
             cfgir: None,
             module_named_addresses: None,
             macro_infos: None,
-            private_transfers: None,
             cfgir_datatype_decls: None,
             cfgir_fun_decls: None,
         })))
@@ -1096,16 +1084,6 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.macro_infos.is_none() && r.flags.contains(&SaveFlag::MacroInfos) {
             r.macro_infos = Some(macro_infos.clone());
-        }
-    }
-
-    pub(crate) fn save_private_transfers(
-        &self,
-        private_transfers: &BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
-    ) {
-        let mut r = self.0.lock().unwrap();
-        if r.private_transfers.is_none() && r.flags.contains(&SaveFlag::PrivateTransfers) {
-            r.private_transfers = Some(private_transfers.clone());
         }
     }
 
@@ -1207,15 +1185,6 @@ impl SaveHook {
             "Macro infos not saved. Please set the flag when creating the SaveHook"
         );
         r.macro_infos.take().unwrap()
-    }
-
-    pub fn take_private_transfers(&self) -> BTreeMap<(ModuleIdent, DatatypeName), TransferKind> {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::PrivateTransfers),
-            "Private transfers not saved. Please set the flag when creating the SaveHook"
-        );
-        r.private_transfers.take().unwrap()
     }
 
     pub fn take_cfgir_datatype_decls(&self) -> DatatypeDeclarations {

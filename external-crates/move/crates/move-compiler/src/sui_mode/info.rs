@@ -4,13 +4,9 @@
 //! ProgramInfo extension for Sui Flavor
 //! Contains information that may be expensive to compute and is needed only for Sui
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    CompiledModuleInfoMap,
     diagnostics::warning_filters::WarningFilters,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast as N,
@@ -53,10 +49,6 @@ pub struct SuiInfo {
     pub uid_holders: BTreeMap<ModuleIdent, BTreeMap<DatatypeName, UIDHolder>>,
     /// All types that either have store or are transferred privately
     pub transferred: BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>>,
-
-    pub uid_holders_old: BTreeMap<(ModuleIdent, DatatypeName), UIDHolder>,
-    /// All types that either have store or are transferred privately
-    pub transferred_old: BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
 }
 
 /// Same as `SuiInfo` but for a given module
@@ -68,19 +60,15 @@ pub struct SuiModInfo {
 
 impl SuiInfo {
     pub fn new(
-        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         info: &TypingProgramInfo,
     ) -> Self {
         assert!(info.sui_flavor_info.is_none());
-        let (uid_holders_old, uid_holders) = all_uid_holders(info);
-        let (transferred_old, transferred) =
-            all_transferred(pre_compiled_module_infos, modules, info);
+        let uid_holders = all_uid_holders(info);
+        let transferred = all_transferred(modules, info);
         Self {
             uid_holders,
             transferred,
-            uid_holders_old,
-            transferred_old,
         }
     }
 }
@@ -88,10 +76,7 @@ impl SuiInfo {
 /// DFS traversal to find all UID holders
 fn all_uid_holders(
     info: &TypingProgramInfo,
-) -> (
-    BTreeMap<(ModuleIdent, DatatypeName), UIDHolder>,
-    BTreeMap<ModuleIdent, BTreeMap<DatatypeName, UIDHolder>>,
-) {
+) -> BTreeMap<ModuleIdent, BTreeMap<DatatypeName, UIDHolder>> {
     fn merge_uid_holder(u1: UIDHolder, u2: UIDHolder) -> UIDHolder {
         match (u1, u2) {
             (u @ UIDHolder::IsUID, _) | (_, u @ UIDHolder::IsUID) => u,
@@ -136,7 +121,6 @@ fn all_uid_holders(
     fn visit_ty(
         info: &TypingProgramInfo,
         visited: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
-        uid_holders_old: &mut BTreeMap<(ModuleIdent, DatatypeName), UIDHolder>,
         uid_holders: &mut BTreeMap<ModuleIdent, BTreeMap<DatatypeName, UIDHolder>>,
         sp!(_, ty_): &N::Type,
     ) -> Option<UIDHolder> {
@@ -149,7 +133,7 @@ fn all_uid_holders(
             | N::Type_::UnresolvedError
             | N::Type_::Void => None,
 
-            N::Type_::Ref(_, inner) => visit_ty(info, visited, uid_holders_old, uid_holders, inner),
+            N::Type_::Ref(_, inner) => visit_ty(info, visited, uid_holders, inner),
 
             N::Type_::Apply(_, sp!(_, tn_), _)
                 if tn_.is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, UID_TYPE_NAME) =>
@@ -163,13 +147,13 @@ fn all_uid_holders(
                     .iter()
                     .zip(phantom_positions)
                     .filter(|(_t, is_phantom)| *is_phantom)
-                    .map(|(t, _is_phantom)| {
-                        visit_ty(info, visited, uid_holders_old, uid_holders, t)
-                    })
+                    .map(|(t, _is_phantom)| visit_ty(info, visited, uid_holders, t))
                     .fold(None, merge_uid_holder_opt);
                 let tn_holder = if let N::TypeName_::ModuleType(m, n) = tn.value {
-                    visit_decl(info, visited, uid_holders_old, uid_holders, m, n);
-                    uid_holders_old.get(&(m, n)).copied()
+                    visit_decl(info, visited, uid_holders, m, n);
+                    uid_holders
+                        .get(&m)
+                        .and_then(|m_uid_holders| m_uid_holders.get(&n).copied())
                 } else {
                     None
                 };
@@ -182,24 +166,21 @@ fn all_uid_holders(
     fn visit_fields(
         info: &TypingProgramInfo,
         visited: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
-        uid_holders_old: &mut BTreeMap<(ModuleIdent, DatatypeName), UIDHolder>,
         uid_holders: &mut BTreeMap<ModuleIdent, BTreeMap<DatatypeName, UIDHolder>>,
         fields: &Fields<(DocComment, N::Type)>,
     ) -> Option<UIDHolder> {
         fields
             .key_cloned_iter()
             .map(|(field, (_, (_, ty)))| {
-                Some(
-                    match visit_ty(info, visited, uid_holders_old, uid_holders, ty)? {
-                        UIDHolder::IsUID => UIDHolder::Direct { field, ty: ty.loc },
-                        UIDHolder::Direct { field, ty: uid }
-                        | UIDHolder::Indirect { field, uid, ty: _ } => UIDHolder::Indirect {
-                            field,
-                            ty: ty.loc,
-                            uid,
-                        },
+                Some(match visit_ty(info, visited, uid_holders, ty)? {
+                    UIDHolder::IsUID => UIDHolder::Direct { field, ty: ty.loc },
+                    UIDHolder::Direct { field, ty: uid }
+                    | UIDHolder::Indirect { field, uid, ty: _ } => UIDHolder::Indirect {
+                        field,
+                        ty: ty.loc,
+                        uid,
                     },
-                )
+                })
             })
             .fold(None, merge_uid_holder_opt)
     }
@@ -208,7 +189,6 @@ fn all_uid_holders(
     fn visit_decl(
         info: &TypingProgramInfo,
         visited: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
-        uid_holders_old: &mut BTreeMap<(ModuleIdent, DatatypeName), UIDHolder>,
         uid_holders: &mut BTreeMap<ModuleIdent, BTreeMap<DatatypeName, UIDHolder>>,
         mident: ModuleIdent,
         tn: DatatypeName,
@@ -221,7 +201,7 @@ fn all_uid_holders(
         let uid_holder_opt = match info.datatype_kind(&mident, &tn) {
             DatatypeKind::Struct => match &info.struct_definition(&mident, &tn).fields {
                 N::StructFields::Defined(_, fields) => {
-                    visit_fields(info, visited, uid_holders_old, uid_holders, fields)
+                    visit_fields(info, visited, uid_holders, fields)
                 }
                 N::StructFields::Native(_) => None,
             },
@@ -233,11 +213,10 @@ fn all_uid_holders(
                     N::VariantFields::Defined(_, fields) => Some(fields),
                     N::VariantFields::Empty => None,
                 })
-                .map(|fields| visit_fields(info, visited, uid_holders_old, uid_holders, fields))
+                .map(|fields| visit_fields(info, visited, uid_holders, fields))
                 .fold(None, merge_uid_holder_opt),
         };
         if let Some(uid_holder) = uid_holder_opt {
-            uid_holders_old.insert((mident, tn), uid_holder);
             uid_holders
                 .entry(mident)
                 .or_default()
@@ -248,7 +227,6 @@ fn all_uid_holders(
     // iterate over all struct/enum declarations
     let visited = &mut BTreeSet::new();
     let mut uid_holders = BTreeMap::new();
-    let mut uid_holders_old = BTreeMap::new();
     for (mident, mdef) in info.modules.key_cloned_iter() {
         let datatypes = mdef
             .structs
@@ -256,27 +234,16 @@ fn all_uid_holders(
             .map(|(n, _)| n)
             .chain(mdef.enums.key_cloned_iter().map(|(n, _)| n));
         for tn in datatypes {
-            visit_decl(
-                info,
-                visited,
-                &mut uid_holders_old,
-                &mut uid_holders,
-                mident,
-                tn,
-            )
+            visit_decl(info, visited, &mut uid_holders, mident, tn)
         }
     }
-    (uid_holders_old, uid_holders)
+    uid_holders
 }
 
 fn all_transferred(
-    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
     info: &TypingProgramInfo,
-) -> (
-    BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
-    BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>>,
-) {
+) -> BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>> {
     let mut transferred: BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>> =
         BTreeMap::new();
     let mut transferred_old: BTreeMap<(ModuleIdent, DatatypeName), TransferKind> = BTreeMap::new();
@@ -295,29 +262,13 @@ fn all_transferred(
                 .insert(s, TransferKind::PublicTransfer(store_loc));
         }
 
-        match modules.get(&mident) {
-            Some(mdef) => {
-                for (_, _, fdef) in &mdef.functions {
-                    add_private_transfers(&mut transferred, &mut transferred_old, fdef);
-                }
-            }
-            None => {
-                let module_info = pre_compiled_module_infos
-                    .as_ref()
-                    .unwrap()
-                    .get(&mident)
-                    .unwrap();
-                for (datatype_name, transfer_kind) in &module_info.private_transfers {
-                    transferred_old.insert((mident, *datatype_name), *transfer_kind);
-                    transferred
-                        .entry(mident)
-                        .or_default()
-                        .insert(*datatype_name, *transfer_kind);
-                }
+        if let Some(mdef) = modules.get(&mident) {
+            for (_, _, fdef) in &mdef.functions {
+                add_private_transfers(&mut transferred, &mut transferred_old, fdef);
             }
         }
     }
-    (transferred_old, transferred)
+    transferred
 }
 
 fn add_private_transfers(

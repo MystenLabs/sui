@@ -33,7 +33,6 @@ use crate::{
         program_info::ModuleInfo,
         unique_map::UniqueMap,
     },
-    sui_mode::{self, info::TransferKind},
     to_bytecode::{self, context::FunctionDeclaration},
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
@@ -133,8 +132,6 @@ pub struct CompiledModuleInfo {
     pub macro_infos: Option<(UseFuns, UniqueMap<FunctionName, Function>)>,
     /// to construct program infos in shared/program_info.rs
     pub info: ModuleInfo,
-    /// to process private transfers in sui_mode/info.rs
-    pub private_transfers: BTreeMap<DatatypeName, TransferKind>,
     pub cfgir_datatype_decls:
         BTreeMap<DatatypeName, (BTreeSet<Ability>, Vec<DatatypeTypeParameter>)>,
     pub cfgir_fun_decls: BTreeMap<FunctionName, FunctionDeclaration>,
@@ -669,7 +666,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
         SaveFlag::TypingInfo,
         SaveFlag::ModuleNameAddresses,
         SaveFlag::MacroInfos,
-        SaveFlag::PrivateTransfers,
         SaveFlag::CFGIRDatatypeDecls,
         SaveFlag::CFGIRFunDecls,
     ]);
@@ -697,21 +693,8 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
             let program_info = hook.take_typing_info();
             let mut module_named_addresses = hook.take_module_named_addresses();
             let mut macro_infos = hook.take_macro_infos();
-            let private_transfers = hook.take_private_transfers();
             let cfgir_datatype_decls = hook.take_cfgir_datatype_decls();
             let cfgir_fun_decls = hook.take_cfgir_fun_decls();
-
-            // private transfers by module rather than module/name pair
-            let mut private_transfers_by_module: BTreeMap<
-                expansion::ast::ModuleIdent,
-                BTreeMap<parser::ast::DatatypeName, sui_mode::info::TransferKind>,
-            > = BTreeMap::new();
-            for ((module_ident, datatype_name), transfer_kind) in private_transfers {
-                private_transfers_by_module
-                    .entry(module_ident)
-                    .or_default()
-                    .insert(datatype_name, transfer_kind);
-            }
 
             // cfgir datatype decls by module rather than module/name pair
             let mut cfgir_datatype_decls_by_module: BTreeMap<
@@ -775,8 +758,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
 
                      let macro_infos = macro_infos.remove(&mod_ident);
 
-                     let private_transfers = private_transfers_by_module.remove(&mod_ident).unwrap_or_default();
-
                      let cfgir_datatype_decls = cfgir_datatype_decls_by_module.remove(&mod_ident).unwrap_or_default();
 
                      let cfgir_fun_decls = cfgir_fun_decls_by_module.remove(&mod_ident).unwrap_or_default();
@@ -793,7 +774,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                              named_address_map: Arc::new(named_address_map),
                              macro_infos,
                              info: typing_module_info.clone(),
-                             private_transfers,
                              cfgir_datatype_decls,
                              cfgir_fun_decls,
                              compiled_unit,
