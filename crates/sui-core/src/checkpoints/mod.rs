@@ -39,6 +39,7 @@ use typed_store::rocks::{default_db_options, DBOptions, ReadWriteOptions};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
+use once_cell::sync::OnceCell;
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
@@ -77,6 +78,17 @@ use typed_store::{
 };
 
 pub type CheckpointHeight = u64;
+
+fn get_sui_ignore_previous_checkpoint() -> Option<u64> {
+    static CACHED: OnceCell<Option<u64>> = OnceCell::new();
+    CACHED
+        .get_or_init(|| {
+            std::env::var("SUI_IGNORE_PREVIOUS_CHECKPOINT")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+        })
+        .clone()
+}
 
 pub struct EpochStats {
     pub checkpoint_count: u64,
@@ -647,7 +659,14 @@ impl CheckpointStore {
             .locally_computed_checkpoints
             .get(checkpoint.sequence_number())?
         {
-            self.check_for_checkpoint_fork(&local_checkpoint, checkpoint);
+            if get_sui_ignore_previous_checkpoint() == Some(*local_checkpoint.sequence_number()) {
+                warn!(
+                    "skipping fork detection for checkpoint {} because of SUI_IGNORE_PREVIOUS_CHECKPOINT",
+                    local_checkpoint.sequence_number()
+                );
+            } else {
+                self.check_for_checkpoint_fork(&local_checkpoint, checkpoint);
+            }
         }
 
         Ok(())
@@ -1474,13 +1493,22 @@ impl CheckpointBuilder {
                 .get(&summary.sequence_number)?
             {
                 if previously_computed_summary != *summary {
-                    // Panic so that we don't send out an equivocating checkpoint sig.
-                    fatal!(
+                    if get_sui_ignore_previous_checkpoint() == Some(summary.sequence_number) {
+                        warn!(
+                                "Checkpoint {} was previously built with a different result: {:?} vs {:?} - ignoring because of SUI_IGNORE_PREVIOUS_CHECKPOINT",
+                                summary.sequence_number,
+                                previously_computed_summary,
+                                summary
+                            );
+                    } else {
+                        // Panic so that we don't send out an equivocating checkpoint sig.
+                        fatal!(
                         "Checkpoint {} was previously built with a different result: {:?} vs {:?}",
                         summary.sequence_number,
                         previously_computed_summary,
                         summary
                     );
+                    }
                 }
             }
 
