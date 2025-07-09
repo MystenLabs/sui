@@ -84,7 +84,7 @@ impl<F: MoveFlavor> Manifest<F> {
         let parsed: ParsedManifest =
             toml_edit::de::from_str(file_id.source()).map_err(ManifestError::from_toml(file_id))?;
 
-        let result = Self::try_from_parsed_manifest(parsed, file_id)?;
+        let result = Self::from_parsed_manifest(parsed, file_id)?;
         result.validate_manifest(file_id)?;
 
         Ok(result)
@@ -92,7 +92,7 @@ impl<F: MoveFlavor> Manifest<F> {
 
     // Try to convert a `ParsedManifest` into a modern manifest.
     // TODO(manos): This one skips validation, we should align on what we wanna validate on legacy packages.
-    pub fn try_from_parsed_manifest(
+    pub fn from_parsed_manifest(
         parsed: ParsedManifest,
         file_id: FileHandle,
     ) -> ManifestResult<Self> {

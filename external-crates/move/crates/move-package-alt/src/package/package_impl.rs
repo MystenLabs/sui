@@ -25,8 +25,6 @@ pub type EnvironmentID = String;
 pub type PackageName = Identifier;
 pub type AddressInfo = String;
 
-pub type PublishData<F> = BTreeMap<EnvironmentName, Publication<F>>;
-
 #[derive(Debug)]
 pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
@@ -35,7 +33,8 @@ pub struct Package<F: MoveFlavor> {
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
     /// The on-chain publish information per environment
-    publish_data: PublishData<F>,
+    /// TODO(manos): Replace this with a type as it's used in many places.
+    publish_data: BTreeMap<EnvironmentName, Publication<F>>,
     /// The way this package should be serialized to the lockfile
     source: LockfileDependencyInfo,
     /// Optional legacy information for a supplied package.
@@ -66,7 +65,7 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// Loads a package internally, doing a "best" effort to translate an old-style package into the new one.
-    pub async fn load_internal(
+    async fn load_internal(
         path: PackagePath,
         source: LockfileDependencyInfo,
     ) -> PackageResult<Self> {
@@ -93,7 +92,7 @@ impl<F: MoveFlavor> Package<F> {
         let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
 
         Ok(Self {
-            manifest: Manifest::try_from_parsed_manifest(
+            manifest: Manifest::from_parsed_manifest(
                 legacy_manifest.parsed_manifest,
                 legacy_manifest.file_handle,
             )?,
