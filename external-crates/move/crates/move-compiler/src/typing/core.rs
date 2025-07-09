@@ -1337,23 +1337,6 @@ impl VarConstraint {
     }
 }
 
-pub fn join_var_constraints(
-    lhs: Option<VarConstraint>,
-    rhs: Option<VarConstraint>,
-) -> Result<Option<VarConstraint>, TypingError> {
-    match (&lhs, &rhs) {
-        (None, None) => Ok(None),
-        (Some(_), None) => Ok(lhs),
-        (None, Some(_)) => Ok(rhs),
-        (Some(lhs_inner), Some(rhs_inner)) => {
-            // This will eventually do actual join work and possibly return an error
-            match (lhs_inner, rhs_inner) {
-                (VarConstraint::Num(_), VarConstraint::Num(_)) => Ok(rhs),
-            }
-        }
-    }
-}
-
 impl ast_debug::AstDebug for Subst {
     fn ast_debug(&self, w: &mut ast_debug::AstWriter) {
         let Subst {
@@ -3083,6 +3066,23 @@ fn join_impl_types(
         tys.push(t)
     }
     Ok((subst, tys))
+}
+
+pub fn join_var_constraints(
+    lhs: Option<VarConstraint>,
+    rhs: Option<VarConstraint>,
+) -> Result<Option<VarConstraint>, TypingError> {
+    match (&lhs, &rhs) {
+        (None, None) => Ok(None),
+        (Some(_), None) => Ok(lhs),
+        (None, Some(_)) => Ok(rhs),
+        (Some(lhs_inner), Some(rhs_inner)) => {
+            // This will eventually do actual join work and possibly return an error
+            match (lhs_inner, rhs_inner) {
+                (VarConstraint::Num(_), VarConstraint::Num(_)) => Ok(rhs),
+            }
+        }
+    }
 }
 
 fn join_tvar(
