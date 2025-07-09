@@ -215,7 +215,7 @@ impl AuthorityPerpetualTables {
             default_cells_per_mutex, Bytes, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
             IndexWalPosition,
         };
-        const MUTEXES: usize = 4 * 1024;
+        const MUTEXES: usize = 2 * 1024;
         const VALUE_CACHE_SIZE: usize = 2_000;
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
