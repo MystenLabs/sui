@@ -1008,16 +1008,6 @@ impl DagState {
     /// After each flush, DagState becomes persisted in storage and it expected to recover
     /// all internal states from storage after restarts.
     pub(crate) fn flush(&mut self) {
-        self.flush_internal();
-    }
-
-    /// Flush all buffered commits to storage.
-    #[cfg(test)]
-    pub(crate) fn flush_all_in_test(&mut self) {
-        self.flush_internal();
-    }
-
-    fn flush_internal(&mut self) {
         let _s = self
             .context
             .metrics
