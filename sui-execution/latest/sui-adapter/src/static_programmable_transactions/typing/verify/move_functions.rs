@@ -142,8 +142,10 @@ fn command<Mode: ExecutionMode>(
         T::Command_::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
-            debug_assert!(!amounts_are_dirty);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
+            if is_dirty {
+                context.mark_dirty(coin);
+            }
             vec![IsDirty::Fixed { is_dirty }; result.len()]
         }
         T::Command_::MergeCoins(_, target, coins) => {
