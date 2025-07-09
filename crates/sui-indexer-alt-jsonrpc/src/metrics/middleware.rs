@@ -139,6 +139,8 @@ where
         let method = this.method.as_ref();
         let elapsed_ms = metrics.timer.stop_and_record() * 1000.0;
 
+        info!(method, response = resp.as_result(), "Request completed");
+
         if let Some(INTERNAL_ERROR_CODE) = resp.as_error_code() {
             metrics
                 .failed
