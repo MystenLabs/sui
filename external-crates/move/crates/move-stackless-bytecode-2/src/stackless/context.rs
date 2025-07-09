@@ -4,7 +4,7 @@
 use move_binary_format::normalized::Type;
 use move_model_2::{model::Model as Model2, source_kind::SourceKind};
 use move_symbol_pool::Symbol;
-use std::{collections::BTreeMap, rc::Rc};
+use std::rc::Rc;
 
 use crate::stackless::ast::Register;
 // -------------------------------------------------------------------------------------------------
@@ -16,7 +16,7 @@ pub struct Context<'a, K: SourceKind> {
     pub model: &'a Model2<K>,
     pub logical_stack: Vec<Register>,
     pub optimize: bool,
-    pub locals_types: BTreeMap<usize, Rc<Type<Symbol>>>,
+    pub locals_types: Vec<Rc<Type<Symbol>>>,
 }
 
 pub struct Counter {
@@ -34,19 +34,22 @@ impl<'a, K: SourceKind> Context<'a, K> {
             model,
             logical_stack: vec![],
             optimize: false,
-            locals_types: BTreeMap::new(),
+            locals_types: vec![],
         }
     }
 
     pub fn pop_register(&mut self) -> Register {
-        self.logical_stack
+        let reg = self.logical_stack
             .pop()
-            .expect("Popped a register and there was none")
+            .expect("Popped a register and there was none");
+        // println!("Popping register: {}", reg.ty);
+        reg
     }
 
     pub fn push_register(&mut self, ty: Rc<Type<Symbol>>) -> Register {
         let reg_id = self.var_counter.next();
         let new_reg = Register { name: reg_id, ty };
+        // println!("Pushing register: {}", new_reg.ty);
         self.logical_stack.push(new_reg.clone());
         new_reg
     }
@@ -61,14 +64,12 @@ impl<'a, K: SourceKind> Context<'a, K> {
         self.optimize = value;
     }
 
-    pub fn set_locals_types(&mut self, locals_types: BTreeMap<usize, Rc<Type<Symbol>>>) {
+    pub fn set_locals_types(&mut self, locals_types: Vec<Rc<Type<Symbol>>>) {
         self.locals_types = locals_types;
     }
 
     pub fn get_local_type(&self, loc: usize) -> &Rc<Type<Symbol>> {
-        self.locals_types
-            .get(&loc)
-            .unwrap_or_else(|| panic!("Local {} not found", loc))
+        &self.locals_types[loc]
     }
 }
 
