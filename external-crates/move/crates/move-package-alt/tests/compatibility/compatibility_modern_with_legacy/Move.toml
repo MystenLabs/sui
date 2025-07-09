@@ -10,5 +10,5 @@ mainnet = "35834a8a"
 testnet = "4c78adac"
 
 [dependencies]
-b = { local = "../b" }
-c = { local = "../c" }
+b = { local = "../compatibility_b" }
+c = { local = "../compatibility_c" }

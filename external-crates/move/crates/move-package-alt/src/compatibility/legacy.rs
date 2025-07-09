@@ -27,6 +27,6 @@ pub struct LegacyData {
     /// This is optional and is the first way of doing package version management,
     /// where `published-at="<latest_id>"`, and `[addresses] <xx> = "<original_id>"`
     ///
-    /// When we're doing `get_package_ids()` on `Package`, we return this.
+    /// When we're doing `try_get_published_at()` or `try_get_original_id` on `Package`, we fallback to these.
     pub manifest_address_info: Option<ManifestPublishInformation>,
 }

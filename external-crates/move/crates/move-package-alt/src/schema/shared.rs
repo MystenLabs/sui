@@ -3,7 +3,7 @@ use std::{fmt::Debug, fmt::Display, path::PathBuf};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
 
-// Let's use a less free name...
+// TODO(Manos): Let's use a less free name...
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
 

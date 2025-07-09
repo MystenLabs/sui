@@ -3,7 +3,7 @@ name = "B"
 edition = "2024.beta"
 
 [dependencies]
-aba = { local = "../a" }
+aba = { local = "../compatibility_a" }
 wow = { r.mvr = "@pkg/qwer"}
 
 [addresses]

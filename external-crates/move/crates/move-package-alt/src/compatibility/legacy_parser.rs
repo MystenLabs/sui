@@ -55,9 +55,10 @@ const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 pub struct ParsedLegacyPackage {
     /// A package is `legacy_like`, if it has the proper edition and was parsed successfully.
     /// If this is true, we need to emit a "legacy" error when parsing, instead of the modern one.
-    pub is_legacy_like: bool,
-
-    pub legacy_data: (ParsedManifest, LegacyData, FileHandle),
+    pub is_legacy_edition: bool,
+    pub parsed_manifest: ParsedManifest,
+    pub legacy_data: LegacyData,
+    pub file_handle: FileHandle,
 }
 
 pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegacyPackage> {
@@ -70,24 +71,25 @@ pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegac
 
     let file_handle = FileHandle::new(path.manifest_path())?;
 
-    let (manifest, legacy_info) =
+    let (parsed_manifest, legacy_data) =
         parse_source_manifest(parse_move_manifest_string(file_contents)?, &path)?;
 
-    let is_legacy_like = VALID_LEGACY_EDITIONS.contains(&manifest.package.edition.as_str());
+    let is_legacy_edition =
+        VALID_LEGACY_EDITIONS.contains(&parsed_manifest.package.edition.as_str());
 
     Ok(ParsedLegacyPackage {
-        is_legacy_like,
-        legacy_data: (manifest, legacy_info, file_handle),
+        is_legacy_edition,
+        parsed_manifest,
+        legacy_data,
+        file_handle,
     })
 }
 
 pub fn parse_legacy_lockfile_addresses<F: MoveFlavor>(
-    path: PathBuf,
+    path: &PackagePath,
 ) -> Result<BTreeMap<EnvironmentName, Publication<F>>> {
     // we do not want to error if the lockfile does not exist.
-    let Ok(file_contents) = std::fs::read_to_string(&path) else {
-        return Ok(BTreeMap::new());
-    };
+    let file_contents = std::fs::read_to_string(&path.lockfile_path())?;
 
     let toml_val = toml::from_str::<TV>(&file_contents)?;
 

@@ -39,7 +39,7 @@ pub struct Package<F: MoveFlavor> {
     /// The way this package should be serialized to the lockfile
     source: LockfileDependencyInfo,
     /// Optional legacy information for a supplied package.
-    legacy_data: Option<LegacyData>,
+    pub legacy_data: Option<LegacyData>,
 }
 
 impl<F: MoveFlavor> Package<F> {
@@ -96,16 +96,16 @@ impl<F: MoveFlavor> Package<F> {
             // We might be able to parse a manifest, but the edition is not as expected, which probably means
             // it is either an "incorrectly" designed modern package OR it's totally wrong.
             // In both cases, we wanna emit the "modern" error, rather than the legacy one.
-            if legacy_manifest.is_legacy_like {
-                let publish_data = parse_legacy_lockfile_addresses(path.lockfile_path())?;
+            if legacy_manifest.is_legacy_edition {
+                let publish_data = parse_legacy_lockfile_addresses(&path).unwrap_or_default();
 
                 return Ok((
                     Manifest::try_from_parsed_manifest(
-                        legacy_manifest.legacy_data.0,
-                        legacy_manifest.legacy_data.2,
+                        legacy_manifest.parsed_manifest,
+                        legacy_manifest.file_handle,
                     )?,
                     publish_data,
-                    Some(legacy_manifest.legacy_data.1),
+                    Some(legacy_manifest.legacy_data),
                 ));
             }
         }

@@ -44,8 +44,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// manifests digests are out of date). If the resolution graph is up-to-date, it is returned.
     /// Otherwise a new resolution graph is constructed by traversing (only) the manifest files.
     ///
-    /// TODO(manos): Should we read leagcy manifests here and
-    /// prompt them to upgrade their manifest into a new one?
+    /// TODO(manos): This probably needs to be removed, as it does what `RootPackage` is meant to do?
     pub async fn load(path: &PackagePath) -> PackageResult<BTreeMap<EnvironmentName, Self>> {
         let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
         let envs = manifest.environments();
@@ -72,7 +71,8 @@ impl<F: MoveFlavor> PackageGraph<F> {
     pub async fn load_from_manifests(
         path: &PackagePath,
     ) -> PackageResult<BTreeMap<EnvironmentName, Self>> {
-        // TODO(manos | discussion): Why are we loading manifests here? isn't `Package::load()` responsible for this?
+        // TODO(manos): As discussed, this probably needs to go
+        // as we want only `per-env` lookups.
         let manifest = Manifest::<F>::read_from_file(path.manifest_path())?;
         let envs = manifest.environments();
         let mut output = BTreeMap::new();

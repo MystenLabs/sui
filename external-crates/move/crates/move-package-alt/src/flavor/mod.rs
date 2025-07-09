@@ -6,11 +6,14 @@ pub mod vanilla;
 
 pub use vanilla::Vanilla;
 
-use std::fmt::Debug;
+use std::{collections::BTreeMap, fmt::Debug};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::dependency::{DependencySet, PinnedDependencyInfo};
+use crate::{
+    dependency::{DependencySet, PinnedDependencyInfo},
+    schema::EnvironmentName,
+};
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
@@ -38,6 +41,10 @@ pub trait MoveFlavor: Debug {
     //
     // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
     type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq + Ord + Debug + ToString;
+
+    /// Return the default environments for the flavor.
+    /// Used for populating new manifests & migration purposes.
+    fn default_environments() -> BTreeMap<EnvironmentName, Self::EnvironmentID>;
 
     /// Return the implicit dependencies for the environments listed in [environments]
     fn implicit_deps(
