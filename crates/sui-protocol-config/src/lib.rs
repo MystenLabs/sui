@@ -972,6 +972,10 @@ pub struct ProtocolConfig {
     /// Maximum amount of the proposed gas price in MIST (defined in the transaction).
     max_gas_price: Option<u64>,
 
+    /// For aborted txns, we cap the gas price at a factor of RGP. This lowers risk of setting higher priority gas price
+    /// if there's a chance the txn will abort.
+    max_gas_price_rgp_factor_for_aborted_transactions: Option<u64>,
+
     /// The max computation bucket for gas. This is the max that can be charged for computation.
     max_gas_computation_bucket: Option<u64>,
 
@@ -2271,6 +2275,7 @@ impl ProtocolConfig {
             max_publish_or_upgrade_per_ptb: None,
             max_tx_gas: Some(10_000_000_000),
             max_gas_price: Some(100_000),
+            max_gas_price_rgp_factor_for_aborted_transactions: None,
             max_gas_computation_bucket: Some(5_000_000),
             max_loop_depth: Some(5),
             max_generic_instantiation_length: Some(32),
@@ -3824,6 +3829,10 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                             },
                         );
+                }
+                89 => {
+                    cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
+                    // 100x RGP
                 }
                 // Use this template when making changes:
                 //
