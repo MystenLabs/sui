@@ -24,24 +24,6 @@ Refer to [when to use gRPC vs GraphQL](../guides/developer/getting-started/data-
 
 Protocol buffers define the gRPC interface. You can find the relevant **beta** `.proto` files at [sui-apis on Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads) include the following services:
 
-- `TransactionExecutionService`
-  - Proto: `sui/rpc/v2beta2/transaction_execution_service.proto`
-  - Purpose: Submit and execute signed transactions on the Sui network. Wallets and apps use the service to send user actions to the network.
-- `LedgerService`
-  - Proto: `sui/rpc/v2beta2/ledger_service.proto`
-  - Purpose: Lookup specific checkpoints, transactions, objects and more from the current state and recent history of the Sui network. “History” here refers to the recent past - limited to what a Full node retains.
-- `LiveDataService`
-  - Proto: `sui/rpc/v2beta2/live_data_service.proto`
-  - Purpose: Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. Also supports dry-run simulations for transactions.
-- `SubscriptionService`
-  - Proto: `sui/rpc/v2beta2/subscription_service.proto`
-  - Purpose: Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). 
-- `MovePackageService`
-  - Proto: `sui/rpc/v2beta2/move_package_service.proto`
-  - Purpose: Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection.
-- `SignatureVerificationService`
-  - Proto: `sui/rpc/v2beta2/signature_verification_service.proto`
-  - Purpose: Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](./cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows.
 | Service | Proto | Purpose |
 | --- | --- | --- |
 | `TransactionExecutionService` | `sui/rpc/v2beta2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use the service to send user actions to the network. |
@@ -50,6 +32,7 @@ Protocol buffers define the gRPC interface. You can find the relevant **beta** `
 | `SubscriptionService` | `sui/rpc/v2beta2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
 | `MovePackageService` | `sui/rpc/v2beta2/move_package_service.proto` | Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
 | `SignatureVerificationService` | `sui/rpc/v2beta2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](./cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
+
 Use these definitions to generate client libraries in various programming languages.
 
 :::info
