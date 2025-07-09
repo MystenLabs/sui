@@ -1367,6 +1367,7 @@
                 "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
+                "record_time_estimate_processed": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "relocate_event_module": false,
                 "reshare_at_same_initial_version": false,
