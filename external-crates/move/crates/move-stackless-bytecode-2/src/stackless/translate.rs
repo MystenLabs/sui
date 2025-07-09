@@ -142,7 +142,6 @@ pub(crate) fn bytecode<K: SourceKind>(
     pc: usize,
     function: &N::Function<Symbol>,
 ) -> Instruction {
-    use ast::CommandOp;
     use ast::DataOp;
     use ast::LocalOp as LocOp;
     use ast::PrimitiveOp as Op;
@@ -179,15 +178,6 @@ pub(crate) fn bytecode<K: SourceKind>(
                 args: vec![$($rval),+],
             }
         };
-    }
-
-    macro_rules! command {
-        ($op:expr, $($args:expr),+ $(,)?) => {
-            Instruction::Command {
-                op: $op,
-                args: vec![$($args),+],
-            }
-        }
     }
 
     macro_rules! make_vec {
@@ -329,7 +319,9 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::ReadRef => assign_reg!([push!()] = data_op!(DataOp::ReadRef, Register(pop!()))),
 
-        IB::WriteRef => command!(CommandOp::WriteRef, Register(pop!()), Register(pop!())),
+        IB::WriteRef => {
+            assign_reg!([] = data_op!(DataOp::WriteRef, Register(pop!()), Register(pop!())))
+        }
 
         IB::FreezeRef => Instruction::Nop,
 
@@ -503,11 +495,14 @@ pub(crate) fn bytecode<K: SourceKind>(
             )
         }
 
+        // TODO check if this is ok for the SSA
         IB::VecPushBack(rc_type) => {
-            command!(
-                CommandOp::VecPushBack(rc_type.clone()),
-                Register(pop!()),
-                Register(pop!())
+            assign_reg!(
+                [] = data_op!(
+                    DataOp::VecPushBack(rc_type.clone()),
+                    Register(pop!()),
+                    Register(pop!())
+                )
             )
         }
 
@@ -526,12 +521,15 @@ pub(crate) fn bytecode<K: SourceKind>(
         }
 
         IB::VecSwap(rc_type) => {
-            command!(
-                CommandOp::VecSwap(rc_type.clone()),
-                Register(pop!()),
-                Register(pop!()),
-                Register(pop!())
-            )
+            let args = make_vec!(3, Register(pop!()));
+            Instruction::AssignReg {
+                rhs: RValue::Data {
+                    op: DataOp::VecSwap(rc_type.clone()),
+                    args,
+                },
+                // TODO check if this is ok for the SSA
+                lhs: vec![],
+            }
         }
 
         IB::LdU16(value) => assign_reg!([push!()] = imm!(Value::U16(*value))),
