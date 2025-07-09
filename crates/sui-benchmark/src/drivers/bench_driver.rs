@@ -15,8 +15,10 @@ use prometheus::IntCounterVec;
 use prometheus::Registry;
 use prometheus::{register_counter_vec_with_registry, register_gauge_vec_with_registry};
 use prometheus::{register_int_counter_vec_with_registry, CounterVec};
-use prometheus::{register_int_gauge_with_registry, GaugeVec};
-use prometheus::{HistogramVec, IntGauge};
+use prometheus::{
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, GaugeVec,
+};
+use prometheus::{HistogramVec, IntGauge, IntGaugeVec};
 use rand::seq::SliceRandom;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::OnceCell;
@@ -29,6 +31,7 @@ use crate::workloads::payload::Payload;
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
+use mysten_metrics::GaugeGuardFutureExt;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
@@ -52,7 +55,7 @@ pub struct BenchMetrics {
     pub num_error: IntCounterVec,
     pub num_expected_error: IntCounterVec,
     pub num_submitted: IntCounterVec,
-    pub num_in_flight: GaugeVec,
+    pub num_in_flight: IntGaugeVec,
     pub latency_s: HistogramVec,
     pub latency_squared_s: CounterVec,
     pub validators_in_tx_cert: IntCounterVec,
@@ -109,10 +112,10 @@ impl BenchMetrics {
                 registry,
             )
             .unwrap(),
-            num_in_flight: register_gauge_vec_with_registry!(
+            num_in_flight: register_int_gauge_vec_with_registry!(
                 "num_in_flight",
                 "Total number of transaction in flight",
-                &["workload", "client_type"],
+                &["workload"],
                 registry,
             )
             .unwrap(),
@@ -775,10 +778,6 @@ async fn run_bench_worker(
                     .latency_squared_s
                     .with_label_values(&[&payload.to_string(), &client_type.to_string()])
                     .inc_by(square_latency_ms);
-                metrics
-                    .num_in_flight
-                    .with_label_values(&[&payload.to_string(), &client_type.to_string()])
-                    .dec();
 
                 let num_commands =
                     transaction.data().transaction_data().kind().num_commands() as u16;
@@ -959,16 +958,19 @@ async fn run_bench_worker(
                         None => num_error_txes += 1,
                     }
                     num_submitted += 1;
-                    let metrics = Arc::clone(&metrics);
+                    let metrics_cloned = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let start = Arc::new(Instant::now());
+                    let payload_str = payload.to_string();
+                    let payload_str_clone = payload_str.clone();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move  {
-                            metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                            metrics_cloned.num_submitted.with_label_values(&[&payload_str_clone, &client_type.to_string()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                        });
+                        })
+                        .count_in_flight_with_labels(&metrics.num_in_flight, &[&payload_str]);
                     futures.push(Box::pin(res));
                     continue
                 }
@@ -982,16 +984,18 @@ async fn run_bench_worker(
                     num_submitted += 1;
                     let tx = payload.make_transaction();
                     let start = Arc::new(Instant::now());
-                    let metrics = Arc::clone(&metrics);
+                    let metrics_cloned = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
+                    let payload_str = payload.to_string();
+                    let payload_str_clone = payload_str.clone();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                     .then(|(client_type, res)| async move {
-                        metrics.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
-                        metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                        metrics_cloned.num_submitted.with_label_values(&[&payload_str_clone, &client_type.to_string()]).inc();
                         handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                    });
+                    })
+                    .count_in_flight_with_labels(&metrics.num_in_flight, &[&payload_str]);
                     futures.push(Box::pin(res));
                 }
             }

@@ -521,13 +521,12 @@ impl VoteInfo {
             }
         }
         // The block is certified.
+        let accepted_txn_count = block.transactions().len().saturating_sub(rejected.len());
         tracing::trace!(
-            "Block {} accepted tx count: {} & rejected txn count: {}",
+            "Certified block {} accepted tx count: {accepted_txn_count} & rejected txn count: {}",
             block.reference(),
-            block.transactions().len(),
             rejected.len()
         );
-        let accepted_txn_count = block.transactions().len().saturating_sub(rejected.len());
         context
             .metrics
             .node_metrics
