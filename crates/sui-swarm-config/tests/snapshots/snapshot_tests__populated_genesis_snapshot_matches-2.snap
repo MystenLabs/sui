@@ -3,7 +3,7 @@ source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object().into_genesis_version_for_tooling()
 ---
 epoch: 0
-protocol_version: 88
+protocol_version: 89
 system_state_version: 1
 validators:
   total_stake: 20000000000000000
