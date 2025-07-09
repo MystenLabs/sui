@@ -40,7 +40,7 @@ use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, TypeTag,
-    base_types::{ObjectID, TxContextKind},
+    base_types::{ObjectID, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
     gas_coin::GasCoin,
@@ -59,6 +59,7 @@ pub struct Env<'pc, 'vm, 'state, 'linkage> {
     upgrade_ticket_type: OnceCell<Type>,
     upgrade_receipt_type: OnceCell<Type>,
     upgrade_cap_type: OnceCell<Type>,
+    tx_context_type: OnceCell<Type>,
 }
 
 macro_rules! get_or_init_ty {
@@ -91,6 +92,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             upgrade_ticket_type: OnceCell::new(),
             upgrade_receipt_type: OnceCell::new(),
             upgrade_cap_type: OnceCell::new(),
+            tx_context_type: OnceCell::new(),
         }
     }
 
@@ -222,10 +224,6 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             .into_iter()
             .map(|ty| self.adapter_type_from_vm_type(&ty, &linkage))
             .collect::<Result<Vec<_>, _>>()?;
-        let tx_context = match parameters.last() {
-            Some(adapter_ty) => adapter_ty.is_tx_context(),
-            None => TxContextKind::None,
-        };
         let signature = LoadedFunctionInstantiation {
             parameters,
             return_,
@@ -236,7 +234,6 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             name,
             type_arguments,
             signature,
-            tx_context,
             linkage,
             instruction_length: runtime_signature.instruction_length,
             definition_index: runtime_signature.definition_index,
@@ -277,6 +274,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
 
     pub fn upgrade_cap_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, upgrade_cap_type, UpgradeCap::type_())
+    }
+
+    pub fn tx_context_type(&self) -> Result<Type, ExecutionError> {
+        get_or_init_ty!(self, tx_context_type, TxContext::type_())
     }
 
     pub fn vector_type(&self, element_type: Type) -> Result<Type, ExecutionError> {
