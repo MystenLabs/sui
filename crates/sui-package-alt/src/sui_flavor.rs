@@ -27,6 +27,10 @@ impl MoveFlavor for SuiFlavor {
 
     type PackageMetadata = (); // TODO
 
+    fn default_environments() -> BTreeMap<String, Self::EnvironmentID> {
+        todo!()
+    }
+
     fn implicit_deps(
         &self,
         environments: impl Iterator<Item = Self::EnvironmentID>,
