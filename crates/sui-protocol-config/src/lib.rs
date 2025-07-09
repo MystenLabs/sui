@@ -727,6 +727,10 @@ struct FeatureFlags {
     // Provide better type resolution errors in the adapter.
     #[serde(skip_serializing_if = "is_false")]
     better_adapter_type_resolution_errors: bool,
+
+    // If true, record the time estimate processed in the consensus commit prologue.
+    #[serde(skip_serializing_if = "is_false")]
+    record_time_estimate_processed: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2076,6 +2080,10 @@ impl ProtocolConfig {
 
     pub fn better_adapter_type_resolution_errors(&self) -> bool {
         self.feature_flags.better_adapter_type_resolution_errors
+    }
+
+    pub fn record_time_estimate_processed(&self) -> bool {
+        self.feature_flags.record_time_estimate_processed
     }
 }
 
@@ -3768,6 +3776,7 @@ impl ProtocolConfig {
                     }
                 }
                 87 => {
+                    cfg.feature_flags.record_time_estimate_processed = true;
                     cfg.feature_flags.better_adapter_type_resolution_errors = true;
                 }
                 88 => {
