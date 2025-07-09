@@ -76,6 +76,7 @@ move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
 mysten-common.workspace = true
 test-cluster.workspace = true
+sui-replay-2.workspace = true
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
