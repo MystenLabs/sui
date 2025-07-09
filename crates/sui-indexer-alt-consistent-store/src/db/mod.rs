@@ -109,9 +109,9 @@ impl Db {
     /// families to open. The database will inject its own column family for watermarks, and set
     /// the option to create missing column families.
     pub(crate) fn open<'c>(
-        capacity: usize,
         path: impl AsRef<Path>,
         mut options: rocksdb::Options,
+        capacity: usize,
         cfs: impl IntoIterator<Item = (&'c str, rocksdb::Options)>,
     ) -> Result<Self, Error> {
         // Add a column family for watermarks, which are managed by the database.
@@ -167,6 +167,12 @@ impl Db {
         // from, which is owned by `self` through `Inner`, so it is safe to extend the lifetime of
         // the column family from that of the read guard, to that of `self` using `transmute`.
         unsafe { std::mem::transmute(i.borrow_db().cf_handle(name)) }
+    }
+
+    /// Drop the column family with the given `name`, if it exists.
+    pub(crate) fn drop_cf(&self, name: &str) -> Result<(), Error> {
+        let i = self.0.read().expect("poisoned");
+        Ok(i.borrow_db().drop_cf(name)?)
     }
 
     /// Return the watermark that was written for the given `pipeline`, or `None` if no checkpoint
@@ -419,17 +425,17 @@ pub(crate) mod tests {
     #[test]
     fn test_open() {
         let d = tempfile::tempdir().unwrap();
-        Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
     }
 
     #[test]
     fn test_reopen() {
         let d = tempfile::tempdir().unwrap();
-        Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
 
         // Reopen with default options which will only work if the database and column families
         // already exist.
-        Db::open(4, d.path().join("db"), rocksdb::Options::default(), cfs()).unwrap();
+        Db::open(d.path().join("db"), rocksdb::Options::default(), 4, cfs()).unwrap();
     }
 
     #[test]
@@ -437,16 +443,16 @@ pub(crate) mod tests {
         let d = tempfile::tempdir().unwrap();
 
         // Open the database once.
-        let _db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let _db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
 
         // Opening the same database again should fail.
-        assert!(Db::open(4, d.path().join("db"), opts(), cfs()).is_err());
+        assert!(Db::open(d.path().join("db"), opts(), 4, cfs()).is_err());
     }
 
     #[test]
     fn test_read_empty() {
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         db.snapshot(0);
@@ -456,7 +462,7 @@ pub(crate) mod tests {
     #[test]
     fn test_snapshot_circular_buffer() {
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         for i in 0..10 {
@@ -481,7 +487,7 @@ pub(crate) mod tests {
     #[test]
     fn test_write_snapshot_read() {
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         // Register an empty snapshot.
@@ -540,7 +546,7 @@ pub(crate) mod tests {
     #[test]
     fn test_multi_get() {
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         let (k0, v0) = (42u64, 43u64);
@@ -610,7 +616,7 @@ pub(crate) mod tests {
         ];
 
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs).unwrap();
         let p0 = db.cf("p0").unwrap();
         let p1 = db.cf("p1").unwrap();
 
@@ -644,7 +650,7 @@ pub(crate) mod tests {
 
         {
             // Create a fresh database and write some data into it.
-            let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+            let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
             let cf = db.cf("test").unwrap();
 
             let mut batch = rocksdb::WriteBatch::default();
@@ -661,7 +667,7 @@ pub(crate) mod tests {
 
         {
             // Re-open the database.
-            let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+            let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
             let cf = db.cf("test").unwrap();
 
             // The `watermark` persists.
@@ -685,7 +691,7 @@ pub(crate) mod tests {
         use Bound::{Excluded as E, Unbounded as U};
 
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         let mut batch = rocksdb::WriteBatch::default();
@@ -807,7 +813,7 @@ pub(crate) mod tests {
         use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         let mut batch = rocksdb::WriteBatch::default();
@@ -852,7 +858,7 @@ pub(crate) mod tests {
         use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         let mut batch = rocksdb::WriteBatch::default();
@@ -932,7 +938,7 @@ pub(crate) mod tests {
         use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         let mut batch = rocksdb::WriteBatch::default();
@@ -970,7 +976,7 @@ pub(crate) mod tests {
         use Bound::{Excluded as E, Unbounded as U};
 
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         let mut batch = rocksdb::WriteBatch::default();
@@ -1097,7 +1103,7 @@ pub(crate) mod tests {
         use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
-        let db = Db::open(4, d.path().join("db"), opts(), cfs()).unwrap();
+        let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
         let cf = db.cf("test").unwrap();
 
         let mut batch = rocksdb::WriteBatch::default();
