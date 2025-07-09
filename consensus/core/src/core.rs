@@ -34,7 +34,6 @@ use crate::{
     block_manager::BlockManager,
     commit::{
         CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
-        GENESIS_COMMIT_INDEX,
     },
     commit_observer::CommitObserver,
     context::Context,
@@ -701,9 +700,7 @@ impl Core {
         }
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
-        // Commits cannot be persisted before being finalized. It is ok for the block to contain
-        // votes for unpersisted commits.
-        self.dag_state.write().flush(GENESIS_COMMIT_INDEX);
+        self.dag_state.write().flush();
 
         // Now acknowledge the transactions for their inclusion to block
         ack_transactions(verified_block.reference());
@@ -1603,7 +1600,7 @@ mod test {
         }
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
@@ -1743,7 +1740,7 @@ mod test {
         core.try_commit(vec![]).ok();
 
         // Flush the DAG state to storage.
-        core.dag_state.write().flush_all_in_test();
+        core.dag_state.write().flush();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
@@ -1866,7 +1863,7 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -1932,7 +1929,7 @@ mod test {
         assert_eq!(transaction_vote.rejects, vec![1, 4]);
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -2023,7 +2020,7 @@ mod test {
         .await;
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -2056,7 +2053,7 @@ mod test {
         );
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         let last_commit = store
             .read_last_commit()
@@ -2183,7 +2180,7 @@ mod test {
         .await;
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -2424,7 +2421,7 @@ mod test {
             assert_eq!(core_fixture.core.last_proposed_round(), 4);
 
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -3257,7 +3254,7 @@ mod test {
 
         for core_fixture in cores {
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -3452,7 +3449,7 @@ mod test {
         assert_eq!(committed_sub_dags.len(), 4);
 
         // Flush the DAG state to storage.
-        core.dag_state.write().flush_all_in_test();
+        core.dag_state.write().flush();
 
         println!("Case 1. Provide no certified commits. No commit should happen.");
 
@@ -3483,7 +3480,7 @@ mod test {
             .expect("Should not fail");
 
         // Flush the DAG state to storage.
-        core.dag_state.write().flush_all_in_test();
+        core.dag_state.write().flush();
 
         let commits = store.scan_commits((6..=10).into()).unwrap();
 
@@ -3743,7 +3740,7 @@ mod test {
             };
 
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -3878,7 +3875,7 @@ mod test {
 
         for core_fixture in cores {
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
             // Check commits have been persisted to store
             let last_commit = core_fixture
                 .store
@@ -3972,7 +3969,7 @@ mod test {
         }
 
         // Flush the DAG state to storage.
-        core_fixture.dag_state.write().flush_all_in_test();
+        core_fixture.dag_state.write().flush();
 
         // Check commits have been persisted to store
         let last_commit = core_fixture
