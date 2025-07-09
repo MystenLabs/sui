@@ -3049,10 +3049,11 @@ impl AuthorityPerEpochStore {
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
         let mut execution_time_observations = Vec::with_capacity(verified_transactions.len());
         for mut tx in verified_transactions {
+            let key = tx.0.key();
             if tx.0.is_end_of_publish() {
                 end_of_publish_transactions.push(tx);
             } else if let Some(observation) = tx.0.try_take_execution_time_observation() {
-                execution_time_observations.push(observation);
+                execution_time_observations.push((key, observation));
             } else if tx.0.is_system() {
                 system_transactions.push(tx);
             } else if tx
@@ -3206,11 +3207,14 @@ impl AuthorityPerEpochStore {
             .execution_time_estimator
             .try_lock()
             .expect("should only ever be called from the commit handler thread");
-        for ExecutionTimeObservation {
-            authority,
-            generation,
-            estimates,
-        } in execution_time_observations
+        for (
+            key,
+            ExecutionTimeObservation {
+                authority,
+                generation,
+                estimates,
+            },
+        ) in execution_time_observations
         {
             let Some(estimator) = execution_time_estimator.as_mut() else {
                 error!("dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled");
@@ -3219,6 +3223,9 @@ impl AuthorityPerEpochStore {
             let authority_index = self.committee.authority_index(&authority).unwrap();
             estimator.process_observations_from_consensus(authority_index, generation, &estimates);
             output.insert_execution_time_observation(authority_index, generation, estimates);
+            if self.protocol_config().record_time_estimate_processed() {
+                output.record_consensus_message_processed(key);
+            }
         }
 
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
