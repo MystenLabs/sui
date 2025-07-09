@@ -1337,25 +1337,16 @@ impl CheckpointBuilder {
                 pending.roots,
             );
 
-            if let Some(TransactionKey::AccumulatorSettlement(..)) = pending.roots.last() {
-                assert!(self.epoch_store.accumulators_enabled());
-
-                let (tx_key, settlement_digests) = self
-                    .construct_and_execute_settlement_transactions(
-                        &sorted_tx_effects_included_in_checkpoint,
-                        pending.details.checkpoint_height,
-                    )
-                    .await;
-                debug!(?tx_key, "executed settlement transactions");
-
-                let last_key = pending.roots.pop().unwrap();
-                assert_eq!(last_key, tx_key);
-
-                // Replace the key with the actual settlement digests
-                pending
-                    .roots
-                    .extend(settlement_digests.into_iter().map(TransactionKey::Digest));
-            }
+            let settlement_root = if self.epoch_store.accumulators_enabled() {
+                let Some(settlement_root @ TransactionKey::AccumulatorSettlement(..)) =
+                    pending.roots.pop()
+                else {
+                    fatal!("No settlement root found");
+                };
+                Some(settlement_root)
+            } else {
+                None
+            };
 
             let roots = &pending.roots;
 
@@ -1427,6 +1418,23 @@ impl CheckpointBuilder {
                 sorted.push(ccp_effects);
             }
             sorted.extend(CausalOrder::causal_sort(unsorted));
+
+            if let Some(settlement_root) = settlement_root {
+                let (tx_key, settlement_digests) = self
+                    .construct_and_execute_settlement_transactions(
+                        &sorted,
+                        pending.details.checkpoint_height,
+                    )
+                    .await;
+                debug!(?tx_key, "executed settlement transactions");
+
+                assert_eq!(settlement_root, tx_key);
+
+                // Replace the key with the actual settlement digests
+                pending
+                    .roots
+                    .extend(settlement_digests.into_iter().map(TransactionKey::Digest));
+            }
 
             #[cfg(msim)]
             {
