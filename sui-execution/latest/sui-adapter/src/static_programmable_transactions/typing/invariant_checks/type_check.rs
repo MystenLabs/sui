@@ -155,8 +155,14 @@ fn command<Mode: ExecutionMode>(
                 argument(context, amount, &T::Type::U64)?;
             }
             anyhow::ensure!(
-                result_tys.is_empty(),
-                "split coins should not return any value, got {result_tys:?}"
+                amounts.len() == result_tys.len(),
+                "split coins should return as many values as amounts, expected {} got {}",
+                amounts.len(),
+                result_tys.len()
+            );
+            anyhow::ensure!(
+                result_tys.iter().all(|t| t == ty_coin),
+                "split coins should return coin<{ty_coin:?}>, got {result_tys:?}"
             );
         }
         T::Command_::MergeCoins(ty_coin, target, coins) => {

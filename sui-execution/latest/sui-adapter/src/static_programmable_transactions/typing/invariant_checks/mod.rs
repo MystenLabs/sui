@@ -15,6 +15,7 @@ pub fn transaction<Mode: ExecutionMode>(
     tt: &T::Transaction,
 ) -> Result<(), ExecutionError> {
     defining_ids_in_types::verify(env, tt)?;
+    type_check::verify::<Mode>(env, tt)?;
     // Add in other invariants checks here as needed/desired.
     Ok(())
 }
