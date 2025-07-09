@@ -34,7 +34,7 @@ use crate::{
     },
     sui_mode::{
         SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME,
-        info::{SuiInfo, TransferKind},
+        info::TransferKind,
         linters::{
             LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_SHARE_FUN,
             SHARE_FUN, TRANSFER_MOD_NAME, type_abilities,
@@ -260,11 +260,10 @@ impl<'a> ShareOwnedVerifierAI<'a> {
             BaseType_::Apply(_, sp!(_, TypeName_::Builtin(_)), _) => false,
 
             BaseType_::Apply(_, sp!(_, TypeName_::ModuleType(m, n)), targs) => {
-                let m = *m;
-                let n = *n;
-                if self.sui_info().uid_holders_old.contains_key(&(m, n)) {
+                if self.holds_uid(m, n) {
                     return true;
                 }
+
                 let phantom_positions = phantom_positions(self.info, &m, &n);
                 phantom_positions
                     .into_iter()
@@ -288,7 +287,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         let Value::NotFreshObj(not_fresh_loc) = &args[0] else {
             return;
         };
-        let Some(tn) = f
+        let Some((m, n)) = f
             .type_arguments
             .first()
             .and_then(|t| t.value.type_name())
@@ -296,7 +295,8 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         else {
             return;
         };
-        let Some(transferred_kind) = self.sui_info().transferred_old.get(&tn) else {
+
+        let Some(transferred_kind) = self.transfer_kind(&m, &n) else {
             return;
         };
 
@@ -323,8 +323,36 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         context.add_diag(d)
     }
 
-    fn sui_info(&self) -> &'a SuiInfo {
-        self.info.sui_flavor_info.as_ref().unwrap()
+    fn holds_uid(&self, mident: &ModuleIdent, tn: &DatatypeName) -> bool {
+        self.info
+            .modules
+            .get(mident)
+            .into_iter()
+            .chain(
+                self.pre_compiled_module_infos
+                    .as_ref()
+                    .and_then(|infos| infos.get(mident))
+                    .map(|minfo| &minfo.info)
+                    .into_iter(),
+            )
+            .filter_map(|minfo| minfo.sui_info.as_ref())
+            .any(|sui_info| sui_info.uid_holders.contains_key(tn))
+    }
+
+    fn transfer_kind(&self, mident: &ModuleIdent, tn: &DatatypeName) -> Option<&TransferKind> {
+        self.info
+            .modules
+            .get(mident)
+            .into_iter()
+            .chain(
+                self.pre_compiled_module_infos
+                    .as_ref()
+                    .and_then(|infos| infos.get(mident))
+                    .map(|minfo| &minfo.info)
+                    .into_iter(),
+            )
+            .filter_map(|minfo| minfo.sui_info.as_ref())
+            .find_map(|sui_info| sui_info.transferred.get(tn))
     }
 }
 

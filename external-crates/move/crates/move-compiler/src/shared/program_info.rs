@@ -265,9 +265,24 @@ impl TypingProgramInfo {
             .package_configs()
             .any(|(_, config)| config.flavor == Flavor::Sui)
         {
-            let sui_flavor_info = SuiInfo::new(pre_compiled_module_infos, modules, &info);
+            let mut sui_flavor_info = SuiInfo::new(pre_compiled_module_infos, modules, &info);
             env.save_private_transfers(&sui_flavor_info.transferred_old);
             info.sui_flavor_info = Some(sui_flavor_info.clone());
+            for (loc, mident, module_info) in info.modules.iter_mut() {
+                let mident = sp(loc, *mident);
+                let uid_holders = sui_flavor_info
+                    .uid_holders
+                    .remove(&mident)
+                    .unwrap_or_default();
+                let transferred = sui_flavor_info
+                    .transferred
+                    .remove(&mident)
+                    .unwrap_or_default();
+                module_info.sui_info = Some(SuiModInfo {
+                    uid_holders,
+                    transferred,
+                });
+            }
         } else {
             env.save_private_transfers(&BTreeMap::new());
         }
