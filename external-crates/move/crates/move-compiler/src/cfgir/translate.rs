@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    CompiledModuleInfoMap,
     cfgir::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
@@ -51,6 +52,7 @@ pub(super) struct CFGIRDebugFlags {
 
 struct Context<'env> {
     env: &'env CompilationEnv,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     info: &'env TypingProgramInfo,
     reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
@@ -62,10 +64,15 @@ struct Context<'env> {
 }
 
 impl<'env> Context<'env> {
-    pub fn new(env: &'env CompilationEnv, info: &'env TypingProgramInfo) -> Self {
+    pub fn new(
+        env: &'env CompilationEnv,
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        info: &'env TypingProgramInfo,
+    ) -> Self {
         let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
+            pre_compiled_module_infos,
             reporter,
             info,
             current_package: None,
@@ -152,14 +159,18 @@ impl<'env> Context<'env> {
 // Entry
 //**************************************************************************************************
 
-pub fn program(compilation_env: &CompilationEnv, prog: H::Program) -> G::Program {
+pub fn program(
+    compilation_env: &CompilationEnv,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+    prog: H::Program,
+) -> G::Program {
     let H::Program {
         modules: hmodules,
         warning_filters_table,
         info,
     } = prog;
 
-    let mut context = Context::new(compilation_env, &info);
+    let mut context = Context::new(compilation_env, pre_compiled_module_infos, &info);
 
     let modules = modules(&mut context, hmodules);
     set_constant_value_types(&info, &modules);
@@ -522,6 +533,7 @@ fn constant_(
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
         env: context.env,
+        pre_compiled_module_infos: context.pre_compiled_module_infos.clone(),
         reporter: &context.reporter,
         info: context.info,
         package: context.current_package,
@@ -696,6 +708,7 @@ fn function_body(
 
             let function_context = super::CFGContext {
                 env: context.env,
+                pre_compiled_module_infos: context.pre_compiled_module_infos.clone(),
                 reporter: &context.reporter,
                 info: context.info,
                 package: context.current_package,
@@ -1045,19 +1058,20 @@ fn visit_program(context: &mut Context, prog: &mut G::Program) {
         return;
     }
 
-    AbsintVisitor.visit(context.env, prog);
+    AbsintVisitor.visit(context.env, context.pre_compiled_module_infos.clone(), prog);
 
     context
         .env
         .visitors()
         .cfgir
         .par_iter()
-        .for_each(|v| v.visit(context.env, prog));
+        .for_each(|v| v.visit(context.env, context.pre_compiled_module_infos.clone(), prog));
 }
 
 struct AbsintVisitor;
 struct AbsintVisitorContext<'a> {
     env: &'a CompilationEnv,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
     reporter: DiagnosticReporter<'a>,
     info: Arc<TypingProgramInfo>,
     current_package: Option<Symbol>,
@@ -1066,10 +1080,15 @@ struct AbsintVisitorContext<'a> {
 impl CFGIRVisitorConstructor for AbsintVisitor {
     type Context<'a> = AbsintVisitorContext<'a>;
 
-    fn context<'a>(env: &'a CompilationEnv, program: &G::Program) -> Self::Context<'a> {
+    fn context<'a>(
+        env: &'a CompilationEnv,
+        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        program: &G::Program,
+    ) -> Self::Context<'a> {
         let reporter = env.diagnostic_reporter_at_top_level();
         AbsintVisitorContext {
             env,
+            pre_compiled_module_infos,
             reporter,
             info: program.info.clone(),
             current_package: None,
@@ -1131,6 +1150,7 @@ impl CFGIRVisitorContext for AbsintVisitorContext<'_> {
         let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());
         let function_context = super::CFGContext {
             env: self.env,
+            pre_compiled_module_infos: self.pre_compiled_module_infos.clone(),
             reporter: &self.reporter,
             info: &self.info,
             package: self.current_package,
