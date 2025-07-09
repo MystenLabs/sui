@@ -73,13 +73,6 @@ pub enum Trivial {
     Immediate(Value),
 }
 
-// TODO use the substitution
-// #[derive(Debug, Clone)]
-// struct Register {
-//   name: RegId,
-//   ty: Rc<Type>
-// }
-
 #[derive(Debug, Clone)]
 pub enum RValue {
     Call {
@@ -177,7 +170,6 @@ pub enum Value {
     U256(move_core_types::u256::U256), // Representing as two u128s for simplicity
     Bool(bool),
     Address(AccountAddress),
-    Empty, // empty added for the pop
     NotImplemented(String),
     Vector(Vec<Value>), // Added to represent vector values
 }
@@ -318,7 +310,6 @@ impl std::fmt::Display for Value {
             Value::U128(n) => write!(f, "U128({n})"),
             Value::U256(n) => write!(f, "U256({n})"),
             Value::Bool(bool) => write!(f, "{bool}"),
-            Value::Empty => write!(f, "Empty"),
             Value::Address(addr) => write!(f, "Address({})", addr.to_canonical_string(true)),
             Value::NotImplemented(msg) => write!(f, "NotImplemented({})", msg),
             Value::Vector(vec) => write!(f, "Vector[{}]", comma_separated(vec)),
