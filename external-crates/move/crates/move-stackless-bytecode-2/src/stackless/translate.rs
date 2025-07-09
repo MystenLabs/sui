@@ -12,7 +12,6 @@ use crate::{
         context::Context,
         optimizations::optimize,
     },
-    utils,
 };
 
 use move_binary_format::{
@@ -212,10 +211,9 @@ pub(crate) fn bytecode<K: SourceKind>(
         ($reg:expr, $other:expr) => {
             assert!(
                 $reg.ty.eq(&$other.ty),
-                "Type mismatch: {:?} vs {:?} \n{}",
+                "Type mismatch: {:?} vs {:?}",
                 $reg.ty,
-                $other.ty,
-                utils::debug_fun(op, pc, function)
+                $other.ty
             )
         };
     }
@@ -387,9 +385,8 @@ pub(crate) fn bytecode<K: SourceKind>(
                     ))
                 }
                 _ => panic!(
-                    "ReadRef expected a reference type, got: {} \n{}",
-                    reg.ty,
-                    utils::debug_fun(op, pc, function)
+                    "ReadRef expected a reference type, got: {}",
+                    reg.ty
                 ),
             }
         }
@@ -401,10 +398,9 @@ pub(crate) fn bytecode<K: SourceKind>(
                 Type::Reference(_mutable, ty) => {
                     assert!(
                         (**ty).eq(&(*val.ty)),
-                        "Type mismatch: {:?} vs {:?} \n{}",
+                        "Type mismatch: {:?} vs {:?}",
                         ty,
-                        val.ty,
-                        utils::debug_fun(op, pc, function)
+                        val.ty
                     );
                     assign_reg!(
                         [] = data_op!(
@@ -415,9 +411,8 @@ pub(crate) fn bytecode<K: SourceKind>(
                     )
                 }
                 _ => panic!(
-                    "WriteRef expected a reference type, got: {} \n{}",
-                    reg.ty,
-                    utils::debug_fun(op, pc, function)
+                    "WriteRef expected a reference type, got: {}",
+                    reg.ty
                 ),
             }
         }
