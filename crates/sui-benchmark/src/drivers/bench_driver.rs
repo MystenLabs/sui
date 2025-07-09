@@ -958,19 +958,18 @@ async fn run_bench_worker(
                         None => num_error_txes += 1,
                     }
                     num_submitted += 1;
-                    let metrics_cloned = Arc::clone(&metrics);
+                    let metrics = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let start = Arc::new(Instant::now());
-                    let payload_str = payload.to_string();
-                    let payload_str_clone = payload_str.clone();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move  {
-                            metrics_cloned.num_submitted.with_label_values(&[&payload_str_clone, &client_type.to_string()]).inc();
+                            let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]);
+                            let _guard = mysten_metrics::GaugeGuard::acquire(&num_in_flight_metric);
+                            metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                        })
-                        .count_in_flight_with_labels(&metrics.num_in_flight, &[&payload_str]);
+                        });
                     futures.push(Box::pin(res));
                     continue
                 }
@@ -984,18 +983,17 @@ async fn run_bench_worker(
                     num_submitted += 1;
                     let tx = payload.make_transaction();
                     let start = Arc::new(Instant::now());
-                    let metrics_cloned = Arc::clone(&metrics);
+                    let metrics = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
-                    let payload_str = payload.to_string();
-                    let payload_str_clone = payload_str.clone();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                     .then(|(client_type, res)| async move {
-                        metrics_cloned.num_submitted.with_label_values(&[&payload_str_clone, &client_type.to_string()]).inc();
+                        let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]);
+                        let _guard = mysten_metrics::GaugeGuard::acquire(&num_in_flight_metric);
+                        metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                         handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                    })
-                    .count_in_flight_with_labels(&metrics.num_in_flight, &[&payload_str]);
+                    });
                     futures.push(Box::pin(res));
                 }
             }
