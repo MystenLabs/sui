@@ -85,7 +85,7 @@ impl<F: MoveFlavor> Package<F> {
 
         // If our "modern" manifest is OK, we load the modern lockfile and that's it.
         if let Ok(manifest) = manifest {
-            let publish_data = Self::load_published_info_from_lockfile(&path)?;
+            let publish_data = Self::load_published_info_from_lockfile(path)?;
             return Ok((manifest, publish_data, None));
         }
 
@@ -97,7 +97,7 @@ impl<F: MoveFlavor> Package<F> {
             // it is either an "incorrectly" designed modern package OR it's totally wrong.
             // In both cases, we wanna emit the "modern" error, rather than the legacy one.
             if legacy_manifest.is_legacy_edition {
-                let publish_data = parse_legacy_lockfile_addresses(&path).unwrap_or_default();
+                let publish_data = parse_legacy_lockfile_addresses(path).unwrap_or_default();
 
                 return Ok((
                     Manifest::try_from_parsed_manifest(

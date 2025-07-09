@@ -3,7 +3,6 @@ use std::path::Path;
 
 use move_package_alt::{
     flavor::Vanilla,
-    graph::PackageGraph,
     package::{Package, paths::PackagePath, root_package::RootPackage},
 };
 

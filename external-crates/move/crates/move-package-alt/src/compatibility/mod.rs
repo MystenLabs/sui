@@ -52,7 +52,7 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Package
         let file_contents = fs::read_to_string(file)?;
         let module_names = parse_module_names(&file_contents)?;
 
-        if module_names.len() > 0 {
+        if !module_names.is_empty() {
             names.extend(module_names);
         }
     }
@@ -65,7 +65,7 @@ pub(crate) fn find_module_name_for_package(path: &PackagePath) -> Result<Package
         bail!("No module names found in the package.");
     };
 
-    Ok(PackageName::new(name.as_str())?)
+    PackageName::new(name.as_str())
 }
 
 /// Find all files matching the extension in a given path.
@@ -100,7 +100,7 @@ fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
     // In both cases, the match is the 2nd group (so `match.get(1)`)
     let regex = Regex::new(MODULE_REGEX).unwrap();
 
-    for cap in regex.captures_iter(&contents) {
+    for cap in regex.captures_iter(contents) {
         set.insert(cap[1].to_string());
     }
 
@@ -109,8 +109,6 @@ fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
 
 #[cfg(test)]
 mod tests {
-    use std::hash::Hash;
-
     use super::*;
 
     fn set(vec: Vec<&str>) -> HashSet<String> {

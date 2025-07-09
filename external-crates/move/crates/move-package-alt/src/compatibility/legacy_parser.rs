@@ -62,7 +62,7 @@ pub struct ParsedLegacyPackage {
 }
 
 pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegacyPackage> {
-    let file_contents = std::fs::read_to_string(&path.manifest_path()).with_context(|| {
+    let file_contents = std::fs::read_to_string(path.manifest_path()).with_context(|| {
         format!(
             "Unable to find package manifest at {:?}",
             path.manifest_path()
@@ -72,7 +72,7 @@ pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegac
     let file_handle = FileHandle::new(path.manifest_path())?;
 
     let (parsed_manifest, legacy_data) =
-        parse_source_manifest(parse_move_manifest_string(file_contents)?, &path)?;
+        parse_source_manifest(parse_move_manifest_string(file_contents)?, path)?;
 
     let is_legacy_edition =
         VALID_LEGACY_EDITIONS.contains(&parsed_manifest.package.edition.as_str());
@@ -89,7 +89,7 @@ pub fn parse_legacy_lockfile_addresses<F: MoveFlavor>(
     path: &PackagePath,
 ) -> Result<BTreeMap<EnvironmentName, Publication<F>>> {
     // we do not want to error if the lockfile does not exist.
-    let file_contents = std::fs::read_to_string(&path.lockfile_path())?;
+    let file_contents = std::fs::read_to_string(path.lockfile_path())?;
 
     let toml_val = toml::from_str::<TV>(&file_contents)?;
 
@@ -103,7 +103,7 @@ pub fn parse_legacy_lockfile_addresses<F: MoveFlavor>(
     let mut publish_info = BTreeMap::new();
 
     // Extract the environments as a table.
-    let Some(envs) = lockfile.get("env").map(|v| v.as_table()).flatten() else {
+    let Some(envs) = lockfile.get("env").and_then(|v| v.as_table()) else {
         return Ok(publish_info);
     };
 
@@ -193,19 +193,19 @@ pub fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedMani
 
             let dependencies = table
                 .remove(DEPENDENCY_NAME)
-                .map(|tval| parse_dependencies(tval))
+                .map(parse_dependencies)
                 .transpose()
                 .context("Error parsing '[dependencies]' section of manifest")?
                 .unwrap_or_default();
 
             let dev_dependencies = table
                 .remove(DEV_DEPENDENCY_NAME)
-                .map(|tval| parse_dependencies(tval))
+                .map(parse_dependencies)
                 .transpose()
                 .context("Error parsing '[dev-dependencies]' section of manifest")?
                 .unwrap_or_default();
 
-            let modern_name = derive_modern_name(&addresses, &path)?;
+            let modern_name = derive_modern_name(&addresses, path)?;
             let new_name = temporary_spanned(modern_name.clone());
 
             // Gather the original publish information from the manifest, if it's defined on the Toml file.
@@ -213,9 +213,8 @@ pub fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedMani
                 let latest_id = parse_address_literal(&published_at);
                 let original_id = addresses
                     .as_ref()
-                    .map(|a| a.get(modern_name.as_str()))
-                    .flatten()
-                    .map(|x| x.clone())
+                    .and_then(|a| a.get(modern_name.as_str()))
+                    .copied()
                     .flatten();
 
                 // If we have BOTH the original and latest id, we can create the published ids!
@@ -506,7 +505,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<DefaultDependency> {
 
     if let Some(dependency) = table
         .get(EXTERNAL_RESOLVER_PREFIX)
-        .and_then(|e| Some(parse_external_resolver(e)))
+        .map(parse_external_resolver)
     {
         return Ok(DefaultDependency {
             dependency_info: ManifestDependencyInfo::External(dependency?),
@@ -760,8 +759,8 @@ pub fn derive_modern_name(
 
     // If we have a single 0x0 address, we can use it as the name safely.
     if zero_addresses.len() == 1 {
-        return Ok(PackageName::new(zero_addresses[0].to_string())?);
+        Ok(PackageName::new(zero_addresses[0].to_string())?)
+    } else {
+        find_module_name_for_package(path)
     }
-
-    Ok(find_module_name_for_package(path)?)
 }
