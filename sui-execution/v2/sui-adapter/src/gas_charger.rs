@@ -274,7 +274,7 @@ pub mod checked {
 
             if self.smashed_gas_coin.is_some() {
                 // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation() {
+                if let Err(err) = self.gas_status.bucketize_computation(None) {
                     if execution_result.is_ok() {
                         *execution_result = Err(err);
                     }
