@@ -103,13 +103,8 @@ pub(crate) fn function<K: SourceKind>(
     let locals_types = function
         .parameters
         .iter()
-        .chain(
-            function
-                .locals
-                .iter()
-                .map(|ty| ty),
-        )
-        .map(|ty| ty.clone())
+        .chain(function.locals.iter())
+        .cloned()
         .collect::<Vec<_>>();
     ctxt.set_locals_types(locals_types);
 
@@ -379,15 +374,12 @@ pub(crate) fn bytecode<K: SourceKind>(
             let reg = pop!();
             match reg.ty.as_ref() {
                 Type::Reference(_mutable, ty) => {
-                    assign_reg!([push!(ty.clone().into())] = data_op!(
-                        DataOp::ReadRef,
-                        Register(reg.clone())
-                    ))
+                    assign_reg!(
+                        [push!(ty.clone().into())] =
+                            data_op!(DataOp::ReadRef, Register(reg.clone()))
+                    )
                 }
-                _ => panic!(
-                    "ReadRef expected a reference type, got: {}",
-                    reg.ty
-                ),
+                _ => panic!("ReadRef expected a reference type, got: {}", reg.ty),
             }
         }
 
@@ -410,10 +402,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                         )
                     )
                 }
-                _ => panic!(
-                    "WriteRef expected a reference type, got: {}",
-                    reg.ty
-                ),
+                _ => panic!("WriteRef expected a reference type, got: {}", reg.ty),
             }
         }
 
@@ -796,11 +785,11 @@ pub(crate) fn bytecode<K: SourceKind>(
                 op: DataOp::UnpackVariantImmRef(bx.clone()),
                 args: vec![Register(pop!())],
             };
-            let ref_type = Type::Reference(false, bx.enum_.subst_signature(bx.instantiation.clone()).into());
-            let lhs = make_vec!(
-                bx.variant.fields.0.len(),
-                push!(ref_type.clone().into())
+            let ref_type = Type::Reference(
+                false,
+                bx.enum_.subst_signature(bx.instantiation.clone()).into(),
             );
+            let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
             Instruction::AssignReg { lhs, rhs }
         }
 
@@ -809,11 +798,11 @@ pub(crate) fn bytecode<K: SourceKind>(
                 op: DataOp::UnpackVariant(bx.clone()),
                 args: vec![Register(pop!())],
             };
-            let ref_type = Type::Reference(true, bx.enum_.subst_signature(bx.instantiation.clone()).into());
-            let lhs = make_vec!(
-                bx.variant.fields.0.len(),
-                push!(ref_type.clone().into())
+            let ref_type = Type::Reference(
+                true,
+                bx.enum_.subst_signature(bx.instantiation.clone()).into(),
             );
+            let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
             Instruction::AssignReg { lhs, rhs }
         }
 
@@ -836,4 +825,3 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
     }
 }
-

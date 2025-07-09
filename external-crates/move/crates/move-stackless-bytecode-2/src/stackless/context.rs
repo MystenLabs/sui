@@ -39,17 +39,14 @@ impl<'a, K: SourceKind> Context<'a, K> {
     }
 
     pub fn pop_register(&mut self) -> Register {
-        let reg = self.logical_stack
+        self.logical_stack
             .pop()
-            .expect("Popped a register and there was none");
-        // println!("Popping register: {}", reg.ty);
-        reg
+            .expect("Popped a register and there was none")
     }
 
     pub fn push_register(&mut self, ty: Rc<Type<Symbol>>) -> Register {
         let reg_id = self.var_counter.next();
         let new_reg = Register { name: reg_id, ty };
-        // println!("Pushing register: {}", new_reg.ty);
         self.logical_stack.push(new_reg.clone());
         new_reg
     }
