@@ -21,6 +21,7 @@ use indexmap::IndexMap;
 use move_binary_format::{
     CompiledModule,
     errors::{Location, PartialVMError, VMResult},
+    file_format::FunctionDefinitionIndex,
     file_format_common::VERSION_6,
 };
 use move_core_types::{
@@ -282,17 +283,6 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         loaded_runtime_objects.extend(loaded_child_objects);
 
         let mut written_objects = BTreeMap::new();
-        for (_, package) in self.env.linkable_store.take_new_packages().into_iter() {
-            let Some(package) = Rc::into_inner(package) else {
-                invariant_violation!(
-                    "Package should have no outstanding references at end of execution"
-                );
-            };
-            let package_obj = Object::new_from_package(package, tx_digest);
-            let id = package_obj.id();
-            created_object_ids.insert(id);
-            written_objects.insert(id, package_obj);
-        }
 
         for (id, (recipient, ty, value)) in writes {
             let ty: Type = env.load_type_from_struct(&ty.clone().into())?;
@@ -314,6 +304,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             };
             let object = Object::new_move(move_object, recipient, tx_digest);
             written_objects.insert(id, object);
+        }
+
+        for package in self.env.linkable_store.to_new_packages().into_iter() {
+            let package_obj = Object::new_from_package(package, tx_digest);
+            let id = package_obj.id();
+            created_object_ids.insert(id);
+            written_objects.insert(id, package_obj);
         }
 
         // Before finishing, ensure that any shared object taken by value by the transaction is either:
@@ -378,15 +375,21 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .map_err(|e| self.env.convert_vm_error(e.finish(Location::Undefined)))
     }
 
-    pub fn take_user_events(&mut self, function: &T::LoadedFunction) -> Result<(), ExecutionError> {
+    pub fn take_user_events(
+        &mut self,
+        storage_id: ModuleId,
+        function_def_idx: FunctionDefinitionIndex,
+        instr_length: u16,
+        linkage: &RootedLinkage,
+    ) -> Result<(), ExecutionError> {
         let events = object_runtime_mut!(self)?.take_user_events();
         let num_events = self.user_events.len() + events.len();
         let max_events = self.env.protocol_config.max_num_event_emit();
         if num_events as u64 > max_events {
             let err = max_event_error(max_events)
-                .at_code_offset(function.definition_index, function.instruction_length)
-                .finish(Location::Module(function.storage_id.clone()));
-            return Err(self.env.convert_linked_vm_error(err, &function.linkage));
+                .at_code_offset(function_def_idx, instr_length)
+                .finish(Location::Module(storage_id.clone()));
+            return Err(self.env.convert_linked_vm_error(err, linkage));
         }
         let new_events = events
             .into_iter()
@@ -394,7 +397,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 let Some(bytes) = value.serialize() else {
                     invariant_violation!("Failed to serialize Move event");
                 };
-                Ok((function.storage_id.clone(), tag, bytes))
+                Ok((storage_id.clone(), tag, bytes))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
@@ -601,20 +604,25 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             )),
         }
         let result = self.execute_function_bypass_visibility(
-            &function.storage_id,
+            &function.runtime_id,
             &function.name,
             &function.type_arguments,
             args,
             &function.linkage,
             trace_builder_opt,
         )?;
-        self.take_user_events(&function)?;
+        self.take_user_events(
+            function.storage_id,
+            function.definition_index,
+            function.instruction_length,
+            &function.linkage,
+        )?;
         Ok(result)
     }
 
     pub fn execute_function_bypass_visibility(
         &mut self,
-        storage_id: &ModuleId,
+        runtime_id: &ModuleId,
         function_name: &IdentStr,
         ty_args: &[Type],
         args: Vec<CtxValue>,
@@ -637,7 +645,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             .vm
             .get_runtime()
             .execute_function_with_values_bypass_visibility(
-                storage_id,
+                runtime_id,
                 function_name,
                 ty_args,
                 args.into_iter().map(|v| v.0.into()).collect(),
@@ -746,12 +754,14 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     fn init_modules(
         &mut self,
+        package_id: ObjectID,
         modules: &[CompiledModule],
         linkage: &RootedLinkage,
         mut trace_builder_opt: Option<&mut MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         for module in modules {
-            let Some((_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str()) else {
+            let Some((fdef_idx, fdef)) = module.find_function_def_by_name(INIT_FN_NAME.as_str())
+            else {
                 continue;
             };
             let fhandle = module.function_handle_at(fdef.function);
@@ -776,6 +786,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 trace_builder_opt.as_deref_mut(),
             )?;
 
+            let storage_id = ModuleId::new(package_id.into(), module.self_id().name().to_owned());
+            self.take_user_events(
+                storage_id,
+                fdef_idx,
+                fdef.code.as_ref().map(|c| c.code.len() as u16).unwrap_or(0),
+                linkage,
+            )?;
             assert_invariant!(
                 return_values.is_empty(),
                 "init should not have return values"
@@ -823,7 +840,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         self.env.linkable_store.push_package(package_id, package)?;
         let res = self
             .publish_and_verify_modules(runtime_id, &modules, &linkage)
-            .and_then(|_| self.init_modules(&modules, &linkage, trace_builder_opt));
+            .and_then(|_| self.init_modules(package_id, &modules, &linkage, trace_builder_opt));
         match res {
             Ok(()) => Ok(runtime_id),
             Err(e) => {

@@ -279,11 +279,6 @@ impl<'a> ObjectRuntime<'a> {
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
             TransferResult::New
-        } else if is_framework_obj {
-            // framework objects are always created when they are transferred, but the id is
-            // hard-coded so it is not yet in new_ids
-            self.state.new_ids.insert(id);
-            TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
                 // don't use == for dummy values in Shared or ConsensusAddressOwner
@@ -299,6 +294,11 @@ impl<'a> ObjectRuntime<'a> {
                 (new, old) if new == old => TransferResult::SameOwner,
                 _ => TransferResult::OwnerChanged,
             }
+        } else if is_framework_obj {
+            // framework objects are always created when they are transferred, but the id is
+            // hard-coded so it is not yet in new_ids
+            self.state.new_ids.insert(id);
+            TransferResult::New
         } else {
             TransferResult::OwnerChanged
         };
