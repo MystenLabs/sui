@@ -70,7 +70,6 @@ sui-move-build.workspace = true
 sui-package-management.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
-sui-replay.workspace = true
 sui-transaction-builder.workspace = true
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true

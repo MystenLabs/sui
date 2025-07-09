@@ -13091,7 +13091,6 @@ dependencies = [
  "sui-move-build",
  "sui-package-management",
  "sui-protocol-config",
- "sui-replay",
  "sui-replay-2",
  "sui-sdk",
  "sui-simulator",
