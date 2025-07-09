@@ -32,17 +32,11 @@ impl<'pc, 'vm, 'state, 'linkage, 'env, 'txn> Context<'pc, 'vm, 'state, 'linkage,
     }
 }
 
-pub fn verify<'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
-    env: &Env<'pc, 'vm, 'state, 'linkage>,
-    txn: &T::Transaction,
-) -> Result<(), ExecutionError> {
+pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     verify_::<Mode>(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))
 }
 
-fn verify_<'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
-    env: &Env<'pc, 'vm, 'state, 'linkage>,
-    txn: &T::Transaction,
-) -> anyhow::Result<()> {
+fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
     let mut context = Context::new(env, txn);
     let T::Transaction { inputs, commands } = txn;
     for (idx, (i, ty)) in inputs.iter().enumerate() {
@@ -71,7 +65,7 @@ fn input(
             let T::InputType::Bytes(tys) = ty else {
                 anyhow::bail!("receiving should not have a fixed type",);
             };
-            for (ty, _) in tys {
+            for ty in tys.keys() {
                 anyhow::ensure!(
                     input_arguments::is_valid_receiving(ty),
                     "receiving type must be valid"
@@ -180,7 +174,7 @@ fn command<Mode: ExecutionMode>(
                 &T::Type::Reference(true, Rc::new(ty_coin.clone())),
             )?;
             for coin in coins {
-                argument(context, coin, &ty_coin)?;
+                argument(context, coin, ty_coin)?;
             }
             anyhow::ensure!(
                 result_tys.is_empty(),
@@ -314,7 +308,7 @@ fn location(context: &Context, l: T::Location, expected: &T::Type) -> anyhow::Re
             match input_ty {
                 T::InputType::Bytes(constraints) => {
                     anyhow::ensure!(
-                        constraints.contains_key(&expected),
+                        constraints.contains_key(expected),
                         "input {i} does not have the expected type {expected:?}, got {constraints:?}"
                     );
                     return Ok(());
