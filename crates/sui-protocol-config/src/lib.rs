@@ -739,10 +739,6 @@ fn is_empty(b: &BTreeSet<String>) -> bool {
     b.is_empty()
 }
 
-fn is_zero(val: &u64) -> bool {
-    *val == 0
-}
-
 /// Ordering mechanism for transactions in one Narwhal consensus output.
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum ConsensusTransactionOrdering {
@@ -781,11 +777,6 @@ pub struct ExecutionTimeEstimateParams {
 
     // Absolute limit on the number of saved observations at end of epoch.
     pub stored_observations_limit: u64,
-
-    // Requires observations from at least this amount of stake in order to use
-    // observation-based execution time estimates instead of the default.
-    #[serde(skip_serializing_if = "is_zero")]
-    pub stake_weighted_median_threshold: u64,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -3595,7 +3586,6 @@ impl ProtocolConfig {
                                     max_estimate_us: 1_500_000, // 1.5s
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
-                                    stake_weighted_median_threshold: 0,
                                 },
                             );
                     }
@@ -3675,7 +3665,6 @@ impl ProtocolConfig {
                                     max_estimate_us: 1_500_000, // 1.5s
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
-                                    stake_weighted_median_threshold: 0,
                                 },
                             );
 
@@ -3705,7 +3694,6 @@ impl ProtocolConfig {
                                     max_estimate_us: 1_500_000, // 1.5s
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
-                                    stake_weighted_median_threshold: 0,
                                 },
                             );
 
@@ -3728,7 +3716,6 @@ impl ProtocolConfig {
                                 max_estimate_us: 1_500_000, // 1.5s
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
-                                stake_weighted_median_threshold: 0,
                             },
                         );
                     cfg.feature_flags.allow_unbounded_system_objects = true;
@@ -3750,27 +3737,12 @@ impl ProtocolConfig {
                                 max_estimate_us: 1_500_000, // 1.5s
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
-                                stake_weighted_median_threshold: 0,
                             },
                         );
                 }
                 86 => {
                     cfg.feature_flags.type_tags_in_object_runtime = true;
                     cfg.max_move_enum_variants = Some(move_core_types::VARIANT_COUNT_MAX);
-
-                    // Set a stake_weighted_median_threshold for congestion control.
-                    cfg.feature_flags.per_object_congestion_control_mode =
-                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
-                            ExecutionTimeEstimateParams {
-                                target_utilization: 50,
-                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
-                                randomness_scalar: 20,
-                                max_estimate_us: 1_500_000, // 1.5s
-                                stored_observations_num_included_checkpoints: 10,
-                                stored_observations_limit: 20,
-                                stake_weighted_median_threshold: 3334,
-                            },
-                        );
                     // Enable party transfer for testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_party_transfer = true;
