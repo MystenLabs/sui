@@ -1089,10 +1089,13 @@ async fn test_gas_price_capping_for_aborted_transactions() {
     let authority_state = TestAuthorityBuilder::new().build().await;
 
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let max_gas_price_aborted = protocol_config.max_gas_price_aborted_transactions();
+
+    let max_gas_price_for_aborted_transactions = protocol_config
+        .max_gas_price_rgp_factor_for_aborted_transactions()
+        * authority_state.reference_gas_price_for_testing().unwrap();
 
     // Test with gas price higher than max_gas_price_aborted_transactions
-    let high_gas_price = max_gas_price_aborted * 2; // Set to 2x cap
+    let high_gas_price = max_gas_price_for_aborted_transactions * 2; // Set to 2x cap
     let budget = high_gas_price * 1000; // Sufficient budget
 
     // Create gas coins
@@ -1142,12 +1145,17 @@ async fn test_gas_price_capping_for_aborted_transactions() {
     // Check that the gas cost is capped
     let gas_cost = effects.gas_cost_summary();
 
+    // We round up gas used to the nearest gas_rounding_step as defined in protocol config
+    let gas_used_pre_gas_price = 1; //simulate cheap txn
+    let gas_used = ((gas_used_pre_gas_price / protocol_config.gas_rounding_step()) + 1)
+        * protocol_config.gas_rounding_step();
+
     // The computation cost should be capped at max_gas_price_aborted_transactions
     // rather than using the full high_gas_price
-    let expected_max_computation_cost = 1000 * max_gas_price_aborted; // bucket cost * capped price
+    let expected_max_computation_cost = gas_used * max_gas_price_for_aborted_transactions; // bucket cost * capped price
     assert!(gas_cost.computation_cost <= expected_max_computation_cost);
 
     // The computation cost should be less than what it would be with full gas price
-    let uncapped_computation_cost = 1000 * high_gas_price; // bucket cost * full price
+    let uncapped_computation_cost = gas_used * high_gas_price; // bucket cost * full price
     assert!(gas_cost.computation_cost < uncapped_computation_cost);
 }
