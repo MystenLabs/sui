@@ -222,7 +222,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI<'_> {
     }
 }
 
-impl<'a> ShareOwnedVerifierAI<'a> {
+impl ShareOwnedVerifierAI<'_> {
     fn can_hold_obj(&self, sp!(_, ty_): &Type) -> bool {
         match ty_ {
             Type_::Unit => false,
@@ -264,7 +264,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
                     return true;
                 }
 
-                let phantom_positions = phantom_positions(self.info, &m, &n);
+                let phantom_positions = phantom_positions(self.info, m, n);
                 phantom_positions
                     .into_iter()
                     .zip(targs)
@@ -332,8 +332,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
                 self.pre_compiled_module_infos
                     .as_ref()
                     .and_then(|infos| infos.get(mident))
-                    .map(|minfo| &minfo.info)
-                    .into_iter(),
+                    .map(|minfo| &minfo.info),
             )
             .filter_map(|minfo| minfo.sui_info.as_ref())
             .any(|sui_info| sui_info.uid_holders.contains_key(tn))
@@ -348,8 +347,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
                 self.pre_compiled_module_infos
                     .as_ref()
                     .and_then(|infos| infos.get(mident))
-                    .map(|minfo| &minfo.info)
-                    .into_iter(),
+                    .map(|minfo| &minfo.info),
             )
             .filter_map(|minfo| minfo.sui_info.as_ref())
             .find_map(|sui_info| sui_info.transferred.get(tn))
