@@ -15,7 +15,7 @@ use crate::{
         ConstantName, DatatypeName, DocComment, Field, FunctionName, TargetKind, VariantName,
     },
     shared::{unique_map::UniqueMap, *},
-    sui_mode::info::SuiInfo,
+    sui_mode::info::{SuiInfo, SuiModInfo},
     typing::ast::{self as T},
 };
 use move_core_types::runtime_value;
@@ -61,6 +61,7 @@ pub struct ModuleInfo {
     pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub functions: UniqueMap<FunctionName, FunctionInfo>,
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
+    pub sui_info: Option<SuiModInfo>,
 }
 
 #[derive(Debug, Clone)]
@@ -216,6 +217,7 @@ macro_rules! program_info {
                 enums,
                 functions,
                 constants,
+                sui_info: None,
             };
             (mident, minfo)
         }))
@@ -264,8 +266,8 @@ impl TypingProgramInfo {
             .any(|(_, config)| config.flavor == Flavor::Sui)
         {
             let sui_flavor_info = SuiInfo::new(pre_compiled_module_infos, modules, &info);
-            env.save_private_transfers(&sui_flavor_info.transferred);
-            info.sui_flavor_info = Some(sui_flavor_info);
+            env.save_private_transfers(&sui_flavor_info.transferred_old);
+            info.sui_flavor_info = Some(sui_flavor_info.clone());
         } else {
             env.save_private_transfers(&BTreeMap::new());
         }

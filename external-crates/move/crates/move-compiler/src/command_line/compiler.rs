@@ -1161,7 +1161,11 @@ fn run(
                 )
             }
             PassResult::HLIR(hprog) => {
-                let cprog = cfgir::translate::program(compilation_env, hprog);
+                let cprog = cfgir::translate::program(
+                    compilation_env,
+                    pre_compiled_module_infos.clone(),
+                    hprog,
+                );
                 rec(
                     compilation_env,
                     pre_compiled_module_infos,

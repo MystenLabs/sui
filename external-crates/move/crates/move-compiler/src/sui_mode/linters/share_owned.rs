@@ -6,6 +6,7 @@
 //! fresh object and share it within the same function
 
 use crate::{
+    CompiledModuleInfoMap,
     cfgir::{
         CFGContext,
         absint::JoinResult,
@@ -43,7 +44,7 @@ use crate::{
 use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 const SHARE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_SHARE_FUN),
@@ -66,6 +67,7 @@ pub struct ShareOwnedVerifier;
 
 pub struct ShareOwnedVerifierAI<'a> {
     info: &'a TypingProgramInfo,
+    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -111,7 +113,10 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
         if !calls_special_function(SHARE_FUNCTIONS, cfg) {
             return None;
         }
-        Some(ShareOwnedVerifierAI { info: context.info })
+        Some(ShareOwnedVerifierAI {
+            info: context.info,
+            pre_compiled_module_infos: context.pre_compiled_module_infos.clone(),
+        })
     }
 }
 
@@ -257,7 +262,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
             BaseType_::Apply(_, sp!(_, TypeName_::ModuleType(m, n)), targs) => {
                 let m = *m;
                 let n = *n;
-                if self.sui_info().uid_holders.contains_key(&(m, n)) {
+                if self.sui_info().uid_holders_old.contains_key(&(m, n)) {
                     return true;
                 }
                 let phantom_positions = phantom_positions(self.info, &m, &n);
@@ -291,7 +296,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         else {
             return;
         };
-        let Some(transferred_kind) = self.sui_info().transferred.get(&tn) else {
+        let Some(transferred_kind) = self.sui_info().transferred_old.get(&tn) else {
             return;
         };
 
