@@ -10,36 +10,31 @@ use super::{error::Error, iter, key, Db};
 
 /// A structured representation of a single RocksDB column family, providing snapshot-based reads
 /// and a transactional write API.
-pub(crate) struct DbMap<'d, K, V> {
-    db: &'d Db,
-    cf: Arc<rocksdb::BoundColumnFamily<'d>>,
+pub(crate) struct DbMap<K, V> {
+    db: Arc<Db>,
+    cf: String,
     _data: PhantomData<fn(K) -> V>,
 }
 
-impl<'d, K, V> DbMap<'d, K, V>
+impl<K, V> DbMap<K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    /// Open a new `DbMap` for the column family `cf` in database `db`. This operation will fail if
-    /// the column family has not been registered with the database.
-    pub(crate) fn new(db: &'d Db, cf: &str) -> Result<Self, Error> {
-        let cf = db
-            .cf(cf)
-            .ok_or_else(|| Error::NoColumnFamily(cf.to_owned()))?;
-
-        Ok(Self {
+    /// Open a new `DbMap` for the column family `cf` in database `db`.
+    pub(crate) fn new(db: Arc<Db>, cf: impl Into<String>) -> Self {
+        Self {
             db,
-            cf,
+            cf: cf.into(),
             _data: PhantomData,
-        })
+        }
     }
 
     /// Point look-up at `checkpoint` for the given `key`.
     ///
     /// Fails if the database does not have a snapshot at `checkpoint`.
     pub(crate) fn get(&self, checkpoint: u64, key: impl Borrow<K>) -> Result<Option<V>, Error> {
-        self.db.get(checkpoint, &self.cf, key.borrow())
+        self.db.get(checkpoint, &self.cf()?, key.borrow())
     }
 
     /// Multi-point look-up at `checkpoint` for the given `key`.
@@ -51,7 +46,7 @@ where
         keys: impl IntoIterator<Item = &'k J>,
     ) -> Result<Vec<Result<Option<V>, Error>>, Error> {
         let keys = keys.into_iter().map(|k| k.borrow());
-        self.db.multi_get(checkpoint, &self.cf, keys)
+        self.db.multi_get(checkpoint, &self.cf()?, keys)
     }
 
     /// Create a forward iterator over the values in the map at the given `checkpoint`, optionally
@@ -64,7 +59,7 @@ where
         checkpoint: u64,
         range: impl RangeBounds<K>,
     ) -> Result<iter::FwdIter<'_, K, V>, Error> {
-        self.db.iter(checkpoint, &self.cf, range)
+        self.db.iter(checkpoint, &self.cf()?, range)
     }
 
     /// Create a reverse iterator over the values in the map at the given `checkpoint`, optionally
@@ -77,7 +72,7 @@ where
         checkpoint: u64,
         range: impl RangeBounds<K>,
     ) -> Result<iter::RevIter<'_, K, V>, Error> {
-        self.db.iter_rev(checkpoint, &self.cf, range)
+        self.db.iter_rev(checkpoint, &self.cf()?, range)
     }
 
     /// Like `iter` but the bound does not have to be given in the key type `K`. This is useful for
@@ -88,7 +83,7 @@ where
         checkpoint: u64,
         range: impl RangeBounds<J>,
     ) -> Result<iter::FwdIter<'_, K, V>, Error> {
-        self.db.iter(checkpoint, &self.cf, range)
+        self.db.iter(checkpoint, &self.cf()?, range)
     }
 
     /// Like `iter_rev` but the bound does not have to be given in the key type `K`. This is useful
@@ -99,7 +94,7 @@ where
         checkpoint: u64,
         range: impl RangeBounds<J>,
     ) -> Result<iter::RevIter<'_, K, V>, Error> {
-        self.db.iter_rev(checkpoint, &self.cf, range)
+        self.db.iter_rev(checkpoint, &self.cf()?, range)
     }
 
     /// Record the insertion of `k -> v` for the map's column family in the given `batch`. The
@@ -112,7 +107,7 @@ where
         batch: &mut rocksdb::WriteBatch,
     ) -> Result<(), Error> {
         batch.put_cf(
-            &self.cf,
+            &self.cf()?,
             key::encode(k.borrow()),
             bcs::to_bytes(v.borrow())?,
         );
@@ -135,7 +130,7 @@ where
         batch: &mut rocksdb::WriteBatch,
     ) -> Result<(), Error> {
         batch.merge_cf(
-            &self.cf,
+            &self.cf()?,
             key::encode(k.borrow()),
             bcs::to_bytes(v.borrow())?,
         );
@@ -145,8 +140,20 @@ where
     /// Record the removal of `k` from the map's column family in the given `batch`. The removal is
     /// not performed until the batch is written to the database, and its effects will not be
     /// visible until a snapshot is created after the batch is written.
-    pub(crate) fn remove(&self, k: impl Borrow<K>, batch: &mut rocksdb::WriteBatch) {
-        batch.delete_cf(&self.cf, key::encode(k.borrow()));
+    pub(crate) fn remove(
+        &self,
+        k: impl Borrow<K>,
+        batch: &mut rocksdb::WriteBatch,
+    ) -> Result<(), Error> {
+        batch.delete_cf(&self.cf()?, key::encode(k.borrow()));
+        Ok(())
+    }
+
+    #[inline]
+    fn cf(&self) -> Result<Arc<rocksdb::BoundColumnFamily>, Error> {
+        self.db
+            .cf(&self.cf)
+            .ok_or_else(|| Error::NoColumnFamily(self.cf.clone()))
     }
 }
 
@@ -163,10 +170,35 @@ mod tests {
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
 
-        let db = Db::open(4, d.path().join("db"), opts, vec![]).unwrap();
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, vec![]).unwrap());
+        let map: DbMap<u64, u64> = DbMap::new(db.clone(), "test");
 
-        // Trying to open a map for a column family that does not exist should fail.
-        let Err(err) = DbMap::<u64, u64>::new(&db, "test") else {
+        // Trying to access a column family that does not exist should return an error.
+        let Err(err) = map.get(0, 42) else {
+            panic!("expected error, got Ok");
+        };
+
+        assert!(matches!(err, Error::NoColumnFamily(_)))
+    }
+
+    #[test]
+    fn test_column_family_deleted() {
+        let d = tempfile::tempdir().unwrap();
+
+        let mut opts = rocksdb::Options::default();
+        opts.create_if_missing(true);
+
+        let cfs = vec![("test", rocksdb::Options::default())];
+
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+        let map: DbMap<u64, u64> = DbMap::new(db.clone(), "test");
+        db.snapshot(0);
+
+        // Access succeeds at first, but will start to fail after the column family is dropped.
+        assert!(map.get(0, 42).unwrap().is_none());
+
+        db.drop_cf("test").unwrap();
+        let Err(err) = map.get(0, 42) else {
             panic!("expected error, got Ok");
         };
 
@@ -182,8 +214,8 @@ mod tests {
 
         let cfs = vec![("test", rocksdb::Options::default())];
 
-        let db = Db::open(4, d.path().join("db"), opts, cfs).unwrap();
-        let map: DbMap<u64, u64> = DbMap::new(&db, "test").unwrap();
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+        let map: DbMap<u64, u64> = DbMap::new(db.clone(), "test");
 
         let mut batch = rocksdb::WriteBatch::default();
         map.insert(42, 43, &mut batch).unwrap();
@@ -192,7 +224,7 @@ mod tests {
         db.snapshot(0);
 
         let mut batch = rocksdb::WriteBatch::default();
-        map.remove(42, &mut batch);
+        map.remove(42, &mut batch).unwrap();
         map.insert(43, 42, &mut batch).unwrap();
         db.write("batch", wm(1), batch).unwrap();
         db.snapshot(1);
@@ -281,8 +313,8 @@ mod tests {
 
         let cfs = vec![("counts", counter_opts)];
 
-        let db = Db::open(4, d.path().join("db"), db_opts, cfs).unwrap();
-        let counts: DbMap<u64, u64> = DbMap::new(&db, "counts").unwrap();
+        let db = Arc::new(Db::open(d.path().join("db"), db_opts, 4, cfs).unwrap());
+        let counts: DbMap<u64, u64> = DbMap::new(db.clone(), "counts");
 
         // Successfully perform a merge to counts.
         let mut batch = rocksdb::WriteBatch::default();
@@ -317,8 +349,8 @@ mod tests {
 
         let cfs = vec![("test", rocksdb::Options::default())];
 
-        let db = Db::open(4, d.path().join("db"), opts, cfs).unwrap();
-        let values: DbMap<u64, u64> = DbMap::new(&db, "test").unwrap();
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+        let values: DbMap<u64, u64> = DbMap::new(db.clone(), "test");
 
         let mut batch = rocksdb::WriteBatch::default();
         values.insert(42, 1, &mut batch).unwrap();
@@ -344,8 +376,8 @@ mod tests {
 
         let cfs = vec![("test", rocksdb::Options::default())];
 
-        let db = Db::open(4, d.path().join("db"), opts, cfs).unwrap();
-        let map: DbMap<u32, u64> = DbMap::new(&db, "test").unwrap();
+        let db = Arc::new(Db::open(d.path().join("db"), opts, 4, cfs).unwrap());
+        let map: DbMap<u32, u64> = DbMap::new(db.clone(), "test");
 
         let mut batch = rocksdb::WriteBatch::default();
         map.insert(0x0000_0001, 10, &mut batch).unwrap();
