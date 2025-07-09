@@ -24,7 +24,6 @@ pub struct Package {
 pub struct Module {
     pub name: Symbol,
     pub functions: BTreeMap<Symbol, Function>,
-    // pub datatypes: BTreeMap<Symbol, Rc<Type<Symbol>>>
 }
 
 #[derive(Debug, Clone)]
@@ -306,7 +305,7 @@ impl std::fmt::Display for Trivial {
 
 impl std::fmt::Display for Register {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "reg_{}<{}>", self.name, self.ty)
+        write!(f, "reg_{} : {}", self.name, self.ty)
     }
 }
 
