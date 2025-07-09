@@ -115,12 +115,12 @@ impl CommitFinalizer {
             } else {
                 vec![committed_sub_dag]
             };
-            if let Some(commit) = finalized_commits.last() {
+            if !finalized_commits.is_empty() {
                 // Commits and committed blocks must be persisted to storage before sending them to Sui
                 // to execute their finalized transactions.
                 // Commit metadata and uncommitted blocks can be persisted more lazily because they are recoverable.
                 // But for simplicity, all unpersisted commits and blocks are flushed to storage.
-                self.dag_state.write().flush(commit.commit_ref.index);
+                self.dag_state.write().flush();
             }
             for commit in finalized_commits {
                 if let Err(e) = self.commit_sender.send(commit) {
