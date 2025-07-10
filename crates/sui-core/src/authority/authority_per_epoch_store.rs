@@ -105,8 +105,9 @@ use crate::checkpoints::{
     PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
 };
 use crate::consensus_handler::{
-    ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
-    SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
+    ConsensusCommitInfo, IndirectStateObserver, SequencedConsensusTransaction,
+    SequencedConsensusTransactionKey, SequencedConsensusTransactionKind,
+    VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
@@ -2204,6 +2205,7 @@ impl AuthorityPerEpochStore {
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
         cert: &VerifiedExecutableTransaction,
         commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: &mut IndirectStateObserver,
         dkg_failed: bool,
         generating_randomness: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
@@ -2233,6 +2235,7 @@ impl AuthorityPerEpochStore {
                 cert,
                 previously_deferred_tx_digests,
                 commit_info,
+                indirect_state_observer,
             )
         {
             Some((
@@ -3029,6 +3032,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: IndirectStateObserver,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
         // Split transactions into different types for processing.
@@ -3274,6 +3278,7 @@ impl AuthorityPerEpochStore {
                 checkpoint_service,
                 cache_reader,
                 consensus_commit_info,
+                indirect_state_observer,
                 &mut roots,
                 &mut randomness_roots,
                 shared_object_congestion_tracker,
@@ -3445,6 +3450,7 @@ impl AuthorityPerEpochStore {
         output: &mut ConsensusCommitOutput,
         transactions: &mut VecDeque<Schedulable<VerifiedExecutableTransaction>>,
         consensus_commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: IndirectStateObserver,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult<Option<TransactionKey>> {
         {
@@ -3488,6 +3494,7 @@ impl AuthorityPerEpochStore {
             self.protocol_config(),
             version_assignment,
             consensus_commit_info,
+            indirect_state_observer,
         );
         let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
@@ -3567,6 +3574,7 @@ impl AuthorityPerEpochStore {
                 Some(Duration::from_millis(80)),
                 skip_consensus_commit_prologue_in_test,
             ),
+            IndirectStateObserver::new(),
             authority_metrics,
         )
         .await
@@ -3626,6 +3634,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
+        mut indirect_state_observer: IndirectStateObserver,
         non_randomness_roots: &mut BTreeSet<TransactionKey>,
         randomness_roots: &mut BTreeSet<TransactionKey>,
         mut shared_object_congestion_tracker: SharedObjectCongestionTracker,
@@ -3707,6 +3716,7 @@ impl AuthorityPerEpochStore {
                     tx,
                     checkpoint_service,
                     consensus_commit_info,
+                    &mut indirect_state_observer,
                     &previously_deferred_tx_digests,
                     randomness_manager.as_deref_mut(),
                     dkg_failed,
@@ -3827,6 +3837,7 @@ impl AuthorityPerEpochStore {
             output,
             &mut verified_non_randomness_certificates,
             consensus_commit_info,
+            indirect_state_observer,
             &cancelled_txns,
         )?;
 
@@ -3966,6 +3977,7 @@ impl AuthorityPerEpochStore {
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: &mut IndirectStateObserver,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_failed: bool,
@@ -4006,6 +4018,7 @@ impl AuthorityPerEpochStore {
                     transaction,
                     certificate_author,
                     commit_info,
+                    indirect_state_observer,
                     tracking_id,
                     previously_deferred_tx_digests,
                     dkg_failed,
@@ -4201,6 +4214,7 @@ impl AuthorityPerEpochStore {
                     transaction,
                     certificate_author,
                     commit_info,
+                    indirect_state_observer,
                     tracking_id,
                     previously_deferred_tx_digests,
                     dkg_failed,
@@ -4238,6 +4252,7 @@ impl AuthorityPerEpochStore {
         transaction: VerifiedExecutableTransaction,
         block_author: &AuthorityPublicKeyBytes,
         commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: &mut IndirectStateObserver,
         tracking_id: u64,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         dkg_failed: bool,
@@ -4281,6 +4296,7 @@ impl AuthorityPerEpochStore {
             execution_time_estimator,
             &transaction,
             commit_info,
+            indirect_state_observer,
             dkg_failed,
             generating_randomness,
             previously_deferred_tx_digests,
@@ -4344,8 +4360,11 @@ impl AuthorityPerEpochStore {
         }
 
         // This certificate will be scheduled. Update object execution cost.
-        shared_object_congestion_tracker
-            .bump_object_execution_cost(execution_time_estimator, &transaction);
+        shared_object_congestion_tracker.bump_object_execution_cost(
+            execution_time_estimator,
+            indirect_state_observer,
+            &transaction,
+        );
 
         Ok(ConsensusCertificateResult::SuiTransaction(transaction))
     }

@@ -337,6 +337,7 @@ mod additional_consensus_state {
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
             )>,
             commit_info: &ConsensusCommitInfo,
+            indirect_state_observer: IndirectStateObserver,
         ) -> VerifiedExecutableTransaction {
             let version_assignments = if protocol_config
                 .record_consensus_determined_version_assignments_in_prologue_v2()
@@ -366,10 +367,18 @@ mod additional_consensus_state {
             };
 
             if protocol_config.record_additional_state_digest_in_prologue() {
+                let additional_state_digest =
+                    if protocol_config.additional_consensus_digest_indirect_state() {
+                        let d1 = commit_info.additional_state_digest();
+                        indirect_state_observer.fold_with(d1)
+                    } else {
+                        commit_info.additional_state_digest()
+                    };
+
                 self.consensus_commit_prologue_v4_transaction(
                     epoch,
                     version_assignments.unwrap(),
-                    commit_info.additional_state_digest(),
+                    additional_state_digest,
                 )
             } else if let Some(version_assignments) = version_assignments {
                 self.consensus_commit_prologue_v3_transaction(epoch, version_assignments)
@@ -381,24 +390,31 @@ mod additional_consensus_state {
         }
     }
 
+    #[derive(Default)]
     pub struct IndirectStateObserver {
-        hash: sui_types::crypto::DefaultHash,
+        hash: DefaultHash,
     }
 
     impl IndirectStateObserver {
         pub fn new() -> Self {
-            Self {
-                hash: sui_types::crypto::DefaultHash::new(),
-            }
+            Self::default()
         }
 
         pub fn observe_indirect_state<T: Serialize>(&mut self, state: &T) {
             bcs::serialize_into(&mut self.hash, state).unwrap();
         }
 
-        pub fn finish(self) -> AdditionalConsensusStateDigest {
+        pub fn fold_with(
+            self,
+            d1: AdditionalConsensusStateDigest,
+        ) -> AdditionalConsensusStateDigest {
             let hash = self.hash.finalize();
-            AdditionalConsensusStateDigest::new(hash.into())
+            let d2 = AdditionalConsensusStateDigest::new(hash.into());
+
+            let mut hasher = DefaultHash::new();
+            bcs::serialize_into(&mut hasher, &d1).unwrap();
+            bcs::serialize_into(&mut hasher, &d2).unwrap();
+            AdditionalConsensusStateDigest::new(hasher.finalize().into())
         }
     }
 
@@ -483,7 +499,7 @@ mod additional_consensus_state {
     }
 }
 use additional_consensus_state::AdditionalConsensusState;
-pub(crate) use additional_consensus_state::ConsensusCommitInfo;
+pub(crate) use additional_consensus_state::{ConsensusCommitInfo, IndirectStateObserver};
 
 pub struct ConsensusHandler<C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -865,7 +881,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
-                commit_info,
+                &commit_info,
                 indirect_state_observer,
                 &self.metrics,
             )
