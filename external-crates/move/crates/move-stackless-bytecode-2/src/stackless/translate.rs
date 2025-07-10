@@ -319,11 +319,12 @@ pub(crate) fn bytecode<K: SourceKind>(
 
         IB::ReadRef => assign_reg!([push!()] = data_op!(DataOp::ReadRef, Register(pop!()))),
 
-        IB::WriteRef => {
-            assign_reg!([] = data_op!(DataOp::WriteRef, Register(pop!()), Register(pop!())))
-        }
+        IB::WriteRef => Instruction::WriteRef {
+            value: Register(pop!()),
+            ref_: Register(pop!()),
+        },
 
-        IB::FreezeRef => Instruction::Nop,
+        IB::FreezeRef => Instruction::FreezeRef,
 
         IB::MutBorrowLoc(loc) => {
             assign_reg!(
@@ -495,16 +496,11 @@ pub(crate) fn bytecode<K: SourceKind>(
             )
         }
 
-        // TODO check if this is ok for the SSA
-        IB::VecPushBack(rc_type) => {
-            assign_reg!(
-                [] = data_op!(
-                    DataOp::VecPushBack(rc_type.clone()),
-                    Register(pop!()),
-                    Register(pop!())
-                )
-            )
-        }
+        IB::VecPushBack(rc_type) => Instruction::VecPushBack {
+            ty: rc_type.clone(),
+            arg: Register(pop!()),
+            vec: Register(pop!()),
+        },
 
         IB::VecPopBack(rc_type) => {
             assign_reg!([push!()] = data_op!(DataOp::VecPopBack(rc_type.clone()), Register(pop!())))
@@ -520,17 +516,12 @@ pub(crate) fn bytecode<K: SourceKind>(
             Instruction::AssignReg { rhs, lhs }
         }
 
-        IB::VecSwap(rc_type) => {
-            let args = make_vec!(3, Register(pop!()));
-            Instruction::AssignReg {
-                rhs: RValue::Data {
-                    op: DataOp::VecSwap(rc_type.clone()),
-                    args,
-                },
-                // TODO check if this is ok for the SSA
-                lhs: vec![],
-            }
-        }
+        IB::VecSwap(rc_type) => Instruction::VecSwap {
+            ty: rc_type.clone(),
+            idx1: Register(pop!()),
+            idx2: Register(pop!()),
+            vec: Register(pop!()),
+        },
 
         IB::LdU16(value) => assign_reg!([push!()] = imm!(Value::U16(*value))),
 

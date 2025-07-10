@@ -46,7 +46,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
         reg_0 = Move(lcl_0)
         lcl_3 = reg_0
         reg_1 = Copy(lcl_3)
-        NoOperation
+        FreezeRef
         lcl_2 = reg_1
         reg_2 = Copy(lcl_2)
         VariantSwitch(SUBJECT(reg_2), LBL_(7), LBL_(13), LBL_(21))
@@ -78,7 +78,7 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
         lcl_4 = reg_14
         reg_15 = Move(lcl_1)
         reg_16 = Move(lcl_4)
-        WriteRef(reg_16, reg_15)
+        WriteRef(reg_15, reg_16)
         Return()
 
 

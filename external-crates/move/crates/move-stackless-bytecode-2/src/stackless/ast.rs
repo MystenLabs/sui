@@ -51,6 +51,22 @@ pub enum Instruction {
         loc: LocalId,
         value: Trivial,
     },
+    WriteRef {
+        ref_: Trivial,
+        value: Trivial,
+    },
+    FreezeRef,
+    VecPushBack {
+        ty: Rc<Type<Symbol>>,
+        arg: Trivial,
+        vec: Trivial,
+    },
+    VecSwap {
+        ty: Rc<Type<Symbol>>,
+        idx1: Trivial,
+        idx2: Trivial,
+        vec: Trivial,
+    },
     Jump(Label),
     JumpIf {
         condition: Trivial,
@@ -142,7 +158,6 @@ pub enum DataOp {
     Pack(Box<StructRef<Symbol>>),
     Unpack(Box<StructRef<Symbol>>),
     ReadRef,
-    WriteRef,
     FreezeRef,
     MutBorrowField(Box<FieldRef<Symbol>>),
     ImmBorrowField(Box<FieldRef<Symbol>>),
@@ -150,10 +165,8 @@ pub enum DataOp {
     VecLen(Rc<Type<Symbol>>),
     VecImmBorrow(Rc<Type<Symbol>>),
     VecMutBorrow(Rc<Type<Symbol>>),
-    VecPushBack(Rc<Type<Symbol>>),
     VecPopBack(Rc<Type<Symbol>>),
     VecUnpack(Rc<Type<Symbol>>),
-    VecSwap(Rc<Type<Symbol>>),
     PackVariant(Box<VariantRef<Symbol>>),
     UnpackVariant(Box<VariantRef<Symbol>>),
     UnpackVariantImmRef(Box<VariantRef<Symbol>>),
@@ -287,6 +300,17 @@ impl std::fmt::Display for Instruction {
             Instruction::Drop(reg_id) => write!(f, "Drop({reg_id})"),
             Instruction::Nop => write!(f, "NoOperation"),
             Instruction::NotImplemented(instr) => write!(f, "Unimplemented({instr})"),
+            Instruction::WriteRef { ref_, value } => write!(f, "WriteRef({ref_}, {value})"),
+            Instruction::FreezeRef => write!(f, "FreezeRef"),
+            Instruction::VecPushBack { ty, vec, arg } => {
+                write!(f, "VecPushBack<{ty}>({vec}, {arg})")
+            }
+            Instruction::VecSwap {
+                ty,
+                idx1,
+                idx2,
+                vec,
+            } => write!(f, "VecSwap<{ty}>({idx1},{idx2},{vec})"),
         }
     }
 }
@@ -354,13 +378,14 @@ impl std::fmt::Display for PrimitiveOp {
 impl std::fmt::Display for DataOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            DataOp::ReadRef => write!(f, "ReadRef"),
+            DataOp::FreezeRef => write!(f, "FreezeRef"),
             DataOp::Pack(struct_ref) => {
                 write!(f, "Pack<{}>", struct_ref.struct_.name)
             }
             DataOp::Unpack(struct_ref) => {
                 write!(f, "Unpack<{}>", struct_ref.struct_.name)
             }
-
             DataOp::ImmBorrowField(field_ref) => {
                 write!(f, "ImmBorrowField<{}>", field_ref.field.type_)
             }
@@ -379,17 +404,11 @@ impl std::fmt::Display for DataOp {
             DataOp::VecMutBorrow(rc_type) => {
                 write!(f, "VecMutBorrow<{}>", rc_type)
             }
-            DataOp::VecPushBack(rc_type) => {
-                write!(f, "VecPushBack<{}>", rc_type)
-            }
             DataOp::VecPopBack(rc_type) => {
                 write!(f, "VecPopBack<{}>", rc_type)
             }
             DataOp::VecUnpack(rc_type) => {
                 write!(f, "VecUnpack<{}>", rc_type)
-            }
-            DataOp::VecSwap(rc_type) => {
-                write!(f, "VecSwap<{}>", rc_type)
             }
             DataOp::PackVariant(variant_ref) => {
                 write!(f, "PackVariant<{}>", variant_ref.variant.name)
@@ -403,7 +422,6 @@ impl std::fmt::Display for DataOp {
             DataOp::UnpackVariantMutRef(variant_ref) => {
                 write!(f, "UnpackVariantMutRef<{}>", variant_ref.variant.name)
             }
-            _ => write!(f, "{:?}", self),
         }
     }
 }
