@@ -3,7 +3,7 @@
 
 use super::execution_time_estimator::ExecutionTimeEstimator;
 use crate::authority::transaction_deferral::DeferralKey;
-use crate::consensus_handler::ConsensusCommitInfo;
+use crate::consensus_handler::{ConsensusCommitInfo, IndirectStateObserver};
 use mysten_common::fatal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -218,6 +218,7 @@ impl SharedObjectCongestionTracker {
         &self,
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
         cert: &VerifiedExecutableTransaction,
+        indirect_state_observer: &mut IndirectStateObserver,
     ) -> Option<u64> {
         match &self.params.mode {
             PerObjectCongestionControlMode::None => None,
@@ -241,6 +242,8 @@ impl SharedObjectCongestionTracker {
                     );
                 }
 
+                indirect_state_observer.observe_indirect_state(&estimate_us);
+
                 Some(estimate_us)
             }
         }
@@ -253,10 +256,11 @@ impl SharedObjectCongestionTracker {
         cert: &VerifiedExecutableTransaction,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: &mut IndirectStateObserver,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let commit_round = commit_info.round;
 
-        let tx_cost = self.get_tx_cost(execution_time_estimator, cert)?;
+        let tx_cost = self.get_tx_cost(execution_time_estimator, cert, indirect_state_observer)?;
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {
@@ -317,6 +321,7 @@ impl SharedObjectCongestionTracker {
     pub fn bump_object_execution_cost(
         &mut self,
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
+        indirect_state_observer: &mut IndirectStateObserver,
         cert: &VerifiedExecutableTransaction,
     ) {
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
@@ -324,7 +329,9 @@ impl SharedObjectCongestionTracker {
             return;
         }
 
-        let Some(tx_cost) = self.get_tx_cost(execution_time_estimator, cert) else {
+        let Some(tx_cost) =
+            self.get_tx_cost(execution_time_estimator, cert, indirect_state_observer)
+        else {
             return;
         };
 
@@ -673,6 +680,7 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(1_500),
                     ),
+                    &mut IndirectStateObserver::new(),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -697,6 +705,7 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(1_500),
                     ),
+                    &mut IndirectStateObserver::new(),
                 )
                 .is_none());
         }
@@ -718,6 +727,7 @@ mod object_cost_tests {
                             0,
                             Duration::from_micros(1_500),
                         ),
+                        &mut IndirectStateObserver::new(),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -789,6 +799,7 @@ mod object_cost_tests {
                 10,
                 Duration::from_micros(10_000_000),
             ),
+            &mut IndirectStateObserver::new(),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 10);
@@ -820,6 +831,7 @@ mod object_cost_tests {
                 10,
                 Duration::from_micros(10_000_000),
             ),
+            &mut IndirectStateObserver::new(),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 4);
@@ -852,6 +864,7 @@ mod object_cost_tests {
                 10,
                 Duration::from_micros(10_000_000),
             ),
+            &mut IndirectStateObserver::new(),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 5);
@@ -979,6 +992,7 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000),
                     ),
+                    &mut IndirectStateObserver::new(),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -1001,6 +1015,7 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000)
                     ),
+                    &mut IndirectStateObserver::new(),
                 )
                 .is_none());
         }
@@ -1022,6 +1037,7 @@ mod object_cost_tests {
                             0,
                             Duration::from_micros(10_000_000),
                         ),
+                        &mut IndirectStateObserver::new(),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1172,6 +1188,7 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000),
                     ),
+                    &mut IndirectStateObserver::new(),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -1195,6 +1212,7 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000)
                     ),
+                    &mut IndirectStateObserver::new(),
                 )
                 .is_none());
         }
@@ -1216,6 +1234,7 @@ mod object_cost_tests {
                             0,
                             Duration::from_micros(10_000_000),
                         ),
+                        &mut IndirectStateObserver::new(),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1270,8 +1289,11 @@ mod object_cost_tests {
 
         // Read two objects should not change the object execution cost.
         let cert = build_transaction(&[(object_id_0, false), (object_id_1, false)], 10);
-        shared_object_congestion_tracker
-            .bump_object_execution_cost(Some(&execution_time_estimator), &cert);
+        shared_object_congestion_tracker.bump_object_execution_cost(
+            Some(&execution_time_estimator),
+            &mut IndirectStateObserver::new(),
+            &cert,
+        );
         assert_eq!(
             shared_object_congestion_tracker,
             SharedObjectCongestionTracker::new(
@@ -1289,8 +1311,11 @@ mod object_cost_tests {
 
         // Write to object 0 should only bump object 0's execution cost. The start cost should be object 1's cost.
         let cert = build_transaction(&[(object_id_0, true), (object_id_1, false)], 10);
-        shared_object_congestion_tracker
-            .bump_object_execution_cost(Some(&execution_time_estimator), &cert);
+        shared_object_congestion_tracker.bump_object_execution_cost(
+            Some(&execution_time_estimator),
+            &mut IndirectStateObserver::new(),
+            &cert,
+        );
         let expected_object_0_cost = match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
             PerObjectCongestionControlMode::TotalGasBudget => 20,
@@ -1332,8 +1357,11 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => 17, // 3 objects, 1 command
             PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 2_010,
         };
-        shared_object_congestion_tracker
-            .bump_object_execution_cost(Some(&execution_time_estimator), &cert);
+        shared_object_congestion_tracker.bump_object_execution_cost(
+            Some(&execution_time_estimator),
+            &mut IndirectStateObserver::new(),
+            &cert,
+        );
         assert_eq!(
             shared_object_congestion_tracker,
             SharedObjectCongestionTracker::new(
@@ -1374,8 +1402,11 @@ mod object_cost_tests {
             // previous cost 2_010 + (unknown-command default of 1000 * 7 commands)
             PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 9_010,
         };
-        shared_object_congestion_tracker
-            .bump_object_execution_cost(Some(&execution_time_estimator), &cert);
+        shared_object_congestion_tracker.bump_object_execution_cost(
+            Some(&execution_time_estimator),
+            &mut IndirectStateObserver::new(),
+            &cert,
+        );
         assert_eq!(
             shared_object_congestion_tracker,
             SharedObjectCongestionTracker::new(
@@ -1501,8 +1532,11 @@ mod object_cost_tests {
         // Simulate a tx on object 0 that exceeds the budget.
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_0, *mutable)], tx_gas_budget);
-            shared_object_congestion_tracker
-                .bump_object_execution_cost(Some(&execution_time_estimator), &tx);
+            shared_object_congestion_tracker.bump_object_execution_cost(
+                Some(&execution_time_estimator),
+                &mut IndirectStateObserver::new(),
+                &tx,
+            );
         }
 
         // Verify that accumulated_debts reports the debt for object 0.
@@ -1590,12 +1624,16 @@ mod object_cost_tests {
                 &tx,
                 &HashMap::new(),
                 &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
+                &mut IndirectStateObserver::new(),
             )
             .is_none());
 
         // Verify max cost after bumping is limited by the absolute cap.
-        shared_object_congestion_tracker
-            .bump_object_execution_cost(Some(&execution_time_estimator), &tx);
+        shared_object_congestion_tracker.bump_object_execution_cost(
+            Some(&execution_time_estimator),
+            &mut IndirectStateObserver::new(),
+            &tx,
+        );
         assert_eq!(300, shared_object_congestion_tracker.max_cost());
 
         // Verify accumulated debts still uses the per-commit budget to decrement.
