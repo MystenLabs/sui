@@ -6,6 +6,7 @@ use async_graphql::{Context, Object};
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
+    message_envelope::Message,
     messages_checkpoint::{CheckpointContents as NativeCheckpointContents, CheckpointSummary},
 };
 
@@ -64,6 +65,14 @@ impl Checkpoint {
 
 #[Object]
 impl CheckpointContents {
+    /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This hash can be used to verify checkpoint contents by checking signatures against the committee, Hashing contents to match digest, and checking that the previous checkpoint digest matches.
+    async fn digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(summary.digest().base58_encode()))
+    }
+
     /// The epoch that this checkpoint is part of.
     async fn epoch(&self) -> Option<Epoch> {
         let (summary, _, _) = self.contents.as_ref()?;
