@@ -30,7 +30,7 @@ mod network;
 pub mod network;
 
 mod stake_aggregator;
-mod storage;
+pub mod storage;
 mod subscriber;
 mod synchronizer;
 mod threshold_clock;
@@ -64,7 +64,7 @@ pub use block::{
 };
 /// Exported API for testing.
 pub use block::{BlockTimestampMs, TestBlock, Transaction, VerifiedBlock};
-pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
+pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag};
 pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
 pub use context::Clock;
 pub use network::{

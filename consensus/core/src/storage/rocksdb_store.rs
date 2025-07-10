@@ -26,7 +26,7 @@ use crate::{
 /// Persistent storage with RocksDB.
 #[derive(DBMapUtils)]
 #[cfg_attr(tidehunter, tidehunter)]
-pub(crate) struct RocksDBStore {
+pub struct RocksDBStore {
     /// Stores SignedBlock by refs.
     blocks: DBMap<(Round, AuthorityIndex, BlockDigest), Bytes>,
     /// A secondary index that orders refs first by authors.
@@ -50,7 +50,7 @@ impl RocksDBStore {
 
     /// Creates a new instance of RocksDB storage.
     #[cfg(not(tidehunter))]
-    pub(crate) fn new(path: &str) -> Self {
+    pub fn new(path: &str) -> Self {
         // Consensus data has high write throughput (all transactions) and is rarely read
         // (only during recovery and when helping peers catch up).
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
@@ -82,7 +82,7 @@ impl RocksDBStore {
     }
 
     #[cfg(tidehunter)]
-    pub(crate) fn new(path: &str) -> Self {
+    pub fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
         use typed_store::tidehunter_util::{KeyIndexing, KeyType, ThConfig};
         const MUTEXES: usize = 1024;
