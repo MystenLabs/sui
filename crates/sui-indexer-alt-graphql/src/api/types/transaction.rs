@@ -77,6 +77,19 @@ impl TransactionContents {
 
         Ok(Some(Base64(content.raw_transaction()?)))
     }
+
+    /// The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
+    async fn gas_input(&self) -> Result<Option<GasInput>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let transaction_data = content.data()?;
+        Ok(Some(GasInput::from_gas_data(
+            self.scope.clone(),
+            transaction_data.gas_data(),
+        )))
+    }
 }
 
 impl Transaction {

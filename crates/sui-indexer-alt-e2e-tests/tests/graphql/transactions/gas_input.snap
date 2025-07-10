@@ -1,0 +1,48 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 818
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-23:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6976800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 25-26:
+//# programmable --sender A --inputs object(1,0)
+//> 0: test::simple::increment(Input(0));
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 1339272, non_refundable_storage_fee: 13528
+
+task 3, line 28:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 30-47:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": {
+      "gasInput": {
+        "gasSponsor": {
+          "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "gasPrice": "1000",
+        "gasBudget": "5000000000",
+        "gasPayment": {
+          "nodes": [
+            {
+              "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+              "version": 1
+            }
+          ]
+        }
+      }
+    }
+  }
+}
