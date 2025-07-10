@@ -75,6 +75,20 @@ public struct Scenario {
     ctx: TxContext,
 }
 
+/// Builder for a `TxContext` to use in a test scenario.
+public struct TxContextBuilder has copy, drop {
+    sender: address,
+    epoch: u64,
+    epoch_timestamp_ms: u64,
+    ids_created: u64,
+    // when rgp is set, the context is used to start the scenario (first time usage)
+    // or with an epoch greater than the current epoch in the test scenario
+    rgp: Option<u64>,
+    gas_price: u64,
+    gas_budget: u64,
+    sponsor: Option<address>,
+}
+
 /// The effects of a transaction
 public struct TransactionEffects has drop {
     /// The objects created this transaction
@@ -84,15 +98,118 @@ public struct TransactionEffects has drop {
     /// The objects deleted this transaction
     deleted: vector<ID>,
     /// The objects transferred to an account this transaction
-    transferred_to_account: VecMap<ID, /* owner */ address>,
+    transferred_to_account: VecMap<ID /* owner */, address>,
     /// The objects transferred to an object this transaction
-    transferred_to_object: VecMap<ID, /* owner */ ID>,
+    transferred_to_object: VecMap<ID /* owner */, ID>,
     /// The objects shared this transaction
     shared: vector<ID>,
     /// The objects frozen this transaction
     frozen: vector<ID>,
     /// The number of user events emitted this transaction
     num_user_events: u64,
+}
+
+//
+// `TxContextBuilder` api
+//
+
+/// Create a new `TxContextBuilder` with the given `sender` address.
+/// Also provides default for all other fields.
+public fun ctx_builder_from_sender(sender: address): TxContextBuilder {
+    TxContextBuilder {
+        sender,
+        epoch: 0,
+        epoch_timestamp_ms: 0,
+        ids_created: 0,
+        rgp: option::some(700),
+        gas_price: 1_000,
+        gas_budget: 100_000_000,
+        sponsor: option::none(),
+    }
+}
+
+/// Create a `TxContextBuilder` from an existing `TxContext` in a `Scenario`.
+public fun ctx_builder(scenario: &Scenario): TxContextBuilder {
+    ctx_builder_from_context(&scenario.ctx)
+}
+
+/// Create a `TxContextBuilder` from an existing `TxContext`.
+public fun ctx_builder_from_context(ctx: &TxContext): TxContextBuilder {
+    TxContextBuilder {
+        sender: ctx.sender(),
+        epoch: ctx.epoch(),
+        epoch_timestamp_ms: ctx.epoch_timestamp_ms(),
+        ids_created: ctx.ids_created(),
+        rgp: option::some(ctx.reference_gas_price()),
+        gas_price: ctx.gas_price(),
+        gas_budget: ctx.gas_budget(),
+        sponsor: ctx.sponsor(),
+    }
+}
+
+/// Set the epoch for the `TxContextBuilder`.
+public fun set_epoch(mut builder: TxContextBuilder, epoch: u64): TxContextBuilder {
+    builder.epoch = epoch;
+    builder
+}
+
+/// Set the epoch timestamp in milliseconds for the `TxContextBuilder`.
+public fun set_epoch_timestamp(mut builder: TxContextBuilder, ms: u64): TxContextBuilder {
+    builder.epoch_timestamp_ms = ms;
+    builder
+}
+
+/// Set the ids created for the `TxContextBuilder`.
+public fun set_ids_created(mut builder: TxContextBuilder, ids_created: u64): TxContextBuilder {
+    builder.ids_created = ids_created;
+    builder
+}
+
+/// Set the reference gas price for the `TxContextBuilder`.
+public fun set_reference_gas_price(mut builder: TxContextBuilder, rgp: u64): TxContextBuilder {
+    builder.rgp = option::some(rgp);
+    builder
+}
+
+/// Set the reference gas price to `option::none()`.
+public fun unset_reference_gas_price(mut builder: TxContextBuilder): TxContextBuilder {
+    builder.rgp = option::none();
+    builder
+}
+
+/// Set the gas price for the `TxContextBuilder`.
+public fun set_gas_price(mut builder: TxContextBuilder, gas_price: u64): TxContextBuilder {
+    builder.gas_price = gas_price;
+    builder
+}
+
+/// Set the gas budget for the `TxContextBuilder`.
+public fun set_gas_budget(mut builder: TxContextBuilder, gas_budget: u64): TxContextBuilder {
+    builder.gas_budget = gas_budget;
+    builder
+}
+
+/// Set the sponsor for the `TxContextBuilder`.
+public fun set_sponsor(mut builder: TxContextBuilder, sponsor: Option<address>): TxContextBuilder {
+    builder.sponsor = sponsor;
+    builder
+}
+
+// Create a `TxContext` from a `TxContextBuilder`.
+// This is an internal function called when building a `Scenario`.
+fun make_tx_context(builder: TxContextBuilder, tx_hash: vector<u8>): TxContext {
+    tx_context::create(
+        builder.sender,
+        tx_hash,
+        builder.epoch,
+        builder.epoch_timestamp_ms,
+        builder.ids_created,
+        // rgp must be set from the caller always
+        builder.rgp.destroy_some(),
+        builder.gas_price,
+        builder.gas_budget,
+        builder.sponsor,
+    )
 }
 
 /// Begin a new multi-transaction test scenario in a context where `sender` is the tx sender
@@ -103,11 +220,23 @@ public fun begin(sender: address): Scenario {
     }
 }
 
+/// Begin a new multi-transaction test scenario with a give `rgp` and `TxContextBuilder`.
+public fun begin_with_context(ctx_builder: TxContextBuilder): Scenario {
+    let txn_number = 0;
+    assert!(ctx_builder.rgp.is_some());
+    let hash = tx_context::dummy_tx_hash_with_hint(txn_number);
+    let ctx = ctx_builder.make_tx_context(hash);
+    Scenario {
+        txn_number,
+        ctx,
+    }
+}
+
 /// Advance the scenario to a new transaction where `sender` is the transaction sender
 /// All objects transferred will be moved into the inventories of the account or the global
 /// inventory. In other words, in order to access an object with one of the various "take"
 /// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
-/// `next_tx`.
+/// `next_tx` or `next_with_context`.
 /// Returns the results from the previous transaction
 /// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
 /// Will abort if TransactionEffects cannot be generated
@@ -127,6 +256,54 @@ public fun next_tx(scenario: &mut Scenario, sender: address): TransactionEffects
         );
     // end the transaction
     end_transaction()
+}
+
+/// Advance the scenario to a new transaction with a given `TxContextBuilder`.
+/// Ensures that `epoch` and `epoch_timestamp_ms` are not in the past.
+/// If `rgp` is set, `epoch` must be greater than current epoch.
+/// If a later epoch is provided, there will be as many transactions as epoch changes needed.
+/// All objects transferred will be moved into the inventories of the account or the global
+/// inventory. In other words, in order to access an object with one of the various "take"
+/// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
+/// `next_tx` or `next_tx_wißth_context`.
+/// Returns the results from the previous transaction
+/// Will abort if shared or immutable objects were deleted, transferred, or wrapped.
+/// Will abort if TransactionEffects cannot be generated
+public fun next_with_context(
+    scenario: &mut Scenario,
+    ctx_builder: TxContextBuilder,
+): TransactionEffects {
+    let epoch = ctx_builder.epoch;
+    let mut current_epoch = scenario.ctx.epoch();
+    assert!(epoch >= current_epoch);
+    // if `rgp` is set and it's not what is already there,
+    // epoch must be greater than current epoch
+    assert!(
+        ctx_builder.rgp.is_none() || ctx_builder
+            .rgp
+            .contains(&scenario.ctx.reference_gas_price()) ||
+        epoch > current_epoch,
+    );
+    assert!(ctx_builder.epoch_timestamp_ms >= scenario.ctx.epoch_timestamp_ms());
+    if (epoch == current_epoch) {
+        scenario.txn_number = scenario.txn_number + 1;
+        let hash = tx_context::dummy_tx_hash_with_hint(scenario.txn_number);
+        scenario.ctx = ctx_builder.make_tx_context(hash);
+        end_transaction()
+    } else {
+        loop {
+            current_epoch = current_epoch + 1;
+            scenario.txn_number = scenario.txn_number + 1;
+            let builder = ctx_builder;
+            builder.set_epoch(current_epoch);
+            let hash = tx_context::dummy_tx_hash_with_hint(scenario.txn_number);
+            scenario.ctx = builder.make_tx_context(hash);
+            let effects = end_transaction();
+            if (current_epoch == epoch) {
+                return effects
+            }
+        }
+    }
 }
 
 /// Advance the scenario to a new epoch and end the transaction
@@ -151,10 +328,12 @@ public fun later_epoch(
 /// Advance the scenario to a future `epoch`. Will abort if the `epoch` is in the past.
 public fun skip_to_epoch(scenario: &mut Scenario, epoch: u64) {
     assert!(epoch >= scenario.ctx.epoch());
-    (epoch - scenario.ctx.epoch()).do!(|_| {
-        scenario.ctx.increment_epoch_number();
-        end_transaction()
-    })
+    (epoch - scenario.ctx.epoch()).do!(
+        |_| {
+            scenario.ctx.increment_epoch_number();
+            end_transaction()
+        },
+    )
 }
 
 /// Ends the test scenario
