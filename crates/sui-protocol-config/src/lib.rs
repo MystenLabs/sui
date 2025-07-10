@@ -731,6 +731,10 @@ struct FeatureFlags {
     // If true, record the time estimate processed in the consensus commit prologue.
     #[serde(skip_serializing_if = "is_false")]
     record_time_estimate_processed: bool,
+
+    // If true, include indirect state in the additional consensus digest.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_consensus_digest_indirect_state: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2084,6 +2088,11 @@ impl ProtocolConfig {
 
     pub fn record_time_estimate_processed(&self) -> bool {
         self.feature_flags.record_time_estimate_processed
+    }
+
+    pub fn additional_consensus_digest_indirect_state(&self) -> bool {
+        self.feature_flags
+            .additional_consensus_digest_indirect_state
     }
 }
 
