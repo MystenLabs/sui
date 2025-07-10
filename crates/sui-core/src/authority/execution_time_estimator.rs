@@ -16,7 +16,8 @@ use itertools::Itertools;
 use lru::LruCache;
 use mysten_common::{assert_reachable, debug_fatal, in_antithesis, in_test_configuration};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use rand::{random, rngs, Rng, SeedableRng};
+use once_cell::sync::OnceCell;
+use rand::{random, rngs, thread_rng, Rng, SeedableRng};
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
@@ -161,7 +162,7 @@ impl ExecutionTimeObserver {
                     }
                     Some((tx, timings, total_duration)) = rx_local_execution_time.recv() => {
                         observer
-                            .record_local_observations(&tx, &timings, total_duration);
+                            .record_local_observations(&tx, timings, total_duration);
                     }
                     else => { break }
                 }
@@ -209,19 +210,30 @@ impl ExecutionTimeObserver {
     fn record_local_observations(
         &mut self,
         tx: &ProgrammableTransaction,
-        timings: &[ExecutionTiming],
-        total_duration: Duration,
+        mut timings: Vec<ExecutionTiming>,
+        mut total_duration: Duration,
     ) {
         let _scope = monitored_scope("ExecutionTimeObserver::record_local_observations");
 
-        // Simulate real total duration timing in SIM and antithesis tests to trigger overutilization.
-        // Commands are executed serially, so we multiply
-        // the duration by the number of commands as a rough heuristic.
-        let total_duration = if in_antithesis() || cfg!(msim) {
-            self.get_test_duration(None) * tx.commands.len() as u32
-        } else {
-            total_duration
-        };
+        // Simulate duration in tests to trigger occational
+        // congestion control & defer/cancel some transactions
+        if in_antithesis() || cfg!(msim) {
+            let mut total_injected_duration = Duration::ZERO;
+            for (i, timing) in timings.iter_mut().enumerate() {
+                let command = &tx.commands[i];
+
+                let key = ExecutionTimeObservationKey::from_command(command);
+                let duration = self.get_test_duration(Some(&key));
+                timing.set_duration_for_testing(duration);
+                total_injected_duration += duration;
+            }
+            let random_overhead =
+                thread_rng().gen_range(Duration::from_millis(1)..Duration::from_millis(5));
+            total_duration = total_injected_duration + random_overhead;
+        }
+
+        let total_duration = total_duration;
+        let timings = timings;
 
         assert!(tx.commands.len() >= timings.len());
 
@@ -346,12 +358,6 @@ impl ExecutionTimeObserver {
             // Update moving-average observation for the command.
             let key = ExecutionTimeObservationKey::from_command(command);
 
-            // Simulate duration in tests to trigger occational
-            // congestion control & defer/cancel some transactions
-            if in_antithesis() || cfg!(msim) {
-                command_duration = self.get_test_duration(Some(&key));
-            }
-
             let local_observation =
                 self.local_observations
                     .get_or_insert_mut(key.clone(), || LocalObservations {
@@ -420,24 +426,24 @@ impl ExecutionTimeObserver {
             panic!("get_test_duration called in non-test configuration");
         }
 
-        thread_local! {
-            static PER_TEST_SEED: u64 = random::<u64>();
-        }
-        PER_TEST_SEED.with(|seed| {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            seed.hash(&mut hasher);
-            if let Some(key) = key {
-                key.hash(&mut hasher); // Use command key for variation if provided
-            }
-            let seed_value = hasher.finish();
-            let mut rng = rngs::StdRng::seed_from_u64(seed_value);
+        static PER_TEST_SEED: OnceCell<u64> = OnceCell::new();
+        let seed = *PER_TEST_SEED.get_or_init(random::<u64>);
 
-            // Normal duration range
-            let mut test_duration =
-                rng.gen_range(Duration::from_millis(400)..Duration::from_millis(600));
-            test_duration += rng.gen_range(Duration::from_micros(0)..Duration::from_micros(1000));
-            test_duration
-        })
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        seed.hash(&mut hasher);
+        if let Some(key) = key {
+            key.hash(&mut hasher); // Use command key for variation if provided
+        }
+        let seed_value = hasher.finish();
+        let mut rng = rngs::StdRng::seed_from_u64(seed_value);
+
+        // Normal duration range
+        let mut test_duration =
+            rng.gen_range(Duration::from_millis(10)..Duration::from_millis(600));
+
+        test_duration +=
+            thread_rng().gen_range(Duration::from_millis(0)..Duration::from_millis(10));
+        test_duration
     }
 
     fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
@@ -804,7 +810,7 @@ mod tests {
         // Record an observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
         let total_duration = Duration::from_millis(110);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, timings, total_duration);
 
         let key = ExecutionTimeObservationKey::MoveEntryPoint {
             package,
@@ -825,7 +831,7 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
         let total_duration = Duration::from_millis(120);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, timings, total_duration);
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
@@ -840,7 +846,7 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(130);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, timings, total_duration);
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
@@ -866,7 +872,7 @@ mod tests {
         // Record last observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(160);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, timings, total_duration);
 
         // Verify that moving average is the same and a new observation was shared, as
         // enough time has now elapsed
@@ -946,7 +952,7 @@ mod tests {
             ExecutionTiming::Success(Duration::from_millis(50)),
         ];
         let total_duration = Duration::from_millis(180);
-        observer.record_local_observations(&ptb, &timings, total_duration);
+        observer.record_local_observations(&ptb, timings, total_duration);
 
         // Check that both commands were recorded
         let move_key = ExecutionTimeObservationKey::MoveEntryPoint {
@@ -1046,7 +1052,7 @@ mod tests {
 
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
+        observer.record_local_observations(&ptb, timings, Duration::from_secs(2));
         assert!(observer
             .local_observations
             .get(&key)
@@ -1056,7 +1062,7 @@ mod tests {
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
+        observer.record_local_observations(&ptb, timings, Duration::from_secs(2));
         assert_eq!(
             observer
                 .local_observations
@@ -1071,7 +1077,7 @@ mod tests {
         // Third execution with significant upward diff and high utilization - should share again
         tokio::time::advance(Duration::from_secs(5)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(3))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(5));
+        observer.record_local_observations(&ptb, timings, Duration::from_secs(5));
         assert_eq!(
             observer
                 .local_observations
@@ -1087,7 +1093,7 @@ mod tests {
         // (downward changes are only shared for indebted objects, not overutilized ones)
         tokio::time::advance(Duration::from_millis(150)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_millis(500));
+        observer.record_local_observations(&ptb, timings, Duration::from_millis(500));
         assert_eq!(
             observer
                 .local_observations
@@ -1102,7 +1108,7 @@ mod tests {
         // Fifth execution after utilization drops - should not share upward diff since not overutilized
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(11))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(11));
+        observer.record_local_observations(&ptb, timings, Duration::from_secs(11));
         assert_eq!(
             observer
                 .local_observations
@@ -1186,7 +1192,7 @@ mod tests {
 
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(1));
+        observer.record_local_observations(&ptb, timings, Duration::from_secs(1));
         assert!(observer
             .local_observations
             .get(&key)
@@ -1196,7 +1202,7 @@ mod tests {
 
         // Second observation - no time has passed, so now utilization is high; should share upward change
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(2))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
+        observer.record_local_observations(&ptb, timings, Duration::from_secs(2));
         assert_eq!(
             observer
                 .local_observations
@@ -1218,7 +1224,7 @@ mod tests {
         // This should share because the object is indebted
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(300))];
-        observer.record_local_observations(&ptb, &timings, Duration::from_millis(300));
+        observer.record_local_observations(&ptb, timings, Duration::from_millis(300));
 
         // Moving average should be (1s + 2s + 0.3s) / 3 = 1.1s
         // This downward change should have been shared for indebted object
