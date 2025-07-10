@@ -35,6 +35,7 @@
 fragment Cp on Checkpoint {
   sequenceNumber
   digest
+  previousCheckpointDigest
 }
 
 //# run-graphql
@@ -42,6 +43,7 @@ fragment Cp on Checkpoint {
   checkpoint(sequenceNumber: 4) {
     sequenceNumber
     digest
+    previousCheckpointDigest
   }
 }
 
@@ -50,5 +52,6 @@ fragment Cp on Checkpoint {
   multiGetCheckpoints(keys: [2, 100, 0, 200]) {
     sequenceNumber
     digest
+    previousCheckpointDigest
   }
 }

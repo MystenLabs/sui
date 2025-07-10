@@ -33,6 +33,10 @@ type Checkpoint {
 	"""
 	digest: String
 	"""
+	The digest of the checkpoint at the previous sequence number.
+	"""
+	previousCheckpointDigest: String
+	"""
 	The epoch that this checkpoint is part of.
 	"""
 	epoch: Epoch

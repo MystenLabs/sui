@@ -73,6 +73,17 @@ impl CheckpointContents {
         Ok(Some(summary.digest().base58_encode()))
     }
 
+    /// The digest of the checkpoint at the previous sequence number.
+    async fn previous_checkpoint_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(summary
+            .previous_digest
+            .as_ref()
+            .map(|digest| digest.base58_encode()))
+    }
+
     /// The epoch that this checkpoint is part of.
     async fn epoch(&self) -> Option<Epoch> {
         let (summary, _, _) = self.contents.as_ref()?;
