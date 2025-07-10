@@ -969,7 +969,7 @@ where
                             }
                         }
                         Err(err) => {
-                            debug!(
+                            warn!(
                                 "Received error from validator {:?}: {:?}",
                                 name.concise(),
                                 err
