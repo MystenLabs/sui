@@ -12,8 +12,9 @@ CHANGELOG.md
 /crates/sui-framework/src/natives/ @dariorussi
 
 # GraphQL RPC working group
-/crates/sui-graphql-rpc/ @amnn @wlmyng @stefan-mysten @emmazzz
-/crates/sui-graphql-e2e-tests/ @amnn @wlmyng @stefan-mysten @emmazzz
+/crates/sui-graphql* @MystenLabs/devx-indexers-and-rpcs
+/crates/sui-indexer* @MystenLabs/devx-indexers-and-rpcs
+/crates/sui-pg-db @MystenLabs/devx-indexers-and-rpcs
 
 # Consensus working group
 /consensus/ @MystenLabs/consensus
