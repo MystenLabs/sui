@@ -2953,7 +2953,7 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
             ));
             context.error_type(loc)
         }
-        sp!(tloc, Var(i)) if !context.subst.is_num_var(i) => {
+        sp!(tloc, Var(i)) if !context.subst.is_num_var(&i) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
