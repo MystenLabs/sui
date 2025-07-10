@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::key_identity::{get_identity_address_from_keystore, KeyIdentity};
 use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
 use anyhow::anyhow;
 use aws_sdk_kms::{
@@ -37,6 +36,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_keys::key_derive::generate_new_key;
+use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
     write_keypair_to_file,
@@ -636,11 +636,11 @@ impl KeyToolCommand {
                     Ok(skp) => {
                         info!("Importing Bech32 encoded private key to keystore");
                         let mut key = Key::from(&skp);
-                        keystore.add_key(alias.clone(), skp)?;
+                        keystore.import(alias.clone(), skp)?;
 
                         let alias = match alias {
                             Some(x) => x,
-                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                            None => keystore.get_alias(&key.sui_address)?,
                         };
 
                         key.alias = Some(alias);
@@ -654,12 +654,12 @@ impl KeyToolCommand {
                             derivation_path,
                             alias.clone(),
                         )?;
-                        let skp = keystore.get_key(&sui_address)?;
+                        let skp = keystore.export(&sui_address)?;
                         let mut key = Key::from(skp);
 
                         let alias = match alias {
                             Some(x) => x,
-                            None => keystore.get_alias_by_address(&key.sui_address)?,
+                            None => keystore.get_alias(&key.sui_address)?,
                         };
 
                         key.alias = Some(alias);
@@ -668,10 +668,10 @@ impl KeyToolCommand {
                 }
             }
             KeyToolCommand::Export { key_identity } => {
-                let address = get_identity_address_from_keystore(key_identity, keystore)?;
-                let skp = keystore.get_key(&address)?;
+                let address = keystore.get_by_identity(key_identity)?;
+                let skp = keystore.export(&address)?;
                 let mut key = Key::from(skp);
-                key.alias = keystore.get_alias_by_address(&key.sui_address).ok();
+                key.alias = keystore.get_alias(&key.sui_address).ok();
                 let key = ExportedKey {
                     exported_private_key: skp
                         .encode()
@@ -682,11 +682,11 @@ impl KeyToolCommand {
             }
             KeyToolCommand::List { sort_by_alias } => {
                 let mut keys = keystore
-                    .keys()
+                    .entries()
                     .into_iter()
                     .map(|pk| {
                         let mut key = Key::from(pk);
-                        key.alias = keystore.get_alias_by_address(&key.sui_address).ok();
+                        key.alias = keystore.get_alias(&key.sui_address).ok();
                         key
                     })
                     .collect::<Vec<Key>>();
@@ -830,7 +830,7 @@ impl KeyToolCommand {
                 data,
                 intent,
             } => {
-                let address = get_identity_address_from_keystore(address, keystore)?;
+                let address = keystore.get_by_identity(address)?;
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 let intent_clone = intent.clone();
                 let msg: TransactionData =
@@ -1013,7 +1013,7 @@ impl KeyToolCommand {
                 let pk = skp.public();
                 let ephemeral_key_identifier: SuiAddress = (&skp.public()).into();
                 println!("Ephemeral key identifier: {ephemeral_key_identifier}");
-                keystore.add_key(None, skp)?;
+                keystore.import(None, skp)?;
 
                 let mut eph_pk_bytes = vec![pk.flag()];
                 eph_pk_bytes.extend(pk.as_ref());

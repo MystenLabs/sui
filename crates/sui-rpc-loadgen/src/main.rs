@@ -141,7 +141,7 @@ fn get_keypair() -> Result<SignerInfo> {
     let keystore_path = get_sui_config_directory().join("sui.keystore");
     let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
     let active_address = keystore.addresses().pop().unwrap();
-    let keypair: &SuiKeyPair = keystore.get_key(&active_address)?;
+    let keypair: &SuiKeyPair = keystore.export(&active_address)?;
     println!("using address {active_address} for signing");
     Ok(SignerInfo::new(keypair.encode_base64()))
 }
