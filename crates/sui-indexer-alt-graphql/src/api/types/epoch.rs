@@ -12,17 +12,17 @@ use sui_indexer_alt_reader::{
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 
+use super::{
+    move_package::{self, CSysPackage, MovePackage},
+    object::{self, Object},
+    protocol_configs::ProtocolConfigs,
+};
+use crate::task::watermark::Watermarks;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
-};
-
-use super::{
-    move_package::{self, CSysPackage, MovePackage},
-    object::{self, Object},
-    protocol_configs::ProtocolConfigs,
 };
 
 pub(crate) struct Epoch {
@@ -66,6 +66,23 @@ impl Epoch {
     #[graphql(flatten)]
     async fn end(&self, ctx: &Context<'_>) -> Result<EpochEnd, RpcError> {
         EpochEnd::fetch(ctx, &self.start.scope, self.epoch_id).await
+    }
+
+    /// The total number of checkpoints in this epoch.
+    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        let last = match &self.end(ctx).await?.contents {
+            Some(last) => last.cp_hi as u64,
+            None => {
+                let watermark: &Arc<Watermarks> = ctx.data()?;
+                watermark.high_watermark().checkpoint()
+            }
+        };
+        let first = match &self.start.contents {
+            Some(first) => first.cp_lo as u64,
+            None => return Ok(None),
+        };
+
+        Ok(Some(UInt53::from(last - first)))
     }
 }
 
