@@ -378,22 +378,6 @@ div[role="tabpanel"] {
   @apply my-8 flex flex-row items-center;
 }
 
-.ais-SearchBox-form button {
-  @apply cursor-pointer;
-}
-
-.ais-SearchBox-form .ais-SearchBox-input {
-  @apply h-12 w-[90%] text-lg p-2;
-}
-
-.ais-SearchBox-form .ais-SearchBox-submit {
-  @apply h-12 w-12 ml-2;
-}
-
-.ais-SearchBox-form .ais-SearchBox-reset {
-  @apply h-12 w-12 ml-2;
-}
-
 .search-page-wrapper main p {
   @apply !not-italic;
 }
@@ -403,10 +387,6 @@ div[role="tabpanel"] {
 
 .ais-RefinementList-list {
   @apply list-none p-0 m-0;
-}
-
-.ais-RefinementList-item {
-  
 }
 
 .ais-RefinementList-checkbox {
