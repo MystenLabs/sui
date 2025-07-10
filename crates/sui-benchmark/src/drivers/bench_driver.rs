@@ -31,7 +31,7 @@ use crate::workloads::payload::Payload;
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
-use mysten_metrics::GaugeGuardFutureExt;
+use mysten_metrics::InflightGuardFutureExt as _;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
@@ -962,14 +962,13 @@ async fn run_bench_worker(
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let start = Arc::new(Instant::now());
+                    let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move  {
-                            let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]);
-                            let _guard = mysten_metrics::GaugeGuard::acquire(&num_in_flight_metric);
                             metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                        });
+                        }).count_in_flight(num_in_flight_metric);
                     futures.push(Box::pin(res));
                     continue
                 }
@@ -984,16 +983,15 @@ async fn run_bench_worker(
                     let tx = payload.make_transaction();
                     let start = Arc::new(Instant::now());
                     let metrics = Arc::clone(&metrics);
+                    let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                     // TODO: clone committee for each request is not ideal.
                     let committee = worker.proxy.clone_committee();
                     let res = worker.proxy
                         .execute_transaction_block(tx.clone())
                     .then(|(client_type, res)| async move {
-                        let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string(), &client_type.to_string()]);
-                        let _guard = mysten_metrics::GaugeGuard::acquire(&num_in_flight_metric);
                         metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
                         handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                    });
+                    }).count_in_flight(num_in_flight_metric);
                     futures.push(Box::pin(res));
                 }
             }
