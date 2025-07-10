@@ -743,6 +743,7 @@ mod object_cost_tests {
                 stored_observations_num_included_checkpoints: 10,
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -874,6 +875,7 @@ mod object_cost_tests {
                 stored_observations_num_included_checkpoints: 10,
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1047,6 +1049,7 @@ mod object_cost_tests {
                 stored_observations_num_included_checkpoints: 10,
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1242,6 +1245,7 @@ mod object_cost_tests {
                 stored_observations_num_included_checkpoints: 10,
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1414,6 +1418,7 @@ mod object_cost_tests {
                 stored_observations_num_included_checkpoints: 10,
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
