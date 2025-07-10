@@ -78,7 +78,7 @@ impl WalletContext {
         input: Option<KeyIdentity>,
     ) -> Result<SuiAddress, anyhow::Error> {
         if let Some(key_identity) = input {
-            Ok(self.config.keystore.get_by_identity(key_identity)?.into())
+            Ok(self.config.keystore.get_by_identity(key_identity)?)
         } else {
             self.active_address()
         }
