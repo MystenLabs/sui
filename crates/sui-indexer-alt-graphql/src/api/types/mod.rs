@@ -10,5 +10,6 @@ pub(crate) mod object;
 pub(crate) mod object_change;
 pub(crate) mod protocol_configs;
 pub(crate) mod service_config;
+pub(crate) mod signature;
 pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
