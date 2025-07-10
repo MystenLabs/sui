@@ -66,7 +66,7 @@ impl TransactionContents {
 
         let sender = content.data()?.sender();
         Ok((sender != NativeSuiAddress::ZERO)
-            .then(|| Address::with_address(self.scope.clone(), sender.into())))
+            .then(|| Address::with_address(self.scope.clone(), sender)))
     }
 
     /// The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
