@@ -3792,6 +3792,7 @@ impl ProtocolConfig {
                 }
                 88 => {
                     cfg.feature_flags.record_time_estimate_processed = true;
+                    cfg.feature_flags.additional_consensus_digest_indirect_state = true;
                     cfg.tx_context_rgp_cost_base = Some(30);
                 }
                 // Use this template when making changes:

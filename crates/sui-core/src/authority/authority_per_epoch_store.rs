@@ -2202,10 +2202,9 @@ impl AuthorityPerEpochStore {
 
     fn should_defer(
         &self,
-        execution_time_estimator: Option<&ExecutionTimeEstimator>,
+        tx_cost: Option<u64>,
         cert: &VerifiedExecutableTransaction,
         commit_info: &ConsensusCommitInfo,
-        indirect_state_observer: &mut IndirectStateObserver,
         dkg_failed: bool,
         generating_randomness: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
@@ -2231,11 +2230,10 @@ impl AuthorityPerEpochStore {
         // Defer transaction if it uses shared objects that are congested.
         if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
             .should_defer_due_to_object_congestion(
-                execution_time_estimator,
+                tx_cost,
                 cert,
                 previously_deferred_tx_digests,
                 commit_info,
-                indirect_state_observer,
             )
         {
             Some((
@@ -4292,11 +4290,16 @@ impl AuthorityPerEpochStore {
             return Ok(ConsensusCertificateResult::Ignored);
         }
 
-        let deferral_info = self.should_defer(
+        let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
             &transaction,
-            commit_info,
             indirect_state_observer,
+        );
+
+        let deferral_info = self.should_defer(
+            tx_cost,
+            &transaction,
+            commit_info,
             dkg_failed,
             generating_randomness,
             previously_deferred_tx_digests,
@@ -4360,11 +4363,7 @@ impl AuthorityPerEpochStore {
         }
 
         // This certificate will be scheduled. Update object execution cost.
-        shared_object_congestion_tracker.bump_object_execution_cost(
-            execution_time_estimator,
-            indirect_state_observer,
-            &transaction,
-        );
+        shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &transaction);
 
         Ok(ConsensusCertificateResult::SuiTransaction(transaction))
     }
