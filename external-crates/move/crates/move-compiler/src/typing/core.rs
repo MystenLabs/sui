@@ -1314,7 +1314,7 @@ impl Subst {
     pub fn new_divergent_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
         let tvar = counter.next();
         assert!(
-            self.var_constraints
+            self.tvar_constraints
                 .insert(tvar, VarConstraint::Divergent(loc))
                 .is_none()
         );
@@ -2416,6 +2416,8 @@ fn solve_builtin_type_constraint(
         UnresolvedError => (),
         // Will fail later in compiling, either through dead code, or unknown type variable
         Anything => (),
+        // Will never arrive here, so it does not matter
+        Void => (),
         Apply(abilities_opt, sp!(_, Builtin(sp!(_, b))), args) if builtin_set.contains(b) => {
             if let Some(abilities) = abilities_opt {
                 assert!(

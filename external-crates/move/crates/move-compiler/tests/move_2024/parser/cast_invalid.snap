@@ -32,15 +32,6 @@ error[E01015]: ambiguous 'as'
 6 │         loop {} as u32;
   │         ^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
 
-error[E04003]: built-in operation not supported
-  ┌─ tests/move_2024/parser/cast_invalid.move:6:9
-  │
-6 │         loop {} as u32;
-  │         ^^^^^^^
-  │         │
-  │         Invalid argument to 'as'
-  │         Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-
 error[E01015]: ambiguous 'as'
   ┌─ tests/move_2024/parser/cast_invalid.move:7:9
   │
@@ -59,44 +50,17 @@ error[E01015]: ambiguous 'as'
 9 │         return as u32;
   │         ^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
 
-error[E04003]: built-in operation not supported
-  ┌─ tests/move_2024/parser/cast_invalid.move:9:9
-  │
-9 │         return as u32;
-  │         ^^^^^^
-  │         │
-  │         Invalid argument to 'as'
-  │         Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-
 error[E01015]: ambiguous 'as'
    ┌─ tests/move_2024/parser/cast_invalid.move:11:13
    │
 11 │             break as u32;
    │             ^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
 
-error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/cast_invalid.move:11:13
-   │
-11 │             break as u32;
-   │             ^^^^^
-   │             │
-   │             Invalid argument to 'as'
-   │             Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-
 error[E01015]: ambiguous 'as'
    ┌─ tests/move_2024/parser/cast_invalid.move:12:13
    │
 12 │             continue as u32;
    │             ^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
-
-error[E04003]: built-in operation not supported
-   ┌─ tests/move_2024/parser/cast_invalid.move:12:13
-   │
-12 │             continue as u32;
-   │             ^^^^^^^^
-   │             │
-   │             Invalid argument to 'as'
-   │             Found: '_'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
 
 error[E01015]: ambiguous 'as'
    ┌─ tests/move_2024/parser/cast_invalid.move:14:9
