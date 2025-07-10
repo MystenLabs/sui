@@ -6,7 +6,7 @@ use sui_types::effects::{IDOperation, ObjectChange as NativeObjectChange};
 
 use crate::{api::scalars::sui_address::SuiAddress, scope::Scope};
 
-use super::{addressable::Addressable, object::Object};
+use super::{address::Address, object::Object};
 
 pub(crate) struct ObjectChange {
     pub(crate) scope: Scope,
@@ -32,8 +32,8 @@ impl ObjectChange {
             return None;
         };
 
-        let addressable = Addressable::with_address(self.scope.clone(), id.into());
-        Some(Object::with_ref(addressable, version, digest))
+        let address = Address::with_address(self.scope.clone(), id.into());
+        Some(Object::with_ref(address, version, digest))
     }
 
     /// The contents of the object immediately after the transaction.
@@ -48,8 +48,8 @@ impl ObjectChange {
             return None;
         };
 
-        let addressable = Addressable::with_address(self.scope.clone(), id.into());
-        Some(Object::with_ref(addressable, version, digest))
+        let address = Address::with_address(self.scope.clone(), id.into());
+        Some(Object::with_ref(address, version, digest))
     }
 
     /// Whether the ID was created in this transaction.

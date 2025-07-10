@@ -4,7 +4,7 @@
 use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use anyhow::{self, Context};
-use api::types::{addressable::IAddressable, object::IObject};
+use api::types::{address::IAddressable, object::IObject};
 use async_graphql::{
     extensions::ExtensionFactory, http::GraphiQLSource, EmptyMutation, EmptySubscription,
     ObjectType, Schema, SchemaBuilder, SubscriptionType,
