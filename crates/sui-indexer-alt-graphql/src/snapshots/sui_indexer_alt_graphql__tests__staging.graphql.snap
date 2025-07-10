@@ -2,17 +2,10 @@
 source: crates/sui-indexer-alt-graphql/src/lib.rs
 expression: sdl
 ---
-type Address {
+type Address implements IAddressable {
 	"""
-	The Address' identifier.
+	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
-	address: SuiAddress!
-}
-
-"""
-An entity that has an address, could be an account or an object (but never both).
-"""
-type Addressable implements IAddressable {
 	address: SuiAddress!
 }
 
