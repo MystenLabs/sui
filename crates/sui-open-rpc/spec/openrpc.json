@@ -1340,6 +1340,7 @@
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
+                "ignore_execution_time_observations_after_certs_closed": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
