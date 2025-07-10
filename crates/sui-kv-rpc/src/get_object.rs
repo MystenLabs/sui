@@ -3,13 +3,13 @@
 
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::Object;
+use sui_rpc::proto::sui::rpc::v2beta2::{GetObjectRequest, GetObjectResponse, GetObjectResult};
 use sui_rpc_api::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc_api::{
-    ledger_service::validate_get_object_requests,
-    proto::rpc::v2beta::{
-        BatchGetObjectsRequest, BatchGetObjectsResponse, GetObjectRequest, Object,
-    },
-    ErrorReason, ObjectNotFoundError, RpcError,
+    ledger_service::validate_get_object_requests, ErrorReason, ObjectNotFoundError, RpcError,
 };
 use sui_types::storage::ObjectKey;
 
@@ -20,7 +20,7 @@ pub(crate) async fn get_object(
         version,
         read_mask,
     }: GetObjectRequest,
-) -> Result<Object, RpcError> {
+) -> Result<GetObjectResponse, RpcError> {
     let (requests, read_mask) =
         validate_get_object_requests(vec![(object_id, version)], read_mask)?;
     let (object_id, version) = requests[0];
@@ -37,8 +37,10 @@ pub(crate) async fn get_object(
     };
     let mut message = Object::default();
     // TODO: support json read mask
-    message.merge(sui_sdk_types::Object::try_from(object)?, &read_mask);
-    Ok(message)
+    message.merge(object, &read_mask);
+    Ok(GetObjectResponse {
+        object: Some(message),
+    })
 }
 
 pub(crate) async fn batch_get_objects(
@@ -69,15 +71,25 @@ pub(crate) async fn batch_get_objects(
             )
         })
         .collect();
-    let objects: Result<_, RpcError> = client
-        .get_objects(&object_keys)
-        .await?
+    let objects = client.get_objects(&object_keys).await?;
+    let mut objects_iter = objects.into_iter().peekable();
+    let objects = object_keys
         .into_iter()
-        .map(|object| {
-            let mut message = Object::default();
-            message.merge(sui_sdk_types::Object::try_from(object)?, &read_mask);
-            Ok(message)
+        .map(|object_key| {
+            if let Some(obj) = objects_iter.peek() {
+                if object_key.0 == obj.id() && object_key.1 == obj.version() {
+                    let object = objects_iter.next().expect("invariant's checked above");
+                    let mut message = Object::default();
+                    message.merge(object, &read_mask);
+                    return GetObjectResult::new_object(message);
+                }
+            }
+            let err: RpcError =
+                ObjectNotFoundError::new_with_version(object_key.0.into(), object_key.1.into())
+                    .into();
+            GetObjectResult::new_error(err.into_status_proto())
         })
         .collect();
-    Ok(BatchGetObjectsResponse { objects: objects? })
+
+    Ok(BatchGetObjectsResponse { objects })
 }

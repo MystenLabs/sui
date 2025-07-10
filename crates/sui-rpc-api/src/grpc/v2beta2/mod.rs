@@ -7,3 +7,4 @@ mod move_package_service;
 mod signature_verification_service;
 mod subscription_service;
 mod transaction_execution_service;
+pub use ledger_service::protocol_config_to_proto;

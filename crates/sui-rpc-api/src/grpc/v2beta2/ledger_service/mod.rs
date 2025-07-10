@@ -23,6 +23,7 @@ mod get_epoch;
 mod get_object;
 mod get_service_info;
 mod get_transaction;
+pub use get_epoch::protocol_config_to_proto;
 
 #[tonic::async_trait]
 impl LedgerService for RpcService {

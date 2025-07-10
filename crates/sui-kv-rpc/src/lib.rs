@@ -3,11 +3,11 @@
 
 use prometheus::Registry;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
-use sui_rpc_api::proto::rpc::v2beta::{
+use sui_rpc::proto::sui::rpc::v2beta2::{
     ledger_service_server::LedgerService, BatchGetObjectsRequest, BatchGetObjectsResponse,
-    BatchGetTransactionsRequest, BatchGetTransactionsResponse, Checkpoint, Epoch,
-    ExecutedTransaction, GetCheckpointRequest, GetEpochRequest, GetObjectRequest,
-    GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, Object,
+    BatchGetTransactionsRequest, BatchGetTransactionsResponse, GetCheckpointRequest,
+    GetCheckpointResponse, GetEpochRequest, GetEpochResponse, GetObjectRequest, GetObjectResponse,
+    GetServiceInfoRequest, GetServiceInfoResponse, GetTransactionRequest, GetTransactionResponse,
 };
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
@@ -76,7 +76,7 @@ impl LedgerService for KvRpcServer {
     async fn get_object(
         &self,
         request: tonic::Request<GetObjectRequest>,
-    ) -> Result<tonic::Response<Object>, tonic::Status> {
+    ) -> Result<tonic::Response<GetObjectResponse>, tonic::Status> {
         get_object::get_object(self.client.clone(), request.into_inner())
             .await
             .map(tonic::Response::new)
@@ -96,7 +96,7 @@ impl LedgerService for KvRpcServer {
     async fn get_transaction(
         &self,
         request: tonic::Request<GetTransactionRequest>,
-    ) -> Result<tonic::Response<ExecutedTransaction>, tonic::Status> {
+    ) -> Result<tonic::Response<GetTransactionResponse>, tonic::Status> {
         get_transaction::get_transaction(self.client.clone(), request.into_inner())
             .await
             .map(tonic::Response::new)
@@ -116,7 +116,7 @@ impl LedgerService for KvRpcServer {
     async fn get_checkpoint(
         &self,
         request: tonic::Request<GetCheckpointRequest>,
-    ) -> Result<tonic::Response<Checkpoint>, tonic::Status> {
+    ) -> Result<tonic::Response<GetCheckpointResponse>, tonic::Status> {
         get_checkpoint::get_checkpoint(self.client.clone(), request.into_inner())
             .await
             .map(tonic::Response::new)
@@ -126,7 +126,7 @@ impl LedgerService for KvRpcServer {
     async fn get_epoch(
         &self,
         request: tonic::Request<GetEpochRequest>,
-    ) -> Result<tonic::Response<Epoch>, tonic::Status> {
+    ) -> Result<tonic::Response<GetEpochResponse>, tonic::Status> {
         get_epoch::get_epoch(
             self.client.clone(),
             request.into_inner(),
@@ -154,6 +154,6 @@ async fn get_service_info(
         timestamp: Some(timestamp_ms_to_proto(checkpoint.timestamp_ms)),
         lowest_available_checkpoint: Some(0),
         lowest_available_checkpoint_objects: Some(0),
-        server_version: server_version.as_ref().map(ToString::to_string),
+        server: server_version.as_ref().map(ToString::to_string),
     })
 }
