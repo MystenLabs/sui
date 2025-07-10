@@ -1026,7 +1026,7 @@ async fn start(
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
             let address: SuiAddress = kp.public().into();
-            keystore.add_key(None, SuiKeyPair::Ed25519(kp)).unwrap();
+            keystore.import(None, SuiKeyPair::Ed25519(kp)).unwrap();
             SuiClientConfig {
                 keystore,
                 envs: vec![SuiEnv {
@@ -1160,7 +1160,7 @@ async fn genesis(
                 let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
                 let mut keystore = FileBasedKeystore::new(&path)?;
                 for gas_key in GenesisConfig::benchmark_gas_keys(ips.len()) {
-                    keystore.add_key(None, gas_key)?;
+                    keystore.import(None, gas_key)?;
                 }
                 keystore.save()?;
 
@@ -1214,7 +1214,7 @@ async fn genesis(
 
     let mut keystore = FileBasedKeystore::new(&keystore_path)?;
     for key in &network_config.account_keys {
-        keystore.add_key(None, SuiKeyPair::Ed25519(key.copy()))?;
+        keystore.import(None, SuiKeyPair::Ed25519(key.copy()))?;
     }
     let active_address = keystore.addresses().pop();
 
@@ -1422,9 +1422,8 @@ async fn prompt_if_no_config(
                     Err(e) => return Err(anyhow!("{e}")),
                 }
             };
-            let (new_address, phrase, scheme) =
-                keystore.generate_and_add_new_key(key_scheme, None, None, None)?;
-            let alias = keystore.get_alias_by_address(&new_address)?;
+            let (new_address, phrase, scheme) = keystore.generate(key_scheme, None, None, None)?;
+            let alias = keystore.get_alias(&new_address)?;
             println!(
                 "Generated new keypair and alias for address with scheme {:?} [{alias}: {new_address}]",
                 scheme.to_string()

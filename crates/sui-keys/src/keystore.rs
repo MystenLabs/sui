@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
+use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
 use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
@@ -31,10 +32,23 @@ pub enum Keystore {
 }
 #[enum_dispatch]
 pub trait AccountKeystore: Send + Sync {
-    fn add_key(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
-    fn remove_key(&mut self, address: SuiAddress) -> Result<(), anyhow::Error>;
-    fn keys(&self) -> Vec<PublicKey>;
-    fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
+    fn generate(
+        &mut self,
+        key_scheme: SignatureScheme,
+        alias: Option<String>,
+        derivation_path: Option<DerivationPath>,
+        word_length: Option<String>,
+    ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
+        let (address, kp, scheme, phrase) =
+            generate_new_key(key_scheme, derivation_path, word_length)?;
+        self.import(alias, kp)?;
+        Ok((address, phrase, scheme))
+    }
+
+    fn import(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
+    fn remove(&mut self, address: impl Into<SuiAddress>) -> Result<(), anyhow::Error>;
+    fn entries(&self) -> Vec<PublicKey>;
+    fn export(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
 
     fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
 
@@ -46,24 +60,39 @@ pub trait AccountKeystore: Send + Sync {
     ) -> Result<Signature, signature::Error>
     where
         T: Serialize;
+
     fn addresses(&self) -> Vec<SuiAddress> {
-        self.keys().iter().map(|k| k.into()).collect()
+        self.entries().iter().map(|k| k.into()).collect()
     }
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)>;
     fn aliases(&self) -> Vec<&Alias>;
     fn aliases_mut(&mut self) -> Vec<&mut Alias>;
-    fn alias_names(&self) -> Vec<&str> {
-        self.aliases()
-            .into_iter()
-            .map(|a| a.alias.as_str())
-            .collect()
-    }
+
+    // fn alias_names(&self) -> Vec<&str> {
+    //     self.aliases()
+    //         .into_iter()
+    //         .map(|a| a.alias.as_str())
+    //         .collect()
+    // }
+
+    fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
+
     /// Get alias of address
-    fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
-    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error>;
-    /// Check if an alias exists by its name
-    fn alias_exists(&self, alias: &str) -> bool {
-        self.alias_names().contains(&alias)
+    fn get_by_identity(
+        &self,
+        key_identity: impl Into<KeyIdentity>,
+    ) -> Result<SuiAddress, anyhow::Error> {
+        let key_identity = key_identity.into();
+        match key_identity {
+            KeyIdentity::Address(addr) => Ok(addr),
+            KeyIdentity::Alias(alias) => Ok(self
+                .addresses_with_alias()
+                .iter()
+                .find(|(_, a)| a.alias == alias)
+                .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))?
+                .0
+                .clone()),
+        }
     }
 
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error>;
@@ -80,7 +109,7 @@ pub trait AccountKeystore: Send + Sync {
         old_alias: &str,
         new_alias: Option<&str>,
     ) -> Result<String, anyhow::Error> {
-        if !self.alias_exists(old_alias) {
+        if !self.aliases().iter().any(|a| a.alias == old_alias) {
             bail!("The provided alias {old_alias} does not exist");
         }
         let new_alias_name = self.create_alias(new_alias.map(str::to_string))?;
@@ -96,19 +125,6 @@ pub trait AccountKeystore: Send + Sync {
         Ok(new_alias_name)
     }
 
-    fn generate_and_add_new_key(
-        &mut self,
-        key_scheme: SignatureScheme,
-        alias: Option<String>,
-        derivation_path: Option<DerivationPath>,
-        word_length: Option<String>,
-    ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
-        let (address, kp, scheme, phrase) =
-            generate_new_key(key_scheme, derivation_path, word_length)?;
-        self.add_key(alias, kp)?;
-        Ok((address, phrase, scheme))
-    }
-
     fn import_from_mnemonic(
         &mut self,
         phrase: &str,
@@ -121,7 +137,7 @@ pub trait AccountKeystore: Send + Sync {
         let seed = Seed::new(&mnemonic, "");
         match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
             Ok((address, kp)) => {
-                self.add_key(alias, kp)?;
+                self.import(alias, kp)?;
                 Ok(address)
             }
             Err(e) => Err(anyhow!("error getting keypair {:?}", e)),
@@ -211,7 +227,7 @@ impl AccountKeystore for FileBasedKeystore {
         ))
     }
 
-    fn add_key(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
+    fn import(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
         let address: SuiAddress = (&keypair.public()).into();
         let alias = self.create_alias(alias)?;
         self.aliases.insert(
@@ -226,7 +242,8 @@ impl AccountKeystore for FileBasedKeystore {
         Ok(())
     }
 
-    fn remove_key(&mut self, address: SuiAddress) -> Result<(), anyhow::Error> {
+    fn remove(&mut self, address: impl Into<SuiAddress>) -> Result<(), anyhow::Error> {
+        let address: SuiAddress = address.into();
         self.aliases.remove(&address);
         self.keys.remove(&address);
         self.save()?;
@@ -247,7 +264,7 @@ impl AccountKeystore for FileBasedKeystore {
         self.aliases.values_mut().collect()
     }
 
-    fn keys(&self) -> Vec<PublicKey> {
+    fn entries(&self) -> Vec<PublicKey> {
         self.keys.values().map(|key| key.public()).collect()
     }
 
@@ -256,38 +273,40 @@ impl AccountKeystore for FileBasedKeystore {
     /// If no alias has been passed, it will generate a new alias.
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error> {
         match alias {
-            Some(a) if self.alias_exists(&a) => {
+            Some(a) if self.aliases.values().any(|x| x.alias == a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
             Some(a) => validate_alias(&a),
             None => Ok(random_name(
                 &self
-                    .alias_names()
+                    .aliases()
                     .into_iter()
-                    .map(|x| x.to_string())
+                    .map(|x| x.alias.to_string())
                     .collect::<HashSet<_>>(),
             )),
         }
     }
 
     /// Get the address by its alias
-    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
-        self.addresses_with_alias()
-            .iter()
-            .find(|x| x.1.alias == alias)
-            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
-            .map(|x| x.0)
-    }
+    // fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
+    //     self.addresses_with_alias()
+    //         .iter()
+    //         .find(|x| x.1.alias == alias)
+    //         .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
+    //         .map(|x| x.0)
+    // }
 
     /// Get the alias if it exists, or return an error if it does not exist.
-    fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
+    fn get_alias(&self, key: &SuiAddress) -> Result<String, anyhow::Error> {
+        let address: &SuiAddress = key.into();
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
             None => bail!("Cannot find alias for address {address}"),
         }
     }
 
-    fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
+    fn export(&self, key: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
+        let address: &SuiAddress = key.into();
         match self.keys.get(address) {
             Some(key) => Ok(key),
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
@@ -481,7 +500,7 @@ impl AccountKeystore for InMemKeystore {
         ))
     }
 
-    fn add_key(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
+    fn import(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error> {
         let address: SuiAddress = (&keypair.public()).into();
         let alias = alias.unwrap_or_else(|| {
             random_name(
@@ -503,7 +522,8 @@ impl AccountKeystore for InMemKeystore {
         Ok(())
     }
 
-    fn remove_key(&mut self, address: SuiAddress) -> Result<(), anyhow::Error> {
+    fn remove(&mut self, address: impl Into<SuiAddress>) -> Result<(), anyhow::Error> {
+        let address: SuiAddress = address.into();
         self.aliases.remove(&address);
         self.keys.remove(&address);
         Ok(())
@@ -514,15 +534,15 @@ impl AccountKeystore for InMemKeystore {
         self.aliases.values().collect()
     }
 
+    fn entries(&self) -> Vec<PublicKey> {
+        self.keys.values().map(|key| key.public()).collect()
+    }
+
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)> {
         self.aliases.iter().collect::<Vec<_>>()
     }
 
-    fn keys(&self) -> Vec<PublicKey> {
-        self.keys.values().map(|key| key.public()).collect()
-    }
-
-    fn get_key(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
+    fn export(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
         match self.keys.get(address) {
             Some(key) => Ok(key),
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
@@ -530,7 +550,7 @@ impl AccountKeystore for InMemKeystore {
     }
 
     /// Get alias of address
-    fn get_alias_by_address(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
+    fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
             None => bail!("Cannot find alias for address {address}"),
@@ -538,28 +558,28 @@ impl AccountKeystore for InMemKeystore {
     }
 
     /// Get the address by its alias
-    fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
-        self.addresses_with_alias()
-            .iter()
-            .find(|x| x.1.alias == alias)
-            .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
-            .map(|x| x.0)
-    }
+    // fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
+    //     self.addresses_with_alias()
+    //         .iter()
+    //         .find(|x| x.1.alias == alias)
+    //         .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
+    //         .map(|x| x.0)
+    // }
 
     /// This function returns an error if the provided alias already exists. If the alias
     /// has not already been used, then it returns the alias.
     /// If no alias has been passed, it will generate a new alias.
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error> {
         match alias {
-            Some(a) if self.alias_exists(&a) => {
+            Some(a) if self.aliases.values().any(|x| x.alias == a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
             Some(a) => validate_alias(&a),
             None => Ok(random_name(
                 &self
-                    .alias_names()
-                    .into_iter()
-                    .map(|x| x.to_string())
+                    .aliases()
+                    .iter()
+                    .map(|x| x.alias.to_string())
                     .collect::<HashSet<_>>(),
             )),
         }
