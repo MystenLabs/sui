@@ -12,14 +12,25 @@ use anyhow::Result;
 use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
 use consensus_core::{BlockAPI, CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef};
 use futures::{future::join_all, StreamExt};
-use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
+use std::{io::Write, path::PathBuf};
 use sui_config::genesis::Genesis;
-use sui_core::authority_client::AuthorityAPI;
-use sui_protocol_config::Chain;
+use sui_core::{
+    authority::execution_time_estimator::ExecutionTimeEstimator, authority_client::AuthorityAPI,
+};
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig};
 use sui_replay::{execute_replay_command, ReplayToolCommand};
 use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
-use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::{
+    committee::Committee,
+    messages_checkpoint::CheckpointSummary,
+    messages_consensus::{
+        ConsensusTransaction, ConsensusTransactionKind, ExecutionTimeObservation,
+    },
+    transaction::{
+        EndOfEpochTransactionKind, TransactionData, TransactionDataAPI, TransactionKind,
+    },
+};
 use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
@@ -53,6 +64,8 @@ pub enum ToolCommand {
         start_commit: Option<u32>,
         #[arg(long = "end-commit")]
         end_commit: Option<u32>,
+        #[arg(long = "fullnode-rpc-url")]
+        fullnode_rpc_url: String,
     },
 
     /// Inspect if a specific object is or all gas objects owned by an address are locked by validators
@@ -452,6 +465,7 @@ impl ToolCommand {
                 db_path,
                 start_commit,
                 end_commit,
+                fullnode_rpc_url,
             } => {
                 let rocks_db_store = RocksDBStore::new(&db_path);
 
@@ -462,16 +476,139 @@ impl ToolCommand {
                     .scan_commits(CommitRange::new(start_commit..=end_commit))
                     .unwrap();
 
+                let sui_client =
+                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+
+                let ckpt_summary = {
+                    let path = std::env::var("SUI_CKPT_SUMMARY").expect(
+                        "SUI_CKPT_SUMMARY env var must be set to the checkpoint summary file path",
+                    );
+                    let bytes = std::fs::read(&path).unwrap_or_else(|e| {
+                        panic!("Failed to read checkpoint summary file '{}': {}", path, e)
+                    });
+                    bcs::from_bytes::<CheckpointSummary>(&bytes)
+                        .expect("Failed to parse checkpoint summary")
+                };
+
+                let committee = Arc::new(Committee::new(
+                    ckpt_summary.epoch + 1,
+                    ckpt_summary
+                        .end_of_epoch_data
+                        .unwrap()
+                        .next_epoch_committee
+                        .into_iter()
+                        .collect(),
+                ));
+
+                let eoe_tx = {
+                    let path = std::env::var("SUI_EOE_TX")
+                        .expect("SUI_EOE_TX env var must be set to the EOE tx file path");
+                    let bytes = std::fs::read(&path)
+                        .unwrap_or_else(|e| panic!("Failed to read EOE tx file '{}': {}", path, e));
+                    bcs::from_bytes::<TransactionData>(&bytes).unwrap_or_else(|e| {
+                        panic!("Failed to parse EOE tx from file '{}': {}", path, e)
+                    })
+                };
+
+                let TransactionKind::EndOfEpochTransaction(eoe_tx) = eoe_tx.kind() else {
+                    panic!("EOE tx is not a valid EndOfEpochTransaction");
+                };
+
+                let mut protocol_version = None;
+                let mut observations = None;
+
+                for sub_tx in eoe_tx.iter() {
+                    match sub_tx {
+                        EndOfEpochTransactionKind::StoreExecutionTimeObservations(o) => {
+                            observations = Some(o);
+                        }
+                        EndOfEpochTransactionKind::ChangeEpoch(change_epoch) => {
+                            protocol_version = Some(change_epoch.protocol_version);
+                        }
+                        _ => {
+                            println!("other tx: {:?}", sub_tx);
+                        }
+                    }
+                }
+
+                let protocol_version = protocol_version.expect("protocol version not found");
+                let observations = observations.expect("observations not found").clone();
+
+                let protocol_config =
+                    ProtocolConfig::get_for_version(protocol_version, Chain::Mainnet);
+
+                let obs_iter = observations.unwrap_v1().into_iter().flat_map({
+                    let committee = committee.clone();
+                    move |(key, observations)| {
+                        let committee = committee.clone();
+                        observations
+                            .into_iter()
+                            .filter_map(move |(authority, duration)| {
+                                committee
+                                    .authority_index(&authority)
+                                    .map(|authority_index| {
+                                        (
+                                            authority_index,
+                                            0, /* generation */
+                                            key.clone(),
+                                            duration,
+                                        )
+                                    })
+                            })
+                    }
+                });
+
+                let PerObjectCongestionControlMode::ExecutionTimeEstimate(time_est_params) =
+                    &protocol_config.per_object_congestion_control_mode()
+                else {
+                    panic!("protocol_config.per_object_congestion_control_mode() is not ExecutionTimeEstimate");
+                };
+
+                let mut exec_est =
+                    ExecutionTimeEstimator::new(committee.clone(), *time_est_params, obs_iter);
+
                 for commit in commits {
                     let inner = &*commit;
                     let block_refs = inner.blocks();
                     let blocks = rocks_db_store.read_blocks(block_refs).unwrap();
+
+                    let mut observations = vec![];
+                    let mut certified_txs = vec![];
+
                     for block in blocks.iter().flatten() {
                         let data = block.transactions_data();
                         for txns in &data {
                             let tx: ConsensusTransaction = bcs::from_bytes(txns).unwrap();
-                            println!("tx key {:?}", tx.key());
+                            match tx.kind {
+                                ConsensusTransactionKind::ExecutionTimeObservation(est) => {
+                                    observations.push(est);
+                                }
+                                ConsensusTransactionKind::CertifiedTransaction(tx) => {
+                                    certified_txs.push(tx);
+                                }
+                                _ => {}
+                            }
+                            //println!("tx key {:?}", tx.key());
                         }
+                    }
+
+                    for ExecutionTimeObservation {
+                        authority,
+                        generation,
+                        estimates,
+                    } in observations
+                    {
+                        let authority_index = committee.authority_index(&authority).unwrap();
+                        exec_est.process_observations_from_consensus(
+                            authority_index,
+                            generation,
+                            &estimates,
+                        );
+                    }
+
+                    for tx in certified_txs {
+                        let estimate = exec_est.get_estimate(&tx.intent_message().value);
+                        println!("{} estimate: {}", tx.digest(), estimate.as_micros());
                     }
                     //println!("\"index\": \"{}\", \"leader\": \"{}\", \"blocks\": \"{:#?}\"", inner.index(), inner.leader(), inner.blocks());
                 }
@@ -631,6 +768,17 @@ impl ToolCommand {
                         checkpoint,
                         contents,
                     } = resp;
+
+                    let summary = checkpoint.clone().unwrap().data().clone();
+                    // write summary to file
+                    let mut file = std::fs::File::create("/tmp/ckpt_summary")
+                        .expect("Failed to create /tmp/summary");
+                    let bytes =
+                        bcs::to_bytes(&summary).expect("Failed to serialize summary to BCS");
+                    use std::io::Write;
+                    file.write_all(&bytes)
+                        .expect("Failed to write summary to /tmp/ckpt_summary");
+
                     println!("Validator: {:?}\n", name.concise());
                     println!("Checkpoint: {:?}\n", checkpoint);
                     println!("Content: {:?}\n", contents);
