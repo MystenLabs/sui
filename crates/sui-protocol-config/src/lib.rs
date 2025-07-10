@@ -3777,7 +3777,9 @@ impl ProtocolConfig {
                     }
                 }
                 87 => {
-                    cfg.feature_flags.record_time_estimate_processed = true;
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.record_time_estimate_processed = true;
+                    }
                     cfg.feature_flags.better_adapter_type_resolution_errors = true;
                 }
                 // Use this template when making changes:
