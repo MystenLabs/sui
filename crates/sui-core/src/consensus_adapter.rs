@@ -18,7 +18,9 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
-use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt, LATENCY_SEC_BUCKETS};
+use mysten_metrics::{
+    spawn_monitored_task, GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS,
+};
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
 use prometheus::HistogramVec;
@@ -815,7 +817,7 @@ impl ConsensusAdapter {
             let _permit: SemaphorePermit = self
                 .submit_semaphore
                 .acquire()
-                .count_in_flight(&self.metrics.sequencing_in_flight_semaphore_wait)
+                .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
                 .await
                 .expect("Consensus adapter does not close semaphore");
             let _in_flight_submission_guard =
