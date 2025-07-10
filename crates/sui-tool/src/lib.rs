@@ -430,6 +430,13 @@ pub async fn get_transaction_block(
                 )?;
                 writeln!(&mut s, "{:#?}", effects)?;
                 if show_input_tx {
+                    use std::fs::File;
+                    use std::io::Write;
+                    let mut file =
+                        File::create("/tmp/tx_data").expect("Failed to create /tmp/tx_data");
+                    let bytes = bcs::to_bytes(tx).expect("Failed to serialize tx_data to BCS");
+                    file.write_all(&bytes)
+                        .expect("Failed to write tx_data to /tmp/tx_data");
                     writeln!(&mut s, "{:#?}", tx)?;
                 }
             }
@@ -446,6 +453,15 @@ pub async fn get_transaction_block(
                     let tx_info = client.handle_transaction_info_request(TransactionInfoRequest {
                         transaction_digest: tx_digest,
                     }).await.unwrap_or_else(|e| panic!("Validator {:?} should have known about tx_digest: {:?}, got error: {:?}", validator_aware_of_tx.0, tx_digest, e));
+                    let tx_data = &tx_info.transaction.intent_message().value;
+                    use std::fs::File;
+                    use std::io::Write;
+                    let mut file =
+                        File::create("/tmp/tx_data").expect("Failed to create /tmp/tx_data");
+                    let bytes = bcs::to_bytes(tx_data).expect("Failed to serialize tx_data to BCS");
+                    file.write_all(&bytes)
+                        .expect("Failed to write tx_data to /tmp/tx_data");
+
                     writeln!(&mut s, "{:#?}", tx_info)?;
                 }
             }
