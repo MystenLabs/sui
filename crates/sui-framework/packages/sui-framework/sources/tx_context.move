@@ -67,14 +67,6 @@ public fun fresh_object_address(_ctx: &mut TxContext): address {
 }
 native fun fresh_id(): address;
 
-#[allow(unused_function)]
-/// Return the number of id's created by the current transaction.
-/// Hidden for now, but may expose later
-fun ids_created(_self: &TxContext): u64 {
-    native_ids_created()
-}
-native fun native_ids_created(): u64;
-
 /// Return the reference gas price in effect for the epoch the transaction
 /// is being executed in.
 public fun reference_gas_price(_self: &TxContext): u64 {
@@ -89,11 +81,57 @@ public fun gas_price(_self: &TxContext): u64 {
 }
 native fun native_gas_price(): u64;
 
+// ==== test-only functions ====
+#[test_only]
+/// Return the number of id's created by the current transaction.
+public fun ids_created(_self: &TxContext): u64 {
+    native_ids_created()
+}
+#[allow(unused_function)]
+native fun native_ids_created(): u64;
+
+#[test_only]
+/// Return the gas budget for the current transaction.
+public fun gas_budget(_self: &TxContext): u64 {
+    native_gas_budget()
+}
 #[allow(unused_function)]
 // native function to retrieve gas budget, currently not exposed
 native fun native_gas_budget(): u64;
 
-// ==== test-only functions ====
+#[test_only]
+/// Create a `TxContext` for testing. All fields can be provided.
+public fun create(
+    sender: address,
+    tx_hash: vector<u8>,
+    epoch: u64,
+    epoch_timestamp_ms: u64,
+    ids_created: u64,
+    rgp: u64,
+    gas_price: u64,
+    gas_budget: u64,
+    sponsor: Option<address>,
+): TxContext {
+    assert!(tx_hash.length() == TX_HASH_LENGTH, EBadTxHashLength);
+    replace(
+        sender,
+        tx_hash,
+        epoch,
+        epoch_timestamp_ms,
+        ids_created,
+        rgp,
+        gas_price,
+        gas_budget,
+        sponsor.to_vec(),
+    );
+    TxContext {
+        sender: @0x0,
+        tx_hash,
+        epoch: 0,
+        epoch_timestamp_ms: 0,
+        ids_created: 0,
+    }
+}
 
 #[test_only]
 /// Create a `TxContext` for testing
@@ -105,25 +143,17 @@ public fun new(
     ids_created: u64,
 ): TxContext {
     assert!(tx_hash.length() == TX_HASH_LENGTH, EBadTxHashLength);
-    replace(
+    create(
         sender,
         tx_hash,
         epoch,
         epoch_timestamp_ms,
         ids_created,
-        600, // rgp
-        700, // gas price
+        native_rgp(),
+        native_gas_price(),
         native_gas_budget(),
-        native_sponsor(),
-    );
-    // return an empty TxContext given all the info is held on the native side (call above)
-    TxContext {
-        sender: @0x0,
-        tx_hash,
-        epoch: 0,
-        epoch_timestamp_ms: 0,
-        ids_created: 0,
-    }
+        option_sponsor(),
+    )
 }
 
 #[test_only]
@@ -148,7 +178,7 @@ public fun dummy(): TxContext {
 #[test_only]
 /// Utility for creating 256 unique input hashes.
 /// These hashes are guaranteed to be unique given a unique `hint: u64`
-fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
+public fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
     let mut tx_hash = std::bcs::to_bytes(&hint);
     while (tx_hash.length() < TX_HASH_LENGTH) tx_hash.push_back(0);
     tx_hash
