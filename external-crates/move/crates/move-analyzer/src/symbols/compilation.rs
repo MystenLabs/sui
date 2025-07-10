@@ -78,6 +78,8 @@ pub struct CompiledPkgInfo {
     pub edition: Option<Edition>,
     /// Compiler info
     pub compiler_info: Option<CompilerInfo>,
+    /// IDE diagnostics related to the package
+    pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
 
 /// Precomputed information about the package and its dependencies
@@ -100,6 +102,8 @@ pub struct PrecomputedPkgInfo {
     pub edition: Option<Edition>,
     /// Compiler info
     pub compiler_info: Option<CompilerInfo>,
+    /// IDE diagnostics related to the package
+    pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
 
 /// Package data used during compilation and analysis
@@ -219,7 +223,7 @@ pub fn get_compiled_pkg(
     let mut diagnostics = None;
 
     let mut dependencies = build_plan.compute_dependencies();
-    let (cached_info_opt, mut edition, mut compiler_info) =
+    let (cached_info_opt, mut edition, mut compiler_info, other_diags) =
         if let Ok(deps_package_paths) = dependencies.make_deps_for_compiler() {
             // Partition deps_package according whether src is available
             let src_deps = deps_package_paths
@@ -284,9 +288,19 @@ pub fn get_compiled_pkg(
                 // were not used to construct pre-compiled lib in the first place
                 dependencies.remove_deps(src_names);
             }
-            (pkg_cached_deps, edition, compiler_info)
+            let other_diags = pkg_info
+                .iter()
+                .filter_map(|(p, d)| {
+                    if p != pkg_path {
+                        Some(d.lsp_diags.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            (pkg_cached_deps, edition, compiler_info, other_diags)
         } else {
-            (None, None, None)
+            (None, None, None, vec![])
         };
 
     let (full_compilation, files_to_compile) = if let Some(chached_info) = &cached_info_opt {
@@ -303,7 +317,13 @@ pub fn get_compiled_pkg(
         (true, BTreeSet::new())
     };
 
-    let mut ide_diagnostics = lsp_empty_diagnostics(mapped_files.file_name_mapping());
+    // diagnostics converted from the compiler format
+    let mut lsp_diags = BTreeMap::new();
+    // for diagnostics information that we actually send to the IDE, we need to
+    // start with empty diagnostics for all files and replace them with actual diagnostics
+    // only for files that have failures/warnings so that diagnostics for all other files
+    // (that no longer have failures/warnings) are reset
+    let mut ide_diags = lsp_empty_diagnostics(mapped_files.file_name_mapping());
     if full_compilation || !files_to_compile.is_empty() {
         let compiled_libs = cached_info_opt
             .clone()
@@ -375,17 +395,14 @@ pub fn get_compiled_pkg(
         )?;
 
         if let Some((compiler_diagnostics, failure)) = diagnostics {
-            let lsp_diagnostics =
+            lsp_diags =
                 lsp_diagnostics(&compiler_diagnostics.into_codespan_format(), &mapped_files);
-            // start with empty diagnostics for all files and replace them with actual diagnostics
-            // only for files that have failures/warnings so that diagnostics for all other files
-            // (that no longer have failures/warnings) are reset
-            ide_diagnostics.extend(lsp_diagnostics);
             if failure {
                 // just return diagnostics as we don't have typed AST that we can use to compute
                 // symbolication information
                 debug_assert!(typed_ast.is_none());
-                return Ok((None, ide_diagnostics));
+                ide_diags.extend(lsp_diags);
+                return Ok((None, ide_diags));
             }
         }
     }
@@ -412,6 +429,21 @@ pub fn get_compiled_pkg(
             files_to_compile,
         )
     };
+
+    // There may be diagnostics from other packages that still need to be displayed
+    // for files that otherwise compile without errors/warnings. An example is an
+    // error in a macro that is manifested in the file where macro is defined
+    // rather than in the file where macro is used. We need to layer these warnings
+    // on top of (potentially) empty ones for the current package.
+    for diags in other_diags {
+        for (f, dvec) in diags.iter() {
+            merge_diagnostics_for_file(&mut ide_diags, f, dvec);
+        }
+    }
+    for (f, dvec) in lsp_diags.iter() {
+        merge_diagnostics_for_file(&mut ide_diags, f, dvec);
+    }
+
     let compiled_pkg_info = CompiledPkgInfo {
         path: pkg_path.into(),
         manifest_hash,
@@ -424,8 +456,31 @@ pub fn get_compiled_pkg(
         mapped_files,
         edition,
         compiler_info,
+        lsp_diags: Arc::new(lsp_diags),
     };
-    Ok((Some(compiled_pkg_info), ide_diagnostics))
+    Ok((Some(compiled_pkg_info), ide_diags))
+}
+
+/// Helper function to merge diagnostics for a file into the IDE diagnostics map.
+/// If diagnostics for the file don't exist yet, they are inserted.
+/// If they do exist, new diagnostics are appended if they aren't already present.
+fn merge_diagnostics_for_file(
+    ide_diags: &mut BTreeMap<PathBuf, Vec<Diagnostic>>,
+    file_path: &PathBuf,
+    diagnostics: &Vec<Diagnostic>,
+) {
+    // sadly, `Diagnostic` does not implement `Hash`, only `Eq`, so the check is rather costly...
+    let ide_diags_for_file_opt = ide_diags.get_mut(file_path);
+    if ide_diags_for_file_opt.is_none() {
+        ide_diags.insert(file_path.clone(), diagnostics.clone());
+    } else {
+        let ide_diags_for_file = ide_diags_for_file_opt.unwrap();
+        for d in diagnostics {
+            if !ide_diags_for_file.contains(d) {
+                ide_diags_for_file.push(d.clone());
+            }
+        }
+    }
 }
 
 fn has_precompiled_deps(
