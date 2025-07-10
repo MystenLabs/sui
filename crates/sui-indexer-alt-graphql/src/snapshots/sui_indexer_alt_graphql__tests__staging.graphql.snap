@@ -2,6 +2,13 @@
 source: crates/sui-indexer-alt-graphql/src/lib.rs
 expression: sdl
 ---
+type Address {
+	"""
+	The Address' identifier.
+	"""
+	address: SuiAddress!
+}
+
 """
 An entity that has an address, could be an account or an object (but never both).
 """
@@ -497,6 +504,10 @@ type ProtocolConfigs {
 
 type Query {
 	"""
+	Look-up an account by its SuiAddress.
+	"""
+	address(address: SuiAddress!): Address!
+	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
 	"""
 	chainIdentifier: String!
@@ -737,6 +748,10 @@ type Transaction {
 	The results to the chain of executing this transaction.
 	"""
 	effects: TransactionEffects
+	"""
+	The address corresponding to the public key that signed this transaction. System transactions do not have senders.
+	"""
+	sender: Address
 	"""
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
