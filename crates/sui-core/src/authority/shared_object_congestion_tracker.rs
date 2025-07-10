@@ -220,7 +220,7 @@ impl SharedObjectCongestionTracker {
         cert: &VerifiedExecutableTransaction,
         indirect_state_observer: &mut IndirectStateObserver,
     ) -> Option<u64> {
-        match &self.params.mode {
+        let tx_cost = match &self.params.mode {
             PerObjectCongestionControlMode::None => None,
             PerObjectCongestionControlMode::TotalGasBudget => Some(cert.gas_budget()),
             PerObjectCongestionControlMode::TotalTxCount => Some(1),
@@ -242,25 +242,24 @@ impl SharedObjectCongestionTracker {
                     );
                 }
 
-                indirect_state_observer.observe_indirect_state(&estimate_us);
-
                 Some(estimate_us)
             }
-        }
+        };
+        indirect_state_observer.observe_indirect_state(&tx_cost);
+        tx_cost
     }
 
     // Given a transaction, returns the deferral key and the congested objects if the transaction should be deferred.
     pub fn should_defer_due_to_object_congestion(
         &self,
-        execution_time_estimator: Option<&ExecutionTimeEstimator>,
+        tx_cost: Option<u64>,
         cert: &VerifiedExecutableTransaction,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_info: &ConsensusCommitInfo,
-        indirect_state_observer: &mut IndirectStateObserver,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let commit_round = commit_info.round;
 
-        let tx_cost = self.get_tx_cost(execution_time_estimator, cert, indirect_state_observer)?;
+        let tx_cost = tx_cost?;
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {
@@ -320,8 +319,7 @@ impl SharedObjectCongestionTracker {
     // This is called when `cert` is scheduled for execution.
     pub fn bump_object_execution_cost(
         &mut self,
-        execution_time_estimator: Option<&ExecutionTimeEstimator>,
-        indirect_state_observer: &mut IndirectStateObserver,
+        tx_cost: Option<u64>,
         cert: &VerifiedExecutableTransaction,
     ) {
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
@@ -329,9 +327,7 @@ impl SharedObjectCongestionTracker {
             return;
         }
 
-        let Some(tx_cost) =
-            self.get_tx_cost(execution_time_estimator, cert, indirect_state_observer)
-        else {
+        let Some(tx_cost) = tx_cost else {
             return;
         };
 
@@ -672,7 +668,11 @@ mod object_cost_tests {
             let tx = build_transaction(&[(shared_obj_0, *mutable)], tx_gas_budget);
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
-                    Some(&execution_time_estimator),
+                    shared_object_congestion_tracker.get_tx_cost(
+                        Some(&execution_time_estimator),
+                        &tx,
+                        &mut IndirectStateObserver::new(),
+                    ),
                     &tx,
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
@@ -680,7 +680,6 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(1_500),
                     ),
-                    &mut IndirectStateObserver::new(),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -697,7 +696,11 @@ mod object_cost_tests {
             let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
             assert!(shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
-                    Some(&execution_time_estimator),
+                    shared_object_congestion_tracker.get_tx_cost(
+                        Some(&execution_time_estimator),
+                        &tx,
+                        &mut IndirectStateObserver::new(),
+                    ),
                     &tx,
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
@@ -705,7 +708,6 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(1_500),
                     ),
-                    &mut IndirectStateObserver::new(),
                 )
                 .is_none());
         }
@@ -719,7 +721,11 @@ mod object_cost_tests {
                 );
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
-                        Some(&execution_time_estimator),
+                        shared_object_congestion_tracker.get_tx_cost(
+                            Some(&execution_time_estimator),
+                            &tx,
+                            &mut IndirectStateObserver::new(),
+                        ),
                         &tx,
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
@@ -727,7 +733,6 @@ mod object_cost_tests {
                             0,
                             Duration::from_micros(1_500),
                         ),
-                        &mut IndirectStateObserver::new(),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -791,7 +796,11 @@ mod object_cost_tests {
             },
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
-            Some(&execution_time_estimator),
+            shared_object_congestion_tracker.get_tx_cost(
+                Some(&execution_time_estimator),
+                &tx,
+                &mut IndirectStateObserver::new(),
+            ),
             &tx,
             &previously_deferred_tx_digests,
             &ConsensusCommitInfo::new_for_congestion_test(
@@ -799,7 +808,6 @@ mod object_cost_tests {
                 10,
                 Duration::from_micros(10_000_000),
             ),
-            &mut IndirectStateObserver::new(),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 10);
@@ -823,7 +831,11 @@ mod object_cost_tests {
             },
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
-            Some(&execution_time_estimator),
+            shared_object_congestion_tracker.get_tx_cost(
+                Some(&execution_time_estimator),
+                &tx,
+                &mut IndirectStateObserver::new(),
+            ),
             &tx,
             &previously_deferred_tx_digests,
             &ConsensusCommitInfo::new_for_congestion_test(
@@ -831,7 +843,6 @@ mod object_cost_tests {
                 10,
                 Duration::from_micros(10_000_000),
             ),
-            &mut IndirectStateObserver::new(),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 4);
@@ -856,7 +867,11 @@ mod object_cost_tests {
             },
             _,
         )) = shared_object_congestion_tracker.should_defer_due_to_object_congestion(
-            Some(&execution_time_estimator),
+            shared_object_congestion_tracker.get_tx_cost(
+                Some(&execution_time_estimator),
+                &tx,
+                &mut IndirectStateObserver::new(),
+            ),
             &tx,
             &previously_deferred_tx_digests,
             &ConsensusCommitInfo::new_for_congestion_test(
@@ -864,7 +879,6 @@ mod object_cost_tests {
                 10,
                 Duration::from_micros(10_000_000),
             ),
-            &mut IndirectStateObserver::new(),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 5);
@@ -984,7 +998,11 @@ mod object_cost_tests {
             let tx = build_transaction(&[(shared_obj_0, *mutable)], tx_gas_budget);
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
-                    Some(&execution_time_estimator),
+                    shared_object_congestion_tracker.get_tx_cost(
+                        Some(&execution_time_estimator),
+                        &tx,
+                        &mut IndirectStateObserver::new(),
+                    ),
                     &tx,
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
@@ -992,7 +1010,6 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000),
                     ),
-                    &mut IndirectStateObserver::new(),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -1007,7 +1024,11 @@ mod object_cost_tests {
             let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
             assert!(shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
-                    Some(&execution_time_estimator),
+                    shared_object_congestion_tracker.get_tx_cost(
+                        Some(&execution_time_estimator),
+                        &tx,
+                        &mut IndirectStateObserver::new(),
+                    ),
                     &tx,
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
@@ -1015,7 +1036,6 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000)
                     ),
-                    &mut IndirectStateObserver::new(),
                 )
                 .is_none());
         }
@@ -1029,7 +1049,11 @@ mod object_cost_tests {
                 );
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
-                        Some(&execution_time_estimator),
+                        shared_object_congestion_tracker.get_tx_cost(
+                            Some(&execution_time_estimator),
+                            &tx,
+                            &mut IndirectStateObserver::new(),
+                        ),
                         &tx,
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
@@ -1037,7 +1061,6 @@ mod object_cost_tests {
                             0,
                             Duration::from_micros(10_000_000),
                         ),
-                        &mut IndirectStateObserver::new(),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1180,7 +1203,11 @@ mod object_cost_tests {
             let tx = build_transaction(&[(shared_obj_0, *mutable)], tx_gas_budget);
             if let Some((_, congested_objects)) = shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
-                    Some(&execution_time_estimator),
+                    shared_object_congestion_tracker.get_tx_cost(
+                        Some(&execution_time_estimator),
+                        &tx,
+                        &mut IndirectStateObserver::new(),
+                    ),
                     &tx,
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
@@ -1188,7 +1215,6 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000),
                     ),
-                    &mut IndirectStateObserver::new(),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -1204,7 +1230,11 @@ mod object_cost_tests {
             let tx = build_transaction(&[(shared_obj_1, *mutable)], tx_gas_budget);
             assert!(shared_object_congestion_tracker
                 .should_defer_due_to_object_congestion(
-                    Some(&execution_time_estimator),
+                    shared_object_congestion_tracker.get_tx_cost(
+                        Some(&execution_time_estimator),
+                        &tx,
+                        &mut IndirectStateObserver::new(),
+                    ),
                     &tx,
                     &HashMap::new(),
                     &ConsensusCommitInfo::new_for_congestion_test(
@@ -1212,7 +1242,6 @@ mod object_cost_tests {
                         0,
                         Duration::from_micros(10_000_000)
                     ),
-                    &mut IndirectStateObserver::new(),
                 )
                 .is_none());
         }
@@ -1226,7 +1255,11 @@ mod object_cost_tests {
                 );
                 if let Some((_, congested_objects)) = shared_object_congestion_tracker
                     .should_defer_due_to_object_congestion(
-                        Some(&execution_time_estimator),
+                        shared_object_congestion_tracker.get_tx_cost(
+                            Some(&execution_time_estimator),
+                            &tx,
+                            &mut IndirectStateObserver::new(),
+                        ),
                         &tx,
                         &HashMap::new(),
                         &ConsensusCommitInfo::new_for_congestion_test(
@@ -1234,7 +1267,6 @@ mod object_cost_tests {
                             0,
                             Duration::from_micros(10_000_000),
                         ),
-                        &mut IndirectStateObserver::new(),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1290,8 +1322,11 @@ mod object_cost_tests {
         // Read two objects should not change the object execution cost.
         let cert = build_transaction(&[(object_id_0, false), (object_id_1, false)], 10);
         shared_object_congestion_tracker.bump_object_execution_cost(
-            Some(&execution_time_estimator),
-            &mut IndirectStateObserver::new(),
+            shared_object_congestion_tracker.get_tx_cost(
+                Some(&execution_time_estimator),
+                &cert,
+                &mut IndirectStateObserver::new(),
+            ),
             &cert,
         );
         assert_eq!(
@@ -1312,8 +1347,11 @@ mod object_cost_tests {
         // Write to object 0 should only bump object 0's execution cost. The start cost should be object 1's cost.
         let cert = build_transaction(&[(object_id_0, true), (object_id_1, false)], 10);
         shared_object_congestion_tracker.bump_object_execution_cost(
-            Some(&execution_time_estimator),
-            &mut IndirectStateObserver::new(),
+            shared_object_congestion_tracker.get_tx_cost(
+                Some(&execution_time_estimator),
+                &cert,
+                &mut IndirectStateObserver::new(),
+            ),
             &cert,
         );
         let expected_object_0_cost = match mode {
@@ -1358,8 +1396,11 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 2_010,
         };
         shared_object_congestion_tracker.bump_object_execution_cost(
-            Some(&execution_time_estimator),
-            &mut IndirectStateObserver::new(),
+            shared_object_congestion_tracker.get_tx_cost(
+                Some(&execution_time_estimator),
+                &cert,
+                &mut IndirectStateObserver::new(),
+            ),
             &cert,
         );
         assert_eq!(
@@ -1403,8 +1444,11 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 9_010,
         };
         shared_object_congestion_tracker.bump_object_execution_cost(
-            Some(&execution_time_estimator),
-            &mut IndirectStateObserver::new(),
+            shared_object_congestion_tracker.get_tx_cost(
+                Some(&execution_time_estimator),
+                &cert,
+                &mut IndirectStateObserver::new(),
+            ),
             &cert,
         );
         assert_eq!(
@@ -1533,8 +1577,11 @@ mod object_cost_tests {
         for mutable in [true, false].iter() {
             let tx = build_transaction(&[(shared_obj_0, *mutable)], tx_gas_budget);
             shared_object_congestion_tracker.bump_object_execution_cost(
-                Some(&execution_time_estimator),
-                &mut IndirectStateObserver::new(),
+                shared_object_congestion_tracker.get_tx_cost(
+                    Some(&execution_time_estimator),
+                    &tx,
+                    &mut IndirectStateObserver::new(),
+                ),
                 &tx,
             );
         }
@@ -1618,22 +1665,22 @@ mod object_cost_tests {
 
         // Verify that the transaction is allowed to execute.
         // 2000 gas budget would exceed overage limit of 1000 but is capped to 200 by the absolute cap.
+        let tx_cost = shared_object_congestion_tracker.get_tx_cost(
+            Some(&execution_time_estimator),
+            &tx,
+            &mut IndirectStateObserver::new(),
+        );
         assert!(shared_object_congestion_tracker
             .should_defer_due_to_object_congestion(
-                Some(&execution_time_estimator),
+                tx_cost,
                 &tx,
                 &HashMap::new(),
                 &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
-                &mut IndirectStateObserver::new(),
             )
             .is_none());
 
         // Verify max cost after bumping is limited by the absolute cap.
-        shared_object_congestion_tracker.bump_object_execution_cost(
-            Some(&execution_time_estimator),
-            &mut IndirectStateObserver::new(),
-            &tx,
-        );
+        shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &tx);
         assert_eq!(300, shared_object_congestion_tracker.max_cost());
 
         // Verify accumulated debts still uses the per-commit budget to decrement.
