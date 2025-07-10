@@ -145,4 +145,5 @@ tracing = [
     "sui-types/tracing",
     "sui-execution/tracing",
     "sui-move/tracing",
+    "sui-replay-2/tracing",
 ]
