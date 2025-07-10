@@ -641,7 +641,14 @@ impl ExecutionTimeEstimator {
                 empty_observations.resize(len, (0, None));
                 ConsensusObservations {
                     observations: empty_observations,
-                    stake_weighted_median: None,
+                    stake_weighted_median: if self
+                        .protocol_params
+                        .default_none_duration_for_new_keys
+                    {
+                        None
+                    } else {
+                        Some(Duration::ZERO)
+                    },
                 }
             });
 
@@ -757,6 +764,7 @@ mod tests {
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
                     },
                 ),
             );
@@ -893,6 +901,7 @@ mod tests {
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
                     },
                 ),
             );
@@ -987,6 +996,7 @@ mod tests {
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
                     },
                 ),
             );
@@ -1085,6 +1095,7 @@ mod tests {
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
                     },
                 ),
             );
@@ -1227,6 +1238,7 @@ mod tests {
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: u64::MAX,
                         stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
                     },
                 ),
             );
@@ -1506,6 +1518,7 @@ mod tests {
                 stored_observations_num_included_checkpoints: 10,
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: true,
             },
             std::iter::empty(),
         );
