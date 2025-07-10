@@ -710,7 +710,7 @@ impl ExecutionTimeEstimator {
                 empty_observations.resize(len, (0, None));
                 ConsensusObservations {
                     observations: empty_observations,
-                    stake_weighted_median: None,
+                    stake_weighted_median: Some(Duration::ZERO),
                 }
             });
 
