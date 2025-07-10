@@ -46,37 +46,37 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
         reg_0 : &mut 0x42::action::Action = Move(lcl_0)
         lcl_3 = reg_0 : &mut 0x42::action::Action
         reg_1 : &mut 0x42::action::Action = Copy(lcl_3)
-        NoOperation
-        lcl_2 = reg_1 : &mut 0x42::action::Action
-        reg_2 : &0x42::action::Action = Copy(lcl_2)
-        VariantSwitch(SUBJECT(reg_2 : &0x42::action::Action), LBL_(7), LBL_(13), LBL_(21))
+        reg_2 : &0x42::action::Action = FreezeRef(reg_1 : &mut 0x42::action::Action)
+        lcl_2 = reg_2 : &0x42::action::Action
+        reg_3 : &0x42::action::Action = Copy(lcl_2)
+        VariantSwitch(SUBJECT(reg_3 : &0x42::action::Action), LBL_(7), LBL_(13), LBL_(21))
 
       Label LBL_7:
-        reg_3 : &mut 0x42::action::Action = Move(lcl_3)
-        Drop(reg_3 : &mut 0x42::action::Action)
-        reg_4 : &0x42::action::Action = Move(lcl_2)
-        UnpackVariantImmRef<Stop>(reg_4 : &0x42::action::Action)
-        Abort(reg_5 : u64)
+        reg_4 : &mut 0x42::action::Action = Move(lcl_3)
+        Drop(reg_4 : &mut 0x42::action::Action)
+        reg_5 : &0x42::action::Action = Move(lcl_2)
+        UnpackVariantImmRef<Stop>(reg_5 : &0x42::action::Action)
+        Abort(reg_6 : u64)
 
       Label LBL_13:
-        reg_6 : &mut 0x42::action::Action = Move(lcl_3)
-        Drop(reg_6 : &mut 0x42::action::Action)
-        reg_7 : &0x42::action::Action = Move(lcl_2)
-        reg_8 : &0x42::action::Action, reg_9 : &0x42::action::Action = UnpackVariantImmRef<MoveTo>(reg_7 : &0x42::action::Action)
+        reg_7 : &mut 0x42::action::Action = Move(lcl_3)
+        Drop(reg_7 : &mut 0x42::action::Action)
+        reg_8 : &0x42::action::Action = Move(lcl_2)
+        reg_9 : &0x42::action::Action, reg_10 : &0x42::action::Action = UnpackVariantImmRef<MoveTo>(reg_8 : &0x42::action::Action)
+        Drop(reg_10 : &0x42::action::Action)
         Drop(reg_9 : &0x42::action::Action)
-        Drop(reg_8 : &0x42::action::Action)
-        Abort(reg_10 : u64)
+        Abort(reg_11 : u64)
 
       Label LBL_21:
-        reg_11 : &0x42::action::Action = Move(lcl_2)
-        reg_12 : &0x42::action::Action = UnpackVariantImmRef<ChangeSpeed>(reg_11 : &0x42::action::Action)
-        Drop(reg_12 : &0x42::action::Action)
-        reg_13 : &mut 0x42::action::Action = Move(lcl_3)
-        reg_14 : &mut 0x42::action::Action = UnpackVariant<ChangeSpeed>(reg_13 : &mut 0x42::action::Action)
-        lcl_4 = reg_14 : &mut 0x42::action::Action
-        reg_15 : u64 = Move(lcl_1)
-        reg_16 : &mut u64 = Move(lcl_4)
-        WriteRef(reg_16 : &mut u64, reg_15 : u64)
+        reg_12 : &0x42::action::Action = Move(lcl_2)
+        reg_13 : &0x42::action::Action = UnpackVariantImmRef<ChangeSpeed>(reg_12 : &0x42::action::Action)
+        Drop(reg_13 : &0x42::action::Action)
+        reg_14 : &mut 0x42::action::Action = Move(lcl_3)
+        reg_15 : &mut 0x42::action::Action = UnpackVariant<ChangeSpeed>(reg_14 : &mut 0x42::action::Action)
+        lcl_4 = reg_15 : &mut 0x42::action::Action
+        reg_16 : u64 = Move(lcl_1)
+        reg_17 : &mut u64 = Move(lcl_4)
+        WriteRef(reg_17 : &mut u64, reg_16 : u64)
         Return()
 
 

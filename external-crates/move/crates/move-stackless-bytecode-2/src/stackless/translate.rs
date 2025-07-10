@@ -406,7 +406,21 @@ pub(crate) fn bytecode<K: SourceKind>(
             }
         }
 
-        IB::FreezeRef => Instruction::Nop,
+        IB::FreezeRef => {
+            let reg = pop!();
+            match reg.ty.as_ref() {
+                Type::Reference(true, ty) => {
+                    assign_reg!(
+                        [push!(Type::Reference(false, ty.clone()).into())] =
+                            data_op!(DataOp::FreezeRef, Register(reg.clone()))
+                    )
+                }
+                _ => panic!(
+                    "FreezeRef expected a mutable reference type, got: {}",
+                    reg.ty
+                ),
+            }
+        }
 
         IB::MutBorrowLoc(loc) => {
             let local_idx = *loc as usize;
