@@ -1125,12 +1125,199 @@ fun test_events() {
 
 #[test]
 fun test_tx_context() {
-    use sui::test_utils::assert_eq;
+    use std::unit_test::assert_eq;
 
-    let mut scenario = test_scenario::begin(@0x0);
+    // check default values for context
+    let mut scenario = test_scenario::begin(@0xA);
     let ctx = scenario.ctx();
-    // values below as coming from TxContext::new(...)
-    assert_eq(ctx.reference_gas_price(), 600);
-    assert_eq(ctx.gas_price(), 700);
+    assert_eq!(ctx.sender(), @0xA);
+    assert_eq!(ctx.epoch(), 0);
+    assert_eq!(ctx.epoch_timestamp_ms(), 0);
+    assert!(ctx.sponsor().is_none());
+    assert_eq!(ctx.reference_gas_price(), 0);
+    assert_eq!(ctx.gas_price(), 0);
+    assert_eq!(ctx.gas_budget(), 0);
+    assert_eq!(ctx.ids_created(), 0);
+
+    // check explicit setup for context
+    let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
+        .set_epoch(42)
+        .set_epoch_timestamp(1_000_000_000)
+        .set_ids_created(3)
+        .set_reference_gas_price(1000)
+        .set_gas_price(700)
+        .set_gas_budget(100_000);
+    scenario.next_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    assert_eq!(ctx.sender(), @0xB);
+    assert_eq!(ctx.epoch(), 42);
+    assert_eq!(ctx.epoch_timestamp_ms(), 1_000_000_000);
+    assert!(ctx.sponsor().is_none());
+    assert_eq!(ctx.reference_gas_price(), 1000);
+    assert_eq!(ctx.gas_price(), 700);
+    assert_eq!(ctx.gas_budget(), 100_000);
+    assert_eq!(ctx.ids_created(), 3);
+
+    // check that the context setup holds across transactions
+    scenario.next_tx(@0xC);
+    let ctx = scenario.ctx();
+    assert_eq!(ctx.sender(), @0xC);
+    assert_eq!(ctx.epoch(), 42);
+    assert_eq!(ctx.epoch_timestamp_ms(), 1_000_000_000);
+    assert!(ctx.sponsor().is_none());
+    assert_eq!(ctx.reference_gas_price(), 1000);
+    assert_eq!(ctx.gas_price(), 700);
+    assert_eq!(ctx.gas_budget(), 100_000);
+    assert_eq!(ctx.ids_created(), 0); // ids reset after each transaction
+
+    // reuse the same context
+    let ctx_builder = scenario.ctx_builder();
+    scenario.next_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    assert_eq!(ctx.sender(), @0xC);
+    assert_eq!(ctx.epoch(), 42);
+    assert_eq!(ctx.epoch_timestamp_ms(), 1_000_000_000);
+    assert!(ctx.sponsor().is_none());
+    assert_eq!(ctx.reference_gas_price(), 1000);
+    assert_eq!(ctx.gas_price(), 700);
+    assert_eq!(ctx.gas_budget(), 100_000);
+    assert_eq!(ctx.ids_created(), 0); // ids reset after each transaction
+
+    // add sponsor and change few values
+    let ctx_builder = scenario
+        .ctx_builder()
+        .set_sponsor(option::some(@0xD))
+        .set_ids_created(5)
+        .set_gas_price(800)
+        .set_epoch_timestamp(1_000_000_100);
+    scenario.next_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    assert_eq!(ctx.sender(), @0xC);
+    assert_eq!(ctx.epoch(), 42);
+    assert_eq!(ctx.epoch_timestamp_ms(), 1_000_000_100);
+    assert_eq!(ctx.sponsor().extract(), @0xD);
+    assert_eq!(ctx.reference_gas_price(), 1000);
+    assert_eq!(ctx.gas_price(), 800);
+    assert_eq!(ctx.gas_budget(), 100_000);
+    assert_eq!(ctx.ids_created(), 5);
+
+    scenario.end();
+}
+
+#[test]
+fun test_tx_context_with_builder() {
+    use std::unit_test::assert_eq;
+
+    // begin with context builder
+    let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
+        .set_epoch(42)
+        .set_epoch_timestamp(1_000_000_000)
+        .set_ids_created(3)
+        .set_reference_gas_price(1000)
+        .set_gas_price(700)
+        .set_gas_budget(100_000);
+    let mut scenario = test_scenario::begin_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    assert_eq!(ctx.sender(), @0xB);
+    assert_eq!(ctx.epoch(), 42);
+    assert_eq!(ctx.epoch_timestamp_ms(), 1_000_000_000);
+    assert!(ctx.sponsor().is_none());
+    assert_eq!(ctx.reference_gas_price(), 1000);
+    assert_eq!(ctx.gas_price(), 700);
+    assert_eq!(ctx.gas_budget(), 100_000);
+    assert_eq!(ctx.ids_created(), 3);
+
+    // change epoch
+    let epoch = ctx.epoch() + 1;
+    let ctx_builder = scenario.ctx_builder().set_epoch(epoch);
+    scenario.next_with_context(ctx_builder);
+    assert_eq!(scenario.ctx().epoch(), 43);
+    assert_eq!(scenario.num_concluded_txes(), 1);
+
+    let epoch = epoch + 10;
+    let ctx_builder = scenario.ctx_builder().set_epoch(epoch);
+    scenario.next_with_context(ctx_builder);
+    assert_eq!(scenario.num_concluded_txes(), 11);
+    assert_eq!(scenario.ctx().epoch(), 53);
+
+    // change epoch and reference gas price
+    let epoch = epoch + 10;
+    let ctx_builder = scenario.ctx_builder().set_epoch(epoch).set_reference_gas_price(2000);
+    scenario.next_with_context(ctx_builder);
+    assert_eq!(scenario.num_concluded_txes(), 21);
+    let ctx = scenario.ctx();
+    assert_eq!(ctx.epoch(), 63);
+    assert_eq!(ctx.reference_gas_price(), 2000);
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure]
+fun test_tx_context_no_rgp() {
+    let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
+        .set_epoch(42)
+        .set_epoch_timestamp(1_000_000_000)
+        .set_ids_created(3)
+        .unset_reference_gas_price()
+        .set_gas_price(700)
+        .set_gas_budget(100_000);
+    let scenario = test_scenario::begin_with_context(ctx_builder);
+    scenario.end();
+}
+
+#[test]
+#[expected_failure]
+fun test_tx_context_bad_epoch() {
+    let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
+        .set_epoch(42)
+        .set_epoch_timestamp(1_000_000_000)
+        .set_ids_created(3)
+        .unset_reference_gas_price()
+        .set_gas_price(700)
+        .set_gas_budget(100_000);
+    let mut scenario = test_scenario::begin_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    let ctx_builder = test_scenario::ctx_builder_from_context(ctx).set_epoch(ctx.epoch() - 1);
+    scenario.next_with_context(ctx_builder);
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure]
+fun test_tx_context_bad_rgp_no_epoch_change() {
+    let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
+        .set_epoch(42)
+        .set_epoch_timestamp(1_000_000_000)
+        .set_ids_created(3)
+        .unset_reference_gas_price()
+        .set_gas_price(700)
+        .set_gas_budget(100_000);
+    let mut scenario = test_scenario::begin_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    let ctx_builder = test_scenario::ctx_builder_from_context(ctx).unset_reference_gas_price();
+    scenario.next_with_context(ctx_builder);
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure]
+fun test_tx_context_bad_epoch_timestamp() {
+    let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
+        .set_epoch(42)
+        .set_epoch_timestamp(1_000_000_000)
+        .set_ids_created(3)
+        .unset_reference_gas_price()
+        .set_gas_price(700)
+        .set_gas_budget(100_000);
+    let mut scenario = test_scenario::begin_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    let ctx_builder = test_scenario::ctx_builder_from_context(ctx).set_epoch_timestamp(
+        ctx.epoch_timestamp_ms() - 1,
+    );
+    scenario.next_with_context(ctx_builder);
+
     scenario.end();
 }
