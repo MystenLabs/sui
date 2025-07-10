@@ -1270,7 +1270,7 @@ impl TVarCounter {
 #[derive(Clone, Debug)]
 pub struct Subst {
     tvars: HashMap<TVar, Type>,
-    var_constraints: HashMap<TVar, VarConstraint>,
+    tvar_constraints: HashMap<TVar, VarConstraint>,
 }
 
 #[derive(Clone, Debug)]
@@ -1283,7 +1283,7 @@ impl Subst {
     pub fn empty() -> Self {
         Self {
             tvars: HashMap::new(),
-            var_constraints: HashMap::new(),
+            tvar_constraints: HashMap::new(),
         }
     }
 
@@ -1302,7 +1302,7 @@ impl Subst {
     pub fn new_num_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
         let tvar = counter.next();
         assert!(
-            self.var_constraints
+            self.tvar_constraints
                 .insert(tvar, VarConstraint::Num(loc))
                 .is_none()
         );
@@ -1311,12 +1311,12 @@ impl Subst {
 
     pub fn set_constraint_opt(&mut self, tvar: TVar, constraint_opt: Option<VarConstraint>) {
         if let Some(constraint) = constraint_opt {
-            assert!(self.var_constraints.insert(tvar, constraint).is_none());
+            assert!(self.tvar_constraints.insert(tvar, constraint).is_none());
         }
     }
 
     pub fn is_num_var(&self, tvar: &TVar) -> bool {
-        self.var_constraints
+        self.tvar_constraints
             .get(tvar)
             .map(|constraint| constraint.is_num_var())
             .unwrap_or(false)
@@ -1341,7 +1341,7 @@ impl ast_debug::AstDebug for Subst {
     fn ast_debug(&self, w: &mut ast_debug::AstWriter) {
         let Subst {
             tvars,
-            var_constraints,
+            tvar_constraints: var_constraints,
         } = self;
 
         w.write("tvars:");
@@ -2210,7 +2210,7 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
 pub fn solve_constraints(context: &mut Context) {
     use BuiltinTypeName_ as BT;
 
-    let var_constraints = context.subst.var_constraints.clone();
+    let var_constraints = context.subst.tvar_constraints.clone();
     let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
 
     for (var, constraint) in var_constraints.into_iter() {
@@ -3104,8 +3104,8 @@ fn join_tvar(
     let new_tvar = counter.next();
 
     // join constraints
-    let constraints_1 = subst.var_constraints.get(&last_id1).cloned();
-    let constraints_2 = subst.var_constraints.get(&last_id2).cloned();
+    let constraints_1 = subst.tvar_constraints.get(&last_id1).cloned();
+    let constraints_2 = subst.tvar_constraints.get(&last_id2).cloned();
     let new_constraint_opt = join_var_constraints(constraints_1, constraints_2)?;
     subst.set_constraint_opt(new_tvar, new_constraint_opt);
 
