@@ -299,6 +299,13 @@ impl ExecutionTiming {
             ExecutionTiming::Abort(duration) => *duration,
         }
     }
+
+    pub fn set_duration_for_testing(&mut self, d: Duration) {
+        match self {
+            ExecutionTiming::Success(duration) => *duration = d,
+            ExecutionTiming::Abort(duration) => *duration = d,
+        }
+    }
 }
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
