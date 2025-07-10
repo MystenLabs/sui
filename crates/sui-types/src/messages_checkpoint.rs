@@ -35,7 +35,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentScope};
-use shared_crypto::merkle::merkle_root;
+use fastcrypto::merkle::merkle_root;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
@@ -50,6 +50,8 @@ pub use crate::digests::CheckpointDigest;
 
 pub type CheckpointSequenceNumber = u64;
 pub type CheckpointTimestamp = u64;
+
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
@@ -126,19 +128,6 @@ impl Default for ECMHLiveObjectSetDigest {
         GlobalStateHash::default().digest().into()
     }
 }
-
-// // Create a dummy artifact for the given object ID.
-// // This is used to create a non-inclusion proof for an object that is not in the checkpoint.
-// pub fn dummy_object_change(object_id: ObjectID) -> Self {
-//     CheckpointArtifact::AccumulatedObjectChange(ObjectChange {
-//         id: object_id,
-//         input_version: None,
-//         input_digest: Default::default(),
-//         output_version: None,
-//         output_digest: Default::default(),
-//         id_operation: IDOperation::None,
-//     })
-// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModifiedObjectState {

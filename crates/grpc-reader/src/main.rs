@@ -1,6 +1,6 @@
 use anyhow::Result;
 use fastcrypto::hash::Blake2b256;
-use shared_crypto::merkle::{MerkleAuth, MerkleNonInclusionProof, MerkleProof, MerkleTree, Node};
+use fastcrypto::merkle::{MerkleAuth, MerkleNonInclusionProof, MerkleProof, MerkleTree, Node};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -49,7 +49,7 @@ pub struct ObjectInclusionProof {
 impl ObjectInclusionProof {
     pub fn verify(&self, root: &CheckpointArtifactsDigest) -> bool {
         self.merkle_proof
-            .verify_proof_with_serialization(
+            .verify_proof_with_unserialized_leaf(
                 &Node::from(root.digest.into_inner()),
                 &self.object_state,
                 self.leaf_index,
@@ -76,7 +76,7 @@ impl ModifiedObjectTree {
             }
         }
         let contents = artifacts.latest_object_states.contents.clone();
-        let tree = MerkleTree::<Blake2b256>::build_from_serialized(contents.iter())
+        let tree = MerkleTree::<Blake2b256>::build_from_unserialized(contents.iter())
             .expect("Failed to build Merkle tree");
         ModifiedObjectTree {
             contents,
