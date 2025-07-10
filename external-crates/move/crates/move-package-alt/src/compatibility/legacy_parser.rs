@@ -77,6 +77,9 @@ pub fn is_legacy_like(path: &PackagePath) -> bool {
     }
 }
 
+/// Tries to parse a legacy looking manifest.
+/// The parser converts this into a modern one on the fly -- and stores legacy information
+/// in the `LegacyData` struct.
 pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegacyPackage> {
     let file_contents = std::fs::read_to_string(path.manifest_path()).with_context(|| {
         format!(
@@ -337,7 +340,8 @@ fn parse_dependencies(tval: TV) -> Result<BTreeMap<Spanned<PackageName>, Default
             let mut deps = BTreeMap::new();
 
             for (dep_name, dep) in table.into_iter() {
-                // TODO: Create a compliant identifier here, as the old free-flowing String can fail.
+                // TODO(manos): This could fail if we have names that are not `Identifier` compatible.
+                // Though this is a super rare case, we'll probably not handle it more complex until we need to.
                 let dep_name_ident = PackageName::new(dep_name)?;
 
                 let dep = parse_dependency(dep)?;
