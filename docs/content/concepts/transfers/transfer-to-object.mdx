@@ -5,6 +5,12 @@ description: On Sui, you can transfer objects to objects in the same way you can
 
 You can transfer objects to an object ID in the same way you transfer objects to an address, using the same functions. This is because Sui does not distinguish between the 32-byte ID of an address and the 32-byte ID of an object (which are guaranteed not to overlap). The transfer to object operation takes advantage of this feature, allowing you to provide an object ID as the address input of a transfer operation.
 
+:::note
+
+The Transfer to Object mechanism is not supported for [Party Objects](../object-ownership/party.mdx) whose owning address corresponds to an object ID.
+
+:::
+
 Because of the identical ID structure, you can use an object ID for the address field when transferring an object. In fact, all functionality around address-owned objects works the same for objects owned by other objects, you just replace the address with the object ID.
 
 When you transfer an object to another object, you're basically establishing a form of parent-child authentication relationship. Objects that you have transferred to another object can be received by the (possibly transitive) owner of the parent object. The module that defines the type of the parent (receiving) object also defines the access control for receiving a child object.
