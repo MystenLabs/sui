@@ -68,13 +68,6 @@ pub trait AccountKeystore: Send + Sync {
     fn aliases(&self) -> Vec<&Alias>;
     fn aliases_mut(&mut self) -> Vec<&mut Alias>;
 
-    // fn alias_names(&self) -> Vec<&str> {
-    //     self.aliases()
-    //         .into_iter()
-    //         .map(|a| a.alias.as_str())
-    //         .collect()
-    // }
-
     fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
 
     /// Get alias of address
@@ -85,13 +78,12 @@ pub trait AccountKeystore: Send + Sync {
         let key_identity = key_identity.into();
         match key_identity {
             KeyIdentity::Address(addr) => Ok(addr),
-            KeyIdentity::Alias(alias) => Ok(self
+            KeyIdentity::Alias(alias) => Ok(*self
                 .addresses_with_alias()
                 .iter()
                 .find(|(_, a)| a.alias == alias)
                 .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))?
-                .0
-                .clone()),
+                .0),
         }
     }
 
@@ -287,26 +279,15 @@ impl AccountKeystore for FileBasedKeystore {
         }
     }
 
-    /// Get the address by its alias
-    // fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
-    //     self.addresses_with_alias()
-    //         .iter()
-    //         .find(|x| x.1.alias == alias)
-    //         .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
-    //         .map(|x| x.0)
-    // }
-
     /// Get the alias if it exists, or return an error if it does not exist.
-    fn get_alias(&self, key: &SuiAddress) -> Result<String, anyhow::Error> {
-        let address: &SuiAddress = key.into();
+    fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
         match self.aliases.get(address) {
             Some(alias) => Ok(alias.alias.clone()),
             None => bail!("Cannot find alias for address {address}"),
         }
     }
 
-    fn export(&self, key: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
-        let address: &SuiAddress = key.into();
+    fn export(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error> {
         match self.keys.get(address) {
             Some(key) => Ok(key),
             None => Err(anyhow!("Cannot find key for address: [{address}]")),
@@ -556,15 +537,6 @@ impl AccountKeystore for InMemKeystore {
             None => bail!("Cannot find alias for address {address}"),
         }
     }
-
-    /// Get the address by its alias
-    // fn get_address_by_alias(&self, alias: String) -> Result<&SuiAddress, anyhow::Error> {
-    //     self.addresses_with_alias()
-    //         .iter()
-    //         .find(|x| x.1.alias == alias)
-    //         .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))
-    //         .map(|x| x.0)
-    // }
 
     /// This function returns an error if the provided alias already exists. If the alias
     /// has not already been used, then it returns the alias.
