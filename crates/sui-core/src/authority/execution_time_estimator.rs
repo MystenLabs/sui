@@ -3,6 +3,7 @@
 
 use std::{
     collections::HashMap,
+    hash::{Hash, Hasher},
     num::NonZeroUsize,
     sync::{Arc, Weak},
     time::Duration,
@@ -14,8 +15,9 @@ use crate::consensus_adapter::SubmitToConsensus;
 use governor::{clock::MonotonicClock, Quota, RateLimiter};
 use itertools::Itertools;
 use lru::LruCache;
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::{assert_reachable, debug_fatal, in_antithesis, in_test_configuration};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use rand::{random, rngs, thread_rng, Rng, SeedableRng};
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
@@ -245,6 +247,27 @@ impl ExecutionTimeObserver {
     ) {
         let _scope = monitored_scope("ExecutionTimeObserver::record_local_observations");
 
+        // Simulate timing in test contexts to trigger congestion control.
+        if in_antithesis() || cfg!(msim) {
+            let (generated_timings, generated_duration) = self.generate_test_timings(tx, timings);
+            self.record_local_observations_timing(
+                tx,
+                &generated_timings,
+                generated_duration,
+                gas_price,
+            )
+        } else {
+            self.record_local_observations_timing(tx, timings, total_duration, gas_price)
+        }
+    }
+
+    fn record_local_observations_timing(
+        &mut self,
+        tx: &ProgrammableTransaction,
+        timings: &[ExecutionTiming],
+        total_duration: Duration,
+        gas_price: u64,
+    ) {
         assert!(tx.commands.len() >= timings.len());
 
         let Some(epoch_store) = self.epoch_store.upgrade() else {
@@ -423,6 +446,52 @@ impl ExecutionTimeObserver {
 
         // Share new observations.
         self.share_observations(to_share);
+    }
+
+    fn generate_test_timings(
+        &self,
+        tx: &ProgrammableTransaction,
+        timings: &[ExecutionTiming],
+    ) -> (Vec<ExecutionTiming>, Duration) {
+        let generated_timings: Vec<_> = tx
+            .commands
+            .iter()
+            .zip(timings.iter())
+            .map(|(command, timing)| {
+                let key = ExecutionTimeObservationKey::from_command(command);
+                let duration = self.get_test_duration(&key);
+                if timing.is_abort() {
+                    ExecutionTiming::Abort(duration)
+                } else {
+                    ExecutionTiming::Success(duration)
+                }
+            })
+            .collect();
+
+        let total_duration = generated_timings
+            .iter()
+            .map(|t| t.duration())
+            .sum::<Duration>()
+            + thread_rng().gen_range(Duration::from_millis(10)..Duration::from_millis(50));
+
+        (generated_timings, total_duration)
+    }
+
+    fn get_test_duration(&self, key: &ExecutionTimeObservationKey) -> Duration {
+        if !in_test_configuration() {
+            panic!("get_test_duration called in non-test configuration");
+        }
+
+        thread_local! {
+            static PER_TEST_SEED: u64 = random::<u64>();
+        }
+        PER_TEST_SEED.with(|seed| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            seed.hash(&mut hasher);
+            key.hash(&mut hasher);
+            let mut rng = rngs::StdRng::seed_from_u64(hasher.finish());
+            rng.gen_range(Duration::from_millis(100)..Duration::from_millis(600))
+        })
     }
 
     fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
