@@ -143,6 +143,15 @@ pub async fn handle_replay_config(config: &ReplayConfig, version: &str) -> anyho
         current_dir.join(DEFAULT_OUTPUT_DIR)
     };
 
+    // If trying to trace but the binary was not built with the tracing feature flag raise an error.
+    #[cfg(not(feature = "tracing"))]
+    if *trace {
+        bail!(
+            "Tracing is not enabled in this build. Please rebuild with the \
+            `tracing` feature (`--features tracing`) to use tracing in replay"
+        );
+    }
+
     // If a file is specified it is read and the digest ignored.
     // Once we decide on the options we want this is likely to change.
     let digests = if let Some(digests_path) = digests_path {
