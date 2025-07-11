@@ -11,14 +11,15 @@ use crate::{
         legacy::LegacyData,
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
-    dependency::{pin, PinnedDependencyInfo},
+    dependency::{PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{EnvironmentName, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageName, Publication, PublishedID},
+    schema::{
+        EnvironmentName, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageName,
+        Publication, PublishedID,
+    },
 };
-
-pub type AddressInfo = String;
 
 #[derive(Debug)]
 pub struct Package<F: MoveFlavor> {
