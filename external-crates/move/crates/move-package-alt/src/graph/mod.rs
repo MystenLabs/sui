@@ -33,8 +33,12 @@ struct PackageNode<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> PackageNode<F> {
-    fn name(&self) -> &PackageName {
+    pub fn name(&self) -> &PackageName {
         self.package.manifest().package_name()
+    }
+
+    pub fn package(&self) -> &Package<F> {
+        &self.package
     }
 }
 
@@ -106,5 +110,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         PackageGraphBuilder::new()
             .load_from_lockfile_ignore_digests(path, env)
             .await
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = &Package<F>> {
+        self.inner.node_weights().map(|x| x.package())
     }
 }

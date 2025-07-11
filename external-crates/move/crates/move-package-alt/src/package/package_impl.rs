@@ -80,9 +80,9 @@ impl<F: MoveFlavor> Package<F> {
                 x.into_iter()
                     .map(|(env, pub_info)| {
                         (
-                            pub_info.chain_id.clone(),
+                            env.clone(),
                             PublishInformation {
-                                environment: env.clone(),
+                                environment: pub_info.chain_id.clone(),
                                 publication: pub_info,
                             },
                         )
@@ -111,6 +111,16 @@ impl<F: MoveFlavor> Package<F> {
 
     pub fn dep_for_self(&self) -> &LockfileDependencyInfo {
         &self.source
+    }
+
+    pub fn publish_data(&self, env: &EnvironmentName) -> PackageResult<&PublishInformation<F>> {
+        self.publish_data.get(env).ok_or_else(|| {
+            PackageError::Generic(format!(
+                "Package {} does not have published information for environment `{}`",
+                self.name(),
+                env
+            ))
+        })
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
