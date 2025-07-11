@@ -15649,6 +15649,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-move-build",
  "sui-package-management",
+ "sui-protocol-config",
  "sui-types",
  "tabled",
  "telemetry-subscribers",

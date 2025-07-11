@@ -164,11 +164,15 @@ impl ReplayTransaction {
         //
         // instantiate the executor
         let epoch = effects.executed_epoch();
+        let chain = epoch_store
+            .epoch_info(epoch)
+            .map(|epoch_data| epoch_data.chain)
+            .unwrap_or_else(|e| panic!("Failed to get epoch info for {epoch}: {e:?}"));
         let protocol_config = epoch_store
             .protocol_config(epoch)
             .unwrap_or_else(|e| panic!("Failed to get protocol config: {:?}", e));
         let executor =
-            ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
+            ReplayExecutor::new(protocol_config, chain, None).unwrap_or_else(|e| panic!("{:?}", e));
 
         debug!("End load transaction");
 
