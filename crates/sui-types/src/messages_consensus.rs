@@ -355,14 +355,9 @@ pub struct ExecutionTimeObservation {
 impl ExecutionTimeObservation {
     pub fn new(
         authority: AuthorityName,
+        generation: u64,
         estimates: Vec<(ExecutionTimeObservationKey, Duration)>,
     ) -> Self {
-        let generation = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Sui did not exist prior to 1970")
-            .as_micros()
-            .try_into()
-            .expect("This build of sui is not supported in the year 500,000");
         Self {
             authority,
             generation,

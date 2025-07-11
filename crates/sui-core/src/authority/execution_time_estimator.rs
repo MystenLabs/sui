@@ -6,7 +6,7 @@ use std::{
     hash::{Hash, Hasher},
     num::NonZeroUsize,
     sync::{Arc, Weak},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -66,6 +66,8 @@ pub struct ExecutionTimeObserver {
             <governor::clock::MonotonicClock as governor::clock::Clock>::Instant,
         >,
     >,
+
+    next_generation_number: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -181,6 +183,12 @@ impl ExecutionTimeObserver {
             ),
             protocol_params,
             config,
+            next_generation_number: SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Sui did not exist prior to 1970")
+                .as_micros()
+                .try_into()
+                .expect("This build of sui is not supported in the year 500,000"),
         };
         spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             loop {
@@ -231,6 +239,12 @@ impl ExecutionTimeObserver {
                 Quota::per_hour(std::num::NonZeroU32::MAX),
                 &MonotonicClock,
             ),
+            next_generation_number: SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Sui did not exist prior to 1970")
+                .as_micros()
+                .try_into()
+                .expect("This build of sui is not supported in the year 500,000"),
         }
     }
 
@@ -518,8 +532,9 @@ impl ExecutionTimeObserver {
 
         let epoch_store = epoch_store.clone();
         let transaction = ConsensusTransaction::new_execution_time_observation(
-            ExecutionTimeObservation::new(epoch_store.name, to_share),
+            ExecutionTimeObservation::new(epoch_store.name, self.next_generation_number, to_share),
         );
+        self.next_generation_number += 1;
 
         if let Err(e) = self.consensus_adapter.submit_best_effort(
             &transaction,
@@ -628,7 +643,12 @@ impl ExecutionTimeEstimator {
         committee: Arc<Committee>,
         protocol_params: ExecutionTimeEstimateParams,
         initial_observations: impl Iterator<
-            Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration),
+            Item = (
+                AuthorityIndex,
+                Option<u64>,
+                ExecutionTimeObservationKey,
+                Duration,
+            ),
         >,
     ) -> Self {
         let mut estimator = Self {
@@ -669,7 +689,7 @@ impl ExecutionTimeEstimator {
     pub fn process_observations_from_consensus(
         &mut self,
         source: AuthorityIndex,
-        generation: u64,
+        generation: Option<u64>,
         observations: &[(ExecutionTimeObservationKey, Duration)],
     ) {
         for (key, duration) in observations {
@@ -686,7 +706,7 @@ impl ExecutionTimeEstimator {
     fn process_observation_from_consensus(
         &mut self,
         source: AuthorityIndex,
-        generation: u64,
+        generation: Option<u64>,
         observation_key: ExecutionTimeObservationKey,
         duration: Duration,
         skip_update: bool,
@@ -723,11 +743,11 @@ impl ExecutionTimeEstimator {
 
         let (obs_generation, obs_duration) =
             &mut observations.observations[TryInto::<usize>::try_into(source).unwrap()];
-        if *obs_generation >= generation {
+        if generation.is_some_and(|generation| *obs_generation >= generation) {
             // Ignore outdated observation.
             return;
         }
-        *obs_generation = generation;
+        *obs_generation = generation.unwrap_or(0);
         *obs_duration = Some(duration);
         if !skip_update {
             observations.update_stake_weighted_median(&self.committee, &self.protocol_params);
@@ -1607,21 +1627,21 @@ mod tests {
         // First record some old observations that should be ignored
         estimator.process_observation_from_consensus(
             0,
-            1,
+            Some(1),
             move_key.clone(),
             Duration::from_millis(1000),
             false,
         );
         estimator.process_observation_from_consensus(
             1,
-            1,
+            Some(1),
             move_key.clone(),
             Duration::from_millis(1000),
             false,
         );
         estimator.process_observation_from_consensus(
             2,
-            1,
+            Some(1),
             move_key.clone(),
             Duration::from_millis(1000),
             false,
@@ -1629,21 +1649,21 @@ mod tests {
 
         estimator.process_observation_from_consensus(
             0,
-            1,
+            Some(1),
             transfer_key.clone(),
             Duration::from_millis(500),
             false,
         );
         estimator.process_observation_from_consensus(
             1,
-            1,
+            Some(1),
             transfer_key.clone(),
             Duration::from_millis(500),
             false,
         );
         estimator.process_observation_from_consensus(
             2,
-            1,
+            Some(1),
             transfer_key.clone(),
             Duration::from_millis(500),
             false,
@@ -1652,21 +1672,21 @@ mod tests {
         // Now record newer observations that should be used
         estimator.process_observation_from_consensus(
             0,
-            2,
+            Some(2),
             move_key.clone(),
             Duration::from_millis(100),
             false,
         );
         estimator.process_observation_from_consensus(
             1,
-            2,
+            Some(2),
             move_key.clone(),
             Duration::from_millis(200),
             false,
         );
         estimator.process_observation_from_consensus(
             2,
-            2,
+            Some(2),
             move_key.clone(),
             Duration::from_millis(300),
             false,
@@ -1674,21 +1694,21 @@ mod tests {
 
         estimator.process_observation_from_consensus(
             0,
-            2,
+            Some(2),
             transfer_key.clone(),
             Duration::from_millis(50),
             false,
         );
         estimator.process_observation_from_consensus(
             1,
-            2,
+            Some(2),
             transfer_key.clone(),
             Duration::from_millis(60),
             false,
         );
         estimator.process_observation_from_consensus(
             2,
-            2,
+            Some(2),
             transfer_key.clone(),
             Duration::from_millis(70),
             false,
@@ -1697,21 +1717,21 @@ mod tests {
         // Try to record old observations again - these should be ignored
         estimator.process_observation_from_consensus(
             0,
-            1,
+            Some(1),
             move_key.clone(),
             Duration::from_millis(1000),
             false,
         );
         estimator.process_observation_from_consensus(
             1,
-            1,
+            Some(1),
             transfer_key.clone(),
             Duration::from_millis(500),
             false,
         );
         estimator.process_observation_from_consensus(
             2,
-            1,
+            Some(1),
             move_key.clone(),
             Duration::from_millis(1000),
             false,
