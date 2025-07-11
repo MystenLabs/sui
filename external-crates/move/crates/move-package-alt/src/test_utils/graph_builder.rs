@@ -163,7 +163,7 @@ impl TestPackageGraph {
         let source_idx = self.nodes[source.as_ref()];
         let target_idx = self.nodes[target.as_ref()];
         self.inner
-            .add_edge(source_idx, target_idx, build(DepSpec::new(target)).into());
+            .add_edge(source_idx, target_idx, build(DepSpec::new(target)));
         self
     }
 
@@ -211,7 +211,7 @@ impl TestPackageGraph {
 
         for edge in self.inner.edges(node) {
             let dep_spec = edge.weight();
-            let dep_str = self.format_dep(&edge.weight(), &self.inner[edge.target()]);
+            let dep_str = self.format_dep(edge.weight(), &self.inner[edge.target()]);
             if let Some(env) = &dep_spec.use_env {
                 dep_replacements.push_str(&dep_str);
                 dep_replacements.push('\n');

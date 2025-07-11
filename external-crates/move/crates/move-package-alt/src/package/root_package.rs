@@ -174,7 +174,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
         let mut output = BTreeMap::new();
         for env in self.environments().keys() {
-            output.extend(self.root.direct_deps(env)?.clone());
+            output.extend(self.root.direct_deps(env)?);
         }
 
         Ok(output)

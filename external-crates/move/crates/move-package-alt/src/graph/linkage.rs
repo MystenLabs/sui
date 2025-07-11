@@ -144,9 +144,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         if deduped.len() <= 1 {
             Ok(**deduped.first().expect("nodes is nonempty"))
         } else {
-            return Err(LinkageError::InconsistentLinkage(
+            Err(LinkageError::InconsistentLinkage(
                 "TODO: inconsistent linkage".to_string(),
-            ));
+            ))
             /* TODO: construct error message
                 let paths = deduped.map(|target| todo!());
                 "Package <TODO: root> depends on <TODO: p1> and <TODO: p2>, but these depend on different versions of <TODO: conflict>:
