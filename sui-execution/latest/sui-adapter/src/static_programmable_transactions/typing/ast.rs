@@ -110,6 +110,7 @@ pub enum Location {
     GasCoin,
     ObjectInput(u16),
     PureInput(u16),
+    ReceivingInput(u16),
     Result(u16, u16),
 }
 

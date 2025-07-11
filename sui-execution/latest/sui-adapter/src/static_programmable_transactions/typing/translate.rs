@@ -6,14 +6,13 @@ use crate::{
     execution_mode::ExecutionMode,
     programmable_transactions::context::EitherError,
     static_programmable_transactions::{
-        loading::ast::{self as L, InputArg, Type},
+        loading::ast::{self as L, Type},
         spanned::sp,
-        typing::ast::{BytesConstraint, BytesUsage},
+        typing::ast::BytesConstraint,
     },
 };
 use indexmap::{IndexMap, IndexSet};
-use serde_json::value::Index;
-use std::{collections::BTreeMap, rc::Rc};
+use std::rc::Rc;
 use sui_types::{
     base_types::{ObjectRef, TxContextKind},
     coin::RESOLVED_COIN_STRUCT,
@@ -21,6 +20,7 @@ use sui_types::{
     execution_status::CommandArgumentError,
 };
 
+#[derive(Debug, Clone, Copy)]
 enum SplatLocation {
     TxContext,
     GasCoin,
@@ -116,28 +116,97 @@ impl Context {
         match location {
             SplatLocation::GasCoin => None,
             SplatLocation::TxContext => None,
-            SplatLocation::Input(i) => self.input_resolution.get(i as usize).copied(),
+            SplatLocation::Input(i) => Some(self.input_resolution[i as usize]),
             SplatLocation::Result(_, _) => None, // results are not inputs
         }
     }
 
-    fn location_type<'context>(
-        &'context mut self,
+    // Get the fixed type of a location. Returns `None` for Pure and Receiving inputs,
+    fn fixed_type(
+        &mut self,
         env: &Env,
-        location: T::Location,
-    ) -> Result<LocationType<'context>, ExecutionError> {
-        Ok(match location {
-            T::Location::GasCoin => LocationType::Fixed(env.gas_coin_type()?),
-            T::Location::Input(i) => match &mut self.inputs[i as usize].1 {
-                t @ InputType::Bytes => {
-                    LocationType::Bytes(t, self.gathered_input_types.get_mut(&i).unwrap())
+        location: SplatLocation,
+    ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
+        Ok(Some(match location {
+            SplatLocation::TxContext => (T::Location::TxContext, env.tx_context_type()?),
+            SplatLocation::GasCoin => (T::Location::GasCoin, env.gas_coin_type()?),
+            SplatLocation::Result(i, j) => (
+                T::Location::Result(i, j),
+                self.results[i as usize][j as usize].clone(),
+            ),
+            SplatLocation::Input(i) => match &self.input_resolution[i as usize] {
+                InputKind::Object => {
+                    let Some((object_index, _, object_input)) = self.objects.get_full(&i) else {
+                        invariant_violation!("Unbound object input {i}")
+                    };
+                    (
+                        T::Location::ObjectInput(object_index as u16),
+                        object_input.ty.clone(),
+                    )
                 }
-                InputType::Fixed(t) => LocationType::Fixed(t.clone()),
+                InputKind::Pure | InputKind::Receiving => return Ok(None),
             },
-            T::Location::Result(i, j) => {
-                LocationType::Fixed(self.results[i as usize][j as usize].clone())
-            }
-            T::Location::TxContext => LocationType::Fixed(env.tx_context_type()?),
+        }))
+    }
+
+    fn resolve_location(
+        &mut self,
+        env: &Env,
+        location: SplatLocation,
+        expected_ty: &Type,
+        bytes_constraint: BytesConstraint,
+    ) -> Result<(T::Location, Type), ExecutionError> {
+        Ok(match location {
+            SplatLocation::TxContext | SplatLocation::GasCoin | SplatLocation::Result(_, _) => self
+                .fixed_type(env, location)?
+                .ok_or_else(|| make_invariant_violation!("Expected fixed type for {location:?}"))?,
+            SplatLocation::Input(i) => match &self.input_resolution[i as usize] {
+                InputKind::Object => self.fixed_type(env, location)?.ok_or_else(|| {
+                    make_invariant_violation!("Expected fixed type for {location:?}")
+                })?,
+                InputKind::Pure => {
+                    let ty = match expected_ty {
+                        Type::Reference(_, inner) => (**inner).clone(),
+                        ty => ty.clone(),
+                    };
+                    let k = (i, ty.clone());
+                    if !self.pure.contains_key(&k) {
+                        let Some(byte_index) = self.bytes_idx_remapping.get(&i).copied() else {
+                            invariant_violation!("Unbound pure input {i}");
+                        };
+                        let pure = T::PureInput {
+                            original_input_index: i,
+                            byte_index,
+                            ty: ty.clone(),
+                            constraint: bytes_constraint,
+                        };
+                        self.pure.insert(k.clone(), pure);
+                    }
+                    let byte_index = self.pure.get_index_of(&k).unwrap();
+                    (T::Location::PureInput(byte_index as u16), ty)
+                }
+                InputKind::Receiving => {
+                    let ty = match expected_ty {
+                        Type::Reference(_, inner) => (**inner).clone(),
+                        ty => ty.clone(),
+                    };
+                    let k = (i, ty.clone());
+                    if !self.receiving.contains_key(&k) {
+                        let Some(object_ref) = self.receiving_refs.get(&i).copied() else {
+                            invariant_violation!("Unbound receiving input {i}");
+                        };
+                        let receiving = T::ReceivingInput {
+                            original_input_index: i,
+                            object_ref,
+                            ty: ty.clone(),
+                            constraint: bytes_constraint,
+                        };
+                        self.receiving.insert(k.clone(), receiving);
+                    }
+                    let byte_index = self.receiving.get_index_of(&k).unwrap();
+                    (T::Location::ReceivingInput(byte_index as u16), ty)
+                }
+            },
         })
     }
 }
@@ -358,9 +427,9 @@ fn one_location(
     context: &mut Context,
     command_arg_idx: usize,
     arg: L::Argument,
-) -> Result<T::Location, ExecutionError> {
+) -> Result<SplatLocation, ExecutionError> {
     let locs = locations(context, command_arg_idx, vec![arg])?;
-    let Ok([loc]): Result<[T::Location; 1], _> = locs.try_into() else {
+    let Ok([loc]): Result<[SplatLocation; 1], _> = locs.try_into() else {
         return Err(command_argument_error(
             CommandArgumentError::InvalidArgumentArity,
             command_arg_idx,
@@ -379,11 +448,11 @@ where
 {
     fn splat_arg(
         context: &mut Context,
-        res: &mut Vec<T::Location>,
+        res: &mut Vec<SplatLocation>,
         arg: L::Argument,
     ) -> Result<(), EitherError> {
         match arg {
-            L::Argument::GasCoin => res.push(T::Location::GasCoin),
+            L::Argument::GasCoin => res.push(SplatLocation::GasCoin),
             L::Argument::Input(i) => {
                 if i as usize >= context.input_resolution.len() {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
@@ -473,7 +542,8 @@ fn argument_(
         command: current_command,
         argument: command_arg_idx as u16,
     };
-    let actual_ty: Type = context.resolve_location(env, location, expected_ty, bytes_constraint)?;
+    let (location, actual_ty): (T::Location, Type) =
+        context.resolve_location(env, location, expected_ty, bytes_constraint)?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
         (Type::Reference(a_is_mut, a), Type::Reference(b_is_mut, b)) => {
@@ -487,12 +557,7 @@ fn argument_(
             };
             debug_assert!(expected_ty.abilities().has_copy());
             // unused since the type is fixed
-            let unused_constraint = BytesConstraint {
-                command: current_command,
-                argument: command_arg_idx as u16,
-                usage: BytesUsage::Copied,
-            };
-            check_type(unused_constraint, LocationType::Fixed((*a).clone()), b)?;
+            check_type(&*a, b)?;
             if needs_freeze {
                 T::Argument__::Freeze(T::Usage::new_copy(location))
             } else {
@@ -500,13 +565,7 @@ fn argument_(
             }
         }
         (Type::Reference(_, a), b) => {
-            // unused since the type is fixed
-            let unused_constraint = BytesConstraint {
-                command: current_command,
-                argument: command_arg_idx as u16,
-                usage: BytesUsage::Copied,
-            };
-            check_type(unused_constraint, LocationType::Fixed((*a).clone()), b)?;
+            check_type(&*a, b)?;
             if !b.abilities().has_copy() {
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());
@@ -516,26 +575,11 @@ fn argument_(
 
         // Non reference location types
         (actual_ty, Type::Reference(is_mut, inner)) => {
-            let usage = if *is_mut {
-                BytesUsage::ByMutRef
-            } else {
-                BytesUsage::ByImmRef
-            };
-            let constraint = BytesConstraint {
-                command: current_command,
-                argument: command_arg_idx as u16,
-                usage,
-            };
-            check_type_impl(constraint, actual_ty, inner)?;
+            check_type(&actual_ty, inner)?;
             T::Argument__::Borrow(/* mut */ *is_mut, location)
         }
         (actual_ty, _) => {
-            let constraint = BytesConstraint {
-                command: current_command,
-                argument: command_arg_idx as u16,
-                usage: BytesUsage::Copied,
-            };
-            check_type(constraint, actual_ty, expected_ty)?;
+            check_type(&actual_ty, expected_ty)?;
             T::Argument__::Use(if expected_ty.abilities().has_copy() {
                 T::Usage::new_copy(location)
             } else {
@@ -545,38 +589,11 @@ fn argument_(
     })
 }
 
-fn check_type(
-    // not used if the type is fixed
-    constraint: BytesConstraint,
-    actual_ty: LocationType,
-    expected_ty: &Type,
-) -> Result<(), CommandArgumentError> {
-    debug_assert!(matches!(constraint.usage, BytesUsage::Copied));
-    check_type_impl(constraint, actual_ty, expected_ty)
-}
-
-fn check_type_impl(
-    // not used if the type is fixed
-    constraint: BytesConstraint,
-    mut actual_ty: LocationType,
-    expected_ty: &Type,
-) -> Result<(), CommandArgumentError> {
-    match &mut actual_ty {
-        LocationType::Fixed(actual_ty) | LocationType::Bytes(InputType::Fixed(actual_ty), _) => {
-            if actual_ty == expected_ty {
-                Ok(())
-            } else {
-                Err(CommandArgumentError::TypeMismatch)
-            }
-        }
-        LocationType::Bytes(ty, types) => {
-            if matches!(&constraint.usage, BytesUsage::ByMutRef) {
-                **ty = InputType::Fixed(expected_ty.clone());
-            }
-            types.entry(expected_ty.clone()).or_insert(constraint);
-            // validity of pure types is checked elsewhere
-            Ok(())
-        }
+fn check_type(actual_ty: &Type, expected_ty: &Type) -> Result<(), CommandArgumentError> {
+    if actual_ty == expected_ty {
+        Ok(())
+    } else {
+        Err(CommandArgumentError::TypeMismatch)
     }
 }
 
@@ -584,7 +601,7 @@ fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
     start_idx: usize,
-    locations: Vec<T::Location>,
+    locations: Vec<SplatLocation>,
     mut is_valid: P,
     err_case: CommandArgumentError,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
@@ -602,7 +619,7 @@ fn constrained_argument<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
-    location: T::Location,
+    location: SplatLocation,
     mut is_valid: P,
     err_case: CommandArgumentError,
 ) -> Result<T::Argument, ExecutionError> {
@@ -620,7 +637,7 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
-    location: T::Location,
+    location: SplatLocation,
     is_valid: &mut P,
     err_case: CommandArgumentError,
 ) -> Result<T::Argument, ExecutionError> {
@@ -632,11 +649,11 @@ fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
 fn constrained_argument__<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
-    location: T::Location,
+    location: SplatLocation,
     is_valid: &mut P,
     err_case: CommandArgumentError,
 ) -> Result<T::Argument_, EitherError> {
-    if let Some(ty) = constrained_type(env, context, location, is_valid)? {
+    if let Some((location, ty)) = constrained_type(env, context, location, is_valid)? {
         if ty.abilities().has_copy() {
             Ok((T::Argument__::new_copy(location), ty))
         } else {
@@ -650,20 +667,24 @@ fn constrained_argument__<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
 fn constrained_type<'a, P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &'a Env,
     context: &'a mut Context,
-    location: T::Location,
+    location: SplatLocation,
     mut is_valid: P,
-) -> Result<Option<Type>, ExecutionError> {
-    let LocationType::Fixed(ty) = context.location_type(env, location)? else {
+) -> Result<Option<(T::Location, Type)>, ExecutionError> {
+    let Some((location, ty)) = context.fixed_type(env, location)? else {
         return Ok(None);
     };
-    Ok(if is_valid(&ty)? { Some(ty) } else { None })
+    Ok(if is_valid(&ty)? {
+        Some((location, ty))
+    } else {
+        None
+    })
 }
 
 fn coin_mut_ref_argument(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
-    location: T::Location,
+    location: SplatLocation,
 ) -> Result<T::Argument, ExecutionError> {
     let arg_ = coin_mut_ref_argument_(env, context, location)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
@@ -673,29 +694,27 @@ fn coin_mut_ref_argument(
 fn coin_mut_ref_argument_(
     env: &Env,
     context: &mut Context,
-    location: T::Location,
+    location: SplatLocation,
 ) -> Result<T::Argument_, EitherError> {
-    let actual_ty = context.location_type(env, location)?;
-
+    let Some((location, actual_ty)) = context.fixed_type(env, location)? else {
+        // TODO we do not currently bytes in any mode as that would require additional type
+        // inference not currently supported
+        return Err(CommandArgumentError::TypeMismatch.into());
+    };
     Ok(match &actual_ty {
-        LocationType::Fixed(Type::Reference(is_mut, ty)) if *is_mut => {
+        Type::Reference(is_mut, ty) if *is_mut => {
             check_coin_type(ty)?;
             (
                 T::Argument__::new_copy(location),
                 Type::Reference(*is_mut, ty.clone()),
             )
         }
-        LocationType::Fixed(ty) => {
+        ty => {
             check_coin_type(ty)?;
             (
                 T::Argument__::Borrow(/* mut */ true, location),
                 Type::Reference(true, Rc::new(ty.clone())),
             )
-        }
-        LocationType::Bytes(_, _) => {
-            // TODO we do not currently bytes in any mode as that would require additional type
-            // inference not currently supported
-            return Err(CommandArgumentError::TypeMismatch.into());
         }
     })
 }

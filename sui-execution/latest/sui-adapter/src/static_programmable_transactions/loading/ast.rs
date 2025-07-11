@@ -49,7 +49,7 @@ pub enum ObjectArg {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Type {
     Bool,
     U8,
@@ -65,13 +65,13 @@ pub enum Type {
     Reference(/* is mut */ bool, Rc<Type>),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Vector {
     pub abilities: AbilitySet,
     pub element_type: Type,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Datatype {
     pub abilities: AbilitySet,
     pub module: ModuleId,
