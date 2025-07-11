@@ -6,11 +6,8 @@ use crate::static_programmable_transactions::{
 };
 use indexmap::IndexSet;
 use move_vm_types::values::VectorSpecialization;
-use std::{cell::OnceCell, collections::BTreeMap, fmt};
-use sui_types::{
-    base_types::{ObjectID, ObjectRef},
-    transfer::Receiving,
-};
+use std::cell::OnceCell;
+use sui_types::base_types::{ObjectID, ObjectRef};
 
 //**************************************************************************************************
 // AST Nodes
