@@ -177,7 +177,7 @@ impl<'r> Visitor<'r> for OutputNodeRule<'r, '_> {
     }
 }
 
-/// Test that the the query does not produce an excessively large output by estimating the number
+/// Test that the query does not produce an excessively large output by estimating the number
 /// of output nodes it will produce before executing it.
 ///
 /// This check must be done after the input limit check, because it relies on the query depth being
