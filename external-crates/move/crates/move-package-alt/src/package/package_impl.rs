@@ -17,7 +17,7 @@ use crate::{
     package::lockfile::Lockfiles,
     schema::{
         EnvironmentName, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageName,
-        Publication, PublishedID,
+        PublishedEnvironments, PublishedID,
     },
 };
 
@@ -30,7 +30,7 @@ pub struct Package<F: MoveFlavor> {
     path: PackagePath,
     /// The on-chain publish information per environment
     /// TODO(manos): Replace this with a type as it's used in many places.
-    publish_data: BTreeMap<EnvironmentName, Publication<F>>,
+    publish_data: PublishedEnvironments<F>,
     /// The way this package should be serialized to the lockfile
     source: LockfileDependencyInfo,
     /// Optional legacy information for a supplied package.
@@ -102,7 +102,7 @@ impl<F: MoveFlavor> Package<F> {
     /// Try to load a lockfile and extract the published information for each environment from it
     fn load_published_info_from_lockfile(
         path: &PackagePath,
-    ) -> PackageResult<BTreeMap<EnvironmentName, Publication<F>>> {
+    ) -> PackageResult<PublishedEnvironments<F>> {
         let lockfile = Lockfiles::<F>::read_from_dir(path)?;
 
         let publish_data = lockfile
