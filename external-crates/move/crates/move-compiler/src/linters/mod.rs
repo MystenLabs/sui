@@ -22,10 +22,10 @@ pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
 pub mod self_assignment;
 pub mod unnecessary_conditional;
+pub mod unnecessary_public_entry;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
-pub mod unnecessary_public_entry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
