@@ -1075,11 +1075,13 @@ impl CheckpointBuilder {
     /// if slow recovery of previously built checkpoints is due to consensus replay or
     /// checkpoint building.
     async fn run(mut self, consensus_replay_waiter: Option<ReplayWaiter>) {
+        /*
         if let Some(replay_waiter) = consensus_replay_waiter {
             info!("Waiting for consensus commits to replay ...");
             replay_waiter.wait_for_replay().await;
             info!("Consensus commits finished replaying");
         }
+        */
         info!("Starting CheckpointBuilder");
         loop {
             self.maybe_build_checkpoints().await;

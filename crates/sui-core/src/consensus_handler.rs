@@ -571,6 +571,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         // - The highest executed checkpoint catches up to the highest certified checkpoint.
         self.backpressure_subscriber.await_no_backpressure().await;
 
+        // Random sleep to introduce jitter (for testing or simulation purposes)
+        #[cfg(msim)]
+        {
+            use rand::Rng;
+            let millis = rand::thread_rng().gen_range(0..500);
+            tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+        }
+
         let _scope = monitored_scope("ConsensusCommitHandler::handle_consensus_commit");
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
