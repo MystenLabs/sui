@@ -9,6 +9,7 @@
 #![allow(unused)]
 #![warn(unused_imports)]
 pub mod cli;
+pub mod compatibility;
 pub mod dependency;
 pub mod errors;
 pub mod flavor;

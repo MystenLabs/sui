@@ -80,19 +80,30 @@ impl<F: MoveFlavor> Manifest<F> {
         debug!("Reading manifest from {:?}", path.as_ref());
 
         let file_id = FileHandle::new(&path).map_err(ManifestError::with_file(&path))?;
+
         let parsed: ParsedManifest =
             toml_edit::de::from_str(file_id.source()).map_err(ManifestError::from_toml(file_id))?;
 
+        let result = Self::from_parsed_manifest(parsed, file_id)?;
+        result.validate_manifest(file_id)?;
+
+        Ok(result)
+    }
+
+    // Try to convert a `ParsedManifest` into a modern manifest.
+    // TODO(manos): This one skips validation, we should align on what we wanna validate on legacy packages.
+    pub fn from_parsed_manifest(
+        parsed: ParsedManifest,
+        file_id: FileHandle,
+    ) -> ManifestResult<Self> {
         let dependencies = CombinedDependency::combine_deps(file_id, &parsed)?;
 
-        let result = Self {
+        Ok(Self {
             inner: parsed,
             digest: format!("{:X}", Sha256::digest(file_id.source().as_ref())),
             dependencies,
             phantom: PhantomData,
-        };
-        result.validate_manifest(file_id)?;
-        Ok(result)
+        })
     }
 
     /// The combined entries of the `[dependencies]` and `[dep-replacements]` sections for this
