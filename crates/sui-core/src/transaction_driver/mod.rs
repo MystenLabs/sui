@@ -3,6 +3,7 @@
 
 mod effects_certifier;
 mod error;
+mod error_categorizer;
 mod message_types;
 mod metrics;
 mod transaction_submitter;
@@ -12,6 +13,7 @@ use std::{net::SocketAddr, sync::Arc, time::Instant};
 use arc_swap::ArcSwap;
 pub use effects_certifier::*;
 pub use error::*;
+pub use error_categorizer::*;
 pub use message_types::*;
 pub use metrics::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
