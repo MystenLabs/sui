@@ -45,11 +45,10 @@ pub enum OperationFeedback {
         latency: Duration,
         error: String,
     },
-    /// Health check result
-    HealthCheckResult {
+    /// Health check succeeded (we only care about latency, not the response data)
+    HealthCheckSuccess {
         validator: AuthorityName,
         latency: Duration,
-        metrics: HealthMetrics,
     },
     /// Health check failed
     HealthCheckFailure {
@@ -57,23 +56,4 @@ pub enum OperationFeedback {
         latency: Duration,
         error: String,
     },
-}
-
-/// Health metrics reported by validators
-#[derive(Debug, Clone, Default)]
-pub struct HealthMetrics {
-    /// Number of pending certificates
-    pub pending_certificates: u64,
-    /// Number of in-flight consensus messages
-    pub inflight_consensus_messages: u64,
-    /// Current consensus round
-    pub consensus_round: u64,
-    /// Current checkpoint sequence number
-    pub checkpoint_sequence: u64,
-    /// Transaction execution queue size
-    pub tx_queue_size: u64,
-    /// Available system memory in bytes
-    pub available_memory: Option<u64>,
-    /// CPU usage percentage (0-100)
-    pub cpu_usage: Option<f32>,
 }

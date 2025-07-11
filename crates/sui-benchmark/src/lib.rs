@@ -20,6 +20,7 @@ use sui_core::{
     transaction_driver::{
         SubmitTransactionOptions, SubmitTxRequest, TransactionDriver, TransactionDriverMetrics,
     },
+    validator_performance_monitor::{ValidatorPerformanceConfig, ValidatorPerformanceMetrics},
 };
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
@@ -330,7 +331,15 @@ impl LocalValidatorAggregatorProxy {
                 .with_reconfig_observer(reconfig_observer.clone());
         let qd_handler = qd_handler_builder.start();
         let qd = qd_handler.clone_quorum_driver();
-        let td = TransactionDriver::new(aggregator, reconfig_observer, transaction_driver_metrics);
+        let performance_config = ValidatorPerformanceConfig::default();
+        let performance_metrics = Arc::new(ValidatorPerformanceMetrics::new(&Registry::new()));
+        let td = TransactionDriver::new(
+            aggregator,
+            reconfig_observer,
+            transaction_driver_metrics,
+            performance_config,
+            performance_metrics,
+        );
         Self {
             _qd_handler: qd_handler,
             qd,

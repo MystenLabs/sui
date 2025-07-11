@@ -54,22 +54,6 @@ pub struct ScoreWeights {
     /// Weight for success rate
     #[serde(default = "default_success_rate_weight")]
     pub success_rate: f64,
-
-    /// Weight for pending certificates (lower is better)
-    #[serde(default = "default_pending_certificates_weight")]
-    pub pending_certificates: f64,
-
-    /// Weight for consensus lag (lower is better)
-    #[serde(default = "default_consensus_lag_weight")]
-    pub consensus_lag: f64,
-
-    /// Weight for queue size (lower is better)
-    #[serde(default = "default_queue_size_weight")]
-    pub queue_size: f64,
-
-    /// Weight for resource usage (lower is better)
-    #[serde(default = "default_resource_usage_weight")]
-    pub resource_usage: f64,
 }
 
 /// Strategy for selecting validators
@@ -118,10 +102,6 @@ impl Default for ScoreWeights {
         Self {
             latency: default_latency_weight(),
             success_rate: default_success_rate_weight(),
-            pending_certificates: default_pending_certificates_weight(),
-            consensus_lag: default_consensus_lag_weight(),
-            queue_size: default_queue_size_weight(),
-            resource_usage: default_resource_usage_weight(),
         }
     }
 }
@@ -161,25 +141,9 @@ fn default_max_consecutive_failures() -> u32 {
 }
 
 fn default_latency_weight() -> f64 {
-    0.3
-}
-
-fn default_success_rate_weight() -> f64 {
     0.4
 }
 
-fn default_pending_certificates_weight() -> f64 {
-    0.1
-}
-
-fn default_consensus_lag_weight() -> f64 {
-    0.1
-}
-
-fn default_queue_size_weight() -> f64 {
-    0.05
-}
-
-fn default_resource_usage_weight() -> f64 {
-    0.05
+fn default_success_rate_weight() -> f64 {
+    0.6
 }

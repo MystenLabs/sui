@@ -97,19 +97,21 @@ mod test_validator_performance_monitor {
                         Some(&error),
                     );
                 }
-                OperationFeedback::HealthCheckResult {
-                    validator,
-                    latency,
-                    metrics,
-                } => {
-                    self.record_health_check_result(&validator, latency, metrics);
+                OperationFeedback::HealthCheckSuccess { validator, latency } => {
+                    self.record_operation_result(&validator, "health_check", true, latency, None);
                 }
                 OperationFeedback::HealthCheckFailure {
                     validator,
                     latency,
                     error,
                 } => {
-                    self.record_health_check_failure(&validator, latency, &error);
+                    self.record_operation_result(
+                        &validator,
+                        "health_check",
+                        false,
+                        latency,
+                        Some(&error),
+                    );
                 }
             }
         }
@@ -258,43 +260,6 @@ mod test_validator_performance_monitor {
             self.recalculate_scores();
         }
 
-        fn record_health_check_result(
-            &self,
-            validator: &AuthorityName,
-            latency: Duration,
-            metrics: HealthMetrics,
-        ) {
-            let validator_str = validator.concise().to_string();
-
-            // Update health metrics
-            self.metrics
-                .health_check_latency
-                .with_label_values(&[&validator_str])
-                .observe(latency.as_secs_f64());
-
-            // Update validator data
-            let mut data = self.validator_data.write();
-            let vdata = data.entry(*validator).or_default();
-            vdata.stats.latest_health = Some(metrics);
-
-            drop(data);
-            self.recalculate_scores();
-        }
-
-        fn record_health_check_failure(
-            &self,
-            validator: &AuthorityName,
-            latency: Duration,
-            error: &str,
-        ) {
-            debug!(
-                "Health check failed for validator {}: {}",
-                validator.concise(),
-                error
-            );
-            self.record_operation_result(validator, "health_check", false, latency, Some(error));
-        }
-
         fn recalculate_scores(&self) {
             let mut data = self.validator_data.write();
             let all_stats: std::collections::HashMap<AuthorityName, ValidatorStats> = data
@@ -344,15 +309,6 @@ mod test_validator_performance_monitor {
             success_count: 90,
             failure_count: 10,
             avg_latency: Duration::from_millis(100),
-            latest_health: Some(HealthMetrics {
-                pending_certificates: 100,
-                inflight_consensus_messages: 50,
-                consensus_round: 1000,
-                checkpoint_sequence: 500,
-                tx_queue_size: 1000,
-                available_memory: Some(8_000_000_000), // 8GB
-                cpu_usage: Some(30.0),
-            }),
             consecutive_failures: 0,
             last_success: Some(Instant::now()),
             last_failure: None,
@@ -369,19 +325,11 @@ mod test_validator_performance_monitor {
         let score_with_failures = calculator.calculate_score(&stats);
         assert!(score_with_failures.overall_score < score.overall_score);
 
-        // Test with poor health metrics
+        // Test with higher latency
         stats.consecutive_failures = 0;
-        stats.latest_health = Some(HealthMetrics {
-            pending_certificates: 5000,
-            inflight_consensus_messages: 500,
-            consensus_round: 900,
-            checkpoint_sequence: 450,
-            tx_queue_size: 10000,
-            available_memory: Some(1_000_000_000),
-            cpu_usage: Some(95.0),
-        });
-        let score_poor_health = calculator.calculate_score(&stats);
-        assert!(score_poor_health.overall_score < score.overall_score);
+        stats.avg_latency = Duration::from_millis(500);
+        let score_high_latency = calculator.calculate_score(&stats);
+        assert!(score_high_latency.overall_score < score.overall_score);
     }
 
     #[test]
@@ -496,10 +444,41 @@ mod test_validator_performance_monitor {
     }
 
     #[test]
-    fn test_health_metrics_impact() {
+    fn test_latency_impact_on_selection() {
         let (monitor, names) = create_test_monitor_simple(2);
 
-        // Both validators have same success rate
+        // Both validators have same success rate but different latencies
+        for _ in 0..10 {
+            monitor.record_feedback(OperationFeedback::SubmitSuccess {
+                validator: names[0],
+                latency: Duration::from_millis(50), // Lower latency
+            });
+        }
+
+        for _ in 0..10 {
+            monitor.record_feedback(OperationFeedback::SubmitSuccess {
+                validator: names[1],
+                latency: Duration::from_millis(200), // Higher latency
+            });
+        }
+
+        // Lower latency validator should be selected
+        let selection = monitor.select_validator();
+        assert_eq!(selection.validator, names[0]);
+
+        // Check that the lower latency validator has a better score
+        let records = monitor.get_performance_records();
+        let record_0 = records.iter().find(|r| r.validator == names[0]).unwrap();
+        let record_1 = records.iter().find(|r| r.validator == names[1]).unwrap();
+
+        assert!(record_0.score.overall_score > record_1.score.overall_score);
+    }
+
+    #[test]
+    fn test_health_check_latency_impact() {
+        let (monitor, names) = create_test_monitor_simple(2);
+
+        // Both validators have same transaction success rate
         for validator in names.iter().take(2) {
             for _ in 0..10 {
                 monitor.record_feedback(OperationFeedback::SubmitSuccess {
@@ -509,46 +488,29 @@ mod test_validator_performance_monitor {
             }
         }
 
-        // But different health metrics
-        monitor.record_feedback(OperationFeedback::HealthCheckResult {
-            validator: names[0],
-            latency: Duration::from_millis(10),
-            metrics: HealthMetrics {
-                pending_certificates: 100,
-                inflight_consensus_messages: 50,
-                consensus_round: 1000,
-                checkpoint_sequence: 500,
-                tx_queue_size: 100,
-                available_memory: Some(8_000_000_000),
-                cpu_usage: Some(20.0),
-            },
-        });
-
-        monitor.record_feedback(OperationFeedback::HealthCheckResult {
-            validator: names[1],
-            latency: Duration::from_millis(10),
-            metrics: HealthMetrics {
-                pending_certificates: 5000,
-                inflight_consensus_messages: 500,
-                consensus_round: 900,
-                checkpoint_sequence: 450,
-                tx_queue_size: 10000,
-                available_memory: Some(1_000_000_000),
-                cpu_usage: Some(90.0),
-            },
-        });
-
-        // Count selections
-        let mut selection_counts = HashMap::new();
-        for _ in 0..100 {
-            let selection = monitor.select_validator();
-            *selection_counts.entry(selection.validator).or_insert(0) += 1;
+        // But different health check latencies
+        for _ in 0..5 {
+            monitor.record_feedback(OperationFeedback::HealthCheckSuccess {
+                validator: names[0],
+                latency: Duration::from_millis(20), // Fast health checks
+            });
         }
 
-        // Healthier validator should be selected more
-        let count_0 = selection_counts.get(&names[0]).unwrap_or(&0);
-        let count_1 = selection_counts.get(&names[1]).unwrap_or(&0);
-        assert!(count_0 > count_1);
+        for _ in 0..5 {
+            monitor.record_feedback(OperationFeedback::HealthCheckSuccess {
+                validator: names[1],
+                latency: Duration::from_millis(200), // Slow health checks
+            });
+        }
+
+        // Validator with faster health checks should have better overall score
+        let records = monitor.get_performance_records();
+        let record_0 = records.iter().find(|r| r.validator == names[0]).unwrap();
+        let record_1 = records.iter().find(|r| r.validator == names[1]).unwrap();
+
+        // Since health check latency contributes to overall latency calculation,
+        // validator 0 should have a better score
+        assert!(record_0.score.overall_score > record_1.score.overall_score);
     }
 
     #[test]

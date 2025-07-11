@@ -25,27 +25,6 @@ pub struct ValidatorPerformanceMetrics {
     /// Current performance score per validator
     pub performance_score: GaugeVec,
 
-    /// Health check latency per validator
-    pub health_check_latency: HistogramVec,
-
-    /// Pending certificates reported by validators
-    pub pending_certificates: IntGaugeVec,
-
-    /// Consensus round reported by validators
-    pub consensus_round: IntGaugeVec,
-
-    /// Checkpoint sequence reported by validators
-    pub checkpoint_sequence: IntGaugeVec,
-
-    /// Transaction queue size reported by validators
-    pub tx_queue_size: IntGaugeVec,
-
-    /// CPU usage reported by validators
-    pub cpu_usage: GaugeVec,
-
-    /// Available memory reported by validators
-    pub available_memory: IntGaugeVec,
-
     /// Number of times each validator was selected
     pub validator_selections: IntCounterVec,
 
@@ -87,63 +66,6 @@ impl ValidatorPerformanceMetrics {
             performance_score: register_gauge_vec_with_registry!(
                 "validator_performance_score",
                 "Current performance score per validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            health_check_latency: register_histogram_vec_with_registry!(
-                "validator_health_check_latency",
-                "Health check latency per validator",
-                &["validator"],
-                LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-
-            pending_certificates: register_int_gauge_vec_with_registry!(
-                "validator_pending_certificates",
-                "Pending certificates reported by validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            consensus_round: register_int_gauge_vec_with_registry!(
-                "validator_consensus_round",
-                "Current consensus round reported by validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            checkpoint_sequence: register_int_gauge_vec_with_registry!(
-                "validator_checkpoint_sequence",
-                "Current checkpoint sequence reported by validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            tx_queue_size: register_int_gauge_vec_with_registry!(
-                "validator_tx_queue_size",
-                "Transaction queue size reported by validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            cpu_usage: register_gauge_vec_with_registry!(
-                "validator_cpu_usage",
-                "CPU usage percentage reported by validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            available_memory: register_int_gauge_vec_with_registry!(
-                "validator_available_memory",
-                "Available memory in bytes reported by validator",
                 &["validator"],
                 registry,
             )

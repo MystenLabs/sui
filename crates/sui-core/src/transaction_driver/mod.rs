@@ -17,7 +17,6 @@ pub use message_types::*;
 pub use metrics::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
-use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
     committee::EpochId,
@@ -53,7 +52,7 @@ pub struct TransactionDriver<A: Clone> {
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     state: Mutex<State>,
     metrics: Arc<TransactionDriverMetrics>,
-    performance_monitor: Option<Arc<ValidatorPerformanceMonitor<A>>>,
+    performance_monitor: Arc<ValidatorPerformanceMonitor<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -61,22 +60,6 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub fn new(
-        authority_aggregator: Arc<AuthorityAggregator<A>>,
-        reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
-        metrics: Arc<TransactionDriverMetrics>,
-    ) -> Arc<Self> {
-        let driver = Arc::new(Self {
-            authority_aggregator: Arc::new(ArcSwap::new(authority_aggregator)),
-            state: Mutex::new(State::new()),
-            metrics,
-            performance_monitor: None,
-        });
-        driver.enable_reconfig(reconfig_observer);
-        driver
-    }
-
-    /// Create with performance monitor enabled
-    pub fn new_with_performance_monitor(
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<TransactionDriverMetrics>,
@@ -95,7 +78,7 @@ where
             authority_aggregator: shared_swap,
             state: Mutex::new(State::new()),
             metrics,
-            performance_monitor: Some(performance_monitor),
+            performance_monitor,
         });
 
         driver.enable_reconfig(reconfig_observer);
@@ -148,29 +131,22 @@ where
             .into_raw()
             .map_err(TransactionDriverError::SerializationError)?;
 
-        // Select validator based on performance or fallback to random
-        let selected_validator = if let Some(perf_monitor) = &self.performance_monitor {
-            let selection = perf_monitor.select_validator();
-            debug!(
-                "Selected validator {} with score {} via {:?}",
-                selection.validator.concise(),
-                selection.score,
-                selection.reason
-            );
+        // Select validator based on performance
+        let selection = self.performance_monitor.select_validator();
+        debug!(
+            "Selected validator {} with score {} via {:?}",
+            selection.validator.concise(),
+            selection.score,
+            selection.reason
+        );
 
-            // Record selection in metrics
-            self.metrics
-                .validator_selections
-                .with_label_values(&[&selection.validator.concise().to_string()])
-                .inc();
+        // Record selection in metrics
+        self.metrics
+            .validator_selections
+            .with_label_values(&[&selection.validator.concise().to_string()])
+            .inc();
 
-            selection.validator
-        } else {
-            // Fallback to random selection
-            let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
-            let (name, _) = clients.choose(&mut rand::thread_rng()).unwrap();
-            **name
-        };
+        let selected_validator = selection.validator;
 
         let client = auth_agg
             .authority_clients
@@ -187,23 +163,21 @@ where
         {
             Ok(Ok(pos)) => {
                 let latency = submit_start.elapsed();
-                if let Some(perf_monitor) = &self.performance_monitor {
-                    perf_monitor.record_feedback(OperationFeedback::SubmitSuccess {
+                self.performance_monitor
+                    .record_feedback(OperationFeedback::SubmitSuccess {
                         validator: selected_validator,
                         latency,
                     });
-                }
                 pos
             }
             Ok(Err(e)) => {
                 let latency = submit_start.elapsed();
-                if let Some(perf_monitor) = &self.performance_monitor {
-                    perf_monitor.record_feedback(OperationFeedback::SubmitFailure {
+                self.performance_monitor
+                    .record_feedback(OperationFeedback::SubmitFailure {
                         validator: selected_validator,
                         latency,
                         error: e.to_string(),
                     });
-                }
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
                     e.to_string(),
@@ -211,13 +185,12 @@ where
             }
             Err(_) => {
                 let latency = submit_start.elapsed();
-                if let Some(perf_monitor) = &self.performance_monitor {
-                    perf_monitor.record_feedback(OperationFeedback::SubmitFailure {
+                self.performance_monitor
+                    .record_feedback(OperationFeedback::SubmitFailure {
                         validator: selected_validator,
                         latency,
                         error: "timeout".to_string(),
                     });
-                }
                 return Err(TransactionDriverError::TimeoutBeforeFinality);
             }
         };
@@ -246,23 +219,21 @@ where
         {
             Ok(Ok(response)) => {
                 let latency = effects_start.elapsed();
-                if let Some(perf_monitor) = &self.performance_monitor {
-                    perf_monitor.record_feedback(OperationFeedback::EffectsSuccess {
+                self.performance_monitor
+                    .record_feedback(OperationFeedback::EffectsSuccess {
                         validator: selected_validator,
                         latency,
                     });
-                }
                 response
             }
             Ok(Err(e)) => {
                 let latency = effects_start.elapsed();
-                if let Some(perf_monitor) = &self.performance_monitor {
-                    perf_monitor.record_feedback(OperationFeedback::EffectsFailure {
+                self.performance_monitor
+                    .record_feedback(OperationFeedback::EffectsFailure {
                         validator: selected_validator,
                         latency,
                         error: e.to_string(),
                     });
-                }
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
                     e.to_string(),
@@ -270,13 +241,12 @@ where
             }
             Err(_) => {
                 let latency = effects_start.elapsed();
-                if let Some(perf_monitor) = &self.performance_monitor {
-                    perf_monitor.record_feedback(OperationFeedback::EffectsFailure {
+                self.performance_monitor
+                    .record_feedback(OperationFeedback::EffectsFailure {
                         validator: selected_validator,
                         latency,
                         error: "timeout".to_string(),
                     });
-                }
                 return Err(TransactionDriverError::TimeoutWaitingForEffects);
             }
         };
@@ -350,9 +320,7 @@ where
         self.authority_aggregator.store(new_authorities);
 
         // Notify performance monitor of epoch change
-        if let Some(perf_monitor) = &self.performance_monitor {
-            perf_monitor.on_epoch_change(new_epoch);
-        }
+        self.performance_monitor.on_epoch_change(new_epoch);
     }
 }
 

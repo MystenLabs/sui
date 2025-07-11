@@ -109,7 +109,7 @@ pub trait AuthorityAPI {
         request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError>;
 
-    /// Get validator health metrics
+    /// Get validator health metrics (for latency measurement)
     async fn validator_health(
         &self,
         request: sui_types::messages_grpc::RawValidatorHealthRequest,

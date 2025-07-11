@@ -1465,37 +1465,37 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<sui_types::messages_grpc::RawValidatorHealthResponse> {
         let state = &self.state;
 
-        // Get pending certificates count (approximation)
-        let pending_certificates = 0u64; // TODO: Get real count from authority state
+        // Get in-flight execution transactions from execution scheduler
+        let num_inflight_execution_transactions =
+            state.execution_scheduler().num_pending_certificates() as u64;
 
-        // Get consensus round (approximation)
-        let consensus_round = 0u64; // TODO: Get real consensus round
+        // Get in-flight consensus transactions from consensus adapter
+        let num_inflight_consensus_transactions =
+            self.consensus_adapter.num_inflight_transactions();
 
-        // Get checkpoint sequence
-        let checkpoint_sequence = match state
-            .get_checkpoint_store()
-            .get_highest_executed_checkpoint()
-        {
-            Ok(Some(checkpoint)) => checkpoint.data().sequence_number,
-            _ => 0,
-        };
+        // Get epoch store once for both metrics
+        let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        // Get transaction queue size (approximation)
-        let tx_queue_size = 0u64; // TODO: Get real queue size
+        // Get last committed leader round from epoch store
+        let last_committed_leader_round = epoch_store
+            .get_last_consensus_stats()
+            .ok()
+            .map(|stats| stats.index.last_committed_round)
+            .unwrap_or(0);
 
-        // TODO: Add real system metrics collection
-        // For now, return None for optional fields
-        let available_memory = None;
-        let cpu_usage = None;
+        // Get last locally built checkpoint sequence
+        let last_locally_built_checkpoint = epoch_store
+            .last_built_checkpoint_summary()
+            .ok()
+            .flatten()
+            .map(|(_, summary)| summary.sequence_number)
+            .unwrap_or(0);
 
         let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
-            pending_certificates,
-            inflight_consensus_messages: 0, // TODO: Get from consensus adapter
-            consensus_round,
-            checkpoint_sequence,
-            tx_queue_size,
-            available_memory,
-            cpu_usage,
+            num_inflight_consensus_transactions,
+            num_inflight_execution_transactions,
+            last_locally_built_checkpoint,
+            last_committed_leader_round,
         };
 
         let raw_response = typed_response

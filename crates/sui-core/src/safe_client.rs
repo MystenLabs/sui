@@ -704,7 +704,7 @@ where
             .await
     }
 
-    /// Handle validator health check requests
+    /// Handle validator health check requests (for latency measurement)
     #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn validator_health(
         &self,

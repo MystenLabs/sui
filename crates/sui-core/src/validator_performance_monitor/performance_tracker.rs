@@ -6,7 +6,7 @@ use crate::validator_performance_monitor::{
     config::{SelectionStrategy, ValidatorPerformanceConfig},
     metrics::ValidatorPerformanceMetrics,
     score_calculator::{PerformanceScore, ScoreCalculator, ValidatorStats},
-    HealthMetrics, OperationFeedback,
+    OperationFeedback,
 };
 use arc_swap::ArcSwap;
 use parking_lot::RwLock;
@@ -19,7 +19,7 @@ use std::{
 use sui_types::{
     base_types::{AuthorityName, ConciseableName},
     committee::EpochId,
-    messages_grpc::{ValidatorHealthRequest, ValidatorHealthResponse},
+    messages_grpc::ValidatorHealthRequest,
 };
 use tokio::{
     task::JoinSet,
@@ -134,19 +134,21 @@ where
             } => {
                 self.record_operation_result(&validator, "effects", false, latency, Some(&error));
             }
-            OperationFeedback::HealthCheckResult {
-                validator,
-                latency,
-                metrics,
-            } => {
-                self.record_health_check_result(&validator, latency, metrics);
+            OperationFeedback::HealthCheckSuccess { validator, latency } => {
+                self.record_operation_result(&validator, "health_check", true, latency, None);
             }
             OperationFeedback::HealthCheckFailure {
                 validator,
                 latency,
                 error,
             } => {
-                self.record_health_check_failure(&validator, latency, &error);
+                self.record_operation_result(
+                    &validator,
+                    "health_check",
+                    false,
+                    latency,
+                    Some(&error),
+                );
             }
         }
     }
@@ -348,77 +350,6 @@ where
         self.recalculate_scores();
     }
 
-    fn record_health_check_result(
-        &self,
-        validator: &AuthorityName,
-        latency: Duration,
-        metrics: HealthMetrics,
-    ) {
-        let validator_str = validator.concise().to_string();
-
-        // Update health metrics
-        self.metrics
-            .health_check_latency
-            .with_label_values(&[&validator_str])
-            .observe(latency.as_secs_f64());
-
-        self.metrics
-            .pending_certificates
-            .with_label_values(&[&validator_str])
-            .set(metrics.pending_certificates as i64);
-
-        self.metrics
-            .consensus_round
-            .with_label_values(&[&validator_str])
-            .set(metrics.consensus_round as i64);
-
-        self.metrics
-            .checkpoint_sequence
-            .with_label_values(&[&validator_str])
-            .set(metrics.checkpoint_sequence as i64);
-
-        self.metrics
-            .tx_queue_size
-            .with_label_values(&[&validator_str])
-            .set(metrics.tx_queue_size as i64);
-
-        if let Some(cpu) = metrics.cpu_usage {
-            self.metrics
-                .cpu_usage
-                .with_label_values(&[&validator_str])
-                .set(cpu as f64);
-        }
-
-        if let Some(mem) = metrics.available_memory {
-            self.metrics
-                .available_memory
-                .with_label_values(&[&validator_str])
-                .set(mem as i64);
-        }
-
-        // Update validator data
-        let mut data = self.validator_data.write();
-        let vdata = data.entry(*validator).or_default();
-        vdata.stats.latest_health = Some(metrics);
-
-        drop(data);
-        self.recalculate_scores();
-    }
-
-    fn record_health_check_failure(
-        &self,
-        validator: &AuthorityName,
-        latency: Duration,
-        error: &str,
-    ) {
-        debug!(
-            "Health check failed for validator {}: {}",
-            validator.concise(),
-            error
-        );
-        self.record_operation_result(validator, "health_check", false, latency, Some(error));
-    }
-
     fn recalculate_scores(&self) {
         let mut data = self.validator_data.write();
         let all_stats: HashMap<AuthorityName, ValidatorStats> = data
@@ -443,65 +374,6 @@ where
                 .performance_score
                 .with_label_values(&[&validator.concise().to_string()])
                 .set(vdata.score.overall_score);
-        }
-    }
-
-    async fn run_health_checks(&self) {
-        let mut interval = interval(self.config.health_check_interval);
-
-        loop {
-            interval.tick().await;
-
-            let authority_agg = self.authority_aggregator.load();
-            let mut tasks = JoinSet::new();
-
-            for (name, safe_client) in authority_agg.authority_clients.iter() {
-                let name = *name;
-                let client = safe_client.clone();
-                let timeout_duration = self.config.health_check_timeout;
-                let monitor = self.clone();
-
-                tasks.spawn(async move {
-                    let start = Instant::now();
-                    match timeout(
-                        timeout_duration,
-                        client.validator_health(ValidatorHealthRequest {}),
-                    )
-                    .await
-                    {
-                        Ok(Ok(response)) => {
-                            let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback::HealthCheckResult {
-                                validator: name,
-                                latency,
-                                metrics: HealthMetrics::from(response),
-                            });
-                        }
-                        Ok(Err(e)) => {
-                            let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback::HealthCheckFailure {
-                                validator: name,
-                                latency,
-                                error: e.to_string(),
-                            });
-                        }
-                        Err(_) => {
-                            let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback::HealthCheckFailure {
-                                validator: name,
-                                latency,
-                                error: "timeout".to_string(),
-                            });
-                        }
-                    }
-                });
-            }
-
-            while let Some(result) = tasks.join_next().await {
-                if let Err(e) = result {
-                    warn!("Health check task failed: {}", e);
-                }
-            }
         }
     }
 
@@ -654,6 +526,64 @@ where
             reason: SelectionReason::PowerOfChoice(choices),
         }
     }
+
+    async fn run_health_checks(&self) {
+        let mut interval = interval(self.config.health_check_interval);
+
+        loop {
+            interval.tick().await;
+
+            let authority_agg = self.authority_aggregator.load();
+            let mut tasks = JoinSet::new();
+
+            for (name, safe_client) in authority_agg.authority_clients.iter() {
+                let name = *name;
+                let client = safe_client.clone();
+                let timeout_duration = self.config.health_check_timeout;
+                let monitor = self.clone();
+
+                tasks.spawn(async move {
+                    let start = Instant::now();
+                    match timeout(
+                        timeout_duration,
+                        client.validator_health(ValidatorHealthRequest {}),
+                    )
+                    .await
+                    {
+                        Ok(Ok(_response)) => {
+                            let latency = start.elapsed();
+                            monitor.record_feedback(OperationFeedback::HealthCheckSuccess {
+                                validator: name,
+                                latency,
+                            });
+                        }
+                        Ok(Err(e)) => {
+                            let latency = start.elapsed();
+                            monitor.record_feedback(OperationFeedback::HealthCheckFailure {
+                                validator: name,
+                                latency,
+                                error: e.to_string(),
+                            });
+                        }
+                        Err(_) => {
+                            let latency = start.elapsed();
+                            monitor.record_feedback(OperationFeedback::HealthCheckFailure {
+                                validator: name,
+                                latency,
+                                error: "timeout".to_string(),
+                            });
+                        }
+                    }
+                });
+            }
+
+            while let Some(result) = tasks.join_next().await {
+                if let Err(e) = result {
+                    warn!("Health check task failed: {}", e);
+                }
+            }
+        }
+    }
 }
 
 impl<A: Clone> Clone for ValidatorPerformanceMonitor<A> {
@@ -665,20 +595,6 @@ impl<A: Clone> Clone for ValidatorPerformanceMonitor<A> {
             score_calculator: RwLock::new(ScoreCalculator::new(self.config.clone())),
             authority_aggregator: self.authority_aggregator.clone(),
             current_epoch: parking_lot::RwLock::new(*self.current_epoch.read()),
-        }
-    }
-}
-
-impl From<ValidatorHealthResponse> for HealthMetrics {
-    fn from(response: ValidatorHealthResponse) -> Self {
-        HealthMetrics {
-            pending_certificates: response.pending_certificates,
-            inflight_consensus_messages: response.inflight_consensus_messages,
-            consensus_round: response.consensus_round,
-            checkpoint_sequence: response.checkpoint_sequence,
-            tx_queue_size: response.tx_queue_size,
-            available_memory: response.available_memory,
-            cpu_usage: response.cpu_usage,
         }
     }
 }
