@@ -134,7 +134,7 @@ fn execute_command<Mode: ExecutionMode>(
                     arguments
                         .iter()
                         .filter(|arg| matches!(&arg.value.1, T::Type::Reference(/* mut */ true, _)))
-                        .map(|sp!(_, (arg, ty))| (arg.location(), ty.clone())),
+                        .cloned(),
                 )
             }
             let arguments = context.arguments(arguments)?;
@@ -161,7 +161,7 @@ fn execute_command<Mode: ExecutionMode>(
         T::Command_::SplitCoins(_, coin, amounts) => {
             // TODO should we just call a Move function?
             if Mode::TRACK_EXECUTION {
-                args_to_update.push((coin.value.0.location(), coin.value.1.clone()));
+                args_to_update.push(coin.clone());
             }
             let coin_ref: CtxValue = context.argument(coin)?;
             let amount_values: Vec<u64> = context.arguments(amounts)?;
@@ -191,7 +191,7 @@ fn execute_command<Mode: ExecutionMode>(
         T::Command_::MergeCoins(_, target, coins) => {
             // TODO should we just call a Move function?
             if Mode::TRACK_EXECUTION {
-                args_to_update.push((target.value.0.location(), target.value.1.clone()));
+                args_to_update.push(target.clone());
             }
             let target_ref: CtxValue = context.argument(target)?;
             let coins = context.arguments(coins)?;
@@ -290,7 +290,7 @@ fn execute_command<Mode: ExecutionMode>(
         }
     };
     if Mode::TRACK_EXECUTION {
-        let argument_updates = context.location_updates(args_to_update)?;
+        let argument_updates = context.argument_updates(args_to_update)?;
         let command_result = context.tracked_results(&result, &result_tys)?;
         Mode::finish_command_v2(mode_results, argument_updates, command_result)?;
     }
