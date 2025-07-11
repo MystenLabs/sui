@@ -187,7 +187,7 @@ impl Context {
                         // If the ref is imm, but is borrowed by a mut ref in the set
                         // the mut ref is not transferrable
                         // In other words, the mut ref is an extension of the imm ref
-                        return Ok(Some(r));
+                        return Ok(Some(borrower));
                     }
                 } else {
                     for path in paths {
@@ -264,9 +264,8 @@ fn command(
                 function,
                 arguments: args,
             } = &**mc;
-            let return_ = &function.signature.return_;
             let arg_values = arguments(context, args)?;
-            call(context, arg_values, return_)?
+            call(context, arg_values, &function.signature)?
         }
         T::Command_::TransferObjects(objects, recipient) => {
             let object_values = arguments(context, objects)?;
@@ -452,27 +451,29 @@ fn write_ref(context: &mut Context, arg_idx: usize, value: Value) -> Result<(), 
 fn call(
     context: &mut Context,
     arg_values: Vec<Value>,
-    return_: &[Type],
+    signature: &T::LoadedFunctionInstantiation,
 ) -> Result<Vec<Value>, ExecutionError> {
     let sources = arg_values
         .iter()
         .filter_map(|v| v.to_ref())
         .collect::<BTreeSet<_>>();
     if let Some(v) = context.find_non_transferrable(&sources)? {
-        let idx = arg_values
+        let mut_idx = arg_values
             .iter()
-            .position(|x| x.to_ref() == Some(v))
-            .unwrap_or(arg_values.len());
-        assert_invariant!(
-            idx < arg_values.len(),
-            "non transferrable value was not found in arguments"
-        );
+            .zip(&signature.parameters)
+            .enumerate()
+            .find(|(_, (x, ty))| x.to_ref() == Some(v) && matches!(ty, Type::Reference(true, _)));
+
+        let Some((idx, _)) = mut_idx else {
+            invariant_violation!("non transferrable value was not found in arguments");
+        };
         return Err(command_argument_error(
             CommandArgumentError::InvalidValueUsage,
             idx,
         ));
     }
-    let mutabilities = return_
+    let mutabilities = signature
+        .return_
         .iter()
         .filter_map(|ty| match ty {
             Type::Reference(is_mut, _) => Some(*is_mut),
@@ -486,7 +487,8 @@ fn call(
         "return_references should have the same length as mutabilities"
     );
 
-    let mut return_values: Vec<_> = return_
+    let mut return_values: Vec<_> = signature
+        .return_
         .iter()
         .rev()
         .map(|ty| {
