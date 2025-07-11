@@ -20,8 +20,8 @@ pub struct TransactionDriverMetrics {
     pub(crate) submit_transaction_success: IntCounter,
     pub(crate) submit_transaction_error: IntCounter,
     pub(crate) executed_transactions: IntCounter,
-    pub(crate) rejected_transactions: IntCounter,
-    pub(crate) expired_transactions: IntCounter,
+    pub(crate) rejection_acks: IntCounter,
+    pub(crate) expiration_acks: IntCounter,
     pub(crate) effects_digest_mismatches: IntCounter,
 }
 
@@ -54,15 +54,15 @@ impl TransactionDriverMetrics {
                 registry,
             )
             .unwrap(),
-            rejected_transactions: register_int_counter_with_registry!(
-                "transaction_driver_rejected_transactions",
-                "Number of transactions rejected observed by the transaction driver",
+            rejection_acks: register_int_counter_with_registry!(
+                "transaction_driver_rejected_acks",
+                "Number of rejection acknowledgments observed by the transaction driver",
                 registry,
             )
             .unwrap(),
-            expired_transactions: register_int_counter_with_registry!(
-                "transaction_driver_expired_transactions",
-                "Number of transactions expired observed by the transaction driver",
+            expiration_acks: register_int_counter_with_registry!(
+                "transaction_driver_expiration_acks",
+                "Number of expiration acknowledgments observed by the transaction driver",
                 registry,
             )
             .unwrap(),

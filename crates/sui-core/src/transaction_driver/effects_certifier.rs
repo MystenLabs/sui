@@ -4,7 +4,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
-use rand::seq::SliceRandom as _;
+use mysten_common::debug_fatal;
+use rand::{seq::SliceRandom as _, Rng as _};
 use sui_types::{
     base_types::ConciseableName,
     committee::EpochId,
@@ -13,7 +14,7 @@ use sui_types::{
     messages_grpc::RawWaitForEffectsRequest,
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 use tracing::instrument;
 
 use crate::{
@@ -228,23 +229,22 @@ impl EffectsCertifier {
         // Create futures for all validators (digest-only requests)
         let mut futures = FuturesUnordered::new();
         for (name, client) in clients {
-            let client_clone = client.clone();
-            let name_clone = *name;
-
-            let raw_request_clone = raw_request.clone();
+            let client = client.clone();
+            let name = *name;
+            let raw_request = raw_request.clone();
             let future = async move {
-                match timeout(
-                    WAIT_FOR_EFFECTS_TIMEOUT,
-                    client_clone.wait_for_effects(raw_request_clone, options.forwarded_client_addr),
-                )
-                .await
-                {
-                    Ok(Ok(response)) => Ok((name_clone, response)),
-                    Ok(Err(e)) => Err(TransactionDriverError::RpcFailure(
-                        name_clone.concise().to_string(),
-                        e.to_string(),
-                    )),
-                    Err(_) => Err(TransactionDriverError::TimeoutAcknowledgingEffects),
+                // Keep retrying transient errors until cancellation.
+                loop {
+                    if let Ok(Ok(response)) = timeout(
+                        WAIT_FOR_EFFECTS_TIMEOUT,
+                        client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
+                    )
+                    .await
+                    {
+                        return (name, response);
+                    };
+                    let delay_ms = rand::thread_rng().gen_range(1000..2000);
+                    sleep(Duration::from_millis(delay_ms)).await;
                 }
             };
 
@@ -259,116 +259,100 @@ impl EffectsCertifier {
         let mut expired_aggregator = StakeAggregator::<(), true>::new(committee.clone());
         let mut rejected_errors = Vec::new();
         let mut expired_errors = Vec::new();
-        let mut errors = Vec::new();
 
-        while let Some(result) = futures.next().await {
-            match result {
-                Ok((name, response)) => match response {
-                    WaitForEffectsResponse::Executed {
-                        effects_digest,
-                        details: _,
-                    } => {
-                        let aggregator = effects_digest_aggregators
-                            .entry(effects_digest)
-                            .or_insert_with(|| StakeAggregator::<(), true>::new(committee.clone()));
+        // Every validator returns at most one WaitForEffectsResponse.
+        while let Some((name, response)) = futures.next().await {
+            match response {
+                WaitForEffectsResponse::Executed {
+                    effects_digest,
+                    details: _,
+                } => {
+                    let aggregator = effects_digest_aggregators
+                        .entry(effects_digest)
+                        .or_insert_with(|| StakeAggregator::<(), true>::new(committee.clone()));
 
-                        match aggregator.insert_generic(name, ()) {
-                            InsertResult::QuorumReached(_) => {
-                                let quorum_weight = aggregator.total_votes();
-                                for (other_digest, other_aggregator) in effects_digest_aggregators {
-                                    if other_digest != effects_digest
-                                        && other_aggregator.total_votes() > 0
-                                    {
-                                        tracing::warn!(
-                                                "Effects digest inconsistency detected: quorum digest {effects_digest:?} (weight {quorum_weight}), other digest {other_digest:?} (weight {})",
-                                                other_aggregator.total_votes()
-                                            );
-                                        self.metrics.effects_digest_mismatches.inc();
-                                    }
-                                }
-                                return Ok(effects_digest);
-                            }
-                            InsertResult::NotEnoughVotes { .. } => {}
-                            InsertResult::Failed { error } => {
-                                tracing::warn!(
-                                    "Failed to insert vote for digest {}: {:?}",
-                                    effects_digest,
-                                    error
-                                );
-                            }
-                        }
-                    }
-                    WaitForEffectsResponse::Rejected { reason } => {
-                        rejected_errors.push(format!("{}: {}", name.concise(), reason));
-
-                        match rejected_aggregator.insert_generic(name, ()) {
-                            InsertResult::QuorumReached(_) => {
-                                self.metrics.rejected_transactions.inc();
-
-                                return Err(TransactionDriverError::TransactionRejected(
-                                    rejected_errors.join(", "),
-                                ));
-                            }
-                            InsertResult::NotEnoughVotes { .. } => {
-                                let expired_weight = expired_aggregator.total_votes();
-                                let rejected_weight = rejected_aggregator.total_votes();
-                                if expired_weight + rejected_weight >= committee.quorum_threshold()
+                    match aggregator.insert_generic(name, ()) {
+                        InsertResult::QuorumReached(_) => {
+                            let quorum_weight = aggregator.total_votes();
+                            for (other_digest, other_aggregator) in effects_digest_aggregators {
+                                if other_digest != effects_digest
+                                    && other_aggregator.total_votes() > 0
                                 {
-                                    return Err(
-                                        TransactionDriverError::TransactionRejectedAndExpired(
-                                            rejected_errors.join(", "),
-                                            expired_errors.join(", "),
-                                        ),
+                                    tracing::warn!(
+                                        "Effects digest inconsistency detected: quorum digest {effects_digest:?} (weight {quorum_weight}), other digest {other_digest:?} (weight {})",
+                                        other_aggregator.total_votes()
                                     );
+                                    self.metrics.effects_digest_mismatches.inc();
                                 }
                             }
-                            InsertResult::Failed { error } => {
-                                tracing::warn!("Failed to insert rejection vote: {:?}", error);
-                            }
+                            return Ok(effects_digest);
+                        }
+                        InsertResult::NotEnoughVotes { .. } => {}
+                        InsertResult::Failed { error } => {
+                            debug_fatal!(
+                                "Failed to insert vote for digest {}: {:?}",
+                                effects_digest,
+                                error
+                            );
                         }
                     }
-                    WaitForEffectsResponse::Expired(round) => {
-                        expired_errors.push(format!(
-                            "{}: expired at round {}",
-                            name.concise(),
-                            round
-                        ));
-
-                        match expired_aggregator.insert_generic(name, ()) {
-                            InsertResult::QuorumReached(_) => {
-                                self.metrics.expired_transactions.inc();
-
-                                return Err(TransactionDriverError::TransactionExpired(
-                                    expired_errors.join(", "),
-                                ));
-                            }
-                            InsertResult::NotEnoughVotes { .. } => {
-                                let expired_weight = expired_aggregator.total_votes();
-                                let rejected_weight = rejected_aggregator.total_votes();
-                                if expired_weight + rejected_weight >= committee.quorum_threshold()
-                                {
-                                    return Err(
-                                        TransactionDriverError::TransactionRejectedAndExpired(
-                                            rejected_errors.join(", "),
-                                            expired_errors.join(", "),
-                                        ),
-                                    );
-                                }
-                            }
-                            InsertResult::Failed { error } => {
-                                tracing::warn!("Failed to insert expiration vote: {:?}", error);
-                            }
-                        }
+                }
+                WaitForEffectsResponse::Rejected { reason } => {
+                    rejected_errors.push(format!("{}: {}", name.concise(), reason));
+                    self.metrics.rejection_acks.inc();
+                    if let InsertResult::Failed { error } =
+                        rejected_aggregator.insert_generic(name, ())
+                    {
+                        debug_fatal!("Failed to insert rejection vote: {:?}", error);
                     }
-                },
-                Err(e) => {
-                    // TODO(fastpath): Categorize retryable errors and push to retry queue, store premanent failures. Exit on f+1 errors
-                    errors.push(e);
+                }
+                WaitForEffectsResponse::Expired(round) => {
+                    expired_errors.push(format!("{}: expired at round {}", name.concise(), round));
+                    self.metrics.expiration_acks.inc();
+                    if let InsertResult::Failed { error } =
+                        expired_aggregator.insert_generic(name, ())
+                    {
+                        debug_fatal!("Failed to insert expiration vote: {:?}", error);
+                    }
+                }
+            };
+
+            let executed_weight: u64 = effects_digest_aggregators
+                .values()
+                .map(|agg| agg.total_votes())
+                .sum();
+            let rejected_weight = rejected_aggregator.total_votes();
+            let expired_weight = expired_aggregator.total_votes();
+            let total_weight = executed_weight + rejected_weight + expired_weight;
+
+            if total_weight >= committee.quorum_threshold() {
+                // Abort as early as possible because there is no guarantee that another response will be received.
+                if rejected_weight + expired_weight >= committee.validity_threshold() {
+                    return Err(TransactionDriverError::TransactionRejectedOrExpired(
+                        rejected_errors.join(", "),
+                        expired_errors.join(", "),
+                    ));
+                }
+                // Check if quorum can still be reached with remaining responses.
+                let remaining_weight = committee.total_votes().saturating_sub(total_weight);
+                let quorum_feasible = effects_digest_aggregators.values().any(|agg| {
+                    agg.total_votes() + remaining_weight >= committee.quorum_threshold()
+                });
+                if !quorum_feasible {
+                    break;
+                }
+            } else {
+                // Abort less eagerly for clearer error message.
+                // More responses are available when the network is live.
+                if rejected_weight >= committee.validity_threshold() {
+                    return Err(TransactionDriverError::TransactionRejected(
+                        rejected_errors.join(", "),
+                    ));
                 }
             }
         }
 
-        // If we get here, we didn't reach quorum for any digest
+        // No quorum is reached or can be reached for any effects digest.
         let executed_weight: u64 = effects_digest_aggregators
             .values()
             .map(|agg| agg.total_votes())
@@ -376,17 +360,17 @@ impl EffectsCertifier {
         let rejected_weight = rejected_aggregator.total_votes();
         let expired_weight = expired_aggregator.total_votes();
 
-        Err(TransactionDriverError::InsufficientResponses {
+        Err(TransactionDriverError::ForkedExecution {
             total_responses_weight: executed_weight + rejected_weight + expired_weight,
             executed_weight,
             rejected_weight,
             expired_weight,
-            // TODO(fastpath): Aggregate and summarize errors
-            errors: errors.into_iter().map(|e| e.to_string()).collect(),
+            // TODO(fastpath): Aggregate and summarize forked effects and errors.
+            errors: vec![],
         })
     }
 
-    /// Create the final response after validating effects digest match
+    /// Creates the final full response.
     fn get_effects_response(
         &self,
         effects_digest: TransactionEffectsDigest,
