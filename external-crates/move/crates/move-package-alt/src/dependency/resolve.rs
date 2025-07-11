@@ -20,8 +20,10 @@ use tracing::{debug, info};
 
 use crate::{
     dependency::combine::Combined,
-    package::{EnvironmentID, EnvironmentName, PackageName},
-    schema::{EXTERNAL_RESOLVE_ARG, ResolveRequest, ResolveResponse, ResolverDependencyInfo},
+    schema::{
+        EXTERNAL_RESOLVE_ARG, EnvironmentID, EnvironmentName, PackageName, ResolveRequest,
+        ResolveResponse, ResolverDependencyInfo,
+    },
 };
 
 use super::{CombinedDependency, Dependency, DependencySet};

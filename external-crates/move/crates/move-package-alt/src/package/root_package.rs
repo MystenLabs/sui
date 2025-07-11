@@ -4,14 +4,14 @@
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
+use super::manifest::Manifest;
 use super::paths::PackagePath;
-use super::{EnvironmentID, manifest::Manifest};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
-    package::{EnvironmentName, Package, PackageName},
-    schema::{PackageID, ParsedLockfile, Pin},
+    package::Package,
+    schema::{EnvironmentID, EnvironmentName, PackageID, PackageName, ParsedLockfile, Pin},
 };
 use tracing::debug;
 

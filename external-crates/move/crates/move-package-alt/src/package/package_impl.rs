@@ -11,18 +11,13 @@ use crate::{
         legacy::LegacyData,
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
-    dependency::{PinnedDependencyInfo, pin},
+    dependency::{pin, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{LocalDepInfo, LockfileDependencyInfo, OriginalID, Publication, PublishedID},
+    schema::{EnvironmentName, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageName, Publication, PublishedID},
 };
-use move_core_types::identifier::Identifier;
 
-pub type EnvironmentName = String;
-pub type EnvironmentID = String;
-
-pub type PackageName = Identifier;
 pub type AddressInfo = String;
 
 #[derive(Debug)]

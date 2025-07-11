@@ -10,7 +10,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, PackageName, manifest::Manifest, paths::PackagePath},
+    package::{Package, manifest::Manifest, paths::PackagePath},
+    schema::{EnvironmentName, PackageName},
 };
 use builder::PackageGraphBuilder;
 

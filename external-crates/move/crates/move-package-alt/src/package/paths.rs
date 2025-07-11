@@ -12,7 +12,7 @@ use std::{
 
 use thiserror::Error;
 
-use super::EnvironmentName;
+use crate::schema::EnvironmentName;
 
 /// A canonical path to a directory containing a loaded Move package (in particular, the directory
 /// must have a Move.toml)
