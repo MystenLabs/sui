@@ -187,7 +187,7 @@ impl<'a> LimitsVerifier<'a> {
         Ok(())
     }
 
-    /// Verifies the lengths of all identifers are valid
+    /// Verifies the lengths of all identifiers are valid
     fn verify_identifiers(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(max_idenfitier_len) = config.max_idenfitier_len {
             for (idx, identifier) in self.resolver.identifiers().iter().enumerate() {

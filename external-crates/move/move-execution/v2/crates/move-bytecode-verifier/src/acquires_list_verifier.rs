@@ -4,7 +4,7 @@
 
 //! This module implements a checker for verifying properties about the acquires list on function
 //! definitions. Function definitions must annotate the global resources (declared in that module)
-//! accesssed by `BorrowGlobal`, `MoveFrom`, and any transitive function calls
+//! accessed by `BorrowGlobal`, `MoveFrom`, and any transitive function calls
 //! The list of acquired resources (stored in `FunctionDefinition`'s `acquires_global_resources`
 //! field) must have:
 //! - No duplicate resources (checked by `check_duplication`)
