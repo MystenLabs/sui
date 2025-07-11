@@ -20,6 +20,6 @@ pub fn transaction<Mode: ExecutionMode>(
     input_arguments::verify::<Mode>(env, &*ast)?;
     move_functions::verify::<Mode>(env, &*ast)?;
     memory_safety::verify(env, &*ast)?;
-    drop_safety::refine_and_verify(env, ast)?;
+    drop_safety::refine_and_verify::<Mode>(env, ast)?;
     Ok(())
 }

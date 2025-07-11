@@ -123,8 +123,7 @@ fn check_pure_bytes<Mode: ExecutionMode>(
     }
     let Some(layout) = primitive_serialization_layout(constraint)? else {
         let msg = format!(
-            "Non-primitive argument at index {command_arg_idx}. If it is an object, it must be \
-            populated by an object",
+            "Invalid usage of `Pure` argument for a non-primitive argument type at index {command_arg_idx}.",
         );
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::command_argument_error(

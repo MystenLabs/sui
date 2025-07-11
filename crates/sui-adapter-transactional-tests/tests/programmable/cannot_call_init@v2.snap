@@ -16,4 +16,4 @@ task 2, lines 13-14:
 //# programmable
 //> 0: test::m1::init();
 Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot call 'init'"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Can only call `entry` or `public` functions"), command: Some(0) } }
