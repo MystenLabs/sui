@@ -307,7 +307,7 @@ impl EffectsCertifier {
                     }
                 }
                 WaitForEffectsResponse::Expired(round) => {
-                    expired_errors.push(format!("{}: expired at round {}", name.concise(), round));
+                    expired_errors.push(format!("{}: {}", name.concise(), round));
                     self.metrics.expiration_acks.inc();
                     if let InsertResult::Failed { error } =
                         expired_aggregator.insert_generic(name, ())

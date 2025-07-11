@@ -29,17 +29,12 @@ pub enum TransactionDriverError {
     TransactionExpired(String),
     #[error("Transaction rejected with reason: {0} & expired with reason: {1}")]
     TransactionRejectedOrExpired(String, String),
-    #[error("Forked execution results: total_responses_weight {total_responses_weight}, executed_weight {executed_weight}, executed_weight {executed_weight}. Errors: {errors:?}")]
+    #[error("Forked execution results: total_responses_weight {total_responses_weight}, executed_weight {executed_weight}, rejected_weight {rejected_weight}, expired_weight {expired_weight}, Errors: {errors:?}")]
     ForkedExecution {
         total_responses_weight: u64,
         executed_weight: u64,
         rejected_weight: u64,
         expired_weight: u64,
         errors: Vec<String>,
-    },
-    #[error("Effects digest mismatch: quorum_expected {quorum_expected}, got {actual}")]
-    EffectsDigestMismatch {
-        quorum_expected: String,
-        actual: String,
     },
 }
