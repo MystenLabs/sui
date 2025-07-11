@@ -53,6 +53,7 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
 use futures::{future::BoxFuture, FutureExt};
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::in_test_configuration;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
@@ -69,7 +70,7 @@ use sui_types::base_types::{
 };
 use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -1064,6 +1065,35 @@ impl WritebackCache {
         self.set_backpressure(pending_count);
     }
 
+    #[instrument(level = "debug", skip_all)]
+    fn persist_transactions_and_effects(&self, effects: &[TransactionEffects]) {
+        let mut batch = self.store.db_batch();
+        for effect in effects {
+            let tx_digest = effect.transaction_digest();
+            let Some(entry) = self.dirty.pending_transaction_writes.get(tx_digest) else {
+                if in_test_configuration() {
+                    assert!(
+                        self.get_transaction_block(tx_digest).is_some(),
+                        "tx {:?} should exist",
+                        tx_digest
+                    );
+                }
+                continue;
+            };
+
+            self.store
+                .add_tx_and_effects_to_batch(
+                    &mut batch,
+                    tx_digest,
+                    entry.value().transaction.serializable_ref(),
+                    effect,
+                )
+                .expect("db error");
+        }
+
+        batch.write().expect("db error");
+    }
+
     fn approximate_pending_transaction_count(&self) -> u64 {
         let num_commits = self
             .dirty
@@ -1352,6 +1382,10 @@ impl ExecutionCacheCommit for WritebackCache {
 
     fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) {
         self.store.persist_transaction(tx).expect("db error");
+    }
+
+    fn persist_transactions_and_effects(&self, effects: &[TransactionEffects]) {
+        WritebackCache::persist_transactions_and_effects(self, effects)
     }
 
     fn approximate_pending_transaction_count(&self) -> u64 {

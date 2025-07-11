@@ -1422,7 +1422,9 @@ impl SuiNode {
         } else {
             Some(replay_waiter)
         };
-        let checkpoint_service_tasks = checkpoint_service.spawn(replay_waiter).await;
+        let checkpoint_service_tasks = checkpoint_service
+            .spawn(state.get_cache_commit().clone(), replay_waiter)
+            .await;
 
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(

@@ -165,6 +165,15 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// case of this is RandomnessStateUpdate.
     fn persist_transaction(&self, transaction: &VerifiedExecutableTransaction);
 
+    /// Durably persist executed (but not committed) transactions and their effects.
+    /// The transaction digests are obtained from effects, and must already be executed
+    /// locally. If they are not in the dirty set, they are assumed to already be
+    /// persisted.
+    ///
+    /// Because both the transaction and effects stores are content-addressed, it is never
+    /// an error to persist data prior to observing a certified checkpoint.
+    fn persist_transactions_and_effects(&self, effects: &[TransactionEffects]);
+
     // Number of pending uncommitted transactions
     fn approximate_pending_transaction_count(&self) -> u64;
 }
