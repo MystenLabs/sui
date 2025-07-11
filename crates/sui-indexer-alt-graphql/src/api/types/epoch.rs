@@ -17,7 +17,6 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
-use crate::task::watermark::Watermarks;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     error::RpcError,
@@ -72,10 +71,7 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
         let last = match &self.end(ctx).await?.contents {
             Some(last) => last.cp_hi as u64,
-            None => {
-                let watermark: &Arc<Watermarks> = ctx.data()?;
-                watermark.high_watermark().checkpoint()
-            }
+            None => self.start.scope.checkpoint_viewed_at(),
         };
         let first = match &self.start.contents {
             Some(first) => first.cp_lo as u64,
