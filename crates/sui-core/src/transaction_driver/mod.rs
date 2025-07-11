@@ -17,7 +17,6 @@ pub use message_types::*;
 pub use metrics::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
-use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
     committee::EpochId,
@@ -34,6 +33,10 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    validator_performance_monitor::{
+        OperationFeedback, OperationType, ValidatorPerformanceConfig, ValidatorPerformanceMetrics,
+        ValidatorPerformanceMonitor,
+    },
     wait_for_effects_request::{WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
@@ -46,9 +49,10 @@ pub struct SubmitTransactionOptions {
 }
 
 pub struct TransactionDriver<A: Clone> {
-    authority_aggregator: ArcSwap<AuthorityAggregator<A>>,
+    authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     state: Mutex<State>,
     metrics: Arc<TransactionDriverMetrics>,
+    performance_monitor: Arc<ValidatorPerformanceMonitor<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -59,12 +63,24 @@ where
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<TransactionDriverMetrics>,
+        performance_config: ValidatorPerformanceConfig,
+        performance_metrics: Arc<ValidatorPerformanceMetrics>,
     ) -> Arc<Self> {
+        let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
+
+        let performance_monitor = ValidatorPerformanceMonitor::new(
+            performance_config,
+            performance_metrics,
+            shared_swap.clone(),
+        );
+
         let driver = Arc::new(Self {
-            authority_aggregator: ArcSwap::new(authority_aggregator),
+            authority_aggregator: shared_swap,
             state: Mutex::new(State::new()),
             metrics,
+            performance_monitor,
         });
+
         driver.enable_reconfig(reconfig_observer);
         driver
     }
@@ -115,26 +131,81 @@ where
             .into_raw()
             .map_err(TransactionDriverError::SerializationError)?;
 
-        // TODO(fastpath): Use validator performance metrics to choose who to submit with
-        // Send the transaction to a random validator.
-        let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
-        let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
+        // Select validator based on performance
+        let selection = self.performance_monitor.select_validator();
+        debug!(
+            "Selected validator {} with score {} via {:?}",
+            selection.validator.concise(),
+            selection.score,
+            selection.reason
+        );
 
-        let consensus_position = timeout(
+        // Record selection in metrics
+        self.metrics
+            .validator_selections
+            .with_label_values(&[&selection.validator.concise().to_string()])
+            .inc();
+
+        let selected_validator = selection.validator;
+
+        let client = auth_agg
+            .authority_clients
+            .get(&selected_validator)
+            .expect("Selected validator not in authority clients")
+            .as_ref();
+
+        let submit_start = Instant::now();
+        let consensus_position = match timeout(
             Duration::from_secs(2),
             client.submit_transaction(raw_request, options.forwarded_client_addr),
         )
         .await
-        .map_err(|_| TransactionDriverError::TimeoutSubmittingTransaction)?
-        .map_err(|e| {
-            TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
-        })?;
+        {
+            Ok(Ok(pos)) => {
+                let latency = submit_start.elapsed();
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency,
+                    success: true,
+                    error: None,
+                });
+                pos
+            }
+            Ok(Err(e)) => {
+                let latency = submit_start.elapsed();
+                // For submit operations, only track latency - don't pass the error
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency,
+                    success: true, // Treat as success for latency tracking only
+                    error: None,   // Don't track non-timeout errors for submit
+                });
+                return Err(TransactionDriverError::RpcFailure(
+                    selected_validator.concise().to_string(),
+                    e.to_string(),
+                ));
+            }
+            Err(_) => {
+                let latency = submit_start.elapsed();
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency,
+                    success: false,
+                    error: Some("timeout".to_string()),
+                });
+                return Err(TransactionDriverError::TimeoutBeforeFinality);
+            }
+        };
 
         debug!(
             "Transaction {} submitted to consensus at position: {consensus_position:?}",
             transaction.digest()
         );
 
+        let effects_start = Instant::now();
         let response = match timeout(
             // TODO(fastpath): This will be removed when we change this to wait for effects from a quorum
             Duration::from_secs(20),
@@ -151,14 +222,40 @@ where
         )
         .await
         {
-            Ok(Ok(response)) => response,
+            Ok(Ok(response)) => {
+                let latency = effects_start.elapsed();
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Effects,
+                    latency,
+                    success: true,
+                    error: None,
+                });
+                response
+            }
             Ok(Err(e)) => {
+                let latency = effects_start.elapsed();
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Effects,
+                    latency,
+                    success: false,
+                    error: Some(e.to_string()),
+                });
                 return Err(TransactionDriverError::RpcFailure(
-                    name.concise().to_string(),
+                    selected_validator.concise().to_string(),
                     e.to_string(),
                 ));
             }
             Err(_) => {
+                let latency = effects_start.elapsed();
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Effects,
+                    latency,
+                    success: false,
+                    error: Some("timeout".to_string()),
+                });
                 return Err(TransactionDriverError::TimeoutWaitingForEffects);
             }
         };
@@ -223,11 +320,16 @@ where
     }
 
     fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>) {
+        let new_epoch = new_authorities.committee.epoch;
         tracing::info!(
-            "Transaction Driver updating AuthorityAggregator with committee {}",
-            new_authorities.committee
+            "Transaction Driver updating AuthorityAggregator with committee epoch {}",
+            new_epoch
         );
+
         self.authority_aggregator.store(new_authorities);
+
+        // Notify performance monitor of epoch change
+        self.performance_monitor.on_epoch_change(new_epoch);
     }
 }
 
