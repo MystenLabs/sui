@@ -11,80 +11,114 @@ use crate::{
         typing::ast::{BytesConstraint, BytesUsage},
     },
 };
+use indexmap::{IndexMap, IndexSet};
+use serde_json::value::Index;
 use std::{collections::BTreeMap, rc::Rc};
 use sui_types::{
-    base_types::TxContextKind,
+    base_types::{ObjectRef, TxContextKind},
     coin::RESOLVED_COIN_STRUCT,
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
 };
 
+enum SplatLocation {
+    TxContext,
+    GasCoin,
+    Input(u16),
+    Result(u16, u16),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum InputKind {
+    Object,
+    Pure,
+    Receiving,
+}
+
 struct Context {
     current_command: u16,
-    gathered_input_types: BTreeMap<u16, BTreeMap<Type, BytesConstraint>>,
-    inputs: Vec<(InputArg, InputType)>,
+    /// What kind of input is at each original index
+    input_resolution: Vec<InputKind>,
+    bytes: IndexSet<Vec<u8>>,
+    // Mapping from original index to `bytes`
+    bytes_idx_remapping: IndexMap</* original input  index*/ u16, T::ByteIndex>,
+    receiving_refs: IndexMap</* original input  index*/ u16, ObjectRef>,
+    objects: IndexMap</* original input  index*/ u16, T::ObjectInput>,
+    pure: IndexMap<(/* original input  index*/ u16, Type), T::PureInput>,
+    receiving: IndexMap<(/* original input  index*/ u16, Type), T::ReceivingInput>,
     results: Vec<T::ResultType>,
 }
 
-enum InputType {
-    Bytes,
-    Fixed(Type),
-}
-
-enum LocationType<'context> {
-    Bytes(
-        &'context mut InputType,
-        &'context mut BTreeMap<Type, BytesConstraint>,
-    ),
-    Fixed(Type),
-}
-
 impl Context {
-    fn new(linputs: L::Inputs) -> Self {
+    fn new(linputs: L::Inputs) -> Result<Self, ExecutionError> {
         let mut context = Context {
             current_command: 0,
-            gathered_input_types: BTreeMap::new(),
-            inputs: vec![],
+            input_resolution: vec![],
+            bytes: IndexSet::new(),
+            bytes_idx_remapping: IndexMap::new(),
+            receiving_refs: IndexMap::new(),
+            objects: IndexMap::new(),
+            pure: IndexMap::new(),
+            receiving: IndexMap::new(),
             results: vec![],
         };
-        context.inputs = linputs
-            .into_iter()
-            .enumerate()
-            .map(|(i, (arg, ty))| {
-                let idx = i as u16;
-                let ty = match ty {
-                    L::InputType::Bytes => {
-                        context.gathered_input_types.insert(idx, BTreeMap::new());
-                        InputType::Bytes
-                    }
-                    L::InputType::Fixed(t) => InputType::Fixed(t),
-                };
-                (arg, ty)
-            })
-            .collect();
-        context
+        for (i, (arg, ty)) in linputs.into_iter().enumerate() {
+            let idx = i as u16;
+            let kind = match (arg, ty) {
+                (L::InputArg::Pure(bytes), L::InputType::Bytes) => {
+                    let (byte_index, _) = context.bytes.insert_full(bytes);
+                    context.bytes_idx_remapping.insert(idx, byte_index);
+                    InputKind::Pure
+                }
+                (L::InputArg::Receiving(oref), L::InputType::Bytes) => {
+                    context.receiving_refs.insert(idx, oref);
+                    InputKind::Receiving
+                }
+                (L::InputArg::Object(arg), L::InputType::Fixed(ty)) => {
+                    let o = T::ObjectInput {
+                        original_input_index: idx,
+                        arg,
+                        ty,
+                    };
+                    context.objects.insert(idx, o);
+                    InputKind::Object
+                }
+                (arg, ty) => invariant_violation!(
+                    "Input arg, type mismatch. Unexpected {arg:?} with type {ty:?}"
+                ),
+            };
+            context.input_resolution.push(kind);
+        }
+        Ok(context)
     }
 
-    fn finish(self) -> Vec<(InputArg, T::InputType)> {
+    fn finish(self, commands: T::Commands) -> T::Transaction {
         let Self {
-            mut gathered_input_types,
-            inputs,
+            bytes,
+            objects,
+            pure,
+            receiving,
             ..
         } = self;
-        inputs
-            .into_iter()
-            .enumerate()
-            .map(|(i, (arg, ty))| match (&arg, ty) {
-                (InputArg::Pure(_) | InputArg::Receiving(_), _) => {
-                    let tys = gathered_input_types.remove(&(i as u16)).unwrap_or_default();
-                    (arg, T::InputType::Bytes(tys))
-                }
-                (_, InputType::Bytes) => {
-                    unreachable!()
-                }
-                (_, InputType::Fixed(t)) => (arg, T::InputType::Fixed(t)),
-            })
-            .collect()
+        let objects = objects.into_iter().map(|(_, o)| o).collect();
+        let pure = pure.into_iter().map(|(_, p)| p).collect();
+        let receiving = receiving.into_iter().map(|(_, r)| r).collect();
+        T::Transaction {
+            bytes,
+            objects,
+            pure,
+            receiving,
+            commands,
+        }
+    }
+
+    fn location_kind(&self, location: SplatLocation) -> Option<InputKind> {
+        match location {
+            SplatLocation::GasCoin => None,
+            SplatLocation::TxContext => None,
+            SplatLocation::Input(i) => self.input_resolution.get(i as usize).copied(),
+            SplatLocation::Result(_, _) => None, // results are not inputs
+        }
     }
 
     fn location_type<'context>(
@@ -113,7 +147,7 @@ pub fn transaction<Mode: ExecutionMode>(
     lt: L::Transaction,
 ) -> Result<T::Transaction, ExecutionError> {
     let L::Transaction { inputs, commands } = lt;
-    let mut context = Context::new(inputs);
+    let mut context = Context::new(inputs)?;
     let commands = commands
         .into_iter()
         .enumerate()
@@ -126,8 +160,7 @@ pub fn transaction<Mode: ExecutionMode>(
             Ok((sp(idx, c), tys))
         })
         .collect::<Result<Vec<_>, ExecutionError>>()?;
-    let inputs = context.finish();
-    let mut ast = T::Transaction { inputs, commands };
+    let mut ast = context.finish(commands);
     // mark the last usage of references as Move instead of Copy
     scope_references::transaction(&mut ast);
     Ok(ast)
@@ -340,7 +373,7 @@ fn locations<Items: IntoIterator<Item = L::Argument>>(
     context: &mut Context,
     start_idx: usize,
     args: Items,
-) -> Result<Vec<T::Location>, ExecutionError>
+) -> Result<Vec<SplatLocation>, ExecutionError>
 where
     Items::IntoIter: ExactSizeIterator,
 {
@@ -352,10 +385,10 @@ where
         match arg {
             L::Argument::GasCoin => res.push(T::Location::GasCoin),
             L::Argument::Input(i) => {
-                if i as usize >= context.inputs.len() {
+                if i as usize >= context.input_resolution.len() {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 }
-                res.push(T::Location::Input(i))
+                res.push(SplatLocation::Input(i))
             }
             L::Argument::NestedResult(i, j) => {
                 let Some(command_result) = context.results.get(i as usize) else {
@@ -368,7 +401,7 @@ where
                     }
                     .into());
                 };
-                res.push(T::Location::Result(i, j))
+                res.push(SplatLocation::Result(i, j))
             }
             L::Argument::Result(i) => {
                 let Some(result) = context.results.get(i as usize) else {
@@ -381,7 +414,7 @@ where
                     // TODO protocol config to allow splatting of args
                     return Err(CommandArgumentError::InvalidResultArity { result_idx: i }.into());
                 }
-                res.extend((0..len).map(|j| T::Location::Result(i, j)))
+                res.extend((0..len).map(|j| SplatLocation::Result(i, j)))
             }
         }
         Ok(())
@@ -402,7 +435,7 @@ fn arguments(
     env: &Env,
     context: &mut Context,
     start_idx: usize,
-    locations: Vec<T::Location>,
+    locations: Vec<SplatLocation>,
     expected_tys: impl IntoIterator<Item = Type>,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
     locations
@@ -419,7 +452,7 @@ fn argument(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
-    location: T::Location,
+    location: SplatLocation,
     expected_ty: Type,
 ) -> Result<T::Argument, ExecutionError> {
     let arg__ = argument_(env, context, command_arg_idx, location, &expected_ty)
@@ -432,14 +465,18 @@ fn argument_(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
-    location: T::Location,
+    location: SplatLocation,
     expected_ty: &Type,
 ) -> Result<T::Argument__, EitherError> {
     let current_command = context.current_command;
-    let actual_ty = context.location_type(env, location)?;
+    let bytes_constraint = BytesConstraint {
+        command: current_command,
+        argument: command_arg_idx as u16,
+    };
+    let actual_ty: Type = context.resolve_location(env, location, expected_ty, bytes_constraint)?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
-        (LocationType::Fixed(Type::Reference(a_is_mut, a)), Type::Reference(b_is_mut, b)) => {
+        (Type::Reference(a_is_mut, a), Type::Reference(b_is_mut, b)) => {
             let needs_freeze = match (a_is_mut, b_is_mut) {
                 // same mutability
                 (true, true) | (false, false) => false,
@@ -462,7 +499,7 @@ fn argument_(
                 T::Argument__::new_copy(location)
             }
         }
-        (LocationType::Fixed(Type::Reference(_, a)), b) => {
+        (Type::Reference(_, a), b) => {
             // unused since the type is fixed
             let unused_constraint = BytesConstraint {
                 command: current_command,
