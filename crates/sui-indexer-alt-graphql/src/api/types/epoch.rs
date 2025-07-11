@@ -37,7 +37,9 @@ struct EpochStart {
 
 #[derive(Clone)]
 struct EpochEnd {
-    contents: Option<Arc<StoredEpochEnd>>,
+    scope: Scope,
+    start: Option<Arc<StoredEpochStart>>,
+    end: Option<Arc<StoredEpochEnd>>,
 }
 
 /// Activity on Sui is partitioned in time, into epochs.
@@ -64,16 +66,18 @@ impl Epoch {
 
     #[graphql(flatten)]
     async fn end(&self, ctx: &Context<'_>) -> Result<EpochEnd, RpcError> {
-        EpochEnd::fetch(ctx, &self.start.scope, self.epoch_id).await
+        let start = self.start.fetch(ctx, Some(self.epoch_id)).await?;
+        EpochEnd::fetch(ctx, &start, self.epoch_id).await
     }
 
     /// The total number of checkpoints in this epoch.
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
-        let last = match &self.end(ctx).await?.contents {
+        let EpochEnd { scope, start, end } = self.end(ctx).await?;
+        let last = match end {
             Some(last) => last.cp_hi as u64,
-            None => self.start.scope.checkpoint_viewed_at(),
+            None => scope.checkpoint_viewed_at(),
         };
-        let first = match &self.start.contents {
+        let first = match start {
             Some(first) => first.cp_lo as u64,
             None => return Ok(None),
         };
@@ -166,7 +170,7 @@ impl EpochStart {
 impl EpochEnd {
     /// The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
     async fn end_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some(contents) = &self.contents else {
+        let Some(contents) = &self.end else {
             return Ok(None);
         };
 
@@ -253,28 +257,39 @@ impl EpochStart {
 }
 
 impl EpochEnd {
-    fn empty() -> Self {
-        Self { contents: None }
+    fn empty(scope: Scope) -> Self {
+        Self {
+            scope,
+            start: None,
+            end: None,
+        }
     }
 
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty
     /// response if the epoch has not ended yet, as of the checkpoint being viewed.
-    async fn fetch(ctx: &Context<'_>, scope: &Scope, epoch_id: u64) -> Result<Self, RpcError> {
+    async fn fetch(
+        ctx: &Context<'_>,
+        epoch_start: &EpochStart,
+        epoch_id: u64,
+    ) -> Result<Self, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let scope = epoch_start.scope.clone();
         let Some(stored) = pg_loader
             .load_one(EpochEndKey(epoch_id))
             .await
             .context("Failed to fetch epoch end information")?
         else {
-            return Ok(Self::empty());
+            return Ok(Self::empty(scope));
         };
 
         if stored.cp_hi as u64 > scope.checkpoint_viewed_at() {
-            return Ok(Self::empty());
+            return Ok(Self::empty(scope));
         }
 
         Ok(Self {
-            contents: Some(Arc::new(stored)),
+            scope,
+            start: epoch_start.contents.clone(),
+            end: Some(Arc::new(stored)),
         })
     }
 }
