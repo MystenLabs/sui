@@ -41,7 +41,7 @@ env:
 jobs:
   release-build:
     name: Build & Publish Binaries
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       matrix:
         os:
