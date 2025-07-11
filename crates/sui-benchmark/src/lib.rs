@@ -344,7 +344,7 @@ impl LocalValidatorAggregatorProxy {
     async fn submit_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let response = self
             .td
-            .submit_transaction(
+            .drive_transaction(
                 SubmitTxRequest {
                     transaction: tx.clone(),
                 },
