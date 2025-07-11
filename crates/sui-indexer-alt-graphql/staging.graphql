@@ -48,6 +48,10 @@ type Checkpoint {
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
+	"""
+	This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
+	validatorSignatures: Base64
 }
 
 """

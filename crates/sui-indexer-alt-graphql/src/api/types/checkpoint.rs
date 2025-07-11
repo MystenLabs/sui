@@ -3,6 +3,7 @@
 
 use anyhow::Context as _;
 use async_graphql::{Context, Object};
+
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
@@ -13,7 +14,7 @@ use sui_types::{
 use crate::{
     api::{
         query::Query,
-        scalars::{date_time::DateTime, uint53::UInt53},
+        scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
     },
     error::RpcError,
     scope::Scope,
@@ -105,6 +106,14 @@ impl CheckpointContents {
         };
 
         Ok(Some(DateTime::from_ms(summary.timestamp_ms as i64)?))
+    }
+
+    /// This is an aggregation of signatures from a quorum of validators for the checkpoint proposal.
+    async fn validator_signatures(&self) -> Result<Option<Base64>, RpcError> {
+        let Some((_, _, authority)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(Base64::from(authority.signature.as_ref())))
     }
 }
 
