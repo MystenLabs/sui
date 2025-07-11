@@ -52,8 +52,6 @@ pub struct ScoreCalculator {
 
 #[derive(Debug, Clone, Default)]
 struct GlobalStats {
-    /// Maximum observed consensus round
-    max_consensus_round: u64,
     /// Maximum observed checkpoint sequence
     _max_checkpoint_sequence: u64,
     /// Average latency across all validators
@@ -112,7 +110,6 @@ impl ScoreCalculator {
         };
 
         self.global_stats = GlobalStats {
-            max_consensus_round: 0,
             _max_checkpoint_sequence: 0,
             _avg_global_latency: if latency_count > 0 {
                 total_latency / latency_count as u32

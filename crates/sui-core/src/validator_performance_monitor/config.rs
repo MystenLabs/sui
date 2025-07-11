@@ -23,10 +23,6 @@ pub struct ValidatorPerformanceConfig {
     #[serde(default)]
     pub selection_strategy: SelectionStrategy,
 
-    /// Window size for rolling metrics
-    #[serde(default = "default_metrics_window")]
-    pub metrics_window: Duration,
-
     /// Minimum number of samples before considering a validator
     #[serde(default = "default_min_samples")]
     pub min_samples: usize,
@@ -79,7 +75,6 @@ impl Default for ValidatorPerformanceConfig {
             health_check_timeout: default_health_check_timeout(),
             score_weights: ScoreWeights::default(),
             selection_strategy: SelectionStrategy::default(),
-            metrics_window: default_metrics_window(),
             min_samples: default_min_samples(),
             failure_cooldown: default_failure_cooldown(),
             max_consecutive_failures: default_max_consecutive_failures(),
@@ -108,10 +103,6 @@ fn default_health_check_interval() -> Duration {
 
 fn default_health_check_timeout() -> Duration {
     Duration::from_secs(2)
-}
-
-fn default_metrics_window() -> Duration {
-    Duration::from_secs(300) // 5 minutes
 }
 
 fn default_min_samples() -> usize {
