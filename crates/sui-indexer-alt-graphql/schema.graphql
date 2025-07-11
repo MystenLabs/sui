@@ -41,6 +41,10 @@ type Checkpoint {
 	"""
 	epoch: Epoch
 	"""
+	The total number of transaction blocks in the network by the end of this checkpoint.
+	"""
+	networkTotalTransactions: UInt53
+	"""
 	The digest of the checkpoint at the previous sequence number.
 	"""
 	previousCheckpointDigest: String
