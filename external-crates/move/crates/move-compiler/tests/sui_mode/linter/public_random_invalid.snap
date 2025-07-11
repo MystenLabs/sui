@@ -49,7 +49,7 @@ warning[Lint W04013]: functions should either be `public` or `entry`
    ┌─ tests/sui_mode/linter/public_random_invalid.move:10:5
    │
 10 │     public entry fun not_allowed4(_x: u64, _r: &Random, _y: u64) {}
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function is both `public` and `entry`
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary combination of `public` and `entry` modifiers. `public` functions can be called in other modules and transactions, consider using private `entry` for transaction-only visibility
    │
    = This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

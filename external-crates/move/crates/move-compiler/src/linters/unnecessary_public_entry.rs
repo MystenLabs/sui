@@ -29,7 +29,7 @@ simple_visitor!(
         if is_entry && is_public {
             self.add_diag(diag!(
                 StyleCodes::UnnecessaryPublicEntry.diag_info(),
-                (fdef.loc, "Function is both `public` and `entry`")
+                (fdef.loc, "Unnecessary combination of `public` and `entry` modifiers. `public` functions can be called in other modules and transactions, consider using private `entry` for transaction-only visibility")
             ));
         }
 
