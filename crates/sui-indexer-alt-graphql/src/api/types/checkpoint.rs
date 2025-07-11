@@ -65,7 +65,7 @@ impl Checkpoint {
 
 #[Object]
 impl CheckpointContents {
-    /// A 32-byte hash that uniquely identifies the checkpoint contents, encoded in Base58. This hash can be used to verify checkpoint contents by checking signatures against the committee, Hashing contents to match digest, and checking that the previous checkpoint digest matches.
+    /// A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
     async fn digest(&self) -> Result<Option<String>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
             return Ok(None);
@@ -73,7 +73,13 @@ impl CheckpointContents {
         Ok(Some(summary.digest().base58_encode()))
     }
 
-    /// The digest of the checkpoint at the previous sequence number.
+    /// The epoch that this checkpoint is part of.
+    async fn epoch(&self) -> Option<Epoch> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(Epoch::with_id(self.scope.clone(), summary.epoch))
+    }
+
+    /// The digest of the previous checkpoint's summary.
     async fn previous_checkpoint_digest(&self) -> Result<Option<String>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
             return Ok(None);
@@ -82,12 +88,6 @@ impl CheckpointContents {
             .previous_digest
             .as_ref()
             .map(|digest| digest.base58_encode()))
-    }
-
-    /// The epoch that this checkpoint is part of.
-    async fn epoch(&self) -> Option<Epoch> {
-        let (summary, _, _) = self.contents.as_ref()?;
-        Some(Epoch::with_id(self.scope.clone(), summary.epoch))
     }
 
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
