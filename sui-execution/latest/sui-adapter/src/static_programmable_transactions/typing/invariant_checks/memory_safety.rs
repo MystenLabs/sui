@@ -13,7 +13,9 @@ use sui_types::error::ExecutionError;
 /// We do not include the `Rc` in this type itself to make it clear where we are relying on the
 /// Rc's reference counting for correctness
 type AbstractLocation = u64;
-type AbstractLocationCounter = u64;
+
+/// Simple counter for abstract locations.
+struct AbstractLocationCounter(u64);
 
 struct AbstractReference {
     /// the roots this locations borrows from
@@ -46,15 +48,25 @@ struct Context {
     results: Vec<Vec<Location>>,
 }
 
+impl AbstractLocationCounter {
+    fn new() -> Self {
+        Self(0)
+    }
+
+    fn next(&mut self) -> AbstractLocation {
+        let abs = self.0;
+        self.0 += 1;
+        abs
+    }
+}
+
 impl AbstractReference {
     fn new(
         counter: &mut AbstractLocationCounter,
         borrows_from: IndexSet<Rc<AbstractLocation>>,
     ) -> Self {
-        let abs = *counter;
-        *counter += 1;
         Self {
-            root: Rc::new(abs),
+            root: Rc::new(counter.next()),
             borrows_from,
         }
     }
@@ -94,10 +106,8 @@ impl Value {
 
 impl Location {
     fn non_ref(counter: &mut AbstractLocationCounter) -> Self {
-        let abs = *counter;
-        *counter += 1;
         Self {
-            root: Rc::new(abs),
+            root: Rc::new(counter.next()),
             value: Some(Value::NonRef),
         }
     }
@@ -186,7 +196,9 @@ impl Location {
 
 impl Context {
     fn new(txn: &T::Transaction) -> Self {
-        let mut counter = 0;
+        let mut counter = AbstractLocationCounter::new();
+        let tx_context = Location::non_ref(&mut counter);
+        let gas = Location::non_ref(&mut counter);
         let inputs = txn
             .inputs
             .iter()
@@ -194,20 +206,19 @@ impl Context {
             .collect();
         Self {
             counter,
-            tx_context: Location::non_ref(&mut counter),
-            gas: Location::non_ref(&mut counter),
+            tx_context,
+            gas,
             inputs,
             results: vec![],
         }
     }
 
     fn add_result_values(&mut self, results: impl IntoIterator<Item = Value>) {
-        let counter = &mut self.counter;
         self.results.push(
             results
                 .into_iter()
                 .map(|v| Location {
-                    root: Rc::new(*counter),
+                    root: Rc::new(self.counter.next()),
                     value: Some(v),
                 })
                 .collect(),
