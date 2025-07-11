@@ -180,7 +180,7 @@ lints!(
     (
         UnnecessaryPublicEntry,
         LinterDiagnosticCategory::Style,
-        "unnecessary_public_entry",
+        "public_entry",
         "functions should either be `public` or `entry`"
     )
 );

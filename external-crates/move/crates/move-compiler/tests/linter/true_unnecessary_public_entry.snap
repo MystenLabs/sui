@@ -11,7 +11,7 @@ warning[Lint W04013]: functions should either be `public` or `entry`
 2 │     public entry fun true_unnecessary_public_entry() {}
   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function is both `public` and `entry`
   │
-  = This warning can be suppressed with '#[allow(lint(unnecessary_public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W04013]: functions should either be `public` or `entry`
   ┌─ tests/linter/true_unnecessary_public_entry.move:3:5
@@ -19,4 +19,4 @@ warning[Lint W04013]: functions should either be `public` or `entry`
 3 │     entry public fun true_unnecessary_public_entry_2() {}
   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Function is both `public` and `entry`
   │
-  = This warning can be suppressed with '#[allow(lint(unnecessary_public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  = This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -4,7 +4,6 @@
 // Implements lint rule for Move code to detect unnecessary `public entry` functions.
 // It identifies and reports functions that contain both `public` and `entry` modifiers.
 
-// use crate::linters::StyleCodes;
 use crate::{
     diag,
     expansion::ast::ModuleIdent,
