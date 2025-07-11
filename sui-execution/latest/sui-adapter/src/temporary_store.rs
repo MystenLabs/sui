@@ -5,7 +5,7 @@ use crate::gas_charger::GasCharger;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
@@ -68,6 +68,9 @@ pub struct TemporaryStore<'backing> {
     /// The set of per-epoch config objects that were loaded during execution, and are not in the
     /// input objects. This allows us to commit them to the effects.
     loaded_per_epoch_config_objects: RwLock<BTreeSet<ObjectID>>,
+
+    /// The chain this store is associated with.
+    chain: Chain,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -80,6 +83,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
+        chain: Chain,
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
@@ -117,12 +121,17 @@ impl<'backing> TemporaryStore<'backing> {
             receiving_objects,
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
+            chain,
         }
     }
 
     // Helpers to access private fields
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects
+    }
+
+    pub fn chain(&self) -> Chain {
+        self.chain
     }
 
     pub fn update_object_version_and_prev_tx(&mut self) {
