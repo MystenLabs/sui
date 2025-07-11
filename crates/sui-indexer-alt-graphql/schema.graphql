@@ -121,19 +121,19 @@ type GasInput {
 	"""
 	Address of the owner of the gas object(s) used.
 	"""
-	gasSponsor: Addressable!
-	"""
-	Objects used to pay for a transaction's execution and storage.
-	"""
-	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection!
+	gasSponsor: Address!
 	"""
 	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay (in MIST).
 	"""
 	gasPrice: BigInt!
 	"""
-	The maximum number of gas units that can be expended by executing this transaction.
+	The maximum SUI that can be expended by executing this transaction
 	"""
 	gasBudget: BigInt!
+	"""
+	Objects used to pay for a transaction's execution and storage
+	"""
+	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection!
 }
 
 """
@@ -757,6 +757,10 @@ type Transaction {
 	"""
 	effects: TransactionEffects
 	"""
+	The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
+	"""
+	gasInput: GasInput
+	"""
 	The address corresponding to the public key that signed this transaction. System transactions do not have senders.
 	"""
 	sender: Address
@@ -764,10 +768,6 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
-	"""
-	The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
-	"""
-	gasInput: GasInput
 }
 
 """
