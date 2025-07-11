@@ -742,6 +742,10 @@ impl Visibility {
             Visibility::Internal => None,
         }
     }
+
+    pub fn is_public(&self) -> bool {
+        matches!(self, Visibility::Public(_))
+    }
 }
 
 //**************************************************************************************************
