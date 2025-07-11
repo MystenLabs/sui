@@ -25,6 +25,7 @@ pub mod unnecessary_conditional;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
+pub mod unnecessary_public_entry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LintLevel {
@@ -175,6 +176,12 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
+    ),
+    (
+        UnnecessaryPublicEntry,
+        LinterDiagnosticCategory::Style,
+        "unnecessary_public_entry",
+        "functions should either be `public` or `entry`"
     )
 );
 
@@ -215,6 +222,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                unnecessary_public_entry::UnnecessaryPublicEntry.visitor(),
             ]
         }
     }
