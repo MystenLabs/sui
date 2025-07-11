@@ -174,10 +174,17 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
         let mut output = BTreeMap::new();
         for env in self.environments().keys() {
-            output.extend(self.root.direct_deps(env).await?);
+            output.extend(self.root.direct_deps(env)?);
         }
 
         Ok(output)
+    }
+
+    /// Return the package graph for `env`
+    // TODO: what's the right API here?
+    #[cfg(test)]
+    pub fn package_graph(&self, env: &EnvironmentName) -> Option<&PackageGraph<F>> {
+        self.dependencies.get(env)
     }
 
     // *** PATHS RELATED FUNCTIONS ***
@@ -272,7 +279,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
-        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
+        let deps = package.direct_deps(&"testnet".to_string()).unwrap();
         assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
         assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
     }
@@ -283,7 +290,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
-        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
+        let deps = package.direct_deps(&"testnet".to_string()).unwrap();
         assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
         assert!(deps.contains_key(&Identifier::new("depends_a_b").unwrap()));
         // should not contain these transitive deps
@@ -299,7 +306,7 @@ pkg_b = { local = "../pkg_b" }"#,
         let pkg_path = root_path.join("packages").join("graph");
         let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
         // devnet does not exist in the manifest, should error
-        let deps = package.direct_deps(&"devnet".to_string()).await;
+        let deps = package.direct_deps(&"devnet".to_string());
         assert!(deps.is_err());
     }
 

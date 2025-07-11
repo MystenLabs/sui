@@ -6,14 +6,14 @@ use crate::{
     compatibility::{
         LegacyAddressDeclarations, LegacyBuildInfo, LegacyDevAddressDeclarations,
         LegacySubstOrRename, LegacySubstitution, LegacyVersion, find_module_name_for_package,
-        legacy::{LegacyData, LegacyEnvironment, ManifestPublishInformation},
+        legacy::{LegacyData, LegacyEnvironment},
     },
     errors::FileHandle,
     package::{EnvironmentName, PackageName, layout::SourcePackageLayout, paths::PackagePath},
     schema::{
         DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
         ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, ParsedManifest,
-        PublishedID,
+        PublishAddresses, PublishedID,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -146,8 +146,10 @@ fn parse_legacy_lockfile_addresses(
             publish_info.insert(
                 env_name,
                 LegacyEnvironment {
-                    published_at: PublishedID(latest_id),
-                    original_id: OriginalID(original_id),
+                    addresses: PublishAddresses {
+                        original_id: OriginalID(original_id),
+                        published_at: PublishedID(latest_id),
+                    },
                     chain_id,
                     version: published_version,
                 },
@@ -230,7 +232,7 @@ fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedManifest
 
                 // If we have BOTH the original and latest id, we can create the published ids!
                 if let (Ok(latest_id), Some(original_id)) = (latest_id, original_id) {
-                    Some(ManifestPublishInformation {
+                    Some(PublishAddresses {
                         published_at: crate::schema::PublishedID(latest_id),
                         original_id: crate::schema::OriginalID(original_id),
                     })

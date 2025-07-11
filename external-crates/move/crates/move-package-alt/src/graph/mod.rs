@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod builder;
+mod linkage;
 mod to_lockfile;
 
 use std::{collections::BTreeMap, sync::Arc};

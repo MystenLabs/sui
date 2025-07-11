@@ -6,13 +6,13 @@ source: crates/move-package-alt/tests/test_runner.rs
 
 [pinned.mainnet.bar]
 source = { local = "../bar" }
-use_environment = "testnet"
+use_environment = "mainnet"
 manifest_digest = "7CF677A61E2A8A49F782366D611EC014DB85EC46CC4987F1508407F22005182B"
 deps = {}
 
 [pinned.mainnet.baz]
 source = { local = "../baz" }
-use_environment = "testnet"
+use_environment = "mainnet"
 manifest_digest = "CB9239900A57672C111EDB16949CB9564EAF02FC5C327FD62AFD04D9518405C9"
 deps = { bar = "bar" }
 

@@ -17,7 +17,10 @@ pub use fetch::FetchedDependency;
 mod dependency_set;
 pub use dependency_set::DependencySet;
 
-use crate::{errors::FileHandle, schema::EnvironmentName, schema::PublishedID};
+use crate::{
+    errors::FileHandle,
+    schema::{EnvironmentName, PublishAddresses},
+};
 
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
 /// fields) with additional metadata about how the dependency is used (such as the source file,
@@ -41,7 +44,7 @@ struct Dependency<DepInfo> {
     is_override: bool,
 
     /// Does the original manifest override the published address?
-    published_at: Option<PublishedID>,
+    addresses: Option<PublishAddresses>,
 
     /// What manifest or lockfile does this dependency come from?
     containing_file: FileHandle,
@@ -54,7 +57,7 @@ impl<T> Dependency<T> {
             dep_info: f(self.dep_info),
             use_environment: self.use_environment,
             is_override: self.is_override,
-            published_at: self.published_at,
+            addresses: self.addresses,
             containing_file: self.containing_file,
         }
     }

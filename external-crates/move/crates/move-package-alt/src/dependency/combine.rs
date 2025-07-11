@@ -75,7 +75,7 @@ impl CombinedDependency {
             dep_info: default.dependency_info,
             use_environment: source_env_name,
             is_override: default.is_override,
-            published_at: None,
+            addresses: None,
             containing_file: file,
         })
     }
@@ -99,7 +99,7 @@ impl CombinedDependency {
             dep_info: dep.dependency_info,
             use_environment: replacement.use_environment.unwrap_or(source_env_name),
             is_override: dep.is_override,
-            published_at: replacement.published_at,
+            addresses: replacement.addresses,
             containing_file: file,
         }))
     }
@@ -118,7 +118,7 @@ impl CombinedDependency {
             dep_info: dep.dependency_info,
             use_environment: replacement.use_environment.unwrap_or(source_env_name),
             is_override: dep.is_override,
-            published_at: replacement.published_at,
+            addresses: replacement.addresses,
             containing_file: file,
         }))
     }
