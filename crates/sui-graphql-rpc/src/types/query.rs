@@ -461,13 +461,13 @@ impl Query {
         before: Option<event::Cursor>,
         filter: Option<EventFilter>,
     ) -> Result<Connection<String, Event>> {
-        let Watermark { hi_cp, .. } = *ctx.data()?;
-
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        let Watermark { lo_tx, hi_cp, .. } = *ctx.data()?;
         Event::paginate(
             ctx.data_unchecked(),
             page,
             filter.unwrap_or_default(),
+            lo_tx,
             hi_cp,
         )
         .await
