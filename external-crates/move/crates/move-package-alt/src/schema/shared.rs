@@ -3,6 +3,7 @@ use std::{fmt::Debug, fmt::Display, path::PathBuf};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
 
+// TODO(Manos): Let's use a less free name...
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
 
@@ -23,13 +24,13 @@ pub struct LocalDepInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct OnChainDepInfo {
     #[serde(rename = "on-chain")]
-    on_chain: ConstTrue,
+    pub on_chain: ConstTrue,
 }
 
 /// The constant `true`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(try_from = "bool", into = "bool")]
-struct ConstTrue;
+pub struct ConstTrue;
 
 impl TryFrom<bool> for ConstTrue {
     type Error = &'static str;
