@@ -3,8 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
+use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
@@ -51,69 +50,57 @@ impl EffectsCertifier {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let mut full_effects_future = Box::pin(self.get_full_effects_with_retry(
-            authority_aggregator,
-            tx_digest,
-            consensus_position,
-            epoch,
-            options,
-        ));
+        let (acknowledgments_result, mut full_effects_result) = join!(
+            self.wait_for_acknowledgments_with_retry(
+                authority_aggregator,
+                tx_digest,
+                consensus_position,
+                epoch,
+                options,
+            ),
+            self.get_full_effects_with_retry(
+                authority_aggregator,
+                tx_digest,
+                consensus_position,
+                epoch,
+                options,
+            ),
+        );
+        let certified_digest = acknowledgments_result?;
 
-        let mut acknowledgments_future = Box::pin(self.wait_for_acknowledgments_with_retry(
-            authority_aggregator,
-            tx_digest,
-            consensus_position,
-            epoch,
-            options,
-        ));
-
-        tokio::select! {
-            full_effects_result = &mut full_effects_future => {
-                match full_effects_result {
-                    Ok((effects_digest, executed_data)) => {
-                        // Full effects succeeded, now wait for acknowledgments
-                        match acknowledgments_future.await {
-                            Ok(confirmed_digest) => {
-                                self.validate_effects_match(
-                                    effects_digest,
-                                    confirmed_digest,
-                                    executed_data,
-                                    epoch,
-                                    tx_digest,
-                                )
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    Err(e) => {
-                        // Full effects failed, no need to wait for acknowledgments
-                        Err(e)
+        // Retry until full effects digest matches the certified digest.
+        // TODO(fastpath): send backup requests to get full effects before timeout or failure.
+        loop {
+            match full_effects_result {
+                Ok((effects_digest, executed_data)) => {
+                    if effects_digest != certified_digest {
+                        tracing::warn!(
+                            "Full effects digest mismatch ({} vs certified {})",
+                            effects_digest,
+                            certified_digest
+                        );
+                    } else {
+                        return Ok(self.get_effects_response(
+                            effects_digest,
+                            executed_data,
+                            epoch,
+                            tx_digest,
+                        ));
                     }
                 }
-            }
-            acknowledgments_result = &mut acknowledgments_future => {
-                match acknowledgments_result {
-                    Ok(confirmed_digest) => {
-                        // Acknowledgments succeeded, now wait for full effects to get the digest
-                        match full_effects_future.await {
-                            Ok((effects_digest, executed_data)) => {
-                                self.validate_effects_match(
-                                    effects_digest,
-                                    confirmed_digest,
-                                    executed_data,
-                                    epoch,
-                                    tx_digest,
-                                )
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    Err(e) => {
-                        // Acknowledgments failed, no need to wait for full effects
-                        Err(e)
-                    }
+                Err(e) => {
+                    tracing::warn!("Failed to get full effects: {e}");
                 }
-            }
+            };
+            full_effects_result = self
+                .get_full_effects_with_retry(
+                    authority_aggregator,
+                    tx_digest,
+                    consensus_position,
+                    epoch,
+                    options,
+                )
+                .await;
         }
     }
 
@@ -400,46 +387,36 @@ impl EffectsCertifier {
     }
 
     /// Create the final response after validating effects digest match
-    fn validate_effects_match(
+    fn get_effects_response(
         &self,
         effects_digest: TransactionEffectsDigest,
-        confirmed_digest: TransactionEffectsDigest,
         executed_data: ExecutedData,
         epoch: EpochId,
         tx_digest: &TransactionDigest,
-    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
-        if effects_digest == confirmed_digest {
-            self.metrics.executed_transactions.inc();
+    ) -> QuorumTransactionResponse {
+        self.metrics.executed_transactions.inc();
 
-            tracing::info!(
-                "Transaction {tx_digest} executed with effects digest: {effects_digest}",
-            );
+        tracing::debug!("Transaction {tx_digest} executed with effects digest: {effects_digest}",);
 
-            let details = FinalizedEffects {
-                effects: executed_data.effects,
-                finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-            };
+        let details = FinalizedEffects {
+            effects: executed_data.effects,
+            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+        };
 
-            Ok(QuorumTransactionResponse {
-                effects: details,
-                events: executed_data.events,
-                input_objects: if !executed_data.input_objects.is_empty() {
-                    Some(executed_data.input_objects)
-                } else {
-                    None
-                },
-                output_objects: if !executed_data.output_objects.is_empty() {
-                    Some(executed_data.output_objects)
-                } else {
-                    None
-                },
-                auxiliary_data: None,
-            })
-        } else {
-            Err(TransactionDriverError::EffectsDigestMismatch {
-                quorum_expected: effects_digest.to_string(),
-                actual: confirmed_digest.to_string(),
-            })
+        QuorumTransactionResponse {
+            effects: details,
+            events: executed_data.events,
+            input_objects: if !executed_data.input_objects.is_empty() {
+                Some(executed_data.input_objects)
+            } else {
+                None
+            },
+            output_objects: if !executed_data.output_objects.is_empty() {
+                Some(executed_data.output_objects)
+            } else {
+                None
+            },
+            auxiliary_data: None,
         }
     }
 }
