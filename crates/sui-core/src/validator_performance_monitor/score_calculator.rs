@@ -26,17 +26,17 @@ pub struct ScoreComponents {
 /// Statistics for a validator
 #[derive(Debug, Clone, Default)]
 pub struct ValidatorStats {
-    /// Success count
+    /// Success count (only for non-submit operations)
     pub success_count: u64,
-    /// Failure count
+    /// Failure count (only for non-submit operations)
     pub failure_count: u64,
-    /// Average latency for submit operations
-    pub avg_submit_latency: Duration,
-    /// Average latency for effects operations
-    pub avg_effects_latency: Duration,
-    /// Average latency for health check operations
-    pub avg_health_check_latency: Duration,
-    /// Consecutive failures
+    /// EMA latency for submit operations (always tracked regardless of success/failure)
+    pub ema_submit_latency: Duration,
+    /// EMA latency for effects operations
+    pub ema_effects_latency: Duration,
+    /// EMA latency for health check operations
+    pub ema_health_check_latency: Duration,
+    /// Consecutive failures (only for non-submit operations)
     pub consecutive_failures: u32,
     /// Last success time
     pub last_success: Option<Instant>,
@@ -85,13 +85,20 @@ impl ScoreCalculator {
         for stats in all_stats.values() {
             if stats.success_count > 0 {
                 // Use submit latency as the primary latency for backward compatibility
-                total_latency += stats.avg_submit_latency * stats.success_count as u32;
+                total_latency += stats.ema_submit_latency * stats.success_count as u32;
                 latency_count += stats.success_count;
+            }
 
-                max_submit_latency = max_submit_latency.max(stats.avg_submit_latency);
-                max_effects_latency = max_effects_latency.max(stats.avg_effects_latency);
+            // Always track max latencies (even if no successful operations yet)
+            if !stats.ema_submit_latency.is_zero() {
+                max_submit_latency = max_submit_latency.max(stats.ema_submit_latency);
+            }
+            if !stats.ema_effects_latency.is_zero() {
+                max_effects_latency = max_effects_latency.max(stats.ema_effects_latency);
+            }
+            if !stats.ema_health_check_latency.is_zero() {
                 max_health_check_latency =
-                    max_health_check_latency.max(stats.avg_health_check_latency);
+                    max_health_check_latency.max(stats.ema_health_check_latency);
             }
         }
 
@@ -141,15 +148,15 @@ impl ScoreCalculator {
         };
 
         let submit_ratio = calc_latency_ratio(
-            stats.avg_submit_latency,
+            stats.ema_submit_latency,
             self.global_stats.max_submit_latency,
         );
         let effects_ratio = calc_latency_ratio(
-            stats.avg_effects_latency,
+            stats.ema_effects_latency,
             self.global_stats.max_effects_latency,
         );
         let health_ratio = calc_latency_ratio(
-            stats.avg_health_check_latency,
+            stats.ema_health_check_latency,
             self.global_stats.max_health_check_latency,
         );
 
@@ -178,38 +185,6 @@ impl ScoreCalculator {
             overall_score: overall_score.clamp(0.0, 1.0),
             components,
             last_updated: Some(Instant::now()),
-        }
-    }
-
-    /// Apply adaptive scoring adjustments based on recent performance
-    pub fn apply_adaptive_adjustments(&self, score: &mut PerformanceScore, stats: &ValidatorStats) {
-        if !self.config.adaptive_scoring {
-            return;
-        }
-
-        // Boost score for recently recovered validators
-        if let (Some(last_success), Some(last_failure)) = (stats.last_success, stats.last_failure) {
-            if last_success > last_failure && stats.consecutive_failures == 0 {
-                let recovery_time = last_success.duration_since(last_failure);
-                if recovery_time < Duration::from_secs(60) {
-                    // Recent recovery, give a small boost
-                    score.overall_score = (score.overall_score * 1.1).min(1.0);
-                }
-            }
-        }
-
-        // Apply time-based decay for stale data
-        if let Some(last_updated) = score.last_updated {
-            let age = Instant::now().duration_since(last_updated);
-            if age > self.config.metrics_window {
-                // Decay score for stale data
-                let decay_factor = 0.5
-                    + 0.5
-                        * (1.0
-                            - age.as_secs_f64() / (2.0 * self.config.metrics_window.as_secs_f64()))
-                        .max(0.0);
-                score.overall_score *= decay_factor;
-            }
         }
     }
 }

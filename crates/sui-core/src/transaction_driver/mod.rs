@@ -34,7 +34,7 @@ use crate::{
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
     validator_performance_monitor::{
-        OperationFeedback, ValidatorPerformanceConfig, ValidatorPerformanceMetrics,
+        OperationFeedback, OperationType, ValidatorPerformanceConfig, ValidatorPerformanceMetrics,
         ValidatorPerformanceMonitor,
     },
     wait_for_effects_request::{WaitForEffectsRequest, WaitForEffectsResponse},
@@ -163,21 +163,25 @@ where
         {
             Ok(Ok(pos)) => {
                 let latency = submit_start.elapsed();
-                self.performance_monitor
-                    .record_feedback(OperationFeedback::SubmitSuccess {
-                        validator: selected_validator,
-                        latency,
-                    });
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency,
+                    success: true,
+                    error: None,
+                });
                 pos
             }
             Ok(Err(e)) => {
                 let latency = submit_start.elapsed();
-                self.performance_monitor
-                    .record_feedback(OperationFeedback::SubmitFailure {
-                        validator: selected_validator,
-                        latency,
-                        error: e.to_string(),
-                    });
+                // For submit operations, only track latency - don't pass the error
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency,
+                    success: true, // Treat as success for latency tracking only
+                    error: None,   // Don't track non-timeout errors for submit
+                });
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
                     e.to_string(),
@@ -185,12 +189,13 @@ where
             }
             Err(_) => {
                 let latency = submit_start.elapsed();
-                self.performance_monitor
-                    .record_feedback(OperationFeedback::SubmitFailure {
-                        validator: selected_validator,
-                        latency,
-                        error: "timeout".to_string(),
-                    });
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Submit,
+                    latency,
+                    success: false,
+                    error: Some("timeout".to_string()),
+                });
                 return Err(TransactionDriverError::TimeoutBeforeFinality);
             }
         };
@@ -219,21 +224,24 @@ where
         {
             Ok(Ok(response)) => {
                 let latency = effects_start.elapsed();
-                self.performance_monitor
-                    .record_feedback(OperationFeedback::EffectsSuccess {
-                        validator: selected_validator,
-                        latency,
-                    });
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Effects,
+                    latency,
+                    success: true,
+                    error: None,
+                });
                 response
             }
             Ok(Err(e)) => {
                 let latency = effects_start.elapsed();
-                self.performance_monitor
-                    .record_feedback(OperationFeedback::EffectsFailure {
-                        validator: selected_validator,
-                        latency,
-                        error: e.to_string(),
-                    });
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Effects,
+                    latency,
+                    success: false,
+                    error: Some(e.to_string()),
+                });
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
                     e.to_string(),
@@ -241,12 +249,13 @@ where
             }
             Err(_) => {
                 let latency = effects_start.elapsed();
-                self.performance_monitor
-                    .record_feedback(OperationFeedback::EffectsFailure {
-                        validator: selected_validator,
-                        latency,
-                        error: "timeout".to_string(),
-                    });
+                self.performance_monitor.record_feedback(OperationFeedback {
+                    validator: selected_validator,
+                    operation: OperationType::Effects,
+                    latency,
+                    success: false,
+                    error: Some("timeout".to_string()),
+                });
                 return Err(TransactionDriverError::TimeoutWaitingForEffects);
             }
         };

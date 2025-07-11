@@ -6,13 +6,13 @@ use crate::validator_performance_monitor::{
     config::{SelectionStrategy, ValidatorPerformanceConfig},
     metrics::ValidatorPerformanceMetrics,
     score_calculator::{PerformanceScore, ScoreCalculator, ValidatorStats},
-    OperationFeedback,
+    OperationFeedback, OperationType,
 };
 use arc_swap::ArcSwap;
 use parking_lot::RwLock;
 use rand::{distributions::WeightedIndex, prelude::*};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -52,30 +52,12 @@ pub enum SelectionReason {
     Fallback,
 }
 
+#[derive(Default)]
 pub struct ValidatorData {
     pub stats: ValidatorStats,
     pub score: PerformanceScore,
-    /// Recent submit operation latencies for rolling average
-    pub recent_submit_latencies: VecDeque<(Instant, Duration)>,
-    /// Recent effects operation latencies for rolling average
-    pub recent_effects_latencies: VecDeque<(Instant, Duration)>,
-    /// Recent health check latencies for rolling average
-    pub recent_health_check_latencies: VecDeque<(Instant, Duration)>,
     /// Time when validator was temporarily excluded
     pub exclusion_time: Option<Instant>,
-}
-
-impl Default for ValidatorData {
-    fn default() -> Self {
-        Self {
-            stats: ValidatorStats::default(),
-            score: PerformanceScore::default(),
-            recent_submit_latencies: VecDeque::with_capacity(100),
-            recent_effects_latencies: VecDeque::with_capacity(100),
-            recent_health_check_latencies: VecDeque::with_capacity(100),
-            exclusion_time: None,
-        }
-    }
 }
 
 pub struct ValidatorPerformanceMonitor<A: Clone> {
@@ -118,44 +100,22 @@ where
 
     /// Process feedback from TransactionDriver operations
     pub fn record_feedback(&self, feedback: OperationFeedback) {
-        match feedback {
-            OperationFeedback::SubmitSuccess { validator, latency } => {
-                self.record_operation_result(&validator, "submit", true, latency, None);
-            }
-            OperationFeedback::SubmitFailure {
-                validator,
-                latency,
-                error,
-            } => {
-                self.record_operation_result(&validator, "submit", false, latency, Some(&error));
-            }
-            OperationFeedback::EffectsSuccess { validator, latency } => {
-                self.record_operation_result(&validator, "effects", true, latency, None);
-            }
-            OperationFeedback::EffectsFailure {
-                validator,
-                latency,
-                error,
-            } => {
-                self.record_operation_result(&validator, "effects", false, latency, Some(&error));
-            }
-            OperationFeedback::HealthCheckSuccess { validator, latency } => {
-                self.record_operation_result(&validator, "health_check", true, latency, None);
-            }
-            OperationFeedback::HealthCheckFailure {
-                validator,
-                latency,
-                error,
-            } => {
-                self.record_operation_result(
-                    &validator,
-                    "health_check",
-                    false,
-                    latency,
-                    Some(&error),
-                );
-            }
-        }
+        let operation_str = match feedback.operation {
+            OperationType::Submit => "submit",
+            OperationType::Effects => "effects",
+            OperationType::HealthCheck => "health_check",
+        };
+
+        // Unified handling for all operation types
+        // Submit operations with non-timeout errors are handled at the caller level
+        // by not passing the error and marking as success for latency tracking only
+        self.record_operation_result(
+            &feedback.validator,
+            operation_str,
+            feedback.success,
+            feedback.latency,
+            feedback.error.as_deref(),
+        );
     }
 
     /// Handle epoch changes by cleaning up stale validator data
@@ -297,7 +257,6 @@ where
         let mut data = self.validator_data.write();
         let vdata = data.entry(*validator).or_default();
 
-        // Update stats
         if success {
             vdata.stats.success_count += 1;
             vdata.stats.consecutive_failures = 0;
@@ -314,11 +273,8 @@ where
             }
         }
 
-        // Update rolling latency average for the specific operation type
-        let now = Instant::now();
-        let cutoff = now - self.config.metrics_window;
-
-        self.update_latency_for_operation_type(vdata, operation, now, latency, cutoff);
+        // Update EMA latency for the specific operation type
+        self.update_ema_latency(vdata, operation, latency);
 
         // Update metrics
         self.metrics
@@ -338,55 +294,39 @@ where
         self.recalculate_scores();
     }
 
-    fn update_latency_for_operation_type(
+    fn update_ema_latency(
         &self,
         vdata: &mut ValidatorData,
         operation: &str,
-        now: Instant,
-        latency: Duration,
-        cutoff: Instant,
+        new_latency: Duration,
     ) {
-        // Helper closure to update latency queue and average
-        let update_latency_queue = |queue: &mut VecDeque<(Instant, Duration)>,
-                                    avg_latency: &mut Duration| {
-            queue.push_back((now, latency));
+        // EMA smoothing factor: 0.2 means 20% weight to new value, 80% to historical
+        const EMA_ALPHA: f64 = 0.2;
 
-            // Remove old entries outside the window
-            while let Some((time, _)) = queue.front() {
-                if *time < cutoff {
-                    queue.pop_front();
-                } else {
-                    break;
-                }
-            }
-
-            // Calculate new average latency
-            if !queue.is_empty() {
-                let total: Duration = queue.iter().map(|(_, d)| *d).sum();
-                *avg_latency = total / queue.len() as u32;
+        // Helper function to calculate EMA
+        let calculate_ema = |current_latency: Duration| -> Duration {
+            if current_latency.is_zero() {
+                new_latency
+            } else {
+                let current_secs = current_latency.as_secs_f64();
+                let new_secs = new_latency.as_secs_f64();
+                let ema_secs = EMA_ALPHA * new_secs + (1.0 - EMA_ALPHA) * current_secs;
+                Duration::from_secs_f64(ema_secs)
             }
         };
 
-        match operation {
-            "submit" => update_latency_queue(
-                &mut vdata.recent_submit_latencies,
-                &mut vdata.stats.avg_submit_latency,
-            ),
-            "effects" => update_latency_queue(
-                &mut vdata.recent_effects_latencies,
-                &mut vdata.stats.avg_effects_latency,
-            ),
-            "health_check" => update_latency_queue(
-                &mut vdata.recent_health_check_latencies,
-                &mut vdata.stats.avg_health_check_latency,
-            ),
-            _ => {
-                // For any other operation types, default to submit latency tracking
-                update_latency_queue(
-                    &mut vdata.recent_submit_latencies,
-                    &mut vdata.stats.avg_submit_latency,
-                )
-            }
+        // Use HashMap to avoid code duplication
+        let mut latency_map = HashMap::from([
+            ("submit", &mut vdata.stats.ema_submit_latency),
+            ("effects", &mut vdata.stats.ema_effects_latency),
+            ("health_check", &mut vdata.stats.ema_health_check_latency),
+        ]);
+
+        if let Some(latency_field) = latency_map.get_mut(operation) {
+            **latency_field = calculate_ema(**latency_field);
+        } else {
+            // Default to submit latency for unknown operation types
+            vdata.stats.ema_submit_latency = calculate_ema(vdata.stats.ema_submit_latency);
         }
     }
 
@@ -405,8 +345,7 @@ where
         // Calculate scores for each validator
         let score_calc = self.score_calculator.read();
         for (validator, vdata) in data.iter_mut() {
-            let mut score = score_calc.calculate_score(&vdata.stats);
-            score_calc.apply_adaptive_adjustments(&mut score, &vdata.stats);
+            let score = score_calc.calculate_score(&vdata.stats);
             vdata.score = score;
 
             // Update metric
@@ -553,25 +492,32 @@ where
                     {
                         Ok(Ok(_response)) => {
                             let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback::HealthCheckSuccess {
+                            monitor.record_feedback(OperationFeedback {
                                 validator: name,
+                                operation: OperationType::HealthCheck,
                                 latency,
+                                success: true,
+                                error: None,
                             });
                         }
                         Ok(Err(e)) => {
                             let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback::HealthCheckFailure {
+                            monitor.record_feedback(OperationFeedback {
                                 validator: name,
+                                operation: OperationType::HealthCheck,
                                 latency,
-                                error: e.to_string(),
+                                success: false,
+                                error: Some(e.to_string()),
                             });
                         }
                         Err(_) => {
                             let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback::HealthCheckFailure {
+                            monitor.record_feedback(OperationFeedback {
                                 validator: name,
+                                operation: OperationType::HealthCheck,
                                 latency,
-                                error: "timeout".to_string(),
+                                success: false,
+                                error: Some("timeout".to_string()),
                             });
                         }
                     }

@@ -31,10 +31,6 @@ pub struct ValidatorPerformanceConfig {
     #[serde(default = "default_min_samples")]
     pub min_samples: usize,
 
-    /// Whether to enable adaptive scoring
-    #[serde(default = "default_adaptive_scoring")]
-    pub adaptive_scoring: bool,
-
     /// Cooldown period after failures
     #[serde(default = "default_failure_cooldown")]
     pub failure_cooldown: Duration,
@@ -85,7 +81,6 @@ impl Default for ValidatorPerformanceConfig {
             selection_strategy: SelectionStrategy::default(),
             metrics_window: default_metrics_window(),
             min_samples: default_min_samples(),
-            adaptive_scoring: default_adaptive_scoring(),
             failure_cooldown: default_failure_cooldown(),
             max_consecutive_failures: default_max_consecutive_failures(),
         }
@@ -121,10 +116,6 @@ fn default_metrics_window() -> Duration {
 
 fn default_min_samples() -> usize {
     3
-}
-
-fn default_adaptive_scoring() -> bool {
-    true
 }
 
 fn default_failure_cooldown() -> Duration {

@@ -20,40 +20,20 @@ pub use score_calculator::{PerformanceScore, ScoreCalculator};
 use std::time::Duration;
 use sui_types::base_types::AuthorityName;
 
+/// Operation types for validator performance tracking
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OperationType {
+    Submit,
+    Effects,
+    HealthCheck,
+}
+
 /// Feedback from TransactionDriver operations
 #[derive(Debug, Clone)]
-pub enum OperationFeedback {
-    /// Transaction submission succeeded
-    SubmitSuccess {
-        validator: AuthorityName,
-        latency: Duration,
-    },
-    /// Transaction submission failed
-    SubmitFailure {
-        validator: AuthorityName,
-        latency: Duration,
-        error: String,
-    },
-    /// Effects retrieval succeeded
-    EffectsSuccess {
-        validator: AuthorityName,
-        latency: Duration,
-    },
-    /// Effects retrieval failed
-    EffectsFailure {
-        validator: AuthorityName,
-        latency: Duration,
-        error: String,
-    },
-    /// Health check succeeded (we only care about latency, not the response data)
-    HealthCheckSuccess {
-        validator: AuthorityName,
-        latency: Duration,
-    },
-    /// Health check failed
-    HealthCheckFailure {
-        validator: AuthorityName,
-        latency: Duration,
-        error: String,
-    },
+pub struct OperationFeedback {
+    pub validator: AuthorityName,
+    pub operation: OperationType,
+    pub latency: Duration,
+    pub success: bool,
+    pub error: Option<String>,
 }

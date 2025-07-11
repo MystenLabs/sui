@@ -5,8 +5,8 @@
 mod test_validator_performance_monitor {
     use super::super::*;
     use crate::validator_performance_monitor::score_calculator::ValidatorStats;
+    use crate::validator_performance_monitor::{OperationFeedback, OperationType};
     use fastcrypto::traits::KeyPair;
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
     use sui_types::{
@@ -14,7 +14,6 @@ mod test_validator_performance_monitor {
         committee::Committee,
         crypto::{get_key_pair, AuthorityKeyPair},
     };
-    use tracing::debug;
 
     fn create_test_committee(num_validators: usize) -> (Committee, Vec<AuthorityName>) {
         let mut voting_rights = Vec::new();
@@ -521,9 +520,12 @@ mod test_validator_performance_monitor {
         // Set up performance gradient
         for (i, name) in names.iter().enumerate() {
             for _ in 0..10 {
-                monitor.record_feedback(OperationFeedback::SubmitSuccess {
+                monitor.record_feedback(OperationFeedback {
                     validator: *name,
+                    operation: OperationType::Submit,
                     latency: Duration::from_millis((i as u64 + 1) * 50),
+                    success: true,
+                    error: None,
                 });
             }
         }
@@ -539,9 +541,12 @@ mod test_validator_performance_monitor {
 
         // Record operations and check they're tracked
         for _ in 0..5 {
-            monitor.record_feedback(OperationFeedback::SubmitSuccess {
+            monitor.record_feedback(OperationFeedback {
                 validator: names[0],
+                operation: OperationType::Submit,
                 latency: Duration::from_millis(100),
+                success: true,
+                error: None,
             });
         }
 
@@ -549,6 +554,6 @@ mod test_validator_performance_monitor {
         let records = monitor.get_performance_records();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].stats.success_count, 5);
-        assert!(records[0].stats.avg_latency > Duration::ZERO);
+        assert!(records[0].stats.ema_submit_latency > Duration::ZERO);
     }
 }
