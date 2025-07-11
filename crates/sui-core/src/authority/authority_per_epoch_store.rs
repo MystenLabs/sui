@@ -1093,9 +1093,9 @@ impl AuthorityPerEpochStore {
                     // Load observations stored during the current epoch.
                     .chain(execution_time_observations.into_iter().flat_map(
                         |((generation, source), observations)| {
-                            observations
-                                .into_iter()
-                                .map(move |(key, duration)| (source, generation, key, duration))
+                            observations.into_iter().map(move |(key, duration)| {
+                                (source, Some(generation), key, duration)
+                            })
                         },
                     )),
                 ))
@@ -1487,7 +1487,14 @@ impl AuthorityPerEpochStore {
         committee: Arc<Committee>,
         object_store: &dyn ObjectStore,
         metrics: &EpochMetrics,
-    ) -> impl Iterator<Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration)> {
+    ) -> impl Iterator<
+        Item = (
+            AuthorityIndex,
+            Option<u64>,
+            ExecutionTimeObservationKey,
+            Duration,
+        ),
+    > {
         if !matches!(
             protocol_config.per_object_congestion_control_mode(),
             PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
@@ -1550,7 +1557,7 @@ impl AuthorityPerEpochStore {
                             .map(|authority_index| {
                                 (
                                     authority_index,
-                                    0, /* generation */
+                                    None, /* generation */
                                     key.clone(),
                                     duration,
                                 )
@@ -3221,7 +3228,11 @@ impl AuthorityPerEpochStore {
                 continue;
             };
             let authority_index = self.committee.authority_index(&authority).unwrap();
-            estimator.process_observations_from_consensus(authority_index, generation, &estimates);
+            estimator.process_observations_from_consensus(
+                authority_index,
+                Some(generation),
+                &estimates,
+            );
             output.insert_execution_time_observation(authority_index, generation, estimates);
             if self.protocol_config().record_time_estimate_processed() {
                 output.record_consensus_message_processed(key);
