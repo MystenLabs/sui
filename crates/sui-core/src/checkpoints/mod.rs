@@ -15,7 +15,7 @@ pub use crate::checkpoints::checkpoint_output::{
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
-use crate::execution_cache::{ExecutionCacheCommit, TransactionCacheRead};
+use crate::execution_cache::TransactionCacheRead;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
@@ -23,7 +23,7 @@ use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{assert_reachable, debug_fatal, fatal};
-use mysten_metrics::{monitored_future, monitored_scope, spawn_monitored_task, MonitoredFutureExt};
+use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
@@ -994,12 +994,6 @@ impl CheckpointStateHasher {
     }
 }
 
-pub(crate) type CheckpointConstructionResults = NonEmpty<(
-    CheckpointSummary,
-    CheckpointContents,
-    Vec<TransactionEffects>,
-)>;
-
 pub struct CheckpointBuilder {
     state: Arc<AuthorityState>,
     store: Arc<CheckpointStore>,
@@ -1010,12 +1004,10 @@ pub struct CheckpointBuilder {
     effects_store: Arc<dyn TransactionCacheRead>,
     global_state_hasher: Weak<GlobalStateHasher>,
     send_to_hasher: mpsc::Sender<(CheckpointSequenceNumber, Vec<TransactionEffects>)>,
-    output: Option<Box<dyn CheckpointOutput>>,
+    output: Box<dyn CheckpointOutput>,
     metrics: Arc<CheckpointMetrics>,
     max_transactions_per_checkpoint: usize,
     max_checkpoint_size_bytes: usize,
-    post_processor_sender: mpsc::Sender<CheckpointConstructionResults>,
-    post_processor_receiver: Option<mpsc::Receiver<CheckpointConstructionResults>>,
 }
 
 pub struct CheckpointAggregator {
@@ -1058,7 +1050,6 @@ impl CheckpointBuilder {
         max_transactions_per_checkpoint: usize,
         max_checkpoint_size_bytes: usize,
     ) -> Self {
-        let (post_processor_sender, post_processor_receiver) = mpsc::channel(100);
         Self {
             state,
             store,
@@ -1067,14 +1058,12 @@ impl CheckpointBuilder {
             effects_store,
             global_state_hasher,
             send_to_hasher,
-            output: Some(output),
+            output,
             notify_aggregator,
             last_built,
             metrics,
             max_transactions_per_checkpoint,
             max_checkpoint_size_bytes,
-            post_processor_sender,
-            post_processor_receiver: Some(post_processor_receiver),
         }
     }
 
@@ -1085,32 +1074,12 @@ impl CheckpointBuilder {
     /// It is optional to pass in consensus_replay_waiter, to make it easier to attribute
     /// if slow recovery of previously built checkpoints is due to consensus replay or
     /// checkpoint building.
-    async fn run(
-        mut self,
-        cache_commit: Arc<dyn ExecutionCacheCommit>,
-        consensus_replay_waiter: Option<ReplayWaiter>,
-    ) {
+    async fn run(mut self, consensus_replay_waiter: Option<ReplayWaiter>) {
         if let Some(replay_waiter) = consensus_replay_waiter {
             info!("Waiting for consensus commits to replay ...");
             replay_waiter.wait_for_replay().await;
             info!("Consensus commits finished replaying");
         }
-
-        info!("Starting Postprocessor task");
-
-        let store = self.store.clone();
-        let epoch_store = self.epoch_store.clone();
-        let output = self.output.take().unwrap();
-        let post_processor_receiver = self.post_processor_receiver.take().unwrap();
-
-        spawn_monitored_task!(Self::post_processor_task(
-            store,
-            epoch_store,
-            output,
-            post_processor_receiver,
-            cache_commit,
-        ));
-
         info!("Starting CheckpointBuilder");
         loop {
             self.maybe_build_checkpoints().await;
@@ -1401,14 +1370,14 @@ impl CheckpointBuilder {
     async fn write_checkpoints(
         &self,
         height: CheckpointHeight,
-        new_checkpoints: CheckpointConstructionResults,
+        new_checkpoints: NonEmpty<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
         let _scope = monitored_scope("CheckpointBuilder::write_checkpoints");
         let mut batch = self.store.tables.checkpoint_content.batch();
         let mut all_tx_digests =
-            Vec::with_capacity(new_checkpoints.iter().map(|(_, c, _)| c.size()).sum());
+            Vec::with_capacity(new_checkpoints.iter().map(|(_, c)| c.size()).sum());
 
-        for (summary, contents, _) in &new_checkpoints {
+        for (summary, contents) in &new_checkpoints {
             debug!(
                 checkpoint_commit_height = height,
                 checkpoint_seq = summary.sequence_number,
@@ -1456,7 +1425,14 @@ impl CheckpointBuilder {
 
         batch.write()?;
 
-        for (local_checkpoint, _, _) in &new_checkpoints {
+        // Send all checkpoint sigs to consensus.
+        for (summary, contents) in &new_checkpoints {
+            self.output
+                .checkpoint_created(summary, contents, &self.epoch_store, &self.store)
+                .await?;
+        }
+
+        for (local_checkpoint, _) in &new_checkpoints {
             if let Some(certified_checkpoint) = self
                 .store
                 .tables
@@ -1470,13 +1446,7 @@ impl CheckpointBuilder {
 
         self.notify_aggregator.notify_one();
         self.epoch_store
-            .process_constructed_checkpoint(height, &new_checkpoints);
-
-        self.post_processor_sender
-            .send(new_checkpoints)
-            .await
-            .expect("post_processor_sender must not fail");
-
+            .process_constructed_checkpoint(height, new_checkpoints);
         Ok(())
     }
 
@@ -1560,7 +1530,7 @@ impl CheckpointBuilder {
         all_effects: Vec<TransactionEffects>,
         details: &PendingCheckpointInfo,
         all_roots: &HashSet<TransactionDigest>,
-    ) -> anyhow::Result<CheckpointConstructionResults> {
+    ) -> anyhow::Result<NonEmpty<(CheckpointSummary, CheckpointContents)>> {
         let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
 
         let total = all_effects.len();
@@ -1833,39 +1803,10 @@ impl CheckpointBuilder {
                 }
             }
             last_checkpoint = Some((sequence_number, summary.clone()));
-            checkpoints.push((summary, contents, effects));
+            checkpoints.push((summary, contents));
         }
 
         Ok(NonEmpty::from_vec(checkpoints).expect("at least one checkpoint"))
-    }
-
-    async fn post_processor_task(
-        store: Arc<CheckpointStore>,
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        output: Box<dyn CheckpointOutput>,
-        mut receiver: mpsc::Receiver<CheckpointConstructionResults>,
-        cache_commit: Arc<dyn ExecutionCacheCommit>,
-    ) {
-        loop {
-            let Some(new_checkpoints) = receiver.recv().await else {
-                info!("Effects persister task shutting down");
-                return;
-            };
-
-            // Send all checkpoint sigs to consensus / state-sync.
-            for (summary, contents, effects) in &new_checkpoints {
-                let seq = summary.sequence_number();
-                // Persist effects before sending to checkpoint output, so that by
-                // all transactions / effects are persisted before we advance the
-                // synced watermark.
-                cache_commit.persist_transactions_and_effects(effects);
-                debug!("Persisted checkpointed effects for sequence number {seq}");
-                output
-                    .checkpoint_created(summary, contents, &epoch_store, &store)
-                    .await
-                    .expect("Checkpoint output must not fail");
-            }
-        }
     }
 
     fn get_epoch_total_gas_cost(
@@ -2675,17 +2616,11 @@ impl CheckpointService {
     /// operation. Upon startup, we may have a number of consensus commits and resulting
     /// checkpoints that were built but not committed to disk. We want to reprocess the
     /// commits and rebuild the checkpoints before starting normal operation.
-    pub async fn spawn(
-        &self,
-        cache_commit: Arc<dyn ExecutionCacheCommit>,
-        consensus_replay_waiter: Option<ReplayWaiter>,
-    ) -> JoinSet<()> {
+    pub async fn spawn(&self, consensus_replay_waiter: Option<ReplayWaiter>) -> JoinSet<()> {
         let mut tasks = JoinSet::new();
 
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
-        tasks.spawn(monitored_future!(
-            builder.run(cache_commit, consensus_replay_waiter)
-        ));
+        tasks.spawn(monitored_future!(builder.run(consensus_replay_waiter)));
         tasks.spawn(monitored_future!(aggregator.run()));
         tasks.spawn(monitored_future!(state_hasher.run()));
 
@@ -3017,9 +2952,7 @@ mod tests {
             3,
             100_000,
         );
-        let _tasks = checkpoint_service
-            .spawn(state.get_cache_commit().clone(), None)
-            .await;
+        let _tasks = checkpoint_service.spawn(None).await;
 
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))

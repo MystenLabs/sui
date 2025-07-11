@@ -24,6 +24,7 @@ use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, fatal};
 use mysten_metrics::monitored_scope;
+use nonempty::NonEmpty;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
 use prometheus::IntCounter;
@@ -100,9 +101,8 @@ use crate::authority::shared_object_version_manager::{
 use crate::authority::AuthorityMetrics;
 use crate::authority::ResolverWrapper;
 use crate::checkpoints::{
-    BuilderCheckpointSummary, CheckpointConstructionResults, CheckpointHeight,
-    CheckpointServiceNotify, EpochStats, PendingCheckpointInfo, PendingCheckpointV2,
-    PendingCheckpointV2Contents,
+    BuilderCheckpointSummary, CheckpointHeight, CheckpointServiceNotify, EpochStats,
+    PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -4397,22 +4397,18 @@ impl AuthorityPerEpochStore {
     pub fn process_constructed_checkpoint(
         &self,
         commit_height: CheckpointHeight,
-        content_info: &CheckpointConstructionResults,
+        content_info: NonEmpty<(CheckpointSummary, CheckpointContents)>,
     ) {
         let mut consensus_quarantine = self.consensus_quarantine.write();
-        for (position_in_commit, (summary, transactions, _)) in content_info.iter().enumerate() {
+        for (position_in_commit, (summary, transactions)) in content_info.into_iter().enumerate() {
             let sequence_number = summary.sequence_number;
             let summary = BuilderCheckpointSummary {
-                summary: summary.clone(),
+                summary,
                 checkpoint_height: Some(commit_height),
                 position_in_commit,
             };
 
-            consensus_quarantine.insert_builder_summary(
-                sequence_number,
-                summary,
-                transactions.clone(),
-            );
+            consensus_quarantine.insert_builder_summary(sequence_number, summary, transactions);
         }
 
         // Because builder can run behind state sync, the data may be immediately ready to be committed.
