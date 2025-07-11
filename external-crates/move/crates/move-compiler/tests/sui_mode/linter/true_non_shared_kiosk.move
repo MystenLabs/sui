@@ -14,8 +14,9 @@ module a::test_kiosk_transfer {
         transfer::public_transfer(cap, @0);
     }
 
-    public fun freeze_kiosk(kiosk: Kiosk) {
-        transfer::public_freeze_object(kiosk);
+    public fun freeze_kiosk(kiosk1: Kiosk, kiosk2: Kiosk) {
+        transfer::public_freeze_object(kiosk1);
+        transfer::public_freeze_object(kiosk2);
     }
 
     public fun share_kiosk(kiosk: Kiosk) {
