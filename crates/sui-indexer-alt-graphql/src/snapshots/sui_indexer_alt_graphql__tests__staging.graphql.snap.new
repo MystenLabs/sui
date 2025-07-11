@@ -1,3 +1,8 @@
+---
+source: crates/sui-indexer-alt-graphql/src/lib.rs
+assertion_line: 423
+expression: sdl
+---
 """
 An entity that has an address, could be an account or an object (but never both).
 """
