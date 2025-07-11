@@ -21,17 +21,17 @@ use crate::{
 
 const SUBMIT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub struct TransactionSubmitter {
+pub(crate) struct TransactionSubmitter {
     metrics: Arc<TransactionDriverMetrics>,
 }
 
 impl TransactionSubmitter {
-    pub fn new(metrics: Arc<TransactionDriverMetrics>) -> Self {
+    pub(crate) fn new(metrics: Arc<TransactionDriverMetrics>) -> Self {
         Self { metrics }
     }
 
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
-    pub async fn submit_transaction<A>(
+    pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
@@ -42,7 +42,7 @@ impl TransactionSubmitter {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let mut attempts = 0;
-        // TODO(fastpath): Retry until f+1 permanent failures
+        // TODO(fastpath): Remove MAX_ATTEMPTS. Retry until f+1 permanent failures or cancellation.
         const MAX_ATTEMPTS: usize = 10;
 
         loop {

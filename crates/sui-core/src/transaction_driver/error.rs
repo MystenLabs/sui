@@ -15,8 +15,8 @@ pub enum TransactionDriverError {
     DeserializationError(SuiError),
     #[error("Transaction timed out getting consensus position")]
     TimeoutSubmittingTransaction,
-    #[error("Transaction timed out while waiting for effects")]
-    TimeoutWaitingForEffects,
+    #[error("Transaction timed out while acknowledging effects")]
+    TimeoutAcknowledgingEffects,
     #[error("Transaction timed out while getting full effects")]
     TimeoutGettingFullEffects,
     #[error("Failed to call validator {0}: {1}")]

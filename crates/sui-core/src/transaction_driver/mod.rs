@@ -7,13 +7,15 @@ mod message_types;
 mod metrics;
 mod transaction_submitter;
 
+/// Exports
+pub use message_types::*;
+pub use metrics::*;
+
 use std::{net::SocketAddr, sync::Arc, time::Instant};
 
 use arc_swap::ArcSwap;
-pub use effects_certifier::*;
-pub use error::*;
-pub use message_types::*;
-pub use metrics::*;
+use effects_certifier::*;
+use error::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use sui_types::{
@@ -21,7 +23,7 @@ use sui_types::{
 };
 use tokio::task::JoinSet;
 use tracing::instrument;
-pub use transaction_submitter::*;
+use transaction_submitter::*;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -70,7 +72,7 @@ where
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
         let raw_request = request
@@ -79,6 +81,7 @@ where
         let timer = Instant::now();
 
         let mut attempts = 0;
+        // TODO(fastpath): Remove MAX_ATTEMPTS. Retry until unretriable error.
         const MAX_ATTEMPTS: usize = 10;
 
         loop {
@@ -101,7 +104,6 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
-                    // TODO: Continue to retry only if error is retryable
                     if attempts >= MAX_ATTEMPTS {
                         return Err(e);
                     }
@@ -122,7 +124,7 @@ where
         tx_digest: &TransactionDigest,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
         let committee = auth_agg.committee.clone();
         let epoch = committee.epoch();
@@ -135,7 +137,13 @@ where
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .wait_for_quorum_effects(&auth_agg, tx_digest, consensus_position, epoch, options)
+            .get_certified_finalized_effects(
+                &auth_agg,
+                tx_digest,
+                consensus_position,
+                epoch,
+                options,
+            )
             .await
     }
 

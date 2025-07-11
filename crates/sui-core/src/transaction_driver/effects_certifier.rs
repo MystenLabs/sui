@@ -23,31 +23,31 @@ use crate::{
     stake_aggregator::{InsertResult, StakeAggregator},
     transaction_driver::{
         error::TransactionDriverError, metrics::TransactionDriverMetrics,
-        QuorumSubmitTransactionResponse, SubmitTransactionOptions,
+        QuorumTransactionResponse, SubmitTransactionOptions,
     },
     wait_for_effects_request::{ExecutedData, WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub struct EffectsCertifier {
+pub(crate) struct EffectsCertifier {
     metrics: Arc<TransactionDriverMetrics>,
 }
 
 impl EffectsCertifier {
-    pub fn new(metrics: Arc<TransactionDriverMetrics>) -> Self {
+    pub(crate) fn new(metrics: Arc<TransactionDriverMetrics>) -> Self {
         Self { metrics }
     }
 
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
-    pub async fn wait_for_quorum_effects<A>(
+    pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
         epoch: EpochId,
         options: &SubmitTransactionOptions,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError>
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
@@ -129,6 +129,7 @@ impl EffectsCertifier {
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let mut attempts = 0;
+        // TODO(fastpath): Remove MAX_ATTEMPTS. Retry until unretriable error.
         const MAX_ATTEMPTS: usize = 10;
         let clients = authority_aggregator
             .authority_clients
@@ -143,8 +144,10 @@ impl EffectsCertifier {
         })
         .map_err(TransactionDriverError::SerializationError)?;
 
+        // TODO(fastpath): only retry transient (RPC) errors. aggregate permanent errors on a higher level.
         loop {
             attempts += 1;
+            // TODO(fastpath): pick target with performance metrics.
             let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
 
             match timeout(
@@ -254,7 +257,7 @@ impl EffectsCertifier {
                         name_clone.concise().to_string(),
                         e.to_string(),
                     )),
-                    Err(_) => Err(TransactionDriverError::TimeoutWaitingForEffects),
+                    Err(_) => Err(TransactionDriverError::TimeoutAcknowledgingEffects),
                 }
             };
 
@@ -404,7 +407,7 @@ impl EffectsCertifier {
         executed_data: ExecutedData,
         epoch: EpochId,
         tx_digest: &TransactionDigest,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         if effects_digest == confirmed_digest {
             self.metrics.executed_transactions.inc();
 
@@ -417,7 +420,7 @@ impl EffectsCertifier {
                 finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
             };
 
-            Ok(QuorumSubmitTransactionResponse {
+            Ok(QuorumTransactionResponse {
                 effects: details,
                 events: executed_data.events,
                 input_objects: if !executed_data.input_objects.is_empty() {

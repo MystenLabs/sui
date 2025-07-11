@@ -50,19 +50,19 @@ impl TransactionDriverMetrics {
             .unwrap(),
             executed_transactions: register_int_counter_with_registry!(
                 "transaction_driver_executed_transactions",
-                "Number of transactions executed by the transaction driver",
+                "Number of transactions executed observed by the transaction driver",
                 registry,
             )
             .unwrap(),
             rejected_transactions: register_int_counter_with_registry!(
                 "transaction_driver_rejected_transactions",
-                "Number of transactions rejected by the transaction driver",
+                "Number of transactions rejected observed by the transaction driver",
                 registry,
             )
             .unwrap(),
             expired_transactions: register_int_counter_with_registry!(
                 "transaction_driver_expired_transactions",
-                "Number of transactions expired by the transaction driver",
+                "Number of transactions expired observed by the transaction driver",
                 registry,
             )
             .unwrap(),
