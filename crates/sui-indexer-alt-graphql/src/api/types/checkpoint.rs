@@ -19,7 +19,7 @@ use crate::{
     scope::Scope,
 };
 
-use super::epoch::Epoch;
+use super::{epoch::Epoch, gas::GasCostSummary};
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -102,6 +102,14 @@ impl CheckpointContents {
             .previous_digest
             .as_ref()
             .map(|digest| digest.base58_encode()))
+    }
+
+    /// The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+    async fn rolling_gas_summary(&self) -> Option<GasCostSummary> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(GasCostSummary::from(
+            summary.epoch_rolling_gas_cost_summary.clone(),
+        ))
     }
 
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
