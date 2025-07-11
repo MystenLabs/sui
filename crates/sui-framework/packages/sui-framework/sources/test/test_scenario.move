@@ -190,8 +190,14 @@ public fun set_gas_budget(mut builder: TxContextBuilder, gas_budget: u64): TxCon
 }
 
 /// Set the sponsor for the `TxContextBuilder`.
-public fun set_sponsor(mut builder: TxContextBuilder, sponsor: Option<address>): TxContextBuilder {
-    builder.sponsor = sponsor;
+public fun set_sponsor(mut builder: TxContextBuilder, sponsor: address): TxContextBuilder {
+    builder.sponsor = option::some(sponsor);
+    builder
+}
+
+/// Set the sponsor for the `TxContextBuilder` to `option::none()`.
+public fun unset_sponsor(mut builder: TxContextBuilder): TxContextBuilder {
+    builder.sponsor = option::none();
     builder
 }
 
