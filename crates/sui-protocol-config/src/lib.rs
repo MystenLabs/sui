@@ -4007,6 +4007,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_ptb_execution_v2 = val;
     }
 
+    pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
+        self.feature_flags.record_time_estimate_processed = val;
+    }
+
     pub fn push_aliased_addresses_for_testing(
         &mut self,
         original: [u8; 32],
