@@ -9,7 +9,7 @@ use tracing::debug;
 use crate::{
     errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
-    schema::{EnvironmentName, PackageID, ParsedLockfile, Pin, Publication},
+    schema::{EnvironmentName, PackageID, ParsedLockfile, Pin, Publication, PublishedEnvironments},
 };
 
 use super::paths::PackagePath;
@@ -18,7 +18,7 @@ use super::paths::PackagePath;
 pub struct Lockfiles<F: MoveFlavor> {
     main: ParsedLockfile<F>,
     file: FileHandle,
-    ephemeral: BTreeMap<EnvironmentName, Publication<F>>,
+    ephemeral: PublishedEnvironments<F>,
     // TODO: probably should have separate file handles for ephemerals?
 }
 
@@ -76,7 +76,7 @@ impl<F: MoveFlavor> Lockfiles<F> {
 
     // TODO: handle ephemerals correctly
     /// Return the published metadata for all environments.
-    pub fn published(&self) -> &BTreeMap<EnvironmentName, Publication<F>> {
+    pub fn published(&self) -> &PublishedEnvironments<F> {
         &self.main.published
     }
 

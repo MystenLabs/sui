@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, path::Path};
 use super::manifest::{Digest, Manifest};
 use super::paths::PackagePath;
 use crate::dependency::CombinedDependency;
-use crate::schema::{Environment, PackageMetadata, PublishAddresses};
+use crate::schema::{Environment, PackageMetadata, Publication, PublishAddresses};
 use crate::{
     compatibility::{
         legacy::LegacyData,
@@ -19,7 +19,7 @@ use crate::{
     package::lockfile::Lockfiles,
     schema::{
         EnvironmentName, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageName,
-        Publication, PublishedID,
+        PublishedEnvironments, PublishedID,
     },
 };
 
@@ -144,7 +144,7 @@ impl<F: MoveFlavor> Package<F> {
     /// Try to load a lockfile and extract the published information for each environment from it
     fn load_published_info_from_lockfile(
         path: &PackagePath,
-    ) -> PackageResult<BTreeMap<EnvironmentName, Publication<F>>> {
+    ) -> PackageResult<PublishedEnvironments<F>> {
         let lockfile = Lockfiles::<F>::read_from_dir(path)?;
 
         let publish_data = lockfile
