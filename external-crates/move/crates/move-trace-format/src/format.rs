@@ -23,7 +23,7 @@ pub type TraceVersion = u64;
 pub const TRACE_FILE_EXTENSION: &str = "json.zst";
 
 /// The current version of the trace format.
-const TRACE_VERSION: TraceVersion = 2;
+const TRACE_VERSION: TraceVersion = 3;
 
 /// Compression level for the trace. This is the level of compression that we will use for the
 /// trace in zstd.
@@ -114,6 +114,7 @@ pub struct Frame {
     pub frame_id: TraceIndex,
     pub function_name: String,
     pub module: ModuleId,
+    pub storage_id: ModuleId,
     // External pointer out into the module -- the `FunctionDefinitionIndex` in the module.
     pub binary_member_index: u16,
     pub type_instantiation: Vec<TypeTag>,
@@ -332,6 +333,7 @@ impl MoveTraceBuilder {
         binary_member_index: BinaryFunctionDefinitionIndex,
         name: String,
         module: ModuleId,
+        storage_id: ModuleId,
         parameters: Vec<TraceValue>,
         type_instantiation: Vec<TypeTag>,
         return_types: Vec<TypeTagWithRefs>,
@@ -343,6 +345,7 @@ impl MoveTraceBuilder {
             frame_id,
             function_name: name,
             module,
+            storage_id,
             binary_member_index: binary_member_index.0,
             type_instantiation,
             parameters,
