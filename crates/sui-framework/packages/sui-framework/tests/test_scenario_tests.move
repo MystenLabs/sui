@@ -1186,7 +1186,7 @@ fun test_tx_context() {
     // add sponsor and change few values
     let ctx_builder = scenario
         .ctx_builder()
-        .set_sponsor(option::some(@0xD))
+        .set_sponsor(@0xD)
         .set_ids_created(5)
         .set_gas_price(800)
         .set_epoch_timestamp(1_000_000_100);
@@ -1200,6 +1200,12 @@ fun test_tx_context() {
     assert_eq!(ctx.gas_price(), 800);
     assert_eq!(ctx.gas_budget(), 100_000);
     assert_eq!(ctx.ids_created(), 5);
+
+    // unset sponsor
+    let ctx_builder = scenario.ctx_builder().unset_sponsor();
+    scenario.next_with_context(ctx_builder);
+    let ctx = scenario.ctx();
+    assert!(ctx.sponsor().is_none());
 
     scenario.end();
 }
