@@ -103,7 +103,7 @@ move-cli.workspace = true
 move-symbol-pool.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemalloc-ctl.workspace = true
+jemalloc-ctl.workspace = true
 
 [dev-dependencies]
 prometheus.workspace = true
@@ -125,7 +125,7 @@ serde_json.workspace = true
 msim.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["tikv-jemalloc-ctl"]
+normal = ["jemalloc-ctl"]
 
 [[example]]
 name = "generate-genesis-checkpoint"
