@@ -10,7 +10,9 @@ use move_binary_format::{
     file_format::{ConstantPoolIndex, SignatureIndex},
 };
 use move_core_types::{
-    account_address::AccountAddress, annotated_value::MoveTypeLayout, language_storage::TypeTag,
+    account_address::AccountAddress,
+    annotated_value::MoveTypeLayout,
+    language_storage::{ModuleId, TypeTag},
 };
 use move_trace_format::{
     format::{
@@ -569,12 +571,14 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
+        let storage_id = get_module_on_chain(link_context, function.module_id(), loader);
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
             function.name().to_string(),
             function.module_id().clone(),
+            storage_id,
             call_args
                 .into_iter()
                 .map(|(trace_value, _)| trace_value)
@@ -689,12 +693,14 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
+        let module_on_chain = get_module_on_chain(link_context, function.module_id(), loader);
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
             function.name().to_string(),
             function.module_id().clone(),
+            module_on_chain,
             call_args,
             function_type_info.ty_args,
             function_type_info
@@ -1790,6 +1796,15 @@ impl FunctionTypeInfo {
             return_types,
         })
     }
+}
+
+fn get_module_on_chain(
+    link_context: AccountAddress,
+    runtime_id: &ModuleId,
+    loader: &Loader,
+) -> ModuleId {
+    let (_, loaded_module) = loader.get_module(link_context, runtime_id);
+    loaded_module.id.clone()
 }
 
 /// Get the type layout of a constant.
