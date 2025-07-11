@@ -31,6 +31,7 @@ fragment E on Epoch {
   startTimestamp
   endTimestamp
   totalCheckpoints
+  totalGasFees
 }
 
 //# run-graphql
@@ -52,4 +53,5 @@ fragment E on Epoch {
   startTimestamp
   endTimestamp
   totalCheckpoints
+  totalGasFees
 }
