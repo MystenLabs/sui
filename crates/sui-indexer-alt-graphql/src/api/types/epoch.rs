@@ -78,7 +78,7 @@ impl Epoch {
             None => return Ok(None),
         };
         let last = match end {
-            Some(last) => last.cp_hi as u64, // exclusive
+            Some(last) => last.cp_hi as u64,          // exclusive
             None => scope.checkpoint_viewed_at() + 1, // inclusive
         };
         Ok(Some(UInt53::from(last - first)))
@@ -104,7 +104,7 @@ impl EpochStart {
             SUI_DENY_LIST_OBJECT_ID.into(),
             (contents.cp_lo as u64).saturating_sub(1).into(),
         )
-            .await
+        .await
     }
 
     /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
@@ -160,7 +160,7 @@ impl EpochStart {
                 page,
                 contents.cp_lo as u64,
             )
-                .await?,
+            .await?,
         ))
     }
 }
@@ -238,7 +238,7 @@ impl EpochStart {
             let cp = self.scope.checkpoint_viewed_at();
             pg_loader.load_one(CheckpointBoundedEpochStartKey(cp)).await
         }
-            .context("Failed to fetch epoch start information")?;
+        .context("Failed to fetch epoch start information")?;
 
         let Some(stored) = load else {
             return Ok(self.clone());
@@ -272,7 +272,7 @@ impl EpochEnd {
 
         let end = match stored {
             Some(end) if end.cp_hi as u64 <= scope.checkpoint_viewed_at() => Some(Arc::new(end)),
-            _ => None
+            _ => None,
         };
         Ok(Self {
             scope,

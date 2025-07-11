@@ -27,7 +27,7 @@ Response: {
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": null,
-      "totalCheckpoints": null
+      "totalCheckpoints": 1
     },
     "e0": {
       "epochId": 0,
@@ -48,7 +48,7 @@ Response: {
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": null,
-      "totalCheckpoints": null
+      "totalCheckpoints": 1
     },
     "e3": null
   }
@@ -65,7 +65,7 @@ Response: {
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": null,
-          "totalCheckpoints": null
+          "totalCheckpoints": 1
         },
         "e0": {
           "epochId": 0,
@@ -79,7 +79,7 @@ Response: {
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": null,
-          "totalCheckpoints": null
+          "totalCheckpoints": 1
         },
         "e2": null
       }
