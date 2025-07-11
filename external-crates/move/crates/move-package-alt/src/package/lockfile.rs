@@ -9,10 +9,10 @@ use tracing::debug;
 use crate::{
     errors::{FileHandle, PackageResult},
     flavor::MoveFlavor,
-    schema::{PackageID, ParsedLockfile, Pin, Publication},
+    schema::{EnvironmentName, PackageID, ParsedLockfile, Pin, Publication},
 };
 
-use super::{EnvironmentName, paths::PackagePath};
+use super::paths::PackagePath;
 
 #[derive(Debug)]
 pub struct Lockfiles<F: MoveFlavor> {

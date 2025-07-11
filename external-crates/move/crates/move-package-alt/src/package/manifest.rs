@@ -17,10 +17,9 @@ use crate::{
     dependency::{CombinedDependency, DependencySet},
     errors::{FileHandle, Location},
     flavor::MoveFlavor,
-    schema::{PackageMetadata, PackageName, ParsedManifest},
+    schema::{EnvironmentID, EnvironmentName, PackageMetadata, PackageName, ParsedManifest},
 };
 
-use super::*;
 use sha2::{Digest as ShaDigest, Sha256};
 
 const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];

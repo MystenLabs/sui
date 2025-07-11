@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     compatibility::{LegacyAddressDeclarations, LegacyDevAddressDeclarations},
-    package::EnvironmentName,
-    schema::PublishAddresses,
+    schema::{EnvironmentName, PublishAddresses},
 };
 use serde::{Deserialize, Serialize};
 

@@ -1,30 +1,28 @@
-// Copyrightc) The Diem Core Contributors
+// Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{collections::BTreeMap, path::Path};
 
-use super::manifest::Manifest;
+use super::manifest::{Digest, Manifest};
 use super::paths::PackagePath;
+use crate::dependency::CombinedDependency;
+use crate::schema::{Environment, PackageMetadata, PublishAddresses};
 use crate::{
     compatibility::{
         legacy::LegacyData,
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
-    dependency::{CombinedDependency, PinnedDependencyInfo, pin},
+    dependency::{PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{lockfile::Lockfiles, manifest::Digest},
+    package::lockfile::Lockfiles,
     schema::{
-        Environment, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageMetadata,
-        PackageName, Publication, PublishAddresses, PublishedID,
+        EnvironmentName, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageName,
+        Publication, PublishedID,
     },
 };
 
-pub type EnvironmentName = String;
-pub type EnvironmentID = String;
-
-// pub type PackageName = Identifier;
 pub type AddressInfo = String;
 
 #[derive(Debug)]
