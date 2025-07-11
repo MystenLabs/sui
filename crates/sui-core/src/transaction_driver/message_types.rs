@@ -26,7 +26,7 @@ impl SubmitTxRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct QuorumSubmitTransactionResponse {
+pub struct QuorumTransactionResponse {
     // TODO(fastpath): Stop using QD types
     pub effects: FinalizedEffects,
 
