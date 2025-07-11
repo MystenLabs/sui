@@ -257,14 +257,6 @@ impl EpochStart {
 }
 
 impl EpochEnd {
-    fn empty(scope: Scope) -> Self {
-        Self {
-            scope,
-            start: None,
-            end: None,
-        }
-    }
-
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty
     /// response if the epoch has not ended yet, as of the checkpoint being viewed.
     async fn fetch(
@@ -274,22 +266,19 @@ impl EpochEnd {
     ) -> Result<Self, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let scope = epoch_start.scope.clone();
-        let Some(stored) = pg_loader
+        let stored = pg_loader
             .load_one(EpochEndKey(epoch_id))
             .await
-            .context("Failed to fetch epoch end information")?
-        else {
-            return Ok(Self::empty(scope));
+            .context("Failed to fetch epoch end information")?;
+
+        let end = match stored {
+            Some(end) if end.cp_hi as u64 >= scope.checkpoint_viewed_at() => Some(Arc::new(end)),
+            _ => None
         };
-
-        if stored.cp_hi as u64 > scope.checkpoint_viewed_at() {
-            return Ok(Self::empty(scope));
-        }
-
         Ok(Self {
             scope,
             start: epoch_start.contents.clone(),
-            end: Some(Arc::new(stored)),
+            end,
         })
     }
 }
