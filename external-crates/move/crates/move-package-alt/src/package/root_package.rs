@@ -22,6 +22,7 @@ use crate::dependency::PinnedDependencyInfo;
 ///
 /// This is a special package that contains the project manifest and dependencies' graphs,
 /// and associated functions to operate with this data.
+#[derive(Debug)]
 pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// The root package itself as a Package
     root: Package<F>,
