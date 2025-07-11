@@ -19,11 +19,11 @@ pub mod custom_state_change;
 pub mod freeze_wrapped;
 pub mod freezing_capability;
 pub mod missing_key;
+pub mod non_shared_kiosk;
 pub mod public_mut_tx_context;
 pub mod public_random;
 pub mod self_transfer;
 pub mod share_owned;
-pub mod non_shared_kiosk;
 
 pub const TRANSFER_MOD_NAME: &str = "transfer";
 pub const TRANSFER_FUN: &str = "transfer";
