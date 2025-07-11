@@ -738,6 +738,30 @@ impl AuthorityStore {
         Ok(self.perpetual_tables.epoch_start_configuration.get(&())?)
     }
 
+    pub(crate) fn db_batch(&self) -> DBBatch {
+        self.perpetual_tables.transactions.batch()
+    }
+
+    pub(crate) fn add_tx_and_effects_to_batch(
+        &self,
+        batch: &mut DBBatch,
+        tx_digest: &TransactionDigest,
+        transaction: &TrustedTransaction,
+        effects: &TransactionEffects,
+    ) -> SuiResult {
+        batch.insert_batch(
+            &self.perpetual_tables.transactions,
+            [(tx_digest, transaction)],
+        )?;
+
+        batch.insert_batch(
+            &self.perpetual_tables.effects,
+            [(effects.digest(), effects)],
+        )?;
+
+        Ok(())
+    }
+
     /// Updates the state resulting from the execution of a certificate.
     ///
     /// Internally it checks that all locks for active inputs are at the correct
@@ -852,16 +876,13 @@ impl AuthorityStore {
 
         let effects_digest = effects.digest();
         write_batch
-            .insert_batch(
-                &self.perpetual_tables.effects,
-                [(effects_digest, effects.clone())],
-            )?
+            .insert_batch(&self.perpetual_tables.effects, [(effects_digest, effects)])?
             .insert_batch(
                 &self.perpetual_tables.executed_effects,
                 [(transaction_digest, effects_digest)],
             )?;
 
-        debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
+        debug!(?effects_digest, "commit_certificate finished");
 
         Ok(())
     }
