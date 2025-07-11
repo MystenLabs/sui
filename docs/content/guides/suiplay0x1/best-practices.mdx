@@ -4,28 +4,38 @@ title: Best Practices
 
 {@include: ../../snippets/suiplay.mdx}
 
-## **Handling transactions**
+There are some best practices to consider when developing for SuiPlay0X1. 
 
-If players are using their self-custody wallets, and transactions require explicit player signatures (as opposed to if you are managing custodial wallets on behalf of the player), then you should avoid frequent micro-transactions, particularly during gameplay. Signing a transaction will require popping up an OS UI element (on device) or a web browser (off device) to approve, and breaks the gameplay flow.
+## Handling transactions
 
-Many on-chain actions do not require explicit user approval. For example, dropping rewards to a user, incrementing their currency, etc. These can be handled whenever appropriate by the game, even silently in the background during gameplay.
+Avoid frequent micro-transactions: If players are using their self-custody wallets and transactions require explicit player signatures, then you should avoid frequent micro-transactions, particularly during gameplay. Signing a transaction requires popping up an on-device visual element or an off-device browser dialog to approve, breaking the gameplay flow. This is not a concern if you are managing custodial wallets on behalf of the player. See [Wallet Integration Options](./wallet-integration.mdx) for more information on available wallet integrations.
 
-**Managing Gas**
+Many on-chain actions do not require explicit user approval. For example, dropping rewards to a user, incrementing their currency, and so on. The game can be handle these whenever appropriate, even silently in the background during gameplay.
 
-* If using a third-party wallet service (Beamable, Shinami), leverage gas sponsorship for custodial implementations to abstract from users  
-* Consider tradeoffs between aggregated and individual wallets  
-* Batch transactions when possible to reduce gas costs
+## Managing gas
 
-## **Data Management Best Practices**
+If using a third-party wallet service ([Beamable](https://beamable.com/), [Shinami](https://www.shinami.com/)), leverage gas sponsorship for custodial implementations to abstract from users. Consider tradeoffs between aggregated and individual wallets and batch transactions whenever possible to reduce gas costs.
 
-**On-Chain vs Off-Chain Storage**
+## Data management
 
-* **On-Chain**: Assets / currencies that can be traded/sold  
-* **Off-Chain**: Game state, progress, etc using traditional game servers
+Proper data management design can augment the user experience.
 
-While you can store any information on-chain, consider whether it’s important to your game for that data to exist on-chain. If not, leverage traditional game server backends, which will make data syncing and updating easier.
+### On-chain versus off-chain storage
 
-**Session Start Protocol**
+Consider where best to store your data:
 
-* Always check wallet state at session beginning  
-* Don't cache wallet data between sessions (assets may change externally)
+- **On chain:** Assets and currencies that can be traded or sold.  
+- **Off chain:** Game state, progress, and so on using traditional game servers.
+
+While you can store any information on chain, consider whether it’s important to your game for that data to exist there. If not, leverage traditional game server backends, which makes data syncing and updating easier.
+
+### Session start protocol
+
+Always check wallet state at session beginning and don't cache wallet data between sessions as assets can change externally.
+
+## Related links
+
+- [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
+- [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
+- [SuiPlay0x1 Discord](discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
+- [Wallet Integration Options](./wallet-integration.mdx): Details about the available wallet integrations. 

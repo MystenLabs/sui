@@ -1,61 +1,76 @@
 ---
-title: Cross-Platform Migration Strategies
+title: Broader Sui Ecosystem Support
 ---
 
 {@include: ../../snippets/suiplay.mdx}
 
-Depending on if a user starts playing your game first on the SuiPlay0x1 or off the device (e.g., on a PC), there can be different migration flows:
+The SuiPlay0x1 is one part of a larger ecosystem of Sui gaming. Users might play your game for the first time on the device, and later decide to continue playing your game on PC. Or they might have already played your game before on PC with their own mnemonic wallet, and want to continue playing on the device.
 
-## **On-Device ⇒ Off-Device (Seamless assuming dApp kit)**
+As a result, it’s important to consider the different possible migration flows for your game both for new users and existing ones.
 
-If a user starts playing your game *on the device* first, their primary wallet will be their Playtron zkLogin wallet. If you integrate the dApp kit and enable the Playtron zkLogin wallet, then they can continue playing off device with the same wallet.
+## On device ⇒ off device
 
-**Automatic Transition**
+If a user starts playing your game on device first, and you have added support using dApp Kit, then their Playtron wallet is their primary wallet. Off-device play is automatically supported with the same wallet.
 
-* Integrate Sui dApp kit in your off-device version  
-* Enable Playtron wallet as connection option  
-* Users can seamlessly continue with same wallet across platforms  
-* Note: The Playtron wallet is portable and can connect to any dApp using our dApp kit
+**Automatic transition**
 
-**Asset Management**
+- Integrate Sui dApp Kit in your off-device version.
+- Enable Playtron wallet as connection option.
+- Users can seamlessly continue with same wallet across platforms.
 
-* All assets remain accessible across platforms  
-* No manual transfer required  
-* Users can connect their Playtron wallet to marketplaces, DeFi protocols, and other dApps
+:::info
 
-## **Off-Device ⇒ On-Device**
+The Playtron wallet is portable and can connect to any dApp using the Sui dApp Kit.
 
-If a user starts playing your game *off the device* first, their primary wallet will depend on what wallet architecture you choose (custodial, self-custody, or game-specific zkLogin). Depending on what kind of wallet interactions your game requires during gameplay, you have different options for supporting cross-device gameplay.
+:::
 
-**Read-Only Asset Access**
+**Asset management**
 
-If your game only needs to **read** the list of assets from a wallet during gameplay (e.g., to determine if a user owns an NFT in order to grant them status in game), then users can link their Playtron zkLogin wallet to their existing self-custody wallet. Examples where read-only is good enough:
+- All assets remain accessible across platforms.
+- No manual transfer required.
+- Users can connect their Playtron wallet to marketplaces, DeFi protocols, and other dApps that support Playtron wallet.
 
-*  Soulbound assets such as a POAP  
-* An NFT representing membership access  
-* An NFT representing an unlocked skin that can’t be transacted on while playing the game (but can be traded separately on a 3rd party NFT marketplace)
+## Off device ⇒ on device
 
-User flow:
+If a user starts playing your game off device first, their primary wallet depends on what wallet architecture you choose in your game design (custodial, self-custody, or game-specific zkLogin). Depending on what kind of wallet interactions your game requires during gameplay, you have different options for supporting cross-device gameplay. To learn more about wallet options, see [Wallet Integration Options](./migration-strategies.mdx).
 
-* Users can use **Sui Link** via the companion web site Mysten is building to tie Playtron wallet to their existing wallet  
-  * This will work for tying the Playtron wallet to **self-custody wallets**  
-  * If you are using a **game-specific zkLogin wallet**, as long as you configure Enoki Connect properly, you will be able to link your game-specific zkLogin wallet with the Playtron wallet.  
-  * This will not work for tying to **custodial wallets**, but that should not be necessary, as your game backend can track the users’s assets across devices (e.g., via a user id, or Steam/EGS login)  
-* Games can read from the linked wallet and act based on contents  
-* No transaction capabilities with linked assets
+### Read-only asset access
 
-**Full Asset Access (Requires Transfer)**
+If your game only needs to read the list of assets from a wallet during gameplay (for example, to determine if a user owns an NFT to grant them status in game), then users can link their Playtron wallet to their existing self-custody wallet.
 
-If your game requires the user to sign/approve transactions to act on assets in their wallet during gameplay, users will need to transfer their assets from their existing self-custody wallet to their Playtron zkLogin wallet. Examples where you may need full asset access:
+Examples where read-only is adequate:
 
-* Tokens that represent game currency and that can be spent by users during the course of gameplay  
-* NFTs that can be traded from inside your game that require transactions to be signed
+- Soulbound assets, such as a proof of attendance protocol (POAP).
+- An NFT representing membership access. 
+- An NFT representing an unlocked skin that can’t be transacted on while playing the game (but can be traded separately on a third-party NFT marketplace).
 
-User flow:
+Users login to the Playtron wallet via the companion web site ([https://wallet.playtron.one](https://wallet.playtron.one)) to link their Playtron wallet to their existing wallet. This works for tying the Playtron wallet to self-custody wallets. This doesn't work for tying to custodial wallets, but that shouldn't be necessary as your game's backend can track users' assets across devices (such as through a user id or Steam/EGS login).
 
-* Because the primary wallet on the device is the Playtron zkLogin wallet, you can not assume users will have access to transact on other wallets  
-  * For **self-custody and game-specific zkLogin wallets** users must transfer assets from original self-custody wallet to Playtron zkLogin wallet  
-  * For **custodial wallets**, there is no need as your game backend can track the user’s assets across devices (e.g., via user id, or Steam/EGS login)  
-* Transfer enables full transaction capabilities on-device  
-* Companion web app will provide user-friendly transfer flows  
-  * Reminder: if you are using a **game-specific zkLogin wallet,** to use the companion web app, you will need to support Enoki Connect
+If you are using a game-specific zkLogin wallet, a properly configured [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect) can link your game-specific zkLogin wallet with the Playtron wallet.  
+
+Games can read from the linked wallet and act based on contents. There are no transaction capabilities with linked assets, however.
+
+### Full asset access
+
+If your game requires the user to sign or approve transactions to act on assets in their wallet during gameplay, users need to transfer their assets from their existing self-custody wallet to their Playtron zkLogin wallet. Examples where you might need full asset access include:
+
+- Tokens that represent game currency and users can spend during the course of gameplay.
+- NFTs that can be traded from inside your game that require signed transactions.
+
+For self-custody and game-specific zkLogin wallets, users must transfer assets from original self-custody wallets to Playtron wallets. For custodial wallets, there is no need as your game backend can track the user’s assets across devices (such as through a user id or Steam/EGS login).
+
+Transfer enables full transaction capabilities on device. The companion web app provides user-friendly transfer flows  
+
+:::tip
+
+If you are using a game-specific zkLogin wallet, to use the companion web app requires Enoki Connect support.
+
+:::
+
+## Related links
+
+- [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
+- [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
+- [SuiPlay0x1 Discord](discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
+- [Companion web application](https://wallet.playtron.one) (in development): Support linking the Playtron wallet to other self-custodied wallets using Sui Link, enabling read-access of associated wallets while on the device.
+- [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect): With Enoki Connect, users can use their dApp-specific accounts across different dApps, enabling a more unified and consistent experience.

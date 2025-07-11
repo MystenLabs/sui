@@ -1,43 +1,42 @@
 ---
-title: Integration
+title: SDK Integrations
 ---
 
 {@include: ../../snippets/suiplay.mdx}
 
-## **On-Device Integration (Playtron SDK)**
+Your integration options depend on the environments you expect your users to interact with your game. 
 
-Playtron has provided an SDK that games should integrate with to enable wallet interaction on the SuiPlay0x1 device.
+## On device integration
 
-### **Setup and Configuration**
+For on device game integration, you need the [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk). The SDK provides access to OS-level features, such as environment detection, remote PACT attestation, virtual keyboard and browser utilities, and Sui wallet integration.
 
-* Playtron SDK installation and initialization  
-* Reference: [GITHUB REPO LINK](https://github.com/playtron-os/playtron-sdk)  
-* The repo contains examples on how to use it for cpp, csharp, and nodejs  
-* It also contains the .dll build files needed to compile the cpp code  
-* For the csharp and nodejs examples, they can be installed from the respective package manager
+The Playtron GameOS SDK repository contains the installation and initialization steps to begin development. The repository also contains examples on how to use the SDK in C++, C#, and Node.js environments. The .dll build files needed to compile the C++ code are provided. For the C# and Node.js examples, you can install the necessary dependencies from the respective package manager.
 
-### **Key Integration Points**
+The Paytron GameOS SDK provides automatic wallet access with the following benefits:
 
-**Automatic Wallet Access**
+- Users already have a Playtron wallet through their Playtron account.
+- No additional wallet setup required on device.
+- Games can immediately access wallet functions through the SDK.
 
-* Users already have a Playtron-tied zkLogin wallet through their Playtron OS account  
-* No additional wallet setup required on-device  
-* Games can immediately access wallet functions through the SDK  
-* The SDK also has documentation on other non-web3 exposed functionality as well, which includes: PACT (OS verification), Virtual Keyboard/Browser utils
+## Off device integration
 
-## **Off-Device Integration (dApp Kit)**
+For off-device integration, use the [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). By integrating the Sui dApp Kit, your game can continue to use the Playtron zkLogin wallet when not running directly on the SuiPlay0x1 device. This is useful if your game is available on the web, desktop, or mobile devices.
 
-By integrating the Sui dApp Kit as well, your game can continue to use the Playtron zkLogin wallet when running *off* the SuiPlay0x1.
+The Sui dApp Kit documentation site (linked in the previous paragraph), provides the installation instructions for the SDK. With the SDK integrated into your gaming project, you can enable Playtron zkLogin wallet as a connection option.
+ 
+The dApp Kit runs in TypeScript, meaning your game needs TypeScript processing to integrate with this SDK. If your game is a web-based game, or you navigate users to a browser to perform Web3 transactions on your associated website, this should not be an issue. 
 
-### **Cross-Platform Wallet Support**
+If you're unable to run TypeScript, you can always support sending assets from your wallet to the Playtron wallet. Users can also access their Playtron wallet address via the [companion web application](https://wallet.playtron.one). Finally, you can support sending assets from your game on a different platform. For example, the user can use your PC client to transfer assets to their Playtron wallet, then continue playing on device.
 
-* Sui wallet dApp kit integration steps  
-* Enabling Playtron zkLogin wallet as connection option  
-* Reference: [dApp Kit docs](https://sdk.mystenlabs.com/dapp-kit)  
-* 🚩Note: The dApp Kit runs in TypeScript, meaning your game needs to a way to run TypeScript in order to integrate with this SDK. If your game is a web-based game, or you pop users out to a browser to perform web3 transactions on your associated website, this should be fine.  
-  * You can always support *sending* assets from your wallet to the Playtron wallet if you are unable to run TypeScript. As long as the user provides the Playtron wallet address, you can support sending assets from your game on a different platform (e.g., the user can use your PC client to transfer assets to their Playtron wallet, and continue playing on device).
+### Supported wallet types
 
-### **Supported Wallet Types**
+* **Playtron wallet:** Seamless continuation from on-device sessions.  
+* **Self-custody options:** Support for any wallet available through the Sui dApp Kit (such as [Slush wallet](https://slush.app/), [Phantom](https://phantom.com/), [Backpack](https://backpack.app/)) to include future wallet integrations.
 
-* **Playtron zkLogin**: Seamless continuation from on-device sessions  
-* **Self-Custody Options**: Support for any wallet available via Sui dApp Kit (e.g., Slush wallet, Phantom, Backpack) including future wallets that are integrated
+## Related links
+
+- [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
+- [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
+- [SuiPlay0x1 Discord](discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
+- [Companion web application](https://wallet.playtron.one) (in development): Support linking the Playtron wallet to other self-custodied wallets using Sui Link, enabling read-access of associated wallets while on the device.
+- [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect): With Enoki Connect, users can use their dApp-specific accounts across different dApps, enabling a more unified and consistent experience.
