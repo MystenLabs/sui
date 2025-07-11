@@ -40,7 +40,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     let mut context = Context::new(env, txn);
     let T::Transaction { inputs, commands } = txn;
     for (idx, (i, ty)) in inputs.iter().enumerate() {
-        input(&mut context, idx, i, ty)?;
+        input::<Mode>(&mut context, idx, i, ty)?;
     }
     for (c, result_tys) in commands {
         command::<Mode>(&context, c, result_tys)?;
@@ -48,7 +48,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     Ok(())
 }
 
-fn input(
+fn input<Mode: ExecutionMode>(
     context: &mut Context,
     idx: usize,
     arg: &T::InputArg,
@@ -59,6 +59,14 @@ fn input(
             let T::InputType::Bytes(tys) = ty else {
                 anyhow::bail!("pure should not have a fixed type",);
             };
+            if !Mode::allow_arbitrary_values() {
+                for ty in tys.keys() {
+                    anyhow::ensure!(
+                        input_arguments::is_valid_pure_type(ty)?,
+                        "pure type must be valid"
+                    );
+                }
+            }
             context.usable_inputs[idx] = !tys.is_empty();
         }
         T::InputArg::Receiving(_) => {
@@ -109,6 +117,12 @@ fn command<Mode: ExecutionMode>(
             for (arg, param) in arguments.iter().zip(parameters) {
                 argument(context, arg, param)?;
             }
+            anyhow::ensure!(
+                return_.len() == result_tys.len(),
+                "result arity mismatch. Expected {}, got {}",
+                return_.len(),
+                result_tys.len()
+            );
             for (actual, expected) in return_.iter().zip(result_tys) {
                 anyhow::ensure!(
                     actual == expected,

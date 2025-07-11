@@ -204,6 +204,10 @@ fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), Execut
     }
 }
 
+pub fn is_valid_pure_type(constraint: &Type) -> Result<bool, ExecutionError> {
+    Ok(primitive_serialization_layout(constraint)?.is_some())
+}
+
 /// Returns true if a type is a `Receiving<t>` where `t` has `key`
 pub fn is_valid_receiving(constraint: &Type) -> bool {
     let Type::Datatype(dt) = constraint else {
