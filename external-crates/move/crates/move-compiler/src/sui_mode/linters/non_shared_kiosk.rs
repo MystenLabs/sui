@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This analysis flags uses of random::Random and random::RandomGenerator in public functions.
+//! Tracks transfer operations on `sui::kiosk::Kiosk` type. If a `Kiosk` is passed
+//! to a `public_transfer` or `public_freeze_object` function, it will emit a warning,
+//! suggesting to use `transfer::public_share_object` instead.
 
 use crate::{
     cfgir::{
