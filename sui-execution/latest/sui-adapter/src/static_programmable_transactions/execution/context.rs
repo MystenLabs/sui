@@ -937,28 +937,34 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     // Dev Inspect tracking
     //
 
-    pub fn location_updates(
+    pub fn argument_updates(
         &mut self,
-        args: Vec<(T::Location, Type)>,
+        args: Vec<T::Argument>,
     ) -> Result<Vec<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
         args.into_iter()
-            .filter_map(|(location, ty)| self.location_update(location, ty).transpose())
+            .filter_map(|arg| self.argument_update(arg).transpose())
             .collect()
     }
 
-    fn location_update(
+    fn argument_update(
         &mut self,
-        location: T::Location,
-        ty: Type,
+        sp!(_, (arg, ty)): T::Argument,
     ) -> Result<Option<(sui_types::transaction::Argument, Vec<u8>, TypeTag)>, ExecutionError> {
         use sui_types::transaction::Argument as TxArgument;
         let ty = match ty {
-            Type::Reference(_, inner) => (*inner).clone(),
-            ty => ty,
+            Type::Reference(true, inner) => (*inner).clone(),
+            ty => {
+                debug_assert!(
+                    false,
+                    "Unexpected non reference type in location update: {ty:?}"
+                );
+                return Ok(None);
+            }
         };
         let Ok(tag): Result<TypeTag, _> = ty.clone().try_into() else {
             invariant_violation!("unable to generate type tag from type")
         };
+        let location = arg.location();
         let (_, _, _, lv) = self.location_value(location, ty)?;
         let local = match lv {
             LocationValue::Loaded(v) => {
@@ -969,7 +975,22 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             }
             LocationValue::InputBytes(_, _, _) => return Ok(None),
         };
-        let Some(bytes) = local.copy()?.serialize() else {
+        // copy the value from the local
+        let value = local.copy()?;
+        let value = match arg {
+            T::Argument__::Use(_) => {
+                // dereference the reference
+                value.read_ref()?
+            }
+            T::Argument__::Borrow(_, _) => {
+                // value is not a reference, nothing to do
+                value
+            }
+            T::Argument__::Read(_) => {
+                invariant_violation!("read should not return a reference")
+            }
+        };
+        let Some(bytes) = value.serialize() else {
             invariant_violation!("Failed to serialize Move value");
         };
         let arg = match location {

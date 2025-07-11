@@ -439,10 +439,15 @@ fn argument_(
     let actual_ty = context.location_type(env, location)?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
-        (LocationType::Fixed(Type::Reference(a_is_mut, a)), Type::Reference(b_is_mut, b))
-            if !b_is_mut || a_is_mut =>
-        {
-            debug_assert!(!a_is_mut || *b_is_mut);
+        (LocationType::Fixed(Type::Reference(a_is_mut, a)), Type::Reference(b_is_mut, b)) => {
+            match (a_is_mut, b_is_mut) {
+                // same mutability
+                (true, true) | (false, false) => (),
+                // mut *can* be used as imm
+                (true, false) => (),
+                // imm cannot be used as mut
+                (false, true) => return Err(CommandArgumentError::TypeMismatch.into()),
+            }
             debug_assert!(expected_ty.abilities().has_copy());
             // unused since the type is fixed
             let unused_constraint = BytesConstraint {
