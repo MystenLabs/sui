@@ -824,6 +824,15 @@ mod test {
     }
 
     async fn test_protocol_upgrade_compatibility_impl() {
+        // Override record_time_estimate_processed for protocol version 87 in tests
+        // it is currently set to true in 87 in mainnet only
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut config| {
+            if version.as_u64() == 87 {
+                config.set_record_time_estimate_processed_for_testing(true);
+            }
+            config
+        });
+
         let max_ver = ProtocolVersion::MAX.as_u64();
         let manifest = sui_framework_snapshot::load_bytecode_snapshot_manifest();
 
@@ -858,7 +867,7 @@ mod test {
                 info!("Targeting protocol version: {version}");
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
                 info!("All nodes are at protocol version: {version}");
-                // Let all nodes run for a few epochs at this version.
+                // Let all nodes run for a few epochs at this version
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 if version == max_ver {
                     break;
