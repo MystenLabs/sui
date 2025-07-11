@@ -16,10 +16,20 @@ fun foo(p: u64): u64 {
         res = res + 1;
     };
     res = res + p;
-    while (res < 16) {
+    while (res < 13) {
         res = res + 1;
     };
+    res = res + bar(res);
+    res = res + bar(res);
     res
+}
+
+fun bar(p: u64): u64 {
+    if (p < 1) {
+        p + p
+    } else {
+        p + 1
+    }
 }
 
 #[test]

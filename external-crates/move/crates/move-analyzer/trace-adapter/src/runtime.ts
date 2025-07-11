@@ -939,6 +939,10 @@ export class Runtime extends EventEmitter {
                         currentFrame.name);
                 }
                 currentEvent = this.trace.events[this.eventIndex];
+                if (this.is_event_at_breakpoint(currentEvent)) {
+                    this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
+                    return ExecutionResult.Ok;
+                }
                 if (currentEvent.type === TraceEventKind.CloseFrame) {
                     const currentFrameID = currentFrame.id;
                     // `step` call finished at the CloseFrame event
@@ -969,37 +973,49 @@ export class Runtime extends EventEmitter {
                 executionResult === ExecutionResult.Exception) {
                 return executionResult;
             }
-            let currentEvent = this.trace.events[this.eventIndex];
-            if (currentEvent.type === TraceEventKind.Instruction) {
-                const eventFrame = this.eventsStack.eventFrame;
-                if (eventFrame && 'frames' in eventFrame && 'globals' in eventFrame) {
-                    const moveCallStack = eventFrame as IMoveCallStack;
-                    const stackHeight = moveCallStack.frames.length;
-                    if (stackHeight <= 0) {
-                        // this should never happen
-                        throw new Error('No frame on the stack when processing Instruction event when continuing');
-                    }
-                    const currentFrame = moveCallStack.frames[stackHeight - 1];
-                    const filePath = currentFrame.disassemblyModeTriggered
-                        ? currentFrame.bcodeFilePath!
-                        : currentFrame.srcFilePath;
-                    const breakpoints = this.lineBreakpoints.get(filePath);
-                    if (!breakpoints) {
-                        continue;
-                    }
-                    const instLine = currentFrame.disassemblyModeTriggered
-                        ? currentEvent.bcodeLoc!.line
-                        : currentEvent.srcLoc.line;
-                    if (breakpoints.has(instLine)) {
-                        this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
-                        return ExecutionResult.Ok;
-                    }
-                } else {
-                    throw new Error('No active Move call when processing Instruction event');
-                }
-
+            const currentEvent = this.trace.events[this.eventIndex];
+            if (this.is_event_at_breakpoint(currentEvent)) {
+                this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
+                return ExecutionResult.Ok;
             }
         }
+    }
+
+    /**
+     *  Checks if an event is an instruction at a breakpoint.
+     *
+     *  @returns true if the current event is an instruction at a breakpoint, false otherwise.
+     *  @throws Error with a descriptive error message if the instruction event cannot be handled.
+    */
+    private is_event_at_breakpoint(event: TraceEvent): boolean {
+        if (event.type === TraceEventKind.Instruction) {
+            const eventFrame = this.eventsStack.eventFrame;
+            if (eventFrame && 'frames' in eventFrame && 'globals' in eventFrame) {
+                const moveCallStack = eventFrame as IMoveCallStack;
+                const stackHeight = moveCallStack.frames.length;
+                if (stackHeight <= 0) {
+                    // this should never happen
+                    throw new Error('No frame on the stack when processing Instruction event when continuing');
+                }
+                const currentFrame = moveCallStack.frames[stackHeight - 1];
+                const filePath = currentFrame.disassemblyModeTriggered
+                    ? currentFrame.bcodeFilePath!
+                    : currentFrame.srcFilePath;
+                const breakpoints = this.lineBreakpoints.get(filePath);
+                if (!breakpoints) {
+                    return false;
+                }
+                const instLine = currentFrame.disassemblyModeTriggered
+                    ? event.bcodeLoc!.line
+                    : event.srcLoc.line;
+                if (breakpoints.has(instLine)) {
+                    return true;
+                }
+            } else {
+                throw new Error('No active Move call when processing Instruction event');
+            }
+        }
+        return false;
     }
 
     /**
