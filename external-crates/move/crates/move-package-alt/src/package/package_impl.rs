@@ -23,8 +23,6 @@ use crate::{
     },
 };
 
-pub type AddressInfo = String;
-
 #[derive(Debug)]
 pub struct Package<F: MoveFlavor> {
     /// The environment of the loaded package.
