@@ -49,15 +49,18 @@ pub enum SelectionReason {
     WeightedRandom,
     TopK(usize),
     EpsilonGreedy,
-    PowerOfChoice(usize),
     Fallback,
 }
 
 pub struct ValidatorData {
     pub stats: ValidatorStats,
     pub score: PerformanceScore,
-    /// Recent operation latencies for rolling average
-    pub recent_latencies: VecDeque<(Instant, Duration)>,
+    /// Recent submit operation latencies for rolling average
+    pub recent_submit_latencies: VecDeque<(Instant, Duration)>,
+    /// Recent effects operation latencies for rolling average
+    pub recent_effects_latencies: VecDeque<(Instant, Duration)>,
+    /// Recent health check latencies for rolling average
+    pub recent_health_check_latencies: VecDeque<(Instant, Duration)>,
     /// Time when validator was temporarily excluded
     pub exclusion_time: Option<Instant>,
 }
@@ -67,7 +70,9 @@ impl Default for ValidatorData {
         Self {
             stats: ValidatorStats::default(),
             score: PerformanceScore::default(),
-            recent_latencies: VecDeque::with_capacity(100),
+            recent_submit_latencies: VecDeque::with_capacity(100),
+            recent_effects_latencies: VecDeque::with_capacity(100),
+            recent_health_check_latencies: VecDeque::with_capacity(100),
             exclusion_time: None,
         }
     }
@@ -244,9 +249,6 @@ where
             SelectionStrategy::EpsilonGreedy { epsilon } => {
                 self.select_epsilon_greedy(&available_validators, *epsilon)
             }
-            SelectionStrategy::PowerOfChoice { choices } => {
-                self.select_power_of_choice(&available_validators, *choices)
-            }
         }
     }
 
@@ -312,25 +314,11 @@ where
             }
         }
 
-        // Update rolling latency average
+        // Update rolling latency average for the specific operation type
         let now = Instant::now();
-        vdata.recent_latencies.push_back((now, latency));
-
-        // Remove old entries outside the window
         let cutoff = now - self.config.metrics_window;
-        while let Some((time, _)) = vdata.recent_latencies.front() {
-            if *time < cutoff {
-                vdata.recent_latencies.pop_front();
-            } else {
-                break;
-            }
-        }
 
-        // Calculate new average latency
-        if !vdata.recent_latencies.is_empty() {
-            let total: Duration = vdata.recent_latencies.iter().map(|(_, d)| *d).sum();
-            vdata.stats.avg_latency = total / vdata.recent_latencies.len() as u32;
-        }
+        self.update_latency_for_operation_type(vdata, operation, now, latency, cutoff);
 
         // Update metrics
         self.metrics
@@ -348,6 +336,58 @@ where
         // Recalculate score
         drop(data); // Release write lock
         self.recalculate_scores();
+    }
+
+    fn update_latency_for_operation_type(
+        &self,
+        vdata: &mut ValidatorData,
+        operation: &str,
+        now: Instant,
+        latency: Duration,
+        cutoff: Instant,
+    ) {
+        // Helper closure to update latency queue and average
+        let update_latency_queue = |queue: &mut VecDeque<(Instant, Duration)>,
+                                    avg_latency: &mut Duration| {
+            queue.push_back((now, latency));
+
+            // Remove old entries outside the window
+            while let Some((time, _)) = queue.front() {
+                if *time < cutoff {
+                    queue.pop_front();
+                } else {
+                    break;
+                }
+            }
+
+            // Calculate new average latency
+            if !queue.is_empty() {
+                let total: Duration = queue.iter().map(|(_, d)| *d).sum();
+                *avg_latency = total / queue.len() as u32;
+            }
+        };
+
+        match operation {
+            "submit" => update_latency_queue(
+                &mut vdata.recent_submit_latencies,
+                &mut vdata.stats.avg_submit_latency,
+            ),
+            "effects" => update_latency_queue(
+                &mut vdata.recent_effects_latencies,
+                &mut vdata.stats.avg_effects_latency,
+            ),
+            "health_check" => update_latency_queue(
+                &mut vdata.recent_health_check_latencies,
+                &mut vdata.stats.avg_health_check_latency,
+            ),
+            _ => {
+                // For any other operation types, default to submit latency tracking
+                update_latency_queue(
+                    &mut vdata.recent_submit_latencies,
+                    &mut vdata.stats.avg_submit_latency,
+                )
+            }
+        }
     }
 
     fn recalculate_scores(&self) {
@@ -485,45 +525,6 @@ where
                 score: best.1.score.overall_score,
                 reason: SelectionReason::BestScore,
             }
-        }
-    }
-
-    fn select_power_of_choice(
-        &self,
-        validators: &[(&AuthorityName, &ValidatorData)],
-        choices: usize,
-    ) -> ValidatorSelectionOutput {
-        let mut rng = thread_rng();
-        let sample_size = choices.min(validators.len());
-
-        // Sample N validators randomly
-        let indices: Vec<usize> = (0..validators.len()).collect();
-        let sampled_indices: Vec<_> = indices
-            .choose_multiple(&mut rng, sample_size)
-            .copied()
-            .collect();
-
-        // Select the best among the sampled
-        let best = sampled_indices
-            .iter()
-            .map(|&idx| validators[idx])
-            .max_by(|a, b| {
-                a.1.score
-                    .overall_score
-                    .partial_cmp(&b.1.score.overall_score)
-                    .unwrap()
-            })
-            .unwrap();
-
-        self.metrics
-            .validator_selections
-            .with_label_values(&[&best.0.concise().to_string()])
-            .inc();
-
-        ValidatorSelectionOutput {
-            validator: *best.0,
-            score: best.1.score.overall_score,
-            reason: SelectionReason::PowerOfChoice(choices),
         }
     }
 

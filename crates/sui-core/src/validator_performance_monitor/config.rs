@@ -74,11 +74,6 @@ pub enum SelectionStrategy {
         /// Probability of random selection
         epsilon: f64,
     },
-    /// Power of choice (select best of N random validators)
-    PowerOfChoice {
-        /// Number of validators to sample
-        choices: usize,
-    },
 }
 
 impl Default for ValidatorPerformanceConfig {
