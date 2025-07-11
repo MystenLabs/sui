@@ -34,4 +34,4 @@ task 4, lines 26-29:
 // type error instead of dirty error
 //> test::m1::priv(Input(0), Input(1));
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be instantiated from raw bytes
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg }, source: Some("Non-primitive argument at index 0. If it is an object, it must be populated by an object"), command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg }, source: Some("Invalid usage of `Pure` argument for a non-primitive argument type at index 0."), command: Some(1) } }

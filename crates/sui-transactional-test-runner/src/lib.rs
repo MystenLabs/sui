@@ -68,15 +68,7 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    // check if the test is disabled
-    const DISABLED_DIRECTORIES: &[&str] = &["dev_inspect", "dry_run", "programmable"];
-    let mut components = path.parent().unwrap().components();
-    let disabled = components.any(|c| {
-        let string = c.as_os_str().to_string_lossy().to_string();
-        DISABLED_DIRECTORIES.contains(&string.as_str())
-    });
-
-    ENABLE_PTB_V2.set(!disabled).unwrap();
+    ENABLE_PTB_V2.set(true).unwrap();
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();

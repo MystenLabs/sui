@@ -142,8 +142,10 @@ fn command<Mode: ExecutionMode>(
         T::Command_::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
-            debug_assert!(!amounts_are_dirty);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
+            if is_dirty {
+                context.mark_dirty(coin);
+            }
             vec![IsDirty::Fixed { is_dirty }; result.len()]
         }
         T::Command_::MergeCoins(_, target, coins) => {
@@ -216,8 +218,7 @@ fn move_call<Mode: ExecutionMode>(
             context.mark_dirty(arg);
         }
     }
-    let is_dirty = is_entry || arg_dirties.iter().any(|&d| d);
-    Ok(vec![IsDirty::Fixed { is_dirty }; result.len()])
+    Ok(vec![IsDirty::Fixed { is_dirty: true }; result.len()])
 }
 
 fn check_signature<Mode: ExecutionMode>(
@@ -227,17 +228,13 @@ fn check_signature<Mode: ExecutionMode>(
         idx: usize,
         return_type: &T::Type,
     ) -> Result<(), ExecutionError> {
-        match return_type {
-            Type::Reference(_, _) => {
-                if !Mode::allow_arbitrary_values() {
-                    return Err(ExecutionError::from_kind(
-                        ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                    ));
-                }
-                todo!("RUNTIME"); // can we support this?
+        if let Type::Reference(_, _) = return_type {
+            if !Mode::allow_arbitrary_values() {
+                return Err(ExecutionError::from_kind(
+                    ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
+                ));
             }
-            t => t,
-        };
+        }
         Ok(())
     }
     for (idx, ty) in function.signature.return_.iter().enumerate() {
