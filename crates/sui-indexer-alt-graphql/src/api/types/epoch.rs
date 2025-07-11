@@ -172,7 +172,7 @@ impl Epoch {
         }
     }
 
-    /// Load the epoch from the store, and return it fully inflated (with contents already
+    /// Load the epoch a the store, and return it fully inflated (with contents already
     /// fetched). If `epoch_id` is provided, the epoch with that ID is loaded. Otherwise, the
     /// latest epoch for the current checkpoint is loaded.
     ///

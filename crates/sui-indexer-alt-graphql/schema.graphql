@@ -49,6 +49,10 @@ type Checkpoint {
 	"""
 	previousCheckpointDigest: String
 	"""
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+	"""
+	rollingGasSummary: GasCostSummary
+	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
@@ -136,6 +140,13 @@ type FeatureFlag {
 	value: Boolean!
 }
 
+
+type GasCostSummary {
+	computationCost: UInt53!
+	storageCost: UInt53!
+	storageRebate: UInt53!
+	nonRefundableStorageFee: UInt53!
+}
 
 """
 Interface implemented by GraphQL types representing entities that are identified by an address.
