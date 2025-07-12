@@ -162,8 +162,8 @@ mod test {
         // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
-        let test_cluster = build_test_cluster(4, 10000, 1).await;
-        test_simulated_load(test_cluster, 60).await;
+        let test_cluster = build_test_cluster(4, 15000, 1).await;
+        test_simulated_load(test_cluster, 90).await;
     }
 
     #[sim_test(config = "test_config()")]
