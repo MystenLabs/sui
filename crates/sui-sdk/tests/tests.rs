@@ -70,6 +70,10 @@ async fn test_verify_personal_message_signature() {
 async fn test_verify_signature_zklogin() {
     use test_cluster::TestClusterBuilder;
 
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let message = b"hello";
     let personal_message = PersonalMessage {
         message: message.to_vec(),

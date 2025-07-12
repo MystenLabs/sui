@@ -118,6 +118,10 @@ async fn test_legacy_zklogin_address_accept() {
 
 #[sim_test]
 async fn zklogin_end_to_end_test() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(15000)
         .with_default_jwks()

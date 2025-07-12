@@ -16,6 +16,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return Ok(());
+    }
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .with_default_jwks()
