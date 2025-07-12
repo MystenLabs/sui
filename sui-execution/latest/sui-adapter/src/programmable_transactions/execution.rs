@@ -29,11 +29,11 @@ mod checked {
     };
     use move_core_types::{
         account_address::AccountAddress,
+        ident_str,
         identifier::{IdentStr, Identifier},
         language_storage::{ModuleId, StructTag, TypeTag},
         u256::U256,
     };
-    use move_core_types::{ident_str, language_storage::StructTag};
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::{
         move_vm::MoveVM,
@@ -1181,6 +1181,7 @@ mod checked {
                 FunctionKind::NonEntry
             }
             (Visibility::Private | Visibility::Friend, false) => {
+                // TODO: delete this as soon as the accumulator Move API is available
                 if context
                     .protocol_config
                     .allow_private_accumulator_entrypoints()
@@ -1202,7 +1203,10 @@ mod checked {
                         ));
                     }
                 } else {
-                    FunctionKind::NonEntry
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::NonEntryFunctionInvoked,
+                        "Can only call `entry` or `public` functions",
+                    ));
                 }
             }
         };

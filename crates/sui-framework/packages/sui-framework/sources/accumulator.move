@@ -35,7 +35,7 @@ public(package) fun accumulator_address<T>(address: address): address {
     dynamic_field::hash_type_and_key(sui_accumulator_root_address(), key)
 }
 
-// === Methods for adding, removing, and mutating accumulator objects ===
+// === Adding, removing, and mutating accumulator objects ===
 
 /// Balance object methods
 fun root_has_accumulator<K, V: store>(accumulator_root: &AccumulatorRoot, name: Key<K>): bool {

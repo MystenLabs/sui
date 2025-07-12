@@ -21,6 +21,10 @@ use serde::{Deserialize, Serialize};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
 pub const ACCUMULATOR_ROOT_CREATE_FUNC: &IdentStr = ident_str!("create");
+pub const ACCUMULATOR_ROOT_SETTLE_U128_FUNC: &IdentStr = ident_str!("settle_u128");
+pub const ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC: &IdentStr = ident_str!("settlement_prologue");
+
+const ACCUMULATOR_KEY_TYPE: &IdentStr = ident_str!("AccumulatorKey");
 
 pub fn get_accumulator_root_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
@@ -49,7 +53,7 @@ impl AccumulatorKey {
         StructTag {
             address: SUI_FRAMEWORK_PACKAGE_ID.into(),
             module: ACCUMULATOR_ROOT_MODULE.to_owned(),
-            name: ident_str!("AccumulatorKey").to_owned(),
+            name: ACCUMULATOR_KEY_TYPE.to_owned(),
             type_params: vec![],
         }
     }

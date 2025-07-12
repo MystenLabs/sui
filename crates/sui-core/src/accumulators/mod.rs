@@ -3,10 +3,12 @@
 
 use std::collections::HashMap;
 
-use move_core_types::ident_str;
-use move_core_types::identifier::IdentStr;
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::accumulator_root::{
+    ACCUMULATOR_ROOT_MODULE, ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC,
+    ACCUMULATOR_ROOT_SETTLE_U128_FUNC,
+};
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::effects::{
     AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
@@ -15,8 +17,7 @@ use sui_types::effects::{
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, CallArg, ObjectArg, TransactionKind};
 use sui_types::{
-    Identifier, TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS,
-    SUI_FRAMEWORK_PACKAGE_ID,
+    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -58,9 +59,6 @@ impl ClassifiedType {
 }
 
 impl MergedValue {
-    const ACCUMULATOR_IDENT: &IdentStr = ident_str!("accumulator");
-    const SETTLE_U128_IDENT: &IdentStr = ident_str!("settle_u128");
-
     fn add_move_call(
         merge: Self,
         split: Self,
@@ -89,8 +87,8 @@ impl MergedValue {
                     let split_amount = builder.pure(split_amount).unwrap();
                     builder.programmable_move_call(
                         SUI_FRAMEWORK_PACKAGE_ID,
-                        Self::ACCUMULATOR_IDENT.into(),
-                        Self::SETTLE_U128_IDENT.into(),
+                        ACCUMULATOR_ROOT_MODULE.into(),
+                        ACCUMULATOR_ROOT_SETTLE_U128_FUNC.into(),
                         vec![address.ty.clone()],
                         vec![root, address_arg, merge_amount, split_amount],
                     );
@@ -239,8 +237,8 @@ pub fn create_accumulator_update_transactions(
 
     builder.programmable_move_call(
         SUI_FRAMEWORK_PACKAGE_ID,
-        Identifier::new("accumulator").unwrap(),
-        Identifier::new("settlement_prologue").unwrap(),
+        ACCUMULATOR_ROOT_MODULE.into(),
+        ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC.into(),
         vec![],
         vec![epoch_arg, checkpoint_height_arg, idx_arg],
     );
