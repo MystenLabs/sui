@@ -290,9 +290,9 @@ impl ExecutionScheduler {
                             let env = env.with_sufficient_balance();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
-                        ScheduleStatus::AlreadyScheduled => {
+                        ScheduleStatus::AlreadyExecuted => {
                             let tx_digest = result.tx_digest;
-                            debug!(?tx_digest, "Withdraw already scheduled or executed");
+                            debug!(?tx_digest, "Withdraw already executed");
                         }
                     },
                     Err(e) => {
