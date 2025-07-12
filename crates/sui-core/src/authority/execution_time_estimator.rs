@@ -9,6 +9,8 @@ use std::{
     time::Duration,
 };
 
+use serde::{Deserialize, Serialize};
+
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use super::weighted_moving_average::WeightedMovingAverage;
 use crate::consensus_adapter::SubmitToConsensus;
@@ -577,7 +579,7 @@ pub struct ExecutionTimeEstimator {
     consensus_observations: HashMap<ExecutionTimeObservationKey, ConsensusObservations>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsensusObservations {
     observations: Vec<(u64 /* generation */, Option<Duration>)>, // keyed by authority index
     stake_weighted_median: Option<Duration>,                     // cached value
@@ -1771,5 +1773,148 @@ mod tests {
             estimator.get_estimate(&multi_command_tx),
             Duration::from_millis(510)
         );
+    }
+
+    // Add imports for snapshot tests
+    #[cfg(test)]
+    use {
+        rand::{Rng, SeedableRng},
+        sui_protocol_config::ProtocolVersion,
+    };
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct ExecutionTimeObserverSnapshot {
+        protocol_version: u64,
+        consensus_observations: Vec<(ExecutionTimeObservationKey, ConsensusObservations)>,
+    }
+
+    // Generates deterministic test inputs for process_observation_from_consensus
+    fn generate_test_inputs(
+        protocol_version: u64,
+        num_validators: usize,
+    ) -> Vec<(AuthorityIndex, u64, ExecutionTimeObservationKey, Duration)> {
+        // Use protocol version as seed for deterministic results
+        let mut rng = rand::rngs::StdRng::seed_from_u64(protocol_version);
+
+        let observation_keys = vec![
+            ExecutionTimeObservationKey::MoveEntryPoint {
+                package: ObjectID::from_hex_literal("0x1").unwrap(),
+                module: "coin".to_string(),
+                function: "transfer".to_string(),
+                type_arguments: vec![],
+            },
+            ExecutionTimeObservationKey::MoveEntryPoint {
+                package: ObjectID::from_hex_literal("0x2").unwrap(),
+                module: "nft".to_string(),
+                function: "mint".to_string(),
+                type_arguments: vec![],
+            },
+            ExecutionTimeObservationKey::TransferObjects,
+            ExecutionTimeObservationKey::SplitCoins,
+            ExecutionTimeObservationKey::MergeCoins,
+            ExecutionTimeObservationKey::MakeMoveVec,
+            ExecutionTimeObservationKey::Upgrade,
+        ];
+
+        let mut inputs = Vec::new();
+        let target_samples = 25; // Target 20-30 samples
+
+        // Generate multiple observations per key from different authorities over time
+        for _ in 0..target_samples {
+            let key = observation_keys[rng.gen_range(0..observation_keys.len())].clone();
+            let authority_index =
+                AuthorityIndex::try_from(rng.gen_range(0..num_validators)).unwrap();
+
+            // Generate generations that simulate observations over time
+            // Use a realistic range where newer generations might replace older ones
+            let generation = rng.gen_range(1..=10);
+
+            // Generate duration based on the key type and add some variance
+            let base_duration = match &key {
+                ExecutionTimeObservationKey::MoveEntryPoint { .. } => rng.gen_range(50..=500),
+                ExecutionTimeObservationKey::TransferObjects => rng.gen_range(10..=100),
+                ExecutionTimeObservationKey::SplitCoins => rng.gen_range(20..=80),
+                ExecutionTimeObservationKey::MergeCoins => rng.gen_range(15..=70),
+                ExecutionTimeObservationKey::MakeMoveVec => rng.gen_range(5..=30),
+                ExecutionTimeObservationKey::Upgrade => rng.gen_range(100..=1000),
+                ExecutionTimeObservationKey::Publish => rng.gen_range(200..=2000),
+            };
+
+            let duration = Duration::from_millis(base_duration);
+
+            inputs.push((authority_index, generation, key, duration));
+        }
+
+        inputs
+    }
+
+    // Safeguard against forking because of changes to the execution time estimator.
+    //
+    // Within an epoch, each estimator must reach the same conclusion about the observations and
+    // stake_weighted_median from the observations shared by other validators, as this is used
+    // for transaction ordering.
+    //
+    // Therefore; any change in the calculation of the observations or stake_weighted_median
+    // not accompanied by a protocol version change may fork.
+    //
+    // This test uses snapshots of computed stake weighted median at particular protocol versions
+    // to attempt to regressions that might fork.
+    #[test]
+    fn snapshot_tests() {
+        println!("\n============================================================================");
+        println!("!                                                                          !");
+        println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
+        println!("!                                                                          !");
+        println!("============================================================================\n");
+
+        let max_version = ProtocolVersion::MAX.as_u64();
+
+        // Test the last 10 protocol versions to focus on recent behavior
+        let test_versions: Vec<u64> = (max_version.saturating_sub(9)..=max_version).collect();
+
+        for version in test_versions {
+            // Create a test committee with 4 validators
+            let (committee, _) = Committee::new_simple_test_committee_of_size(4);
+            let committee = Arc::new(committee);
+
+            // Generate deterministic test inputs for this version
+            let test_inputs = generate_test_inputs(version, committee.num_members());
+
+            // Create a fresh estimator
+            let mut estimator = ExecutionTimeEstimator::new(
+                committee.clone(),
+                ExecutionTimeEstimateParams::default(),
+                std::iter::empty(), // No initial observations
+            );
+
+            // Process observations by calling process_observation_from_consensus
+            for (source, generation, observation_key, duration) in test_inputs {
+                estimator.process_observation_from_consensus(
+                    source,
+                    generation,
+                    observation_key,
+                    duration,
+                    false, // Don't skip update so stake_weighted_median is calculated
+                );
+            }
+
+            // Get the final state after processing all observations
+            let mut final_observations = estimator.get_observations();
+
+            // Sort observations by their string representation for deterministic snapshots
+            final_observations.sort_by(|a, b| a.0.to_string().cmp(&b.0.to_string()));
+
+            // Create snapshot data
+            let snapshot_data = ExecutionTimeObserverSnapshot {
+                protocol_version: version,
+                consensus_observations: final_observations.clone(),
+            };
+
+            // Generate snapshot using insta
+            insta::assert_yaml_snapshot!(
+                format!("execution_time_observer_v{}", version),
+                snapshot_data
+            );
+        }
     }
 }
