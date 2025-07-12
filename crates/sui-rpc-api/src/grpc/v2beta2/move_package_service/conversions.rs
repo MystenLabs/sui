@@ -62,11 +62,11 @@ pub(crate) fn convert_datatype(
     DatatypeDescriptor {
         type_name: Some(format!(
             "{}::{}::{}",
-            package_id.to_hex_literal(),
+            package_id.to_canonical_string(true),
             module_name,
             datatype_name
         )),
-        defining_id: Some(data_def.defining_id.to_hex_literal()),
+        defining_id: Some(data_def.defining_id.to_canonical_string(true)),
         module: Some(module_name.to_string()),
         name: Some(datatype_name.to_string()),
         abilities,
@@ -237,7 +237,7 @@ fn convert_open_signature_body(
         sui_package_resolver::OpenSignatureBody::Datatype(key, args) => {
             let type_name = format!(
                 "{}::{}::{}",
-                key.package.to_hex_literal(),
+                key.package.to_canonical_string(true),
                 key.module,
                 key.name
             );

@@ -114,11 +114,14 @@ pub fn validate_validator_cap_module(module: &Module) {
 pub fn validate_validator_operation_cap_datatype(datatype: &DatatypeDescriptor) {
     assert_eq!(
         datatype.type_name.as_ref().unwrap(),
-        "0x3::validator_cap::ValidatorOperationCap"
+        "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::ValidatorOperationCap"
     );
     assert_eq!(datatype.name.as_ref().unwrap(), "ValidatorOperationCap");
     assert_eq!(datatype.module.as_ref().unwrap(), "validator_cap");
-    assert_eq!(datatype.defining_id.as_ref().unwrap(), "0x3");
+    assert_eq!(
+        datatype.defining_id.as_ref().unwrap(),
+        "0x0000000000000000000000000000000000000000000000000000000000000003"
+    );
     assert_eq!(datatype.kind, Some(DatatypeKind::Struct as i32));
 
     // Check abilities - only has Drop
@@ -190,7 +193,7 @@ pub fn validate_new_unverified_validator_operation_cap_and_transfer_function(
     );
     assert_eq!(
         param1_body.type_name,
-        Some("0x2::tx_context::TxContext".to_string())
+        Some("0x0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext".to_string())
     );
     assert_eq!(param1_body.type_parameter_instantiation.len(), 0);
     assert_eq!(param1_body.type_parameter, None);
@@ -206,7 +209,13 @@ pub fn validate_new_unverified_validator_operation_cap_and_transfer_function(
         return0_body.r#type,
         Some(open_signature_body::Type::Datatype as i32)
     );
-    assert_eq!(return0_body.type_name, Some("0x2::object::ID".to_string()));
+    assert_eq!(
+        return0_body.type_name,
+        Some(
+            "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                .to_string()
+        )
+    );
     assert_eq!(return0_body.type_parameter_instantiation.len(), 0);
     assert_eq!(return0_body.type_parameter, None);
 }
