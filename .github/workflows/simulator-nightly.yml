@@ -6,6 +6,7 @@ concurrency:
 on:
   schedule:
     - cron: '0 9 * * *' # equivalent to 1am PST
+    - cron: '0 21 * * *' # equivalent to 1pm PST
   workflow_dispatch:
     inputs:
       sui_ref:
@@ -18,6 +19,11 @@ on:
         type: string
         required: false
         default: "30"
+      protocol_config_override:
+        description: "Protocol config override"
+        type: string
+        required: false
+        default: ""
 
 env:
   SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
@@ -76,6 +82,24 @@ jobs:
       - name: Install simtest
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
+
+      - name: Set protocol config override based on trigger
+        # This step determines which protocol config override to use.
+        # It checks if the trigger was a manual dispatch or a specific schedule.
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "${{ github.event.inputs.protocol_config_override }}" ]]; then
+              echo "Testing with protocol config override: ${{ github.event.inputs.protocol_config_override }}"
+              echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ github.event.inputs.protocol_config_override }}" >> $GITHUB_ENV
+            else
+              echo "Testing latest protocol config for dispatched run"
+            fi
+          elif [[ "${{ github.event.schedule }}" == "0 21 * * *" ]]; then
+            echo "Testing mainnet protocol config"
+            echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=mainnet" >> $GITHUB_ENV
+          else
+            echo "Testing latest protocol config"
+          fi
 
       # Run simulator tests
       - name: Run simtest
