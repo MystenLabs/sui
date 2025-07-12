@@ -266,7 +266,7 @@ fn determine_subject_type_name(
             assert!(context.env.has_errors());
             None
         }
-        N::Type_::Unit | N::Type_::Fun(_, _) => {
+        N::Type_::Unit | N::Type_::Fun(_, _) | N::Type_::Void => {
             let msg = "Invalid type for syntax method definition";
             let mut diag = diag!(Declarations::InvalidSyntaxMethod, (*loc, msg));
             diag.add_note("Syntax methods may only be defined for single base types");
@@ -386,7 +386,7 @@ fn valid_index_return_type(
             ));
             false
         }
-        N::Type_::Var(_) | N::Type_::Anything | N::Type_::UnresolvedError => {
+        N::Type_::Var(_) | N::Type_::Anything | N::Type_::Void | N::Type_::UnresolvedError => {
             // Already an error state, so pass
             assert!(context.env.has_errors());
             false

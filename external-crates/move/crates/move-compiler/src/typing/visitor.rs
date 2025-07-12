@@ -275,6 +275,7 @@ pub trait TypingVisitorContext {
             }
             N::Type_::Var(_) => (),
             N::Type_::Anything => (),
+            N::Type_::Void => (),
             N::Type_::UnresolvedError => (),
         }
     }
@@ -882,6 +883,7 @@ pub trait TypingMutVisitorContext {
             }
             N::Type_::Var(_) => (),
             N::Type_::Anything => (),
+            N::Type_::Void => (),
             N::Type_::UnresolvedError => (),
         }
     }

@@ -1101,7 +1101,7 @@ fn visit_type_params(
                 f,
             )
         }
-        Type_::Var(_) | Type_::Anything | Type_::UnresolvedError => {}
+        Type_::Var(_) | Type_::Anything | Type_::Void | Type_::UnresolvedError => {}
         Type_::Unit => {}
     }
 }
@@ -1160,7 +1160,7 @@ fn has_unresolved_error_type(ty: &Type) -> bool {
         Type_::Fun(args, result) => {
             args.iter().any(has_unresolved_error_type) || has_unresolved_error_type(result)
         }
-        Type_::Param(_) | Type_::Var(_) | Type_::Anything | Type_::Unit => false,
+        Type_::Param(_) | Type_::Var(_) | Type_::Anything | Type_::Void | Type_::Unit => false,
     }
 }
 
@@ -1836,14 +1836,14 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let eret = exp(context, nret);
             let ret_ty = context.return_type.clone().unwrap();
             subtype(context, eloc, || "Invalid return", eret.ty.clone(), ret_ty);
-            (sp(eloc, Type_::Anything), TE::Return(eret))
+            (core::make_divergent_tvar(context, eloc), TE::Return(eret))
         }
         NE::Abort(ncode) => {
             let mut ecode = exp(context, ncode);
             let code_ty = Type_::u64(eloc);
             annotated_error_const(context, &mut ecode, "abort");
             subtype(context, eloc, || "Invalid abort", ecode.ty.clone(), code_ty);
-            (sp(eloc, Type_::Anything), TE::Abort(ecode))
+            (core::make_divergent_tvar(context, eloc), TE::Abort(ecode))
         }
         NE::Give(usage, name, rhs) => {
             let break_rhs = exp(context, rhs);
@@ -1854,9 +1854,12 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 || format!("Invalid {usage}"),
                 break_rhs.ty.clone(),
             );
-            (sp(eloc, Type_::Anything), TE::Give(name, break_rhs))
+            (
+                core::make_divergent_tvar(context, eloc),
+                TE::Give(name, break_rhs),
+            )
         }
-        NE::Continue(name) => (sp(eloc, Type_::Anything), TE::Continue(name)),
+        NE::Continue(name) => (core::make_divergent_tvar(context, eloc), TE::Continue(name)),
 
         NE::Dereference(nref) => {
             let eref = exp(context, nref);
@@ -2230,9 +2233,10 @@ fn match_arms(
         .into_iter()
         .map(|narm| match_arm(context, subject_type, narm, ref_mut))
         .collect::<Vec<_>>();
+    // Start with a divergent tvar in case all of the arms diverge
     let result_type = arms
         .iter()
-        .fold(core::make_tvar(context, *arms_loc), |ty, arm| {
+        .fold(core::make_divergent_tvar(context, *arms_loc), |ty, arm| {
             join(
                 context,
                 *arms_loc,
@@ -3121,7 +3125,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
 
     match ty {
         sp!(_, T::UnresolvedError) => None,
-        sp!(tloc, T::Anything) => {
+        sp!(tloc, T::Anything | T::Void) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -3985,7 +3989,7 @@ fn type_to_type_name_(
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
         t => {
             let msg = match t {
-                Ty::Anything => {
+                Ty::Anything | Ty::Void => {
                     format!("Unable to infer type for {error_msg}. Try annotating this type")
                 }
                 Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) | Ty::Fun(_, _) => {
@@ -4745,7 +4749,8 @@ fn convert_macro_arg_to_block(context: &mut Context, sp!(loc, ne_): N::Exp) -> N
                     .iter()
                     .map(|(sp!(loc, _), _)| core::make_tvar(context, *loc))
                     .collect::<Vec<_>>();
-                let res_ty = core::make_tvar(context, lambda.body.loc);
+                // The return may be divergent
+                let res_ty = core::make_divergent_tvar(context, lambda.body.loc);
                 let tfun = sp(loc, Type_::Fun(param_tys.clone(), Box::new(res_ty.clone())));
                 for annot in extra_annotations {
                     let annot_loc = annot.loc;

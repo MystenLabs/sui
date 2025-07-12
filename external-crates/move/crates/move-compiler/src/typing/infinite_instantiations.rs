@@ -79,7 +79,7 @@ impl<'a> Context<'a> {
         use N::Type_::*;
         match targ_ {
             Var(_) => panic!("ICE tvar after expansion"),
-            Unit | Anything | UnresolvedError => (),
+            Unit | Anything | Void | UnresolvedError => (),
             Ref(_, t) => {
                 let info = EdgeInfo {
                     edge: Edge::Nested,

@@ -323,7 +323,7 @@ fn type_(context: &mut Context, sp!(_, ty_): &N::Type) {
             types(context, tys);
             type_(context, t);
         }
-        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => (),
+        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::Void | T::UnresolvedError => (),
     }
 }
 

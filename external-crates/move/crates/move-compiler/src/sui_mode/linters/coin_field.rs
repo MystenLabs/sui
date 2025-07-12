@@ -65,8 +65,12 @@ fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
             let sp!(_, tname) = tname;
             tname.is(&SUI_ADDR_VALUE, COIN_MOD_NAME, COIN_STRUCT_NAME)
         }
-        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => {
-            false
-        }
+        T::Unit
+        | T::Param(_)
+        | T::Var(_)
+        | T::Anything
+        | T::Void
+        | T::UnresolvedError
+        | T::Fun(_, _) => false,
     }
 }

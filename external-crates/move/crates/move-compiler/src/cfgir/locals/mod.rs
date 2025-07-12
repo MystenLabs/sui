@@ -563,7 +563,7 @@ fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType
             let abilities = match &ty_arg.value {
                 T::Unit => AbilitySet::collection(ty_arg.loc),
                 T::Ref(_, _) => AbilitySet::references(ty_arg.loc),
-                T::UnresolvedError | T::Anything => AbilitySet::all(ty_arg.loc),
+                T::UnresolvedError | T::Anything | T::Void => AbilitySet::all(ty_arg.loc),
                 T::Param(TParam { abilities, .. }) | T::Apply(Some(abilities), _, _) => {
                     abilities.clone()
                 }

@@ -20,9 +20,9 @@ error[E04007]: incompatible types
   │
 8 │         call!(|| { if (cond) 1 else return &0 });
   │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  │                  │           │             │
-  │                  │           │             Found: '&{integer}'. It is not compatible with the other type.
-  │                  │           Found: integer. It is not compatible with the other type.
+  │                  │                  │      │
+  │                  │                  │      Found: '&{integer}'. It is not compatible with the other type.
+  │                  │                  Found: integer. It is not compatible with the other type.
   │                  Invalid lambda return
 
 error[E04007]: incompatible types
@@ -40,9 +40,9 @@ error[E04007]: incompatible types
    │
 10 │         call!(|| { if (cond) 1 else return &0 });
    │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │                  │           │             │
-   │                  │           │             Found: '&{integer}'. It is not compatible with the other type.
-   │                  │           Found: integer. It is not compatible with the other type.
+   │                  │                  │      │
+   │                  │                  │      Found: '&{integer}'. It is not compatible with the other type.
+   │                  │                  Found: integer. It is not compatible with the other type.
    │                  Invalid lambda return
 
 error[E04007]: incompatible types

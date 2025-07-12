@@ -1232,6 +1232,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             | N::Type_::Fun(_, _)
             | N::Type_::Var(_)
             | N::Type_::Anything
+            | N::Type_::Void
             | N::Type_::UnresolvedError => false,
         }
     }
