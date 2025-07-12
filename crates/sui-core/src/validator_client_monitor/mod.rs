@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod client_stats;
+mod client_tracker;
 mod config;
 mod metrics;
-mod performance_stats;
-mod performance_tracker;
 
 #[cfg(test)]
 mod tests;
 
-pub use config::ValidatorPerformanceConfig;
-pub use metrics::ValidatorPerformanceMetrics;
-pub use performance_tracker::ValidatorPerformanceMonitor;
+pub use client_tracker::ValidatorClientMonitor;
+pub use config::ValidatorClientMonitorConfig;
+pub use metrics::ValidatorClientMetrics;
 use strum::EnumIter;
 
 use std::time::Duration;

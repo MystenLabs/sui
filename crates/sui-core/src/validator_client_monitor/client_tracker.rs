@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::validator_performance_monitor::performance_stats::PerformanceStats;
-use crate::validator_performance_monitor::{
-    config::{SelectionStrategy, ValidatorPerformanceConfig},
-    metrics::ValidatorPerformanceMetrics,
+use crate::validator_client_monitor::client_stats::ClientObservedStats;
+use crate::validator_client_monitor::{
+    config::{SelectionStrategy, ValidatorClientMonitorConfig},
+    metrics::ValidatorClientMetrics,
     OperationFeedback, OperationType,
 };
 use arc_swap::ArcSwap;
@@ -25,42 +25,42 @@ use tokio::{
 };
 use tracing::{debug, info, warn};
 
-/// Monitors and tracks validator performance across the network.
+/// Monitors validator interactions from the client's perspective.
 ///
 /// This component:
-/// - Collects performance metrics from TransactionDriver operations
-/// - Runs periodic health checks on all validators
-/// - Maintains statistics for reliability and latency
-/// - Provides intelligent validator selection based on performance
+/// - Collects client-side metrics from TransactionDriver operations
+/// - Runs periodic health checks on all validators from the client
+/// - Maintains client-observed statistics for reliability and latency
+/// - Provides intelligent validator selection based on client-observed performance
 /// - Handles epoch changes by cleaning up stale validator data
 ///
 /// The monitor runs a background task for health checks and uses
-/// exponential moving averages to smooth performance measurements.
-pub struct ValidatorPerformanceMonitor<A: Clone> {
-    config: ValidatorPerformanceConfig,
-    metrics: Arc<ValidatorPerformanceMetrics>,
-    performance_stats: RwLock<PerformanceStats>,
+/// exponential moving averages to smooth client-side measurements.
+pub struct ValidatorClientMonitor<A: Clone> {
+    config: ValidatorClientMonitorConfig,
+    metrics: Arc<ValidatorClientMetrics>,
+    client_stats: RwLock<ClientObservedStats>,
     authority_aggregator: Arc<ArcSwap<crate::authority_aggregator::AuthorityAggregator<A>>>,
 }
 
-impl<A> ValidatorPerformanceMonitor<A>
+impl<A> ValidatorClientMonitor<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     pub fn new(
-        config: ValidatorPerformanceConfig,
-        metrics: Arc<ValidatorPerformanceMetrics>,
+        config: ValidatorClientMonitorConfig,
+        metrics: Arc<ValidatorClientMetrics>,
         authority_aggregator: Arc<ArcSwap<crate::authority_aggregator::AuthorityAggregator<A>>>,
     ) -> Arc<Self> {
         info!(
-            "Validator performance monitor starting with config: {:?}",
+            "Validator client monitor starting with config: {:?}",
             config
         );
 
         let monitor = Arc::new(Self {
             config: config.clone(),
             metrics,
-            performance_stats: RwLock::new(PerformanceStats::new(config)),
+            client_stats: RwLock::new(ClientObservedStats::new(config)),
             authority_aggregator,
         });
 
@@ -72,13 +72,13 @@ where
         monitor
     }
 
-    /// Process feedback from TransactionDriver operations.
+    /// Record client-observed interaction result with a validator.
     ///
-    /// Records operation results including success/failure status and latency.
-    /// Updates both Prometheus metrics and internal performance statistics.
-    /// This is the primary interface for the TransactionDriver to report
-    /// validator performance data.
-    pub fn record_feedback(&self, feedback: OperationFeedback) {
+    /// Records operation results including success/failure status and latency
+    /// from the client's perspective. Updates both Prometheus metrics and
+    /// internal client statistics. This is the primary interface for the
+    /// TransactionDriver to report client-observed validator interactions.
+    pub fn record_interaction_result(&self, feedback: OperationFeedback) {
         let validator_str = feedback.validator.concise().to_string();
         let operation_str = match feedback.operation {
             OperationType::Submit => "submit",
@@ -106,14 +106,14 @@ where
                 .inc();
         }
 
-        // Update performance stats
-        let mut perf_stats = self.performance_stats.write();
-        perf_stats.record_feedback(feedback);
+        // Update client stats
+        let mut client_stats = self.client_stats.write();
+        client_stats.record_interaction_result(feedback);
     }
 
     /// Handle epoch changes by cleaning up stale validator data.
     ///
-    /// Called when the network transitions to a new epoch. Removes performance
+    /// Called when the network transitions to a new epoch. Removes client-observed
     /// data for validators that are no longer in the active committee to prevent
     /// memory leaks and ensure scores are only calculated for current validators.
     pub fn on_epoch_change(&self, epoch: EpochId) {
@@ -125,15 +125,15 @@ where
         let current_validators: HashSet<_> =
             authority_agg.authority_clients.keys().cloned().collect();
 
-        let mut perf_stats = self.performance_stats.write();
-        perf_stats.refresh_validator_set(&current_validators);
+        let mut client_stats = self.client_stats.write();
+        client_stats.refresh_validator_set(&current_validators);
     }
 
-    /// Select a validator based on performance.
+    /// Select a validator based on client-observed performance.
     ///
     /// Uses the configured selection strategy (WeightedRandom or TopK) to choose
     /// a validator from the provided committee. The selection considers:
-    /// - Current performance scores (reliability + latency)
+    /// - Current client-observed scores (reliability + latency)
     /// - Exclusion status (temporarily excluded validators are filtered out)
     /// - Committee membership (only selects from the provided committee)
     ///
@@ -142,10 +142,10 @@ where
     /// is called, and we need to maintain an invariant that the selected
     /// validator is always in the committee passed in.
     ///
-    /// Falls back to random selection if no performance data is available.
-    pub fn select_validator(&self, committee: &Committee) -> AuthorityName {
+    /// Falls back to random selection if no client performance data is available.
+    pub fn select_preferred_validator(&self, committee: &Committee) -> AuthorityName {
         // Get all validators with their scores
-        let validator_scores = self.performance_stats.read().calculate_all_scores();
+        let validator_scores = self.client_stats.read().calculate_all_client_scores();
 
         // Filter out excluded validators that are still in the current committee
         let available_validators: Vec<_> = validator_scores
@@ -288,7 +288,7 @@ where
                     {
                         Ok(Ok(_response)) => {
                             let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback {
+                            monitor.record_interaction_result(OperationFeedback {
                                 validator: name,
                                 operation: OperationType::HealthCheck,
                                 latency: Some(latency),
@@ -297,7 +297,7 @@ where
                         }
                         Ok(Err(_)) => {
                             let latency = start.elapsed();
-                            monitor.record_feedback(OperationFeedback {
+                            monitor.record_interaction_result(OperationFeedback {
                                 validator: name,
                                 operation: OperationType::HealthCheck,
                                 latency: Some(latency),
@@ -306,7 +306,7 @@ where
                         }
                         Err(_) => {
                             // Timeout - don't include latency as it would pollute the numbers
-                            monitor.record_feedback(OperationFeedback {
+                            monitor.record_interaction_result(OperationFeedback {
                                 validator: name,
                                 operation: OperationType::HealthCheck,
                                 latency: None,

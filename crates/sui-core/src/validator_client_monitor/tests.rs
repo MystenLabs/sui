@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::validator_performance_monitor::config::{ScoreWeights, SelectionStrategy};
-use crate::validator_performance_monitor::metrics::ValidatorPerformanceMetrics;
-use crate::validator_performance_monitor::performance_stats::{PerformanceStats, ValidatorStats};
+use crate::validator_client_monitor::client_stats::{ClientObservedStats, ValidatorClientMetrics};
+use crate::validator_client_monitor::config::{ScoreWeights, SelectionStrategy};
+use crate::validator_client_monitor::metrics::ValidatorClientMetrics as MetricsModule;
 use prometheus::Registry;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use sui_types::base_types::AuthorityName;
 use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
 use tokio::time::sleep;
 
-mod performance_stats_tests {
+mod client_stats_tests {
     use super::*;
 
     /// Helper to create test validator names
@@ -27,9 +27,9 @@ mod performance_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_performance_stats_new() {
-        let config = ValidatorPerformanceConfig::default();
-        let stats = PerformanceStats::new(config.clone());
+    async fn test_client_stats_new() {
+        let config = ValidatorClientMonitorConfig::default();
+        let stats = ClientObservedStats::new(config.clone());
 
         assert!(stats.validator_stats.is_empty());
         assert!(stats.global_stats.max_latencies.is_empty());
@@ -37,9 +37,9 @@ mod performance_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_performance_stats_record_success() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+    async fn test_client_stats_record_success() {
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
@@ -52,7 +52,7 @@ mod performance_stats_tests {
             success: true,
         };
 
-        stats.record_feedback(feedback);
+        stats.record_interaction_result(feedback);
 
         // Check validator stats were created and updated
         let validator_stats = stats.validator_stats.get(&validator).unwrap();
@@ -69,12 +69,12 @@ mod performance_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_performance_stats_record_failure() {
-        let config = ValidatorPerformanceConfig {
+    async fn test_client_stats_record_failure() {
+        let config = ValidatorClientMonitorConfig {
             max_consecutive_failures: 3,
             ..Default::default()
         };
-        let mut stats = PerformanceStats::new(config);
+        let mut stats = ClientObservedStats::new(config);
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
@@ -87,7 +87,7 @@ mod performance_stats_tests {
                 latency: Some(Duration::from_millis(100)),
                 success: false,
             };
-            stats.record_feedback(feedback);
+            stats.record_interaction_result(feedback);
 
             let validator_stats = stats.validator_stats.get(&validator).unwrap();
             assert_eq!(validator_stats.consecutive_failures, i + 1);
@@ -102,9 +102,9 @@ mod performance_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_performance_stats_calculate_scores() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+    async fn test_client_stats_calculate_scores() {
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         // Create two validators with different performance
         let validators = create_test_validator_names(2);
@@ -117,7 +117,7 @@ mod performance_stats_tests {
             OperationType::Effects,
             OperationType::HealthCheck,
         ] {
-            stats.record_feedback(OperationFeedback {
+            stats.record_interaction_result(OperationFeedback {
                 validator: validator1,
                 operation: op,
                 latency: Some(Duration::from_millis(50)),
@@ -131,7 +131,7 @@ mod performance_stats_tests {
             OperationType::Effects,
             OperationType::HealthCheck,
         ] {
-            stats.record_feedback(OperationFeedback {
+            stats.record_interaction_result(OperationFeedback {
                 validator: validator2,
                 operation: op,
                 latency: Some(Duration::from_millis(200)),
@@ -140,14 +140,14 @@ mod performance_stats_tests {
         }
 
         // Add one failure for validator2
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator: validator2,
             operation: OperationType::Submit,
             latency: None,
             success: false,
         });
 
-        let scores = stats.calculate_all_scores();
+        let scores = stats.calculate_all_client_scores();
         assert_eq!(scores.len(), 2);
 
         // Validator 1 should have higher score
@@ -157,13 +157,13 @@ mod performance_stats_tests {
     }
 
     #[tokio::test]
-    async fn test_performance_stats_exclusion() {
-        let config = ValidatorPerformanceConfig {
+    async fn test_client_stats_exclusion() {
+        let config = ValidatorClientMonitorConfig {
             max_consecutive_failures: 2,
             failure_cooldown: Duration::from_millis(100),
             ..Default::default()
         };
-        let mut stats = PerformanceStats::new(config);
+        let mut stats = ClientObservedStats::new(config);
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
@@ -174,7 +174,7 @@ mod performance_stats_tests {
             OperationType::Effects,
             OperationType::HealthCheck,
         ] {
-            stats.record_feedback(OperationFeedback {
+            stats.record_interaction_result(OperationFeedback {
                 validator,
                 operation: op,
                 latency: Some(Duration::from_millis(50)),
@@ -184,7 +184,7 @@ mod performance_stats_tests {
 
         // Cause exclusion
         for _ in 0..2 {
-            stats.record_feedback(OperationFeedback {
+            stats.record_interaction_result(OperationFeedback {
                 validator,
                 operation: OperationType::Submit,
                 latency: None,
@@ -193,27 +193,27 @@ mod performance_stats_tests {
         }
 
         // Should be excluded
-        let scores = stats.calculate_all_scores();
+        let scores = stats.calculate_all_client_scores();
         assert!(!scores.contains_key(&validator));
 
         // Wait for cooldown
         sleep(Duration::from_millis(150)).await;
 
         // Should be included again
-        let scores = stats.calculate_all_scores();
+        let scores = stats.calculate_all_client_scores();
         assert!(scores.contains_key(&validator));
     }
 
     #[tokio::test]
-    async fn test_performance_stats_refresh_validator_set() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+    async fn test_client_stats_refresh_validator_set() {
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         // Add stats for 3 validators
         let validators = create_test_validator_names(3);
 
         for validator in &validators {
-            stats.record_feedback(OperationFeedback {
+            stats.record_interaction_result(OperationFeedback {
                 validator: *validator,
                 operation: OperationType::Submit,
                 latency: Some(Duration::from_millis(100)),
@@ -235,7 +235,7 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_validator_stats_new() {
-        let stats = ValidatorStats::new(0.8);
+        let stats = ValidatorClientMetrics::new(0.8);
         assert_eq!(stats.reliability.get(), 0.8);
         assert!(stats.average_latencies.is_empty());
         assert_eq!(stats.consecutive_failures, 0);
@@ -244,7 +244,7 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_validator_stats_update_latency() {
-        let mut stats = ValidatorStats::new(1.0);
+        let mut stats = ValidatorClientMetrics::new(1.0);
 
         // First update creates the entry
         stats.update_average_latency(OperationType::Submit, Duration::from_millis(100));
@@ -271,8 +271,8 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_global_stats_update() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         // First update sets initial value
         stats.update_global_stats(OperationType::Submit, Duration::from_millis(100));
@@ -324,35 +324,35 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_score_calculation_with_missing_operations() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
 
         // Only record Submit operation, missing Effects and HealthCheck
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator,
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(100)),
             success: true,
         });
 
-        let scores = stats.calculate_all_scores();
+        let scores = stats.calculate_all_client_scores();
         // Should not have a score since not all operations are present
         assert!(!scores.contains_key(&validator));
     }
 
     #[tokio::test]
     async fn test_reliability_decay() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         let validators = create_test_validator_names(1);
         let validator = validators[0];
 
         // Start with success
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator,
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(100)),
@@ -368,7 +368,7 @@ mod performance_stats_tests {
         assert_eq!(initial_reliability, 1.0);
 
         // Add failure
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator,
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(100)),
@@ -387,13 +387,13 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_global_max_latency_with_multiple_validators() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         let validators = create_test_validator_names(3);
 
         // Validator 1: 100ms latency
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator: validators[0],
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(100)),
@@ -409,7 +409,7 @@ mod performance_stats_tests {
         assert_eq!(max_latency.get(), 0.1);
 
         // Validator 2: 50ms latency (lower, should apply decay)
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator: validators[1],
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(50)),
@@ -426,7 +426,7 @@ mod performance_stats_tests {
         assert!((max_latency.get() - 0.0505).abs() < 0.001);
 
         // Validator 3: 200ms latency (higher, should immediately become new max)
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator: validators[2],
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(200)),
@@ -444,13 +444,13 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_decay_factor_differences() {
-        let config = ValidatorPerformanceConfig::default();
-        let mut stats = PerformanceStats::new(config);
+        let config = ValidatorClientMonitorConfig::default();
+        let mut stats = ClientObservedStats::new(config);
 
         let validator = create_test_validator_names(1)[0];
 
         // Initial values for both validator latency and global max
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator,
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(100)),
@@ -477,7 +477,7 @@ mod performance_stats_tests {
         assert_eq!(max_latency, 0.1);
 
         // Update with lower value (50ms)
-        stats.record_feedback(OperationFeedback {
+        stats.record_interaction_result(OperationFeedback {
             validator,
             operation: OperationType::Submit,
             latency: Some(Duration::from_millis(50)),
@@ -515,7 +515,7 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_different_operation_weights() {
-        let config = ValidatorPerformanceConfig {
+        let config = ValidatorClientMonitorConfig {
             score_weights: ScoreWeights {
                 submit_latency_weight: 0.1,
                 effects_latency_weight: 0.8,
@@ -525,7 +525,7 @@ mod performance_stats_tests {
             ..Default::default()
         };
 
-        let mut stats = PerformanceStats::new(config);
+        let mut stats = ClientObservedStats::new(config);
 
         let validators = create_test_validator_names(2);
         let validator1 = validators[0];
@@ -542,7 +542,7 @@ mod performance_stats_tests {
             } else {
                 200
             };
-            stats.record_feedback(OperationFeedback {
+            stats.record_interaction_result(OperationFeedback {
                 validator: validator1,
                 operation: op,
                 latency: Some(Duration::from_millis(latency)),
@@ -561,7 +561,7 @@ mod performance_stats_tests {
             } else {
                 50
             };
-            stats.record_feedback(OperationFeedback {
+            stats.record_interaction_result(OperationFeedback {
                 validator: validator2,
                 operation: op,
                 latency: Some(Duration::from_millis(latency)),
@@ -569,43 +569,43 @@ mod performance_stats_tests {
             });
         }
 
-        let scores = stats.calculate_all_scores();
+        let scores = stats.calculate_all_client_scores();
         // Validator 1 should have higher score due to fast effects (high weight)
         assert!(scores.get(&validator1).unwrap() > scores.get(&validator2).unwrap());
     }
 }
 
 #[cfg(test)]
-mod performance_monitor_tests {
+mod client_monitor_tests {
     use super::*;
     use sui_types::committee::Committee;
 
     /// Simple mock for testing validator selection without full AuthorityAggregator setup
-    struct MockValidatorMonitor {
-        config: ValidatorPerformanceConfig,
+    struct MockValidatorClientMonitor {
+        config: ValidatorClientMonitorConfig,
         #[allow(dead_code)]
-        metrics: Arc<ValidatorPerformanceMetrics>,
-        performance_stats: parking_lot::RwLock<PerformanceStats>,
+        metrics: Arc<MetricsModule>,
+        client_stats: parking_lot::RwLock<ClientObservedStats>,
     }
 
-    impl MockValidatorMonitor {
-        fn new(config: ValidatorPerformanceConfig) -> Self {
+    impl MockValidatorClientMonitor {
+        fn new(config: ValidatorClientMonitorConfig) -> Self {
             let registry = Registry::new();
-            let metrics = Arc::new(ValidatorPerformanceMetrics::new(&registry));
+            let metrics = Arc::new(MetricsModule::new(&registry));
             Self {
                 config: config.clone(),
                 metrics,
-                performance_stats: parking_lot::RwLock::new(PerformanceStats::new(config)),
+                client_stats: parking_lot::RwLock::new(ClientObservedStats::new(config)),
             }
         }
 
-        fn record_feedback(&self, feedback: OperationFeedback) {
-            let mut stats = self.performance_stats.write();
-            stats.record_feedback(feedback);
+        fn record_interaction_result(&self, feedback: OperationFeedback) {
+            let mut stats = self.client_stats.write();
+            stats.record_interaction_result(feedback);
         }
 
-        fn select_validator(&self, committee: &Committee) -> AuthorityName {
-            let validator_scores = self.performance_stats.read().calculate_all_scores();
+        fn select_preferred_validator(&self, committee: &Committee) -> AuthorityName {
+            let validator_scores = self.client_stats.read().calculate_all_client_scores();
 
             let available_validators: Vec<_> = validator_scores
                 .into_iter()
@@ -662,12 +662,12 @@ mod performance_monitor_tests {
 
     #[tokio::test]
     async fn test_validator_selection_weighted_random() {
-        let config = ValidatorPerformanceConfig {
+        let config = ValidatorClientMonitorConfig {
             selection_strategy: SelectionStrategy::WeightedRandom { temperature: 1.0 },
             ..Default::default()
         };
 
-        let monitor = MockValidatorMonitor::new(config);
+        let monitor = MockValidatorClientMonitor::new(config);
 
         // Create test validators
         let validators: Vec<AuthorityName> = (0..3)
@@ -690,7 +690,7 @@ mod performance_monitor_tests {
                 OperationType::Effects,
                 OperationType::HealthCheck,
             ] {
-                monitor.record_feedback(OperationFeedback {
+                monitor.record_interaction_result(OperationFeedback {
                     validator: *validator,
                     operation: op,
                     latency: Some(Duration::from_millis((i as u64 + 1) * 50)),
@@ -702,7 +702,7 @@ mod performance_monitor_tests {
         // Select validators multiple times to verify weighted selection
         let mut selections = HashMap::new();
         for _ in 0..100 {
-            let selected = monitor.select_validator(&committee);
+            let selected = monitor.select_preferred_validator(&committee);
             *selections.entry(selected).or_insert(0) += 1;
         }
 
@@ -726,12 +726,12 @@ mod performance_monitor_tests {
 
     #[tokio::test]
     async fn test_validator_selection_top_k() {
-        let config = ValidatorPerformanceConfig {
+        let config = ValidatorClientMonitorConfig {
             selection_strategy: SelectionStrategy::TopK { k: 2 },
             ..Default::default()
         };
 
-        let monitor = MockValidatorMonitor::new(config);
+        let monitor = MockValidatorClientMonitor::new(config);
 
         // Create test validators
         let validators: Vec<AuthorityName> = (0..5)
@@ -754,7 +754,7 @@ mod performance_monitor_tests {
                 OperationType::Effects,
                 OperationType::HealthCheck,
             ] {
-                monitor.record_feedback(OperationFeedback {
+                monitor.record_interaction_result(OperationFeedback {
                     validator: *validator,
                     operation: op,
                     latency: Some(Duration::from_millis((i as u64 + 1) * 50)),
@@ -766,7 +766,7 @@ mod performance_monitor_tests {
         // Select validators multiple times
         let mut selections = HashSet::new();
         for _ in 0..20 {
-            let selected = monitor.select_validator(&committee);
+            let selected = monitor.select_preferred_validator(&committee);
             selections.insert(selected);
         }
 
@@ -778,8 +778,8 @@ mod performance_monitor_tests {
 
     #[tokio::test]
     async fn test_validator_selection_empty_committee() {
-        let config = ValidatorPerformanceConfig::default();
-        let monitor = MockValidatorMonitor::new(config);
+        let config = ValidatorClientMonitorConfig::default();
+        let monitor = MockValidatorClientMonitor::new(config);
 
         // Create test validators
         let validators: Vec<AuthorityName> = (0..2)
@@ -809,7 +809,7 @@ mod performance_monitor_tests {
                 OperationType::Effects,
                 OperationType::HealthCheck,
             ] {
-                monitor.record_feedback(OperationFeedback {
+                monitor.record_interaction_result(OperationFeedback {
                     validator: *validator,
                     operation: op,
                     latency: Some(Duration::from_millis(100)),
@@ -819,7 +819,7 @@ mod performance_monitor_tests {
         }
 
         // Should still select a validator from the provided committee
-        let selected = monitor.select_validator(&other_committee);
+        let selected = monitor.select_preferred_validator(&other_committee);
         assert!(other_committee.authority_exists(&selected));
     }
 }

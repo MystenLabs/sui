@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::validator_performance_monitor::{
-    OperationFeedback, OperationType, ValidatorPerformanceConfig,
+use crate::validator_client_monitor::{
+    OperationFeedback, OperationType, ValidatorClientMonitorConfig,
 };
 use mysten_common::decay_moving_average::DecayMovingAverage;
 use std::collections::hash_map::Entry;
@@ -19,29 +19,29 @@ const LATENCY_DECAY_FACTOR: f64 = 0.1;
 /// Decay factor for max latency - much lower to keep max stable over time
 const MAX_LATENCY_DECAY_FACTOR: f64 = 0.01;
 
-/// Complete performance statistics for the validator monitoring system.
+/// Complete client-observed statistics for validator interactions.
 ///
-/// This struct maintains performance metrics for all validators in the network,
-/// including reliability scores, latency measurements, and failure tracking.
-/// It uses exponential moving averages (EMA) to smooth out transient spikes
-/// while still responding to sustained performance changes.
+/// This struct maintains client-side metrics for all validators in the network,
+/// including reliability scores, latency measurements, and failure tracking
+/// as observed from the client's perspective. It uses exponential moving averages (EMA)
+/// to smooth out transient spikes while still responding to sustained changes.
 #[derive(Debug, Clone)]
-pub struct PerformanceStats {
-    /// Per-validator statistics mapping validator names to their performance data
-    pub validator_stats: HashMap<AuthorityName, ValidatorStats>,
+pub struct ClientObservedStats {
+    /// Per-validator statistics mapping validator names to their client-observed metrics
+    pub validator_stats: HashMap<AuthorityName, ValidatorClientMetrics>,
     /// Global statistics used for normalization and comparison
     pub global_stats: GlobalStats,
     /// Configuration parameters for scoring and exclusion policies
-    pub config: ValidatorPerformanceConfig,
+    pub config: ValidatorClientMonitorConfig,
 }
 
-/// Statistics for a single validator.
+/// Client-observed metrics for a single validator.
 ///
-/// Tracks reliability, latency, and failure patterns for a specific validator.
-/// Uses exponential moving averages to smooth measurements while maintaining
-/// responsiveness to changes in validator performance.
+/// Tracks reliability, latency, and failure patterns for a specific validator
+/// as observed from the client's perspective. Uses exponential moving averages
+/// to smooth measurements while maintaining responsiveness to changes.
 #[derive(Debug, Clone)]
-pub struct ValidatorStats {
+pub struct ValidatorClientMetrics {
     /// Exponential moving average of success rate (0.0 to 1.0)
     pub reliability: DecayMovingAverage,
     /// EMA latencies for each operation type (Submit, Effects, HealthCheck)
@@ -53,7 +53,7 @@ pub struct ValidatorStats {
     pub exclusion_time: Option<Instant>,
 }
 
-impl ValidatorStats {
+impl ValidatorClientMetrics {
     pub fn new(init_reliability: f64) -> Self {
         Self {
             reliability: DecayMovingAverage::new(init_reliability, RELIABILITY_DECAY_FACTOR),
@@ -92,8 +92,8 @@ pub struct GlobalStats {
     pub max_latencies: HashMap<OperationType, DecayMovingAverage>,
 }
 
-impl PerformanceStats {
-    pub fn new(config: ValidatorPerformanceConfig) -> Self {
+impl ClientObservedStats {
+    pub fn new(config: ValidatorClientMonitorConfig) -> Self {
         Self {
             validator_stats: HashMap::new(),
             global_stats: GlobalStats::default(),
@@ -101,18 +101,18 @@ impl PerformanceStats {
         }
     }
 
-    /// Process feedback from an operation and update validator statistics.
+    /// Record client-observed interaction result with a validator.
     ///
-    /// Updates reliability scores, latency measurements, and failure counts.
-    /// Automatically excludes validators that exceed the maximum consecutive
-    /// failure threshold.
-    pub fn record_feedback(&mut self, feedback: OperationFeedback) {
+    /// Updates reliability scores, latency measurements, and failure counts
+    /// based on client observations. Automatically excludes validators that
+    /// exceed the maximum consecutive failure threshold.
+    pub fn record_interaction_result(&mut self, feedback: OperationFeedback) {
         let reliability = if feedback.success { 1.0 } else { 0.0 };
 
         let validator_stats = self
             .validator_stats
             .entry(feedback.validator)
-            .or_insert_with(|| ValidatorStats::new(reliability));
+            .or_insert_with(|| ValidatorClientMetrics::new(reliability));
 
         if feedback.success {
             validator_stats
@@ -168,15 +168,15 @@ impl PerformanceStats {
         }
     }
 
-    /// Calculate performance scores for all validators.
+    /// Calculate client-observed scores for all validators.
     ///
-    /// Returns a map of validator names to their computed scores.
-    /// Validators that are currently excluded or missing required data
-    /// will not be included in the results.
-    pub fn calculate_all_scores(&self) -> HashMap<AuthorityName, f64> {
+    /// Returns a map of validator names to their computed scores based on
+    /// client-side observations. Validators that are currently excluded or
+    /// missing required data will not be included in the results.
+    pub fn calculate_all_client_scores(&self) -> HashMap<AuthorityName, f64> {
         let mut scores = HashMap::new();
         for (validator, stats) in self.validator_stats.iter() {
-            if let Some(score) = self.calculate_validator_score(stats, &self.global_stats) {
+            if let Some(score) = self.calculate_client_score(stats, &self.global_stats) {
                 scores.insert(*validator, score);
             }
         }
@@ -184,10 +184,10 @@ impl PerformanceStats {
         scores
     }
 
-    /// Calculate performance score for a single validator.
+    /// Calculate client-observed score for a single validator.
     ///
-    /// The score combines reliability and latency metrics, weighted according
-    /// to configuration. Returns None if:
+    /// The score combines reliability and latency metrics as observed by the client,
+    /// weighted according to configuration. Returns None if:
     /// - The validator is currently in exclusion cooldown period
     /// - The validator is missing data for any operation type
     /// - Global stats are missing for normalization
@@ -196,9 +196,9 @@ impl PerformanceStats {
     /// 1. Latency scores are normalized against global maximums
     /// 2. Each operation type has its own weight
     /// 3. Final score = (weighted_latency_score * latency_weight) + (reliability * reliability_weight)
-    fn calculate_validator_score(
+    fn calculate_client_score(
         &self,
-        stats: &ValidatorStats,
+        stats: &ValidatorClientMetrics,
         global_stats: &GlobalStats,
     ) -> Option<f64> {
         // Check if validator is still in exclusion cooldown

@@ -4,9 +4,9 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-/// Configuration for the validator performance monitor
+/// Configuration for the validator client monitor
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValidatorPerformanceConfig {
+pub struct ValidatorClientMonitorConfig {
     /// How often to perform health checks on validators
     #[serde(default = "default_health_check_interval")]
     pub health_check_interval: Duration,
@@ -71,7 +71,7 @@ pub enum SelectionStrategy {
     },
 }
 
-impl Default for ValidatorPerformanceConfig {
+impl Default for ValidatorClientMonitorConfig {
     fn default() -> Self {
         Self {
             health_check_interval: default_health_check_interval(),

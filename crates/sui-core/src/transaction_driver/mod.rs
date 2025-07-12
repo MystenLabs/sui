@@ -33,9 +33,9 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
-    validator_performance_monitor::{
-        OperationFeedback, OperationType, ValidatorPerformanceConfig, ValidatorPerformanceMetrics,
-        ValidatorPerformanceMonitor,
+    validator_client_monitor::{
+        OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
+        ValidatorClientMonitorConfig,
     },
     wait_for_effects_request::{WaitForEffectsRequest, WaitForEffectsResponse},
 };
@@ -52,7 +52,7 @@ pub struct TransactionDriver<A: Clone> {
     authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     state: Mutex<State>,
     metrics: Arc<TransactionDriverMetrics>,
-    performance_monitor: Arc<ValidatorPerformanceMonitor<A>>,
+    client_monitor: Arc<ValidatorClientMonitor<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -63,22 +63,19 @@ where
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<TransactionDriverMetrics>,
-        performance_config: ValidatorPerformanceConfig,
-        performance_metrics: Arc<ValidatorPerformanceMetrics>,
+        client_config: ValidatorClientMonitorConfig,
+        client_metrics: Arc<ValidatorClientMetrics>,
     ) -> Arc<Self> {
         let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
 
-        let performance_monitor = ValidatorPerformanceMonitor::new(
-            performance_config,
-            performance_metrics,
-            shared_swap.clone(),
-        );
+        let client_monitor =
+            ValidatorClientMonitor::new(client_config, client_metrics, shared_swap.clone());
 
         let driver = Arc::new(Self {
             authority_aggregator: shared_swap,
             state: Mutex::new(State::new()),
             metrics,
-            performance_monitor,
+            client_monitor,
         });
 
         driver.enable_reconfig(reconfig_observer);
@@ -132,7 +129,7 @@ where
             .map_err(TransactionDriverError::SerializationError)?;
 
         // Select validator based on performance
-        let selected_validator = self.performance_monitor.select_validator(&committee);
+        let selected_validator = self.client_monitor.select_preferred_validator(&committee);
         debug!("Selected validator: {}", selected_validator.concise());
 
         // Record selection in metrics
@@ -156,26 +153,28 @@ where
         {
             Ok(Ok(pos)) => {
                 let latency = submit_start.elapsed();
-                self.performance_monitor.record_feedback(OperationFeedback {
-                    validator: selected_validator,
-                    operation: OperationType::Submit,
-                    latency: Some(latency),
-                    success: true,
-                });
+                self.client_monitor
+                    .record_interaction_result(OperationFeedback {
+                        validator: selected_validator,
+                        operation: OperationType::Submit,
+                        latency: Some(latency),
+                        success: true,
+                    });
                 pos
             }
             Ok(Err(e)) => {
                 let latency = submit_start.elapsed();
-                self.performance_monitor.record_feedback(OperationFeedback {
-                    validator: selected_validator,
-                    operation: OperationType::Submit,
-                    latency: Some(latency),
-                    // submit_transaction may return errors if the transaction is invalid,
-                    // but we still want to record the feedback.
-                    // TODO(mysticeti-fastpath): If we check transaction validity
-                    // on the fullnode first, we can then utilize the error info.
-                    success: true,
-                });
+                self.client_monitor
+                    .record_interaction_result(OperationFeedback {
+                        validator: selected_validator,
+                        operation: OperationType::Submit,
+                        latency: Some(latency),
+                        // submit_transaction may return errors if the transaction is invalid,
+                        // but we still want to record the feedback.
+                        // TODO(mysticeti-fastpath): If we check transaction validity
+                        // on the fullnode first, we can then utilize the error info.
+                        success: true,
+                    });
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
                     e.to_string(),
@@ -183,12 +182,13 @@ where
             }
             Err(_) => {
                 // Timeout - don't include latency as it would pollute the numbers
-                self.performance_monitor.record_feedback(OperationFeedback {
-                    validator: selected_validator,
-                    operation: OperationType::Submit,
-                    latency: None,
-                    success: false,
-                });
+                self.client_monitor
+                    .record_interaction_result(OperationFeedback {
+                        validator: selected_validator,
+                        operation: OperationType::Submit,
+                        latency: None,
+                        success: false,
+                    });
                 return Err(TransactionDriverError::TimeoutBeforeFinality);
             }
         };
@@ -217,22 +217,24 @@ where
         {
             Ok(Ok(response)) => {
                 let latency = effects_start.elapsed();
-                self.performance_monitor.record_feedback(OperationFeedback {
-                    validator: selected_validator,
-                    operation: OperationType::Effects,
-                    latency: Some(latency),
-                    success: true,
-                });
+                self.client_monitor
+                    .record_interaction_result(OperationFeedback {
+                        validator: selected_validator,
+                        operation: OperationType::Effects,
+                        latency: Some(latency),
+                        success: true,
+                    });
                 response
             }
             Ok(Err(e)) => {
                 let latency = effects_start.elapsed();
-                self.performance_monitor.record_feedback(OperationFeedback {
-                    validator: selected_validator,
-                    operation: OperationType::Effects,
-                    latency: Some(latency),
-                    success: false,
-                });
+                self.client_monitor
+                    .record_interaction_result(OperationFeedback {
+                        validator: selected_validator,
+                        operation: OperationType::Effects,
+                        latency: Some(latency),
+                        success: false,
+                    });
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
                     e.to_string(),
@@ -240,12 +242,13 @@ where
             }
             Err(_) => {
                 // Timeout - don't include latency as it would pollute the numbers
-                self.performance_monitor.record_feedback(OperationFeedback {
-                    validator: selected_validator,
-                    operation: OperationType::Effects,
-                    latency: None,
-                    success: false,
-                });
+                self.client_monitor
+                    .record_interaction_result(OperationFeedback {
+                        validator: selected_validator,
+                        operation: OperationType::Effects,
+                        latency: None,
+                        success: false,
+                    });
                 return Err(TransactionDriverError::TimeoutWaitingForEffects);
             }
         };
@@ -319,7 +322,7 @@ where
         self.authority_aggregator.store(new_authorities);
 
         // Notify performance monitor of epoch change
-        self.performance_monitor.on_epoch_change(new_epoch);
+        self.client_monitor.on_epoch_change(new_epoch);
     }
 }
 
