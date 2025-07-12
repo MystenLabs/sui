@@ -21,11 +21,7 @@ use crate::{
         self,
         ast::{Function, UseFuns},
     },
-    parser::{
-        self,
-        ast::{DatatypeName, FunctionName},
-        *,
-    },
+    parser::{self, ast::FunctionName, *},
     shared::{
         CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
         NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
@@ -33,7 +29,7 @@ use crate::{
         program_info::ModuleInfo,
         unique_map::UniqueMap,
     },
-    to_bytecode::{self, context::FunctionDeclaration},
+    to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
@@ -42,10 +38,7 @@ use move_command_line_common::files::{
     find_filenames_and_keep_specified,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
-use move_ir_types::{
-    ast::{Ability, DatatypeTypeParameter},
-    location::sp,
-};
+use move_ir_types::location::sp;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
@@ -132,9 +125,6 @@ pub struct CompiledModuleInfo {
     pub macro_infos: Option<(UseFuns, UniqueMap<FunctionName, Function>)>,
     /// to construct program infos in shared/program_info.rs
     pub info: ModuleInfo,
-    pub cfgir_datatype_decls:
-        BTreeMap<DatatypeName, (BTreeSet<Ability>, Vec<DatatypeTypeParameter>)>,
-    pub cfgir_fun_decls: BTreeMap<FunctionName, FunctionDeclaration>,
     /// for transactional test runner in move-transactional-test-runner/src/framework.rs
     pub compiled_unit: AnnotatedCompiledUnit,
 }
@@ -666,8 +656,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
         SaveFlag::TypingInfo,
         SaveFlag::ModuleNameAddresses,
         SaveFlag::MacroInfos,
-        SaveFlag::CFGIRDatatypeDecls,
-        SaveFlag::CFGIRFunDecls,
     ]);
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
         vfs_root,
@@ -693,51 +681,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
             let program_info = hook.take_typing_info();
             let mut module_named_addresses = hook.take_module_named_addresses();
             let mut macro_infos = hook.take_macro_infos();
-            let cfgir_datatype_decls = hook.take_cfgir_datatype_decls();
-            let cfgir_fun_decls = hook.take_cfgir_fun_decls();
-
-            // cfgir datatype decls by module rather than module/name pair
-            let mut cfgir_datatype_decls_by_module: BTreeMap<
-                expansion::ast::ModuleIdent,
-                BTreeMap<
-                    parser::ast::DatatypeName,
-                    (
-                        BTreeSet<move_ir_types::ast::Ability>,
-                        Vec<move_ir_types::ast::DatatypeTypeParameter>,
-                    ),
-                >,
-            > = BTreeMap::new();
-            for ((module_ident, datatype_name), (abilities, type_params)) in cfgir_datatype_decls {
-                cfgir_datatype_decls_by_module
-                    .entry(module_ident)
-                    .or_default()
-                    .insert(datatype_name, (abilities, type_params));
-            }
-
-            // cfgir fun decls by module rather than module/name pair
-            let mut cfgir_fun_decls_by_module: BTreeMap<
-                expansion::ast::ModuleIdent,
-                BTreeMap<parser::ast::FunctionName, FunctionDeclaration>,
-            > = BTreeMap::new();
-            for (
-                (module_ident, function_name),
-                FunctionDeclaration {
-                    seen_datatypes,
-                    signature,
-                },
-            ) in cfgir_fun_decls
-            {
-                cfgir_fun_decls_by_module
-                    .entry(module_ident)
-                    .or_default()
-                    .insert(
-                        function_name,
-                        FunctionDeclaration {
-                            seen_datatypes,
-                            signature,
-                        },
-                    );
-            }
 
             let mut compiled_units_by_module = mod_idents
                 .into_iter()
@@ -758,10 +701,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
 
                      let macro_infos = macro_infos.remove(&mod_ident);
 
-                     let cfgir_datatype_decls = cfgir_datatype_decls_by_module.remove(&mod_ident).unwrap_or_default();
-
-                     let cfgir_fun_decls = cfgir_fun_decls_by_module.remove(&mod_ident).unwrap_or_default();
-
                      let compiled_unit = compiled_units_by_module
                         .remove(&mod_ident)
                         .ok_or_else(|| anyhow::anyhow!("compiled unit not found for module: {:?}", mod_ident))?;
@@ -774,8 +713,6 @@ pub fn construct_precompiled_module_infos<Paths: Into<Symbol>, NamedAddress: Int
                              named_address_map: Arc::new(named_address_map),
                              macro_infos,
                              info: typing_module_info.clone(),
-                             cfgir_datatype_decls,
-                             cfgir_fun_decls,
                              compiled_unit,
                          }),
                      ))

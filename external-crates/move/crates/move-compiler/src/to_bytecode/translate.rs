@@ -8,18 +8,23 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::DiagnosticReporter,
+    diagnostics::{DiagnosticReporter, Diagnostics},
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
-    hlir::ast::{self as H, Value_, Var, Visibility},
+    hlir::{
+        ast::{self as H, Value_, Var, Visibility},
+        translate::{single_type as hlir_single_type, translate_var, type_},
+    },
     naming::{
-        ast::{BuiltinTypeName_, DatatypeTypeParameter, TParam},
+        ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
     },
     parser::ast::{
         Ability, Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName,
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
-    shared::{known_attributes::AttributeKind_, unique_map::UniqueMap, *},
+    shared::{
+        known_attributes::AttributeKind_, program_info::ModuleInfo, unique_map::UniqueMap, *,
+    },
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
@@ -128,21 +133,97 @@ fn extract_decls(
     // add pre-compiled declaratinos if any
     if let Some(pre_compiled_module_infos) = pre_compiled_module_infos {
         for (mident, minfo) in pre_compiled_module_infos.iter() {
-            for (datatype_name, (abilities, type_parameters)) in minfo.cfgir_datatype_decls.iter() {
-                ddecls.insert(
-                    (*mident, *datatype_name),
-                    (abilities.clone(), type_parameters.clone()),
-                );
-            }
-            for (function_name, function_declaration) in minfo.cfgir_fun_decls.iter() {
-                fdecls.insert((*mident, *function_name), function_declaration.clone());
-            }
+            let (pre_compiled_datatype_decls, pre_compiled_fun_decls) =
+                extract_decls_from_program_info(compilation_env, mident, &minfo.info);
+            ddecls.extend(pre_compiled_datatype_decls);
+            fdecls.extend(pre_compiled_fun_decls);
         }
     }
 
-    compilation_env.save_cfgir_datatype_decls(&ddecls);
-    compilation_env.save_cfgir_fun_decls(&fdecls);
     (orderings, ddecls, fdecls)
+}
+
+fn extract_decls_from_program_info(
+    compilation_env: &CompilationEnv,
+    mident: &ModuleIdent,
+    minfo: &ModuleInfo,
+) -> (
+    DatatypeDeclarations,
+    HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
+) {
+    fn hlir_function_signature(sig: N::FunctionSignature) -> H::FunctionSignature {
+        let type_parameters = sig.type_parameters;
+        let mut diags = Diagnostics::new();
+        let parameters = sig
+            .parameters
+            .into_iter()
+            .map(|(mut_, v, tty)| {
+                let ty = hlir_single_type(&mut diags, tty);
+                (mut_, translate_var(v), ty)
+            })
+            .collect();
+        if !diags.is_empty() {
+            panic!("ICE There should be no errors when translating pre-compiled type");
+        }
+        let return_type = type_(&mut diags, sig.return_type);
+        H::FunctionSignature {
+            type_parameters,
+            parameters,
+            return_type,
+        }
+    }
+
+    let sdecls: DatatypeDeclarations = minfo
+        .structs
+        .key_cloned_iter()
+        .map(move |(s, sdef)| {
+            let key = (*mident, s);
+            let abilities = abilities(&sdef.abilities);
+            let type_parameters = datatype_type_parameters(sdef.type_parameters.clone());
+            (key, (abilities, type_parameters))
+        })
+        .collect();
+
+    let edecls: DatatypeDeclarations = minfo
+        .enums
+        .key_cloned_iter()
+        .map(move |(e, edef)| {
+            let key = (*mident, e);
+            let abilities = abilities(&edef.abilities);
+            let type_parameters = datatype_type_parameters(edef.type_parameters.clone());
+            (key, (abilities, type_parameters))
+        })
+        .collect();
+
+    let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
+
+    let context = &mut Context::new(compilation_env, None, None);
+    let fdecls = minfo
+        .functions
+        .key_cloned_iter()
+        .filter_map(move |(f, fdef)| {
+            if fdef.macro_.is_none() {
+                let key = (*mident, f);
+                let hlir_sig = hlir_function_signature(fdef.signature.clone());
+                let seen_datatypes = seen_datatypes(&hlir_sig);
+                let gsig = hlir_sig;
+                Some((key, (seen_datatypes, gsig)))
+            } else {
+                None
+            }
+        })
+        .map(|(key, (seen_datatypes, sig))| {
+            (
+                key,
+                FunctionDeclaration {
+                    seen_datatypes,
+                    signature: function_signature(context, sig),
+                },
+            )
+        })
+        .collect();
+
+    (ddecls, fdecls)
 }
 
 //**************************************************************************************************
