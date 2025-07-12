@@ -234,6 +234,9 @@ async fn test_passive_reconfig_mainnet_smoke_test() {
 
 #[sim_test]
 async fn test_passive_reconfig_testnet_smoke_test() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
     do_test_passive_reconfig(Some(Chain::Testnet)).await;
 }
 

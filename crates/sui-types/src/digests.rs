@@ -1105,12 +1105,20 @@ impl fmt::Debug for AdditionalConsensusStateDigest {
     }
 }
 
+#[cfg(test)]
 mod test {
-    #[allow(unused_imports)]
-    use crate::digests::ChainIdentifier;
+    use crate::digests::{ChainIdentifier, SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE};
+
+    fn has_env_override() -> bool {
+        SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE.is_some()
+    }
+
     // check that the chain id returns mainnet
     #[test]
     fn test_chain_id_mainnet() {
+        if has_env_override() {
+            return;
+        }
         let chain_id = ChainIdentifier::from_chain_short_id(&String::from("35834a8a"));
         assert_eq!(
             chain_id.unwrap().chain(),
@@ -1120,6 +1128,9 @@ mod test {
 
     #[test]
     fn test_chain_id_testnet() {
+        if has_env_override() {
+            return;
+        }
         let chain_id = ChainIdentifier::from_chain_short_id(&String::from("4c78adac"));
         assert_eq!(
             chain_id.unwrap().chain(),
@@ -1129,6 +1140,9 @@ mod test {
 
     #[test]
     fn test_chain_id_unknown() {
+        if has_env_override() {
+            return;
+        }
         let chain_id = ChainIdentifier::from_chain_short_id(&String::from("unknown"));
         assert_eq!(chain_id, None);
     }
