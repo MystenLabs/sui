@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::validator_performance_monitor::config::SelectionStrategy;
+use crate::validator_performance_monitor::config::{ScoreWeights, SelectionStrategy};
 use crate::validator_performance_monitor::metrics::ValidatorPerformanceMetrics;
 use crate::validator_performance_monitor::performance_stats::{PerformanceStats, ValidatorStats};
 use prometheus::Registry;
@@ -70,8 +70,10 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_performance_stats_record_failure() {
-        let mut config = ValidatorPerformanceConfig::default();
-        config.max_consecutive_failures = 3;
+        let config = ValidatorPerformanceConfig {
+            max_consecutive_failures: 3,
+            ..Default::default()
+        };
         let mut stats = PerformanceStats::new(config);
 
         let validators = create_test_validator_names(1);
@@ -156,9 +158,11 @@ mod performance_stats_tests {
 
     #[tokio::test]
     async fn test_performance_stats_exclusion() {
-        let mut config = ValidatorPerformanceConfig::default();
-        config.max_consecutive_failures = 2;
-        config.failure_cooldown = Duration::from_millis(100);
+        let config = ValidatorPerformanceConfig {
+            max_consecutive_failures: 2,
+            failure_cooldown: Duration::from_millis(100),
+            ..Default::default()
+        };
         let mut stats = PerformanceStats::new(config);
 
         let validators = create_test_validator_names(1);
@@ -190,14 +194,14 @@ mod performance_stats_tests {
 
         // Should be excluded
         let scores = stats.calculate_all_scores();
-        assert!(scores.get(&validator).is_none());
+        assert!(!scores.contains_key(&validator));
 
         // Wait for cooldown
         sleep(Duration::from_millis(150)).await;
 
         // Should be included again
         let scores = stats.calculate_all_scores();
-        assert!(scores.get(&validator).is_some());
+        assert!(scores.contains_key(&validator));
     }
 
     #[tokio::test]
@@ -270,17 +274,52 @@ mod performance_stats_tests {
         let config = ValidatorPerformanceConfig::default();
         let mut stats = PerformanceStats::new(config);
 
-        // Update with different latencies
+        // First update sets initial value
         stats.update_global_stats(OperationType::Submit, Duration::from_millis(100));
-        stats.update_global_stats(OperationType::Submit, Duration::from_millis(200));
-
         let max_latency = stats
             .global_stats
             .max_latencies
             .get(&OperationType::Submit)
             .unwrap();
-        // With decay factor 0.1: 0.1 * 0.1 + 0.2 * (1 - 0.1) = 0.01 + 0.18 = 0.19
-        assert!((max_latency.get() - 0.19).abs() < 0.001);
+        assert_eq!(max_latency.get(), 0.1); // 100ms = 0.1s
+
+        // Update with higher latency - should immediately jump to new max
+        stats.update_global_stats(OperationType::Submit, Duration::from_millis(300));
+        let max_latency = stats
+            .global_stats
+            .max_latencies
+            .get(&OperationType::Submit)
+            .unwrap();
+        assert_eq!(max_latency.get(), 0.3); // 300ms = 0.3s
+
+        // Update with lower latency - should apply decay
+        stats.update_global_stats(OperationType::Submit, Duration::from_millis(100));
+        let max_latency = stats
+            .global_stats
+            .max_latencies
+            .get(&OperationType::Submit)
+            .unwrap();
+        // With decay factor 0.1: 0.3 * 0.1 + 0.1 * (1 - 0.1) = 0.03 + 0.09 = 0.12
+        assert!((max_latency.get() - 0.12).abs() < 0.001);
+
+        // Another lower update to verify continued decay
+        stats.update_global_stats(OperationType::Submit, Duration::from_millis(50));
+        let max_latency = stats
+            .global_stats
+            .max_latencies
+            .get(&OperationType::Submit)
+            .unwrap();
+        // With decay factor 0.1: 0.12 * 0.1 + 0.05 * (1 - 0.1) = 0.012 + 0.045 = 0.057
+        assert!((max_latency.get() - 0.057).abs() < 0.001);
+
+        // Update with higher latency again - should jump to new max
+        stats.update_global_stats(OperationType::Submit, Duration::from_millis(500));
+        let max_latency = stats
+            .global_stats
+            .max_latencies
+            .get(&OperationType::Submit)
+            .unwrap();
+        assert_eq!(max_latency.get(), 0.5); // 500ms = 0.5s
     }
 
     #[tokio::test]
@@ -301,7 +340,7 @@ mod performance_stats_tests {
 
         let scores = stats.calculate_all_scores();
         // Should not have a score since not all operations are present
-        assert!(scores.get(&validator).is_none());
+        assert!(!scores.contains_key(&validator));
     }
 
     #[tokio::test]
@@ -347,11 +386,73 @@ mod performance_stats_tests {
     }
 
     #[tokio::test]
+    async fn test_global_max_latency_with_multiple_validators() {
+        let config = ValidatorPerformanceConfig::default();
+        let mut stats = PerformanceStats::new(config);
+
+        let validators = create_test_validator_names(3);
+
+        // Validator 1: 100ms latency
+        stats.record_feedback(OperationFeedback {
+            validator: validators[0],
+            operation: OperationType::Submit,
+            latency: Some(Duration::from_millis(100)),
+            success: true,
+        });
+
+        // Check global max is 100ms
+        let max_latency = stats
+            .global_stats
+            .max_latencies
+            .get(&OperationType::Submit)
+            .unwrap();
+        assert_eq!(max_latency.get(), 0.1);
+
+        // Validator 2: 50ms latency (lower, should apply decay)
+        stats.record_feedback(OperationFeedback {
+            validator: validators[1],
+            operation: OperationType::Submit,
+            latency: Some(Duration::from_millis(50)),
+            success: true,
+        });
+
+        // Max should decay towards 50ms
+        let max_latency = stats
+            .global_stats
+            .max_latencies
+            .get(&OperationType::Submit)
+            .unwrap();
+        // 0.1 * 0.1 + 0.05 * 0.9 = 0.01 + 0.045 = 0.055
+        assert!((max_latency.get() - 0.055).abs() < 0.001);
+
+        // Validator 3: 200ms latency (higher, should immediately become new max)
+        stats.record_feedback(OperationFeedback {
+            validator: validators[2],
+            operation: OperationType::Submit,
+            latency: Some(Duration::from_millis(200)),
+            success: true,
+        });
+
+        // Max should jump to 200ms
+        let max_latency = stats
+            .global_stats
+            .max_latencies
+            .get(&OperationType::Submit)
+            .unwrap();
+        assert_eq!(max_latency.get(), 0.2);
+    }
+
+    #[tokio::test]
     async fn test_different_operation_weights() {
-        let mut config = ValidatorPerformanceConfig::default();
-        config.score_weights.submit_latency_weight = 0.1;
-        config.score_weights.effects_latency_weight = 0.8;
-        config.score_weights.health_check_latency_weight = 0.1;
+        let config = ValidatorPerformanceConfig {
+            score_weights: ScoreWeights {
+                submit_latency_weight: 0.1,
+                effects_latency_weight: 0.8,
+                health_check_latency_weight: 0.1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
         let mut stats = PerformanceStats::new(config);
 
@@ -490,8 +591,10 @@ mod performance_monitor_tests {
 
     #[tokio::test]
     async fn test_validator_selection_weighted_random() {
-        let mut config = ValidatorPerformanceConfig::default();
-        config.selection_strategy = SelectionStrategy::WeightedRandom { temperature: 1.0 };
+        let config = ValidatorPerformanceConfig {
+            selection_strategy: SelectionStrategy::WeightedRandom { temperature: 1.0 },
+            ..Default::default()
+        };
 
         let monitor = MockValidatorMonitor::new(config);
 
@@ -552,8 +655,10 @@ mod performance_monitor_tests {
 
     #[tokio::test]
     async fn test_validator_selection_top_k() {
-        let mut config = ValidatorPerformanceConfig::default();
-        config.selection_strategy = SelectionStrategy::TopK { k: 2 };
+        let config = ValidatorPerformanceConfig {
+            selection_strategy: SelectionStrategy::TopK { k: 2 },
+            ..Default::default()
+        };
 
         let monitor = MockValidatorMonitor::new(config);
 

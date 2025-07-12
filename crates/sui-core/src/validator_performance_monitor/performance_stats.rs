@@ -137,18 +137,28 @@ impl PerformanceStats {
 
     /// Update global maximum latency statistics.
     ///
-    /// Maintains an exponential moving average of the maximum latencies
-    /// observed across all validators for each operation type.
+    /// For max latencies, we use a special update strategy:
+    /// - If the new latency is higher than the current max, we immediately update to it
+    /// - Otherwise, we apply decay to gradually lower the max over time
+    ///
+    /// This ensures we always capture peak latencies while still allowing the max to decrease
+    /// when network conditions improve.
     pub fn update_global_stats(&mut self, operation: OperationType, latency: Duration) {
+        let latency_secs = latency.as_secs_f64();
+
         match self.global_stats.max_latencies.entry(operation) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().update_moving_average(latency.as_secs_f64());
+                let current_max = entry.get().get();
+                if latency_secs > current_max {
+                    // New latency is higher - immediately update to this value
+                    entry.get_mut().override_moving_average(latency_secs);
+                } else {
+                    // New latency is lower - apply decay to gradually reduce max
+                    entry.get_mut().update_moving_average(latency_secs);
+                }
             }
             Entry::Vacant(entry) => {
-                entry.insert(DecayMovingAverage::new(
-                    latency.as_secs_f64(),
-                    LATENCY_DECAY_FACTOR,
-                ));
+                entry.insert(DecayMovingAverage::new(latency_secs, LATENCY_DECAY_FACTOR));
             }
         }
     }
