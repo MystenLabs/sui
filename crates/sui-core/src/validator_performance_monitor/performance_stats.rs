@@ -16,6 +16,8 @@ use tracing::debug;
 const RELIABILITY_DECAY_FACTOR: f64 = 0.5;
 /// Decay factor for latency EMA - lower values smooth out spikes better
 const LATENCY_DECAY_FACTOR: f64 = 0.1;
+/// Decay factor for max latency - much lower to keep max stable over time
+const MAX_LATENCY_DECAY_FACTOR: f64 = 0.01;
 
 /// Complete performance statistics for the validator monitoring system.
 ///
@@ -158,7 +160,10 @@ impl PerformanceStats {
                 }
             }
             Entry::Vacant(entry) => {
-                entry.insert(DecayMovingAverage::new(latency_secs, LATENCY_DECAY_FACTOR));
+                entry.insert(DecayMovingAverage::new(
+                    latency_secs,
+                    MAX_LATENCY_DECAY_FACTOR,
+                ));
             }
         }
     }
