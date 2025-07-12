@@ -27,7 +27,6 @@ use crate::{
         unique_map::UniqueMap,
     },
     sui_mode,
-    to_bytecode::context::{DatatypeDeclarations, FunctionDeclaration},
     typing::{
         ast as T,
         visitor::{TypingVisitor, TypingVisitorObj},
@@ -40,7 +39,7 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     hash::Hash,
     path::PathBuf,
@@ -583,21 +582,6 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
-        for hook in &self.save_hooks {
-            hook.save_cfgir_datatype_decls(cfgir_datatype_decls)
-        }
-    }
-
-    pub fn save_cfgir_fun_decls(
-        &self,
-        cfgir_fun_decls: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
-    ) {
-        for hook in &self.save_hooks {
-            hook.save_cfgir_fun_decls(cfgir_fun_decls)
-        }
-    }
-
     // -- Flag Information --
 
     pub fn sources_shadow_deps(&self) -> bool {
@@ -978,8 +962,6 @@ pub(crate) struct SavedInfo {
     cfgir: Option<G::Program>,
     module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
     macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
-    cfgir_datatype_decls: Option<DatatypeDeclarations>,
-    cfgir_fun_decls: Option<HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>>,
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -995,8 +977,6 @@ pub enum SaveFlag {
     ModuleResolvedMembers,
     MacroInfos,
     ModuleInfo,
-    CFGIRDatatypeDecls,
-    CFGIRFunDecls,
 }
 
 impl SaveHook {
@@ -1013,8 +993,6 @@ impl SaveHook {
             cfgir: None,
             module_named_addresses: None,
             macro_infos: None,
-            cfgir_datatype_decls: None,
-            cfgir_fun_decls: None,
         })))
     }
 
@@ -1084,23 +1062,6 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.macro_infos.is_none() && r.flags.contains(&SaveFlag::MacroInfos) {
             r.macro_infos = Some(macro_infos.clone());
-        }
-    }
-
-    pub(crate) fn save_cfgir_datatype_decls(&self, cfgir_datatype_decls: &DatatypeDeclarations) {
-        let mut r = self.0.lock().unwrap();
-        if r.cfgir_datatype_decls.is_none() && r.flags.contains(&SaveFlag::CFGIRDatatypeDecls) {
-            r.cfgir_datatype_decls = Some(cfgir_datatype_decls.clone());
-        }
-    }
-
-    pub(crate) fn save_cfgir_fun_decls(
-        &self,
-        cfgir_fun_decls: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
-    ) {
-        let mut r = self.0.lock().unwrap();
-        if r.cfgir_fun_decls.is_none() && r.flags.contains(&SaveFlag::CFGIRFunDecls) {
-            r.cfgir_fun_decls = Some(cfgir_fun_decls.clone());
         }
     }
 
@@ -1185,26 +1146,6 @@ impl SaveHook {
             "Macro infos not saved. Please set the flag when creating the SaveHook"
         );
         r.macro_infos.take().unwrap()
-    }
-
-    pub fn take_cfgir_datatype_decls(&self) -> DatatypeDeclarations {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::CFGIRDatatypeDecls),
-            "CFGIR datatype decls not saved. Please set the flag when creating the SaveHook"
-        );
-        r.cfgir_datatype_decls.take().unwrap()
-    }
-
-    pub fn take_cfgir_fun_decls(
-        &self,
-    ) -> HashMap<(ModuleIdent, FunctionName), FunctionDeclaration> {
-        let mut r = self.0.lock().unwrap();
-        assert!(
-            r.flags.contains(&SaveFlag::CFGIRFunDecls),
-            "CFGIR fun decls not saved. Please set the flag when creating the SaveHook"
-        );
-        r.cfgir_fun_decls.take().unwrap()
     }
 }
 
