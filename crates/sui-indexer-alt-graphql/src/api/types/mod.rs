@@ -4,6 +4,7 @@
 pub(crate) mod address;
 pub(crate) mod checkpoint;
 pub(crate) mod epoch;
+pub(crate) mod gas_input;
 pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;
