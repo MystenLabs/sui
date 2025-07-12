@@ -66,7 +66,7 @@ pub fn list_package_versions(
             result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
         versions.push(PackageVersion {
-            package_id: Some(storage_id.to_string()),
+            package_id: Some(storage_id.to_canonical_string(true)),
             version: Some(version),
         });
     }
