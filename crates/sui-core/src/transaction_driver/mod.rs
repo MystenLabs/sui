@@ -132,21 +132,14 @@ where
             .map_err(TransactionDriverError::SerializationError)?;
 
         // Select validator based on performance
-        let selection = self.performance_monitor.select_validator();
-        debug!(
-            "Selected validator {} with score {} via {:?}",
-            selection.validator.concise(),
-            selection.score,
-            selection.reason
-        );
+        let selected_validator = self.performance_monitor.select_validator(&committee);
+        debug!("Selected validator: {}", selected_validator.concise());
 
         // Record selection in metrics
         self.metrics
             .validator_selections
-            .with_label_values(&[&selection.validator.concise().to_string()])
+            .with_label_values(&[&selected_validator.concise().to_string()])
             .inc();
-
-        let selected_validator = selection.validator;
 
         let client = auth_agg
             .authority_clients
@@ -166,21 +159,22 @@ where
                 self.performance_monitor.record_feedback(OperationFeedback {
                     validator: selected_validator,
                     operation: OperationType::Submit,
-                    latency,
+                    latency: Some(latency),
                     success: true,
-                    error: None,
                 });
                 pos
             }
             Ok(Err(e)) => {
                 let latency = submit_start.elapsed();
-                // For submit operations, only track latency - don't pass the error
                 self.performance_monitor.record_feedback(OperationFeedback {
                     validator: selected_validator,
                     operation: OperationType::Submit,
-                    latency,
-                    success: true, // Treat as success for latency tracking only
-                    error: None,   // Don't track non-timeout errors for submit
+                    latency: Some(latency),
+                    // submit_transaction may return errors if the transaction is invalid,
+                    // but we still want to record the feedback.
+                    // TODO(mysticeti-fastpath): If we check transaction validity
+                    // on the fullnode first, we can then utilize the error info.
+                    success: true,
                 });
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
@@ -188,13 +182,12 @@ where
                 ));
             }
             Err(_) => {
-                let latency = submit_start.elapsed();
+                // Timeout - don't include latency as it would pollute the numbers
                 self.performance_monitor.record_feedback(OperationFeedback {
                     validator: selected_validator,
                     operation: OperationType::Submit,
-                    latency,
+                    latency: None,
                     success: false,
-                    error: Some("timeout".to_string()),
                 });
                 return Err(TransactionDriverError::TimeoutBeforeFinality);
             }
@@ -227,9 +220,8 @@ where
                 self.performance_monitor.record_feedback(OperationFeedback {
                     validator: selected_validator,
                     operation: OperationType::Effects,
-                    latency,
+                    latency: Some(latency),
                     success: true,
-                    error: None,
                 });
                 response
             }
@@ -238,9 +230,8 @@ where
                 self.performance_monitor.record_feedback(OperationFeedback {
                     validator: selected_validator,
                     operation: OperationType::Effects,
-                    latency,
+                    latency: Some(latency),
                     success: false,
-                    error: Some(e.to_string()),
                 });
                 return Err(TransactionDriverError::RpcFailure(
                     selected_validator.concise().to_string(),
@@ -248,13 +239,12 @@ where
                 ));
             }
             Err(_) => {
-                let latency = effects_start.elapsed();
+                // Timeout - don't include latency as it would pollute the numbers
                 self.performance_monitor.record_feedback(OperationFeedback {
                     validator: selected_validator,
                     operation: OperationType::Effects,
-                    latency,
+                    latency: None,
                     success: false,
-                    error: Some("timeout".to_string()),
                 });
                 return Err(TransactionDriverError::TimeoutWaitingForEffects);
             }
@@ -322,8 +312,8 @@ where
     fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>) {
         let new_epoch = new_authorities.committee.epoch;
         tracing::info!(
-            "Transaction Driver updating AuthorityAggregator with committee epoch {}",
-            new_epoch
+            "Transaction Driver updating AuthorityAggregator with committee {}",
+            new_authorities.committee
         );
 
         self.authority_aggregator.store(new_authorities);

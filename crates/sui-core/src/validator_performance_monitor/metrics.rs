@@ -58,7 +58,7 @@ impl ValidatorPerformanceMetrics {
             operation_failure: register_int_counter_vec_with_registry!(
                 "validator_operation_failure_total",
                 "Total failed operations per validator",
-                &["validator", "operation_type", "error_type"],
+                &["validator", "operation_type"],
                 registry,
             )
             .unwrap(),

@@ -23,10 +23,6 @@ pub struct ValidatorPerformanceConfig {
     #[serde(default)]
     pub selection_strategy: SelectionStrategy,
 
-    /// Minimum number of samples before considering a validator
-    #[serde(default = "default_min_samples")]
-    pub min_samples: usize,
-
     /// Cooldown period after failures
     #[serde(default = "default_failure_cooldown")]
     pub failure_cooldown: Duration,
@@ -44,8 +40,20 @@ pub struct ScoreWeights {
     pub latency: f64,
 
     /// Weight for success rate
-    #[serde(default = "default_success_rate_weight")]
-    pub success_rate: f64,
+    #[serde(default = "default_reliability_weight")]
+    pub reliability: f64,
+
+    /// Weight for submit latency
+    #[serde(default = "default_submit_latency_weight")]
+    pub submit_latency_weight: f64,
+
+    /// Weight for effects latency
+    #[serde(default = "default_effects_latency_weight")]
+    pub effects_latency_weight: f64,
+
+    /// Weight for health check latency
+    #[serde(default = "default_health_check_latency_weight")]
+    pub health_check_latency_weight: f64,
 }
 
 /// Strategy for selecting validators
@@ -61,11 +69,6 @@ pub enum SelectionStrategy {
         /// Number of top validators to consider
         k: usize,
     },
-    /// Epsilon-greedy selection
-    EpsilonGreedy {
-        /// Probability of random selection
-        epsilon: f64,
-    },
 }
 
 impl Default for ValidatorPerformanceConfig {
@@ -75,7 +78,6 @@ impl Default for ValidatorPerformanceConfig {
             health_check_timeout: default_health_check_timeout(),
             score_weights: ScoreWeights::default(),
             selection_strategy: SelectionStrategy::default(),
-            min_samples: default_min_samples(),
             failure_cooldown: default_failure_cooldown(),
             max_consecutive_failures: default_max_consecutive_failures(),
         }
@@ -86,7 +88,10 @@ impl Default for ScoreWeights {
     fn default() -> Self {
         Self {
             latency: default_latency_weight(),
-            success_rate: default_success_rate_weight(),
+            reliability: default_reliability_weight(),
+            submit_latency_weight: default_submit_latency_weight(),
+            effects_latency_weight: default_effects_latency_weight(),
+            health_check_latency_weight: default_health_check_latency_weight(),
         }
     }
 }
@@ -105,10 +110,6 @@ fn default_health_check_timeout() -> Duration {
     Duration::from_secs(2)
 }
 
-fn default_min_samples() -> usize {
-    3
-}
-
 fn default_failure_cooldown() -> Duration {
     Duration::from_secs(30)
 }
@@ -121,6 +122,18 @@ fn default_latency_weight() -> f64 {
     0.4
 }
 
-fn default_success_rate_weight() -> f64 {
+fn default_reliability_weight() -> f64 {
     0.6
+}
+
+fn default_submit_latency_weight() -> f64 {
+    0.3
+}
+
+fn default_effects_latency_weight() -> f64 {
+    0.5
+}
+
+fn default_health_check_latency_weight() -> f64 {
+    0.2
 }
