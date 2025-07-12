@@ -18,6 +18,10 @@ use tracing::info;
 /// Delete a party object as the object owner.
 #[sim_test]
 async fn party_object_deletion() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -56,6 +60,10 @@ async fn party_object_deletion() {
 
 #[sim_test]
 async fn party_object_deletion_multiple_times() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_deletions = 20;
@@ -128,6 +136,10 @@ async fn party_object_deletion_multiple_times() {
 
 #[sim_test]
 async fn party_object_deletion_multiple_times_cert_racing() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_deletions = 10;
@@ -201,6 +213,10 @@ async fn party_object_deletion_multiple_times_cert_racing() {
 /// Transfer a party object as the object owner.
 #[sim_test]
 async fn party_object_transfer() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -249,6 +265,10 @@ async fn party_object_transfer() {
 
 #[sim_test]
 async fn party_object_transfer_multiple_times() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_transfers = 20;
@@ -329,6 +349,10 @@ async fn party_object_transfer_multiple_times() {
 /// 4. Execute the remaining two.
 #[sim_test]
 async fn party_object_transfer_multi_certs() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     // cause random delay just before tx is executed (to explore all orders)
@@ -457,6 +481,10 @@ async fn party_object_transfer_multi_certs() {
 /// Use a party object immutably.
 #[sim_test]
 async fn party_object_read() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     // Create a test cluster with enough gas coins for the below.
@@ -617,6 +645,10 @@ async fn party_object_grpc() {
     use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
     use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
 
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, object) =
@@ -764,6 +796,10 @@ async fn party_coin_grpc() {
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
     use sui_types::Identifier;
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
 
     let cluster = TestClusterBuilder::new().build().await;
     let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
@@ -928,6 +964,10 @@ async fn party_coin_grpc() {
 /// indexes
 #[sim_test]
 async fn party_object_jsonrpc() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, object) =
