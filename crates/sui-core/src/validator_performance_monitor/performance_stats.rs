@@ -12,28 +12,42 @@ use strum::IntoEnumIterator;
 use sui_types::base_types::AuthorityName;
 use tracing::debug;
 
+/// Decay factor for reliability EMA - higher values give more weight to recent observations
 const RELIABILITY_DECAY_FACTOR: f64 = 0.5;
+/// Decay factor for latency EMA - lower values smooth out spikes better
 const LATENCY_DECAY_FACTOR: f64 = 0.1;
 
-/// Complete performance statistics for the validator monitoring system
+/// Complete performance statistics for the validator monitoring system.
+///
+/// This struct maintains performance metrics for all validators in the network,
+/// including reliability scores, latency measurements, and failure tracking.
+/// It uses exponential moving averages (EMA) to smooth out transient spikes
+/// while still responding to sustained performance changes.
 #[derive(Debug, Clone)]
 pub struct PerformanceStats {
-    /// Per-validator statistics
+    /// Per-validator statistics mapping validator names to their performance data
     pub validator_stats: HashMap<AuthorityName, ValidatorStats>,
-    /// Global statistics
+    /// Global statistics used for normalization and comparison
     pub global_stats: GlobalStats,
+    /// Configuration parameters for scoring and exclusion policies
     pub config: ValidatorPerformanceConfig,
 }
 
-/// Statistics for a single validator
+/// Statistics for a single validator.
+///
+/// Tracks reliability, latency, and failure patterns for a specific validator.
+/// Uses exponential moving averages to smooth measurements while maintaining
+/// responsiveness to changes in validator performance.
 #[derive(Debug, Clone)]
 pub struct ValidatorStats {
+    /// Exponential moving average of success rate (0.0 to 1.0)
     pub reliability: DecayMovingAverage,
-    /// EMA latencies for each operation type
+    /// EMA latencies for each operation type (Submit, Effects, HealthCheck)
     pub average_latencies: HashMap<OperationType, DecayMovingAverage>,
-    /// Consecutive failures
+    /// Counter for consecutive failures - resets on success
     pub consecutive_failures: u32,
-    /// Time when validator was temporarily excluded
+    /// Time when validator was temporarily excluded due to failures.
+    /// Validators are excluded when consecutive_failures >= max_consecutive_failures
     pub exclusion_time: Option<Instant>,
 }
 
@@ -64,9 +78,15 @@ impl ValidatorStats {
     }
 }
 
-/// Global statistics across all validators
+/// Global statistics across all validators.
+///
+/// Used to track network-wide performance metrics that serve as baselines
+/// for scoring individual validators. Currently tracks maximum latencies
+/// for normalization purposes.
 #[derive(Debug, Clone, Default)]
 pub struct GlobalStats {
+    /// Maximum observed latencies for each operation type across all validators.
+    /// Used to normalize individual validator latencies in score calculations.
     pub max_latencies: HashMap<OperationType, DecayMovingAverage>,
 }
 
@@ -79,6 +99,11 @@ impl PerformanceStats {
         }
     }
 
+    /// Process feedback from an operation and update validator statistics.
+    ///
+    /// Updates reliability scores, latency measurements, and failure counts.
+    /// Automatically excludes validators that exceed the maximum consecutive
+    /// failure threshold.
     pub fn record_feedback(&mut self, feedback: OperationFeedback) {
         let reliability = if feedback.success { 1.0 } else { 0.0 };
 
@@ -98,6 +123,7 @@ impl PerformanceStats {
                 .update_moving_average(reliability);
             validator_stats.consecutive_failures += 1;
 
+            // Exclude validator temporarily after too many consecutive failures
             if validator_stats.consecutive_failures >= self.config.max_consecutive_failures {
                 validator_stats.exclusion_time = Some(Instant::now());
             }
@@ -109,7 +135,10 @@ impl PerformanceStats {
         }
     }
 
-    /// Update global statistics based on current validator stats
+    /// Update global maximum latency statistics.
+    ///
+    /// Maintains an exponential moving average of the maximum latencies
+    /// observed across all validators for each operation type.
     pub fn update_global_stats(&mut self, operation: OperationType, latency: Duration) {
         match self.global_stats.max_latencies.entry(operation) {
             Entry::Occupied(mut entry) => {
@@ -124,33 +153,53 @@ impl PerformanceStats {
         }
     }
 
+    /// Calculate performance scores for all validators.
+    ///
+    /// Returns a map of validator names to their computed scores.
+    /// Validators that are currently excluded or missing required data
+    /// will not be included in the results.
     pub fn calculate_all_scores(&self) -> HashMap<AuthorityName, f64> {
         let mut scores = HashMap::new();
         for (validator, stats) in self.validator_stats.iter() {
             if let Some(score) = self.calculate_validator_score(stats, &self.global_stats) {
-                scores.insert(validator, score);
+                scores.insert(*validator, score);
             }
         }
 
         scores
     }
 
+    /// Calculate performance score for a single validator.
+    ///
+    /// The score combines reliability and latency metrics, weighted according
+    /// to configuration. Returns None if:
+    /// - The validator is currently in exclusion cooldown period
+    /// - The validator is missing data for any operation type
+    /// - Global stats are missing for normalization
+    ///
+    /// Score calculation:
+    /// 1. Latency scores are normalized against global maximums
+    /// 2. Each operation type has its own weight
+    /// 3. Final score = (weighted_latency_score * latency_weight) + (reliability * reliability_weight)
     fn calculate_validator_score(
         &self,
         stats: &ValidatorStats,
         global_stats: &GlobalStats,
     ) -> Option<f64> {
+        // Check if validator is still in exclusion cooldown
+        if let Some(exclusion_time) = stats.exclusion_time {
+            if exclusion_time.elapsed() < self.config.failure_cooldown {
+                return None;
+            }
+        }
+
         let mut latency_score = 0.0;
         for op in OperationType::iter() {
-            if let Some(exclusion_time) = stats.exclusion_time {
-                if exclusion_time.elapsed() < self.config.failure_cooldown {
-                    return None;
-                }
-            }
-
+            // Validator must have data for all operation types
             let latency = stats.average_latencies.get(&op)?.get();
             let max_latency = global_stats.max_latencies.get(&op)?.get();
 
+            // Lower latency ratios are better (inverted for scoring)
             let latency_ratio = latency / max_latency;
             let latency_weight = match op {
                 OperationType::Submit => self.config.score_weights.submit_latency_weight,
@@ -169,6 +218,10 @@ impl PerformanceStats {
     }
 
     /// Remove validators that are no longer in the committee.
+    ///
+    /// Called during epoch changes to clean up statistics for validators
+    /// that have left the active set. This prevents memory leaks and
+    /// ensures scores are only calculated for current validators.
     pub fn refresh_validator_set(&mut self, new_committee_validators: &HashSet<AuthorityName>) {
         let cur_len = self.validator_stats.len();
         self.validator_stats

@@ -25,6 +25,17 @@ use tokio::{
 };
 use tracing::{debug, info, warn};
 
+/// Monitors and tracks validator performance across the network.
+///
+/// This component:
+/// - Collects performance metrics from TransactionDriver operations
+/// - Runs periodic health checks on all validators
+/// - Maintains statistics for reliability and latency
+/// - Provides intelligent validator selection based on performance
+/// - Handles epoch changes by cleaning up stale validator data
+///
+/// The monitor runs a background task for health checks and uses
+/// exponential moving averages to smooth performance measurements.
 pub struct ValidatorPerformanceMonitor<A: Clone> {
     config: ValidatorPerformanceConfig,
     metrics: Arc<ValidatorPerformanceMetrics>,
@@ -61,7 +72,12 @@ where
         monitor
     }
 
-    /// Process feedback from TransactionDriver operations
+    /// Process feedback from TransactionDriver operations.
+    ///
+    /// Records operation results including success/failure status and latency.
+    /// Updates both Prometheus metrics and internal performance statistics.
+    /// This is the primary interface for the TransactionDriver to report
+    /// validator performance data.
     pub fn record_feedback(&self, feedback: OperationFeedback) {
         let validator_str = feedback.validator.concise().to_string();
         let operation_str = match feedback.operation {
@@ -95,7 +111,11 @@ where
         perf_stats.record_feedback(feedback);
     }
 
-    /// Handle epoch changes by cleaning up stale validator data
+    /// Handle epoch changes by cleaning up stale validator data.
+    ///
+    /// Called when the network transitions to a new epoch. Removes performance
+    /// data for validators that are no longer in the active committee to prevent
+    /// memory leaks and ensure scores are only calculated for current validators.
     pub fn on_epoch_change(&self, epoch: EpochId) {
         let authority_agg = self.authority_aggregator.load();
         if authority_agg.committee.epoch == epoch {
@@ -110,10 +130,19 @@ where
     }
 
     /// Select a validator based on performance.
+    ///
+    /// Uses the configured selection strategy (WeightedRandom or TopK) to choose
+    /// a validator from the provided committee. The selection considers:
+    /// - Current performance scores (reliability + latency)
+    /// - Exclusion status (temporarily excluded validators are filtered out)
+    /// - Committee membership (only selects from the provided committee)
+    ///
     /// We need to pass the current committee here because it is possible
     /// that the fullnode is in the middle of a committee change when this
     /// is called, and we need to maintain an invariant that the selected
     /// validator is always in the committee passed in.
+    ///
+    /// Falls back to random selection if no performance data is available.
     pub fn select_validator(&self, committee: &Committee) -> AuthorityName {
         // Get all validators with their scores
         let validator_scores = self.performance_stats.read().calculate_all_scores();
@@ -161,6 +190,11 @@ where
         }
     }
 
+    /// Select validator using weighted random strategy with softmax.
+    ///
+    /// Applies softmax function with temperature parameter to convert scores
+    /// into selection probabilities. Higher temperature values make selection
+    /// more uniform, while lower values favor higher-scoring validators.
     fn select_weighted_random(
         &self,
         validators: Vec<(AuthorityName, f64)>,
@@ -195,6 +229,11 @@ where
         validator
     }
 
+    /// Select validator using top-K strategy.
+    ///
+    /// Sorts validators by score and randomly selects from the top K performers.
+    /// This provides a balance between preferring good validators and avoiding
+    /// overloading any single validator.
     fn select_top_k(&self, validators: Vec<(AuthorityName, f64)>, k: usize) -> AuthorityName {
         let mut sorted = validators;
         sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -219,6 +258,11 @@ where
         validator
     }
 
+    /// Background task that runs periodic health checks on all validators.
+    ///
+    /// Sends health check requests to all validators in parallel and records
+    /// the results (success/failure and latency). Timeouts are treated as
+    /// failures without recording latency to avoid polluting latency statistics.
     async fn run_health_checks(self: Arc<Self>) {
         let mut interval = interval(self.config.health_check_interval);
 
