@@ -892,7 +892,8 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::PackageTooBig
             }
             E::CircularObjectOwnership { object } => {
-                message.error_details = Some(ErrorDetails::ObjectId(object.to_canonical_string(true)));
+                message.error_details =
+                    Some(ErrorDetails::ObjectId(object.to_canonical_string(true)));
                 ExecutionErrorKind::CircularObjectOwnership
             }
             E::InsufficientCoinBalance => ExecutionErrorKind::InsufficientCoinBalance,
@@ -2092,7 +2093,10 @@ impl From<crate::transaction::ChangeEpoch> for ChangeEpoch {
                 .map(|(version, modules, dependencies)| SystemPackage {
                     version: Some(version.value()),
                     modules: modules.into_iter().map(Into::into).collect(),
-                    dependencies: dependencies.iter().map(|d| d.to_canonical_string(true)).collect(),
+                    dependencies: dependencies
+                        .iter()
+                        .map(|d| d.to_canonical_string(true))
+                        .collect(),
                 })
                 .collect(),
         }
@@ -2327,7 +2331,10 @@ impl From<crate::transaction::Command> for Command {
             }),
             C::Publish(modules, dependencies) => Command::Publish(Publish {
                 modules: modules.into_iter().map(Into::into).collect(),
-                dependencies: dependencies.iter().map(|d| d.to_canonical_string(true)).collect(),
+                dependencies: dependencies
+                    .iter()
+                    .map(|d| d.to_canonical_string(true))
+                    .collect(),
             }),
             C::MakeMoveVec(element_type, elements) => Command::MakeMoveVector(MakeMoveVector {
                 element_type: element_type.map(|t| t.to_canonical_string(true)),
@@ -2335,7 +2342,10 @@ impl From<crate::transaction::Command> for Command {
             }),
             C::Upgrade(modules, dependencies, package, ticket) => Command::Upgrade(Upgrade {
                 modules: modules.into_iter().map(Into::into).collect(),
-                dependencies: dependencies.iter().map(|d| d.to_canonical_string(true)).collect(),
+                dependencies: dependencies
+                    .iter()
+                    .map(|d| d.to_canonical_string(true))
+                    .collect(),
                 package: Some(package.to_canonical_string(true)),
                 ticket: Some(ticket.into()),
             }),
