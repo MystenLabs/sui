@@ -565,7 +565,6 @@ mod tests {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
     use std::sync::Arc;
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -609,7 +608,6 @@ mod test {
         let registry = prometheus::Registry::new();
         let metrics = Arc::new(LimitsMetrics::new(&registry));
         let expensive_checks = false;
-        let certificate_deny_set = HashSet::new();
         let epoch = EpochData::new_test();
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, mut gas_data) = transaction_data.execution_parts();
@@ -622,7 +620,7 @@ mod test {
                 &protocol_config,
                 metrics,
                 expensive_checks,
-                &certificate_deny_set,
+                None,
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,
