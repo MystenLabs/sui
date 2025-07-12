@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ACCUMULATOR_ROOT_CREATE_FUNC","ACCUMULATOR_ROOT_MODULE"],"fn":["create_account_for_testing","derive_balance_account_object_id","get_accumulator_root_obj_initial_shared_version","get_balance_from_account_for_testing","update_account_balance_for_testing"]};

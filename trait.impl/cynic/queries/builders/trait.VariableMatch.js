@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["sui_replay_2",[["impl VariableMatch&lt;<a class=\"struct\" href=\"sui_replay_2/gql_queries/epoch_query/struct.EpochDataArgsFields.html\" title=\"struct sui_replay_2::gql_queries::epoch_query::EpochDataArgsFields\">EpochDataArgsFields</a>&gt; for <a class=\"struct\" href=\"sui_replay_2/gql_queries/epoch_query/struct.EpochDataArgsFields.html\" title=\"struct sui_replay_2::gql_queries::epoch_query::EpochDataArgsFields\">EpochDataArgsFields</a>"],["impl VariableMatch&lt;<a class=\"struct\" href=\"sui_replay_2/gql_queries/object_query/struct.MultiGetObjectsVarsFields.html\" title=\"struct sui_replay_2::gql_queries::object_query::MultiGetObjectsVarsFields\">MultiGetObjectsVarsFields</a>&gt; for <a class=\"struct\" href=\"sui_replay_2/gql_queries/object_query/struct.MultiGetObjectsVarsFields.html\" title=\"struct sui_replay_2::gql_queries::object_query::MultiGetObjectsVarsFields\">MultiGetObjectsVarsFields</a>"],["impl VariableMatch&lt;<a class=\"struct\" href=\"sui_replay_2/gql_queries/txn_query/struct.TransactionDataArgsFields.html\" title=\"struct sui_replay_2::gql_queries::txn_query::TransactionDataArgsFields\">TransactionDataArgsFields</a>&gt; for <a class=\"struct\" href=\"sui_replay_2/gql_queries/txn_query/struct.TransactionDataArgsFields.html\" title=\"struct sui_replay_2::gql_queries::txn_query::TransactionDataArgsFields\">TransactionDataArgsFields</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1382]}

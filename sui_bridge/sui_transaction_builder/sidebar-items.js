@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_add_tokens_on_sui_transaction","build_committee_register_transaction","build_committee_update_url_transaction","build_sui_transaction"]};
