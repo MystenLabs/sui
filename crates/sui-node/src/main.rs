@@ -1,6 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(target_env = "msvc"))]
+extern crate tikv_jemalloc_sys;
+
+#[cfg(not(target_env = "msvc"))]
+#[used]
+static INIT: unsafe extern "C" fn(usize) -> *mut std::ffi::c_void = tikv_jemalloc_sys::malloc;
+
 use clap::{ArgGroup, Parser};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -43,7 +50,7 @@ struct Args {
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
 
-#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
+#[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static JEMALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
