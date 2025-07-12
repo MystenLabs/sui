@@ -377,7 +377,7 @@ impl From<crate::event::Event> for Event {
 impl Merge<crate::event::Event> for Event {
     fn merge(&mut self, source: crate::event::Event, mask: &FieldMaskTree) {
         if mask.contains(Self::PACKAGE_ID_FIELD) {
-            self.package_id = Some(source.package_id.to_string());
+            self.package_id = Some(source.package_id.to_canonical_string(true));
         }
 
         if mask.contains(Self::MODULE_FIELD) {
@@ -389,12 +389,12 @@ impl Merge<crate::event::Event> for Event {
         }
 
         if mask.contains(Self::EVENT_TYPE_FIELD) {
-            self.event_type = Some(source.type_.to_string());
+            self.event_type = Some(source.type_.to_canonical_string(true));
         }
 
         if mask.contains(Self::CONTENTS_FIELD) {
             self.contents = Some(Bcs {
-                name: Some(source.type_.to_string()),
+                name: Some(source.type_.to_canonical_string(true)),
                 value: Some(source.contents.into()),
             });
         }
@@ -892,7 +892,8 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::PackageTooBig
             }
             E::CircularObjectOwnership { object } => {
-                message.error_details = Some(ErrorDetails::ObjectId(object.to_string()));
+                message.error_details =
+                    Some(ErrorDetails::ObjectId(object.to_canonical_string(true)));
                 ExecutionErrorKind::CircularObjectOwnership
             }
             E::InsufficientCoinBalance => ExecutionErrorKind::InsufficientCoinBalance,
@@ -1000,7 +1001,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                     objects: congested_objects
                         .0
                         .iter()
-                        .map(ToString::to_string)
+                        .map(|o| o.to_canonical_string(true))
                         .collect(),
                 }));
 
@@ -1144,11 +1145,11 @@ impl From<crate::execution_status::PackageUpgradeError> for PackageUpgradeError 
 
         let kind = match value {
             E::UnableToFetchPackage { package_id } => {
-                message.package_id = Some(package_id.to_string());
+                message.package_id = Some(package_id.to_canonical_string(true));
                 PackageUpgradeErrorKind::UnableToFetchPackage
             }
             E::NotAPackage { object_id } => {
-                message.package_id = Some(object_id.to_string());
+                message.package_id = Some(object_id.to_canonical_string(true));
                 PackageUpgradeErrorKind::NotAPackage
             }
             E::IncompatibleUpgrade => PackageUpgradeErrorKind::IncompatibleUpgrade,
@@ -1166,8 +1167,8 @@ impl From<crate::execution_status::PackageUpgradeError> for PackageUpgradeError 
                 package_id,
                 ticket_id,
             } => {
-                message.package_id = Some(package_id.to_string());
-                message.ticket_id = Some(ticket_id.to_string());
+                message.package_id = Some(package_id.to_canonical_string(true));
+                message.ticket_id = Some(ticket_id.to_canonical_string(true));
                 PackageUpgradeErrorKind::PackageIdDoesNotMatch
             }
         };
@@ -1537,7 +1538,7 @@ impl Merge<crate::object::Object> for Object {
         }
 
         if mask.contains(Self::OBJECT_ID_FIELD.name) {
-            self.object_id = Some(source.id().to_string());
+            self.object_id = Some(source.id().to_canonical_string(true));
         }
 
         if mask.contains(Self::VERSION_FIELD.name) {
@@ -1562,7 +1563,7 @@ impl Merge<crate::object::Object> for Object {
 
 impl Merge<&crate::object::MoveObject> for Object {
     fn merge(&mut self, source: &crate::object::MoveObject, mask: &FieldMaskTree) {
-        self.object_id = Some(source.id().to_string());
+        self.object_id = Some(source.id().to_canonical_string(true));
         self.version = Some(source.version().value());
 
         if mask.contains(Self::OBJECT_TYPE_FIELD.name) {
@@ -1584,7 +1585,7 @@ impl Merge<&crate::object::MoveObject> for Object {
 
 impl Merge<&crate::move_package::MovePackage> for Object {
     fn merge(&mut self, source: &crate::move_package::MovePackage, mask: &FieldMaskTree) {
-        self.object_id = Some(source.id().to_string());
+        self.object_id = Some(source.id().to_canonical_string(true));
         self.version = Some(source.version().value());
 
         if mask.contains(Self::OBJECT_TYPE_FIELD.name) {
@@ -1620,8 +1621,8 @@ impl Merge<&crate::move_package::MovePackage> for Object {
                             },
                         )| {
                             Linkage {
-                                original_id: Some(original_id.to_string()),
-                                upgraded_id: Some(upgraded_id.to_string()),
+                                original_id: Some(original_id.to_canonical_string(true)),
+                                upgraded_id: Some(upgraded_id.to_canonical_string(true)),
                                 upgraded_version: Some(upgraded_version.value()),
                             }
                         },
@@ -1652,7 +1653,7 @@ impl From<crate::move_package::TypeOrigin> for TypeOrigin {
         Self {
             module_name: Some(value.module_name.to_string()),
             datatype_name: Some(value.datatype_name.to_string()),
-            package_id: Some(value.package.to_string()),
+            package_id: Some(value.package.to_canonical_string(true)),
         }
     }
 }
@@ -1682,7 +1683,7 @@ impl From<crate::transaction::GenesisObject> for Object {
 fn object_ref_to_proto(value: crate::base_types::ObjectRef) -> ObjectReference {
     let (object_id, version, digest) = value;
     ObjectReference {
-        object_id: Some(object_id.to_string()),
+        object_id: Some(object_id.to_canonical_string(true)),
         version: Some(version.value()),
         digest: Some(digest.to_string()),
     }
@@ -1969,7 +1970,7 @@ impl From<crate::messages_consensus::ConsensusDeterminedVersionAssignments>
                         version_assignments: assignments
                             .into_iter()
                             .map(|(id, version)| VersionAssignment {
-                                object_id: Some(id.to_string()),
+                                object_id: Some(id.to_canonical_string(true)),
                                 start_version: None,
                                 version: Some(version.value()),
                             })
@@ -1986,7 +1987,7 @@ impl From<crate::messages_consensus::ConsensusDeterminedVersionAssignments>
                         version_assignments: assignments
                             .into_iter()
                             .map(|((id, start_version), version)| VersionAssignment {
-                                object_id: Some(id.to_string()),
+                                object_id: Some(id.to_canonical_string(true)),
                                 start_version: Some(start_version.value()),
                                 version: Some(version.value()),
                             })
@@ -2092,7 +2093,10 @@ impl From<crate::transaction::ChangeEpoch> for ChangeEpoch {
                 .map(|(version, modules, dependencies)| SystemPackage {
                     version: Some(version.value()),
                     modules: modules.into_iter().map(Into::into).collect(),
-                    dependencies: dependencies.iter().map(ToString::to_string).collect(),
+                    dependencies: dependencies
+                        .iter()
+                        .map(|d| d.to_canonical_string(true))
+                        .collect(),
                 })
                 .collect(),
         }
@@ -2167,7 +2171,7 @@ impl From<crate::transaction::StoredExecutionTimeObservations> for ExecutionTime
                                 type_arguments,
                             } => {
                                 message.move_entry_point = Some(MoveCall {
-                                    package: Some(package.to_string()),
+                                    package: Some(package.to_canonical_string(true)),
                                     module: Some(module),
                                     function: Some(function),
                                     type_arguments: type_arguments
@@ -2238,7 +2242,7 @@ impl From<crate::transaction::CallArg> for Input {
             }
             I::Object(o) => match o {
                 O::ImmOrOwnedObject((id, version, digest)) => {
-                    message.object_id = Some(id.to_string());
+                    message.object_id = Some(id.to_canonical_string(true));
                     message.version = Some(version.value());
                     message.digest = Some(digest.to_string());
                     InputKind::ImmutableOrOwned
@@ -2248,13 +2252,13 @@ impl From<crate::transaction::CallArg> for Input {
                     initial_shared_version,
                     mutable,
                 } => {
-                    message.object_id = Some(id.to_string());
+                    message.object_id = Some(id.to_canonical_string(true));
                     message.version = Some(initial_shared_version.value());
                     message.mutable = Some(mutable);
                     InputKind::Shared
                 }
                 O::Receiving((id, version, digest)) => {
-                    message.object_id = Some(id.to_string());
+                    message.object_id = Some(id.to_canonical_string(true));
                     message.version = Some(version.value());
                     message.digest = Some(digest.to_string());
                     InputKind::Receiving
@@ -2327,7 +2331,10 @@ impl From<crate::transaction::Command> for Command {
             }),
             C::Publish(modules, dependencies) => Command::Publish(Publish {
                 modules: modules.into_iter().map(Into::into).collect(),
-                dependencies: dependencies.iter().map(ToString::to_string).collect(),
+                dependencies: dependencies
+                    .iter()
+                    .map(|d| d.to_canonical_string(true))
+                    .collect(),
             }),
             C::MakeMoveVec(element_type, elements) => Command::MakeMoveVector(MakeMoveVector {
                 element_type: element_type.map(|t| t.to_canonical_string(true)),
@@ -2335,8 +2342,11 @@ impl From<crate::transaction::Command> for Command {
             }),
             C::Upgrade(modules, dependencies, package, ticket) => Command::Upgrade(Upgrade {
                 modules: modules.into_iter().map(Into::into).collect(),
-                dependencies: dependencies.iter().map(ToString::to_string).collect(),
-                package: Some(package.to_string()),
+                dependencies: dependencies
+                    .iter()
+                    .map(|d| d.to_canonical_string(true))
+                    .collect(),
+                package: Some(package.to_canonical_string(true)),
                 ticket: Some(ticket.into()),
             }),
         };
@@ -2354,7 +2364,7 @@ impl From<crate::transaction::Command> for Command {
 impl From<crate::transaction::ProgrammableMoveCall> for MoveCall {
     fn from(value: crate::transaction::ProgrammableMoveCall) -> Self {
         Self {
-            package: Some(value.package.to_string()),
+            package: Some(value.package.to_canonical_string(true)),
             module: Some(value.module.to_string()),
             function: Some(value.function.to_string()),
             type_arguments: value
@@ -2445,7 +2455,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
 
             for ((id, version, digest), owner) in value.created() {
                 let change = ChangedObject {
-                    object_id: Some(id.to_string()),
+                    object_id: Some(id.to_canonical_string(true)),
                     input_state: Some(changed_object::InputObjectState::DoesNotExist.into()),
                     input_version: None,
                     input_digest: None,
@@ -2463,7 +2473,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
 
             for ((id, version, digest), owner) in value.mutated() {
                 let change = ChangedObject {
-                    object_id: Some(id.to_string()),
+                    object_id: Some(id.to_canonical_string(true)),
                     input_state: Some(changed_object::InputObjectState::Exists.into()),
                     input_version: None,
                     input_digest: None,
@@ -2481,7 +2491,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
 
             for ((id, version, digest), owner) in value.unwrapped() {
                 let change = ChangedObject {
-                    object_id: Some(id.to_string()),
+                    object_id: Some(id.to_canonical_string(true)),
                     input_state: Some(changed_object::InputObjectState::DoesNotExist.into()),
                     input_version: None,
                     input_digest: None,
@@ -2499,7 +2509,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
 
             for (id, version, digest) in value.deleted() {
                 let change = ChangedObject {
-                    object_id: Some(id.to_string()),
+                    object_id: Some(id.to_canonical_string(true)),
                     input_state: Some(changed_object::InputObjectState::Exists.into()),
                     input_version: None,
                     input_digest: None,
@@ -2517,7 +2527,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
 
             for (id, version, digest) in value.unwrapped_then_deleted() {
                 let change = ChangedObject {
-                    object_id: Some(id.to_string()),
+                    object_id: Some(id.to_canonical_string(true)),
                     input_state: Some(changed_object::InputObjectState::DoesNotExist.into()),
                     input_version: None,
                     input_digest: None,
@@ -2535,7 +2545,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
 
             for (id, version, digest) in value.wrapped() {
                 let change = ChangedObject {
-                    object_id: Some(id.to_string()),
+                    object_id: Some(id.to_canonical_string(true)),
                     input_state: Some(changed_object::InputObjectState::Exists.into()),
                     input_version: None,
                     input_digest: None,
@@ -2552,7 +2562,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
             }
 
             for (object_id, version) in value.modified_at_versions() {
-                let object_id = object_id.to_string();
+                let object_id = object_id.to_canonical_string(true);
                 let version = version.value();
                 if let Some(changed_object) = changed_objects
                     .iter_mut()
@@ -2563,7 +2573,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
             }
 
             for (id, version, digest) in value.shared_objects() {
-                let object_id = id.to_string();
+                let object_id = id.to_canonical_string(true);
                 let version = version.value();
                 let digest = digest.to_string();
 
@@ -2589,7 +2599,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
             }
 
             if mask.contains(Self::GAS_OBJECT_FIELD.name) {
-                let gas_object_id = value.gas_object().0 .0.to_string();
+                let gas_object_id = value.gas_object().0 .0.to_canonical_string(true);
                 self.gas_object = changed_objects
                     .iter()
                     .find(|object| object.object_id() == gas_object_id)
@@ -2657,7 +2667,7 @@ impl Merge<&crate::effects::TransactionEffectsV2> for TransactionEffects {
                         .cloned()
                         .map(|(id, change)| {
                             let mut message = ChangedObject::from(change);
-                            message.object_id = Some(id.to_string());
+                            message.object_id = Some(id.to_canonical_string(true));
                             message
                         })
                 })
@@ -2682,7 +2692,7 @@ impl Merge<&crate::effects::TransactionEffectsV2> for TransactionEffects {
                 .into_iter()
                 .map(|(id, change)| {
                     let mut message = ChangedObject::from(change);
-                    message.object_id = Some(id.to_string());
+                    message.object_id = Some(id.to_canonical_string(true));
                     message
                 })
                 .collect();
@@ -2700,7 +2710,7 @@ impl Merge<&crate::effects::TransactionEffectsV2> for TransactionEffects {
                 .into_iter()
                 .map(|(id, unchanged)| {
                     let mut message = UnchangedSharedObject::from(unchanged);
-                    message.object_id = Some(id.to_string());
+                    message.object_id = Some(id.to_canonical_string(true));
                     message
                 })
                 .collect();
