@@ -8,7 +8,7 @@ A: object(0,0)
 
 task 1, line 6:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 2, lines 8-49:
 //# publish --sender A
@@ -30,7 +30,7 @@ Checkpoint created: 2
 
 task 5, line 56:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 6, line 58:
 //# create-checkpoint

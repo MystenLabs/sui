@@ -34,7 +34,7 @@ use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
-    base_types::SuiAddress,
+    base_types::{EpochId, SuiAddress},
     committee::Committee,
     effects::TransactionEffects,
     error::ExecutionError,
@@ -498,6 +498,10 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
 
     fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
         Ok(self.store().get_highest_checkpint().unwrap())
+    }
+
+    fn get_latest_epoch_id(&self) -> sui_types::storage::error::Result<EpochId> {
+        Ok(self.epoch_state.epoch())
     }
 
     fn get_highest_verified_checkpoint(

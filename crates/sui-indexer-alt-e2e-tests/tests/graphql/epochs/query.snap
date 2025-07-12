@@ -8,15 +8,15 @@ A: object(0,0)
 
 task 2, line 8:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 4, line 12:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 5, line 14:
 //# advance-epoch
-Epoch advanced: 2
+Epoch advanced: 3
 
 task 6, lines 16-33:
 //# run-graphql
