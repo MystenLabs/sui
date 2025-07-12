@@ -6,7 +6,7 @@ import { treeFn } from '../printer';
 import { AstPath, Doc } from 'prettier';
 
 /**
- * Creates a callback function to print commments and comment-related nodes.
+ * Creates a callback function to print comments and comment-related nodes.
  *
  * @param path
  * @returns
