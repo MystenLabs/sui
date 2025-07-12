@@ -17,13 +17,14 @@ use crate::{
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
-    expansion::ast as E,
+    expansion::ast::{self as E, ModuleIdent},
     hlir::ast as H,
-    naming::ast as N,
-    parser::ast as P,
+    naming::ast::{self as N, Function, UseFuns},
+    parser::ast::{self as P, FunctionName},
     shared::{
         files::{FileName, MappedFiles},
         ide::IDEInfo,
+        unique_map::UniqueMap,
     },
     sui_mode,
     typing::{
@@ -176,7 +177,7 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct NamedAddressMapIndex(usize);
+pub struct NamedAddressMapIndex(pub usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);
@@ -563,6 +564,24 @@ impl CompilationEnv {
         }
     }
 
+    pub fn save_module_named_addresses(
+        &self,
+        module_named_addresses: &BTreeMap<ModuleIdent, NamedAddressMap>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_module_named_addresses(module_named_addresses)
+        }
+    }
+
+    pub fn save_macro_infos(
+        &self,
+        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        for hook in &self.save_hooks {
+            hook.save_macro_infos(macro_infos)
+        }
+    }
+
     // -- Flag Information --
 
     pub fn sources_shadow_deps(&self) -> bool {
@@ -941,6 +960,8 @@ pub(crate) struct SavedInfo {
     typing_info: Option<Arc<program_info::TypingProgramInfo>>,
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
+    module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
+    macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -952,6 +973,10 @@ pub enum SaveFlag {
     TypingInfo,
     HLIR,
     CFGIR,
+    ModuleNameAddresses,
+    ModuleResolvedMembers,
+    MacroInfos,
+    ModuleInfo,
 }
 
 impl SaveHook {
@@ -966,6 +991,8 @@ impl SaveHook {
             typing_info: None,
             hlir: None,
             cfgir: None,
+            module_named_addresses: None,
+            macro_infos: None,
         })))
     }
 
@@ -1015,6 +1042,26 @@ impl SaveHook {
         let mut r = self.0.lock().unwrap();
         if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
             r.cfgir = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_module_named_addresses(
+        &self,
+        module_named_addresses: &BTreeMap<ModuleIdent, NamedAddressMap>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.module_named_addresses.is_none() && r.flags.contains(&SaveFlag::ModuleNameAddresses) {
+            r.module_named_addresses = Some(module_named_addresses.clone());
+        }
+    }
+
+    pub(crate) fn save_macro_infos(
+        &self,
+        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+    ) {
+        let mut r = self.0.lock().unwrap();
+        if r.macro_infos.is_none() && r.flags.contains(&SaveFlag::MacroInfos) {
+            r.macro_infos = Some(macro_infos.clone());
         }
     }
 
@@ -1079,6 +1126,26 @@ impl SaveHook {
             "CFGIR AST not saved. Please set the flag when creating the SaveHook"
         );
         r.cfgir.take().unwrap()
+    }
+
+    pub fn take_module_named_addresses(&self) -> BTreeMap<ModuleIdent, NamedAddressMap> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::ModuleNameAddresses),
+            "Module named addresses not saved. Please set the flag when creating the SaveHook"
+        );
+        r.module_named_addresses.take().unwrap()
+    }
+
+    pub fn take_macro_infos(
+        &self,
+    ) -> BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> {
+        let mut r = self.0.lock().unwrap();
+        assert!(
+            r.flags.contains(&SaveFlag::MacroInfos),
+            "Macro infos not saved. Please set the flag when creating the SaveHook"
+        );
+        r.macro_infos.take().unwrap()
     }
 }
 
