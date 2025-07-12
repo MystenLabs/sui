@@ -35,8 +35,8 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
 
     Ok(GetPackageResponse {
         package: Some(Package {
-            storage_id: Some(package_id.to_string()),
-            original_id: Some(package.original_package_id().to_string()),
+            storage_id: Some(package_id.to_canonical_string(true)),
+            original_id: Some(package.original_package_id().to_canonical_string(true)),
             version: Some(package.version().value()),
             modules,
             ..Default::default()
