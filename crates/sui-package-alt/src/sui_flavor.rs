@@ -7,7 +7,6 @@ use move_package_alt::{
     dependency::{self, DependencySet, PinnedDependencyInfo},
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::PackageName,
 };
 use serde::{Deserialize, Serialize};
 

@@ -9,8 +9,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::package::layout::SourcePackageLayout;
-use crate::{errors::PackageResult, package::PackageName};
+use crate::errors::PackageResult;
+use crate::{package::layout::SourcePackageLayout, schema::PackageName};
 use anyhow::Context;
 use clap::Parser;
 

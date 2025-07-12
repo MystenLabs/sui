@@ -9,11 +9,11 @@ use crate::{
         legacy::{LegacyData, LegacyEnvironment, ManifestPublishInformation},
     },
     errors::FileHandle,
-    package::{EnvironmentName, PackageName, layout::SourcePackageLayout, paths::PackagePath},
+    package::{layout::SourcePackageLayout, paths::PackagePath},
     schema::{
-        DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, ParsedManifest,
-        PublishedID,
+        DefaultDependency, EnvironmentName, ExternalDependency, LocalDepInfo,
+        ManifestDependencyInfo, ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata,
+        PackageName, ParsedManifest, PublishedID,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};

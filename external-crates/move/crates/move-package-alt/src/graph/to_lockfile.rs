@@ -4,8 +4,7 @@
 
 use crate::{
     flavor::MoveFlavor,
-    package::PackageName,
-    schema::{PackageID, Pin},
+    schema::{PackageID, PackageName, Pin},
 };
 use petgraph::{graph::NodeIndex, visit::EdgeRef};
 use std::collections::BTreeMap;
