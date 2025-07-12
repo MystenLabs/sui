@@ -1,0 +1,105 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import React from "react";
+import { useHits } from "react-instantsearch";
+import { useHistory } from "@docusaurus/router";
+import { truncateAtWord, getDeepestHierarchyLabel } from "./utils";
+
+export default function CustomHitsContent({ name }) {
+  const { hits: items } = useHits();
+  const history = useHistory();
+  const currentHost = typeof window !== "undefined" ? window.location.host : "";
+
+  let siteToVisit = "Try your search again with different keywords";
+  if (name === "sui_docs") {
+    siteToVisit = `${siteToVisit}. If you are unable to find the information you need, try one of the official Sui support channels: <a href="https://github.com/MystenLabs/sui/issues/new/choose" target="_blank">GitHub</a>, <a href="https://discord.gg/Sui" target="_blank">Discord</a>, or <a href="https://t.me/SuiTokenNetwork" target="_blank">Telegram</a>.`;
+  } else if (name === "suins_docs") {
+    siteToVisit = `${siteToVisit} or visit the official <a href="https://docs.suins.io" target="_blank">SuiNS doc</a> site.`;
+  } else if (name === "move_book") {
+    siteToVisit = `${siteToVisit} or visit <a href="https://move-book.com/" target="_blank">The Move Book</a> dedicated site.`;
+  } else if (name === "dapp_kit") {
+    siteToVisit = `${siteToVisit} or visit the official <a href="https://sdk.mystenlabs.com/dapp-kit" target="_blank">dApp Kit</a> site.`;
+  } else {
+    siteToVisit = `${siteToVisit}.`;
+  }
+
+  if (items.length === 0) {
+    return (
+      <>
+        <p>No results found.</p>
+        <p
+          dangerouslySetInnerHTML={{
+            __html: `${siteToVisit}`,
+          }}
+        />
+      </>
+    );
+  }
+
+  const grouped = items.reduce(
+    (acc, hit) => {
+      const key = hit.url_without_anchor;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(hit);
+      return acc;
+    },
+    {} as Record<string, typeof items>,
+  );
+
+  return (
+    <>
+      {Object.entries(grouped).map(([key, group], index) => {
+        return (
+          <div
+            className="mb-8 pb-8 border-2 border-solid border-transparent border-b-sui-gray-50 dark:border-b-sui-gray-80"
+            key={index}
+          >
+            <div className="text-2xl text-sui-gray-80 text-bold mb-2">
+              {group[0].hierarchy?.lvl1 ||
+                group[0].hierarchy?.lvl0 ||
+                "[no title]"}
+            </div>
+            <div className="">
+              {group.map((hit, i) => {
+                const level = hit.type;
+                let sectionTitle = hit.lvl0;
+                if (level === "content") {
+                  sectionTitle = getDeepestHierarchyLabel(hit.hierarchy);
+                } else {
+                  sectionTitle = hit.hierarchy?.[level] || level;
+                }
+
+                const hitHost = new URL(hit.url).host;
+                const isInternal = hitHost === currentHost;
+
+                return (
+                  <div key={i} className="mb-2">
+                    {isInternal ? (
+                      <button
+                        onClick={() => history.push(new URL(hit.url).pathname)}
+                        className="text-lg text-blue-600 underline text-left"
+                      >
+                        {sectionTitle}
+                      </button>
+                    ) : (
+                      <a
+                        href={hit.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-lg text-blue-600 underline"
+                      >
+                        {sectionTitle}
+                      </a>
+                    )}
+                    <p>{hit.content ? truncateAtWord(hit.content) : ""}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
