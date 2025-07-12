@@ -482,16 +482,33 @@ impl ExecutionTimeObserver {
             panic!("get_test_duration called in non-test configuration");
         }
 
+        let per_validator_seed = self.get_per_test_seed();
+        // 25%  of validators always report fast execution times
+        if rngs::StdRng::seed_from_u64(per_validator_seed).gen_bool(0.25) {
+            return Duration::from_micros(10);
+        }
+
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        per_validator_seed.hash(&mut hasher);
+        key.hash(&mut hasher);
+        let mut rng = rngs::StdRng::seed_from_u64(hasher.finish());
+        rng.gen_range(Duration::from_millis(100)..Duration::from_millis(600))
+    }
+
+    #[cfg(msim)]
+    fn get_per_test_seed(&self) -> u64 {
         thread_local! {
             static PER_TEST_SEED: u64 = random::<u64>();
         }
-        PER_TEST_SEED.with(|seed| {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            seed.hash(&mut hasher);
-            key.hash(&mut hasher);
-            let mut rng = rngs::StdRng::seed_from_u64(hasher.finish());
-            rng.gen_range(Duration::from_millis(100)..Duration::from_millis(600))
-        })
+        PER_TEST_SEED.with(|seed| *seed)
+    }
+
+    #[cfg(not(msim))]
+    fn get_per_test_seed(&self) -> u64 {
+        use once_cell::sync::OnceCell;
+
+        static PER_TEST_SEED: OnceCell<u64> = OnceCell::new();
+        *PER_TEST_SEED.get_or_init(random::<u64>)
     }
 
     fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
