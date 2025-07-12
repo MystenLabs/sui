@@ -244,10 +244,10 @@ fn test_read_keystore() {
     let path = temp_dir.path().join("sui.keystore");
     let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
     let key1 = ks
-        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
+        .generate(SignatureScheme::ED25519, None, None, None)
         .unwrap();
     let key2 = ks
-        .generate_and_add_new_key(SignatureScheme::Secp256k1, None, None, None)
+        .generate(SignatureScheme::Secp256k1, None, None, None)
         .unwrap();
 
     let accounts = read_prefunded_account(&path).unwrap();

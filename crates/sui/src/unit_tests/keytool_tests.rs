@@ -3,7 +3,6 @@
 
 use std::str::FromStr;
 
-use crate::key_identity::KeyIdentity;
 use crate::keytool::read_authority_keypair_from_file;
 use crate::keytool::read_keypair_from_file;
 use crate::keytool::CommandOutput;
@@ -20,6 +19,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentScope;
+use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
 use sui_types::base_types::ObjectDigest;
 use sui_types::base_types::ObjectID;
@@ -50,7 +50,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
-        keystore.add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
+        keystore.import(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
     }
 
     // List all addresses with flag
@@ -67,10 +67,10 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
 
-    keystore.add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
-    keystore.add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+    keystore.import(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
+    keystore.import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
 
-    for pk in keystore.keys() {
+    for pk in keystore.entries() {
         let pk1 = pk.clone();
         let sig = keystore.sign_secure(&(&pk).into(), b"hello", Intent::sui_transaction())?;
         match sig {
@@ -516,7 +516,7 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
     let binding = keystore.addresses();
     let sender = binding.first().unwrap();
-    let alias = keystore.get_alias_by_address(sender).unwrap();
+    let alias = keystore.get_alias(sender).unwrap();
 
     // Create a dummy TransactionData
     let gas = (

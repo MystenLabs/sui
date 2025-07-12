@@ -14,6 +14,7 @@ use sui_json_rpc_types::{
     SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
     SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::SuiKeyPair;
@@ -72,6 +73,17 @@ impl WalletContext {
         self.env_override.clone()
     }
 
+    pub fn get_identity_address(
+        &mut self,
+        input: Option<KeyIdentity>,
+    ) -> Result<SuiAddress, anyhow::Error> {
+        if let Some(key_identity) = input {
+            Ok(self.config.keystore.get_by_identity(key_identity)?)
+        } else {
+            self.active_address()
+        }
+    }
+
     pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
         let read = self.client.read().await;
 
@@ -102,7 +114,7 @@ impl WalletContext {
 
     // TODO: Ger rid of mut
     pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        if self.config.keystore.addresses().is_empty() {
+        if self.config.keystore.entries().is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
             ));
@@ -326,7 +338,7 @@ impl WalletContext {
 
     /// Add an account
     pub fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
-        self.config.keystore.add_key(alias, keypair).unwrap();
+        self.config.keystore.import(alias, keypair).unwrap();
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext

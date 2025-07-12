@@ -102,7 +102,7 @@ async fn test_get_staked_sui() {
         )
         .await
         .unwrap();
-    let tx = to_sender_signed_transaction(delegation_tx, keystore.get_key(&address).unwrap());
+    let tx = to_sender_signed_transaction(delegation_tx, keystore.export(&address).unwrap());
     client
         .quorum_driver_api()
         .execute_transaction_block(
