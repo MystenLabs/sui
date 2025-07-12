@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
 use prost_types::FieldMask;
+use sui_protocol_config::ProtocolConfigValue;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
@@ -168,12 +169,13 @@ fn get_protocol_config(
     version: u64,
     chain: sui_protocol_config::Chain,
 ) -> Result<ProtocolConfig, ProtocolVersionNotFoundError> {
-    use sui_protocol_config::ProtocolConfigValue;
-
     let config =
         sui_protocol_config::ProtocolConfig::get_for_version_if_supported(version.into(), chain)
             .ok_or_else(|| ProtocolVersionNotFoundError::new(version))?;
+    Ok(protocol_config_to_proto(config))
+}
 
+pub fn protocol_config_to_proto(config: sui_protocol_config::ProtocolConfig) -> ProtocolConfig {
     let protocol_version = config.version.as_u64();
     let attributes = config
         .attr_map()
@@ -191,10 +193,9 @@ fn get_protocol_config(
         })
         .collect();
     let feature_flags = config.feature_map().into_iter().collect();
-
-    Ok(ProtocolConfig {
+    ProtocolConfig {
         protocol_version: Some(protocol_version),
         feature_flags,
         attributes,
-    })
+    }
 }

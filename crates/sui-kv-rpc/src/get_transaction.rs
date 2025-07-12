@@ -5,22 +5,23 @@ use std::str::FromStr;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader, TransactionData};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
-use sui_rpc_api::proto::rpc::v2beta::{BatchGetTransactionsRequest, BatchGetTransactionsResponse};
+use sui_rpc::proto::sui::rpc::v2beta2::{
+    BatchGetTransactionsRequest, BatchGetTransactionsResponse, ExecutedTransaction,
+    GetTransactionRequest, GetTransactionResponse, GetTransactionResult, Transaction,
+    TransactionEffects, TransactionEvents, UserSignature,
+};
 use sui_rpc_api::{
-    proto::google::rpc::bad_request::FieldViolation,
-    proto::rpc::v2beta::{
-        ExecutedTransaction, GetTransactionRequest, Transaction, TransactionEffects,
-        TransactionEvents, UserSignature,
-    },
-    proto::timestamp_ms_to_proto,
-    ErrorReason, RpcError, TransactionNotFoundError,
+    proto::google::rpc::bad_request::FieldViolation, proto::timestamp_ms_to_proto, ErrorReason,
+    RpcError, TransactionNotFoundError,
 };
 use sui_types::base_types::TransactionDigest;
+
+pub const READ_MASK_DEFAULT: &str = "digest";
 
 pub async fn get_transaction(
     mut client: BigTableClient,
     request: GetTransactionRequest,
-) -> Result<ExecutedTransaction, RpcError> {
+) -> Result<GetTransactionResponse, RpcError> {
     let transaction_digest = request
         .digest
         .ok_or_else(|| {
@@ -38,7 +39,7 @@ pub async fn get_transaction(
     let read_mask = {
         let read_mask = request
             .read_mask
-            .unwrap_or_else(|| FieldMask::from_str(GetTransactionRequest::READ_MASK_DEFAULT));
+            .unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask
             .validate::<ExecutedTransaction>()
             .map_err(|path| {
@@ -53,7 +54,9 @@ pub async fn get_transaction(
     let transaction = response
         .pop()
         .ok_or(TransactionNotFoundError(transaction_digest.into()))?;
-    transaction_to_response(transaction, &read_mask)
+    Ok(GetTransactionResponse {
+        transaction: Some(transaction_to_response(transaction, &read_mask)?),
+    })
 }
 
 pub async fn batch_get_transactions(
@@ -61,8 +64,7 @@ pub async fn batch_get_transactions(
     BatchGetTransactionsRequest { digests, read_mask }: BatchGetTransactionsRequest,
 ) -> Result<BatchGetTransactionsResponse, RpcError> {
     let read_mask = {
-        let read_mask = read_mask
-            .unwrap_or_else(|| FieldMask::from_str(BatchGetTransactionsRequest::READ_MASK_DEFAULT));
+        let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask
             .validate::<ExecutedTransaction>()
             .map_err(|path| {
@@ -77,12 +79,26 @@ pub async fn batch_get_transactions(
         .iter()
         .map(|digest| TransactionDigest::from_str(digest))
         .collect::<Result<Vec<_>, _>>()?;
-    let transactions = client
-        .get_transactions(&digests)
-        .await?
+    let transactions = client.get_transactions(&digests).await?;
+    let mut tx_iter = transactions.into_iter().peekable();
+    let transactions = digests
         .into_iter()
-        .map(|tx| transaction_to_response(tx, &read_mask))
-        .collect::<Result<_, _>>()?;
+        .map(|digest| {
+            if let Some(tx) = tx_iter.peek() {
+                if tx.transaction.digest() == &digest {
+                    return match transaction_to_response(
+                        tx_iter.next().expect("invariant's checked above"),
+                        &read_mask,
+                    ) {
+                        Ok(tx) => GetTransactionResult::new_transaction(tx),
+                        Err(err) => GetTransactionResult::new_error(err.into_status_proto()),
+                    };
+                }
+            }
+            let err: RpcError = TransactionNotFoundError(digest.into()).into();
+            GetTransactionResult::new_error(err.into_status_proto())
+        })
+        .collect();
     Ok(BatchGetTransactionsResponse { transactions })
 }
 
