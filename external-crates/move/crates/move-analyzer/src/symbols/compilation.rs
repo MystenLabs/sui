@@ -25,12 +25,13 @@ use std::{
 };
 use tempfile::tempdir;
 use vfs::{
-    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
     VfsPath,
+    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
 };
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
+    CompiledModuleInfoMap, PASS_CFGIR, PASS_PARSER, PASS_TYPING,
     construct_precompiled_module_infos,
     editions::{Edition, Flavor},
     expansion::ast::ModuleIdent,
@@ -38,7 +39,6 @@ use move_compiler::{
     parser::ast as P,
     shared::{files::MappedFiles, unique_map::UniqueMap},
     typing::ast::ModuleDefinition,
-    CompiledModuleInfoMap, PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::Loc;
 use move_package::{
