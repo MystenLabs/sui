@@ -95,7 +95,7 @@ pub enum LinterDiagnosticCode {
     MissingKey,
     FreezingCapability,
     PreferMutableTxContext,
-    TransferKiosk,
+    NonSharedKiosk,
 }
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
@@ -164,7 +164,7 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
             LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::TransferKiosk as u8,
+            LinterDiagnosticCode::NonSharedKiosk as u8,
             Some(TRANSFER_KIOSK_FILTER_NAME),
         ),
     ];
@@ -184,7 +184,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
             collection_equality::CollectionEqualityVisitor.visitor(),
             public_random::PublicRandomVisitor.visitor(),
             missing_key::MissingKeyVisitor.visitor(),
-            non_shared_kiosk::KioskTransferVerifier.visitor(),
+            non_shared_kiosk::NonSharedKioskVisitor.visitor(),
         ],
         LintLevel::All => {
             let mut visitors = linter_visitors(LintLevel::Default);

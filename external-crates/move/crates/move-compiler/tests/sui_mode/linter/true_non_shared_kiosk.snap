@@ -5,45 +5,35 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W99010]: Kiosks should always be `shared`
-  ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:7:9
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+  ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:7:34
   │
-6 │     public fun transfer_kiosk(kiosk: Kiosk, _ctx: &mut TxContext) {
-  │                                      ----- Value originating from here
 7 │         transfer::public_transfer(kiosk, @0);
-  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Kiosk should not be transferred, use `transfer::public_share_object` instead
+  │                                  ^^^^^^^^^^^ Kiosk should be shared with `public_share_object`
   │
   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W99010]: Kiosks should always be `shared`
-   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:13:9
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:13:34
    │
 13 │         transfer::public_transfer(kiosk, @0);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Kiosk should not be transferred, use `transfer::public_share_object` instead
-   ·
-39 │     public fun new(ctx: &mut TxContext): (Kiosk, KioskCap) {
-   │                                           ----- Value originating from here
+   │                                  ^^^^^^^^^^^ Kiosk should be shared with `public_share_object`
    │
    = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W99010]: Kiosks should always be `shared`
-   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:18:9
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:18:40
    │
-17 │     public fun freeze_kiosk(kiosk1: Kiosk, kiosk2: Kiosk) {
-   │                                     ----- Value originating from here
 18 │         transfer::public_freeze_object(kiosk1);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Kiosk should not be frozen, use `transfer::public_share_object` instead
+   │                                        ^^^^^^ Kiosk should be shared with `public_share_object`
    │
    = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W99010]: Kiosks should always be `shared`
-   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:19:9
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:19:40
    │
-17 │     public fun freeze_kiosk(kiosk1: Kiosk, kiosk2: Kiosk) {
-   │                                                    ----- Value originating from here
-18 │         transfer::public_freeze_object(kiosk1);
 19 │         transfer::public_freeze_object(kiosk2);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Kiosk should not be frozen, use `transfer::public_share_object` instead
+   │                                        ^^^^^^ Kiosk should be shared with `public_share_object`
    │
    = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
