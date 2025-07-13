@@ -766,13 +766,8 @@ where
             None
         }
     };
-    let (adapter, result_opt) = Adapter::init(
-        default_syntax,
-        pre_compiled_module_info_opt,
-        init_opt,
-        path,
-    )
-    .await;
+    let (adapter, result_opt) =
+        Adapter::init(default_syntax, pre_compiled_module_info_opt, init_opt, path).await;
 
     if let Some(result) = result_opt {
         if let Err(e) = writeln!(output, "\ninit:\n{}", result) {

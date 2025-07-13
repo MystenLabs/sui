@@ -1746,8 +1746,7 @@ pub fn program(
     pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
     prog: E::Program,
 ) -> N::Program {
-    let outer_context =
-        OuterContext::new(compilation_env, pre_compiled_module_info.clone(), &prog);
+    let outer_context = OuterContext::new(compilation_env, pre_compiled_module_info.clone(), &prog);
     let E::Program {
         warning_filters_table,
         modules: emodules,
