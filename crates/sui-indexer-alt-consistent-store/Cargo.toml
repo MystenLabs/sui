@@ -8,12 +8,18 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 bcs.workspace = true
 bincode.workspace = true
+futures.workspace = true
 ouroboros.workspace = true
 rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
+scoped-futures.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
 
 sui-default-config.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
