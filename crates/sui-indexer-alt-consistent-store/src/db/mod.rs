@@ -4,7 +4,7 @@
 
 use std::{
     collections::BTreeMap,
-    ops::{Bound, RangeBounds},
+    ops::{Bound, RangeBounds, RangeInclusive},
     path::Path,
     sync::{Arc, RwLock},
 };
@@ -16,11 +16,11 @@ use sui_indexer_alt_framework::store::CommitterWatermark;
 
 use self::error::Error;
 
-mod config;
+pub(crate) mod config;
 mod error;
 mod iter;
 mod key;
-mod map;
+pub(crate) mod map;
 
 /// Name of the column family the database adds, to manage the checkpoint watermark.
 const WATERMARK_CF: &str = "$watermark";
@@ -186,6 +186,21 @@ impl Db {
             Ok(Some(
                 bcs::from_bytes(&watermark).context("Failed to deserialize watermark")?,
             ))
+        })
+    }
+
+    /// The number of snapshots this database has.
+    pub(crate) fn snapshots(&self) -> usize {
+        self.0.read().expect("poisoned").with_snapshots(|s| s.len())
+    }
+
+    /// The range of checkpoints that the database has snapshots for, or `None` if there are no
+    /// snapshots.
+    pub(crate) fn snapshot_range(&self) -> Option<RangeInclusive<u64>> {
+        self.0.read().expect("poisoned").with_snapshots(|s| {
+            let (&lo, _) = s.first_key_value()?;
+            let (&hi, _) = s.last_key_value()?;
+            Some(lo..=hi)
         })
     }
 
@@ -390,6 +405,17 @@ unsafe impl std::marker::Send for Db {}
 
 impl From<Watermark> for CommitterWatermark {
     fn from(w: Watermark) -> Self {
+        Self {
+            epoch_hi_inclusive: w.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            tx_hi: w.tx_hi,
+            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
+        }
+    }
+}
+
+impl From<CommitterWatermark> for Watermark {
+    fn from(w: CommitterWatermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
