@@ -22,7 +22,6 @@ use sui_types::{
 
 #[derive(Debug, Clone, Copy)]
 enum SplatLocation {
-    TxContext,
     GasCoin,
     Input(u16),
     Result(u16, u16),
@@ -112,15 +111,6 @@ impl Context {
         }
     }
 
-    fn location_kind(&self, location: SplatLocation) -> Option<InputKind> {
-        match location {
-            SplatLocation::GasCoin => None,
-            SplatLocation::TxContext => None,
-            SplatLocation::Input(i) => Some(self.input_resolution[i as usize]),
-            SplatLocation::Result(_, _) => None, // results are not inputs
-        }
-    }
-
     // Get the fixed type of a location. Returns `None` for Pure and Receiving inputs,
     fn fixed_type(
         &mut self,
@@ -128,7 +118,6 @@ impl Context {
         location: SplatLocation,
     ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
         Ok(Some(match location {
-            SplatLocation::TxContext => (T::Location::TxContext, env.tx_context_type()?),
             SplatLocation::GasCoin => (T::Location::GasCoin, env.gas_coin_type()?),
             SplatLocation::Result(i, j) => (
                 T::Location::Result(i, j),
@@ -157,7 +146,7 @@ impl Context {
         bytes_constraint: BytesConstraint,
     ) -> Result<(T::Location, Type), ExecutionError> {
         Ok(match location {
-            SplatLocation::TxContext | SplatLocation::GasCoin | SplatLocation::Result(_, _) => self
+            SplatLocation::GasCoin | SplatLocation::Result(_, _) => self
                 .fixed_type(env, location)?
                 .ok_or_else(|| make_invariant_violation!("Expected fixed type for {location:?}"))?,
             SplatLocation::Input(i) => match &self.input_resolution[i as usize] {
