@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use crate::{
-    CompiledModuleInfoMap,
+    PreCompiledModuleInfoMap,
     cfgir::{
         CFGContext,
         absint::{AbstractDomain, JoinResult, TransferFunctions, analyze_function},
@@ -29,7 +29,7 @@ pub trait CFGIRVisitor: Send + Sync {
     fn visit(
         &self,
         env: &CompilationEnv,
-        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
         program: &G::Program,
     );
 
@@ -61,16 +61,16 @@ pub trait CFGIRVisitorConstructor: Send {
 
     fn context<'a>(
         env: &'a CompilationEnv,
-        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
         program: &G::Program,
     ) -> Self::Context<'a>;
 
     fn visit(
         env: &CompilationEnv,
-        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
         program: &G::Program,
     ) {
-        let mut context = Self::context(env, pre_compiled_module_infos, program);
+        let mut context = Self::context(env, pre_compiled_module_info, program);
         context.visit(program);
     }
 }
@@ -335,10 +335,10 @@ impl<V: CFGIRVisitorConstructor + Send + Sync> CFGIRVisitor for V {
     fn visit(
         &self,
         env: &CompilationEnv,
-        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
         program: &G::Program,
     ) {
-        Self::visit(env, pre_compiled_module_infos, program)
+        Self::visit(env, pre_compiled_module_info, program)
     }
 }
 
@@ -357,7 +357,7 @@ macro_rules! simple_visitor {
 
             fn context<'a>(
                 env: &'a crate::shared::CompilationEnv,
-                _pre_compiled_module_infos: Option<std::sync::Arc<crate::command_line::compiler::CompiledModuleInfoMap>>,
+                _pre_compiled_module_info: Option<std::sync::Arc<crate::command_line::compiler::PreCompiledModuleInfoMap>>,
                 _program: &crate::cfgir::ast::Program,
             ) -> Self::Context<'a> {
                 let reporter = env.diagnostic_reporter_at_top_level();

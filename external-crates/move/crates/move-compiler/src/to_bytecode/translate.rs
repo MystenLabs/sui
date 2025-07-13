@@ -4,7 +4,7 @@
 
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
-    CompiledModuleInfoMap,
+    PreCompiledModuleInfoMap,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
@@ -43,7 +43,7 @@ type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
@@ -53,8 +53,8 @@ fn extract_decls(
     // pre-compiled modules contain ProgramInfo computed at typing which does contains
     // dependency order so unwrap below is safe
     let pre_compiled_dependency_orders = || {
-        pre_compiled_module_infos.iter().flat_map(|module_infos| {
-            module_infos
+        pre_compiled_module_info.iter().flat_map(|module_info| {
+            module_info
                 .iter()
                 .filter(|(mident, _)| !prog.modules.contains_key(mident))
                 .map(|(mident, minfo)| (*mident, minfo.info.dependency_order.unwrap()))
@@ -131,8 +131,8 @@ fn extract_decls(
         .collect();
 
     // add pre-compiled declaratinos if any
-    if let Some(pre_compiled_module_infos) = pre_compiled_module_infos {
-        for (mident, minfo) in pre_compiled_module_infos.iter() {
+    if let Some(pre_compiled_module_info) = pre_compiled_module_info {
+        for (mident, minfo) in pre_compiled_module_info.iter() {
             let (pre_compiled_datatype_decls, pre_compiled_fun_decls) =
                 extract_decls_from_program_info(compilation_env, mident, &minfo.info);
             ddecls.extend(pre_compiled_datatype_decls);
@@ -232,14 +232,13 @@ fn extract_decls_from_program_info(
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
     prog: G::Program,
-) -> (Vec<AnnotatedCompiledUnit>, Vec<ModuleIdent>) {
+) -> Vec<AnnotatedCompiledUnit> {
     let mut units = Vec::new();
-    let mut mod_idents = Vec::new();
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let (orderings, ddecls, fdecls) =
-        extract_decls(compilation_env, pre_compiled_module_infos, &prog);
+        extract_decls(compilation_env, pre_compiled_module_info, &prog);
     let G::Program {
         modules: gmodules,
         warning_filters_table,
@@ -262,13 +261,12 @@ pub fn program(
             &fdecls,
         ) {
             units.push(unit);
-            mod_idents.push(m);
         }
     }
     // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
     // are gone, the table can safely be dropped.
     drop(warning_filters_table);
-    (units, mod_idents)
+    units
 }
 
 fn module(

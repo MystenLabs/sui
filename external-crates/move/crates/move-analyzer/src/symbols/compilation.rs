@@ -25,20 +25,20 @@ use std::{
 };
 use tempfile::tempdir;
 use vfs::{
-    VfsPath,
     impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
+    VfsPath,
 };
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    CompiledModuleInfoMap, PASS_CFGIR, PASS_PARSER, PASS_TYPING,
-    construct_precompiled_module_infos,
+    construct_precompiled_module_info,
     editions::{Edition, Flavor},
     expansion::ast::ModuleIdent,
     linters::LintLevel,
     parser::ast as P,
     shared::{files::MappedFiles, unique_map::UniqueMap},
     typing::ast::ModuleDefinition,
+    PreCompiledModuleInfoMap, PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::Loc;
 use move_package::{
@@ -89,7 +89,7 @@ pub struct PrecomputedPkgInfo {
     /// Hash of dependency source files
     pub deps_hash: String,
     /// Precompiled deps
-    pub deps: Arc<CompiledModuleInfoMap>,
+    pub deps: Arc<PreCompiledModuleInfoMap>,
     /// Symbols computation data
     pub deps_symbols_data: Arc<SymbolsComputationData>,
     /// Compiled user program
@@ -110,7 +110,7 @@ pub struct PrecomputedPkgInfo {
 #[derive(Clone)]
 pub struct AnalyzedPkgInfo {
     /// Cached fully compiled program representing dependencies
-    pub program_deps: Arc<CompiledModuleInfoMap>,
+    pub program_deps: Arc<PreCompiledModuleInfoMap>,
     /// Cached symbols computation data for dependencies
     pub symbols_data: Option<Arc<SymbolsComputationData>>,
     /// Compiled user program
@@ -267,7 +267,7 @@ pub fn get_compiled_pkg(
                         )
                     }
                     _ => (
-                        construct_precompiled_module_infos(
+                        construct_precompiled_module_info(
                             src_deps,
                             None,
                             compiler_flags,
@@ -345,7 +345,7 @@ pub fn get_compiled_pkg(
                 let compiler = compiler.set_ide_mode();
                 // extract expansion AST
                 let (files, compilation_result) = compiler
-                    .set_pre_compiled_module_infos_opt(compiled_libs)
+                    .set_pre_compiled_module_info_opt(compiled_libs)
                     .set_files_to_compile(if full_compilation {
                         None
                     } else {
@@ -557,11 +557,9 @@ fn merge_user_programs(
     // address maps might have changed - below we need to update named map indexes
     // even for unmodified packages
     parsed_program_cached.named_address_maps = parsed_program_new.named_address_maps;
-    // remove modules from user code that belong to modified files (use new
-    // file hashes - if cached module's hash is on the list of new file hashes, it means
-    // that nothing changed)
+    // remove modules from user code that belong to modified files
     parsed_program_cached.source_definitions.retain(|pkg_def| {
-        let (pkg_modified, _) =
+        let pkg_modified =
             is_parsed_pkg_modified(pkg_def, &files_to_compile, file_paths_cached.clone());
         !pkg_modified
     });
@@ -575,7 +573,7 @@ fn merge_user_programs(
     // add new modules from user code, but even if nothing's changed we still
     // need to update the named address map index)
     for pkg_def in parsed_program_new.source_definitions {
-        let (pkg_modified, pkg_hash) =
+        let pkg_modified =
             is_parsed_pkg_modified(&pkg_def, &files_to_compile, file_paths_new.clone());
 
         if pkg_modified {
@@ -583,6 +581,10 @@ fn merge_user_programs(
         } else {
             // find cached package definition with the same hash
             // and update its named address map index
+            let pkg_hash = match &pkg_def.def {
+                P::Definition::Module(mdef) => mdef.loc.file_hash(),
+                P::Definition::Address(adef) => adef.loc.file_hash(),
+            };
             let cached_pkg_def =
                 parsed_program_cached
                     .source_definitions

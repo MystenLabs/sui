@@ -16,7 +16,7 @@ use move_binary_format::{
     errors::{Location, VMError, VMResult},
 };
 use move_command_line_common::files::verify_and_create_named_address_mapping;
-use move_compiler::{CompiledModuleInfoMap, editions::Edition, shared::PackagePaths};
+use move_compiler::{PreCompiledModuleInfoMap, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
@@ -67,7 +67,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_module_infos_opt: Option<Arc<CompiledModuleInfoMap>>,
+        pre_compiled_module_info_opt: Option<Arc<PreCompiledModuleInfoMap>>,
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
@@ -93,7 +93,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         let mut adapter = Self {
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_module_infos_opt,
+                pre_compiled_module_info_opt,
                 None,
                 Some(compiler_edition),
                 None,
@@ -295,8 +295,8 @@ impl SimpleVMTestAdapter {
     }
 }
 
-pub static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<CompiledModuleInfoMap> = Lazy::new(|| {
-    let module_infos = move_compiler::construct_precompiled_module_infos(
+pub static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<PreCompiledModuleInfoMap> = Lazy::new(|| {
+    let module_info = move_compiler::construct_precompiled_module_info(
         vec![PackagePaths {
             name: None,
             paths: move_stdlib::source_files(),
@@ -307,7 +307,7 @@ pub static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<CompiledModuleInfoMap> = L
         None,
     )
     .unwrap();
-    match module_infos {
+    match module_info {
         Ok(modules_info) => modules_info,
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");

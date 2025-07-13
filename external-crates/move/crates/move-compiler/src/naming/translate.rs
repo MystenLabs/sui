@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    CompiledModuleInfoMap, debug_display, diag,
+    PreCompiledModuleInfoMap, debug_display, diag,
     diagnostics::{
         self, Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{self, *},
@@ -405,7 +405,7 @@ pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMe
 
 pub fn build_member_map(
     env: &CompilationEnv,
-    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
     prog: &E::Program,
 ) -> ModuleMembers {
     // NB: This checks if the element is present, and doesn't replace it if so. This is congruent
@@ -507,8 +507,8 @@ pub fn build_member_map(
         assert!(all_members.insert(mident, members).is_none());
     }
 
-    if let Some(pre_compiled_module_infos) = pre_compiled_module_infos {
-        all_members.extend(pre_compiled_module_infos.iter().map(|(mident, minfo)| {
+    if let Some(pre_compiled_module_info) = pre_compiled_module_info {
+        all_members.extend(pre_compiled_module_info.iter().map(|(mident, minfo)| {
             (
                 *mident,
                 module_info_to_resolved_members(*mident, &minfo.info),
@@ -655,11 +655,11 @@ macro_rules! resolve_from_module_access {
 impl OuterContext {
     fn new(
         compilation_env: &CompilationEnv,
-        pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
         prog: &E::Program,
     ) -> Self {
         use ResolvedType as RT;
-        let module_members = build_member_map(compilation_env, pre_compiled_module_infos, prog);
+        let module_members = build_member_map(compilation_env, pre_compiled_module_info, prog);
         let unscoped_types = N::BuiltinTypeName_::all_names()
             .iter()
             .map(|s| {
@@ -1743,18 +1743,18 @@ fn arity_string(arity: usize) -> &'static str {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
     prog: E::Program,
 ) -> N::Program {
     let outer_context =
-        OuterContext::new(compilation_env, pre_compiled_module_infos.clone(), &prog);
+        OuterContext::new(compilation_env, pre_compiled_module_info.clone(), &prog);
     let E::Program {
         warning_filters_table,
         modules: emodules,
     } = prog;
     let modules = modules(compilation_env, &outer_context, emodules);
     let mut inner = N::Program_ { modules };
-    let mut info = NamingProgramInfo::new(pre_compiled_module_infos, &inner);
+    let mut info = NamingProgramInfo::new(pre_compiled_module_info, &inner);
     super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
     N::Program {
         info,

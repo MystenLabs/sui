@@ -358,37 +358,41 @@ pub fn compute_symbols_typed_program(
                 })
                 .collect::<BTreeSet<_>>();
 
+            /// macro to filter computation data fields based on a predicate
+            /// determining if computation data belongs to a dependency
+            macro_rules! filter_computation_data {
+                ($data:expr, $field:ident, $predicate:expr) => {
+                    $data
+                        .$field
+                        .clone()
+                        .into_iter()
+                        .filter($predicate)
+                        .collect()
+                };
+            }
+
             let deps_computation_data = SymbolsComputationData {
-                mod_outer_defs: computation_data
-                    .mod_outer_defs
-                    .clone()
-                    .into_iter()
-                    .filter(|(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str))
-                    .collect(),
-                mod_use_defs: computation_data
-                    .mod_use_defs
-                    .clone()
-                    .into_iter()
-                    .filter(|(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str))
-                    .collect(),
-                references: computation_data
-                    .references
-                    .clone()
-                    .into_iter()
-                    .filter(|(loc, _)| cached_deps.dep_hashes.contains(&loc.file_hash()))
-                    .collect(),
-                def_info: computation_data
-                    .def_info
-                    .clone()
-                    .into_iter()
-                    .filter(|(loc, _)| cached_deps.dep_hashes.contains(&loc.file_hash()))
-                    .collect(),
-                mod_to_alias_lengths: computation_data
-                    .mod_to_alias_lengths
-                    .clone()
-                    .into_iter()
-                    .filter(|(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str))
-                    .collect(),
+                mod_outer_defs: filter_computation_data!(
+                    computation_data,
+                    mod_outer_defs,
+                    |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
+                ),
+                mod_use_defs: filter_computation_data!(
+                    computation_data,
+                    mod_use_defs,
+                    |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
+                ),
+                references: filter_computation_data!(computation_data, references, |(loc, _)| {
+                    cached_deps.dep_hashes.contains(&loc.file_hash())
+                }),
+                def_info: filter_computation_data!(computation_data, def_info, |(loc, _)| {
+                    cached_deps.dep_hashes.contains(&loc.file_hash())
+                }),
+                mod_to_alias_lengths: filter_computation_data!(
+                    computation_data,
+                    mod_to_alias_lengths,
+                    |(mod_ident_str, _)| dep_mod_ident_strs.contains(mod_ident_str)
+                ),
             };
             Arc::new(deps_computation_data)
         };

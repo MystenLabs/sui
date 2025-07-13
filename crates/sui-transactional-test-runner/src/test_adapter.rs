@@ -336,7 +336,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_module_infos_opt: Option<Arc<CompiledModuleInfoMap>>,
+        pre_compiled_module_info_opt: Option<Arc<CompiledModuleInfoMap>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -347,7 +347,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
     ) -> (Self, Option<String>) {
         let rng = StdRng::from_seed(RNG_SEED);
         assert!(
-            pre_compiled_module_infos_opt.is_some(),
+            pre_compiled_module_info_opt.is_some(),
             "Must populate 'pre_compiled_deps' with Sui framework"
         );
 
@@ -411,7 +411,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             read_replica,
             compiled_state: CompiledState::new(
                 named_address_mapping,
-                pre_compiled_module_infos_opt,
+                pre_compiled_module_info_opt,
                 Some(NumericalAddress::new(
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
@@ -2284,7 +2284,7 @@ pub static PRE_COMPILED: Lazy<CompiledModuleInfoMap> = Lazy::new(|| {
         buf.extend(["packages", "bridge", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let fully_compiled_res = move_compiler::construct_precompiled_module_infos(
+    let fully_compiled_res = move_compiler::construct_precompiled_module_info(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
             paths: vec![

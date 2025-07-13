@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    CompiledModuleInfoMap, diag,
+    PreCompiledModuleInfoMap, diag,
     diagnostics::{Diagnostic, codes::*},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
@@ -57,7 +57,7 @@ use std::{
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
     prog: N::Program,
 ) -> T::Program {
     let N::Program {
@@ -67,7 +67,7 @@ pub fn program(
     } = prog;
 
     let all_macro_definitions =
-        extract_macros(compilation_env, &nmodules, &pre_compiled_module_infos);
+        extract_macros(compilation_env, &nmodules, &pre_compiled_module_info);
     let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
     dependency_ordering::program(compilation_env, &mut modules);
@@ -81,7 +81,7 @@ pub fn program(
         .collect();
     let program_info = TypingProgramInfo::new(
         compilation_env,
-        pre_compiled_module_infos,
+        pre_compiled_module_info,
         &modules,
         module_use_funs,
     );
@@ -101,7 +101,7 @@ pub fn program(
 fn extract_macros(
     compilation_env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
-    pre_compiled_module_infos: &Option<Arc<CompiledModuleInfoMap>>,
+    pre_compiled_module_info: &Option<Arc<PreCompiledModuleInfoMap>>,
 ) -> UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
@@ -133,8 +133,8 @@ fn extract_macros(
     // should have already produced that error. To avoid unnecessary error handling, we simply
     // prefer the non-precompiled definitions.
     let pre_compiled_macro_infos = || {
-        pre_compiled_module_infos.iter().flat_map(|module_infos| {
-            module_infos.iter().filter_map(|(mident, module_info)| {
+        pre_compiled_module_info.iter().flat_map(|module_info| {
+            module_info.iter().filter_map(|(mident, module_info)| {
                 if !modules.contains_key(mident) {
                     if let Some(macro_infos) = &module_info.macro_infos {
                         return Some((*mident, &macro_infos.0, &macro_infos.1));

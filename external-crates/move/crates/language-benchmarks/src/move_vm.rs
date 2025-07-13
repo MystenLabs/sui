@@ -5,7 +5,7 @@
 use criterion::{Criterion, measurement::Measurement};
 use move_binary_format::CompiledModule;
 use move_compiler::{
-    Compiler, command_line::compiler::CompiledModuleInfoMap, editions::Edition,
+    Compiler, command_line::compiler::PreCompiledModuleInfoMap, editions::Edition,
     shared::PackagePaths,
 };
 use move_core_types::{
@@ -20,8 +20,8 @@ use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;
 use std::{path::PathBuf, sync::Arc};
 
-static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<CompiledModuleInfoMap> = Lazy::new(|| {
-    let module_infos = move_compiler::construct_precompiled_module_infos(
+static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<PreCompiledModuleInfoMap> = Lazy::new(|| {
+    let module_info = move_compiler::construct_precompiled_module_info(
         vec![PackagePaths {
             name: None,
             paths: move_stdlib::source_files(),
@@ -32,7 +32,7 @@ static PRECOMPILED_MOVE_STDLIB_MODULES_INFO: Lazy<CompiledModuleInfoMap> = Lazy:
         None,
     )
     .unwrap();
-    match module_infos {
+    match module_info {
         Ok(stdlib) => stdlib,
         Err((files, errors)) => {
             eprintln!("!!!Standard library failed to compile!!!");
@@ -63,7 +63,7 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
     };
     let (_files, compiled_units) =
         Compiler::from_files(None, src_files, vec![], move_stdlib::named_addresses())
-            .set_pre_compiled_module_infos_opt(Some(Arc::new(
+            .set_pre_compiled_module_info_opt(Some(Arc::new(
                 PRECOMPILED_MOVE_STDLIB_MODULES_INFO.clone(),
             )))
             .set_default_config(pkg_config)

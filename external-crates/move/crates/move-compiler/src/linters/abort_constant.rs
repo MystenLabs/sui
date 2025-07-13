@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use crate::CompiledModuleInfoMap;
+use crate::PreCompiledModuleInfoMap;
 use crate::diagnostics::DiagnosticReporter;
 use crate::diagnostics::warning_filters::WarningFilters;
 use crate::linters::StyleCodes;
@@ -37,7 +37,7 @@ impl CFGIRVisitorConstructor for AssertAbortNamedConstants {
 
     fn context<'a>(
         env: &'a CompilationEnv,
-        _pre_compiled_module_infos: Option<Arc<CompiledModuleInfoMap>>,
+        _pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
         program: &G::Program,
     ) -> Self::Context<'a> {
         let package_name = program

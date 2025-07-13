@@ -31,9 +31,9 @@ pub mod unit_test;
 pub use command_line::{
     MOVE_COMPILED_INTERFACES_DIR,
     compiler::{
-        CompiledModuleInfo, CompiledModuleInfoMap, Compiler, PASS_CFGIR, PASS_COMPILATION,
-        PASS_EXPANSION, PASS_HLIR, PASS_NAMING, PASS_PARSER, PASS_TYPING, SteppedCompiler,
-        construct_precompiled_module_infos, generate_interface_files, output_compiled_units,
+        Compiler, PASS_CFGIR, PASS_COMPILATION, PASS_EXPANSION, PASS_HLIR, PASS_NAMING,
+        PASS_PARSER, PASS_TYPING, PreCompiledModuleInfo, PreCompiledModuleInfoMap, SteppedCompiler,
+        construct_precompiled_module_info, generate_interface_files, output_compiled_units,
     },
 };
 pub use shared::Flags;
