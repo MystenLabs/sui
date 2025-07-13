@@ -406,11 +406,11 @@ div[role="tabpanel"] {
 }
 
 .ais-Pagination-list {
-  @apply pl-0 list-none flex justify-center border border-solid border-transparent border-t-sui-gray-50 dark:border-t-sui-gray-80;
+  @apply pl-0 list-none flex justify-center;
 }
 
 .ais-Pagination-item {
-  @apply border border-solid border-sui-gray-50 dark:border-sui-gray-80 border-t-0 p-1 mx-2 w-12 flex items-center justify-center;
+  @apply border border-solid border-sui-gray-50 dark:border-sui-gray-80 p-1 mx-2 w-12 flex items-center justify-center;
 }
 
 .ais-SearchBox-submitIcon {

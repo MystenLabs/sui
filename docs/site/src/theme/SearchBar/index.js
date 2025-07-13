@@ -14,9 +14,16 @@ export default class SearchBarWrapper extends React.Component {
     }
 
     const observer = new MutationObserver(() => {
-      const footer = document.querySelector(".DocSearch-HitsFooter");
+      const modal = document.querySelector(".DocSearch-Modal");
+      const footer =
+        document.querySelector(".DocSearch-Footer") ||
+        document.querySelector(".DocSearch-Dropdown") || // fallback
+        document.querySelector(".DocSearch"); // worst-case fallback
+
       const input = document.querySelector(".DocSearch-Input");
+
       if (
+        modal &&
         footer &&
         input &&
         !document.getElementById("custom-search-footer-link")
@@ -24,15 +31,14 @@ export default class SearchBarWrapper extends React.Component {
         const link = document.createElement("a");
         link.id = "custom-search-footer-link";
         link.textContent = "Go to full search page →";
-        link.style.cssText =
-          "margin-top: 8px; display: block; font-weight: bold;";
+        link.className = "py-2 pr-4 block text-right text-sm font-bold";
         const updateHref = () => {
           const query = encodeURIComponent(input.value || "");
           link.href = `/search?q=${query}`;
         };
         input.addEventListener("input", updateHref);
         updateHref();
-        footer.appendChild(link);
+        modal.appendChild(link);
       }
     });
 
