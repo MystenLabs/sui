@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import React from "react";
 import { useHits, usePagination } from "react-instantsearch";
 
