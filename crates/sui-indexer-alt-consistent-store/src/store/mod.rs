@@ -16,7 +16,7 @@ use crate::db::{Db, Watermark};
 
 use self::synchronizer::Synchronizer;
 
-mod synchronizer;
+pub(crate) mod synchronizer;
 
 /// Defines the schema for the database.
 pub(crate) trait Schema: Sized {
