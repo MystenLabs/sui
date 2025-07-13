@@ -6,49 +6,41 @@ info:
   lint: true
 ---
 warning[Lint W99010]: Kiosk should be shared with `public_share_object`
-  ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:7:34
-  │
-7 │         transfer::public_transfer(kiosk, @0);
-  │                                  ^^^^^^^^^^^ Kiosk should be shared with `public_share_object`
-  │
-  = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:10:16
+   │
+10 │         kiosk: Kiosk,
+   │                ^^^^^ Kiosk should not be used as a field, use it as a top-level shared object with `public_share_object`
+   │
+   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99010]: Kiosk should be shared with `public_share_object`
-   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:13:34
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:25:34
    │
-13 │         transfer::public_transfer(kiosk, @0);
+25 │         transfer::public_transfer(kiosk, @0);
    │                                  ^^^^^^^^^^^ Kiosk should be shared with `public_share_object`
    │
    = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99010]: Kiosk should be shared with `public_share_object`
-   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:18:40
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:31:34
    │
-18 │         transfer::public_freeze_object(kiosk1);
+31 │         transfer::public_transfer(kiosk, @0);
+   │                                  ^^^^^^^^^^^ Kiosk should be shared with `public_share_object`
+   │
+   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:36:40
+   │
+36 │         transfer::public_freeze_object(kiosk1);
    │                                        ^^^^^^ Kiosk should be shared with `public_share_object`
    │
    = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99010]: Kiosk should be shared with `public_share_object`
-   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:19:40
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:37:40
    │
-19 │         transfer::public_freeze_object(kiosk2);
+37 │         transfer::public_freeze_object(kiosk2);
    │                                        ^^^^^^ Kiosk should be shared with `public_share_object`
    │
    = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[Lint W99000]: possible owned object share
-   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:23:9
-   │
-22 │     public fun share_kiosk(kiosk: Kiosk) {
-   │                            ----- A potentially owned object coming from here
-23 │         transfer::public_share_object(kiosk);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │                             │
-   │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
-   │         Potential abort from a (potentially) owned object created by a different transaction.
-   ·
-31 │     struct Kiosk has key, store {
-   │                           ----- Potentially an owned object because 'store' grants access to public transfers
-   │
-   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -1,7 +1,25 @@
+#[allow(lint(share_owned))]
 module a::test_kiosk_transfer {
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::TxContext;
     use sui::kiosk::{Self, Kiosk};
+
+    struct KioskWrapper has key {
+        id: UID,
+        kiosk: Kiosk,
+    }
+
+    public fun new_kiosk_wrapper(ctx: &mut TxContext): KioskWrapper {
+        let (kiosk, cap) = kiosk::new(ctx);
+
+        transfer::public_transfer(cap, @0);
+
+        KioskWrapper {
+            id: object::new(ctx),
+            kiosk,
+        }
+    }
 
     public fun transfer_kiosk(kiosk: Kiosk, _ctx: &mut TxContext) {
         transfer::public_transfer(kiosk, @0);
