@@ -229,7 +229,6 @@ pub mod authority_test_utils;
 pub mod authority_per_epoch_store;
 pub mod authority_per_epoch_store_pruner;
 
-mod authority_store_migrations;
 pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
@@ -3193,8 +3192,6 @@ impl AuthorityState {
             rx_ready_certificates,
             rx_execution_shutdown,
         ));
-        spawn_monitored_task!(authority_store_migrations::migrate_events(store));
-
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state
             .create_owner_index_if_empty(genesis_objects, &epoch_store)
