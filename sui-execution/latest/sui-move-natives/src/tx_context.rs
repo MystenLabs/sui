@@ -400,7 +400,8 @@ pub fn replace(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 9);
+    let args_len = args.len();
+    debug_assert!(args_len == 8 || args_len == 9);
 
     // use the `TxContextReplaceCostParams` for the cost of this function
     let tx_context_replace_cost_params: TxContextReplaceCostParams = context
@@ -413,16 +414,20 @@ pub fn replace(
         tx_context_replace_cost_params.tx_context_replace_cost_base
     );
 
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let mut sponsor: Vec<AccountAddress> = pop_arg!(args, Vec<AccountAddress>);
     let gas_budget: u64 = pop_arg!(args, u64);
     let gas_price: u64 = pop_arg!(args, u64);
-    let rgp: u64 = pop_arg!(args, u64);
+    let rgp: u64 = if args_len == 9 {
+        pop_arg!(args, u64)
+    } else {
+        transaction_context.rgp()
+    };
     let ids_created: u64 = pop_arg!(args, u64);
     let epoch_timestamp_ms: u64 = pop_arg!(args, u64);
     let epoch: u64 = pop_arg!(args, u64);
     let tx_hash: Vec<u8> = pop_arg!(args, Vec<u8>);
     let sender: AccountAddress = pop_arg!(args, AccountAddress);
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     transaction_context.replace(
         sender,
         tx_hash,
