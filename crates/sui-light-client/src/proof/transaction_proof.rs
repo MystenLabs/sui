@@ -6,7 +6,14 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use sui_types::{
-    base_types::ObjectRef, digests::TransactionDigest, effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents}, event::{Event, EventID}, full_checkpoint_content::CheckpointData, messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, VerifiedCheckpoint}, object::Object, transaction::Transaction
+    base_types::ObjectRef,
+    digests::TransactionDigest,
+    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
+    event::{Event, EventID},
+    full_checkpoint_content::CheckpointData,
+    messages_checkpoint::{CheckpointContents, VerifiedCheckpoint},
+    object::Object,
+    transaction::Transaction,
 };
 
 use crate::proof::base::{ProofContentsVerifier, ProofTarget};
@@ -45,13 +52,9 @@ impl TransactionProof {
             checkpoint_contents: checkpoint.checkpoint_contents.clone(),
             transaction: tx.transaction.clone(),
             effects: tx.effects.clone(),
-            events: if add_events {
-                tx.events.clone()
-            } else {
-                None
-            },
+            events: if add_events { tx.events.clone() } else { None },
         })
-    }   
+    }
 
     /// Check that the object references are correct and in the effects
     fn verify_objects(&self, objects: &Vec<(ObjectRef, Object)>) -> anyhow::Result<()> {
@@ -115,11 +118,7 @@ impl TransactionProof {
 }
 
 impl ProofContentsVerifier for TransactionProof {
-    fn verify(
-        self,
-        targets: &ProofTarget,
-        summary: &VerifiedCheckpoint,
-    ) -> anyhow::Result<()> {
+    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> anyhow::Result<()> {
         let contents_digest = *self.checkpoint_contents.digest();
         if contents_digest != summary.data().content_digest {
             return Err(anyhow!(

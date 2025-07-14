@@ -115,12 +115,8 @@ impl ProofVerifier for Proof {
 impl ProofContentsVerifier for ProofContents {
     fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> anyhow::Result<()> {
         match self {
-            ProofContents::TransactionProof(proof) => {
-                proof.verify(targets, summary)
-            }
-            ProofContents::CommitteeProof(proof) => {
-                proof.verify(targets, summary)
-            }
+            ProofContents::TransactionProof(proof) => proof.verify(targets, summary),
+            ProofContents::CommitteeProof(proof) => proof.verify(targets, summary),
         }
     }
 }

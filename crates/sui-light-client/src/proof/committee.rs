@@ -5,10 +5,15 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use sui_types::{
-    committee::Committee, full_checkpoint_content::CheckpointData, messages_checkpoint::{CertifiedCheckpointSummary, VerifiedCheckpoint}
+    committee::Committee,
+    full_checkpoint_content::CheckpointData,
+    messages_checkpoint::{CertifiedCheckpointSummary, VerifiedCheckpoint},
 };
 
-use crate::{base::ProofContentsVerifier, proof::base::{Proof, ProofBuilder, ProofContents, ProofTarget}};
+use crate::{
+    base::ProofContentsVerifier,
+    proof::base::{Proof, ProofBuilder, ProofContents, ProofTarget},
+};
 
 /// The new committee to be verified.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -43,11 +48,7 @@ impl ProofBuilder for CommitteeTarget {
 pub struct CommitteeProof {}
 
 impl ProofContentsVerifier for CommitteeProof {
-    fn verify(
-        self,
-        targets: &ProofTarget,
-        summary: &VerifiedCheckpoint,
-    ) -> anyhow::Result<()> {
+    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> anyhow::Result<()> {
         // Note: We just need to verify the new committee is the same as the one in the checkpoint
         // summary as the summary is already verified.
         match targets {

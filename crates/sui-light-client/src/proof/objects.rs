@@ -5,8 +5,7 @@ use anyhow::anyhow;
 
 use serde::{Deserialize, Serialize};
 use sui_types::{
-    base_types::ObjectRef, effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData,
-    full_checkpoint_content::CheckpointTransaction, object::Object,
+    base_types::ObjectRef, full_checkpoint_content::CheckpointData, object::Object,
 };
 
 use crate::proof::{
