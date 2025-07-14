@@ -4,7 +4,9 @@
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
+use std::fmt::Debug;
 use std::fs::OpenOptions;
+use std::os::raw::c_int;
 use std::{
     path::{Path, PathBuf},
     process::{Child, Command},
@@ -44,7 +46,7 @@ struct PostgresProcess {
 
 #[derive(Debug)]
 enum HealthCheckError {
-    NotRunning,
+    NotRunning(Option<c_int>),
     NotReady,
     #[allow(unused)]
     Unknown(String),
@@ -117,8 +119,11 @@ impl LocalDatabase {
     fn start(&mut self) -> Result<()> {
         if self.process.is_none() {
             self.process = Some(PostgresProcess::start(self.dir.clone(), self.port)?);
-            self.wait_till_ready()
-                .map_err(|e| anyhow!("unable to start postgres: {e:?}"))?;
+            self.wait_till_ready().map_err(|e| {
+                let dir = self.dir.clone().into_os_string().into_string();
+                // may need to add breakpoint/sleep to prevent temp dir from being deleted
+                anyhow!("unable to start postgres: {e:?} check dir {dir:?} for logs")
+            })?;
         }
 
         Ok(())
@@ -128,7 +133,7 @@ impl LocalDatabase {
         if let Some(p) = &mut self.process {
             match p.inner.try_wait() {
                 // This would mean the child process has crashed
-                Ok(Some(_)) => Err(HealthCheckError::NotRunning),
+                Ok(Some(status)) => Err(HealthCheckError::NotRunning(status.code())),
 
                 // This is the case where the process is still running
                 Ok(None) => pg_isready(self.port),
@@ -137,7 +142,7 @@ impl LocalDatabase {
                 Err(e) => Err(HealthCheckError::Unknown(e.to_string())),
             }
         } else {
-            Err(HealthCheckError::NotRunning)
+            Err(HealthCheckError::NotRunning(None))
         }
     }
 
@@ -148,7 +153,17 @@ impl LocalDatabase {
             match self.health_check() {
                 Ok(()) => return Ok(()),
                 Err(HealthCheckError::NotReady) => {}
-                Err(HealthCheckError::NotRunning | HealthCheckError::Unknown(_)) => break,
+                Err(HealthCheckError::NotRunning(status)) => {
+                    return Err(HealthCheckError::Unknown(format!(
+                        "not running error - status code: {:?}",
+                        status
+                    )))
+                }
+                Err(HealthCheckError::Unknown(msg)) => {
+                    return Err(HealthCheckError::Unknown(format!(
+                        "unknown error - message: {msg}"
+                    )))
+                }
             }
 
             std::thread::sleep(Duration::from_millis(50));
