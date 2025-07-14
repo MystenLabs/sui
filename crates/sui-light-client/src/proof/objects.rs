@@ -4,9 +4,7 @@
 use anyhow::anyhow;
 
 use serde::{Deserialize, Serialize};
-use sui_types::{
-    base_types::ObjectRef, full_checkpoint_content::CheckpointData, object::Object,
-};
+use sui_types::{base_types::ObjectRef, full_checkpoint_content::CheckpointData, object::Object};
 
 use crate::proof::{
     base::{Proof, ProofBuilder, ProofContents, ProofTarget},
