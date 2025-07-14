@@ -4295,6 +4295,7 @@ impl AuthorityPerEpochStore {
             &transaction,
             indirect_state_observer,
         );
+        debug!(?tx_cost, "tx_cost");
 
         let deferral_info = self.should_defer(
             tx_cost,
