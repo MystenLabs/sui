@@ -93,6 +93,7 @@ pub struct TestCluster {
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
     indexer_handle: Option<test_indexer_handle::IndexerHandle>,
+    transaction_driver_percentage: Option<u8>,
 }
 
 impl TestCluster {
@@ -156,6 +157,10 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone())
+    }
+
+    pub fn transaction_driver_percentage(&self) -> Option<u8> {
+        self.transaction_driver_percentage
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -850,6 +855,8 @@ pub struct TestClusterBuilder {
     indexer_backed_rpc: bool,
 
     chain_override: Option<Chain>,
+
+    transaction_driver_percentage: Option<u8>,
 }
 
 impl TestClusterBuilder {
@@ -884,6 +891,7 @@ impl TestClusterBuilder {
                 true,
             ),
             indexer_backed_rpc: false,
+            transaction_driver_percentage: None,
         }
     }
 
@@ -1106,6 +1114,13 @@ impl TestClusterBuilder {
         self
     }
 
+    /// Percentage of transactions going through TransactionDriver, instead of QuorumDriver.
+    /// Can be overridden by setting the TRANSACTION_DRIVER environment variable.
+    pub fn transaction_driver_percentage(mut self, percent: u8) -> Self {
+        self.transaction_driver_percentage = Some(percent);
+        self
+    }
+
     pub async fn build(mut self) -> TestCluster {
         // All test clusters receive a continuous stream of random JWKs.
         // If we later use zklogin authenticated transactions in tests we will need to supply
@@ -1193,11 +1208,14 @@ impl TestClusterBuilder {
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
         let wallet = WalletContext::new(&wallet_conf).unwrap();
 
+        let transaction_driver_percentage = self.transaction_driver_percentage;
+
         TestCluster {
             swarm,
             wallet,
             fullnode_handle,
             indexer_handle,
+            transaction_driver_percentage,
         }
     }
 
