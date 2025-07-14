@@ -504,7 +504,7 @@ impl ExecutionTimeObserver {
             seed.hash(&mut hasher);
             key.hash(&mut hasher);
             let mut rng = rngs::StdRng::seed_from_u64(hasher.finish());
-            rng.gen_range(Duration::from_millis(100)..Duration::from_millis(600))
+            rng.gen_range(Duration::from_millis(400)..Duration::from_millis(600))
         })
     }
 
