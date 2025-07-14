@@ -62,7 +62,7 @@ impl ProofContentsVerifier for CommitteeProof {
                 Ok(())
             }
             _ => {
-                return Err(anyhow!("Targets are not a committee"));
+                Err(anyhow!("Targets are not a committee"))
             }
         }
     }

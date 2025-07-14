@@ -153,9 +153,9 @@ impl ProofContentsVerifier for TransactionProof {
             ProofTarget::Objects(target) => self.verify_objects(&target.objects),
             ProofTarget::Events(target) => self.verify_events(&target.events, &digests.transaction),
             _ => {
-                return Err(anyhow!(
+                Err(anyhow!(
                     "Targets are not objects or events for transaction proof"
-                ));
+                ))
             }
         }
     }
