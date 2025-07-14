@@ -69,6 +69,10 @@ pub trait AccountKeystore: Send + Sync {
     fn aliases_mut(&mut self) -> Vec<&mut Alias>;
 
     fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
+    /// Check if an alias exists by its name
+    fn alias_exists(&self, alias: &str) -> bool {
+        self.aliases().iter().any(|a| a.alias == alias)
+    }
 
     /// Get alias of address
     fn get_by_identity(&self, key_identity: KeyIdentity) -> Result<SuiAddress, anyhow::Error> {
@@ -262,7 +266,8 @@ impl AccountKeystore for FileBasedKeystore {
     /// If no alias has been passed, it will generate a new alias.
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error> {
         match alias {
-            Some(a) if self.aliases.values().any(|x| x.alias == a) => {
+            Some(a) if self.alias_exists(&a) => {
+                //} aliases.values().any(|x| x.alias == a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
             Some(a) => validate_alias(&a),
@@ -540,7 +545,7 @@ impl AccountKeystore for InMemKeystore {
     /// If no alias has been passed, it will generate a new alias.
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error> {
         match alias {
-            Some(a) if self.aliases.values().any(|x| x.alias == a) => {
+            Some(a) if self.alias_exists(&a) => {
                 bail!("Alias {a} already exists. Please choose another alias.")
             }
             Some(a) => validate_alias(&a),
