@@ -5,8 +5,8 @@ use anyhow::anyhow;
 
 use sui_light_client::proof::{
     base::{Proof, ProofBuilder, ProofContents, ProofTarget, ProofVerifier},
-    committee_target::CommitteeProof,
-    objects_target::ObjectsTarget,
+    committee::{extract_new_committee_info, CommitteeProof},
+    objects::ObjectsTarget,
 };
 
 use sui_types::event::{Event, EventID};
@@ -34,26 +34,7 @@ async fn read_data(committee_seq: u64, seq: u64) -> (Committee, CheckpointData) 
 
     let committee_checkpoint = read_full_checkpoint(&d).await.unwrap();
 
-    let prev_committee = committee_checkpoint
-        .checkpoint_summary
-        .end_of_epoch_data
-        .as_ref()
-        .ok_or(anyhow!("Expected checkpoint to be end-of-epoch"))
-        .unwrap()
-        .next_epoch_committee
-        .iter()
-        .cloned()
-        .collect();
-
-    // Make a committee object using this
-    let committee = Committee::new(
-        committee_checkpoint
-            .checkpoint_summary
-            .epoch()
-            .checked_add(1)
-            .unwrap(),
-        prev_committee,
-    );
+    let committee = extract_new_committee_info(&committee_checkpoint.checkpoint_summary).unwrap();
 
     let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     d.push(format!("test_files/{}.chk", seq));
@@ -76,32 +57,11 @@ async fn check_can_read_test_data() {
 async fn test_new_committee() {
     let (committee, full_checkpoint) = read_data(15918264, 16005062).await;
 
-    let new_committee_data = full_checkpoint
-        .checkpoint_summary
-        .end_of_epoch_data
-        .as_ref()
-        .ok_or(anyhow!("Expected checkpoint to be end-of-epoch"))
-        .unwrap()
-        .next_epoch_committee
-        .iter()
-        .cloned()
-        .collect();
-
     // Make a committee object using this
-    let new_committee = Committee::new(
-        full_checkpoint
-            .checkpoint_summary
-            .epoch()
-            .checked_add(1)
-            .unwrap(),
-        new_committee_data,
-    );
+    let new_committee = extract_new_committee_info(&full_checkpoint.checkpoint_summary).unwrap();
 
-    let committee_proof = Proof {
-        checkpoint_summary: full_checkpoint.checkpoint_summary.clone(),
-        proof_contents: ProofContents::CommitteeProof(CommitteeProof {}),
-        targets: ProofTarget::new_committee(new_committee.clone()),
-    };
+    let target = ProofTarget::new_committee(new_committee.clone());
+    let committee_proof = target.construct(&full_checkpoint).unwrap();
 
     assert!(committee_proof.verify(&committee).is_ok());
 }
@@ -125,32 +85,11 @@ async fn test_incorrect_new_committee() {
 async fn test_fail_incorrect_cert() {
     let (_committee, full_checkpoint) = read_data(15918264, 16005062).await;
 
-    let new_committee_data = full_checkpoint
-        .checkpoint_summary
-        .end_of_epoch_data
-        .as_ref()
-        .ok_or(anyhow!("Expected checkpoint to be end-of-epoch"))
-        .unwrap()
-        .next_epoch_committee
-        .iter()
-        .cloned()
-        .collect();
-
     // Make a committee object using this
-    let new_committee = Committee::new(
-        full_checkpoint
-            .checkpoint_summary
-            .epoch()
-            .checked_add(1)
-            .unwrap(),
-        new_committee_data,
-    );
+    let new_committee = extract_new_committee_info(&full_checkpoint.checkpoint_summary).unwrap();
 
-    let committee_proof = Proof {
-        checkpoint_summary: full_checkpoint.checkpoint_summary.clone(),
-        proof_contents: ProofContents::CommitteeProof(CommitteeProof {}),
-        targets: ProofTarget::new_committee(new_committee.clone()),
-    };
+    let target = ProofTarget::new_committee(new_committee.clone());
+    let committee_proof = target.construct(&full_checkpoint).unwrap();
 
     assert!(committee_proof.verify(&new_committee).is_err());
 }

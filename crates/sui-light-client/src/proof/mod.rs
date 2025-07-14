@@ -4,9 +4,9 @@
 pub mod base;
 
 // Targets
-pub mod committee_target;
-pub mod events_target;
-pub mod objects_target;
+pub mod committee;
+pub mod events;
+pub mod objects;
 
 // Proofs
 pub mod transaction_proof;

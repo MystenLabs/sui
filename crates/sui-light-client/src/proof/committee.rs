@@ -5,13 +5,13 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use sui_types::{
-    committee::Committee,
-    full_checkpoint_content::CheckpointData,
-    messages_checkpoint::{CertifiedCheckpointSummary, EndOfEpochData},
+    committee::Committee, full_checkpoint_content::CheckpointData,
+    messages_checkpoint::CertifiedCheckpointSummary,
 };
 
 use crate::proof::base::{Proof, ProofBuilder, ProofContents, ProofTarget};
 
+/// The new committee to be verified.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommitteeTarget {
     pub committee: Committee,
@@ -38,7 +38,8 @@ impl ProofBuilder for CommitteeTarget {
     }
 }
 
-// No additional data needed for committee proof
+/// Note: The summary is enough to verify the committee.
+/// This is a placeholder for the committee proof.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommitteeProof {}
 
@@ -48,9 +49,17 @@ impl CommitteeProof {
         targets: &ProofTarget,
         summary: &CertifiedCheckpointSummary,
     ) -> anyhow::Result<()> {
+        // Note: We just need to verify the new committee is the same as the one in the checkpoint
+        // summary as the summary is already verified.
         match targets {
             ProofTarget::Committee(target) => {
-                verify_committee_with_summary(&target.committee, summary)
+                let new_committee = extract_new_committee_info(summary)?;
+                if new_committee != target.committee {
+                    return Err(anyhow!(
+                        "Given committee does not match the end of epoch committee"
+                    ));
+                }
+                Ok(())
             }
             _ => {
                 return Err(anyhow!("Targets are not a committee"));
@@ -59,33 +68,21 @@ impl CommitteeProof {
     }
 }
 
-/// Verifies the new committee using the end of epoch checkpoint summary.
-fn verify_committee_with_summary(
-    committee: &Committee,
+/// Get the new committee from the end of epoch checkpoint summary.
+pub fn extract_new_committee_info(
     summary: &CertifiedCheckpointSummary,
-) -> anyhow::Result<()> {
-    // let next_epoch_committee = summary.next_epoch_committee();
-    match &summary.end_of_epoch_data {
-        Some(EndOfEpochData {
-            next_epoch_committee,
-            ..
-        }) => {
-            let next_committee_data = next_epoch_committee.iter().cloned().collect();
-            let new_committee =
-                Committee::new(summary.epoch().checked_add(1).unwrap(), next_committee_data);
-
-            if new_committee != *committee {
-                return Err(anyhow!(
-                    "Given committee does not match the end of epoch committee"
-                ));
-            }
-
-            Ok(())
-        }
-        None => {
-            return Err(anyhow!(
-                "No end of epoch committee in the checkpoint summary"
-            ));
-        }
+) -> anyhow::Result<Committee> {
+    let next_epoch_committee = summary.next_epoch_committee();
+    if next_epoch_committee.is_none() {
+        return Err(anyhow!(
+            "No end of epoch committee in the checkpoint summary"
+        ));
     }
+
+    let next_committee_data = next_epoch_committee.unwrap().iter().cloned().collect();
+
+    Ok(Committee::new(
+        summary.epoch().checked_add(1).unwrap(),
+        next_committee_data,
+    ))
 }

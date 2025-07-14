@@ -14,9 +14,9 @@ use sui_types::{
 };
 
 use crate::proof::{
-    committee_target::{CommitteeProof, CommitteeTarget},
-    events_target::EventsTarget,
-    objects_target::ObjectsTarget,
+    committee::{CommitteeProof, CommitteeTarget},
+    events::EventsTarget,
+    objects::ObjectsTarget,
     transaction_proof::TransactionProof,
 };
 
@@ -73,17 +73,19 @@ pub struct Proof {
     pub proof_contents: ProofContents,
 }
 
+/// Different types of proofs that can be constructed.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ProofContents {
-    /// TxTarget, ObjectsTarget & EventsTarget build a transaction proof.
+    /// Used by ObjectsTarget & EventsTarget.
     TransactionProof(TransactionProof),
 
-    /// CommitteeTarget is certified by a committee proof.
+    /// Used by CommitteeTarget.
     CommitteeProof(CommitteeProof),
 }
 
 impl ProofVerifier for Proof {
     fn verify(&self, committee: &Committee) -> anyhow::Result<()> {
+        // Verify the checkpoint summary, which is common to all proof types.
         self.checkpoint_summary
             .verify_authority_signatures(committee)?;
 
