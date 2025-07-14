@@ -3871,12 +3871,17 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_coin_registry = true;
                     }
                 }
+<<<<<<< HEAD
                 89 => {
                     // 100x RGP
                     cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
                 }
+||||||| parent of d5b1f97607 (Test not for landing)
+=======
+                89 => {}
+>>>>>>> d5b1f97607 (Test not for landing)
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
