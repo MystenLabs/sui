@@ -62,8 +62,8 @@ If a change affects the GraphQL schema, it will need to be re-generated. This
 is done automatically as part of test runs, and can be isolated as follows:
 
 ```sh
-cargo nextest run -p sui-indexer-alt-graphql -- schema_export
-cargo nextest run -p sui-indexer-alt-graphql --features staging -- schema_export
+cargo nextest run -p sui-indexer-alt-graphql -- test_schema_sdl_export
+cargo nextest run -p sui-indexer-alt-graphql --features staging -- test_schema_sdl_export
 cargo insta review
 ```
 
