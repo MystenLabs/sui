@@ -22,7 +22,7 @@ use crate::{
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
         known_attributes::{
-            AttributeKind_, ErrorAttribute, KnownAttribute, MinorCode_, SyntaxAttribute, TestingAttribute, VerificationAttribute
+            AttributeKind_, ErrorAttribute, KnownAttribute, MinorCode_, SyntaxAttribute,
         },
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, NamingProgramInfo, TypingProgramInfo},
@@ -4858,6 +4858,7 @@ pub fn collect_known_attribute_module_members(
         | Diagnostic(_)
         | Error(_)
         | Mode(_)
+        | Verification(_)
         | Syntax(_) => {
             // No nested module accesses.
         }
@@ -4956,10 +4957,10 @@ fn unused_module_members(
     }
 
     for (loc, name, fun) in &mdef.functions {
-        if fun.attributes.contains_key_(&TestingAttribute::Test.into())
-            || fun.attributes.contains_key_(&TestingAttribute::RandTest.into())
-            || fun.attributes.contains_key_(&VerificationAttribute::Spec.into())
-            || fun.attributes.contains_key_(&VerificationAttribute::SpecOnly.into())
+        if fun.attributes.contains_key_(&AttributeKind_::Test)
+            || fun.attributes.contains_key_(&AttributeKind_::RandTest)
+            || fun.attributes.contains_key_(&AttributeKind_::Spec)
+            || fun.attributes.contains_key_(&AttributeKind_::SpecOnly)
         {
             // functions with #[test] or R[random_test] attribute are implicitly used
             continue;

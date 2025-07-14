@@ -8,16 +8,13 @@ use crate::{
     diagnostics::Diagnostic,
     parser::{
         ast::{
-            self as P, Attribute, Attribute_, AttributeValue, AttributeValue_, ExpectedFailureKind,
-            ExpectedFailureKind_, NameAccessChain, ParsedAttribute, ParsedAttribute_,
+            self as P, Attribute, AttributeValue, AttributeValue_, Attribute_, ExpectedFailureKind, ExpectedFailureKind_, NameAccessChain, ParsedAttribute, ParsedAttribute_
         },
         format_one_of,
         syntax::Context,
     },
     shared::{
-        Name,
-        known_attributes::{self as KA, DEPRECATED_EXPECTED_KEYS, TestingAttribute},
-        unique_set::UniqueSet,
+        known_attributes::{self as KA, TestingAttribute, DEPRECATED_EXPECTED_KEYS}, unique_set::UniqueSet, Name
     },
 };
 
@@ -66,6 +63,9 @@ pub(crate) fn to_known_attributes(
         KA::TestingAttribute::TEST => parse_test(context, attribute),
         KA::TestingAttribute::RAND_TEST => parse_random_test(context, attribute),
         KA::TestingAttribute::EXPECTED_FAILURE => parse_expected_failure(context, attribute),
+        KA::VerificationAttribute::SPEC => parse_spec(context, attribute),
+        // -- verification attributes -=-------
+        KA::VerificationAttribute::SPEC_ONLY => parse_spec_only(context, attribute),
         ref name => {
             let msg = format!(
                 "Unknown attribute '{name}'. Custom attributes must be wrapped in '{ext}', \
@@ -458,6 +458,50 @@ fn parse_verify_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<A
                 &format!("'#[{}]' with no arguments", KA::ModeAttribute::VERIFY_ONLY),
             );
             context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            vec![]
+        }
+    }
+}
+
+fn parse_spec(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+   use ParsedAttribute_ as PA;
+    let sp!(loc, attr) = attribute;
+    match attr {
+        // Valid: a bare identifier is required.
+        PA::Name(_) => {
+            vec![sp(loc, Attribute_::Spec)]
+        }
+        // Invalid: any assignment or parameterized use is not allowed.
+        PA::Assigned(_, _) | PA::Parameterized(_, _) => {
+            let msg = make_attribute_format_error(
+                &attr,
+                &format!("'#[{}]' with no arguments", KA::VerificationAttribute::SPEC),
+            );
+            let mut diag = diag!(Declarations::InvalidAttribute, (loc, msg));
+            diag.add_note("Input values will be randomly generated for this test.");
+            context.add_diag(diag);
+            vec![]
+        }
+    }
+}
+
+fn parse_spec_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+   use ParsedAttribute_ as PA;
+    let sp!(loc, attr) = attribute;
+    match attr {
+        // Valid: a bare identifier is required.
+        PA::Name(_) => {
+            vec![sp(loc, Attribute_::SpecOnly)]
+        }
+        // Invalid: any assignment or parameterized use is not allowed.
+        PA::Assigned(_, _) | PA::Parameterized(_, _) => {
+            let msg = make_attribute_format_error(
+                &attr,
+                &format!("'#[{}]' with no arguments", KA::VerificationAttribute::SPEC_ONLY),
+            );
+            let mut diag = diag!(Declarations::InvalidAttribute, (loc, msg));
+            diag.add_note("Input values will be randomly generated for this test.");
+            context.add_diag(diag);
             vec![]
         }
     }

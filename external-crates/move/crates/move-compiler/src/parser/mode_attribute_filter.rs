@@ -5,15 +5,13 @@ use crate::{
     diagnostics::DiagnosticReporter,
     parser::{
         ast as P,
-        filter::{FilterContext, filter_program},
+        filter::{filter_program, FilterContext},
     },
-    shared::{CompilationEnv, known_attributes::ModeAttribute},
+    shared::{known_attributes::{KnownAttribute, VerificationAttribute}, CompilationEnv},
 };
 
-use move_ir_types::location::{Loc, sp};
+use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
-
-use std::collections::BTreeSet;
 
 struct Context<'env> {
     env: &'env CompilationEnv,
@@ -48,10 +46,9 @@ impl FilterContext for Context<'_> {
     // An AST element should be removed if:
     // * It is annotated #[spec_only] and verify mode is not set
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-        if self.env.flags().is_verifying() {
+        if self.env.verify_mode() {
             return false;
         }
-        use known_attributes::VerificationAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
         //
         let is_spec_only = flattened_attrs.iter().find(|(_, attr)| {
@@ -118,4 +115,20 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
 pub fn program(compilation_env: &CompilationEnv, prog: P::Program) -> P::Program {
     let mut context = Context::new(compilation_env);
     filter_program(&mut context, prog)
+}
+
+fn verification_attributes(
+    attrs: &P::Attributes,
+) -> Vec<(Loc, VerificationAttribute)> {
+    attrs
+        .value
+        .0
+        .iter()
+        .filter_map(
+            |attr| match KnownAttribute::resolve(attr.value.attribute_name())? {
+                KnownAttribute::Verification(verify_attr) => Some((attr.loc, verify_attr)),
+                _ => None,
+            },
+        )
+        .collect()
 }

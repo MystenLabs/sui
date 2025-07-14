@@ -227,6 +227,9 @@ pub enum Attribute_ {
         location: Option<NameAccessChain>,
     },
     RandomTest,
+    // -- verification attributes  --------------------
+    Spec,
+    SpecOnly,
 }
 
 pub type Attribute = Spanned<Attribute_>;
@@ -877,6 +880,8 @@ impl Attribute_ {
             Attribute_::Test => AK::Test.name(),
             Attribute_::ExpectedFailure { .. } => AK::ExpectedFailure.name(),
             Attribute_::RandomTest => AK::RandTest.name(),
+            Attribute_::Spec => AK::Spec.name(),
+            Attribute_::SpecOnly => AK::SpecOnly.name(),
         }
     }
 
@@ -1738,7 +1743,13 @@ impl AstDebug for Attribute_ {
             }
             A::RandomTest => {
                 w.write("rand_test");
-            }
+            },
+            A::Spec => {
+                w.write("spec");
+            },
+            A::SpecOnly => {
+                w.write("spec_only");
+            },
         }
     }
 }

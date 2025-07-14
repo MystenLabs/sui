@@ -599,6 +599,10 @@ impl CompilationEnv {
         &self.modes
     }
 
+    pub fn verify_mode(&self) -> bool {
+        self.modes().contains(&ModeAttribute::VERIFY_ONLY.into())
+    }
+
     pub fn publishable(&self) -> bool {
         self.modes.is_empty()
     }

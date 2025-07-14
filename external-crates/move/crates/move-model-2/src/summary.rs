@@ -927,6 +927,12 @@ fn ext_attribute(entry: &KA::ExternalAttributeEntry) -> Attribute {
 
 fn attribute(k: &KA::KnownAttribute) -> Attribute {
     match k {
+        KA::KnownAttribute::Verification(KA::VerificationAttribute::Spec) => {
+            Attribute::Name(KA::VerificationAttribute::SPEC.into())
+        }
+        KA::KnownAttribute::Verification(KA::VerificationAttribute::SpecOnly) => {
+            Attribute::Name(KA::VerificationAttribute::SPEC_ONLY.into())
+        }
         // --- name-only ---
         KA::KnownAttribute::BytecodeInstruction(_) => {
             Attribute::Name(KA::BytecodeInstructionAttribute::BYTECODE_INSTRUCTION.into())

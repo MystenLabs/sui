@@ -180,6 +180,7 @@ fn no_conflicts(
         | KA::Error(..)
         | KA::External(..)
         | KA::Mode(..)
+        | KA::Verification(..)
         | KA::Syntax(..) => vec![],
         KA::Testing(test_attr) => match test_attr {
             crate::shared::known_attributes::TestingAttribute::ExpectedFailure(..) => vec![],
@@ -306,6 +307,8 @@ fn attribute(
             KA::Testing(TestingAttribute::ExpectedFailure(Box::new(failure)))
         }
         PA::RandomTest => KA::Testing(A::TestingAttribute::RandTest),
+        PA::Spec => KA::Verification(A::VerificationAttribute::Spec),
+        PA::SpecOnly => KA::Verification(A::VerificationAttribute::SpecOnly),
     };
     Some(sp(loc, attr_))
 }
