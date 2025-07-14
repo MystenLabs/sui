@@ -10,6 +10,10 @@ module test::m1 {
     use std::string::{Self, String};
     use std::ascii;
 
+    public fun borrow_mut<T>(x: &mut T): &mut T {
+        x
+    }
+
     public fun modify_u8(s: &mut u8) {
         assert!(*s == 0);
         *s = 1;
@@ -50,3 +54,16 @@ module test::m1 {
 //# programmable --inputs 0u8 0u8
 //> test::m1::modify_u8(Input(0));
 //> test::m1::assert_string(Input(1));
+
+// In statically checked PTBs, tests that each type can be borrowed mutably separately
+//# programmable --inputs 0u8 --dev-inspect
+//> 0: test::m1::borrow_mut<u8>(Input(0));
+//> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
+//> test::m1::modify_ascii(Result(1));
+//> test::m1::modify_u8(Result(0));
+
+//# programmable --inputs 0u8 --dev-inspect
+//> 0: test::m1::borrow_mut<u8>(Input(0));
+//> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
+//> test::m1::modify_u8(Result(0));
+//> test::m1::modify_ascii(Result(1));

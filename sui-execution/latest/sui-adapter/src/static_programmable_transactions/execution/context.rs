@@ -1028,7 +1028,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 self.locations.pure_input_metadata[i as usize].original_input_index,
             ),
             T::Location::ReceivingInput(i) => TxArgument::Input(
-                self.locations.pure_input_metadata[i as usize].original_input_index,
+                self.locations.receiving_input_metadata[i as usize].original_input_index,
             ),
         };
         Ok(Some((arg, bytes, tag)))
