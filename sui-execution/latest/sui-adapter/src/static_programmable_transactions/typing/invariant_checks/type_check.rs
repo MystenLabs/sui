@@ -307,7 +307,7 @@ fn argument(
         LocationType::Bytes(constraints) => {
             anyhow::ensure!(
                 constraints.contains_key(expected),
-                "Bytes are nto constrained for expected type {expected:?}"
+                "Bytes are not constrained for expected type {expected:?}"
             );
         }
         LocationType::Fixed(actual_ty) => {
