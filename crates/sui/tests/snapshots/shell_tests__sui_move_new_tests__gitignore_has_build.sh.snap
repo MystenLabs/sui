@@ -23,6 +23,8 @@ exit_code: 0
 ----- stdout -----
 ignore1
 build/*
+.trace
+.coverage*
 ignore2
 
 ==== files in example/ ====
