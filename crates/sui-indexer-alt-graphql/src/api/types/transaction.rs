@@ -10,12 +10,16 @@ use sui_indexer_alt_reader::kv_loader::{
     KvLoader, TransactionContents as NativeTransactionContents,
 };
 use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress, digests::TransactionDigest,
-    transaction::TransactionDataAPI,
+    base_types::SuiAddress as NativeSuiAddress,
+    digests::TransactionDigest,
+    transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
 use crate::{
-    api::scalars::{base64::Base64, digest::Digest},
+    api::{
+        scalars::{base64::Base64, digest::Digest},
+        types::epoch::Epoch,
+    },
     error::RpcError,
     scope::Scope,
 };
@@ -59,6 +63,21 @@ impl Transaction {
 
 #[Object]
 impl TransactionContents {
+    /// This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
+    async fn expiration(&self) -> Result<Option<Epoch>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let transaction_data = content.data()?;
+        match transaction_data.expiration() {
+            TransactionExpiration::None => Ok(None),
+            TransactionExpiration::Epoch(epoch_id) => {
+                Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
+            }
+        }
+    }
+
     /// The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
     async fn gas_input(&self) -> Result<Option<GasInput>, RpcError> {
         let Some(content) = &self.contents else {
