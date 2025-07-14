@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::faucet::{FaucetClient, FaucetClientFactory};
+use crate::test_case::authenticated_events_test::AuthenticatedEventsTest;
 use async_trait::async_trait;
 use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
@@ -310,6 +311,7 @@ impl ClusterTest {
             TestCase::new(FullNodeBuildPublishTransactionTest {}),
             TestCase::new(CoinIndexTest {}),
             TestCase::new(RandomBeaconTest {}),
+            TestCase::new(AuthenticatedEventsTest {}),
         ];
 
         // TODO: improve the runner parallelism for efficiency

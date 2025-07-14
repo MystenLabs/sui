@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+bcs.workspace = true
 futures.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
@@ -24,6 +25,8 @@ fastcrypto.workspace = true
 shared-crypto.workspace = true
 derive_more = { workspace = true, features = ["debug"] }
 regex.workspace = true
+serde.workspace = true
+rand.workspace = true
 
 sui-indexer.workspace = true
 sui-faucet.workspace = true
@@ -36,6 +39,8 @@ sui-sdk.workspace = true
 sui-keys.workspace = true
 sui-types.workspace = true
 sui-core.workspace = true
+sui-package-resolver.workspace = true
+sui-rpc-api.workspace = true
 sui-json.workspace = true
 sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
