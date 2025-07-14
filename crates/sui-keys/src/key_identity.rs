@@ -41,27 +41,3 @@ impl Display for KeyIdentity {
         write!(f, "{}", v)
     }
 }
-
-// Get the SuiAddress corresponding to this key identity.
-// If no string is provided, then the current active address is returned.
-// TODO wallet method
-// pub fn get_identity_address(
-//     input: Option<KeyIdentity>,
-//     ctx: &mut WalletContext,
-// ) -> Result<SuiAddress, Error> {
-//     if let Some(addr) = input {
-//         get_identity_address_from_keystore(addr, &ctx.config.keystore)
-//     } else {
-//         Ok(ctx.active_address()?)
-//     }
-// }
-
-// pub fn get_identity_address_from_keystore(
-//     input: KeyIdentity,
-//     keystore: &Keystore,
-// ) -> Result<SuiAddress, Error> {
-//     match input {
-//         KeyIdentity::Address(x) => Ok(x),
-//         KeyIdentity::Alias(x) => Ok(*keystore.get_address_by_alias(x)?),
-//     }
-// }
