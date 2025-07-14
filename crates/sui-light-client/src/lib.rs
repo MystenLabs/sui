@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod construct;
+// pub mod construct;
 pub mod proof;
 
 pub mod checkpoint;
@@ -18,5 +18,5 @@ pub mod verifier;
 #[doc(inline)]
 pub use proof::*;
 
-#[doc(inline)]
-pub use construct::*;
+// #[doc(inline)]
+// pub use construct::*;
