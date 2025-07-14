@@ -546,7 +546,7 @@ fn argument_(
             };
             debug_assert!(expected_ty.abilities().has_copy());
             // unused since the type is fixed
-            check_type(&*a, b)?;
+            check_type(&a, b)?;
             if needs_freeze {
                 T::Argument__::Freeze(T::Usage::new_copy(location))
             } else {
@@ -554,7 +554,7 @@ fn argument_(
             }
         }
         (Type::Reference(_, a), b) => {
-            check_type(&*a, b)?;
+            check_type(&a, b)?;
             if !b.abilities().has_copy() {
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());

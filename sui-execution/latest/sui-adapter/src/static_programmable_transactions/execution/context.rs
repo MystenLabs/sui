@@ -162,25 +162,20 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
 impl Locations {
     /// NOTE! This does not charge gas and should not be used directly. It is exposed for
     /// dev-inspect
-    fn resolve<'a>(
-        &'a mut self,
-        location: T::Location,
-    ) -> Result<ResolvedLocation<'a>, ExecutionError> {
+    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation, ExecutionError> {
         Ok(match location {
             T::Location::TxContext => ResolvedLocation::Local(self.tx_context_value.local(0)?),
             T::Location::GasCoin => {
                 let (_, gas_locals) = unwrap!(self.gas.as_mut(), "Gas coin not provided");
                 ResolvedLocation::Local(gas_locals.local(0)?)
             }
-            T::Location::ObjectInput(i) => {
-                ResolvedLocation::Local(self.object_inputs.local(i as u16)?)
-            }
+            T::Location::ObjectInput(i) => ResolvedLocation::Local(self.object_inputs.local(i)?),
             T::Location::Result(i, j) => {
                 let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
                 ResolvedLocation::Local(result.local(j)?)
             }
             T::Location::PureInput(i) => {
-                let local = self.pure_inputs.local(i as u16)?;
+                let local = self.pure_inputs.local(i)?;
                 let metadata = &self.pure_input_metadata[i as usize];
                 let bytes = self
                     .pure_input_bytes
@@ -200,7 +195,7 @@ impl Locations {
             }
             T::Location::ReceivingInput(i) => ResolvedLocation::Receiving {
                 metadata: &self.receiving_input_metadata[i as usize],
-                local: self.receiving_inputs.local(i as u16)?,
+                local: self.receiving_inputs.local(i)?,
             },
         })
     }

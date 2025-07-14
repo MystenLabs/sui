@@ -314,7 +314,7 @@ fn usage(env: &Env, context: &Context, u: &T::Usage) -> anyhow::Result<T::Type> 
     }
 }
 
-fn location<'a>(env: &Env, context: &Context<'a>, l: T::Location) -> anyhow::Result<T::Type> {
+fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::Type> {
     Ok(match l {
         T::Location::TxContext => env.tx_context_type()?,
         T::Location::GasCoin => env.gas_coin_type()?,

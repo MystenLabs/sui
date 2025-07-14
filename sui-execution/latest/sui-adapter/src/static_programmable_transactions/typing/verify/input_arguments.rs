@@ -71,7 +71,7 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
         check_pure_input::<Mode>(bytes, pure)?;
     }
     for receiving in receiving {
-        check_receving_input::<Mode>(receiving)?;
+        check_receving_input(receiving)?;
     }
     let context = &mut Context::new(txn);
     for (c, _t) in commands {
@@ -176,9 +176,7 @@ fn primitive_serialization_layout(
     })
 }
 
-fn check_receving_input<Mode: ExecutionMode>(
-    receiving: &T::ReceivingInput,
-) -> Result<(), ExecutionError> {
+fn check_receving_input(receiving: &T::ReceivingInput) -> Result<(), ExecutionError> {
     let T::ReceivingInput {
         original_input_index: _,
         object_ref: _,
@@ -186,7 +184,7 @@ fn check_receving_input<Mode: ExecutionMode>(
         constraint,
     } = receiving;
     let BytesConstraint { command, argument } = constraint;
-    check_receiving(*argument, &ty).map_err(|e| e.with_command_index(*command as usize))
+    check_receiving(*argument, ty).map_err(|e| e.with_command_index(*command as usize))
 }
 
 fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), ExecutionError> {
