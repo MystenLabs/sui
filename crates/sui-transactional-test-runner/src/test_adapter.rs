@@ -773,9 +773,20 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 Ok(Some(format!("Epoch advanced: {epoch}")))
             }
             SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
-                self.executor
+                let effects = self
+                    .executor
                     .advance_clock(Duration::from_nanos(duration_ns))
                     .await?;
+
+                // Add the transaction digest to digest_enumeration for variable substitution
+                let digest = effects.transaction_digest();
+                let task = self.next_fake.0;
+                if let Some(prev) = self.digest_enumeration.insert(task, *digest) {
+                    panic!(
+                        "Task {task} executed two transactions (expected at most one): {prev}, {digest}"
+                    );
+                }
+
                 Ok(None)
             }
             SuiSubcommand::SetRandomState(SetRandomStateCommand {
