@@ -4,7 +4,9 @@
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
+use std::fmt::Debug;
 use std::fs::OpenOptions;
+use std::process::ExitStatus;
 use std::{
     path::{Path, PathBuf},
     process::{Child, Command},
@@ -44,11 +46,26 @@ struct PostgresProcess {
 
 #[derive(Debug)]
 enum HealthCheckError {
-    NotRunning,
+    NotRunning(Option<ExitStatus>),
     NotReady,
     #[allow(unused)]
     Unknown(String),
 }
+
+impl std::fmt::Display for HealthCheckError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HealthCheckError::NotRunning(Some(status)) => {
+                write!(f, "Not running - exit status: {}", status)
+            }
+            HealthCheckError::NotRunning(None) => write!(f, "Not running - no exit status"),
+            HealthCheckError::NotReady => write!(f, "Not ready"),
+            HealthCheckError::Unknown(msg) => write!(f, "Unknown error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for HealthCheckError {}
 
 impl TempDb {
     /// Create and start a new temporary postgres database.
@@ -117,8 +134,13 @@ impl LocalDatabase {
     fn start(&mut self) -> Result<()> {
         if self.process.is_none() {
             self.process = Some(PostgresProcess::start(self.dir.clone(), self.port)?);
-            self.wait_till_ready()
-                .map_err(|e| anyhow!("unable to start postgres: {e:?}"))?;
+            self.wait_till_ready().with_context(|| {
+                format!(
+                    // may need to add breakpoint/sleep to prevent temp dir from being deleted
+                    "Unable to start postgres, check dir {} for logs",
+                    self.dir.display(),
+                )
+            })?;
         }
 
         Ok(())
@@ -128,7 +150,7 @@ impl LocalDatabase {
         if let Some(p) = &mut self.process {
             match p.inner.try_wait() {
                 // This would mean the child process has crashed
-                Ok(Some(_)) => Err(HealthCheckError::NotRunning),
+                Ok(Some(status)) => Err(HealthCheckError::NotRunning(Some(status))),
 
                 // This is the case where the process is still running
                 Ok(None) => pg_isready(self.port),
@@ -137,7 +159,7 @@ impl LocalDatabase {
                 Err(e) => Err(HealthCheckError::Unknown(e.to_string())),
             }
         } else {
-            Err(HealthCheckError::NotRunning)
+            Err(HealthCheckError::NotRunning(None))
         }
     }
 
@@ -146,9 +168,8 @@ impl LocalDatabase {
 
         while start.elapsed() < Duration::from_secs(10) {
             match self.health_check() {
-                Ok(()) => return Ok(()),
                 Err(HealthCheckError::NotReady) => {}
-                Err(HealthCheckError::NotRunning | HealthCheckError::Unknown(_)) => break,
+                result => return result,
             }
 
             std::thread::sleep(Duration::from_millis(50));
