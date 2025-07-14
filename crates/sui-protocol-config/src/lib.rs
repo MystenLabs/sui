@@ -790,7 +790,8 @@ pub struct ExecutionTimeEstimateParams {
     pub stake_weighted_median_threshold: u64,
 
     // For backwards compatibility with old behavior we use a zero default duration when adding
-    // new execution time observaiton keys. This can be removed once set to "true" on mainnet.
+    // new execution time observation keys and a zero generation when loading stored observations.
+    // This can be removed once set to "true" on mainnet.
     #[serde(skip_serializing_if = "is_false")]
     pub default_none_duration_for_new_keys: bool,
 }
