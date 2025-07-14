@@ -6,7 +6,6 @@ use anyhow::Context;
 use anyhow::Result;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
-use std::os::raw::c_int;
 use std::{
     path::{Path, PathBuf},
     process::{Child, Command},
@@ -46,7 +45,7 @@ struct PostgresProcess {
 
 #[derive(Debug)]
 enum HealthCheckError {
-    NotRunning(Option<c_int>),
+    NotRunning(String),
     NotReady,
     #[allow(unused)]
     Unknown(String),
@@ -133,7 +132,7 @@ impl LocalDatabase {
         if let Some(p) = &mut self.process {
             match p.inner.try_wait() {
                 // This would mean the child process has crashed
-                Ok(Some(status)) => Err(HealthCheckError::NotRunning(status.code())),
+                Ok(Some(status)) => Err(HealthCheckError::NotRunning(status.to_string())),
 
                 // This is the case where the process is still running
                 Ok(None) => pg_isready(self.port),
@@ -142,7 +141,9 @@ impl LocalDatabase {
                 Err(e) => Err(HealthCheckError::Unknown(e.to_string())),
             }
         } else {
-            Err(HealthCheckError::NotRunning(None))
+            Err(HealthCheckError::NotRunning(
+                "no postgres process".to_owned(),
+            ))
         }
     }
 
@@ -154,9 +155,8 @@ impl LocalDatabase {
                 Ok(()) => return Ok(()),
                 Err(HealthCheckError::NotReady) => {}
                 Err(HealthCheckError::NotRunning(status)) => {
-                    return Err(HealthCheckError::Unknown(format!(
-                        "not running error - status code: {:?}",
-                        status
+                    return Err(HealthCheckError::NotRunning(format!(
+                        "not running error - status: {status:?}"
                     )))
                 }
                 Err(HealthCheckError::Unknown(msg)) => {
