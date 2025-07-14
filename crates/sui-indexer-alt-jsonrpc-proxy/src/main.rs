@@ -34,7 +34,7 @@ async fn main() {
         .init();
     info!("Initialized telemetry");
 
-    let (config, client): (ProxyConfig, Client) =
+    let (config, _): (ProxyConfig, Client) =
         load(&args.config).await.expect("Failed to load config");
     info!("Loaded config: {:?}", config);
 
@@ -53,7 +53,6 @@ async fn main() {
     info!("Created cursor state");
 
     let app_state = AppState::new(
-        client,
         config.fullnode_address,
         config.unsupported_methods.into_iter().collect(),
         config

@@ -20,7 +20,6 @@ use url::Url;
 
 #[derive(Clone)]
 pub struct AppState {
-    client: reqwest::Client,
     fullnode_address: Url,
     unsupported_methods: HashSet<String>,
     allowed_origins: Option<HashSet<String>>,
@@ -30,7 +29,6 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        client: reqwest::Client,
         fullnode_address: Url,
         unsupported_methods: HashSet<String>,
         allowed_origins: Option<HashSet<String>>,
@@ -42,7 +40,6 @@ impl AppState {
             allowed_origins, unsupported_methods
         );
         Self {
-            client,
             fullnode_address,
             unsupported_methods,
             allowed_origins,
@@ -69,7 +66,10 @@ pub async fn proxy_handler(
         }
     };
 
-    debug!("Request method: {:?}, headers: {:?}", parts.method, parts.headers);
+    debug!(
+        "Request method: {:?}, headers: {:?}",
+        parts.method, parts.headers
+    );
 
     if let Some(allowed_origins) = &state.allowed_origins {
         match parts.headers.get("origin") {
@@ -223,8 +223,11 @@ async fn proxy_request(
     // remove host header to avoid interfering with reqwest auto-host header
     let mut headers = parts.headers.clone();
     headers.remove("host");
-    let request_builder = state
-        .client
+
+    let request_builder = reqwest::ClientBuilder::new()
+        .http2_prior_knowledge()
+        .build()
+        .expect("Failed to build HTTP/2 client")
         .request(parts.method.clone(), target_url)
         .headers(headers)
         .body(body_bytes.clone());
