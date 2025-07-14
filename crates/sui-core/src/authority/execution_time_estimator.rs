@@ -654,6 +654,7 @@ impl ExecutionTimeEstimator {
             consensus_observations: HashMap::new(),
         };
         for (source, generation, key, duration) in initial_observations {
+            debug!("processing initial observation: {source}, {generation}, {key}, {duration:?}");
             estimator.process_observation_from_consensus(
                 source,
                 generation,
@@ -690,6 +691,7 @@ impl ExecutionTimeEstimator {
         observations: &[(ExecutionTimeObservationKey, Duration)],
     ) {
         for (key, duration) in observations {
+            debug!("processing observation from consensus: {source}, {generation}, {key}, {duration:?}");
             self.process_observation_from_consensus(
                 source,
                 generation,
@@ -753,13 +755,16 @@ impl ExecutionTimeEstimator {
             .iter()
             .map(|command| {
                 let key = ExecutionTimeObservationKey::from_command(command);
-                self.consensus_observations
+                let val = self
+                    .consensus_observations
                     .get(&key)
                     .and_then(|obs| obs.stake_weighted_median)
                     .unwrap_or_else(|| key.default_duration())
                     // For native commands, adjust duration by length of command's inputs/outputs.
                     // This is sort of arbitrary, but hopefully works okay as a heuristic.
-                    .mul_f64(command_length(command).get() as f64)
+                    .mul_f64(command_length(command).get() as f64);
+                debug!("get_estimate: {key}, {val:?}");
+                val
             })
             .sum::<Duration>()
             .min(Duration::from_micros(self.protocol_params.max_estimate_us))
