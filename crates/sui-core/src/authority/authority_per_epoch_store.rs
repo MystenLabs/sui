@@ -3218,28 +3218,39 @@ impl AuthorityPerEpochStore {
             .execution_time_estimator
             .try_lock()
             .expect("should only ever be called from the commit handler thread");
-        for (
-            key,
-            ExecutionTimeObservation {
-                authority,
-                generation,
-                estimates,
-            },
-        ) in execution_time_observations
+        // It is ok to just release lock here as functions called by this one are the
+        // only place that transition reconfig state, and this function itself is always
+        // executed from consensus task.
+        if !self
+            .protocol_config()
+            .ignore_execution_time_observations_after_certs_closed()
+            || self
+                .get_reconfig_state_read_lock_guard()
+                .should_accept_consensus_certs()
         {
-            let Some(estimator) = execution_time_estimator.as_mut() else {
-                error!("dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled");
-                continue;
-            };
-            let authority_index = self.committee.authority_index(&authority).unwrap();
-            estimator.process_observations_from_consensus(
-                authority_index,
-                Some(generation),
-                &estimates,
-            );
-            output.insert_execution_time_observation(authority_index, generation, estimates);
-            if self.protocol_config().record_time_estimate_processed() {
-                output.record_consensus_message_processed(key);
+            for (
+                key,
+                ExecutionTimeObservation {
+                    authority,
+                    generation,
+                    estimates,
+                },
+            ) in execution_time_observations
+            {
+                let Some(estimator) = execution_time_estimator.as_mut() else {
+                    error!("dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled");
+                    continue;
+                };
+                let authority_index = self.committee.authority_index(&authority).unwrap();
+                estimator.process_observations_from_consensus(
+                    authority_index,
+                    Some(generation),
+                    &estimates,
+                );
+                output.insert_execution_time_observation(authority_index, generation, estimates);
+                if self.protocol_config().record_time_estimate_processed() {
+                    output.record_consensus_message_processed(key);
+                }
             }
         }
 
