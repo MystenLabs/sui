@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::rc::Rc;
+use std::{collections::BTreeMap, rc::Rc};
 
 use crate::{
     execution_mode::ExecutionMode,
@@ -14,17 +14,15 @@ use crate::{
 };
 use sui_types::{coin::RESOLVED_COIN_STRUCT, error::ExecutionError};
 
-struct Context<'pc, 'vm, 'state, 'linkage, 'env, 'txn> {
-    env: &'env Env<'pc, 'vm, 'state, 'linkage>,
+struct Context<'txn> {
     inputs: Vec<&'txn T::InputType>,
     usable_inputs: Vec<bool>,
     result_types: Vec<&'txn [T::Type]>,
 }
 
-impl<'pc, 'vm, 'state, 'linkage, 'env, 'txn> Context<'pc, 'vm, 'state, 'linkage, 'env, 'txn> {
-    fn new(env: &'env Env<'pc, 'vm, 'state, 'linkage>, txn: &'txn T::Transaction) -> Self {
+impl<'txn> Context<'txn> {
+    fn new(txn: &'txn T::Transaction) -> Self {
         Self {
-            env,
             inputs: txn.inputs.iter().map(|(_, ty)| ty).collect(),
             usable_inputs: vec![false; txn.inputs.len()], // set later
             result_types: txn.commands.iter().map(|(_, ty)| ty.as_slice()).collect(),
@@ -37,13 +35,13 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
 }
 
 fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
-    let mut context = Context::new(env, txn);
+    let mut context = Context::new(txn);
     let T::Transaction { inputs, commands } = txn;
     for (idx, (i, ty)) in inputs.iter().enumerate() {
         input::<Mode>(&mut context, idx, i, ty)?;
     }
     for (c, result_tys) in commands {
-        command::<Mode>(&context, c, result_tys)?;
+        command::<Mode>(env, &context, c, result_tys)?;
     }
     Ok(())
 }
@@ -93,6 +91,7 @@ fn input<Mode: ExecutionMode>(
 }
 
 fn command<Mode: ExecutionMode>(
+    env: &Env,
     context: &Context,
     sp!(_, c): &T::Command,
     result_tys: &[T::Type],
@@ -115,7 +114,7 @@ fn command<Mode: ExecutionMode>(
                 arguments.len()
             );
             for (arg, param) in arguments.iter().zip(parameters) {
-                argument(context, arg, param)?;
+                argument(env, context, arg, param)?;
             }
             anyhow::ensure!(
                 return_.len() == result_tys.len(),
@@ -137,9 +136,9 @@ fn command<Mode: ExecutionMode>(
                     ty.abilities().has_key(),
                     "transfer object type must have key, got {ty:?}"
                 );
-                argument(context, obj, ty)?;
+                argument(env, context, obj, ty)?;
             }
-            argument(context, recipient, &T::Type::Address)?;
+            argument(env, context, recipient, &T::Type::Address)?;
             anyhow::ensure!(
                 result_tys.is_empty(),
                 "transfer objects should not return any value, got {result_tys:?}"
@@ -155,12 +154,13 @@ fn command<Mode: ExecutionMode>(
                 "split coins should have a coin type, got {resolved:?}"
             );
             argument(
+                env,
                 context,
                 coin,
                 &T::Type::Reference(true, Rc::new(ty_coin.clone())),
             )?;
             for amount in amounts {
-                argument(context, amount, &T::Type::U64)?;
+                argument(env, context, amount, &T::Type::U64)?;
             }
             anyhow::ensure!(
                 amounts.len() == result_tys.len(),
@@ -183,12 +183,13 @@ fn command<Mode: ExecutionMode>(
                 "split coins should have a coin type, got {resolved:?}"
             );
             argument(
+                env,
                 context,
                 target,
                 &T::Type::Reference(true, Rc::new(ty_coin.clone())),
             )?;
             for coin in coins {
-                argument(context, coin, ty_coin)?;
+                argument(env, context, coin, ty_coin)?;
             }
             anyhow::ensure!(
                 result_tys.is_empty(),
@@ -197,7 +198,7 @@ fn command<Mode: ExecutionMode>(
         }
         T::Command_::MakeMoveVec(t, args) => {
             for arg in args {
-                argument(context, arg, t)?;
+                argument(env, context, arg, t)?;
             }
             anyhow::ensure!(
                 result_tys.len() == 1,
@@ -222,7 +223,7 @@ fn command<Mode: ExecutionMode>(
                     result_tys.len() == 1,
                     "publish should return exactly one upgrade cap"
                 );
-                let cap = &context.env.upgrade_cap_type()?;
+                let cap = &env.upgrade_cap_type()?;
                 anyhow::ensure!(
                     cap == &result_tys[0],
                     "publish should return {cap:?}, got {result_tys:?}",
@@ -230,8 +231,8 @@ fn command<Mode: ExecutionMode>(
             }
         }
         T::Command_::Upgrade(_, _, _, arg, _) => {
-            argument(context, arg, &context.env.upgrade_ticket_type()?)?;
-            let receipt = &context.env.upgrade_receipt_type()?;
+            argument(env, context, arg, &env.upgrade_ticket_type()?)?;
+            let receipt = &env.upgrade_receipt_type()?;
             anyhow::ensure!(
                 result_tys.len() == 1,
                 "upgrade should return exactly one receipt"
@@ -246,62 +247,114 @@ fn command<Mode: ExecutionMode>(
 }
 
 fn argument(
+    env: &Env,
     context: &Context,
     sp!(_, (arg__, ty)): &T::Argument,
     param: &T::Type,
 ) -> anyhow::Result<()> {
+    let t;
     anyhow::ensure!(
         ty == param,
         "argument type mismatch. Expected {param:?}, got {ty:?}"
     );
-    match arg__ {
-        T::Argument__::Use(u) => usage(context, u, param)?,
-        T::Argument__::Read(u) => usage(
-            context,
-            u,
-            &T::Type::Reference(false, Rc::new(param.clone())),
-        )?,
+    let (actual, expected) = match arg__ {
+        T::Argument__::Use(u) => (usage(env, context, u)?, param),
+        T::Argument__::Read(u) => {
+            let actual = usage(env, context, u)?;
+            t = match actual {
+                LocationType::Fixed(T::Type::Reference(_, inner)) => (*inner).clone(),
+                LocationType::Bytes(_) => {
+                    anyhow::bail!("should never ReadRef a non-reference location")
+                }
+                LocationType::Fixed(ty) => {
+                    anyhow::bail!("should never ReadRef a non-reference type, got {ty:?}");
+                }
+            };
+            (LocationType::Fixed(t), param)
+        }
+        T::Argument__::Freeze(u) => {
+            let actual = usage(env, context, u)?;
+            t = match actual {
+                LocationType::Fixed(T::Type::Reference(true, inner)) => {
+                    T::Type::Reference(false, inner.clone())
+                }
+                LocationType::Bytes(_) => {
+                    anyhow::bail!("should never FreezeRef a non-reference location")
+                }
+                LocationType::Fixed(T::Type::Reference(false, _)) => {
+                    anyhow::bail!("should never FreezeRef an immutable reference")
+                }
+                LocationType::Fixed(ty) => {
+                    anyhow::bail!("should never Freeze a non-reference type, got {ty:?}");
+                }
+            };
+            (LocationType::Fixed(t), param)
+        }
         T::Argument__::Borrow(is_mut, l) => {
-            let T::Type::Reference(param_mut, inner_param) = param else {
-                anyhow::bail!("expected a referenc type for borrowed location, got {param:?}");
+            let T::Type::Reference(param_mut, expected) = param else {
+                anyhow::bail!("expected a reference type for borrowed location, got {param:?}");
             };
             anyhow::ensure!(
                 *param_mut == *is_mut,
                 "borrowed location mutability mismatch. Expected {param_mut}, got {is_mut}"
             );
-            location(context, *l, inner_param)?;
+            let actual = location(env, context, *l)?;
+            (actual, &**expected)
         }
+    };
+    // check actual == expected
+    match actual {
+        LocationType::Bytes(constraints) => {
+            anyhow::ensure!(
+                constraints.contains_key(expected),
+                "Bytes are not constrained for expected type {expected:?}"
+            );
+        }
+        LocationType::Fixed(actual_ty) => {
+            anyhow::ensure!(
+                &actual_ty == expected,
+                "argument type mismatch. Expected {expected:?}, got {actual_ty:?}"
+            );
+        }
+    }
+    // check copy usage
+    match arg__ {
+        T::Argument__::Use(T::Usage::Copy { .. }) | T::Argument__::Read(_) => {
+            anyhow::ensure!(
+                param.abilities().has_copy(),
+                "expected type does not have copy, {expected:?}"
+            );
+        }
+        T::Argument__::Use(T::Usage::Move(_))
+        | T::Argument__::Freeze(_)
+        | T::Argument__::Borrow(_, _) => (),
     }
     Ok(())
 }
 
-fn usage(context: &Context, u: &T::Usage, expected: &T::Type) -> anyhow::Result<()> {
+fn usage<'a>(env: &Env, context: &Context<'a>, u: &T::Usage) -> anyhow::Result<LocationType<'a>> {
     match u {
-        T::Usage::Move(l) => location(context, *l, expected),
-        T::Usage::Copy {
+        T::Usage::Move(l)
+        | T::Usage::Copy {
             location: l,
             borrowed: _,
-        } => {
-            anyhow::ensure!(
-                expected.abilities().has_copy(),
-                "expected a copyable type for copied location, got {expected:?}"
-            );
-            location(context, *l, expected)
-        }
+        } => location(env, context, *l),
     }
 }
 
-fn location(context: &Context, l: T::Location, expected: &T::Type) -> anyhow::Result<()> {
-    let t;
-    let actual = match l {
-        T::Location::TxContext => {
-            t = context.env.tx_context_type()?;
-            &t
-        }
-        T::Location::GasCoin => {
-            t = context.env.gas_coin_type()?;
-            &t
-        }
+enum LocationType<'a> {
+    Bytes(&'a BTreeMap<T::Type, T::BytesConstraint>),
+    Fixed(T::Type),
+}
+
+fn location<'a>(
+    env: &Env,
+    context: &Context<'a>,
+    l: T::Location,
+) -> anyhow::Result<LocationType<'a>> {
+    Ok(LocationType::Fixed(match l {
+        T::Location::TxContext => env.tx_context_type()?,
+        T::Location::GasCoin => env.gas_coin_type()?,
         T::Location::Input(i) => {
             let usable = context.usable_inputs.get(i as usize).ok_or_else(|| {
                 anyhow::anyhow!(
@@ -320,37 +373,15 @@ fn location(context: &Context, l: T::Location, expected: &T::Type) -> anyhow::Re
                 )
             })?;
             match input_ty {
-                T::InputType::Bytes(constraints) => {
-                    anyhow::ensure!(
-                        constraints.contains_key(expected),
-                        "input {i} does not have the expected type {expected:?}, got {constraints:?}"
-                    );
-                    return Ok(());
-                }
-                T::InputType::Fixed(t) => t,
+                T::InputType::Bytes(constraints) => return Ok(LocationType::Bytes(constraints)),
+                T::InputType::Fixed(t) => t.clone(),
             }
         }
         T::Location::Result(i, j) => context
             .result_types
             .get(i as usize)
             .and_then(|v| v.get(j as usize))
-            .ok_or_else(|| anyhow::anyhow!("result ({i}, {j}) out of bounds",))?,
-    };
-    let (actual, expected) = match (actual, expected) {
-        (T::Type::Reference(a_is_mut, a_inner), T::Type::Reference(e_is_mut, e_inner)) => {
-            // for reference subtyping
-            // expected is mut ==> actual must be mut
-            anyhow::ensure!(
-                !e_is_mut || *a_is_mut,
-                "reference mutability incompatibility. Expected {e_is_mut}, got {a_is_mut}"
-            );
-            (&**a_inner, &**e_inner)
-        }
-        (a, e) => (a, e),
-    };
-    anyhow::ensure!(
-        actual == expected,
-        "location type mismatch. Expected {expected:?}, got {actual:?}"
-    );
-    Ok(())
+            .ok_or_else(|| anyhow::anyhow!("result ({i}, {j}) out of bounds",))?
+            .clone(),
+    }))
 }

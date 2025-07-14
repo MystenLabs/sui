@@ -75,7 +75,8 @@ impl Context {
             T::Argument__::Borrow(/* mut */ true, loc) => self.mark_loc_dirty(*loc),
             T::Argument__::Borrow(/* mut */ false, _)
             | T::Argument__::Use(_)
-            | T::Argument__::Read(_) => (),
+            | T::Argument__::Read(_)
+            | &T::Argument__::Freeze(_) => (),
         }
     }
 
