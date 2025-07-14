@@ -6,6 +6,7 @@ use async_graphql::{Context, Object};
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
+    message_envelope::Message,
     messages_checkpoint::{CheckpointContents as NativeCheckpointContents, CheckpointSummary},
 };
 
@@ -64,10 +65,29 @@ impl Checkpoint {
 
 #[Object]
 impl CheckpointContents {
+    /// A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
+    async fn digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(summary.digest().base58_encode()))
+    }
+
     /// The epoch that this checkpoint is part of.
     async fn epoch(&self) -> Option<Epoch> {
         let (summary, _, _) = self.contents.as_ref()?;
         Some(Epoch::with_id(self.scope.clone(), summary.epoch))
+    }
+
+    /// The digest of the previous checkpoint's summary.
+    async fn previous_checkpoint_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(summary
+            .previous_digest
+            .as_ref()
+            .map(|digest| digest.base58_encode()))
     }
 
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
