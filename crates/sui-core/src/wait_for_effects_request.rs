@@ -6,10 +6,9 @@ use sui_types::{
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::{TransactionEffects, TransactionEvents},
     error::SuiError,
-    messages_consensus::{ConsensusPosition, Round},
+    messages_consensus::{ConsensusPosition},
     messages_grpc::{
-        RawExecutedData, RawExecutedStatus, RawRejectReason, RawRejectedStatus,
-        RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
+        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectReason, RawRejectedStatus, RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse
     },
     object::Object,
 };
@@ -69,7 +68,10 @@ pub enum WaitForEffectsResponse {
         reason: RejectReason,
     },
     // The transaction position is expired at the committed round.
-    Expired(Round),
+    Expired {
+        epoch: u32,
+        round: u32,
+    },
 }
 
 impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
@@ -180,7 +182,10 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                 };
                 Ok(Self::Rejected { reason })
             }
-            Some(RawValidatorTransactionStatus::Expired(round)) => Ok(Self::Expired(round)),
+            Some(RawValidatorTransactionStatus::Expired(expired)) => Ok(Self::Expired {
+                epoch: expired.epoch,
+                round: expired.round,
+            }),
             None => Err(SuiError::GrpcMessageDeserializeError {
                 type_info: "RawWaitForEffectsResponse.inner".to_string(),
                 error: "RawWaitForEffectsResponse.inner is None".to_string(),
@@ -304,7 +309,9 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                     message,
                 })
             }
-            WaitForEffectsResponse::Expired(round) => RawValidatorTransactionStatus::Expired(round),
+            WaitForEffectsResponse::Expired { epoch, round } => {
+                RawValidatorTransactionStatus::Expired(RawExpiredStatus { epoch, round })
+            }
         };
         Ok(RawWaitForEffectsResponse { inner: Some(inner) })
     }

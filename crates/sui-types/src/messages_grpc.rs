@@ -6,7 +6,7 @@ use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use crate::messages_consensus::{ConsensusPosition, Round};
+use crate::messages_consensus::ConsensusPosition;
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use bytes::Bytes;
@@ -245,10 +245,10 @@ pub struct RawWaitForEffectsRequest {
     pub epoch: u64,
 
     #[prost(bytes = "bytes", tag = "2")]
-    pub transaction_digest: Bytes,
+    pub transaction_position: Bytes,
 
     #[prost(bytes = "bytes", tag = "3")]
-    pub transaction_position: Bytes,
+    pub transaction_digest: Bytes,
 
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
@@ -272,8 +272,8 @@ pub enum RawValidatorTransactionStatus {
     Executed(RawExecutedStatus),
     #[prost(message, tag = "2")]
     Rejected(RawRejectedStatus),
-    #[prost(uint64, tag = "3")]
-    Expired(Round),
+    #[prost(message, tag = "3")]
+    Expired(RawExpiredStatus),
 }
 
 #[derive(Clone, prost::Message)]
@@ -317,6 +317,16 @@ pub enum RawRejectReason {
     Overload = 3,
     // Rejected due to coin deny list.
     CoinDenyList = 4,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExpiredStatus {
+    // Validator's current epoch.
+    #[prost(uint32, tag = "1")]
+    pub epoch: u32,
+    // Validator's current round. 0 if it is not yet checked.
+    #[prost(uint32, tag = "2")]
+    pub round: u32,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

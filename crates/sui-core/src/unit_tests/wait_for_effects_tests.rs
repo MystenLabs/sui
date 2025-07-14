@@ -445,5 +445,5 @@ async fn test_wait_for_effects_expired() {
         .try_into()
         .unwrap();
 
-    assert!(matches!(response, WaitForEffectsResponse::Expired(_)));
+    assert!(matches!(response, WaitForEffectsResponse::Expired{..}));
 }

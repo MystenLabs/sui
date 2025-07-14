@@ -1128,7 +1128,16 @@ impl ValidatorService {
                 error: "Mysticeti fastpath".to_string(),
             });
         };
-        if request.epoch != epoch_store.epoch() {
+        if request.epoch < epoch_store.epoch() {
+            // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
+            // if response from this validator is desired.
+            let response = WaitForEffectsResponse::Expired {
+                epoch: epoch_store.epoch() as u32,
+                round: 0,
+            };
+            return Ok(response);
+        } else if request.epoch > epoch_store.epoch() {
+            // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
             return Err(SuiError::WrongEpoch {
                 expected_epoch: epoch_store.epoch(),
                 actual_epoch: request.epoch,
@@ -1159,7 +1168,10 @@ impl ValidatorService {
                 ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => status,
             },
             NotifyReadConsensusTxStatusResult::Expired(round) => {
-                return Ok(WaitForEffectsResponse::Expired(round.into()));
+                return Ok(WaitForEffectsResponse::Expired {
+                    epoch: epoch_store.epoch() as u32,
+                    round: round.into(),
+                });
             }
         };
         // Now that we know the transaction position is accepted by consensus,
@@ -1188,7 +1200,10 @@ impl ValidatorService {
                             continue;
                         }
                         NotifyReadConsensusTxStatusResult::Expired(round) => {
-                            return Ok(WaitForEffectsResponse::Expired(round.into()));
+                            return Ok(WaitForEffectsResponse::Expired {
+                                epoch: epoch_store.epoch() as u32,
+                                round: round.into(),
+                            });
                         }
                     }
                 },

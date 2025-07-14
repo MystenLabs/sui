@@ -261,4 +261,8 @@ impl Workload<dyn Payload> for SlowWorkload {
             .map(|b| Box::<dyn Payload>::from(Box::new(b)))
             .collect()
     }
+
+    fn name(&self) -> &str {
+        "Slow"
+    }
 }
