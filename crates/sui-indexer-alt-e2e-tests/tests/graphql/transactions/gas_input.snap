@@ -1,0 +1,149 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-25:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6976800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-30:
+//# programmable --sender A --inputs object(1,0)
+//> 0: test::simple::increment(Input(0));
+// Digest 3: Split gas coin into multiple pieces for later use as gas payments
+// This creates object(3,0) and object(3,1) which will be used in other digests
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 1339272, non_refundable_storage_fee: 13528
+
+task 3, lines 31-35:
+//# programmable --sender A --inputs 500000000 300000000 @A
+//> 0: SplitCoins(Gas, [Input(0), Input(1)]);
+//> 1: TransferObjects([NestedResult(0,0), NestedResult(0,1)], Input(2));
+// Digest 4: Use BOTH split coins from Digest 3 as multiple gas payments
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 36-37:
+//# programmable --sender A --gas-payment 3,0 --gas-payment 3,1 --gas-budget 500000000 --inputs object(1,0)
+//> 0: test::simple::increment(Input(0));
+mutated: object(1,0), object(3,0)
+deleted: object(3,1)
+gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 3295512, non_refundable_storage_fee: 33288
+
+task 5, line 39:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 41-62:
+//# run-graphql
+Response: {
+  "data": {
+    "basicTransaction": {
+      "gasInput": {
+        "gasSponsor": {
+          "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "gasPrice": "1000",
+        "gasBudget": "5000000000",
+        "gasPayment": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "nodes": [
+            {
+              "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+              "version": 1
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 64-85:
+//# run-graphql
+Response: {
+  "data": {
+    "multipleGasPaymentsTransaction": {
+      "gasInput": {
+        "gasSponsor": {
+          "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "gasPrice": "1000",
+        "gasBudget": "500000000",
+        "gasPayment": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "nodes": [
+            {
+              "address": "0x88e469b7b2ffe1b8e724ad54cc96d39590e3ab30b8863aa5d08f761d7d05c19c",
+              "version": 4
+            },
+            {
+              "address": "0xd36321d7785495cfdf1e73d5c088b789410123f49d711320a624324c44641527",
+              "version": 4
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 8, lines 88-105:
+//# run-graphql
+Response: {
+  "data": {
+    "paginationTest": {
+      "gasInput": {
+        "gasPayment": {
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false,
+            "endCursor": "MA=="
+          },
+          "nodes": [
+            {
+              "address": "0x88e469b7b2ffe1b8e724ad54cc96d39590e3ab30b8863aa5d08f761d7d05c19c",
+              "version": 4
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 9, lines 107-124:
+//# run-graphql
+Response: {
+  "data": {
+    "backwardPaginationTest": {
+      "gasInput": {
+        "gasPayment": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": true,
+            "startCursor": "MQ=="
+          },
+          "nodes": [
+            {
+              "address": "0xd36321d7785495cfdf1e73d5c088b789410123f49d711320a624324c44641527",
+              "version": 4
+            }
+          ]
+        }
+      }
+    }
+  }
+}
