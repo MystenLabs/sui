@@ -62,7 +62,7 @@ struct BasicBlock {
 }
 
 /// The control flow graph that we build from the bytecode.
-pub struct StacklessControlFlowGraph {
+pub struct NormalizedControlFlowGraph {
     /// The basic blocks
     blocks: Map<BlockId, BasicBlock>,
     /// Basic block ordering for traversal
@@ -85,7 +85,7 @@ impl BasicBlock {
 
 const ENTRY_BLOCK_ID: BlockId = 0;
 
-impl StacklessControlFlowGraph {
+impl NormalizedControlFlowGraph {
     pub fn new<S: Hash + Eq + Display + Debug>(
         code: &[Bytecode<S>],
         jump_tables: &[Rc<VariantJumpTable<S>>],
@@ -96,12 +96,7 @@ impl StacklessControlFlowGraph {
         let mut block_ids = Set::new();
         block_ids.insert(ENTRY_BLOCK_ID);
         for pc in 0..code.len() {
-            StacklessControlFlowGraph::record_block_ids(
-                pc as CodeOffset,
-                code,
-                jump_tables,
-                &mut block_ids,
-            );
+            Self::record_block_ids(pc as CodeOffset, code, jump_tables, &mut block_ids);
         }
 
         // Create basic blocks
@@ -230,7 +225,7 @@ impl StacklessControlFlowGraph {
             })
             .collect();
 
-        StacklessControlFlowGraph {
+        NormalizedControlFlowGraph {
             blocks,
             traversal_successors,
             loop_heads,
@@ -632,7 +627,7 @@ pub fn offsets<S: Hash + Eq + Display + Debug>(
         }
 }
 
-impl ControlFlowGraph for StacklessControlFlowGraph {
+impl ControlFlowGraph for NormalizedControlFlowGraph {
     // Note: in the following procedures, it's safe not to check bounds because:
     // - Every CFG (even one with no instructions) has a block at ENTRY_BLOCK_ID
     // - The only way to acquire new BlockId's is via block_successors()

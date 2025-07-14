@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfg::{ControlFlowGraph, StacklessControlFlowGraph},
+    cfg::{ControlFlowGraph, NormalizedControlFlowGraph},
     stackless::{
         ast::{
             self, BasicBlock, Instruction, RValue,
@@ -98,7 +98,7 @@ pub(crate) fn function<K: SourceKind>(
             basic_blocks: BTreeMap::new(),
         });
     }
-    let cfg = StacklessControlFlowGraph::new(code, function.jump_tables());
+    let cfg = NormalizedControlFlowGraph::new(code, function.jump_tables());
 
     let locals_types = function
         .parameters
