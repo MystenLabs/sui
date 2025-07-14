@@ -32,6 +32,7 @@ pub enum Keystore {
 }
 #[enum_dispatch]
 pub trait AccountKeystore: Send + Sync {
+    /// Generate a new keypair and add it into the keystore.
     fn generate(
         &mut self,
         key_scheme: SignatureScheme,
@@ -45,13 +46,19 @@ pub trait AccountKeystore: Send + Sync {
         Ok((address, phrase, scheme))
     }
 
+    /// Import a keypair into the keystore.
     fn import(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
+    /// Remove a keypair from the keystore by its address.
     fn remove(&mut self, address: SuiAddress) -> Result<(), anyhow::Error>;
+    /// Return an array of `PublicKey`, consisting of every public key in the keystore.
     fn entries(&self) -> Vec<PublicKey>;
+    /// Return `SuiKeyPair` for the given address.
     fn export(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
 
+    /// Sign a hash with the keypair corresponding to the given address.
     fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
 
+    /// Sign a message with the keypair corresponding to the given address with the given intent.
     fn sign_secure<T>(
         &self,
         address: &SuiAddress,
@@ -61,22 +68,25 @@ pub trait AccountKeystore: Send + Sync {
     where
         T: Serialize;
 
+    /// Return an array of `SuiAddress`, consisting of every address in the keystore.
     fn addresses(&self) -> Vec<SuiAddress> {
         self.entries().iter().map(|k| k.into()).collect()
     }
+    /// Return an array of (&SuiAddress, &Alias), consisting of every address and its corresponding alias in the keystore.
     fn addresses_with_alias(&self) -> Vec<(&SuiAddress, &Alias)>;
+    /// Return an array of `Alias`, consisting of every alias stored. Each alias corresponds to a key.
     fn aliases(&self) -> Vec<&Alias>;
+    /// Mutable references to each alias in the keystore.
     fn aliases_mut(&mut self) -> Vec<&mut Alias>;
-
+    /// Get the alias of an address.
     fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
     /// Check if an alias exists by its name
     fn alias_exists(&self, alias: &str) -> bool {
         self.aliases().iter().any(|a| a.alias == alias)
     }
 
-    /// Get alias of address
+    /// Get address by its identity: a type which is either an address or an alias.
     fn get_by_identity(&self, key_identity: KeyIdentity) -> Result<SuiAddress, anyhow::Error> {
-        let key_identity = key_identity.into();
         match key_identity {
             KeyIdentity::Address(addr) => Ok(addr),
             KeyIdentity::Alias(alias) => Ok(*self
@@ -88,8 +98,10 @@ pub trait AccountKeystore: Send + Sync {
         }
     }
 
+    /// Returns an alias string. Optional string can be passed, checks for duplicates
     fn create_alias(&self, alias: Option<String>) -> Result<String, anyhow::Error>;
 
+    /// Updates the alias of an existing keypair.
     fn update_alias(
         &mut self,
         old_alias: &str,
@@ -118,6 +130,7 @@ pub trait AccountKeystore: Send + Sync {
         Ok(new_alias_name)
     }
 
+    /// Import from a mnemonic phrase.
     fn import_from_mnemonic(
         &mut self,
         phrase: &str,
@@ -236,7 +249,6 @@ impl AccountKeystore for FileBasedKeystore {
     }
 
     fn remove(&mut self, address: SuiAddress) -> Result<(), anyhow::Error> {
-        let address: SuiAddress = address.into();
         self.aliases.remove(&address);
         self.keys.remove(&address);
         self.save()?;
@@ -506,7 +518,6 @@ impl AccountKeystore for InMemKeystore {
     }
 
     fn remove(&mut self, address: SuiAddress) -> Result<(), anyhow::Error> {
-        let address: SuiAddress = address.into();
         self.aliases.remove(&address);
         self.keys.remove(&address);
         Ok(())
