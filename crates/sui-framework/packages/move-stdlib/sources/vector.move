@@ -171,13 +171,11 @@ public fun skip<T: drop>(mut v: vector<T>, n: u64): vector<T> {
 
 /// Take the first `n` elements of the vector `v` and drop the rest.
 /// Aborts if `n` is greater than the length of `v`.
-/// Destroys the original vector after taking the elements.
 public fun take<T: drop>(mut v: vector<T>, n: u64): vector<T> {
     assert!(n <= v.length());
+    if (n == v.length()) return v;
     v.reverse();
-    let r = tabulate!(n, |_| v.pop_back());
-    v.reverse();
-    r
+    tabulate!(n, |_| v.pop_back())
 }
 
 // === Macros ===
@@ -520,23 +518,27 @@ public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): boo
     }
 }
 
-/// Takes the first `n` elements of the vector `v` that satisfy the predicate `p` and drops the rest.
-/// Destroys the original vector after taking the elements. If all elements satisfy the predicate,
-/// returns the original vector.
+/// Take the first `n` elements of the vector `v` that satisfy the predicate `p`
+/// and drop the rest, where `n <= v.length()`.
 public macro fun take_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
-    let mut v = $v;
-    'search: {
-        v.length().do!(|i| if (!$p(&v[i])) return 'search v.take(i));
-        v
+    let v = $v;
+    'take: {
+        let mut r = vector[];
+        v.do!(|e| if ($p(&e)) r.push_back(e) else return 'take r);
+        r
     }
 }
 
-/// Take all elements of the vector `v` except the first `n` elements that satisfy the predicate `p`
-/// and drop the vector. If all elements satisfy the predicate, returns an empty vector.
+/// Take all elements of the vector `v` except the first `n` elements that satisfy
+/// the predicate `p` and drop the rest, where `n <= v.length()`.
 public macro fun skip_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
     let mut v = $v;
-    'search: {
-        v.length().do!(|i| if (!$p(&v[i])) return 'search v.skip(i));
-        vector[]
-    }
+    v.reverse();
+    let mut i = v.length();
+    while (i > 0) {
+        i = i - 1;
+        if ($p(&v[i])) v.pop_back() else break;
+    };
+    v.reverse();
+    v
 }
