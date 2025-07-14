@@ -711,7 +711,7 @@ where
         let tx_digest = *request.transaction.digest();
         match err {
             None => {
-                debug!(?tx_digest, "Failed to {action} - Retrying");
+                debug!(?tx_digest, "Failed to {action}: {err:?} - Retrying");
                 spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
                     request.clone(),
                     tx_cert,
