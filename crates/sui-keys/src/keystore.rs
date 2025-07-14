@@ -46,7 +46,7 @@ pub trait AccountKeystore: Send + Sync {
     }
 
     fn import(&mut self, alias: Option<String>, keypair: SuiKeyPair) -> Result<(), anyhow::Error>;
-    fn remove(&mut self, address: impl Into<SuiAddress>) -> Result<(), anyhow::Error>;
+    fn remove(&mut self, address: SuiAddress) -> Result<(), anyhow::Error>;
     fn entries(&self) -> Vec<PublicKey>;
     fn export(&self, address: &SuiAddress) -> Result<&SuiKeyPair, anyhow::Error>;
 
@@ -71,10 +71,7 @@ pub trait AccountKeystore: Send + Sync {
     fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error>;
 
     /// Get alias of address
-    fn get_by_identity(
-        &self,
-        key_identity: impl Into<KeyIdentity>,
-    ) -> Result<SuiAddress, anyhow::Error> {
+    fn get_by_identity(&self, key_identity: KeyIdentity) -> Result<SuiAddress, anyhow::Error> {
         let key_identity = key_identity.into();
         match key_identity {
             KeyIdentity::Address(addr) => Ok(addr),
@@ -234,7 +231,7 @@ impl AccountKeystore for FileBasedKeystore {
         Ok(())
     }
 
-    fn remove(&mut self, address: impl Into<SuiAddress>) -> Result<(), anyhow::Error> {
+    fn remove(&mut self, address: SuiAddress) -> Result<(), anyhow::Error> {
         let address: SuiAddress = address.into();
         self.aliases.remove(&address);
         self.keys.remove(&address);
@@ -503,7 +500,7 @@ impl AccountKeystore for InMemKeystore {
         Ok(())
     }
 
-    fn remove(&mut self, address: impl Into<SuiAddress>) -> Result<(), anyhow::Error> {
+    fn remove(&mut self, address: SuiAddress) -> Result<(), anyhow::Error> {
         let address: SuiAddress = address.into();
         self.aliases.remove(&address);
         self.keys.remove(&address);
