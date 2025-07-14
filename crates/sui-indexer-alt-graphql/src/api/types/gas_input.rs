@@ -36,18 +36,18 @@ type CGasPayment = JsonCursor<usize>;
 #[Object]
 impl GasInput {
     /// Address of the owner of the gas object(s) used.
-    async fn gas_sponsor(&self) -> Address {
-        Address::with_address(self.scope.clone(), self.native.owner)
+    async fn gas_sponsor(&self) -> Option<Address> {
+        Some(Address::with_address(self.scope.clone(), self.native.owner))
     }
 
     /// An unsigned integer specifying the number of native tokens per gas unit this transaction will pay (in MIST).
-    async fn gas_price(&self) -> BigInt {
-        BigInt::from(self.native.price)
+    async fn gas_price(&self) -> Option<BigInt> {
+        Some(BigInt::from(self.native.price))
     }
 
     /// The maximum SUI that can be expended by executing this transaction
-    async fn gas_budget(&self) -> BigInt {
-        BigInt::from(self.native.budget)
+    async fn gas_budget(&self) -> Option<BigInt> {
+        Some(BigInt::from(self.native.budget))
     }
 
     /// Objects used to pay for a transaction's execution and storage
@@ -58,7 +58,7 @@ impl GasInput {
         after: Option<CGasPayment>,
         last: Option<u64>,
         before: Option<CGasPayment>,
-    ) -> Result<Connection<String, Object>, RpcError> {
+    ) -> Result<Option<Connection<String, Object>>, RpcError> {
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("GasInput", "gasPayment");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -74,6 +74,6 @@ impl GasInput {
                 .push(Edge::new(edge.cursor.encode_cursor(), object));
         }
 
-        Ok(conn)
+        Ok(Some(conn))
     }
 }
