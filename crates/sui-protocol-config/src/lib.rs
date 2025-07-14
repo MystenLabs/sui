@@ -3776,7 +3776,7 @@ impl ProtocolConfig {
                                 max_estimate_us: 1_500_000, // 1.5s
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
-                                stake_weighted_median_threshold: 3334,
+                                stake_weighted_median_threshold: 0,
                             },
                         );
                     // Enable party transfer for testnet.
