@@ -158,9 +158,7 @@ Response: {
   "data": {
     "systemTransaction": {
       "gasInput": {
-        "gasSponsor": {
-          "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
-        },
+        "gasSponsor": null,
         "gasPrice": "1",
         "gasBudget": "0",
         "gasPayment": {
@@ -168,12 +166,7 @@ Response: {
             "hasNextPage": false,
             "hasPreviousPage": false
           },
-          "nodes": [
-            {
-              "address": "0x0000000000000000000000000000000000000000000000000000000000000000",
-              "version": 0
-            }
-          ]
+          "nodes": []
         }
       }
     }

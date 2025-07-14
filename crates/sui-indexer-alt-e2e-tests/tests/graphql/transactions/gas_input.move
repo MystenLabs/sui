@@ -129,7 +129,7 @@ module test::simple {
 }
 
 //# run-graphql
-{ # Test system transaction GasInput (should be null for system transactions)
+{ # Test system transaction GasInput
   systemTransaction: transaction(digest: "@{digest_6}") {
     gasInput {
       gasSponsor {
