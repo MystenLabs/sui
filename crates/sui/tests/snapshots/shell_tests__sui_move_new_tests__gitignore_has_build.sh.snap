@@ -1,6 +1,6 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-description: tests/shell_tests/new_tests/gitignore_has_build.sh
+description: tests/shell_tests/sui_move_new_tests/gitignore_has_build.sh
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -23,9 +23,10 @@ exit_code: 0
 ----- stdout -----
 ignore1
 build/*
+ignore2
+build/*
 .trace
 .coverage*
-ignore2
 
 ==== files in example/ ====
 .gitignore
