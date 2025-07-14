@@ -205,14 +205,14 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
-            WalPosition,
+            default_cells_per_mutex, Bytes, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType,
+            ThConfig,
         };
-        const MUTEXES: usize = 1024;
-        const VALUE_CACHE_SIZE: usize = 20_000;
+        const MUTEXES: usize = 2 * 1024;
+        const VALUE_CACHE_SIZE: usize = 2_000;
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
-        let objects_compactor = |index: &mut BTreeMap<Bytes, WalPosition>| {
+        let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
             const OID_SIZE: usize = 32;
