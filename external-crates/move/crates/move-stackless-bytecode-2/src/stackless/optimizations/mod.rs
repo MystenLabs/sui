@@ -3,8 +3,10 @@
 
 use crate::stackless::ast::Function;
 
+mod forwarding_jumps;
 mod inline_immediates;
 
 pub fn optimize(function: &mut Function) {
     inline_immediates::optimize(function);
+    forwarding_jumps::optimize(function);
 }
