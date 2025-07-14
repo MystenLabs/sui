@@ -6,21 +6,14 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use sui_types::{
-    base_types::ObjectRef,
-    committee::Committee,
-    digests::TransactionDigest,
-    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    event::{Event, EventID},
-    messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents},
-    object::Object,
-    transaction::Transaction,
+    base_types::ObjectRef, digests::TransactionDigest, effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents}, event::{Event, EventID}, full_checkpoint_content::CheckpointData, messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents, VerifiedCheckpoint}, object::Object, transaction::Transaction
 };
 
-use crate::proof::base::ProofTarget;
+use crate::proof::base::{ProofContentsVerifier, ProofTarget};
 
-/// A proof that provides evidence relating to a specific transaction to
-/// certify objects and events.
+/// A proof that provides evidence relating to a specific transaction.
 /// Implements the tx effects -> contents -> summary pathway.
+/// The certified effects can be used to in turn verify objects / events, for example.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TransactionProof {
     /// Checkpoint contents including this transaction.
@@ -37,47 +30,28 @@ pub struct TransactionProof {
 }
 
 impl TransactionProof {
-    pub fn verify(
-        &self,
-        committee: &Committee,
-        summary: &CertifiedCheckpointSummary,
-        targets: &ProofTarget,
-    ) -> anyhow::Result<()> {
-        let contents_ref = &self.checkpoint_contents;
-        summary.verify_with_contents(committee, Some(contents_ref))?;
+    pub fn new(
+        tx_digest: TransactionDigest,
+        checkpoint: &CheckpointData,
+        add_events: bool,
+    ) -> anyhow::Result<Self> {
+        let tx = checkpoint
+            .transactions
+            .iter()
+            .find(|t| t.transaction.digest() == &tx_digest)
+            .ok_or(anyhow!("Transaction not found"))?;
 
-        // Extract Transaction Digests and check they are in contents
-        let digests = self.effects.execution_digests();
-        if self.transaction.digest() != &digests.transaction {
-            return Err(anyhow!(
-                "Transaction digest does not match the execution digest"
-            ));
-        }
-
-        // Ensure the digests are in the checkpoint contents
-        if !self
-            .checkpoint_contents
-            .enumerate_transactions(summary)
-            .any(|x| x.1 == &digests)
-        {
-            // Could not find the digest in the checkpoint contents
-            return Err(anyhow!(
-                "Transaction digest not found in the checkpoint contents"
-            ));
-        }
-
-        // MILESTONE: Transaction & Effect correct and in contents
-
-        match targets {
-            ProofTarget::Objects(target) => self.verify_objects(&target.objects),
-            ProofTarget::Events(target) => self.verify_events(&target.events, &digests.transaction),
-            _ => {
-                return Err(anyhow!(
-                    "Targets are not objects or events for transaction proof"
-                ));
-            }
-        }
-    }
+        Ok(Self {
+            checkpoint_contents: checkpoint.checkpoint_contents.clone(),
+            transaction: tx.transaction.clone(),
+            effects: tx.effects.clone(),
+            events: if add_events {
+                tx.events.clone()
+            } else {
+                None
+            },
+        })
+    }   
 
     /// Check that the object references are correct and in the effects
     fn verify_objects(&self, objects: &Vec<(ObjectRef, Object)>) -> anyhow::Result<()> {
@@ -137,5 +111,53 @@ impl TransactionProof {
 
         // MILESTONE 2 checked
         Ok(())
+    }
+}
+
+impl ProofContentsVerifier for TransactionProof {
+    fn verify(
+        self,
+        targets: &ProofTarget,
+        summary: &VerifiedCheckpoint,
+    ) -> anyhow::Result<()> {
+        let contents_digest = *self.checkpoint_contents.digest();
+        if contents_digest != summary.data().content_digest {
+            return Err(anyhow!(
+                "Contents digest does not match the checkpoint summary"
+            ));
+        }
+        // MILESTONE: Contents is correct
+
+        // Extract Transaction Digests and check they are in contents
+        let digests = self.effects.execution_digests();
+        if self.transaction.digest() != &digests.transaction {
+            return Err(anyhow!(
+                "Transaction digest does not match the execution digest"
+            ));
+        }
+
+        // Ensure the digests are in the checkpoint contents
+        if !self
+            .checkpoint_contents
+            .enumerate_transactions(summary)
+            .any(|x| x.1 == &digests)
+        {
+            // Could not find the digest in the checkpoint contents
+            return Err(anyhow!(
+                "Transaction digest not found in the checkpoint contents"
+            ));
+        }
+
+        // MILESTONE: Transaction & Effect correct and in contents
+
+        match targets {
+            ProofTarget::Objects(target) => self.verify_objects(&target.objects),
+            ProofTarget::Events(target) => self.verify_events(&target.events, &digests.transaction),
+            _ => {
+                return Err(anyhow!(
+                    "Targets are not objects or events for transaction proof"
+                ));
+            }
+        }
     }
 }

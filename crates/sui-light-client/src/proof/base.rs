@@ -9,7 +9,7 @@ use sui_types::{
     committee::Committee,
     event::{Event, EventID},
     full_checkpoint_content::CheckpointData,
-    messages_checkpoint::CertifiedCheckpointSummary,
+    messages_checkpoint::{CertifiedCheckpointSummary, VerifiedCheckpoint},
     object::Object,
 };
 
@@ -25,7 +25,11 @@ pub trait ProofBuilder {
 }
 
 pub trait ProofVerifier {
-    fn verify(&self, committee: &Committee) -> anyhow::Result<()>;
+    fn verify(self, committee: &Committee) -> anyhow::Result<()>;
+}
+
+pub trait ProofContentsVerifier {
+    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> anyhow::Result<()>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,10 +88,9 @@ pub enum ProofContents {
 }
 
 impl ProofVerifier for Proof {
-    fn verify(&self, committee: &Committee) -> anyhow::Result<()> {
+    fn verify(self, committee: &Committee) -> anyhow::Result<()> {
         // Verify the checkpoint summary, which is common to all proof types.
-        self.checkpoint_summary
-            .verify_authority_signatures(committee)?;
+        let verified_summary = self.checkpoint_summary.try_into_verified(committee)?;
 
         // Sanity check that targets & proof types match
         match &self.targets {
@@ -105,12 +108,18 @@ impl ProofVerifier for Proof {
             }
         }
 
-        match &self.proof_contents {
-            ProofContents::TransactionProof(transaction_proof) => {
-                transaction_proof.verify(committee, &self.checkpoint_summary, &self.targets)
+        self.proof_contents.verify(&self.targets, &verified_summary)
+    }
+}
+
+impl ProofContentsVerifier for ProofContents {
+    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> anyhow::Result<()> {
+        match self {
+            ProofContents::TransactionProof(proof) => {
+                proof.verify(targets, summary)
             }
-            ProofContents::CommitteeProof(committee_proof) => {
-                committee_proof.verify(&self.targets, &self.checkpoint_summary)
+            ProofContents::CommitteeProof(proof) => {
+                proof.verify(targets, summary)
             }
         }
     }

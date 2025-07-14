@@ -30,27 +30,12 @@ impl ProofBuilder for ObjectsTarget {
             return Err(anyhow!("All targets must refer to the same transaction"));
         }
 
-        let tx = checkpoint
-            .transactions
-            .iter()
-            .find(|t| t.effects.transaction_digest() == &target_tx)
-            .ok_or(anyhow!("Transaction not found"))?;
-
-        let CheckpointTransaction {
-            transaction,
-            effects,
-            ..
-        } = tx;
+        let transaction_proof = TransactionProof::new(target_tx, checkpoint, false)?;
 
         Ok(Proof {
             targets: ProofTarget::Objects(self.clone()),
             checkpoint_summary: checkpoint.checkpoint_summary.clone(),
-            proof_contents: ProofContents::TransactionProof(TransactionProof {
-                checkpoint_contents: checkpoint.checkpoint_contents.clone(),
-                transaction: transaction.clone(),
-                effects: effects.clone(),
-                events: None,
-            }),
+            proof_contents: ProofContents::TransactionProof(transaction_proof),
         })
     }
 }

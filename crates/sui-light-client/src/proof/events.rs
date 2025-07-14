@@ -5,10 +5,8 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use sui_types::{
-    effects::TransactionEffectsAPI,
     event::{Event, EventID},
     full_checkpoint_content::CheckpointData,
-    full_checkpoint_content::CheckpointTransaction,
 };
 
 use crate::proof::{
@@ -32,28 +30,12 @@ impl ProofBuilder for EventsTarget {
             return Err(anyhow!("All targets must refer to the same transaction"));
         }
 
-        let tx = checkpoint
-            .transactions
-            .iter()
-            .find(|t| t.effects.transaction_digest() == &target_tx)
-            .ok_or(anyhow!("Transaction not found"))?;
-
-        let CheckpointTransaction {
-            transaction,
-            effects,
-            events,
-            ..
-        } = tx;
+        let transaction_proof = TransactionProof::new(target_tx, checkpoint, true)?;
 
         Ok(Proof {
             targets: ProofTarget::Events(self),
             checkpoint_summary: checkpoint.checkpoint_summary.clone(),
-            proof_contents: ProofContents::TransactionProof(TransactionProof {
-                checkpoint_contents: checkpoint.checkpoint_contents.clone(),
-                transaction: transaction.clone(),
-                effects: effects.clone(),
-                events: events.clone(),
-            }),
+            proof_contents: ProofContents::TransactionProof(transaction_proof),
         })
     }
 }
