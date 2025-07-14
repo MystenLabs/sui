@@ -6,9 +6,10 @@ use sui_types::{
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::{TransactionEffects, TransactionEvents},
     error::SuiError,
-    messages_consensus::{ConsensusPosition},
+    messages_consensus::ConsensusPosition,
     messages_grpc::{
-        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectReason, RawRejectedStatus, RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse
+        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectReason, RawRejectedStatus,
+        RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
     },
     object::Object,
 };

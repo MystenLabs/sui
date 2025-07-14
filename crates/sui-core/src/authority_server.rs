@@ -14,6 +14,7 @@ use prometheus::{
     IntCounter, IntCounterVec, Registry,
 };
 use std::{
+    cmp::Ordering,
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
@@ -1128,21 +1129,30 @@ impl ValidatorService {
                 error: "Mysticeti fastpath".to_string(),
             });
         };
-        if request.epoch < epoch_store.epoch() {
-            // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
-            // if response from this validator is desired.
-            let response = WaitForEffectsResponse::Expired {
-                epoch: epoch_store.epoch() as u32,
-                round: 0,
-            };
-            return Ok(response);
-        } else if request.epoch > epoch_store.epoch() {
-            // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
-            return Err(SuiError::WrongEpoch {
-                expected_epoch: epoch_store.epoch(),
-                actual_epoch: request.epoch,
-            });
-        }
+
+        match request.epoch.cmp(&epoch_store.epoch()) {
+            Ordering::Less => {
+                // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
+                // if response from this validator is desired.
+                let response = WaitForEffectsResponse::Expired {
+                    epoch: epoch_store.epoch() as u32,
+                    round: 0,
+                };
+                return Ok(response);
+            }
+            Ordering::Greater => {
+                // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
+                return Err(SuiError::WrongEpoch {
+                    expected_epoch: epoch_store.epoch(),
+                    actual_epoch: request.epoch,
+                });
+            }
+            Ordering::Equal => {
+                // The validator's epoch is the same as the epoch of the transaction.
+                // We can proceed with the normal flow.
+            }
+        };
+
         consensus_tx_status_cache.check_position_too_ahead(&request.transaction_position)?;
 
         // Because we need to associate effects with a specific transaction position,
@@ -1170,7 +1180,7 @@ impl ValidatorService {
             NotifyReadConsensusTxStatusResult::Expired(round) => {
                 return Ok(WaitForEffectsResponse::Expired {
                     epoch: epoch_store.epoch() as u32,
-                    round: round.into(),
+                    round,
                 });
             }
         };
@@ -1202,7 +1212,7 @@ impl ValidatorService {
                         NotifyReadConsensusTxStatusResult::Expired(round) => {
                             return Ok(WaitForEffectsResponse::Expired {
                                 epoch: epoch_store.epoch() as u32,
-                                round: round.into(),
+                                round,
                             });
                         }
                     }

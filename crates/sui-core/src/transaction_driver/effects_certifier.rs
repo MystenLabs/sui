@@ -176,7 +176,11 @@ impl EffectsCertifier {
                                 round.to_string(),
                             ));
                         }
-                        tracing::debug!("Transaction expired at epoch {}, round {}, retrying...", epoch, round);
+                        tracing::debug!(
+                            "Transaction expired at epoch {}, round {}, retrying...",
+                            epoch,
+                            round
+                        );
                     }
                 },
                 Ok(Err(e)) => {
@@ -245,10 +249,7 @@ impl EffectsCertifier {
                             return (name, response);
                         }
                         Ok(Err(e)) => {
-                            tracing::trace!(
-                                "Wait for effects acknowledgement: error: {:?}",
-                                e
-                            );
+                            tracing::trace!("Wait for effects acknowledgement: error: {:?}", e);
                         }
                         Err(_) => {
                             tracing::trace!("Wait for effects acknowledgement: timeout");
