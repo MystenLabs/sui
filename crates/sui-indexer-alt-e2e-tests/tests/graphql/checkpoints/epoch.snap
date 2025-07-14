@@ -12,7 +12,7 @@ Checkpoint created: 1
 
 task 2, line 8:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 3, line 10:
 //# create-checkpoint
@@ -24,7 +24,7 @@ Checkpoint created: 4
 
 task 5, line 14:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 6, line 16:
 //# create-checkpoint

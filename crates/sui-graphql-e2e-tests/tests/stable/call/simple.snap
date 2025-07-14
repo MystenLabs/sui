@@ -76,7 +76,7 @@ CheckpointSummary { epoch: 0, seq: 4, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY
 
 task 9, line 41:
 //# advance-epoch 6
-Epoch advanced: 5
+Epoch advanced: 6
 
 task 10, line 43:
 //# view-checkpoint
@@ -147,7 +147,7 @@ CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNN
 
 task 17, lines 72-75:
 //# advance-epoch
-Epoch advanced: 6
+Epoch advanced: 7
 
 task 18, lines 77-92:
 //# run-graphql
