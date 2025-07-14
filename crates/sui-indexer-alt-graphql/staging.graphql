@@ -29,9 +29,17 @@ type Checkpoint {
 	"""
 	query: Query
 	"""
+	A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
+	"""
+	digest: String
+	"""
 	The epoch that this checkpoint is part of.
 	"""
 	epoch: Epoch
+	"""
+	The digest of the previous checkpoint's summary.
+	"""
+	previousCheckpointDigest: String
 	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
