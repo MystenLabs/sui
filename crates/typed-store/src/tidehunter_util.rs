@@ -15,7 +15,7 @@ use tidehunter::metrics::Metrics;
 pub use tidehunter::{
     key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
-    WalPosition,
+    IndexWalPosition, WalPosition,
 };
 use typed_store_error::TypedStoreError;
 
@@ -205,8 +205,13 @@ impl ThConfig {
             prefix: Some(prefix),
         }
     }
+
+    pub fn with_config(mut self, config: KeySpaceConfig) -> Self {
+        self.config = config;
+        self
+    }
 }
 
 pub fn default_cells_per_mutex() -> usize {
-    8
+    2
 }
