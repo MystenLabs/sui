@@ -30,6 +30,7 @@ use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
+use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
@@ -922,7 +923,7 @@ fn create_genesis_transaction(
                 protocol_config,
                 metrics,
                 expensive_checks,
-                None,
+                ExecutionOrEarlyError::Ok(()),
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,

@@ -12,10 +12,10 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     committee::{Committee, EpochId},
     effects::TransactionEffects,
+    execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    metrics::BytecodeVerifierMetrics,
-    metrics::LimitsMetrics,
+    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
     sui_system_state::{
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
         SuiSystemState, SuiSystemStateTrait,
@@ -141,7 +141,8 @@ impl EpochState {
                 &self.protocol_config,
                 self.limits_metrics.clone(),
                 false, // enable_expensive_checks
-                None,  // early_execution_error
+                // TODO: Integrate with early execution error
+                ExecutionOrEarlyError::Ok(()),
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,

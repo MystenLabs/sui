@@ -569,6 +569,7 @@ mod test {
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
+    use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas::SuiGasStatus;
     use sui_types::in_memory_storage::InMemoryStorage;
     use sui_types::metrics::LimitsMetrics;
@@ -620,7 +621,7 @@ mod test {
                 &protocol_config,
                 metrics,
                 expensive_checks,
-                None,
+                ExecutionOrEarlyError::Ok(()),
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,

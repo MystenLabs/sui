@@ -26,6 +26,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{AccountKeyPair, AuthoritySignature, Signer};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
@@ -231,7 +232,7 @@ impl SingleValidator {
                 self.epoch_store.protocol_config(),
                 self.get_validator().metrics.limits_metrics.clone(),
                 false,
-                None,
+                ExecutionOrEarlyError::Ok(()),
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,

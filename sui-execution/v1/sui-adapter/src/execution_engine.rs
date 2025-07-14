@@ -14,6 +14,7 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
@@ -71,7 +72,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -116,7 +117,7 @@ mod checked {
             protocol_config,
             metrics,
             enable_expensive_checks,
-            early_execution_error,
+            execution_params,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -239,7 +240,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -259,10 +260,11 @@ mod checked {
         // we must still ensure an effect is committed and all objects versions incremented
         let result = gas_charger.charge_input_objects(temporary_store);
         let mut result = result.and_then(|()| {
-            let mut execution_result = if let Some(early_execution_error) = early_execution_error {
-                Err(ExecutionError::new(early_execution_error, None))
-            } else {
-                execution_loop::<Mode>(
+            let mut execution_result = match execution_params {
+                ExecutionOrEarlyError::Err(early_execution_error) => {
+                    Err(ExecutionError::new(early_execution_error, None))
+                }
+                ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                     temporary_store,
                     transaction_kind,
                     tx_ctx,
@@ -270,7 +272,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics.clone(),
-                )
+                ),
             };
 
             let meter_check = check_meter_limit(

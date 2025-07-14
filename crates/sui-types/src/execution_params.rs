@@ -10,6 +10,8 @@ use crate::{
     execution_status::CongestedObjects, transaction::CheckedInputObjects,
 };
 
+pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
+
 /// Determine if a transaction is predetermined to fail execution.
 /// If so, return the error kind, otherwise return `None`.
 /// When we pass this to the execution engine, we will not execute the transaction

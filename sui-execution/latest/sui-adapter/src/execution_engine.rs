@@ -17,6 +17,7 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
@@ -96,7 +97,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
@@ -164,7 +165,7 @@ mod checked {
             protocol_config,
             metrics,
             enable_expensive_checks,
-            early_execution_error,
+            execution_params,
             trace_builder_opt,
         );
 
@@ -302,7 +303,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         GasCostSummary,
@@ -331,10 +332,11 @@ mod checked {
                     let mut execution_result: ResultWithTimings<
                         Mode::ExecutionResults,
                         ExecutionError,
-                    > = if let Some(early_execution_error) = early_execution_error {
-                        Err((ExecutionError::new(early_execution_error, None), vec![]))
-                    } else {
-                        execution_loop::<Mode>(
+                    > = match execution_params {
+                        ExecutionOrEarlyError::Err(early_execution_error) => {
+                            Err((ExecutionError::new(early_execution_error, None), vec![]))
+                        }
+                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                             store,
                             temporary_store,
                             transaction_kind,
@@ -344,7 +346,7 @@ mod checked {
                             protocol_config,
                             metrics.clone(),
                             trace_builder_opt,
-                        )
+                        ),
                     };
 
                     let meter_check = check_meter_limit(

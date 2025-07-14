@@ -4,8 +4,8 @@
 use move_trace_format::format::MoveTraceBuilder;
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::error::ExecutionErrorKind;
 use sui_types::execution::ExecutionTiming;
+use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::storage::BackingStore;
 use sui_types::transaction::GasData;
 use sui_types::{
@@ -31,7 +31,7 @@ pub trait Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
         // Epoch
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
@@ -60,7 +60,7 @@ pub trait Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
         // Epoch
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,

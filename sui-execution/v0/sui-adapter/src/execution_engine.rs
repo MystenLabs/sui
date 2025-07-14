@@ -23,6 +23,7 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution_config_utils::to_binary_config;
+    use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -66,7 +67,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -104,7 +105,7 @@ mod checked {
             protocol_config,
             metrics,
             enable_expensive_checks,
-            early_execution_error,
+            execution_params,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -222,7 +223,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        early_execution_error: Option<ExecutionErrorKind>,
+        execution_params: ExecutionOrEarlyError,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -241,10 +242,11 @@ mod checked {
         // we must still ensure an effect is committed and all objects versions incremented
         let result = gas_charger.charge_input_objects(temporary_store);
         let mut result = result.and_then(|()| {
-            let mut execution_result = if let Some(early_execution_error) = early_execution_error {
-                Err(ExecutionError::new(early_execution_error, None))
-            } else {
-                execution_loop::<Mode>(
+            let mut execution_result = match execution_params {
+                ExecutionOrEarlyError::Err(early_execution_error) => {
+                    Err(ExecutionError::new(early_execution_error, None))
+                }
+                ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                     temporary_store,
                     transaction_kind,
                     tx_ctx,
@@ -252,7 +254,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics.clone(),
-                )
+                ),
             };
 
             let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();

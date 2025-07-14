@@ -29,9 +29,9 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
     digests::TransactionDigest,
-    early_execution_error::get_early_execution_error,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiError, SuiResult},
+    execution_params::{get_early_execution_error, ExecutionOrEarlyError},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
@@ -113,13 +113,17 @@ pub fn execute_transaction_to_effects(
     let input_objects = CheckedInputObjects::new_for_replay(input_objects);
     let early_execution_error =
         get_early_execution_error(&digest, &input_objects, &config_certificate_deny_set);
+    let execution_params = match early_execution_error {
+        Some(error) => ExecutionOrEarlyError::Err(error),
+        None => ExecutionOrEarlyError::Ok(()),
+    };
     let (inner_store, gas_status, effects, _execution_timing, result) =
         executor.executor.execute_transaction_to_effects(
             &store,
             protocol_config,
             executor.metrics.clone(),
             false, // expensive checks
-            early_execution_error,
+            execution_params,
             &epoch,
             epoch_start_timestamp,
             input_objects,
