@@ -4546,6 +4546,12 @@ insert
 swap_remove
 	public fun
 	0x1::vector
+skip
+	public fun
+	0x1::vector
+take
+	public fun
+	0x1::vector
 flatten
 	public fun
 	0x1::vector
