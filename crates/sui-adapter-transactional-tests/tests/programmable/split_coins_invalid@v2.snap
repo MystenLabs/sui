@@ -42,54 +42,59 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 5, lines 36-39:
+task 5, lines 36-40:
 //# programmable --sender A --inputs object(3,0) 10001 @B
 //> 0: SplitCoins(Input(0), [Input(1)]);
+//> TransferObjects([Result(0)], Input(2))
 // split off more than it's available using vector of amounts
 Error: Transaction Effects Status: Insufficient coin balance for operation.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 1000 required: 10001"), command: Some(0) } }
 
-task 6, lines 40-43:
-//# programmable --sender A --inputs object(3,0) 333 333 335
+task 6, lines 41-45:
+//# programmable --sender A --inputs object(3,0) 333 333 335 @A
 //> 0: SplitCoins(Input(0), [Input(1), Input(2), Input(3)]);
+//> TransferObjects([NestedResult(0,0),NestedResult(0,1),NestedResult(0,2)], Input(4))
 // use incorrect amount type for split
 Error: Transaction Effects Status: Insufficient coin balance for operation.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 334 required: 335"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InsufficientCoinBalance, source: Some("balance: 1000 required: 1001"), command: Some(0) } }
 
-task 7, lines 44-47:
+task 7, lines 46-49:
 //# programmable --sender A --inputs object(3,0) @C
 //> 0: SplitCoins(Input(0), [Input(1)]);
 // use incorrect amount type for split with the first one being correct
 Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be deserialized into a value of the specified type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: None, command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: Some("Function expects u64 but provided argument's value does not match"), command: Some(0) } }
 
-task 8, lines 48-51:
+task 8, lines 50-53:
 //# programmable --sender A --inputs object(3,0) 100 @C
 //> 0: SplitCoins(Input(0), [Input(1), Input(2)]);
 // use incorrect arg type for split coming from a Move function
-Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be deserialized into a value of the specified type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: None, command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 2. The argument cannot be deserialized into a value of the specified type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidBCSBytes }, source: Some("Function expects u64 but provided argument's value does not match"), command: Some(0) } }
 
-task 9, lines 52-56:
-//# programmable --sender A --inputs object(3,0)
+task 9, lines 54-59:
+//# programmable --sender A --inputs object(3,0) @A
 //> 0: test::m1::ret_one_amount();
 //> 1: SplitCoins(Input(0), [Result(0)]);
+//> TransferObjects([Result(1)], Input(1))
 // use incorrect arg type for split by creating a vector of u64s
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 10, lines 57-62:
-//# programmable --sender A --inputs object(3,0) 100
+task 10, lines 60-66:
+//# programmable --sender A --inputs object(3,0) 100 @A
 //> 0: MakeMoveVec<u64>([Input(1), Input(1), Input(1)]);
 //> 1: SplitCoins(Input(0), [Result(0)]);
+//> TransferObjects([Result(1)], Input(2))
 // pass result of SplitCoins directly as another function argument without creating and intermediate
 // vector first
 Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(1) } }
 
-task 11, lines 63-65:
+task 11, lines 67-70:
 //# programmable --sender A --inputs object(3,0) 100 100 @B
 //> 0: SplitCoins(Input(0), [Input(1), Input(2)]);
 //> test::m1::transfer_(Result(0), Input(3));
+//> TransferObjects([NestedResult(0,1)], Input(3))
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of result 0, expected a single result but found either no return values or multiple.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidResultArity { result_idx: 0 } }, source: None, command: Some(1) } }

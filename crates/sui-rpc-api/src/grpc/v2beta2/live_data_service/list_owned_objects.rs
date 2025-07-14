@@ -161,7 +161,7 @@ fn owned_object_to_proto(info: OwnedObjectInfo, mask: &FieldMaskTree) -> Object 
     let mut message = Object::default();
 
     if mask.contains(Object::OBJECT_ID_FIELD) {
-        message.object_id = Some(info.object_id.to_string());
+        message.object_id = Some(info.object_id.to_canonical_string(true));
     }
     if mask.contains(Object::VERSION_FIELD) {
         message.version = Some(info.version.value());

@@ -14,28 +14,30 @@ use super::{move_package::MovePackage, object::Object};
 #[derive(Interface)]
 #[graphql(name = "IAddressable", field(name = "address", ty = "SuiAddress"))]
 pub(crate) enum IAddressable {
-    Addressable(Addressable),
+    Address(Address),
     MovePackage(MovePackage),
     Object(Object),
 }
 
 #[derive(Clone)]
-pub(crate) struct Addressable {
+pub(crate) struct Address {
     pub(crate) scope: Scope,
     pub(crate) address: NativeSuiAddress,
 }
 
-pub(crate) struct AddressableImpl<'a>(&'a Addressable);
+pub(crate) struct AddressableImpl<'a>(&'a Address);
 
-/// An entity that has an address, could be an account or an object (but never both).
 #[Object]
-impl Addressable {
+impl Address {
+    /// The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
     pub(crate) async fn address(&self) -> SuiAddress {
         AddressableImpl::from(self).address()
     }
 }
 
-impl Addressable {
+impl Address {
+    /// Construct an address that is represented by just its identifier (`SuiAddress`).
+    /// This does not check whether the address is valid or exists in the system.
     pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {
         Self { scope, address }
     }
@@ -47,8 +49,8 @@ impl AddressableImpl<'_> {
     }
 }
 
-impl<'a> From<&'a Addressable> for AddressableImpl<'a> {
-    fn from(addressable: &'a Addressable) -> Self {
-        AddressableImpl(addressable)
+impl<'a> From<&'a Address> for AddressableImpl<'a> {
+    fn from(address: &'a Address) -> Self {
+        AddressableImpl(address)
     }
 }

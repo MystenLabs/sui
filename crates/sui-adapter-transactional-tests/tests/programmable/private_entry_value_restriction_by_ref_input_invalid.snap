@@ -1,18 +1,18 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 6 tasks
+processed 8 tasks
 
 init:
 A: object(0,0)
 
-task 1, lines 9-18:
+task 1, lines 9-24:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5054000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5639200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 20-25:
+task 2, lines 26-31:
 //# programmable --sender A --inputs @A
 //> 0: test::m1::r();
 //> TransferObjects([Result(0)], Input(0))
@@ -21,14 +21,14 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 27-29:
+task 3, lines 33-35:
 //# programmable
 //> 0: test::m1::r();
 //> test::m1::priv(Result(0));
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
 
-task 4, lines 31-35:
+task 4, lines 37-41:
 //# programmable --sender A --inputs object(2,0)
 //> 0: test::m1::id(Input(0));
 //> test::m1::priv(Result(0));
@@ -36,9 +36,30 @@ task 4, lines 31-35:
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
 
-task 5, lines 37-39:
+task 5, lines 43-47:
 //# programmable --sender A --inputs object(2,0)
 //> 0: test::m1::dirty(Input(0));
 //> test::m1::priv(Input(0));
+// the result of the function makes the split coin dirty
 Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(1) } }
+
+task 6, lines 49-53:
+//# programmable --sender A --inputs @A  --gas-budget 10000000000
+//> 0: test::m1::v();
+//> 1: SplitCoins(Gas, [Result(0)]);
+//> test::m1::coin(Gas);
+//> TransferObjects([Result(1)], Input(0))
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 55-59:
+//# programmable --sender A --inputs @A  --gas-budget 10000000000
+//> 0: test::m1::v();
+//> 1: SplitCoins(Gas, [Result(0)]);
+//> test::m1::coin(Result(1));
+//> TransferObjects([Result(1)], Input(0))
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

@@ -793,6 +793,12 @@ pub struct ExecutionTimeEstimateParams {
     // observation-based execution time estimates instead of the default.
     #[serde(skip_serializing_if = "is_zero")]
     pub stake_weighted_median_threshold: u64,
+
+    // For backwards compatibility with old behavior we use a zero default duration when adding
+    // new execution time observation keys and a zero generation when loading stored observations.
+    // This can be removed once set to "true" on mainnet.
+    #[serde(skip_serializing_if = "is_false")]
+    pub default_none_duration_for_new_keys: bool,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -3605,6 +3611,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
                     }
@@ -3685,6 +3692,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
 
@@ -3715,6 +3723,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
 
@@ -3738,6 +3747,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                     cfg.feature_flags.allow_unbounded_system_objects = true;
@@ -3760,6 +3770,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                 }
@@ -3778,6 +3789,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                     // Enable party transfer for testnet.
@@ -3796,6 +3808,22 @@ impl ProtocolConfig {
                     cfg.tx_context_rgp_cost_base = Some(30);
                     cfg.feature_flags
                         .ignore_execution_time_observations_after_certs_closed = true;
+
+                    // Disable backwards compatible behavior in exeuction time estimator for
+                    // new protocol version.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 20,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                            },
+                        );
                 }
                 // Use this template when making changes:
                 //
@@ -3990,6 +4018,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_ptb_execution_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_ptb_execution_v2 = val;
+    }
+
+    pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
+        self.feature_flags.record_time_estimate_processed = val;
     }
 
     pub fn push_aliased_addresses_for_testing(

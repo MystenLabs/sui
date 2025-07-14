@@ -154,10 +154,10 @@ pub struct Function<S: Hash + Eq> {
     pub visibility: Visibility,
     pub is_entry: bool,
     pub type_parameters: Vec<AbilitySet>,
+    pub locals: Signature<S>,
     pub parameters: Signature<S>,
     pub return_: Signature<S>,
     code_included: bool,
-    locals: Signature<S>,
     jump_tables: Vec<Rc<VariantJumpTable<S>>>,
     code: Vec<Bytecode<S>>,
 }
@@ -916,6 +916,7 @@ impl<S: Hash + Eq> Function<S> {
     }
 
     /// Should not be called if `code_included` is `false`--will panic in debug builds.
+    /// This ignores locals.
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             name,
@@ -925,7 +926,7 @@ impl<S: Hash + Eq> Function<S> {
             parameters,
             return_,
             code_included,
-            locals,
+            locals: _,
             jump_tables,
             code,
         } = self;
@@ -939,7 +940,6 @@ impl<S: Hash + Eq> Function<S> {
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
             && return_ == &other.return_
-            && locals == &other.locals
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
     }

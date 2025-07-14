@@ -9,8 +9,8 @@ A: object(0,0), B: object(0,1)
 task 1, lines 8-9:
 //# programmable --sender A
 //> MergeCoins(Gas, [Gas])
-Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid taking of the Gas coin. It can only be used by-value with TransferObjects
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidGasCoinUsage }, source: None, command: Some(0) } }
 
 task 2, lines 11-12:
 //# programmable --sender B --inputs @A

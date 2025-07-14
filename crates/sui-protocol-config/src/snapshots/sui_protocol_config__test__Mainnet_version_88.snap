@@ -56,6 +56,7 @@ feature_flags:
       stored_observations_num_included_checkpoints: 10
       stored_observations_limit: 20
       stake_weighted_median_threshold: 3334
+      default_none_duration_for_new_keys: true
   consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30

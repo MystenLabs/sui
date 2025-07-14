@@ -123,8 +123,7 @@ fn check_pure_bytes<Mode: ExecutionMode>(
     }
     let Some(layout) = primitive_serialization_layout(constraint)? else {
         let msg = format!(
-            "Non-primitive argument at index {command_arg_idx}. If it is an object, it must be \
-            populated by an object",
+            "Invalid usage of `Pure` argument for a non-primitive argument type at index {command_arg_idx}.",
         );
         return Err(ExecutionError::new_with_source(
             ExecutionErrorKind::command_argument_error(
@@ -195,11 +194,7 @@ fn primitive_serialization_layout(
 }
 
 fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), ExecutionError> {
-    let is_receiving = matches!(constraint ,
-        Type::Datatype(dt) if
-            dt.qualified_ident() == RESOLVED_RECEIVING_STRUCT && dt.type_arguments.len() == 1
-    );
-    if is_receiving {
+    if is_valid_receiving(constraint) {
         Ok(())
     } else {
         Err(command_argument_error(
@@ -207,6 +202,20 @@ fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), Execut
             command_arg_idx as usize,
         ))
     }
+}
+
+pub fn is_valid_pure_type(constraint: &Type) -> Result<bool, ExecutionError> {
+    Ok(primitive_serialization_layout(constraint)?.is_some())
+}
+
+/// Returns true if a type is a `Receiving<t>` where `t` has `key`
+pub fn is_valid_receiving(constraint: &Type) -> bool {
+    let Type::Datatype(dt) = constraint else {
+        return false;
+    };
+    dt.qualified_ident() == RESOLVED_RECEIVING_STRUCT
+        && dt.type_arguments.len() == 1
+        && dt.type_arguments[0].abilities().has_key()
 }
 
 //**************************************************************************************************

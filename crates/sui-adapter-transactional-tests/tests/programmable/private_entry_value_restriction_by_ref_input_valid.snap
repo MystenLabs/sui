@@ -32,13 +32,12 @@ task 3, lines 29-36:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
 
-task 4, lines 38-43:
-//# programmable --sender A --inputs @A  --gas-budget 10000000000
-//> 0: test::m1::v();
-//> 1: SplitCoins(Gas, [Result(0)]);
+task 4, lines 38-42:
+//# programmable --sender A --inputs @A 0  --gas-budget 10000000000
+//> 0: SplitCoins(Gas, [Input(1)]);
 //> test::m1::coin(Gas);
-//> test::m1::coin(Result(1));
-//> TransferObjects([Result(1)], Input(0))
+//> test::m1::coin(Result(0));
+//> TransferObjects([Result(0)], Input(0))
 created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

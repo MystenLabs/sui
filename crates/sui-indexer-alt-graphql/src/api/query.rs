@@ -14,6 +14,7 @@ use crate::{
 use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
+        address::Address,
         checkpoint::Checkpoint,
         epoch::Epoch,
         move_package::{self, CheckpointFilter, MovePackage, PackageKey},
@@ -34,6 +35,12 @@ pub struct Query {
 
 #[Object]
 impl Query {
+    /// Look-up an account by its SuiAddress.
+    async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Address, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(Address::with_address(scope, address.into()))
+    }
+
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
         let chain_id: ChainIdentifier = *ctx.data()?;

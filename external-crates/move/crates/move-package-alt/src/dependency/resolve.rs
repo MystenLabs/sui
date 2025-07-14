@@ -87,6 +87,8 @@ impl ResolvedDependency {
                     env.clone(),
                     pkg.clone(),
                     ResolveRequest {
+                        // TODO(Manos): We should be able to pass the env, not require ext resolvers to be
+                        // set per env.
                         env: envs[dep.0.use_environment()].clone(),
                         data: ext.data.clone(),
                     },

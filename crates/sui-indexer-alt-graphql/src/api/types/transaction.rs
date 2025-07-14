@@ -9,7 +9,10 @@ use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::kv_loader::{
     KvLoader, TransactionContents as NativeTransactionContents,
 };
-use sui_types::digests::TransactionDigest;
+use sui_types::{
+    base_types::SuiAddress as NativeSuiAddress, digests::TransactionDigest,
+    transaction::TransactionDataAPI,
+};
 
 use crate::{
     api::scalars::{base64::Base64, digest::Digest},
@@ -17,7 +20,11 @@ use crate::{
     scope::Scope,
 };
 
-use super::transaction_effects::{EffectsContents, TransactionEffects};
+use super::{
+    address::Address,
+    gas_input::GasInput,
+    transaction_effects::{EffectsContents, TransactionEffects},
+};
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -52,6 +59,30 @@ impl Transaction {
 
 #[Object]
 impl TransactionContents {
+    /// The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
+    async fn gas_input(&self) -> Result<Option<GasInput>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let transaction_data = content.data()?;
+        Ok(Some(GasInput::from_gas_data(
+            self.scope.clone(),
+            transaction_data.gas_data().clone(),
+        )))
+    }
+
+    /// The address corresponding to the public key that signed this transaction. System transactions do not have senders.
+    async fn sender(&self) -> Result<Option<Address>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let sender = content.data()?.sender();
+        Ok((sender != NativeSuiAddress::ZERO)
+            .then(|| Address::with_address(self.scope.clone(), sender)))
+    }
+
     /// The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
     async fn transaction_bcs(&self) -> Result<Option<Base64>, RpcError> {
         let Some(content) = &self.contents else {

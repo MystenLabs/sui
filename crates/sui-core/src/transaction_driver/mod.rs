@@ -1,40 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod effects_certifier;
 mod error;
 mod message_types;
 mod metrics;
+mod transaction_submitter;
 
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
-use arc_swap::ArcSwap;
-pub use error::*;
+/// Exports
 pub use message_types::*;
 pub use metrics::*;
+
+use std::{net::SocketAddr, sync::Arc, time::Instant};
+
+use arc_swap::ArcSwap;
+use effects_certifier::*;
+use error::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
-use rand::seq::SliceRandom as _;
 use sui_types::{
-    base_types::ConciseableName,
-    committee::EpochId,
-    messages_grpc::RawWaitForEffectsRequest,
-    quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
+    committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
 };
-use tokio::{
-    task::JoinSet,
-    time::{sleep, timeout},
-};
-use tracing::{debug, instrument};
+use tokio::task::JoinSet;
+use tracing::instrument;
+use transaction_submitter::*;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
-    wait_for_effects_request::{WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
 /// Options for submitting a transaction.
@@ -49,6 +43,8 @@ pub struct TransactionDriver<A: Clone> {
     authority_aggregator: ArcSwap<AuthorityAggregator<A>>,
     state: Mutex<State>,
     metrics: Arc<TransactionDriverMetrics>,
+    submitter: TransactionSubmitter,
+    certifier: EffectsCertifier,
 }
 
 impl<A> TransactionDriver<A>
@@ -63,23 +59,38 @@ where
         let driver = Arc::new(Self {
             authority_aggregator: ArcSwap::new(authority_aggregator),
             state: Mutex::new(State::new()),
-            metrics,
+            metrics: metrics.clone(),
+            submitter: TransactionSubmitter::new(metrics.clone()),
+            certifier: EffectsCertifier::new(metrics),
         });
         driver.enable_reconfig(reconfig_observer);
         driver
     }
 
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn submit_transaction(
+    pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
+        let raw_request = request
+            .into_raw()
+            .map_err(TransactionDriverError::SerializationError)?;
         let timer = Instant::now();
+
+        let mut attempts = 0;
+        // TODO(fastpath): Remove MAX_ATTEMPTS. Retry until unretriable error.
+        const MAX_ATTEMPTS: usize = 10;
+
         loop {
-            match self.submit_transaction_once(&request, &options).await {
+            attempts += 1;
+            // TODO(fastpath): Check local state before submitting transaction
+            match self
+                .drive_transaction_once(tx_digest, raw_request.clone(), &options)
+                .await
+            {
                 Ok(resp) => {
                     let settlement_finality_latency = timer.elapsed().as_secs_f64();
                     self.metrics
@@ -93,109 +104,47 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to submit transaction {tx_digest}: {}", e);
-                    sleep(Duration::from_secs(1)).await;
+                    if attempts >= MAX_ATTEMPTS {
+                        return Err(e);
+                    }
+                    tracing::warn!(
+                        "Failed to submit transaction {tx_digest} (attempt {}/{}): {}",
+                        attempts,
+                        MAX_ATTEMPTS,
+                        e
+                    );
                 }
             }
         }
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
-    async fn submit_transaction_once(
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
+    async fn drive_transaction_once(
         &self,
-        request: &SubmitTxRequest,
+        tx_digest: &TransactionDigest,
+        raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
-        // Store the epoch number; we read it from the votes and use it later to create the certificate.
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
         let committee = auth_agg.committee.clone();
         let epoch = committee.epoch();
-        let transaction = request.transaction.clone();
-        let raw_request = request
-            .into_raw()
-            .map_err(TransactionDriverError::SerializationError)?;
 
-        // TODO(fastpath): Use validator performance metrics to choose who to submit with
-        // Send the transaction to a random validator.
-        let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
-        let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
+        // Get consensus position using TransactionSubmitter
+        let consensus_position = self
+            .submitter
+            .submit_transaction(&auth_agg, tx_digest, raw_request, options)
+            .await?;
 
-        let consensus_position = timeout(
-            Duration::from_secs(2),
-            client.submit_transaction(raw_request, options.forwarded_client_addr),
-        )
-        .await
-        .map_err(|_| TransactionDriverError::TimeoutSubmittingTransaction)?
-        .map_err(|e| {
-            TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
-        })?;
-
-        debug!(
-            "Transaction {} submitted to consensus at position: {consensus_position:?}",
-            transaction.digest()
-        );
-
-        let response = match timeout(
-            // TODO(fastpath): This will be removed when we change this to wait for effects from a quorum
-            Duration::from_secs(20),
-            client.wait_for_effects(
-                RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-                    epoch,
-                    transaction_digest: *transaction.digest(),
-                    transaction_position: consensus_position,
-                    include_details: true,
-                })
-                .map_err(TransactionDriverError::SerializationError)?,
-                options.forwarded_client_addr,
-            ),
-        )
-        .await
-        {
-            Ok(Ok(response)) => response,
-            Ok(Err(e)) => {
-                return Err(TransactionDriverError::RpcFailure(
-                    name.concise().to_string(),
-                    e.to_string(),
-                ));
-            }
-            Err(_) => {
-                return Err(TransactionDriverError::TimeoutWaitingForEffects);
-            }
-        };
-
-        match response {
-            WaitForEffectsResponse::Executed {
-                details,
-                effects_digest: _,
-            } => {
-                if let Some(details) = details {
-                    return Ok(QuorumSubmitTransactionResponse {
-                        effects: FinalizedEffects {
-                            effects: details.effects,
-                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-                        },
-                        events: details.events,
-                        input_objects: Some(details.input_objects),
-                        output_objects: Some(details.output_objects),
-                        auxiliary_data: None,
-                    });
-                } else {
-                    return Err(TransactionDriverError::ExecutionDataNotFound(
-                        transaction.digest().to_string(),
-                    ));
-                }
-            }
-            WaitForEffectsResponse::Rejected { reason } => {
-                return Err(TransactionDriverError::TransactionRejected(
-                    reason.to_string(),
-                ));
-            }
-            WaitForEffectsResponse::Expired(round) => {
-                return Err(TransactionDriverError::TransactionExpired(
-                    round.to_string(),
-                ));
-            }
-        };
+        // Wait for quorum effects using EffectsCertifier
+        self.certifier
+            .get_certified_finalized_effects(
+                &auth_agg,
+                tx_digest,
+                consensus_position,
+                epoch,
+                options,
+            )
+            .await
     }
 
     fn enable_reconfig(

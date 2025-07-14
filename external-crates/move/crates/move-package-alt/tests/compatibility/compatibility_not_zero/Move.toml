@@ -1,0 +1,9 @@
+[package]
+name = "Anything"
+edition = "2024.beta"
+published-at = "0x10"
+
+[dependencies]
+
+[addresses]
+not_zero = "0x5"

@@ -38,7 +38,7 @@ pub struct ParsedManifest {
 #[derive(Debug, Deserialize, Clone)]
 pub struct PackageMetadata {
     pub name: Spanned<PackageName>,
-    edition: String,
+    pub edition: String,
 }
 
 /// An entry in the `[dependencies]` section of a manifest
@@ -64,6 +64,7 @@ pub struct ReplacementDependency {
     pub dependency: Option<DefaultDependency>,
 
     #[serde(default)]
+    // TODO: we need original id too
     pub published_at: Option<PublishedID>,
 
     #[serde(default)]
