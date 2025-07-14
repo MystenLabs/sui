@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    analysis::{DefMap, add_member_use_def},
     symbols::{
-        add_member_use_def, ignored_function, parsed_address,
-        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key,
-        AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, CursorContext,
-        CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef, UseDefMap,
+        cursor::{CursorContext, CursorDefinition, CursorPosition},
+        ignored_function,
+        mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs},
+        parsed_address,
+        use_def::{References, UseDef, UseDefMap},
     },
     utils::{loc_end_to_lsp_position_opt, loc_start_to_lsp_position_opt},
 };
@@ -17,7 +19,7 @@ use std::collections::BTreeMap;
 
 use move_compiler::{
     parser::ast as P,
-    shared::{files::MappedFiles, Identifier, Name, NamedAddressMap, NamedAddressMaps},
+    shared::{Identifier, Name, NamedAddressMap, NamedAddressMaps, files::MappedFiles},
 };
 use move_ir_types::location::*;
 
@@ -108,15 +110,59 @@ impl<'a> ParsingAnalysisContext<'a> {
         }
     }
 
-    fn attr_symbols(&mut self, sp!(_, attr): P::Attribute) {
+    fn attr_symbols(&mut self, sp!(_attr_loc, attr): &P::Attribute) {
         use P::Attribute_ as A;
+        // TODO: This is under-supported in the current cursor position system. We could make
+        // pretty good suggestions with a little work, though.
         match attr {
-            A::Name(_) => (),
-            A::Assigned(_, v) => {
-                update_cursor!(self.cursor, *v, Attribute);
+            A::BytecodeInstruction
+            | A::DefinesPrimitive(..)
+            | A::Deprecation { .. }
+            | A::Error { .. }
+            | A::Mode { .. }
+            | A::Syntax { .. }
+            | A::Allow { .. }
+            | A::LintAllow { .. } => (),
+            A::External { attrs } => {
+                // attrs: Spanned<Vec<ParsedAttribute>>
+                for parsed in &attrs.value {
+                    self.parsed_attr_symbols(parsed);
+                }
             }
-            A::Parameterized(_, sp!(_, attributes)) => {
-                attributes.iter().for_each(|a| self.attr_symbols(a.clone()))
+            A::Test | A::RandomTest => {}
+            A::ExpectedFailure {
+                minor_status,
+                failure_kind,
+                ..
+            } => {
+                let failure_kind = &failure_kind.as_ref().value;
+                match failure_kind {
+                    P::ExpectedFailureKind_::Empty => (),
+                    P::ExpectedFailureKind_::Name(_) => (),
+                    P::ExpectedFailureKind_::MajorStatus(_) => (),
+                    P::ExpectedFailureKind_::AbortCode(value) => {
+                        update_cursor!(self.cursor, *value, Attribute);
+                    }
+                }
+                if let Some(value) = minor_status {
+                    update_cursor!(self.cursor, *value, Attribute);
+                }
+            }
+        }
+    }
+
+    /// Walk a `ParsedAttribute` (used by `External`) similarly.
+    fn parsed_attr_symbols(&mut self, sp!(_loc, pattr): &P::ParsedAttribute) {
+        use P::ParsedAttribute_ as P;
+        match pattr {
+            P::Name(_) => (),
+            P::Assigned(_, boxed_val) => {
+                update_cursor!(self.cursor, **boxed_val, Attribute);
+            }
+            P::Parameterized(_, sp!(_, args)) => {
+                for arg in args {
+                    self.parsed_attr_symbols(arg);
+                }
             }
         }
     }
@@ -157,12 +203,16 @@ impl<'a> ParsingAnalysisContext<'a> {
         mod_def
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
         // location of the latest use declaration (if any)
         let mut latest_use_loc = Loc::new(mod_def.loc.file_hash(), 0, 0);
         // location of the earliest member (if any)
         let mut earliest_member_loc = Loc::new(mod_def.loc.file_hash(), u32::MAX, u32::MAX);
+        // we need this to avoid adding auto-imports for `use` declarations
+        // in "use blocks" that follow the follow the initial one (and come
+        // after other module members)
+        let mut non_use_member_after_use = false;
         for m in &mod_def.members {
             use P::ModuleMember as MM;
             match m {
@@ -170,7 +220,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                     if ignored_function(fun.name.value()) {
                         continue;
                     }
-                    earliest_member_loc = earliest_loc(earliest_member_loc, fun.loc);
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, fun.doc.loc().unwrap_or(fun.loc));
                     // Unit returns span the entire function signature, so we process them first
                     // for cursor ordering.
                     self.type_symbols(&fun.signature.return_type);
@@ -188,7 +242,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     fun.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     for (_, x, t) in fun.signature.parameters.iter() {
@@ -207,7 +261,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
                 }
                 MM::Struct(sdef) => {
-                    earliest_member_loc = earliest_loc(earliest_member_loc, sdef.loc);
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, sdef.doc.loc().unwrap_or(sdef.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -221,7 +279,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     sdef.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     match &sdef.fields {
@@ -236,7 +294,11 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Enum(edef) => {
-                    earliest_member_loc = earliest_loc(earliest_member_loc, edef.loc);
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, edef.doc.loc().unwrap_or(edef.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -250,7 +312,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     edef.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     let P::EnumDefinition { variants, .. } = edef;
@@ -269,15 +331,26 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Use(use_decl) => {
-                    latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    if !non_use_member_after_use {
+                        // update only if we have not seen a use that was already
+                        // followed by a non-use member
+                        latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    }
                     self.use_decl_symbols(use_decl)
                 }
                 MM::Friend(fdecl) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc = earliest_loc(earliest_member_loc, fdecl.loc);
                     self.chain_symbols(&fdecl.friend)
                 }
                 MM::Constant(c) => {
-                    earliest_member_loc = earliest_loc(earliest_member_loc, c.loc);
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, c.doc.loc().unwrap_or(c.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -291,13 +364,16 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
 
                     c.attributes.iter().for_each(|sp!(_, attrs)| {
-                        attrs.iter().for_each(|a| self.attr_symbols(a.clone()))
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
                     });
 
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
                 MM::Spec(s) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
                 }
             }
@@ -616,7 +692,7 @@ impl<'a> ParsingAnalysisContext<'a> {
         use_decl
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
         update_cursor!(self.cursor, sp(use_decl.loc, use_decl.use_.clone()), Use);
 
@@ -866,6 +942,34 @@ impl<'a> ParsingAnalysisContext<'a> {
         // If the cursor is in this item, mark that down.
         update_cursor!(IDENT, self.cursor, field, FieldDefn);
     }
+}
+
+/// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+pub fn parsing_mod_def_to_map_key(
+    pkg_addresses: &NamedAddressMap,
+    mod_def: &P::ModuleDefinition,
+) -> Option<String> {
+    // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
+    // standard practice) and while Move allows other ways of defining modules (i.e., with address
+    // preceding a sequence of modules), this method is now deprecated.
+    //
+    // TODO: make this function simply return String when the other way of defining modules is
+    // removed
+    mod_def
+        .address
+        .map(|a| parsing_leading_and_mod_names_to_map_key(pkg_addresses, a, mod_def.name))
+}
+
+/// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+fn parsing_leading_and_mod_names_to_map_key(
+    pkg_addresses: &NamedAddressMap,
+    ln: P::LeadingNameAccess,
+    name: P::ModuleName,
+) -> String {
+    let parsed_addr = parsed_address(ln, pkg_addresses);
+    format!("{}::{}", parsed_addr, name).to_string()
 }
 
 /// Produces module ident string of the form pkg::module to be used as a map key.

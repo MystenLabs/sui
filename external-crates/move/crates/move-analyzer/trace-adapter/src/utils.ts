@@ -20,3 +20,14 @@ export const FRAME_LIFETIME = -1;
  * The extension for JSON files.
  */
 export const JSON_FILE_EXT = ".json";
+
+/**
+ * The extension for compressed trace files (zstd).
+ */
+export const COMPRESSED_FILE_EXT = ".zst";
+
+/**
+ * The extension for trace files.
+ */
+export const TRACE_FILE_EXT = JSON_FILE_EXT + COMPRESSED_FILE_EXT;
+

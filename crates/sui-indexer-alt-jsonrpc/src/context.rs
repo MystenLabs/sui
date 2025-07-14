@@ -2,26 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
+use sui_indexer_alt_reader::{
+    bigtable_reader::{BigtableArgs, BigtableReader},
+    error::Error,
+    kv_loader::KvLoader,
+    package_resolver::{DbPackageStore, PackageCache, PackageResolver},
+    pg_reader::db::DbArgs,
+    pg_reader::PgReader,
+};
 use sui_package_resolver::Resolver;
-use sui_pg_db::DbArgs;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use crate::{
-    config::RpcConfig,
-    data::{
-        bigtable_reader::BigtableReader,
-        error::Error,
-        kv_loader::KvLoader,
-        package_resolver::{DbPackageStore, PackageCache, PackageResolver},
-        pg_reader::PgReader,
-    },
-    metrics::RpcMetrics,
-};
+use crate::{config::RpcConfig, metrics::RpcMetrics};
 
 /// A bundle of different interfaces to data, for use by JSON-RPC method implementations.
 #[derive(Clone)]
@@ -58,26 +54,24 @@ impl Context {
         database_url: Option<Url>,
         bigtable_instance: Option<String>,
         db_args: DbArgs,
+        bigtable_args: BigtableArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
-        slow_request_threshold: Duration,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let pg_reader = PgReader::new(
-            database_url,
-            db_args,
-            metrics.clone(),
-            registry,
-            cancel,
-            slow_request_threshold,
-        )
-        .await?;
+        let pg_reader = PgReader::new(None, database_url, db_args, registry, cancel).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(instance_id) = bigtable_instance {
-            let bigtable_reader =
-                BigtableReader::new(instance_id, registry, slow_request_threshold).await?;
+            let bigtable_reader = BigtableReader::new(
+                instance_id,
+                "indexer-alt-jsonrpc".to_owned(),
+                bigtable_args,
+                registry,
+            )
+            .await?;
+
             KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
         } else {
             KvLoader::new_with_pg(pg_loader.clone())

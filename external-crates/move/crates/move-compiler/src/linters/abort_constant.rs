@@ -4,8 +4,8 @@
 //! Lint to encourage the use of named constants with 'abort' and 'assert' for enhanced code readability.
 //! Detects cases where non-constants are used and issues a warning.
 
-use crate::diagnostics::warning_filters::WarningFilters;
 use crate::diagnostics::DiagnosticReporter;
+use crate::diagnostics::warning_filters::WarningFilters;
 use crate::linters::StyleCodes;
 use crate::{
     cfgir::{

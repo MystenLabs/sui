@@ -116,6 +116,7 @@ mod checked {
             epoch_timestamp_ms,
             // Those values are unused in execution versions before 3 (or latest)
             1,
+            1,
             1_000_000,
             None,
             protocol_config,
@@ -689,6 +690,9 @@ mod checked {
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
                             panic!("EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v2");
                         }
+                        EndOfEpochTransactionKind::AccumulatorRootCreate => {
+                            panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v2");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -716,6 +720,9 @@ mod checked {
                     metrics,
                 )?;
                 Ok(Mode::empty_results())
+            }
+            TransactionKind::ProgrammableSystemTransaction(_) => {
+                panic!("ProgrammableSystemTransaction should not exist in execution layer v2");
             }
         }?;
         temporary_store.check_execution_results_consistency()?;

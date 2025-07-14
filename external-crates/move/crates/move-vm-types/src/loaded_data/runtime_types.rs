@@ -106,7 +106,7 @@ impl DepthFormula {
                     return Err(
                         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                             .with_message(format!("{t_i:?} missing mapping")),
-                    )
+                    );
                 }
                 Some(ty_depth) => depth = max(depth, ty_depth.saturating_add(*c_i)),
             }
@@ -319,14 +319,14 @@ impl Type {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Unable to load const type signature".to_string()),
-                )
+                );
             }
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Unable to load const type signature".to_string()),
-                )
+                );
             }
         })
     }

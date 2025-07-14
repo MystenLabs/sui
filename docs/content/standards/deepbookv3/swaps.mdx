@@ -2,8 +2,6 @@
 title: Swaps
 ---
 
-{@include: ../../snippets/deepbook.mdx}
-
 DeepBook provides a swap-like interface commonly seen in automatic market makers (AMMs). Unlike the order functions, you can call `swap_exact_amount` without a `BalanceManager`. You call it directly with `Coin` objects instead. When swapping from base to quote, `base_in` must have a positive value while `quote_in` must be zero. When swapping from quote to base, `quote_in` must be positive and `base_in` zero. Some `deep_in` amount is required to pay for trading fees. You can overestimate this amount, as the unused DEEP tokens are returned at the end of the call.
 
 You can use the `get_amount_out` endpoint to simulate a swap. The function returns the exact amount of DEEP tokens that the swap requires.

@@ -106,6 +106,9 @@ pub struct EpochMetrics {
     /// The number of execution time observations messages shared by this node.
     pub epoch_execution_time_observations_shared: IntCounter,
 
+    /// The number of execution time observations messages intended to be shared by this node, annotated with reason.
+    pub epoch_execution_time_observations_sharing_reason: IntCounterVec,
+
     /// The number of execution time measurements dropped due to backpressure from the observer.
     pub epoch_execution_time_measurements_dropped: IntCounter,
 
@@ -127,6 +130,9 @@ pub struct EpochMetrics {
     /// point in their lifetime.
     /// Note: This metric is disabled by default as it may have very large cardinality.
     pub epoch_execution_time_observer_object_utilization: CounterVec,
+
+    /// The number of execution time observations loaded at start of epoch.
+    pub epoch_execution_time_observations_loaded: IntGauge,
 
     /// The number of consensus output items in the quarantine.
     pub consensus_quarantine_queue_size: IntGauge,
@@ -257,6 +263,13 @@ impl EpochMetrics {
                 registry
             )
             .unwrap(),
+            epoch_execution_time_observations_sharing_reason: register_int_counter_vec_with_registry!(
+                "epoch_execution_time_observations_sharing_reason",
+                "The number of execution time observations messages intended to be shared by this node, annotated with reason",
+                &["reason"],
+                registry
+            )
+            .unwrap(),
             epoch_execution_time_measurements_dropped: register_int_counter_with_registry!(
                 "epoch_execution_time_measurements_dropped",
                 "The number of execution time measurements dropped due to backpressure from the observer",
@@ -292,6 +305,12 @@ impl EpochMetrics {
                 "epoch_execution_time_observer_object_utilization",
                 "Per-object utilization for objects that were overutilized at least once at some point in their lifetime",
                 &["object_id"],
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observations_loaded: register_int_gauge_with_registry!(
+                "epoch_execution_time_observations_loaded",
+                "The number of execution time observations loaded at start of epoch",
                 registry
             )
             .unwrap(),

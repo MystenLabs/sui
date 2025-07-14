@@ -92,6 +92,7 @@ const concepts = [
 					'concepts/transactions/gas-smashing',
 				],
 			},
+			'concepts/grpc-overview',
 			'concepts/graphql-rpc',
 			'concepts/gaming'
 		],
@@ -121,6 +122,18 @@ const concepts = [
 			},
 			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
+			{
+				type: 'category',
+				label: 'Nautilus',
+				link: {
+					type: 'doc',
+					id: 'concepts/cryptography/nautilus',
+				},
+				items: [
+					'concepts/cryptography/nautilus/nautilus-design',
+					'concepts/cryptography/nautilus/using-nautilus',
+				],
+			},
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',

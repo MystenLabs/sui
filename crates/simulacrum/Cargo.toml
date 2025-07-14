@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-async-trait.workspace = true   
+async-trait.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 fastcrypto.workspace = true

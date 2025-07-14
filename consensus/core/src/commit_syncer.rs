@@ -32,6 +32,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::BlockRef;
 use futures::{stream::FuturesOrdered, StreamExt as _};
 use itertools::Itertools as _;
 use mysten_metrics::spawn_logged_monitored_task;
@@ -46,7 +47,7 @@ use tokio::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{BlockAPI, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
         CertifiedCommit, CertifiedCommits, Commit, CommitAPI as _, CommitDigest, CommitRange,
@@ -580,6 +581,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                             target_authority,
                             request_block_refs.to_vec(),
                             vec![],
+                            false,
                             timeout,
                         )
                         .await?;
@@ -635,7 +637,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
         }
 
-        // 8. Make sure fetched block (and votes) timestamps are lower than current time.
+        // 8. Check if the block timestamps are lower than current time - this is for metrics only.
         for block in fetched_blocks.values().chain(vote_blocks.iter()) {
             let now_ms = inner.context.clock.timestamp_utc_ms();
             let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
@@ -650,23 +652,6 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .block_timestamp_drift_ms
                 .with_label_values(&[peer_hostname, "commit_syncer"])
                 .inc_by(forward_drift);
-
-            // We want to run the following checks only if the median based commit timestamp is not enabled.
-            if !inner
-                .context
-                .protocol_config
-                .consensus_median_based_commit_timestamp()
-            {
-                let forward_drift = Duration::from_millis(forward_drift);
-                if forward_drift >= inner.context.parameters.max_forward_time_drift {
-                    warn!(
-                        "Local clock is behind a quorum of peers: local ts {}, committed block ts {}",
-                        now_ms,
-                        block.timestamp_ms()
-                    );
-                }
-                sleep(forward_drift).await;
-            }
         }
 
         // 9. Now create certified commits by assigning the blocks to each commit.
@@ -685,9 +670,6 @@ impl<C: NetworkClient> CommitSyncer<C> {
         }
 
         // 10. Add blocks in certified commits to the transaction certifier.
-        if inner.context.protocol_config.mysticeti_fastpath() {
-            inner.transaction_certifier.run_gc();
-        }
         for commit in &certified_commits {
             for block in commit.blocks() {
                 // Only account for reject votes in the block, since they may vote on uncommitted
@@ -842,11 +824,12 @@ mod tests {
 
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
+    use consensus_types::block::{BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::RwLock;
 
     use crate::{
-        block::{BlockRef, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitRange,
         commit_syncer::CommitSyncer,
@@ -858,7 +841,7 @@ mod tests {
         network::{BlockStream, NetworkClient},
         storage::mem_store::MemStore,
         transaction_certifier::TransactionCertifier,
-        CommitConsumerMonitor, CommitDigest, CommitRef, Round,
+        CommitConsumerMonitor, CommitDigest, CommitRef,
     };
 
     #[derive(Default)]
@@ -891,6 +874,7 @@ mod tests {
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
             _highest_accepted_rounds: Vec<Round>,
+            _breadth_first: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")

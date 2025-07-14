@@ -211,7 +211,7 @@ fun test_flash_loan() {
         assert!(lender.max_loan() == 101, 0);
 
         // Withdraw a coin from the pool for lending
-        let coin = lender.withdraw( &cap, 1, ts.ctx());
+        let coin = lender.withdraw(&cap, 1, ts.ctx());
         transfer::public_transfer(coin, ADMIN);
 
         ts::return_shared(lender);

@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
+    FullyCompiledProgram, diag,
     diagnostics::{
-        warning_filters::{
-            WarningFilter, WarningFilters, WarningFiltersBuilder, WarningFiltersTable, FILTER_ALL,
-            FILTER_UNUSED,
-        },
         Diagnostic, DiagnosticReporter, Diagnostics,
+        warning_filters::{
+            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters, WarningFiltersBuilder,
+            WarningFiltersTable,
+        },
     },
     editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
@@ -18,37 +18,37 @@ use crate::{
         },
         aliases::AliasSet,
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_},
+        attributes::expand_attributes,
         byte_string, hex_string,
         name_validation::{
-            check_restricted_name_all_cases, check_valid_address_name,
+            IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS, IMPLICIT_SUI_MODULES,
+            ModuleMemberKind, NameCase, check_restricted_name_all_cases, check_valid_address_name,
             check_valid_function_parameter_name, check_valid_local_name,
             check_valid_module_member_alias, check_valid_module_member_name,
-            check_valid_type_parameter_name, valid_local_variable_name, ModuleMemberKind, NameCase,
-            IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS, IMPLICIT_SUI_MODULES,
+            check_valid_type_parameter_name, valid_local_variable_name,
         },
         path_expander::{
-            access_result, Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander,
-            PathExpander,
+            Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander, PathExpander,
+            access_result,
         },
         translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
     },
     ice, ice_assert,
     parser::ast::{
-        self as P, Ability, BlockLabel, ConstantName, DatatypeName, Field, FieldBindings,
-        FunctionName, ModuleName, NameAccess, Var, VariantName, ENTRY_MODIFIER, MACRO_MODIFIER,
-        NATIVE_MODIFIER,
+        self as P, Ability, BlockLabel, ConstantName, DatatypeName, ENTRY_MODIFIER, Field,
+        FieldBindings, FunctionName, MACRO_MODIFIER, ModuleName, NATIVE_MODIFIER, NameAccess, Var,
+        VariantName,
     },
     shared::{
         ide::{IDEAnnotation, IDEInfo},
-        known_attributes::AttributePosition,
+        known_attributes::{AttributeKind_, AttributePosition},
         string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
         *,
     },
-    FullyCompiledProgram,
 };
 use move_core_types::account_address::AccountAddress;
-use move_core_types::parsing::parser::{parse_u16, parse_u256, parse_u32};
+use move_core_types::parsing::parser::{parse_u16, parse_u32, parse_u256};
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
@@ -79,7 +79,7 @@ pub(super) struct DefnContext<'env, 'map> {
     pub(super) reporter: DiagnosticReporter<'env>,
 }
 
-struct Context<'env, 'map> {
+pub(super) struct Context<'env, 'map> {
     defn_context: DefnContext<'env, 'map>,
     address: Option<Address>,
     warning_filters_table: Mutex<WarningFiltersTable>,
@@ -96,12 +96,7 @@ impl<'env> Context<'env, '_> {
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
         let mut warning_filters_table = WarningFiltersTable::new();
-        let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
-        for prefix in compilation_env.known_filter_names() {
-            for f in compilation_env.filter_from_str(prefix, FILTER_ALL) {
-                all_filter_alls.add(f);
-            }
-        }
+        let all_filter_alls = WarningFiltersBuilder::new_all_filter_alls(compilation_env);
         let all_filter_alls = warning_filters_table.add(all_filter_alls);
         let reporter = compilation_env.diagnostic_reporter_at_top_level();
         let defn_context = DefnContext {
@@ -132,7 +127,7 @@ impl<'env> Context<'env, '_> {
         self.defn_context.env
     }
 
-    fn reporter(&self) -> &DiagnosticReporter {
+    pub(super) fn reporter(&self) -> &DiagnosticReporter {
         &self.defn_context.reporter
     }
 
@@ -206,10 +201,10 @@ impl<'env> Context<'env, '_> {
         }
     }
 
-    pub fn attribute_value(
+    pub fn external_attribute_value(
         &mut self,
         attribute_value: P::AttributeValue,
-    ) -> Option<E::AttributeValue> {
+    ) -> Option<known_attributes::ExternalAttributeValue> {
         let Context {
             path_expander,
             defn_context: inner_context,
@@ -219,6 +214,22 @@ impl<'env> Context<'env, '_> {
             .as_mut()
             .unwrap()
             .name_access_chain_to_attribute_value(inner_context, attribute_value)
+    }
+
+    pub fn value_opt(&mut self, pvalue_opt: Option<P::Value>) -> Option<E::Value> {
+        let Context {
+            defn_context: inner_context,
+            ..
+        } = self;
+        pvalue_opt.and_then(|pvalue| value(inner_context, pvalue))
+    }
+
+    pub fn value(&mut self, pvalue: P::Value) -> Option<E::Value> {
+        let Context {
+            defn_context: inner_context,
+            ..
+        } = self;
+        value(inner_context, pvalue)
     }
 
     pub fn name_access_chain_to_module_access(
@@ -620,7 +631,7 @@ pub fn program(
     //
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
-            if !context.env().flags().sources_shadow_deps() {
+            if !context.env().sources_shadow_deps() {
                 duplicate_module(&mut context, &source_module_map, mident, old_loc)
             }
         }
@@ -897,7 +908,7 @@ fn module_(
         members,
         definition_mode: _,
     } = mdef;
-    let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
+    let attributes = expand_attributes(context, AttributePosition::Module, attributes);
     let warning_filter = module_warning_filter(context, package_name, &attributes);
     context.push_warning_filter_scope(warning_filter);
     assert!(context.address.is_none());
@@ -1274,6 +1285,32 @@ fn module_warning_filter(
     }
 }
 
+fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
+    let mut wf = warning_filter_(context, attributes);
+    // If a struct is marked as deprecated, do not report unused fields in it.
+    if attributes.contains_key_(&AttributeKind_::Deprecation) {
+        let none: Option<Symbol> = None;
+        let new_filters = context.env().filter_from_str(none, FILTER_DEPRECATED);
+        wf.add_all(new_filters);
+        let new_filters = context
+            .env()
+            .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD);
+        wf.add_all(new_filters);
+    }
+    context.warning_filters_table.get_mut().unwrap().add(wf)
+}
+
+fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
+    let mut wf = warning_filter_(context, attributes);
+    // If a function is marked as deprecated, do not report deprecations used within it.
+    if attributes.contains_key_(&AttributeKind_::Deprecation) {
+        let none: Option<Symbol> = None;
+        let new_filters = context.env().filter_from_str(none, FILTER_DEPRECATED);
+        wf.add_all(new_filters);
+    }
+    context.warning_filters_table.get_mut().unwrap().add(wf)
+}
+
 fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let wf = warning_filter_(context, attributes);
     context.warning_filters_table.get_mut().unwrap().add(wf)
@@ -1283,122 +1320,66 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningF
 /// attribute.
 fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFiltersBuilder {
     let mut warning_filters = WarningFiltersBuilder::new_for_source();
-    let mut prefixed_filters: Vec<(DiagnosticAttribute, Option<Symbol>, Vec<Name>)> = vec![];
-    // Gather lint_allow warnings
-    if let Some(lint_allow_attr) = attributes.get_(&DiagnosticAttribute::LintAllow.into()) {
-        // get the individual filters
-        let inners =
-            get_allow_attribute_inners(context, DiagnosticAttribute::LINT_ALLOW, lint_allow_attr);
-        if let Some(inners) = inners {
-            let names = prefixed_warning_filters(context, DiagnosticAttribute::LINT_ALLOW, inners);
-            prefixed_filters.push((DiagnosticAttribute::LintAllow, Some(symbol!("lint")), names));
-        }
-    }
-    // Gather allow warnings
-    if let Some(allow_attr) = attributes.get_(&DiagnosticAttribute::Allow.into()) {
-        // get the individual filters, or nested filters
-        let inners = get_allow_attribute_inners(context, DiagnosticAttribute::ALLOW, allow_attr);
-        for (inner_attr_loc, _, inner_attr) in inners.into_iter().flatten() {
-            let (prefix, names) = match &inner_attr.value {
-                // a filter, e.g. allow(unused_variables)
-                E::Attribute_::Name(n) => (None, vec![*n]),
-                // a nested filter, e.g. allow(lint(_))
-                E::Attribute_::Parameterized(prefix, inners) => (
-                    Some(prefix.value),
-                    prefixed_warning_filters(context, prefix, inners),
-                ),
-                E::Attribute_::Assigned(n, _) => {
-                    let msg = format!(
-                        "Expected a stand alone warning filter identifier, e.g. '{}({})'",
-                        DiagnosticAttribute::ALLOW,
-                        n
-                    );
-                    context.add_diag(diag!(Declarations::InvalidAttribute, (inner_attr_loc, msg)));
-                    (None, vec![*n])
-                }
-            };
-            prefixed_filters.push((DiagnosticAttribute::Allow, prefix, names));
-        }
-    }
-    // Find the warning filter for each prefix+name instance
-    for (diag_attr, prefix, names) in prefixed_filters {
-        for sp!(nloc, n_) in names {
-            let filters = context.env().filter_from_str(prefix, n_);
+    // Attributes are guaranteedto be sets by now, and everything was flattened during parsing.
+    if let Some(lint_allow) = attributes.get_(&known_attributes::AttributeKind_::LintAllow) {
+        let KnownAttribute::Diagnostic(DiagnosticAttribute::LintAllow { allow_set }) =
+            &lint_allow.value
+        else {
+            context.add_diag(ice!((
+                lint_allow.loc,
+                format!(
+                    "Expected diagnostics based on kind, but found {}",
+                    lint_allow.value.attribute_kind()
+                )
+            )));
+            return WarningFiltersBuilder::new_for_source();
+        };
+
+        let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
+        for name in allow_set {
+            let filters = context.env().filter_from_str(prefix, name.value);
             if filters.is_empty() {
-                let msg = match diag_attr {
-                    DiagnosticAttribute::Allow => {
-                        format!("Unknown warning filter '{}'", format_allow_attr(prefix, n_))
-                    }
-                    DiagnosticAttribute::LintAllow => {
-                        // specialized error message for the deprecated syntax
-                        format!(
-                            "Unknown warning filter '{}({})'",
-                            DiagnosticAttribute::LINT_ALLOW,
-                            n_
-                        )
-                    }
-                };
-                context.add_diag(diag!(Attributes::ValueWarning, (nloc, msg)));
+                let msg = format!(
+                    "Unknown warning filter '{}({})'",
+                    DiagnosticAttribute::LINT_ALLOW,
+                    name
+                );
+                context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                 continue;
             };
-            for f in filters {
-                warning_filters.add(f);
-            }
+            warning_filters.add_all(filters);
         }
-    }
-    warning_filters
-}
+    };
 
-fn get_allow_attribute_inners<'a>(
-    context: &Context,
-    name: &'static str,
-    allow_attr: &'a E::Attribute,
-) -> Option<&'a E::InnerAttributes> {
-    use crate::diagnostics::codes::Category;
-    match &allow_attr.value {
-        E::Attribute_::Parameterized(_, inner) if !inner.is_empty() => Some(inner),
-        _ => {
-            let msg = format!(
-                "Expected list of warnings, e.g. '{}({})'",
-                name,
-                WarningFilter::Category {
-                    prefix: None,
-                    category: Category::UnusedItem as u8,
-                    name: Some(FILTER_UNUSED)
-                }
-                .to_str()
-                .unwrap(),
-            );
-            context.add_diag(diag!(Attributes::ValueWarning, (allow_attr.loc, msg)));
-            None
-        }
-    }
-}
+    if let Some(allow) = attributes.get_(&known_attributes::AttributeKind_::Allow) {
+        let KnownAttribute::Diagnostic(DiagnosticAttribute::Allow { allow_set }) = &allow.value
+        else {
+            context.add_diag(ice!((
+                allow.loc,
+                format!(
+                    "Expected diagnostics based on kind, but found {}",
+                    allow.value.attribute_kind()
+                )
+            )));
+            return WarningFiltersBuilder::new_for_source();
+        };
 
-fn prefixed_warning_filters(
-    context: &Context,
-    prefix: impl std::fmt::Display,
-    inners: &E::InnerAttributes,
-) -> Vec<Name> {
-    inners
-        .key_cloned_iter()
-        .map(|(_, inner_attr)| match inner_attr {
-            sp!(_, E::Attribute_::Name(n)) => *n,
-            sp!(
-                loc,
-                E::Attribute_::Assigned(n, _) | E::Attribute_::Parameterized(n, _)
-            ) => {
+        for (prefix, name) in allow_set {
+            let prefix = prefix.map(|sym| sym.value);
+            let sp!(name_loc, name) = *name;
+            let filters = context.env().filter_from_str(prefix, name);
+            if filters.is_empty() {
                 let msg = format!(
-                    "Expected a warning filter identifier, e.g. '{}({}({}))'",
-                    DiagnosticAttribute::ALLOW,
-                    prefix,
-                    n
+                    "Unknown warning filter '{}'",
+                    format_allow_attr(prefix, name)
                 );
-                context.add_diag(diag!(Attributes::ValueWarning, (*loc, msg)));
-                *n
-            }
-        })
-        .collect()
+                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
+                continue;
+            };
+            warning_filters.add_all(filters);
+        }
+    };
+    warning_filters
 }
 
 //**************************************************************************************************
@@ -1576,7 +1557,7 @@ fn use_(
         loc,
         attributes,
     } = u;
-    let attributes = flatten_attributes(context, AttributePosition::Use, attributes);
+    let attributes = expand_attributes(context, AttributePosition::Use, attributes);
     match u {
         P::Use::NestedModuleUses(address, use_decls) => {
             for (module, use_) in use_decls {
@@ -1910,8 +1891,8 @@ fn struct_def_(
         type_parameters: pty_params,
         fields: pfields,
     } = pstruct;
-    let attributes = flatten_attributes(context, AttributePosition::Struct, attributes);
-    let warning_filter = warning_filter(context, &attributes);
+    let attributes = expand_attributes(context, AttributePosition::Struct, attributes);
+    let warning_filter = struct_warning_filter(context, &attributes);
     context.push_warning_filter_scope(warning_filter);
     let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
@@ -1997,7 +1978,7 @@ fn enum_def_(
         type_parameters: pty_params,
         variants: pvariants,
     } = penum;
-    let attributes = flatten_attributes(context, AttributePosition::Enum, attributes);
+    let attributes = expand_attributes(context, AttributePosition::Enum, attributes);
     let warning_filter = warning_filter(context, &attributes);
     context.push_warning_filter_scope(warning_filter);
     let type_parameters = datatype_type_parameters(context, pty_params);
@@ -2147,7 +2128,7 @@ fn friend_(context: &mut Context, pfriend_decl: P::FriendDecl) -> Option<(Module
         .iter()
         .map(|sp!(loc, _)| *loc)
         .collect::<Vec<_>>();
-    let attributes = flatten_attributes(context, AttributePosition::Friend, pattributes);
+    let attributes = expand_attributes(context, AttributePosition::Friend, pattributes);
     Some((
         mident,
         E::Friend {
@@ -2186,7 +2167,7 @@ fn constant_(
         signature: psignature,
         value: pvalue,
     } = pconstant;
-    let attributes = flatten_attributes(context, AttributePosition::Constant, pattributes);
+    let attributes = expand_attributes(context, AttributePosition::Constant, pattributes);
     let warning_filter = warning_filter(context, &attributes);
     context.push_warning_filter_scope(warning_filter);
     let signature = type_(context, psignature);
@@ -2237,8 +2218,8 @@ fn function_(
         signature: psignature,
         body: pbody,
     } = pfunction;
-    let attributes = flatten_attributes(context, AttributePosition::Function, pattributes);
-    let warning_filter = warning_filter(context, &attributes);
+    let attributes = expand_attributes(context, AttributePosition::Function, pattributes);
+    let warning_filter = function_warning_filter(context, &attributes);
     context.push_warning_filter_scope(warning_filter);
     if let (Some(entry_loc), Some(macro_loc)) = (entry, macro_) {
         let e_msg = format!(

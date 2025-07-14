@@ -7,10 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
-use sui_data_ingestion::{
-    ArchivalConfig, ArchivalReducer, ArchivalWorker, BlobTaskConfig, BlobWorker,
-    DynamoDBProgressStore,
-};
+use sui_data_ingestion::{BlobTaskConfig, BlobWorker, DynamoDBProgressStore};
 use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
 use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
 use sui_kvstore::{BigTableClient, BigTableProgressStore, KvWorker};
@@ -20,7 +17,6 @@ use tokio::sync::oneshot;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 enum Task {
-    Archival(ArchivalConfig),
     Blob(BlobTaskConfig),
     BigTableKV(BigTableTaskConfig),
 }
@@ -131,6 +127,7 @@ async fn main() -> Result<()> {
                 Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                 "ingestion".to_string(),
                 None,
+                None,
             )
             .await?;
             bigtable_store = Some(BigTableProgressStore::new(bigtable_client));
@@ -149,19 +146,6 @@ async fn main() -> Result<()> {
     let mut executor = IndexerExecutor::new(progress_store, config.tasks.len(), metrics);
     for task_config in config.tasks {
         match task_config.task {
-            Task::Archival(archival_config) => {
-                let reducer = ArchivalReducer::new(archival_config).await?;
-                executor
-                    .update_watermark(task_config.name.clone(), reducer.get_watermark().await?)
-                    .await?;
-                let worker_pool = WorkerPool::new_with_reducer(
-                    ArchivalWorker,
-                    task_config.name,
-                    task_config.concurrency,
-                    Box::new(reducer),
-                );
-                executor.register(worker_pool).await?;
-            }
             Task::Blob(blob_config) => {
                 let worker_pool = WorkerPool::new(
                     BlobWorker::new(blob_config),
@@ -176,6 +160,7 @@ async fn main() -> Result<()> {
                     false,
                     Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                     "ingestion".to_string(),
+                    None,
                     None,
                 )
                 .await?;

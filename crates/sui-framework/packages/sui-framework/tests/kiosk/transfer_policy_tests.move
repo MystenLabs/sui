@@ -14,11 +14,11 @@ module sui::malicious_policy {
 
 #[test_only]
 module sui::transfer_policy_tests {
-    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
+    use sui::coin;
     use sui::dummy_policy;
     use sui::malicious_policy;
     use sui::package;
-    use sui::coin;
+    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap};
 
     public struct OTW has drop {}
     public struct Asset has key, store { id: UID }
@@ -142,7 +142,11 @@ module sui::transfer_policy_tests {
         (policy, cap)
     }
 
-    public fun wrapup(policy: TransferPolicy<Asset>, cap: TransferPolicyCap<Asset>, ctx: &mut TxContext): u64 {
+    public fun wrapup(
+        policy: TransferPolicy<Asset>,
+        cap: TransferPolicyCap<Asset>,
+        ctx: &mut TxContext,
+    ): u64 {
         let profits = policy.destroy_and_withdraw(cap, ctx);
         profits.burn_for_testing()
     }

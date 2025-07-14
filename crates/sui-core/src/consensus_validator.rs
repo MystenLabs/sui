@@ -3,7 +3,8 @@
 
 use std::sync::Arc;
 
-use consensus_core::{TransactionIndex, TransactionVerifier, ValidationError};
+use consensus_core::{TransactionVerifier, ValidationError};
+use consensus_types::block::TransactionIndex;
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
@@ -19,7 +20,6 @@ use crate::{
     authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
     checkpoints::CheckpointServiceNotify,
     consensus_adapter::ConsensusOverloadChecker,
-    transaction_manager::TransactionManager,
 };
 
 /// Allows verifying the validity of transactions
@@ -28,7 +28,6 @@ pub struct SuiTxValidator {
     authority_state: Arc<AuthorityState>,
     consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
-    _transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
 
@@ -37,7 +36,6 @@ impl SuiTxValidator {
         authority_state: Arc<AuthorityState>,
         consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
-        transaction_manager: Arc<TransactionManager>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
         let epoch_store = authority_state.load_epoch_store_one_call_per_task().clone();
@@ -49,7 +47,6 @@ impl SuiTxValidator {
             authority_state,
             consensus_overload_checker,
             checkpoint_service,
-            _transaction_manager: transaction_manager,
             metrics,
         }
     }
@@ -169,7 +166,7 @@ impl SuiTxValidator {
     ) -> SuiResult<()> {
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
-        tx.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+        tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
             &*self.consensus_overload_checker,
@@ -304,7 +301,6 @@ mod tests {
             state.clone(),
             Arc::new(NoopConsensusOverloadChecker {}),
             Arc::new(CheckpointServiceNoop {}),
-            state.transaction_manager().clone(),
             metrics,
         );
         let res = validator.verify_batch(&[&first_transaction_bytes]);

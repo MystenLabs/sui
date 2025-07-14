@@ -5,4 +5,11 @@ info:
   edition: legacy
   lint: false
 ---
-
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/unit_test/multiple_errors.move:16:7
+   │
+16 │     #[test(_a=Foo)]
+   │       ^^^^^^^^^^^^
+   │       │
+   │       Arguments are no longer supported in `#[test]` attributes
+   │       Ignoring these arguments

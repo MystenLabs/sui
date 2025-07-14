@@ -9,7 +9,7 @@ use crate::{
     annotated_value::{MoveTypeLayout, MoveValue},
     language_storage::TypeTag,
     unit_tests::visitor_test::{
-        enum_layout_, serialize, struct_layout_, struct_value_, variant_value_, PrintVisitor,
+        PrintVisitor, enum_layout_, serialize, struct_layout_, struct_value_, variant_value_,
     },
 };
 

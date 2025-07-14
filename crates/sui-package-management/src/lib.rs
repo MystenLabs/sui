@@ -45,11 +45,10 @@ pub enum PublishedAtError {
     },
 }
 
-/// Update the `Move.lock` file with automated address management info.
-/// Expects a wallet context, the publish or upgrade command, its response.
-/// The `Move.lock` principally file records the published address (i.e., package ID) of
-/// a package under an environment determined by the wallet context config. See the
-/// `ManagedPackage` type in the lock file for a complete spec.
+/// Update the `Move.lock` file with automated address management info. Expects a wallet context,
+/// the publish or upgrade command, and its response. The `Move.lock` file principally records the
+/// published address (i.e., package ID) of a package under an environment determined by the wallet
+/// context config. See the `ManagedPackage` type in the lock file for a complete spec.
 pub async fn update_lock_file(
     context: &WalletContext,
     command: LockCommand,
@@ -65,7 +64,33 @@ pub async fn update_lock_file(
         .get_chain_identifier()
         .await
         .context("Network issue: couldn't determine chain identifier for updating Move.lock")?;
+    let env = context.config.get_active_env().context(
+        "Could not resolve environment from active wallet context. \
+         Try ensure `sui client active-env` is valid.",
+    )?;
+    update_lock_file_for_chain_env(
+        &chain_identifier,
+        &env.alias,
+        command,
+        install_dir,
+        lock_file,
+        response,
+    )
+    .await
+}
 
+/// Update the `Move.lock` file with automated address management info. Expects a chain identifier,
+/// env alias, the publish or upgrade command, and its response. The `Move.lock` file principally
+/// records the published address (i.e., package ID) of a package under an environment in the given
+/// chain. See the `ManagedPackage` type in the lock file for a complete spec.
+pub async fn update_lock_file_for_chain_env(
+    chain_identifier: &str,
+    env_alias: &str,
+    command: LockCommand,
+    install_dir: Option<PathBuf>,
+    lock_file: Option<PathBuf>,
+    response: &SuiTransactionBlockResponse,
+) -> Result<(), anyhow::Error> {
     let (original_id, version, _) = get_new_package_obj_from_response(response).context(
         "Expected a valid published package response but didn't see \
          one when attempting to update the `Move.lock`.",
@@ -78,24 +103,20 @@ pub async fn update_lock_file(
         )
     };
     let install_dir = install_dir.unwrap_or(PathBuf::from("."));
-    let env = context.config.get_active_env().context(
-        "Could not resolve environment from active wallet context. \
-         Try ensure `sui client active-env` is valid.",
-    )?;
 
     let mut lock = LockFile::from(install_dir.clone(), &lock_file)?;
     match command {
         LockCommand::Publish => lock_file::schema::update_managed_address(
             &mut lock,
-            &env.alias,
+            env_alias,
             lock_file::schema::ManagedAddressUpdate::Published {
-                chain_id: chain_identifier,
+                chain_id: chain_identifier.to_string(),
                 original_id: original_id.to_string(),
             },
         ),
         LockCommand::Upgrade => lock_file::schema::update_managed_address(
             &mut lock,
-            &env.alias,
+            env_alias,
             lock_file::schema::ManagedAddressUpdate::Upgraded {
                 latest_id: original_id.to_string(),
                 version: version.into(),

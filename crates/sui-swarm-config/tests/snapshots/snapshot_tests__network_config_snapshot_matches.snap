@@ -64,9 +64,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -155,6 +152,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -224,9 +222,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -315,6 +310,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -384,9 +380,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -475,6 +468,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -544,9 +538,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -635,6 +626,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -704,9 +696,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -795,6 +784,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -864,9 +854,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -955,6 +942,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1024,9 +1012,6 @@ validator_configs:
       zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
-    state-archive-write-config:
-      concurrency: 0
-      use-for-pruning-watermark: false
     state-archive-read-config: []
     state-snapshot-write-config:
       concurrency: 0
@@ -1115,6 +1100,7 @@ validator_configs:
         transaction_objects_cache_size: ~
         backpressure_threshold: ~
         backpressure_threshold_for_rpc: ~
+        fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:

@@ -17,7 +17,7 @@ pin-project-lite = "0.2.15"
 socket2 = { version = "0.5", features = ["all"] }
 tokio = { version = "1.36.0", default-features = false, features = ["macros"] }
 tokio-util = { version = "0.7.10" }
-tower = { version = "0.4", default-features = false, features = ["util"] }
+tower = { version = "0.5", default-features = false, features = ["util"] }
 tracing = { version = "0.1" }
 
 # TLS support

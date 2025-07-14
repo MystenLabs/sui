@@ -49,6 +49,8 @@ pub struct ModuleIdent {
 pub struct ModuleDefinition {
     /// The specified binary version of this module if a specific version is required.
     pub specified_version: Option<u32>,
+    /// If this definition is being built in testing mode
+    pub publishable: bool,
     /// The location of this module
     pub loc: Loc,
     /// name and address of the module
@@ -791,6 +793,7 @@ impl ModuleDefinition {
     pub fn new(
         specified_version: Option<u32>,
         loc: Loc,
+        publishable: bool,
         identifier: ModuleIdent,
         friends: Vec<ModuleIdent>,
         imports: Vec<ImportDefinition>,
@@ -803,6 +806,7 @@ impl ModuleDefinition {
         ModuleDefinition {
             specified_version,
             loc,
+            publishable,
             identifier,
             friends,
             imports,
@@ -1319,10 +1323,7 @@ impl fmt::Display for ConstantName {
 impl fmt::Display for FunctionBody {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FunctionBody::Move {
-                ref locals,
-                ref code,
-            } => {
+            FunctionBody::Move { locals, code } => {
                 for (local, ty) in locals {
                     write!(f, "let {}: {};", local, ty)?;
                 }

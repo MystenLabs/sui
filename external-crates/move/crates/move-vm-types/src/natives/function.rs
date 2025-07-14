@@ -18,7 +18,7 @@
 //! function.
 
 use crate::values::Value;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 pub use move_binary_format::errors::{PartialVMError, PartialVMResult};
 pub use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
@@ -114,7 +114,7 @@ macro_rules! pop_arg {
             None => {
                 return Err(PartialVMError::new(
                     StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                ))
+                ));
             }
             Some(Err(e)) => return Err(e),
             Some(Ok(v)) => v,

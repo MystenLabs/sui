@@ -17,79 +17,79 @@ const { join, hardline, indent } = doc.builders;
  * Creates a callback function to print modules and module-related nodes.
  */
 export default function (path: AstPath<Node>): treeFn | null {
-	switch (path.node.type) {
-		case Module.ModuleDefinition:
-			return printModuleDefinition;
-		case Module.ModuleIdentity:
-			return printModuleIdentity;
-		case Module.ModuleIdentifier:
-			return printIdentifier;
-		case Module.ModuleBody:
-			return printModuleBody;
-		default:
-			return null;
-	}
+    switch (path.node.type) {
+        case Module.ModuleDefinition:
+            return printModuleDefinition;
+        case Module.ModuleIdentity:
+            return printModuleIdentity;
+        case Module.ModuleIdentifier:
+            return printIdentifier;
+        case Module.ModuleBody:
+            return printModuleBody;
+        default:
+            return null;
+    }
 }
 
 /**
  * Module - top-level definition in a Move source file.
  */
 export enum Module {
-	ModuleDefinition = 'module_definition',
-	BlockComment = 'block_comment',
-	ModuleIdentity = 'module_identity',
-	ModuleIdentifier = 'module_identifier',
-	ModuleBody = 'module_body',
+    ModuleDefinition = 'module_definition',
+    BlockComment = 'block_comment',
+    ModuleIdentity = 'module_identity',
+    ModuleIdentifier = 'module_identifier',
+    ModuleBody = 'module_body',
 }
 
 /**
  * Print `module_definition` node.
  */
 export function printModuleDefinition(
-	path: AstPath<Node>,
-	options: MoveOptions,
-	print: printFn,
+    path: AstPath<Node>,
+    options: MoveOptions,
+    print: printFn,
 ): Doc {
-	let useLabel = false;
+    let useLabel = false;
 
-	// when option is present we must check that there's only one module per file
-	if (options.useModuleLabel) {
-		const modules = path.parent!.nonFormattingChildren.filter(
-			(node) => node.type === path.node.type,
-		);
+    // when option is present we must check that there's only one module per file
+    if (options.useModuleLabel) {
+        const modules = path.parent!.nonFormattingChildren.filter(
+            (node) => node.type === path.node.type,
+        );
 
-		useLabel = modules.length == 1;
-	}
+        useLabel = modules.length == 1;
+    }
 
-	const result = ['module ', path.call(print, 'nonFormattingChildren', 0)];
+    const result = ['module ', path.call(print, 'nonFormattingChildren', 0)];
 
-	// if we're using the label, we must add a semicolon and print the body in a
-	// new line
-	if (useLabel) {
-		return result.concat([
-			';',
-			hardline,
-			hardline,
-			path.call(print, 'nonFormattingChildren', 1),
-		]);
-	}
+    // if we're using the label, we must add a semicolon and print the body in a
+    // new line
+    if (useLabel) {
+        return result.concat([
+            ';',
+            hardline,
+            hardline,
+            path.call(print, 'nonFormattingChildren', 1),
+        ]);
+    }
 
-	// when not module mabel, module body is a block with curly braces and
-	// indentation
-	return result.concat([
-		' {',
-		indent(hardline),
-		indent(path.call(print, 'nonFormattingChildren', 1)),
-		hardline,
-		'}',
-	]);
+    // when not module mabel, module body is a block with curly braces and
+    // indentation
+    return result.concat([
+        ' {',
+        indent(hardline),
+        indent(path.call(print, 'nonFormattingChildren', 1)),
+        hardline,
+        '}',
+    ]);
 }
 
 /**
  * Print `module_identity` node.
  */
 function printModuleIdentity(path: AstPath<Node>, options: ParserOptions, print: printFn): Doc {
-	return join('::', path.map(print, 'nonFormattingChildren'));
+    return join('::', path.map(print, 'nonFormattingChildren'));
 }
 
 /**
@@ -97,12 +97,12 @@ function printModuleIdentity(path: AstPath<Node>, options: ParserOptions, print:
  * For example, a function definition followed by a struct definition.
  */
 const separatedMembers = [
-	FunctionDefinition.FunctionDefinition,
-	StructDefinition.StructDefinition,
-	Constant.NODE_TYPE,
-	UseDeclaration.UseDeclaration,
-	UseDeclaration.FriendDeclaration,
-	EnumDefinition.EnumDefinition,
+    FunctionDefinition.FunctionDefinition,
+    StructDefinition.StructDefinition,
+    Constant.NODE_TYPE,
+    UseDeclaration.UseDeclaration,
+    UseDeclaration.FriendDeclaration,
+    EnumDefinition.EnumDefinition,
 ] as string[];
 
 /**
@@ -113,52 +113,48 @@ const separatedMembers = [
  * Additionally, if `groupImports` is set to `package` or `module`, we should group imports and
  * print them at the top of the module.
  */
-function printModuleBody(
-	path: AstPath<Node>,
-	options: MoveOptions,
-	print: printFn,
-): Doc {
-	const nodes = path.node.namedAndEmptyLineChildren;
-	const importsDoc = [] as Doc[];
-	const imports = collectImports(path.node);
-	if (Object.keys(imports).length > 0) {
-		importsDoc.push(
-			...(printImports(imports, options.autoGroupImports as 'package' | 'module') as Doc[]),
-		);
-	}
+function printModuleBody(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
+    const nodes = path.node.namedAndEmptyLineChildren;
+    const importsDoc = [] as Doc[];
+    const imports = collectImports(path.node);
+    if (imports.size > 0) {
+        importsDoc.push(
+            ...(printImports(imports, options.autoGroupImports as 'package' | 'module') as Doc[]),
+        );
+    }
 
-	const bodyDoc = [] as Doc[];
+    const bodyDoc = [] as Doc[];
 
-	path.each((path, i) => {
-		const next = nodes[i + 1];
+    path.each((path, i) => {
+        const next = nodes[i + 1];
 
-		// empty lines should be removed if they are next to grouped imports
-		if (path.node.isEmptyLine && path.node.previousNamedSibling?.isGroupedImport) return;
-		if (path.node.isGroupedImport) return;
-		if (path.node.isEmptyLine && !path.node.previousNamedSibling) return;
+        // empty lines should be removed if they are next to grouped imports
+        if (path.node.isEmptyLine && path.node.previousNamedSibling?.isGroupedImport) return;
+        if (path.node.isGroupedImport) return;
+        if (path.node.isEmptyLine && !path.node.previousNamedSibling) return;
 
-		if (
-			separatedMembers.includes(path.node.type) &&
-			separatedMembers.includes(next?.type || '') &&
-			path.node.type !== next?.type
-		) {
-			return bodyDoc.push([path.call(print), hardline]);
-		}
+        if (
+            separatedMembers.includes(path.node.type) &&
+            separatedMembers.includes(next?.type || '') &&
+            path.node.type !== next?.type
+        ) {
+            return bodyDoc.push([path.call(print), hardline]);
+        }
 
-		// force add empty line after function definitions
-		if (
-			path.node.type === FunctionDefinition.FunctionDefinition &&
-			next?.type === FunctionDefinition.FunctionDefinition
-		) {
-			return bodyDoc.push([path.call(print), hardline]);
-		}
+        // force add empty line after function definitions
+        if (
+            path.node.type === FunctionDefinition.FunctionDefinition &&
+            next?.type === FunctionDefinition.FunctionDefinition
+        ) {
+            return bodyDoc.push([path.call(print), hardline]);
+        }
 
-		return bodyDoc.push(path.call(print));
-	}, 'namedAndEmptyLineChildren');
+        return bodyDoc.push(path.call(print));
+    }, 'namedAndEmptyLineChildren');
 
-	if (bodyDoc.length > 0 && importsDoc.length > 0) {
-		bodyDoc.unshift(''); // add empty line before first member
-	}
+    if (bodyDoc.length > 0 && importsDoc.length > 0) {
+        bodyDoc.unshift(''); // add empty line before first member
+    }
 
-	return join(hardline, importsDoc.concat(bodyDoc));
+    return join(hardline, importsDoc.concat(bodyDoc));
 }

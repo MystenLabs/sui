@@ -5,6 +5,43 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::{
+        adapter::new_native_extensions,
+        data_store::{
+            PackageStore,
+            cached_package_store::CachedPackageStore,
+            legacy::{linkage_view::LinkageView, sui_data_store::SuiDataStore},
+        },
+        execution_mode::ExecutionMode,
+        execution_value::{
+            CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
+            ObjectValue, RawValueType, ResultValue, SizeBound, TryFromValue, UsageKind, Value,
+        },
+        gas_charger::GasCharger,
+        gas_meter::SuiGasMeter,
+        type_resolver::TypeTagResolver,
+    };
+    use indexmap::IndexSet;
+    use move_binary_format::{
+        CompiledModule,
+        errors::{Location, PartialVMError, VMError, VMResult},
+        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+    };
+    use move_core_types::{
+        account_address::AccountAddress,
+        identifier::IdentStr,
+        language_storage::{ModuleId, StructTag, TypeTag},
+        resolver::MoveResolver,
+        vm_status::StatusCode,
+    };
+    use move_trace_format::format::MoveTraceBuilder;
+    use move_vm_runtime::{
+        move_vm::MoveVM,
+        native_extensions::NativeContextExtensions,
+        session::{LoadedFunctionInstantiation, SerializedReturnValues},
+    };
+    use move_vm_types::loaded_data::runtime_types::Type;
+    use mysten_common::debug_fatal;
     use std::{
         borrow::Borrow,
         cell::RefCell,
@@ -12,60 +49,26 @@ mod checked {
         rc::Rc,
         sync::Arc,
     };
-
-    use crate::adapter::new_native_extensions;
-    use crate::error::convert_vm_error;
-    use crate::execution_mode::ExecutionMode;
-    use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
-    use crate::execution_value::{
-        ExecutionState, InputObjectMetadata, InputValue, ObjectValue, RawValueType, ResultValue,
-        UsageKind,
-    };
-    use crate::gas_charger::GasCharger;
-    use crate::gas_meter::SuiGasMeter;
-    use crate::programmable_transactions::linkage_view::LinkageView;
-    use crate::type_resolver::TypeTagResolver;
-    use move_binary_format::{
-        errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
-        file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
-        CompiledModule,
-    };
-    use move_core_types::resolver::ModuleResolver;
-    use move_core_types::vm_status::StatusCode;
-    use move_core_types::{
-        account_address::AccountAddress,
-        identifier::IdentStr,
-        language_storage::{ModuleId, StructTag, TypeTag},
-    };
-    use move_trace_format::format::MoveTraceBuilder;
-    use move_vm_runtime::native_extensions::NativeContextExtensions;
-    use move_vm_runtime::{
-        move_vm::MoveVM,
-        session::{LoadedFunctionInstantiation, SerializedReturnValues},
-    };
-    use move_vm_types::data_store::DataStore;
-    use move_vm_types::loaded_data::runtime_types::Type;
-    use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+        self, LoadedRuntimeObject, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+        RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind},
+        error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
-        execution::ExecutionResultsV2,
+        execution::{ExecutionResults, ExecutionResultsV2},
+        execution_config_utils::to_binary_config,
+        execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
-        storage::BackingPackageStore,
+        storage::DenyListResult,
         transaction::{Argument, CallArg, ObjectArg},
     };
-    use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
-    use sui_types::{execution::ExecutionResults, object::Authenticator};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
@@ -148,7 +151,9 @@ mod checked {
         where
             'a: 'state,
         {
-            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
+            let mut linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
+                state_view.as_sui_resolver(),
+            ))));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
@@ -281,38 +286,35 @@ mod checked {
             &mut self,
             package_id: ObjectID,
         ) -> Result<AccountAddress, ExecutionError> {
-            if self.linkage_view.has_linkage(package_id) {
+            if self.linkage_view.has_linkage(package_id)? {
                 // Setting same context again, can skip.
                 return Ok(self
                     .linkage_view
-                    .original_package_id()
+                    .original_package_id()?
                     .unwrap_or(*package_id));
             }
 
-            let package = package_for_linkage(&self.linkage_view, package_id)
+            let move_package = get_package(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(package.move_package())
+            self.linkage_view.set_linkage(&move_package)
         }
 
         /// Load a type using the context's current session.
         pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<Type> {
-            load_type(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                type_tag,
-            )
+            load_type(self.vm, &self.linkage_view, &self.new_packages, type_tag)
         }
 
         /// Load a type using the context's current session.
         pub fn load_type_from_struct(&mut self, struct_tag: &StructTag) -> VMResult<Type> {
-            load_type_from_struct(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                struct_tag,
-            )
+            load_type_from_struct(self.vm, &self.linkage_view, &self.new_packages, struct_tag)
+        }
+
+        pub fn get_type_abilities(&self, t: &Type) -> Result<AbilitySet, ExecutionError> {
+            self.vm
+                .get_runtime()
+                .get_type_abilities(t)
+                .map_err(|e| self.convert_vm_error(e))
         }
 
         /// Takes the user events from the runtime and tags them with the Move module of the function
@@ -338,13 +340,27 @@ mod checked {
             }
             let new_events = events
                 .into_iter()
-                .map(|(ty, tag, value)| {
+                .map(|(tag, value)| {
+                    let type_tag = TypeTag::Struct(Box::new(tag.clone()));
+                    let ty = unwrap_type_tag_load(
+                        self.protocol_config,
+                        self.vm
+                            .get_runtime()
+                            .try_load_cached_type(&type_tag)
+                            .map_err(|e| self.convert_vm_error(e))?
+                            .ok_or_else(|| {
+                                make_invariant_violation!(
+                                    "Failed to load type for event tag: {}",
+                                    tag
+                                )
+                            }),
+                    )?;
                     let layout = self
                         .vm
                         .get_runtime()
                         .type_to_type_layout(&ty)
                         .map_err(|e| self.convert_vm_error(e))?;
-                    let Some(bytes) = value.simple_serialize(&layout) else {
+                    let Some(bytes) = value.typed_serialize(&layout) else {
                         invariant_violation!("Failed to deserialize already serialized Move value");
                     };
                     Ok((module_id.clone(), tag, bytes))
@@ -720,7 +736,7 @@ mod checked {
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             let mut by_value_shared_objects = BTreeSet::new();
-            let mut authenticator_objects = BTreeMap::new();
+            let mut consensus_owner_objects = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -747,8 +763,8 @@ mod checked {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
-                } else if owner.authenticator().is_some() {
-                    authenticator_objects.insert(id, owner.clone());
+                } else if matches!(owner, Owner::ConsensusAddressOwner { .. }) {
+                    consensus_owner_objects.insert(id, owner.clone());
                 }
             }
             // check for unused values
@@ -767,7 +783,7 @@ mod checked {
                                     result_idx: i as u16,
                                     secondary_idx: j as u16,
                                 }
-                                .into())
+                                .into());
                             }
                             Some(Value::Raw(RawValueType::Any, _)) => (),
                             Some(Value::Raw(RawValueType::Loaded { abilities, .. }, _)) => {
@@ -824,6 +840,7 @@ mod checked {
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
+                accumulator_events,
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
@@ -851,7 +868,7 @@ mod checked {
                 } = additional_write;
                 // safe given the invariant that the runtime correctly propagates has_public_transfer
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -869,7 +886,23 @@ mod checked {
                 }
             }
 
-            for (id, (recipient, ty, value)) in writes {
+            for (id, (recipient, tag, value)) in writes {
+                let ty = unwrap_type_tag_load(
+                    protocol_config,
+                    vm.get_runtime()
+                        .try_load_cached_type(&TypeTag::from(tag.clone()))
+                        .map_err(|e| {
+                            convert_vm_error(
+                                e,
+                                vm,
+                                &linkage_view,
+                                protocol_config.resolve_abort_locations_to_package_id(),
+                            )
+                        })?
+                        .ok_or_else(|| {
+                            make_invariant_violation!("Failed to load type for event tag: {}", tag)
+                        }),
+                )?;
                 let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
                     convert_vm_error(
                         e,
@@ -887,12 +920,12 @@ mod checked {
                         protocol_config.resolve_abort_locations_to_package_id(),
                     )
                 })?;
-                let Some(bytes) = value.simple_serialize(&layout) else {
+                let Some(bytes) = value.typed_serialize(&layout) else {
                     invariant_violation!("Failed to deserialize already serialized Move value");
                 };
                 // safe because has_public_transfer has been determined by the abilities
                 let move_object = unsafe {
-                    create_written_object(
+                    create_written_object::<Mode>(
                         vm,
                         &linkage_view,
                         protocol_config,
@@ -907,108 +940,25 @@ mod checked {
                 written_objects.insert(id, object);
             }
 
-            // Before finishing, ensure that any shared object taken by value by the transaction is either:
-            // 1. Mutated (and still has a shared ownership); or
-            // 2. Deleted.
-            // Otherwise, the shared object operation is not allowed and we fail the transaction.
-            for id in &by_value_shared_objects {
-                // If it's been written it must have been reshared so must still have an ownership
-                // of `Shared`.
-                if let Some(obj) = written_objects.get(id) {
-                    if !obj.is_shared() {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                            Some(
-                                format!(
-                                    "Shared object operation on {} not allowed: \
-                                     cannot be frozen, transferred, or wrapped",
-                                    id
-                                )
-                                .into(),
-                            ),
-                        ));
-                    }
-                } else {
-                    // If it's not in the written objects, the object must have been deleted. Otherwise
-                    // it's an error.
-                    if !deleted_object_ids.contains(id) {
-                        return Err(ExecutionError::new(
-                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                            Some(
-                                format!("Shared object operation on {} not allowed: \
-                                         shared objects used by value must be re-shared if not deleted", id).into(),
-                            ),
-                        ));
-                    }
-                }
-            }
-
-            // Before finishing, enforce restrictions on transfer and deletion for objects configured
-            // with authenticators.
-            for (id, original_owner) in authenticator_objects {
-                let authenticator = original_owner.authenticator().expect("verified before adding to `authenticator_objects` that these have authenticators");
-
-                match authenticator {
-                    Authenticator::SingleOwner(owner) => {
-                        // Already verified in pre-execution checks that tx sender is the object owner.
-                        // SingleOwner is allowed to do anything with the object.
-                        if ref_context.borrow().sender() != *owner {
-                            debug_fatal!("transaction with a singly owned input object where the tx sender is not the owner should never be executed");
-                            return Err(ExecutionError::new(
-                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                                Some(
-                                    format!("Shared object operation on {} not allowed: \
-                                             transaction with singly owned input object must be sent by the owner", id).into(),
-                                ),
-                            ));
-                        }
-                    } // Future authenticators with fewer permissions should be checked here. For
-                      // example, transfers and wraps can be detected by comparing `original_owner`
-                      // with:
-                      // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
-                      //
-                      // Deletions can be detected with:
-                      // let deleted = deleted_object_ids.contains(&id);
-                }
-            }
-
-            if protocol_config.enable_coin_deny_list_v2() {
-                let DenyListResult {
-                    result,
-                    num_non_gas_coin_owners,
-                } = state_view.check_coin_deny_list(&written_objects);
-                gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
-                result?;
-            }
-
-            let user_events = user_events
-                .into_iter()
-                .map(|(module_id, tag, contents)| {
-                    Event::new(
-                        module_id.address(),
-                        module_id.name(),
-                        ref_context.borrow().sender(),
-                        tag,
-                        contents,
-                    )
-                })
-                .collect();
-
-            Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            finish(
+                protocol_config,
+                state_view,
+                gas_charger,
+                &ref_context.borrow(),
+                &by_value_shared_objects,
+                &consensus_owner_objects,
+                loaded_runtime_objects,
                 written_objects,
-                modified_objects: loaded_runtime_objects
-                    .into_iter()
-                    .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
-                    .collect(),
-                created_object_ids: created_object_ids.into_iter().collect(),
-                deleted_object_ids: deleted_object_ids.into_iter().collect(),
+                created_object_ids,
+                deleted_object_ids,
                 user_events,
-            }))
+                accumulator_events,
+            )
         }
 
         /// Convert a VM Error to an execution one
         pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 error,
                 self.vm,
                 &self.linkage_view,
@@ -1018,7 +968,6 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
-            use move_core_types::vm_status::StatusCode;
             use sui_types::execution_status::TypeArgumentError;
             match error.major_status() {
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
@@ -1227,6 +1176,44 @@ mod checked {
                 &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
         }
+
+        pub fn size_bound_raw(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::Raw(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
+        }
+
+        pub fn size_bound_vector_elem(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::VectorElem(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
+        }
+
+        pub(crate) fn deserialize_modules(
+            &self,
+            module_bytes: &[Vec<u8>],
+        ) -> Result<Vec<CompiledModule>, ExecutionError> {
+            let binary_config = to_binary_config(self.protocol_config);
+            let modules = module_bytes
+                .iter()
+                .map(|b| {
+                    CompiledModule::deserialize_with_config(b, &binary_config)
+                        .map_err(|e| e.finish(Location::Undefined))
+                })
+                .collect::<VMResult<Vec<CompiledModule>>>()
+                .map_err(|e| self.convert_vm_error(e))?;
+
+            assert_invariant!(
+                !modules.is_empty(),
+                "input checker ensures package is not empty"
+            );
+
+            Ok(modules)
+        }
     }
 
     impl Arg {
@@ -1263,29 +1250,146 @@ mod checked {
 
     /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
     /// if the object at that ID does not exist, or is not a package.
-    fn package_for_linkage(
-        linkage_view: &LinkageView,
+    fn get_package(
+        package_store: &dyn PackageStore,
         package_id: ObjectID,
-    ) -> VMResult<PackageObject> {
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
-
-        match linkage_view.get_package_object(&package_id) {
+    ) -> VMResult<Rc<MovePackage>> {
+        match package_store.get_package(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
                 .finish(Location::Undefined)),
             Err(err) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!(
-                    "Error loading link context {package_id} from store: {err}"
-                ))
+                .with_message(format!("Error loading {package_id} from store: {err}"))
                 .finish(Location::Undefined)),
         }
     }
 
+    pub fn finish(
+        protocol_config: &ProtocolConfig,
+        state_view: &dyn ExecutionState,
+        gas_charger: &mut GasCharger,
+        tx_context: &TxContext,
+        by_value_shared_objects: &BTreeSet<ObjectID>,
+        consensus_owner_objects: &BTreeMap<ObjectID, Owner>,
+        loaded_runtime_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
+        written_objects: BTreeMap<ObjectID, Object>,
+        created_object_ids: IndexSet<ObjectID>,
+        deleted_object_ids: IndexSet<ObjectID>,
+        user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+        accumulator_events: Vec<MoveAccumulatorEvent>,
+    ) -> Result<ExecutionResults, ExecutionError> {
+        // Before finishing, ensure that any shared object taken by value by the transaction is either:
+        // 1. Mutated (and still has a shared ownership); or
+        // 2. Deleted.
+        // Otherwise, the shared object operation is not allowed and we fail the transaction.
+        for id in by_value_shared_objects {
+            // If it's been written it must have been reshared so must still have an ownership
+            // of `Shared`.
+            if let Some(obj) = written_objects.get(id) {
+                if !obj.is_shared() {
+                    return Err(ExecutionError::new(
+                        ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                        Some(
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                     cannot be frozen, transferred, or wrapped",
+                                id
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
+            } else {
+                // If it's not in the written objects, the object must have been deleted. Otherwise
+                // it's an error.
+                if !deleted_object_ids.contains(id) {
+                    return Err(ExecutionError::new(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            Some(
+                                format!("Shared object operation on {} not allowed: \
+                                         shared objects used by value must be re-shared if not deleted", id).into(),
+                            ),
+                        ));
+                }
+            }
+        }
+
+        // Before finishing, enforce auth restrictions on consensus objects.
+        for (id, original_owner) in consensus_owner_objects {
+            let Owner::ConsensusAddressOwner { owner, .. } = original_owner else {
+                panic!(
+                    "verified before adding to `consensus_owner_objects` that these are ConsensusAddressOwner"
+                );
+            };
+            // Already verified in pre-execution checks that tx sender is the object owner.
+            // Owner is allowed to do anything with the object.
+            if tx_context.sender() != *owner {
+                debug_fatal!(
+                    "transaction with a singly owned input object where the tx sender is not the owner should never be executed"
+                );
+                return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed: \
+                                             transaction with singly owned input object must be sent by the owner", id).into(),
+                                ),
+                            ));
+            }
+            // If an Owner type is implemented with support for more fine-grained authorization,
+            // checks should be performed here. For example, transfers and wraps can be detected
+            // by comparing `original_owner` with:
+            // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+            //
+            // Deletions can be detected with:
+            // let deleted = deleted_object_ids.contains(&id);
+        }
+
+        if protocol_config.enable_coin_deny_list_v2() {
+            let DenyListResult {
+                result,
+                num_non_gas_coin_owners,
+            } = state_view.check_coin_deny_list(&written_objects);
+            gas_charger.charge_coin_transfers(protocol_config, num_non_gas_coin_owners)?;
+            result?;
+        }
+
+        let user_events = user_events
+            .into_iter()
+            .map(|(module_id, tag, contents)| {
+                Event::new(
+                    module_id.address(),
+                    module_id.name(),
+                    tx_context.sender(),
+                    tag,
+                    contents,
+                )
+            })
+            .collect();
+
+        let accumulator_events = accumulator_events
+            .into_iter()
+            .map(|accum_event| match accum_event.value {
+                MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+            })
+            .collect();
+
+        Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            written_objects,
+            modified_objects: loaded_runtime_objects
+                .into_iter()
+                .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
+                .collect(),
+            created_object_ids: created_object_ids.into_iter().collect(),
+            deleted_object_ids: deleted_object_ids.into_iter().collect(),
+            user_events,
+            accumulator_events,
+        }))
+    }
+
     pub fn load_type_from_struct(
         vm: &MoveVM,
-        linkage_view: &mut LinkageView,
+        linkage_view: &LinkageView,
         new_packages: &[MovePackage],
         struct_tag: &StructTag,
     ) -> VMResult<Type> {
@@ -1302,22 +1406,26 @@ mod checked {
 
         // Load the package that the struct is defined in, in storage
         let defining_id = ObjectID::from_address(*address);
-        let package = package_for_linkage(linkage_view, defining_id)?;
+
+        let data_store = SuiDataStore::new(linkage_view, new_packages);
+        let move_package = get_package(&data_store, defining_id)?;
 
         // Set the defining package as the link context while loading the
         // struct
-        let original_address = linkage_view
-            .set_linkage(package.move_package())
-            .map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(e.to_string())
-                    .finish(Location::Undefined)
-            })?;
+        let original_address = linkage_view.set_linkage(&move_package).map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
         let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
-        linkage_view.reset_linkage();
+        linkage_view.reset_linkage().map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
         let (idx, struct_type) = res?;
 
         // Recursively load type parameters, if necessary
@@ -1353,7 +1461,7 @@ mod checked {
     /// reset after this operation, because during the operation, it may change when loading a struct.
     pub fn load_type(
         vm: &MoveVM,
-        linkage_view: &mut LinkageView,
+        linkage_view: &LinkageView,
         new_packages: &[MovePackage],
         type_tag: &TypeTag,
     ) -> VMResult<Type> {
@@ -1372,7 +1480,7 @@ mod checked {
                 Type::Vector(Box::new(load_type(vm, linkage_view, new_packages, inner)?))
             }
             TypeTag::Struct(struct_tag) => {
-                return load_type_from_struct(vm, linkage_view, new_packages, struct_tag)
+                return load_type_from_struct(vm, linkage_view, new_packages, struct_tag);
             }
         })
     }
@@ -1398,7 +1506,7 @@ mod checked {
 
         let tag: StructTag = type_.into();
         let type_ = load_type_from_struct(vm, linkage_view, new_packages, &tag).map_err(|e| {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 e,
                 vm,
                 linkage_view,
@@ -1407,7 +1515,7 @@ mod checked {
         })?;
         let has_public_transfer = if protocol_config.recompute_has_public_transfer_in_execution() {
             let abilities = vm.get_runtime().get_type_abilities(&type_).map_err(|e| {
-                crate::error::convert_vm_error(
+                convert_vm_error(
                     e,
                     vm,
                     linkage_view,
@@ -1469,15 +1577,18 @@ mod checked {
             // protected by transaction input checker
             invariant_violation!("Object {} does not exist yet", id);
         };
-        // override_as_immutable ==> Owner::Shared or Owner::ConsensusV2
+        // override_as_immutable ==> Owner::Shared or Owner::ConsensusAddressOwner
         assert_invariant!(
             !override_as_immutable
-                || matches!(obj.owner, Owner::Shared { .. } | Owner::ConsensusV2 { .. }),
+                || matches!(
+                    obj.owner,
+                    Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
+                ),
             "override_as_immutable should only be set for consensus objects"
         );
         let is_mutable_input = match obj.owner {
             Owner::AddressOwner(_) => true,
-            Owner::Shared { .. } | Owner::ConsensusV2 { .. } => !override_as_immutable,
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } => !override_as_immutable,
             Owner::Immutable => false,
             Owner::ObjectOwner(_) => {
                 // protected by transaction input checker
@@ -1506,7 +1617,7 @@ mod checked {
                     )
                 })?;
             let mut bytes = vec![];
-            obj_value.write_bcs_bytes(&mut bytes);
+            obj_value.write_bcs_bytes(&mut bytes, None)?;
             match get_all_uids(&fully_annotated_layout, &bytes) {
                 Err(e) => {
                     invariant_violation!("Unable to retrieve UIDs for object. Got error: {e}")
@@ -1546,6 +1657,10 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
+            CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Add support for balance withdraws.
+                todo!("Load balance withdraw call arg")
+            }
         })
     }
 
@@ -1644,7 +1759,7 @@ mod checked {
     ///
     /// This function assumes proper generation of has_public_transfer, either from the abilities of
     /// the StructTag, or from the runtime correctly propagating from the inputs
-    unsafe fn create_written_object(
+    unsafe fn create_written_object<Mode: ExecutionMode>(
         vm: &MoveVM,
         linkage_view: &LinkageView,
         protocol_config: &ProtocolConfig,
@@ -1663,7 +1778,7 @@ mod checked {
             .map(|obj: &LoadedRuntimeObject| obj.version);
 
         let type_tag = vm.get_runtime().get_type_tag(&type_).map_err(|e| {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 e,
                 vm,
                 linkage_view,
@@ -1675,104 +1790,30 @@ mod checked {
             TypeTag::Struct(inner) => *inner,
             _ => invariant_violation!("Non struct type for object"),
         };
-        MoveObject::new_from_execution(
-            struct_tag.into(),
-            has_public_transfer,
-            old_obj_ver.unwrap_or_default(),
-            contents,
-            protocol_config,
-        )
-    }
-
-    // Implementation of the `DataStore` trait for the Move VM.
-    // When used during execution it may have a list of new packages that have
-    // just been published in the current context. Those are used for module/type
-    // resolution when executing module init.
-    // It may be created with an empty slice of packages either when no publish/upgrade
-    // are performed or when a type is requested not during execution.
-    pub(crate) struct SuiDataStore<'state, 'a> {
-        linkage_view: &'a LinkageView<'state>,
-        new_packages: &'a [MovePackage],
-    }
-
-    impl<'state, 'a> SuiDataStore<'state, 'a> {
-        pub(crate) fn new(
-            linkage_view: &'a LinkageView<'state>,
-            new_packages: &'a [MovePackage],
-        ) -> Self {
-            Self {
-                linkage_view,
-                new_packages,
-            }
-        }
-
-        fn get_module(&self, module_id: &ModuleId) -> Option<&Vec<u8>> {
-            for package in self.new_packages {
-                let module = package.get_module(module_id);
-                if module.is_some() {
-                    return module;
-                }
-            }
-            None
+        unsafe {
+            MoveObject::new_from_execution(
+                struct_tag.into(),
+                has_public_transfer,
+                old_obj_ver.unwrap_or_default(),
+                contents,
+                protocol_config,
+                Mode::packages_are_predefined(),
+            )
         }
     }
 
-    // TODO: `DataStore` will be reworked and this is likely to disappear.
-    //       Leaving this comment around until then as testament to better days to come...
-    impl DataStore for SuiDataStore<'_, '_> {
-        fn link_context(&self) -> AccountAddress {
-            self.linkage_view.link_context()
-        }
-
-        fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
-            self.linkage_view.relocate(module_id).map_err(|err| {
-                PartialVMError::new(StatusCode::LINKER_ERROR)
-                    .with_message(format!("Error relocating {module_id}: {err:?}"))
-            })
-        }
-
-        fn defining_module(
-            &self,
-            runtime_id: &ModuleId,
-            struct_: &IdentStr,
-        ) -> PartialVMResult<ModuleId> {
-            self.linkage_view
-                .defining_module(runtime_id, struct_)
-                .map_err(|err| {
-                    PartialVMError::new(StatusCode::LINKER_ERROR).with_message(format!(
-                        "Error finding defining module for {runtime_id}::{struct_}: {err:?}"
-                    ))
-                })
-        }
-
-        fn load_module(&self, module_id: &ModuleId) -> VMResult<Vec<u8>> {
-            if let Some(bytes) = self.get_module(module_id) {
-                return Ok(bytes.clone());
-            }
-            match self.linkage_view.get_module(module_id) {
-                Ok(Some(bytes)) => Ok(bytes),
-                Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                    .with_message(format!("Cannot find {:?} in data cache", module_id))
-                    .finish(Location::Undefined)),
-                Err(err) => {
-                    let msg = format!("Unexpected storage error: {:?}", err);
-                    Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(msg)
-                            .finish(Location::Undefined),
-                    )
-                }
-            }
-        }
-
-        fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
-            // we cannot panic here because during execution and publishing this is
-            // currently called from the publish flow in the Move runtime
-            Ok(())
+    fn unwrap_type_tag_load(
+        protocol_config: &ProtocolConfig,
+        ty: Result<Type, ExecutionError>,
+    ) -> Result<Type, ExecutionError> {
+        if ty.is_err() && !protocol_config.type_tags_in_object_runtime() {
+            panic!("Failed to load a type tag from the object runtime -- this shouldn't happen")
+        } else {
+            ty
         }
     }
 
-    enum EitherError {
+    pub enum EitherError {
         CommandArgument(CommandArgumentError),
         Execution(ExecutionError),
     }
@@ -1790,11 +1831,36 @@ mod checked {
     }
 
     impl EitherError {
-        fn into_execution_error(self, command_index: usize) -> ExecutionError {
+        pub fn into_execution_error(self, command_index: usize) -> ExecutionError {
             match self {
                 EitherError::CommandArgument(e) => command_argument_error(e, command_index),
                 EitherError::Execution(e) => e,
             }
         }
+    }
+
+    fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
+        error: VMError,
+        vm: &MoveVM,
+        state_view: &S,
+        resolve_abort_location_to_package_id: bool,
+    ) -> ExecutionError {
+        crate::error::convert_vm_error_impl(
+            error,
+            &|id: &ModuleId| {
+                if resolve_abort_location_to_package_id {
+                    state_view.relocate(id).unwrap_or_else(|_| id.clone())
+                } else {
+                    id.clone()
+                }
+            },
+            &|id, function| {
+                vm.load_module(id, state_view).ok().map(|module| {
+                    let fdef = module.function_def_at(function);
+                    let fhandle = module.function_handle_at(fdef.function);
+                    module.identifier_at(fhandle.name).to_string()
+                })
+            },
+        )
     }
 }

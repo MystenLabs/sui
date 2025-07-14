@@ -8,21 +8,25 @@ use std::{
     time::Duration,
 };
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
+use crate::{
+    authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv},
+    execution_scheduler::ExecutionSchedulerAPI,
+};
 use async_trait::async_trait;
+use consensus_types::block::BlockRef;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
-    HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-    ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
-};
-use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
+    executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
+    messages_consensus::ConsensusPosition,
+    messages_grpc::{
+        RawSubmitTxRequest, RawSubmitTxResponse, RawWaitForEffectsRequest,
+        RawWaitForEffectsResponse,
+    },
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 use sui_types::{
@@ -33,14 +37,25 @@ use sui_types::{
     error::SuiResult,
     messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3},
 };
+use sui_types::{
+    messages_grpc::{
+        HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
+        HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
+        ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    },
+    sui_system_state::SuiSystemState,
+};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
     pub fail_before_handle_transaction: bool,
     pub fail_after_handle_transaction: bool,
+    pub fail_before_submit_transaction: bool,
+    pub fail_after_vote_transaction: bool,
     pub fail_before_handle_confirmation: bool,
     pub fail_after_handle_confirmation: bool,
     pub overload_retry_after_handle_transaction: Option<Duration>,
+    pub overload_retry_after_vote_transaction: Option<Duration>,
 }
 
 impl LocalAuthorityClientFaultConfig {
@@ -57,6 +72,48 @@ pub struct LocalAuthorityClient {
 
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
+    async fn submit_transaction(
+        &self,
+        request: RawSubmitTxRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawSubmitTxResponse, SuiError> {
+        if self.fault_config.fail_before_submit_transaction {
+            return Err(SuiError::from("Mock error before submit_transaction"));
+        }
+        let state = self.state.clone();
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transaction)
+            .map_err(|e| SuiError::TransactionDeserializationError {
+                error: e.to_string(),
+            })?;
+        let transaction = epoch_store
+            .verify_transaction(deserialized_transaction.clone())
+            .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
+        state.handle_vote_transaction(&epoch_store, transaction.clone())?;
+        if self.fault_config.fail_after_vote_transaction {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Mock error after vote transaction in submit_transaction".to_owned(),
+            });
+        }
+        if let Some(duration) = self.fault_config.overload_retry_after_vote_transaction {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: duration.as_secs(),
+            });
+        }
+
+        // No submission to consensus is needed for test authority client, return
+        // dummy consensus position
+        // TODO(fastpath): Return the actual consensus position
+        let consensus_position = ConsensusPosition {
+            block: BlockRef::MIN,
+            index: 0,
+        };
+
+        Ok(RawSubmitTxResponse {
+            consensus_position: consensus_position.into_raw()?,
+        })
+    }
+
     async fn handle_transaction(
         &self,
         transaction: Transaction,
@@ -126,6 +183,14 @@ impl AuthorityAPI for LocalAuthorityClient {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+        unimplemented!()
+    }
+
+    async fn wait_for_effects(
+        &self,
+        _request: RawWaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 
@@ -217,8 +282,14 @@ impl LocalAuthorityClient {
                     .signature_verifier
                     .verify_cert(request.certificate)
                     .await?;
-                //let certificate = certificate.verify(epoch_store.committee())?;
-                state.enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store);
+                state.execution_scheduler().enqueue(
+                    vec![(
+                        VerifiedExecutableTransaction::new_from_certificate(certificate.clone())
+                            .into(),
+                        ExecutionEnv::new(),
+                    )],
+                    &epoch_store,
+                );
                 let effects = state.notify_read_effects(*certificate.digest()).await?;
                 state.sign_effects(effects, &epoch_store)?
             }
@@ -284,6 +355,15 @@ impl MockAuthorityApi {
 
 #[async_trait]
 impl AuthorityAPI for MockAuthorityApi {
+    /// Submit a new transaction to a Sui or Primary account.
+    async fn submit_transaction(
+        &self,
+        _request: RawSubmitTxRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawSubmitTxResponse, SuiError> {
+        unimplemented!();
+    }
+
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -315,6 +395,14 @@ impl AuthorityAPI for MockAuthorityApi {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+        unimplemented!()
+    }
+
+    async fn wait_for_effects(
+        &self,
+        _request: RawWaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 
@@ -380,6 +468,14 @@ pub struct HandleTransactionTestAuthorityClient {
 
 #[async_trait]
 impl AuthorityAPI for HandleTransactionTestAuthorityClient {
+    async fn submit_transaction(
+        &self,
+        _request: RawSubmitTxRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawSubmitTxResponse, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
@@ -415,6 +511,14 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
         _request: HandleSoftBundleCertificatesRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+        unimplemented!()
+    }
+
+    async fn wait_for_effects(
+        &self,
+        _request: RawWaitForEffectsRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<RawWaitForEffectsResponse, SuiError> {
         unimplemented!()
     }
 

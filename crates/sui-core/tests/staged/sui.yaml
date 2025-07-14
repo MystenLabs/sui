@@ -4,6 +4,36 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+AccumulatorAddress:
+  STRUCT:
+    - address:
+        TYPENAME: SuiAddress
+    - ty:
+        TYPENAME: TypeTag
+AccumulatorOperation:
+  ENUM:
+    0:
+      Merge: UNIT
+    1:
+      Split: UNIT
+AccumulatorValue:
+  ENUM:
+    0:
+      Integer:
+        NEWTYPE: U64
+    1:
+      IntegerTuple:
+        TUPLE:
+          - U64
+          - U64
+AccumulatorWriteV1:
+  STRUCT:
+    - address:
+        TYPENAME: AccumulatorAddress
+    - operation:
+        TYPENAME: AccumulatorOperation
+    - value:
+        TYPENAME: AccumulatorValue
 ActiveJwk:
   STRUCT:
     - jwk_id:
@@ -29,12 +59,6 @@ Argument:
         TUPLE:
           - U16
           - U16
-Authenticator:
-  ENUM:
-    0:
-      SingleOwner:
-        NEWTYPE:
-          TYPENAME: SuiAddress
 AuthenticatorStateExpire:
   STRUCT:
     - min_epoch: U64
@@ -59,6 +83,14 @@ AuthorityQuorumSignInfo:
           CONTENT: U8
           SIZE: 48
     - signers_map: BYTES
+BalanceWithdrawArg:
+  STRUCT:
+    - reservation:
+        TYPENAME: Reservation
+    - type_param:
+        TYPENAME: WithdrawTypeParam
+    - withdraw_from:
+        TYPENAME: WithdrawFrom
 CallArg:
   ENUM:
     0:
@@ -69,6 +101,10 @@ CallArg:
       Object:
         NEWTYPE:
           TYPENAME: ObjectArg
+    2:
+      BalanceWithdraw:
+        NEWTYPE:
+          TYPENAME: BalanceWithdrawArg
 ChainIdentifier:
   NEWTYPESTRUCT:
     TYPENAME: CheckpointDigest
@@ -244,6 +280,10 @@ CommandArgumentError:
       SharedObjectOperationNotAllowed: UNIT
     12:
       InvalidArgumentArity: UNIT
+    13:
+      InvalidTransferObject: UNIT
+    14:
+      InvalidMakeMoveVecNonObjectArgument: UNIT
 CompressedSignature:
   ENUM:
     0:
@@ -416,6 +456,8 @@ EndOfEpochTransactionKind:
       StoreExecutionTimeObservations:
         NEWTYPE:
           TYPENAME: StoredExecutionTimeObservations
+    8:
+      AccumulatorRootCreate: UNIT
 Event:
   STRUCT:
     - package_id:
@@ -559,6 +601,18 @@ ExecutionFailureStatus:
           - coin_type: STR
     36:
       ExecutionCancelledDueToRandomnessUnavailable: UNIT
+    37:
+      MoveVectorElemTooBig:
+        STRUCT:
+          - value_size: U64
+          - max_scaled_size: U64
+    38:
+      MoveRawValueTooBig:
+        STRUCT:
+          - value_size: U64
+          - max_scaled_size: U64
+    39:
+      InvalidLinkage: UNIT
 ExecutionStatus:
   ENUM:
     0:
@@ -819,6 +873,10 @@ ObjectOut:
           TUPLE:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    3:
+      AccumulatorWriteV1:
+        NEWTYPE:
+          TYPENAME: AccumulatorWriteV1
 Owner:
   ENUM:
     0:
@@ -837,12 +895,12 @@ Owner:
     3:
       Immutable: UNIT
     4:
-      ConsensusV2:
+      ConsensusAddressOwner:
         STRUCT:
           - start_version:
               TYPENAME: SequenceNumber
-          - authenticator:
-              TYPENAME: Authenticator
+          - owner:
+              TYPENAME: SuiAddress
 PackageUpgradeError:
   ENUM:
     0:
@@ -930,6 +988,13 @@ RandomnessStateUpdate:
         SEQ: U8
     - randomness_obj_initial_shared_version:
         TYPENAME: SequenceNumber
+Reservation:
+  ENUM:
+    0:
+      EntireBalance: UNIT
+    1:
+      MaxAmountU64:
+        NEWTYPE: U64
 SenderSignedData:
   NEWTYPESTRUCT:
     SEQ:
@@ -1175,6 +1240,10 @@ TransactionKind:
       ConsensusCommitPrologueV4:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologueV4
+    10:
+      ProgrammableSystemTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
 TypeArgumentError:
   ENUM:
     0:
@@ -1288,6 +1357,16 @@ UpgradeInfo:
         TYPENAME: ObjectID
     - upgraded_version:
         TYPENAME: SequenceNumber
+WithdrawFrom:
+  ENUM:
+    0:
+      Sender: UNIT
+WithdrawTypeParam:
+  ENUM:
+    0:
+      Balance:
+        NEWTYPE:
+          TYPENAME: TypeInput
 ZkLoginAuthenticatorAsBytes:
   NEWTYPESTRUCT:
     SEQ: U8

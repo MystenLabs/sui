@@ -10,6 +10,7 @@ use futures::future;
 use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
+use sui_indexer_alt_reader::coin_metadata::CoinMetadataKey;
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
 use sui_indexer_alt_schema::schema::coin_balance_buckets;
 use sui_json_rpc_types::{Balance, Coin, Page as PageResponse, SuiCoinMetadata};
@@ -25,7 +26,7 @@ use sui_types::{
 use crate::{
     config::NodeConfig,
     context::Context,
-    data::{coin_metadata::CoinMetadataKey, objects::load_latest},
+    data::load_live,
     error::{client_error_to_error_object, invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };
@@ -72,6 +73,17 @@ trait DelegationCoinsApi {
         /// the owner's Sui address
         owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
+
+    /// Return the total coin balance for one coin type, owned by the address.
+    /// If no coin type is specified, SUI coin balance is returned.
+    #[method(name = "getBalance")]
+    async fn get_balance(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// optional type names for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance>;
 }
 
 pub(crate) struct Coins(pub Context);
@@ -165,6 +177,19 @@ impl DelegationCoinsApiServer for DelegationCoins {
 
         client
             .get_all_balances(owner)
+            .await
+            .map_err(client_error_to_error_object)
+    }
+
+    async fn get_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+    ) -> RpcResult<Balance> {
+        let Self(client) = self;
+
+        client
+            .get_balance(owner, coin_type)
             .await
             .map_err(client_error_to_error_object)
     }
@@ -343,7 +368,7 @@ async fn coin_metadata_response(
 
     let id = ObjectID::from_bytes(&stored.object_id).context("Failed to parse ObjectID")?;
 
-    let Some(object) = load_latest(ctx, id)
+    let Some(object) = load_live(ctx, id)
         .await
         .context("Failed to load latest version of CoinMetadata")?
     else {
@@ -361,9 +386,9 @@ async fn object_with_coin_data(
     ctx: &Context,
     id: ObjectID,
 ) -> Result<(Object, String, u64), RpcError<Error>> {
-    let object = load_latest(ctx, id)
+    let object = load_live(ctx, id)
         .await?
-        .ok_or_else(|| anyhow::anyhow!("Failed to load latest object {}", id))?;
+        .with_context(|| format!("Failed to load latest object {id}"))?;
 
     let coin = object
         .as_coin_maybe()

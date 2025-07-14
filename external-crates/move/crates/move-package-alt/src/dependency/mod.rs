@@ -2,74 +2,64 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod external;
-mod git;
-mod local;
+mod combine;
+pub use combine::CombinedDependency;
 
-use std::collections::BTreeMap;
+mod resolve;
+pub use resolve::{ResolvedDependency, ResolverError};
 
-use serde::{Deserialize, Serialize};
+mod pin;
+pub use pin::{PinnedDependencyInfo, pin};
 
-use crate::{errors::PackageResult, flavor::MoveFlavor, package::PackageName};
+mod fetch;
+pub use fetch::FetchedDependency;
 
-use derive_where::derive_where;
-use external::ExternalDependency;
-use git::GitDependency;
-use local::LocalDependency;
+mod dependency_set;
+pub use dependency_set::DependencySet;
 
-/// Phantom type to represent pinned dependencies (see [PinnedDependency])
-pub struct Pinned;
+use crate::{errors::FileHandle, schema::EnvironmentName, schema::PublishedID};
 
-/// Phantom type to represent unpinned dependencies (see [ManifestDependencyInfo])
-pub struct Unpinned;
-
-/// [ManifestDependencyInfo]s contain the dependency-type-specific things that users write in their
-/// Move.toml files in the `dependencies` section.
+/// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
+/// fields) with additional metadata about how the dependency is used (such as the source file,
+/// enviroment overrides, etc).
 ///
-/// There are additional general fields in the manifest format (like `override` or `rename-from`)
-/// that are not part of the ManifestDependencyInfo. We separate these partly because these things
-/// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
-/// of an entry in the `dependencies` table.
-#[derive(Serialize, Deserialize)]
-#[derive_where(Clone)]
-pub enum ManifestDependencyInfo<F: MoveFlavor> {
-    Git(GitDependency<Unpinned>),
-    External(ExternalDependency),
-    Local(LocalDependency),
-    FlavorSpecific(F::FlavorDependency<Unpinned>),
+/// At different stages of the pipeline we have different information about the dependency location
+/// (e.g. resolved dependencies have no `External` variant, pinned dependencies have a pinned git
+/// dependency, etc). The `DepInfo` type encapsulates these invariants.
+#[derive(Debug, Clone)]
+struct Dependency<DepInfo> {
+    dep_info: DepInfo,
+
+    /// The environment in the dependency's namespace to use. For example, given
+    /// ```toml
+    /// dep-replacements.mainnet.foo = { ..., use-environment = "testnet" }
+    /// ```
+    /// `use_environment` variable would be `testnet`
+    use_environment: EnvironmentName,
+
+    /// Was this dependency written with `override = true` in its original manifest?
+    is_override: bool,
+
+    /// Does the original manifest override the published address?
+    published_at: Option<PublishedID>,
+
+    /// What manifest or lockfile does this dependency come from?
+    containing_file: FileHandle,
 }
 
-/// Pinned dependencies are guaranteed to always resolve to the same package source. For example,
-/// a git dependendency with a branch or tag revision may change over time (and is thus not
-/// pinned), whereas a git dependency with a sha revision is always guaranteed to produce the same
-/// files.
-///
-/// Local dependencies are a somewhat special case here - we want to pin them as local deps during
-/// development, because the developer would expect to use the latest code without having to
-/// explicitly repin, but we need to convert them to persistent dependencies when we publish since
-/// we want to retain that information for source verification.
-#[derive(Serialize, Deserialize)]
-#[derive_where(Clone)]
-pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
-    Git(GitDependency<Pinned>),
-    Local(LocalDependency),
-    FlavorSpecific(F::FlavorDependency<Pinned>),
-}
+impl<T> Dependency<T> {
+    /// Apply `f` to `self.dep_info`, keeping the remaining fields unchanged
+    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Dependency<U> {
+        Dependency {
+            dep_info: f(self.dep_info),
+            use_environment: self.use_environment,
+            is_override: self.is_override,
+            published_at: self.published_at,
+            containing_file: self.containing_file,
+        }
+    }
 
-/// Replace all dependencies with their pinned versions. The returned map is guaranteed to have the
-/// same keys as [deps].
-// TODO: this needs to change to support the fact that external resolvers return different results
-// depending on the environment
-fn pin<F: MoveFlavor>(
-    deps: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
-) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
-    todo!()
-}
-
-/// Ensure that all dependencies are stored locally and return the paths to their contents. The
-/// returned map is guaranteed to have the same keys as [deps].
-fn fetch<F: MoveFlavor>(
-    deps: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
-) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
-    todo!()
+    pub fn use_environment(&self) -> &EnvironmentName {
+        &self.use_environment
+    }
 }

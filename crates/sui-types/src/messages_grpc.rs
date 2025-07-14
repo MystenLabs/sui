@@ -4,11 +4,12 @@
 use crate::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEvents,
-    VerifiedSignedTransactionEffects,
+    SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
+use crate::messages_consensus::{ConsensusPosition, Round};
 use crate::object::Object;
-use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction, Transaction};
+use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
+use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
@@ -183,7 +184,7 @@ pub struct SystemStateRequest {
     pub _unused: bool,
 }
 
-/// Response type for version 3 of the handle certifacte validator API.
+/// Response type for version 3 of the handle certificate validator API.
 ///
 /// The corresponding version 3 request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very
@@ -220,41 +221,102 @@ pub struct HandleCertificateRequestV3 {
     pub include_auxiliary_data: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleTransactionRequestV2 {
-    pub transaction: Transaction,
-
-    pub include_events: bool,
-    pub include_input_objects: bool,
-    pub include_output_objects: bool,
-    pub include_auxiliary_data: bool,
+#[derive(Clone, prost::Message)]
+pub struct RawSubmitTxRequest {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub transaction: Bytes,
 }
 
-/// Response type for version 2 of the handle transaction validator API.
-///
-/// The corresponding version 2 request type allows for a client to request events as well as
-/// input/output objects from a transaction's execution. Given Validators operate with very
-/// aggressive object pruning, the return of input/output objects is only done immediately after
-/// the transaction has been executed locally on the validator and will not be returned for
-/// requests to previously executed transactions.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleTransactionResponseV2 {
-    pub effects: TransactionEffects,
-    pub events: Option<TransactionEvents>,
+#[derive(Clone, prost::Message)]
+pub struct RawSubmitTxResponse {
+    // Serialized Consensus Position
+    #[prost(bytes = "bytes", tag = "1")]
+    pub consensus_position: Bytes,
+}
 
-    /// If requested, will included all initial versions of objects modified in this transaction.
-    /// This includes owned objects included as input into the transaction as well as the assigned
-    /// versions of shared objects.
-    //
-    // TODO: In the future we may want to include shared objects or child objects which were read
-    // but not modified during execution.
-    pub input_objects: Option<Vec<Object>>,
+#[derive(Clone, Debug)]
+pub struct SubmitTxResponse {
+    pub consensus_position: ConsensusPosition,
+}
 
-    /// If requested, will included all changed objects, including mutated, created and unwrapped
-    /// objects. In other words, all objects that still exist in the object state after this
-    /// transaction.
-    pub output_objects: Option<Vec<Object>>,
-    pub auxiliary_data: Option<Vec<u8>>,
+#[derive(Clone, prost::Message)]
+pub struct RawWaitForEffectsRequest {
+    #[prost(uint64, tag = "1")]
+    pub epoch: u64,
+
+    #[prost(bytes = "bytes", tag = "2")]
+    pub transaction_digest: Bytes,
+
+    #[prost(bytes = "bytes", tag = "3")]
+    pub transaction_position: Bytes,
+
+    /// Whether to include details of the effects,
+    /// including the effects content, events, input objects, and output objects.
+    #[prost(bool, tag = "4")]
+    pub include_details: bool,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawWaitForEffectsResponse {
+    // In order to represent an enum in protobuf, we need to use oneof.
+    // However, oneof also allows the value to be unset, which corresponds to None value.
+    // Hence, we need to use Option type for `inner`.
+    // We expect the value to be set in a valid response.
+    #[prost(oneof = "RawValidatorTransactionStatus", tags = "1, 2, 3")]
+    pub inner: Option<RawValidatorTransactionStatus>,
+}
+
+#[derive(Clone, prost::Oneof)]
+pub enum RawValidatorTransactionStatus {
+    #[prost(message, tag = "1")]
+    Executed(RawExecutedStatus),
+    #[prost(message, tag = "2")]
+    Rejected(RawRejectedStatus),
+    #[prost(uint64, tag = "3")]
+    Expired(Round),
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExecutedStatus {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub effects_digest: Bytes,
+    #[prost(message, optional, tag = "2")]
+    pub details: Option<RawExecutedData>,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExecutedData {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub effects: Bytes,
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub events: Option<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "3")]
+    pub input_objects: Vec<Bytes>,
+    #[prost(bytes = "bytes", repeated, tag = "4")]
+    pub output_objects: Vec<Bytes>,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawRejectedStatus {
+    #[prost(enumeration = "RawRejectReason", tag = "1")]
+    pub reason: i32,
+    #[prost(string, optional, tag = "2")]
+    pub message: Option<String>, // Only for string-carrying variants
+}
+
+#[derive(Clone, Debug, prost::Enumeration)]
+#[repr(i32)]
+pub enum RawRejectReason {
+    // Transaction is not voted to be rejected locally.
+    None = 0,
+    // Rejected due to lock conflict.
+    LockConflict = 1,
+    // Rejected due to package verification.
+    PackageVerification = 2,
+    // Rejected due to overload.
+    Overload = 3,
+    // Rejected due to coin deny list.
+    CoinDenyList = 4,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

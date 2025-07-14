@@ -14,16 +14,21 @@ async-trait.workspace = true
 anemo.workspace = true
 anyhow.workspace = true
 bincode.workspace = true
+base64.workspace = true
 bcs.workspace = true
 byteorder.workspace = true
+bytes.workspace = true
 chrono.workspace = true
 consensus-config.workspace = true
+consensus-types.workspace = true
 num_enum.workspace = true
 im.workspace = true
 itertools.workspace = true
 nonempty.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true
+prost.workspace = true
+prost-types.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde-name.workspace = true
@@ -45,6 +50,7 @@ indexmap.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
+move-trace-format.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-profiler.workspace = true
 num-traits = "0.2.18"
@@ -54,6 +60,7 @@ sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 mysten-network.workspace = true
 mysten-metrics.workspace = true
+mysten-common.workspace = true
 parking_lot.workspace = true
 sui-macros.workspace = true
 sui-enum-compat-util.workspace = true
@@ -64,13 +71,19 @@ fastcrypto-zkp.workspace = true
 passkey-types.workspace = true
 
 typed-store-error.workspace = true
-derive_more = { workspace = true, features = ["as_ref", "debug", "display", "from"] }
+derive_more = { workspace = true, features = [
+    "as_ref",
+    "debug",
+    "display",
+    "from",
+] }
 proptest.workspace = true
 proptest-derive.workspace = true
 better_any.workspace = true
 lru.workspace = true
 
 sui-sdk-types.workspace = true
+sui-rpc.workspace = true
 
 ciborium.workspace = true
 x509-parser.workspace = true
@@ -78,6 +91,7 @@ p384.workspace = true
 rustls-pemfile.workspace = true
 
 [dev-dependencies]
+base64.workspace = true
 bincode.workspace = true
 criterion.workspace = true
 proptest.workspace = true
@@ -94,7 +108,7 @@ passkey-client.workspace = true
 passkey-authenticator.workspace = true
 
 [[bench]]
-name = "accumulator_bench"
+name = "global_state_hash_bench"
 harness = false
 
 [[bench]]
@@ -103,8 +117,5 @@ harness = false
 
 [features]
 default = []
-tracing = [
-    "move-vm-profiler/tracing",
-    "move-vm-test-utils/tracing",
-]
+tracing = ["move-vm-profiler/tracing", "move-vm-test-utils/tracing"]
 fuzzing = ["move-core-types/fuzzing"]

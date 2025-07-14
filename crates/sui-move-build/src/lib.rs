@@ -116,7 +116,7 @@ pub struct BuildConfig {
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-        let install_dir = tempfile::tempdir().unwrap().into_path();
+        let install_dir = mysten_common::tempdir().unwrap().keep();
 
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),
@@ -510,9 +510,10 @@ impl CompiledPackage {
     /// These layout schemas can be consumed by clients (e.g., the TypeScript SDK) to enable
     /// BCS serialization/deserialization of the package's objects, tx arguments, and events.
     pub fn generate_struct_layouts(&self) -> Registry {
+        let pool = &mut normalized::RcPool::new();
         let mut package_types = BTreeSet::new();
         for m in self.get_modules() {
-            let normalized_m = normalized::Module::new(m);
+            let normalized_m = normalized::Module::new(pool, m, /* include code */ false);
             // 1. generate struct layouts for all declared types
             'structs: for (name, s) in normalized_m.structs {
                 let mut dummy_type_parameters = Vec::new();
@@ -533,15 +534,15 @@ impl CompiledPackage {
                 package_types.insert(StructTag {
                     address: *m.address(),
                     module: m.name().to_owned(),
-                    name,
+                    name: name.as_ident_str().to_owned(),
                     type_params: dummy_type_parameters,
                 });
             }
             // 2. generate struct layouts for all parameters of `entry` funs
             for (_name, f) in normalized_m.functions {
                 if f.is_entry {
-                    for t in f.parameters {
-                        let tag_opt = match t.clone() {
+                    for t in &*f.parameters {
+                        let tag_opt = match &**t {
                             Type::Address
                             | Type::Bool
                             | Type::Signer
@@ -553,8 +554,8 @@ impl CompiledPackage {
                             | Type::U128
                             | Type::U256
                             | Type::Vector(_) => continue,
-                            Type::Reference(t) | Type::MutableReference(t) => t.into_struct_tag(),
-                            s @ Type::Struct { .. } => s.into_struct_tag(),
+                            Type::Reference(_, inner) => inner.to_struct_tag(pool),
+                            Type::Datatype(_) => t.to_struct_tag(pool),
                         };
                         if let Some(tag) = tag_opt {
                             package_types.insert(tag);
@@ -905,4 +906,44 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
     Err(SuiError::ModulePublishFailure {
         error: error_messages.join("\n"),
     })
+}
+
+pub fn check_conflicting_addresses(
+    conflicting: &BTreeMap<Symbol, (ObjectID, ObjectID)>,
+    dump_bytecode_base64: bool,
+) -> Result<(), SuiError> {
+    if conflicting.is_empty() {
+        return Ok(());
+    }
+
+    let suffix = if conflicting.len() == 1 { "" } else { "es" };
+
+    let err_msg = format!("found the following conflicting published package address{suffix}:");
+    let suggestion_message =
+        "You may want to:
+ - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+ - update the `Move.lock` address to be the same as the `Move.toml`; OR
+ - check that your `sui active-env` corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+ - contact the maintainer if this package is a dependency and request resolving the conflict.";
+
+    let conflicting_addresses_msg = conflicting
+        .iter()
+        .map(|(_, (id_lock, id_manifest))| {
+            format!(
+                "  `Move.toml` contains published-at address \
+                 {id_manifest} but `Move.lock` file contains published-at address {id_lock}."
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let error = format!("{err_msg}\n{conflicting_addresses_msg}\n{suggestion_message}");
+
+    let err = if dump_bytecode_base64 {
+        SuiError::ModuleBuildFailure { error }
+    } else {
+        SuiError::ModulePublishFailure { error }
+    };
+
+    Err(err)
 }

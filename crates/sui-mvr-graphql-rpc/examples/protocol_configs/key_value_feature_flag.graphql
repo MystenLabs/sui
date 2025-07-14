@@ -1,9 +1,0 @@
-# Select the key and value of the feature flag
-{
-  protocolConfig {
-    featureFlags {
-      key
-      value
-    }
-  }
-}

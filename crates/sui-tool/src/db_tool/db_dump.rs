@@ -10,7 +10,6 @@ use std::path::PathBuf;
 use std::str;
 use std::sync::Arc;
 use strum_macros::EnumString;
-use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_core::authority::authority_per_epoch_store::AuthorityEpochTables;
 use sui_core::authority::authority_store_pruner::{
@@ -101,7 +100,7 @@ pub fn print_table_metadata(
             if epoch_tables.contains_key(table_name) {
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
                 AuthorityEpochTables::open_readonly(epoch, &db_path)
-                    .next_shared_object_versions
+                    .next_shared_object_versions_v2
                     .db
             } else {
                 AuthorityPerpetualTables::open_readonly(&db_path).objects.db
@@ -198,7 +197,9 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
     let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
-    let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+    let highest_pruned_checkpoint = checkpoint_store
+        .get_highest_pruned_checkpoint_seq_number()?
+        .unwrap_or(0);
     let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
     info!(
         "Latest executed checkpoint sequence num: {}",
@@ -236,7 +237,6 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         ..Default::default()
     };
     info!("Starting txns and effects pruning");
-    let archive_readers = ArchiveReaderBalancer::default();
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
@@ -244,7 +244,6 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
         None,
         pruning_config,
         metrics,
-        archive_readers,
         EPOCH_DURATION_MS_FOR_TESTING,
     )
     .await?;
@@ -271,6 +270,8 @@ pub fn dump_table(
                     page_number,
                 )
             } else {
+                let perpetual_tables = AuthorityPerpetualTables::describe_tables();
+                assert!(perpetual_tables.contains_key(table_name));
                 AuthorityPerpetualTables::open_readonly(&db_path).dump(
                     table_name,
                     page_size,
@@ -302,7 +303,7 @@ mod test {
 
     #[tokio::test]
     async fn db_dump_population() -> Result<(), anyhow::Error> {
-        let primary_path = tempfile::tempdir()?.into_path();
+        let primary_path = tempfile::tempdir()?.keep();
 
         // Open the DB for writing
         let _: AuthorityEpochTables = AuthorityEpochTables::open(0, &primary_path, None);

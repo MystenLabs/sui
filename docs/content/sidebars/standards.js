@@ -39,6 +39,7 @@ const standards = [
 				items: [
 					'standards/deepbookv3/design',
 					'standards/deepbookv3/balance-manager',
+					'standards/deepbookv3/permissionless-pool',
 					'standards/deepbookv3/query-the-pool',
 					'standards/deepbookv3/orders',
 					'standards/deepbookv3/swaps',

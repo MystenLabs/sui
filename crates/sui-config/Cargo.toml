@@ -27,13 +27,15 @@ prometheus.workspace = true
 clap.workspace = true
 object_store.workspace = true
 reqwest.workspace = true
+starlark.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
 
 consensus-config.workspace = true
 sui-keys.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 move-vm-config.workspace = true
-sui-rpc-api.workspace = true
 mysten-common.workspace = true
 
 [dev-dependencies]

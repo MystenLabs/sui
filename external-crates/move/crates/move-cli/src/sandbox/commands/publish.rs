@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    NativeFunctionRecord,
     sandbox::utils::{
         explain_publish_changeset, explain_publish_error, get_gas_status,
         on_disk_state_view::OnDiskStateView,
     },
-    NativeFunctionRecord,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_binary_format::errors::Location;
 use move_package::compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::move_vm::MoveVM;
@@ -121,7 +121,9 @@ pub fn publish(
                             {
                                 explain_publish_error(err, state, unit)?
                             } else {
-                                println!("Unable to locate the module in the multi-module publishing error");
+                                println!(
+                                    "Unable to locate the module in the multi-module publishing error"
+                                );
                             }
                         }
                         has_error = true;

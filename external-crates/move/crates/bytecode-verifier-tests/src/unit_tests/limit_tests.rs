@@ -8,7 +8,7 @@ use move_bytecode_verifier_meter::dummy::DummyMeter;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
-use move_vm_config::verifier::{VerifierConfig, DEFAULT_MAX_IDENTIFIER_LENGTH};
+use move_vm_config::verifier::{DEFAULT_MAX_IDENTIFIER_LENGTH, VerifierConfig};
 
 #[test]
 fn test_function_handle_type_instantiation() {
@@ -121,6 +121,7 @@ fn big_vec_unpacks() {
     };
     let module = CompiledModule {
         version: 5,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),

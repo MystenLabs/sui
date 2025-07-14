@@ -5,12 +5,10 @@
 module slot_machine::tests;
 
 use slot_machine::example;
-use sui::{
-    coin::{Self, Coin},
-    random::{Self, update_randomness_state_for_testing, Random},
-    sui::SUI,
-    test_scenario as ts
-};
+use sui::coin::{Self, Coin};
+use sui::random::{Self, update_randomness_state_for_testing, Random};
+use sui::sui::SUI;
+use sui::test_scenario as ts;
 
 fun mint(addr: address, amount: u64, scenario: &mut ts::Scenario) {
     transfer::public_transfer(coin::mint_for_testing<SUI>(amount, scenario.ctx()), addr);

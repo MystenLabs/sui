@@ -6,7 +6,7 @@
 use crate::{
     diag,
     diagnostics::Diagnostic,
-    editions::{create_feature_error, Edition, FeatureGate},
+    editions::{Edition, FeatureGate, create_feature_error},
     expansion::{
         alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace, UnnecessaryAlias},
         aliases::{AliasMap, AliasSet},
@@ -14,8 +14,8 @@ use crate::{
         legacy_aliases,
         name_validation::is_valid_datatype_or_constant_name,
         translate::{
-            make_address, module_ident, top_level_address, top_level_address_opt, value,
-            DefnContext,
+            DefnContext, make_address, module_ident, top_level_address, top_level_address_opt,
+            value,
         },
     },
     ice, ice_assert,
@@ -25,11 +25,12 @@ use crate::{
     },
     shared::{
         ide::{AliasAutocompleteInfo, IDEAnnotation},
+        known_attributes::{ExternalAttributeValue, ExternalAttributeValue_},
         *,
     },
 };
 
-use move_ir_types::location::{sp, Loc, Spanned};
+use move_ir_types::location::{Loc, Spanned, sp};
 
 //**************************************************************************************************
 // Definitions
@@ -72,7 +73,7 @@ pub trait PathExpander {
         &mut self,
         context: &mut DefnContext,
         attribute_value: P::AttributeValue,
-    ) -> Option<E::AttributeValue>;
+    ) -> Option<ExternalAttributeValue>;
 
     fn name_access_chain_to_module_access(
         &mut self,
@@ -509,9 +510,9 @@ impl PathExpander for Move2024PathExpander {
         &mut self,
         context: &mut DefnContext,
         sp!(loc, avalue_): P::AttributeValue,
-    ) -> Option<E::AttributeValue> {
+    ) -> Option<ExternalAttributeValue> {
         use AccessChainNameResult as NR;
-        use E::AttributeValue_ as EV;
+        use ExternalAttributeValue_ as EV;
         use P::AttributeValue_ as PV;
         Some(sp(
             loc,
@@ -909,8 +910,8 @@ impl PathExpander for LegacyPathExpander {
         &mut self,
         context: &mut DefnContext,
         sp!(loc, avalue_): P::AttributeValue,
-    ) -> Option<E::AttributeValue> {
-        use E::AttributeValue_ as EV;
+    ) -> Option<ExternalAttributeValue> {
+        use ExternalAttributeValue_ as EV;
         use P::{AttributeValue_ as PV, LeadingNameAccess_ as LN, NameAccessChain_ as PN};
         Some(sp(
             loc,
@@ -1265,7 +1266,7 @@ fn unexpected_address_module_error(loc: Loc, nloc: Loc, access: Access) -> Diagn
                     "ICE expected a module name and got one, but tried to report an error"
                 ),
                 (nloc, "Name location")
-            )
+            );
         }
     };
     let unexpected_msg = format!(

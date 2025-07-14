@@ -40,6 +40,9 @@ const SUI_RANDOM_ID: address = @0x8;
 /// The hardcoded ID for the singleton DenyList.
 const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
 
+/// The hardcoded ID for the singleton AccumulatorRoot Object.
+const SUI_ACCUMULATOR_ROOT_OBJECT_ID: address = @0xacc;
+
 /// The hardcoded ID for the Bridge Object.
 const SUI_BRIDGE_ID: address = @0x9;
 
@@ -134,6 +137,16 @@ public(package) fun sui_deny_list_object_id(): UID {
     UID {
         id: ID { bytes: SUI_DENY_LIST_OBJECT_ID },
     }
+}
+
+public(package) fun sui_accumulator_root_object_id(): UID {
+    UID {
+        id: ID { bytes: SUI_ACCUMULATOR_ROOT_OBJECT_ID },
+    }
+}
+
+public(package) fun sui_accumulator_root_address(): address {
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID
 }
 
 #[allow(unused_function)]

@@ -8,14 +8,12 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round};
 use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 use crate::{
-    block::{
-        genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot, TestBlock,
-        VerifiedBlock,
-    },
+    block::{genesis_blocks, BlockAPI, Slot, TestBlock, VerifiedBlock},
     commit::{CertifiedCommit, CommitDigest, TrustedCommit, DEFAULT_WAVE_LENGTH},
     context::Context,
     dag_state::DagState,
@@ -97,7 +95,7 @@ pub(crate) struct DagBuilder {
 impl DagBuilder {
     pub(crate) fn new(context: Arc<Context>) -> Self {
         let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
-        let genesis_blocks = genesis_blocks(context.clone());
+        let genesis_blocks = genesis_blocks(context.as_ref());
         let genesis: BTreeMap<BlockRef, VerifiedBlock> = genesis_blocks
             .into_iter()
             .map(|block| (block.reference(), block))
@@ -176,10 +174,6 @@ impl DagBuilder {
                 self.gc_round
             }
 
-            fn gc_enabled(&self) -> bool {
-                self.context.protocol_config.gc_depth() > 0
-            }
-
             fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
                 let Some((block, committed)) = self.blocks.get_mut(block_ref) else {
                     panic!("Block {:?} should be found in store", block_ref);
@@ -224,12 +218,7 @@ impl DagBuilder {
 
             let leader_block_ref = leader_block.reference();
 
-            let (to_commit, rejected_transactions) = Linearizer::linearize_sub_dag(
-                &self.context.clone(),
-                leader_block.clone(),
-                self.last_committed_rounds.clone(),
-                &mut storage,
-            );
+            let to_commit = Linearizer::linearize_sub_dag(leader_block.clone(), &mut storage);
 
             last_timestamp_ms = Linearizer::calculate_commit_timestamp(
                 &self.context.clone(),
@@ -260,10 +249,8 @@ impl DagBuilder {
             let sub_dag = CommittedSubDag::new(
                 leader_block_ref,
                 to_commit,
-                rejected_transactions,
                 last_timestamp_ms,
                 commit.reference(),
-                vec![],
             );
 
             self.committed_sub_dags.push((sub_dag, commit));

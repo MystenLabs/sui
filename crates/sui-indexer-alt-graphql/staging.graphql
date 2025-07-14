@@ -1,0 +1,805 @@
+type Address implements IAddressable {
+	"""
+	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
+	"""
+	address: SuiAddress!
+}
+
+"""
+String containing Base64-encoded binary data.
+"""
+scalar Base64
+
+"""
+String representation of an arbitrary width, possibly signed integer
+"""
+scalar BigInt
+
+
+"""
+Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
+"""
+type Checkpoint {
+	"""
+	The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
+	"""
+	sequenceNumber: UInt53!
+	"""
+	Query the RPC as if this checkpoint were the latest checkpoint.
+	"""
+	query: Query
+	"""
+	The epoch that this checkpoint is part of.
+	"""
+	epoch: Epoch
+	"""
+	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
+	"""
+	timestamp: DateTime
+}
+
+"""
+Filter for paginating packages published within a range of checkpoints.
+"""
+input CheckpointFilter {
+	"""
+	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
+}
+
+"""
+ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
+"""
+scalar DateTime
+
+"""
+Activity on Sui is partitioned in time, into epochs.
+
+Epoch changes are opportunities for the network to reconfigure itself (perform protocol or system package upgrades, or change the committee) and distribute staking rewards. The network aims to keep epochs roughly the same duration as each other.
+
+During a particular epoch the following data is fixed:
+
+- protocol version,
+- reference gas price,
+- system package versions,
+- validators in the committee.
+"""
+type Epoch {
+	"""
+	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
+	"""
+	epochId: UInt53!
+	"""
+	State of the Coin DenyList object (0x403) at the start of this epoch.
+	
+	The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
+	"""
+	coinDenyList: Object
+	"""
+	The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
+	The minimum gas price that a quorum of validators are guaranteed to sign a transaction for in this epoch.
+	"""
+	referenceGasPrice: BigInt
+	"""
+	The timestamp associated with the first checkpoint in the epoch.
+	"""
+	startTimestamp: DateTime
+	"""
+	The system packages used by all transactions in this epoch.
+	"""
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
+	"""
+	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
+	"""
+	endTimestamp: DateTime
+}
+
+"""
+A boolean protocol configuration.
+"""
+type FeatureFlag {
+	"""
+	Feature flag name.
+	"""
+	key: String!
+	"""
+	Feature flag value.
+	"""
+	value: Boolean!
+}
+
+
+"""
+Interface implemented by GraphQL types representing entities that are identified by an address.
+
+An address uniquely represents either the public key of an account, or an object's ID, but never both. It is not possible to determine which type an address represents up-front. If an object is wrapped, its contents will not be accessible via its address, but it will still be possible to access other objects it owns.
+"""
+interface IAddressable {
+	address: SuiAddress!
+}
+
+
+"""
+Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
+"""
+interface IObject {
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection
+	"""
+	The transaction that created this version of the object
+	"""
+	previousTransaction: Transaction
+}
+
+
+"""
+A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
+"""
+type MovePackage implements IAddressable & IObject {
+	"""
+	The MovePackage's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this package that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the package's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this package, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this package treated as an object, after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this package treated as an object, before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
+	"""
+	packageAt(version: UInt53, checkpoint: UInt53): MovePackage
+	"""
+	The Base64-encoded BCS serialization of this package, as a `MovePackage`.
+	"""
+	packageBcs: Base64
+	"""
+	Paginate all versions of this package after this one.
+	"""
+	packageVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
+	"""
+	Paginate all versions of this package before this one.
+	"""
+	packageVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): MovePackageConnection!
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+}
+
+type MovePackageConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MovePackageEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MovePackage!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MovePackageEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MovePackage!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
+
+Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
+"""
+type Object implements IAddressable & IObject {
+	"""
+	The Object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	Attempts to convert the object into a MovePackage.
+	"""
+	asMovePackage: MovePackage
+	"""
+	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
+	
+	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	"""
+	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	Paginate all versions of this object after this one.
+	"""
+	objectVersionsAfter(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	Paginate all versions of this object before this one.
+	"""
+	objectVersionsBefore(first: Int, after: String, last: Int, before: String, filter: VersionFilter): ObjectConnection!
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
+}
+
+type ObjectChange {
+	"""
+	The address of the object that has changed.
+	"""
+	address: SuiAddress!
+	"""
+	The contents of the object immediately before the transaction.
+	"""
+	inputState: Object
+	"""
+	The contents of the object immediately after the transaction.
+	"""
+	outputState: Object
+	"""
+	Whether the ID was created in this transaction.
+	"""
+	idCreated: Boolean
+	"""
+	Whether the ID was deleted in this transaction.
+	"""
+	idDeleted: Boolean
+}
+
+type ObjectChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ObjectChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ObjectChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type ObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Object!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Identifies a specific version of an object.
+
+The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
+
+See `Query.object` for more details.
+"""
+input ObjectKey {
+	"""
+	The object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	If specified, tries to fetch the object at this exact version.
+	"""
+	version: UInt53
+	"""
+	If specified, tries to fetch the latest version of the object at or before this version.
+	
+	This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	
+	- The root object of the object it is wrapped in, if it is wrapped.
+	- The root object of its owner, if it is owned by another object.
+	- The object itself, if it is not object-owned or wrapped.
+	"""
+	rootVersion: UInt53
+	"""
+	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
+	"""
+	atCheckpoint: UInt53
+}
+
+"""
+Identifies a specific version of a package.
+
+The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
+
+See `Query.package` for more details.
+"""
+input PackageKey {
+	"""
+	The object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	If specified, tries to fetch the package at this exact version.
+	"""
+	version: UInt53
+	"""
+	If specified, tries to fetch the latest version as of this checkpoint.
+	"""
+	atCheckpoint: UInt53
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+"""
+A protocol configuration that can hold an arbitrary value (or no value at all).
+"""
+type ProtocolConfig {
+	"""
+	Configuration name.
+	"""
+	key: String!
+	"""
+	Configuration value.
+	"""
+	value: String
+}
+
+"""
+Constants that control how the chain operates.
+
+These can only change during protocol upgrades which happen on epoch boundaries. Configuration is split into feature flags (which are just booleans), and configs which can take any value (including no value at all), and will be represented by a string.
+"""
+type ProtocolConfigs {
+	protocolVersion: UInt53!
+	"""
+	Query for the value of the configuration with name `key`.
+	"""
+	config(key: String!): ProtocolConfig
+	"""
+	List all available configurations and their values.
+	"""
+	configs: [ProtocolConfig!]!
+	"""
+	Query for the state of the feature flag with name `key`.
+	"""
+	featureFlag(key: String!): FeatureFlag
+	"""
+	List all available feature flags and their values.
+	"""
+	featureFlags: [FeatureFlag!]!
+}
+
+type Query {
+	"""
+	Look-up an account by its SuiAddress.
+	"""
+	address(address: SuiAddress!): Address!
+	"""
+	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
+	"""
+	chainIdentifier: String!
+	"""
+	Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
+	
+	Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
+	"""
+	checkpoint(sequenceNumber: UInt53): Checkpoint
+	"""
+	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
+	
+	Returns `null` if the epoch does not exist yet, or was pruned.
+	"""
+	epoch(epochId: UInt53): Epoch
+	"""
+	Fetch checkpoints by their sequence numbers.
+	
+	Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.
+	"""
+	multiGetCheckpoints(keys: [UInt53!]!): [Checkpoint]!
+	"""
+	Fetch epochs by their IDs.
+	
+	Returns a list of epochs that is guaranteed to be the same length as `keys`. If an epoch in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the epoch does not exist yet, or because it was pruned.
+	"""
+	multiGetEpochs(keys: [UInt53!]!): [Epoch]!
+	"""
+	Fetch objects by their keys.
+	
+	Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.
+	"""
+	multiGetObjects(keys: [ObjectKey!]!): [Object]!
+	"""
+	Fetch packages by their keys.
+	
+	Returns a list of packages that is guaranteed to be the same length as `keys`. If a package in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because that address never pointed to a package, or because the package was pruned.
+	"""
+	multiGetPackages(keys: [PackageKey!]!): [MovePackage]!
+	"""
+	Fetch transactions by their digests.
+	
+	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
+	"""
+	multiGetTransactions(keys: [String!]!): [Transaction]!
+	"""
+	Fetch transaction effects by their transactions' digests.
+	
+	Returns a list of transaction effects that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction effects never existed, or because it was pruned.
+	"""
+	multiGetTransactionEffects(keys: [String!]!): [TransactionEffects]!
+	"""
+	Fetch an object by its address.
+	
+	If `version` is specified, the object will be fetched at that exact version.
+	
+	If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	
+	- The root object of the object it is wrapped in, if it is wrapped.
+	- The root object of its owner, if it is owned by another object.
+	- The object itself, if it is not object-owned or wrapped.
+	
+	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
+	
+	If none of the above are specified, the object is fetched at the latest checkpoint.
+	
+	It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
+	
+	Returns `null` if an object cannot be found that meets this criteria.
+	"""
+	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
+	"""
+	Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
+	"""
+	objectVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): ObjectConnection
+	"""
+	Fetch a package by its address.
+	
+	If `version` is specified, the package loaded is the one that shares its original ID with the package at `address`, but whose version is `version`.
+	
+	If `atCheckpoint` is specified, the package loaded is the one with the largest version among all packages sharing an original ID with the package at `address` and was published at or before `atCheckpoint`.
+	
+	If neither are specified, the package is fetched at the latest checkpoint.
+	
+	It is an error to specify both `version` and `atCheckpoint`, and `null` will be returned if the package cannot be found as of the latest checkpoint, or the address points to an object that is not a package.
+	
+	Note that this interpretation of `version` and "latest" differs from the one used by `Query.object`, because non-system package upgrades generate objects with different IDs. To fetch a package using the versioning semantics of objects, use `Object.asMovePackage` nested under `Query.object`.
+	"""
+	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
+	"""
+	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
+	"""
+	packages(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): MovePackageConnection
+	"""
+	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
+	
+	Different versions of a package will have different object IDs, unless they are system packages, but will share the same original ID.
+	"""
+	packageVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): MovePackageConnection
+	"""
+	Fetch the protocol config by protocol version, or the latest protocol config used on chain if no version is provided.
+	"""
+	protocolConfigs(version: UInt53): ProtocolConfigs
+	"""
+	Configuration for this RPC service.
+	"""
+	serviceConfig: ServiceConfig!
+	"""
+	Fetch a transaction by its digest.
+	
+	Returns `null` if the transaction does not exist in the store, either because it never existed or because it was pruned.
+	"""
+	transaction(digest: String!): Transaction
+	"""
+	Fetch transaction effects by its transaction's digest.
+	
+	Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
+	"""
+	transactionEffects(digest: String!): TransactionEffects
+}
+
+type ServiceConfig {
+	"""
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
+	"""
+	mutationTimeoutMs: Int
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
+	"""
+	queryTimeoutMs: Int
+	"""
+	Maximum depth of a GraphQL query that can be accepted by this service.
+	"""
+	maxQueryDepth: Int
+	"""
+	The maximum number of nodes (field names) the service will accept in a single query.
+	"""
+	maxQueryNodes: Int
+	"""
+	Maximum number of estimated output nodes in a GraphQL response.
+	
+	The estimate is an upperbound of how many nodes there would be in the output assuming every requested field is present, paginated requests return full page sizes, and multi-get queries find all requested keys. Below is a worked example query:
+	
+	```graphql
+	|  0: query {                            # 514 = total
+	|  1:   checkpoint {                     # 1
+	|  2:     sequenceNumber                 # 1
+	|  3:   }
+	|  4:
+	|  5:   multiGetObjects([$a, $b, $c]) {  # 1 (* 3)
+	|  6:     address                        # 3
+	|  7:     digest                         # 3
+	|  8:   }
+	|  9:
+	| 10:   # default page size is 20
+	| 11:   transactions {                   # 1 (* 20)
+	| 12:     pageInfo {                     # 1
+	| 13:       hasNextPage                  # 1
+	| 14:       endCursor                    # 1
+	| 15:     }
+	| 16:
+	| 17:     nodes                          # 1
+	| 18:     {                              # 20
+	| 19:       digest                       # 20
+	| 20:       effects {                    # 20
+	| 21:         objectChanges(first: 10) { # 20 (* 10)
+	| 22:           nodes                    # 20
+	| 23:           {                        # 200
+	| 24:             address                # 200
+	| 25:           }
+	| 26:         }
+	| 27:       }
+	| 28:     }
+	| 29:   }
+	| 30: }
+	```
+	"""
+	maxOutputNodes: Int
+	"""
+	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
+	
+	This is cumulative across all matching fields in a single GraphQL request.
+	"""
+	maxTransactionPayloadSize: Int
+	"""
+	Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
+	"""
+	maxQueryPayloadSize: Int
+	"""
+	Number of elements a paginated connection will return if a page size is not supplied.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
+	"""
+	defaultPageSize(type: String!, field: String!): Int
+	"""
+	Maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its max page size is returned. If it does not exist or is not paginated, `null` is returned.
+	"""
+	maxPageSize(type: String!, field: String!): Int
+	"""
+	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
+	"""
+	maxMultiGetSize: Int
+	"""
+	Maximum amount of nesting among type arguments (type arguments nest when a type argument is itself generic and has arguments).
+	"""
+	maxTypeArgumentDepth: Int
+	"""
+	Maximum number of type parameters a type can have.
+	"""
+	maxTypeArgumentWidth: Int
+	"""
+	Maximum number of datatypes that need to be processed when calculating the layout of a single type.
+	"""
+	maxTypeNodes: Int
+	"""
+	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+	"""
+	maxMoveValueDepth: Int
+}
+
+
+"""
+String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
+"""
+scalar SuiAddress
+
+"""
+Description of a transaction, the unit of activity on Sui.
+"""
+type Transaction {
+	"""
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The results to the chain of executing this transaction.
+	"""
+	effects: TransactionEffects
+	"""
+	The address corresponding to the public key that signed this transaction. System transactions do not have senders.
+	"""
+	sender: Address
+	"""
+	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
+	"""
+	transactionBcs: Base64
+}
+
+"""
+The results of executing a transaction.
+"""
+type TransactionEffects {
+	"""
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	
+	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
+	"""
+	digest: String!
+	"""
+	The transaction that ran to produce these effects.
+	"""
+	transaction: Transaction
+	"""
+	The checkpoint this transaction was finalized in.
+	"""
+	checkpoint: Checkpoint
+	"""
+	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
+	"""
+	effectsBcs: Base64
+	"""
+	A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
+	"""
+	effectsDigest: String
+	"""
+	The before and after state of objects that were modified by this transaction.
+	"""
+	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+}
+
+"""
+An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
+"""
+scalar UInt53
+
+"""
+Filter for paginating the history of an Object or MovePackage.
+"""
+input VersionFilter {
+	"""
+	Filter to versions that are strictly newer than this one, defaults to fetching from the earliest version known to this RPC (this could be the initial version, or some later version if the initial version has been pruned).
+	"""
+	afterVersion: UInt53
+	"""
+	Filter to versions that are strictly older than this one, defaults to fetching up to the latest version (inclusive).
+	"""
+	beforeVersion: UInt53
+}
+
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+}

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    FullyCompiledProgram,
     cfgir::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
@@ -10,13 +11,12 @@ use crate::{
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
     parser::ast::{ConstantName, FunctionName},
-    shared::{program_info::TypingProgramInfo, unique_map::UniqueMap, AstDebug, CompilationEnv},
-    FullyCompiledProgram,
+    shared::{AstDebug, CompilationEnv, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, runtime_value::MoveValue};
@@ -258,7 +258,7 @@ fn constants(
 ) -> UniqueMap<ConstantName, G::Constant> {
     // Traverse the constants and compute the dependency graph between constants: if one mentions
     // another, an edge is added between them.
-    let mut graph = DiGraphMap::new();
+    let mut graph = DiGraphMap::<ConstantName, ()>::new();
     for (name, constant) in consts.key_cloned_iter() {
         let deps = dependent_constants(constant);
         if deps.is_empty() {

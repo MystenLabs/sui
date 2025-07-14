@@ -3,7 +3,7 @@
 
 use crate::{
     diag,
-    diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
     expansion::ast::ModuleIdent,
     ice,
     naming::ast::{self as N, BlockLabel},
@@ -315,8 +315,7 @@ const UNREACHABLE_MSG: &str =
     "Unreachable code. This statement (and any following statements) will not be executed.";
 
 const SEMI_MSG: &str = "Invalid trailing ';'";
-const INFO_MSG: &str =
-    "A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. \
+const INFO_MSG: &str = "A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. \
      That '()' value will not be reachable";
 
 fn return_called(loc: Loc) -> ControlFlow {

@@ -32,8 +32,6 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use tempfile::tempdir;
-use typed_store::traits::TableSummary;
-use typed_store::traits::TypedStoreDebug;
 use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{
@@ -114,7 +112,7 @@ impl PersistedStore {
     where
         R: rand::RngCore + rand::CryptoRng,
     {
-        let path: PathBuf = path.unwrap_or(tempdir().unwrap().into_path());
+        let path: PathBuf = path.unwrap_or(tempdir().unwrap().keep());
 
         let mut builder = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
@@ -620,15 +618,9 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
             .expect("Fatal: DB read failed")
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        _sequence_number: CheckpointSequenceNumber,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
-        todo!()
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        _sequence_number: Option<CheckpointSequenceNumber>,
         _digest: &CheckpointContentsDigest,
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
@@ -650,6 +642,14 @@ impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
 
     fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
         None
+    }
+
+    fn get_struct_layout(
+        &self,
+        _: &move_core_types::language_storage::StructTag,
+    ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
+    {
+        Ok(None)
     }
 }
 

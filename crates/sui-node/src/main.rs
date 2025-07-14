@@ -5,6 +5,7 @@ use clap::{ArgGroup, Parser};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_rpc_api::ServerVersion;
 use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::{error, info};
@@ -13,9 +14,9 @@ use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use sui_config::node::RunWithRange;
 use sui_config::{Config, NodeConfig};
 use sui_core::runtime::SuiRuntimes;
-use sui_node::metrics;
 use sui_telemetry::send_telemetry_event;
 use sui_types::committee::EpochId;
+use sui_types::crypto::KeypairTraits;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
@@ -41,6 +42,10 @@ struct Args {
     #[clap(long, group = "exclusive")]
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
+
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
+#[global_allocator]
+static JEMALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() {
     antithesis_sdk::antithesis_init();
@@ -96,7 +101,16 @@ fn main() {
 
     {
         let _enter = runtimes.metrics.enter();
-        metrics::start_metrics_push_task(&config, registry_service.clone());
+        if let Some(metrics_config) = &config.metrics {
+            if let Some(push_url) = &metrics_config.push_url {
+                sui_metrics_push_client::start_metrics_push_task(
+                    metrics_config.push_interval_seconds,
+                    push_url.clone(),
+                    config.network_key_pair().copy(),
+                    registry_service.clone(),
+                );
+            }
+        }
     }
 
     if let Some(listen_address) = args.listen_address {
@@ -111,13 +125,13 @@ fn main() {
     // if it deadlocks.
     let node_once_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
     let node_once_cell_clone = node_once_cell.clone();
-    let rpc_runtime = runtimes.json_rpc.handle().clone();
 
     // let sui-node signal main to shutdown runtimes
     let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
 
+    let server_version = ServerVersion::new(env!("CARGO_BIN_NAME"), VERSION);
     runtimes.sui_node.spawn(async move {
-        match sui_node::SuiNode::start_async(config, registry_service, Some(rpc_runtime), VERSION).await {
+        match sui_node::SuiNode::start_async(config, registry_service, server_version).await {
             Ok(sui_node) => node_once_cell_clone
                 .set(sui_node)
                 .expect("Failed to set node in AsyncOnceCell"),

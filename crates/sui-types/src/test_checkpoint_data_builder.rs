@@ -7,7 +7,8 @@ use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag},
 };
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_sdk_types::CheckpointTimestamp;
 use tap::Pipe;
 
 use crate::{
@@ -28,7 +29,8 @@ use crate::{
     object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
-        EndOfEpochTransactionKind, SenderSignedData, Transaction, TransactionData, TransactionKind,
+        EndOfEpochTransactionKind, ObjectArg, SenderSignedData, Transaction, TransactionData,
+        TransactionKind,
     },
     SUI_SYSTEM_ADDRESS,
 };
@@ -66,6 +68,8 @@ struct CheckpointBuilder {
     epoch: u64,
     /// Counter for the total number of transactions added to the builder.
     network_total_transactions: u64,
+    /// Timestamp of the checkpoint.
+    timestamp_ms: CheckpointTimestamp,
     /// Transactions that have been added to the current checkpoint.
     transactions: Vec<CheckpointTransaction>,
     /// The current transaction being built.
@@ -81,7 +85,14 @@ struct TransactionBuilder {
     unwrapped_objects: BTreeSet<ObjectID>,
     wrapped_objects: BTreeSet<ObjectID>,
     deleted_objects: BTreeSet<ObjectID>,
+    frozen_objects: BTreeSet<ObjectRef>,
+    shared_inputs: BTreeMap<ObjectID, Shared>,
     events: Option<Vec<Event>>,
+}
+
+struct Shared {
+    mutable: bool,
+    object: Object,
 }
 
 impl TransactionBuilder {
@@ -95,6 +106,8 @@ impl TransactionBuilder {
             unwrapped_objects: BTreeSet::new(),
             wrapped_objects: BTreeSet::new(),
             deleted_objects: BTreeSet::new(),
+            frozen_objects: BTreeSet::new(),
+            shared_inputs: BTreeMap::new(),
             events: None,
         }
     }
@@ -110,6 +123,7 @@ impl TestCheckpointDataBuilder {
                 checkpoint,
                 epoch: 0,
                 network_total_transactions: 0,
+                timestamp_ms: 0,
                 transactions: vec![],
                 next_transaction: None,
             },
@@ -119,6 +133,18 @@ impl TestCheckpointDataBuilder {
     /// Set the epoch for the checkpoint.
     pub fn with_epoch(mut self, epoch: u64) -> Self {
         self.checkpoint_builder.epoch = epoch;
+        self
+    }
+
+    /// Set the network_total_transactions for the checkpoint.
+    pub fn with_network_total_transactions(mut self, network_total_transactions: u64) -> Self {
+        self.checkpoint_builder.network_total_transactions = network_total_transactions;
+        self
+    }
+
+    /// Set the timestamp for the checkpoint.
+    pub fn with_timestamp_ms(mut self, timestamp_ms: CheckpointTimestamp) -> Self {
+        self.checkpoint_builder.timestamp_ms = timestamp_ms;
         self
     }
 
@@ -229,9 +255,9 @@ impl TestCheckpointDataBuilder {
         self
     }
 
-    /// Mutate an existing object in the transaction.
+    /// Mutate an existing owned object in the transaction.
     /// `object_idx` is a convenient representation of the object's ID.
-    pub fn mutate_object(mut self, object_idx: u64) -> Self {
+    pub fn mutate_owned_object(mut self, object_idx: u64) -> Self {
         let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
         let object_id = Self::derive_object_id(object_idx);
         let object = self
@@ -241,6 +267,11 @@ impl TestCheckpointDataBuilder {
             .expect("Mutating an object that doesn't exist");
         tx_builder.mutated_objects.insert(object_id, object);
         self
+    }
+
+    /// Mutate an existing shared object in the transaction.
+    pub fn mutate_shared_object(self, object_idx: u64) -> Self {
+        self.access_shared_object(object_idx, true)
     }
 
     /// Transfer an existing object to a new owner.
@@ -326,6 +357,29 @@ impl TestCheckpointDataBuilder {
         self
     }
 
+    /// Add an immutable object as an input to the transaction.
+    ///
+    /// Fails if the object is not live or if its owner is not [Owner::Immutable]).
+    pub fn read_frozen_object(mut self, object_id: u64) -> Self {
+        let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
+        let object_id = Self::derive_object_id(object_id);
+
+        let Some(obj) = self.live_objects.get(&object_id) else {
+            panic!("Frozen object not found");
+        };
+
+        assert!(obj.owner().is_immutable());
+        tx_builder
+            .frozen_objects
+            .insert(obj.compute_object_reference());
+        self
+    }
+
+    /// Add a read to a shared object to the transaction's effects.
+    pub fn read_shared_object(self, object_idx: u64) -> Self {
+        self.access_shared_object(object_idx, false)
+    }
+
     /// Add events to the transaction.
     /// `events` is a vector of events to be added to the transaction.
     pub fn with_events(mut self, events: Vec<Event>) -> Self {
@@ -364,11 +418,15 @@ impl TestCheckpointDataBuilder {
             unwrapped_objects,
             wrapped_objects,
             deleted_objects,
+            frozen_objects,
+            shared_inputs,
             events,
         } = self.checkpoint_builder.next_transaction.take().unwrap();
+
         let sender = Self::derive_address(sender_idx);
         let events = events.map(|events| TransactionEvents { data: events });
         let events_digest = events.as_ref().map(|events| events.digest());
+
         let mut pt_builder = ProgrammableTransactionBuilder::new();
         for (package, module, function) in move_calls {
             pt_builder
@@ -381,6 +439,30 @@ impl TestCheckpointDataBuilder {
                 )
                 .unwrap();
         }
+
+        for &object_ref in &frozen_objects {
+            pt_builder
+                .obj(ObjectArg::ImmOrOwnedObject(object_ref))
+                .expect("Failed to add frozen object input");
+        }
+
+        for (id, input) in &shared_inputs {
+            let &Owner::Shared {
+                initial_shared_version,
+            } = input.object.owner()
+            else {
+                panic!("Accessing a non-shared object as shared");
+            };
+
+            pt_builder
+                .obj(ObjectArg::SharedObject {
+                    id: *id,
+                    initial_shared_version,
+                    mutable: input.mutable,
+                })
+                .expect("Failed to add shared object input");
+        }
+
         let pt = pt_builder.finish();
         let tx_data = TransactionData::new(
             TransactionKind::ProgrammableTransaction(pt),
@@ -389,7 +471,9 @@ impl TestCheckpointDataBuilder {
             1,
             1,
         );
+
         let tx = Transaction::new(SenderSignedData::new(tx_data, vec![]));
+
         let wrapped_objects: Vec<_> = wrapped_objects
             .into_iter()
             .map(|id| self.live_objects.remove(&id).unwrap())
@@ -402,6 +486,7 @@ impl TestCheckpointDataBuilder {
             .into_iter()
             .map(|id| self.wrapped_objects.remove(&id).unwrap())
             .collect();
+
         let mut effects_builder = TestEffectsBuilder::new(tx.data())
             .with_created_objects(
                 created_objects
@@ -419,14 +504,29 @@ impl TestCheckpointDataBuilder {
                     .iter()
                     .map(|o| (o.id(), o.owner().clone())),
             )
-            .with_deleted_objects(deleted_objects.iter().map(|o| (o.id(), o.version())));
+            .with_deleted_objects(deleted_objects.iter().map(|o| (o.id(), o.version())))
+            .with_frozen_objects(frozen_objects.into_iter().map(|(id, _, _)| id))
+            .with_shared_input_versions(
+                shared_inputs
+                    .iter()
+                    .map(|(id, input)| (*id, input.object.version()))
+                    .collect(),
+            );
+
         if let Some(events_digest) = &events_digest {
             effects_builder = effects_builder.with_events_digest(*events_digest);
         }
+
         let effects = effects_builder.build();
         let lamport_version = effects.lamport_version();
         let input_objects: Vec<_> = mutated_objects
             .keys()
+            .chain(
+                shared_inputs
+                    .iter()
+                    .filter(|(_, i)| i.mutable)
+                    .map(|(id, _)| id),
+            )
             .map(|id| self.live_objects.get(id).unwrap().clone())
             .chain(deleted_objects.clone())
             .chain(wrapped_objects.clone())
@@ -438,6 +538,12 @@ impl TestCheckpointDataBuilder {
             .values()
             .cloned()
             .chain(mutated_objects.values().cloned())
+            .chain(
+                shared_inputs
+                    .values()
+                    .filter(|i| i.mutable)
+                    .map(|i| i.object.clone()),
+            )
             .chain(unwrapped_objects.clone())
             .chain(std::iter::once(
                 self.live_objects.get(&gas.0).cloned().unwrap(),
@@ -454,6 +560,7 @@ impl TestCheckpointDataBuilder {
             .extend(output_objects.iter().map(|o| (o.id(), o.clone())));
         self.wrapped_objects
             .extend(wrapped_objects.iter().map(|o| (o.id(), o.clone())));
+
         self.checkpoint_builder
             .transactions
             .push(CheckpointTransaction {
@@ -486,7 +593,7 @@ impl TestCheckpointDataBuilder {
             None,
             Default::default(),
             None,
-            0,
+            self.checkpoint_builder.timestamp_ms,
             vec![],
         );
         let (committee, keys) = Committee::new_simple_test_committee();
@@ -503,15 +610,25 @@ impl TestCheckpointDataBuilder {
         }
     }
 
+    /// Like `advance_epoch_and_protocol_upgrade`, but default the protocol version to the maximum.
+    pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
+        self.advance_epoch_and_protocol_upgrade(safe_mode, ProtocolVersion::MAX)
+    }
+
     /// Creates a transaction that advances the epoch, adds it to the checkpoint, and then builds
     /// the checkpoint. This increments the stored checkpoint sequence number and epoch. If
     /// `safe_mode` is true, the epoch end transaction will not include the `SystemEpochInfoEvent`.
-    pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
+    /// The `protocol_version` is used to set the protocol that we are going to follow in the
+    /// subsequent epoch.
+    pub fn advance_epoch_and_protocol_upgrade(
+        &mut self,
+        safe_mode: bool,
+        protocol_version: ProtocolVersion,
+    ) -> CheckpointData {
         let (committee, _) = Committee::new_simple_test_committee();
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let tx_kind = EndOfEpochTransactionKind::new_change_epoch(
             self.checkpoint_builder.epoch + 1,
-            protocol_config.version,
+            protocol_version,
             Default::default(),
             Default::default(),
             Default::default(),
@@ -535,7 +652,7 @@ impl TestCheckpointDataBuilder {
         let events = if !safe_mode {
             let system_epoch_info_event = SystemEpochInfoEvent {
                 epoch: self.checkpoint_builder.epoch,
-                protocol_version: protocol_config.version.as_u64(),
+                protocol_version: protocol_version.as_u64(),
                 ..Default::default()
             };
             let struct_tag = StructTag {
@@ -573,7 +690,7 @@ impl TestCheckpointDataBuilder {
         let mut checkpoint = self.build_checkpoint();
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: committee.voting_rights.clone(),
-            next_epoch_protocol_version: protocol_config.version,
+            next_epoch_protocol_version: protocol_version,
             epoch_commitments: vec![],
         };
         checkpoint.checkpoint_summary.end_of_epoch_data = Some(end_of_epoch_data);
@@ -595,14 +712,20 @@ impl TestCheckpointDataBuilder {
         dbg_addr(address_idx)
     }
 
-    /// Get mutable access to all transactions in the current checkpoint
-    pub fn transactions_mut(&mut self) -> &mut Vec<CheckpointTransaction> {
-        &mut self.checkpoint_builder.transactions
-    }
-
-    /// Get mutable access to a specific transaction by index
-    pub fn transaction_mut(&mut self, idx: usize) -> Option<&mut CheckpointTransaction> {
-        self.checkpoint_builder.transactions.get_mut(idx)
+    /// Add a shared input to the transaction, being accessed from the currently recorded live
+    /// version.
+    fn access_shared_object(mut self, object_idx: u64, mutable: bool) -> Self {
+        let tx_builder = self.checkpoint_builder.next_transaction.as_mut().unwrap();
+        let object_id = Self::derive_object_id(object_idx);
+        let object = self
+            .live_objects
+            .get(&object_id)
+            .cloned()
+            .expect("Accessing a shared object that doesn't exist");
+        tx_builder
+            .shared_inputs
+            .insert(object_id, Shared { mutable, object });
+        self
     }
 }
 
@@ -702,7 +825,7 @@ mod tests {
             .create_owned_object(0)
             .finish_transaction()
             .start_transaction(0)
-            .mutate_object(0)
+            .mutate_owned_object(0)
             .finish_transaction()
             .build_checkpoint();
 
@@ -965,7 +1088,7 @@ mod tests {
         let checkpoint1 = builder.build_checkpoint();
         builder = builder
             .start_transaction(0)
-            .mutate_object(0)
+            .mutate_owned_object(0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
         builder = builder

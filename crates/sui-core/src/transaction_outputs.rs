@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::Arc;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
-use sui_types::storage::{FullObjectKey, MarkerValue, ObjectKey};
+use sui_types::storage::{FullObjectKey, InputKey, MarkerValue, ObjectKey};
 use sui_types::transaction::{TransactionDataAPI, VerifiedTransaction};
 
 /// TransactionOutputs
+#[derive(Debug, Clone)]
 pub struct TransactionOutputs {
     pub transaction: Arc<VerifiedTransaction>,
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
+    pub accumulator_events: Vec<AccumulatorEvent>,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
     pub wrapped: Vec<ObjectKey>,
@@ -21,6 +24,10 @@ pub struct TransactionOutputs {
     pub locks_to_delete: Vec<ObjectRef>,
     pub new_locks_to_init: Vec<ObjectRef>,
     pub written: WrittenObjects,
+
+    // Temporarily needed to notify TxManager about the availability of objects.
+    // TODO: Remove this once we ship the new ExecutionScheduler.
+    pub output_keys: Vec<InputKey>,
 }
 
 impl TransactionOutputs {
@@ -30,12 +37,15 @@ impl TransactionOutputs {
         effects: TransactionEffects,
         inner_temporary_store: InnerTemporaryStore,
     ) -> TransactionOutputs {
+        let output_keys = inner_temporary_store.get_output_keys(&effects);
+
         let InnerTemporaryStore {
             input_objects,
             stream_ended_consensus_objects,
             mutable_inputs,
             written,
             events,
+            accumulator_events,
             loaded_runtime_objects: _,
             binary_config: _,
             runtime_packages_loaded_from_db: _,
@@ -43,8 +53,6 @@ impl TransactionOutputs {
         } = inner_temporary_store;
 
         let tx_digest = *transaction.digest();
-
-        let tombstones: HashMap<_, _> = effects.all_tombstones().into_iter().collect();
 
         // Get the actual set of objects that have been received -- any received
         // object will show up in the modified-at set.
@@ -54,46 +62,67 @@ impl TransactionOutputs {
             .into_iter()
             .filter(|obj_ref| modified_at.contains(&(obj_ref.0, obj_ref.1)));
 
-        // We record any received or deleted objects since they could be pruned, and smear shared
-        // object deletions in the marker table. For deleted entries in the marker table we need to
-        // make sure we don't accidentally overwrite entries.
+        // We record any received or deleted objects since they could be pruned, and smear object
+        // removals from consensus in the marker table. For deleted entries in the marker table we
+        // need to make sure we don't accidentally overwrite entries.
         let markers: Vec<_> = {
             let received = received_objects.clone().map(|objref| {
                 (
-                    // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                    // TODO: Add support for receiving consensus objects. For now this assumes fastpath.
                     FullObjectKey::new(FullObjectID::new(objref.0, None), objref.1),
                     MarkerValue::Received,
                 )
             });
 
-            let tombstones = tombstones.into_iter().map(|(object_id, version)| {
-                let consensus_key = input_objects
-                    .get(&object_id)
-                    .filter(|o| o.is_consensus())
-                    .map(|o| FullObjectKey::new(o.full_id(), version));
-                if let Some(consensus_key) = consensus_key {
-                    (consensus_key, MarkerValue::ConsensusStreamEnded(tx_digest))
-                } else {
-                    (
-                        FullObjectKey::new(FullObjectID::new(object_id, None), version),
-                        MarkerValue::OwnedDeleted,
-                    )
-                }
-            });
+            let tombstones = effects
+                .all_tombstones()
+                .into_iter()
+                .map(|(object_id, version)| {
+                    let consensus_key = input_objects
+                        .get(&object_id)
+                        .filter(|o| o.is_consensus())
+                        .map(|o| FullObjectKey::new(o.full_id(), version));
+                    if let Some(consensus_key) = consensus_key {
+                        (consensus_key, MarkerValue::ConsensusStreamEnded(tx_digest))
+                    } else {
+                        (
+                            FullObjectKey::new(FullObjectID::new(object_id, None), version),
+                            MarkerValue::FastpathStreamEnded,
+                        )
+                    }
+                });
 
-            let transferred_from_consensus =
+            let fastpath_stream_ended =
                 effects
-                    .transferred_from_consensus()
+                    .transferred_to_consensus()
                     .into_iter()
                     .map(|(object_id, version, _)| {
-                        let object = input_objects
-                            .get(&object_id)
-                            .expect("object transferred from consensus must be in input_objects");
+                        // Note: it's a bit of a misnomer to mark an object as `FastpathStreamEnded`
+                        // when it could have been transferred to consensus from `ObjectOwner`, as
+                        // its root owner may not have been a fastpath object. However, whether or
+                        // not it was technically in the fastpath at the version the marker is
+                        // written, it cetainly is not in the fastpath *anymore*. This is needed
+                        // to produce the required behavior in `ObjectCacheRead::multi_input_objects_available`
+                        // when checking whether receiving objects are available.
                         (
-                            FullObjectKey::new(object.full_id(), version),
-                            MarkerValue::ConsensusStreamEnded(tx_digest),
+                            FullObjectKey::new(FullObjectID::new(object_id, None), version),
+                            MarkerValue::FastpathStreamEnded,
                         )
                     });
+
+            let consensus_stream_ended = effects
+                .transferred_from_consensus()
+                .into_iter()
+                .chain(effects.consensus_owner_changed())
+                .map(|(object_id, version, _)| {
+                    let object = input_objects
+                        .get(&object_id)
+                        .expect("stream-ended object must be in input_objects");
+                    (
+                        FullObjectKey::new(object.full_id(), version),
+                        MarkerValue::ConsensusStreamEnded(tx_digest),
+                    )
+                });
 
             // We "smear" removed consensus objects in the marker table to allow for proper
             // sequencing of transactions that are submitted after the consensus stream ends.
@@ -119,7 +148,8 @@ impl TransactionOutputs {
 
             received
                 .chain(tombstones)
-                .chain(transferred_from_consensus)
+                .chain(fastpath_stream_ended)
+                .chain(consensus_stream_ended)
                 .chain(consensus_smears)
                 .collect()
         };
@@ -156,12 +186,31 @@ impl TransactionOutputs {
             transaction: Arc::new(transaction),
             effects,
             events,
+            accumulator_events,
             markers,
             wrapped,
             deleted,
             locks_to_delete,
             new_locks_to_init,
             written,
+            output_keys,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn new_for_testing(transaction: VerifiedTransaction, effects: TransactionEffects) -> Self {
+        Self {
+            transaction: Arc::new(transaction),
+            effects,
+            events: TransactionEvents { data: vec![] },
+            accumulator_events: vec![],
+            markers: vec![],
+            wrapped: vec![],
+            deleted: vec![],
+            locks_to_delete: vec![],
+            new_locks_to_init: vec![],
+            written: WrittenObjects::new(),
+            output_keys: vec![],
         }
     }
 }

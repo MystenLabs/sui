@@ -48,7 +48,12 @@ fn bootstrap() {
         .build_client(true)
         .build_server(true)
         .bytes(["."])
-        .btree_map([".sui.node.v2alpha.GetProtocolConfigResponse"])
+        .boxed(".sui.rpc.v2beta.Input.literal")
+        .boxed(".sui.rpc.v2beta.Epoch.system_state")
+        .boxed(".sui.rpc.v2beta2.Input.literal")
+        .boxed(".sui.rpc.v2beta2.Epoch.system_state")
+        .boxed("json")
+        .extern_path(".google", "crate::proto::google")
         .out_dir(&out_dir)
         .compile_fds(fds.clone())
     {

@@ -43,7 +43,10 @@ pub fn native_empty(
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
-    NativeResult::map_partial_vm_result_one(context.gas_used(), Vector::empty(&ty_args[0]))
+    NativeResult::map_partial_vm_result_one(
+        context.gas_used(),
+        (&ty_args[0]).try_into().and_then(Vector::empty),
+    )
 }
 
 pub fn make_native_empty(gas_params: EmptyGasParameters) -> NativeFunction {

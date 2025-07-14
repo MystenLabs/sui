@@ -5,4 +5,11 @@ info:
   edition: legacy
   lint: false
 ---
-
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/typing/used_const.move:13:7
+   │
+13 │     #[test(p = @42)]
+   │       ^^^^^^^^^^^^^
+   │       │
+   │       Arguments are no longer supported in `#[test]` attributes
+   │       Ignoring these arguments

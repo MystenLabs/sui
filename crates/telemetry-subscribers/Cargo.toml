@@ -26,7 +26,7 @@ tokio = { workspace = true, features = ["full"] }
 futures.workspace = true
 clap.workspace = true
 bytes.workspace = true
-bytes-varint = { version = "1" }
+bytes-varint = { version = "1.1.0" }
 
 # must use same version as opentelemetry for tonic and prost, so we can't use from
 # workspace

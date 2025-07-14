@@ -2,16 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use move_core_types::{
     account_address::AccountAddress,
     effects::{AccountChangeSet, ChangeSet, Op},
     identifier::Identifier,
-    language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, MoveResolver, ResourceResolver},
+    language_storage::ModuleId,
+    resolver::{LinkageResolver, ModuleResolver, MoveResolver},
 };
 use std::{
-    collections::{btree_map, BTreeMap},
+    collections::{BTreeMap, btree_map},
     fmt::Debug,
 };
 
@@ -33,18 +33,6 @@ impl ModuleResolver for BlankStorage {
     type Error = ();
 
     fn get_module(&self, _module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(None)
-    }
-}
-
-impl ResourceResolver for BlankStorage {
-    type Error = ();
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(None)
     }
 }
@@ -83,18 +71,6 @@ impl<S: ModuleResolver> ModuleResolver for DeltaStorage<'_, '_, S> {
     }
 }
 
-impl<S: ResourceResolver> ResourceResolver for DeltaStorage<'_, '_, S> {
-    type Error = S::Error;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, S::Error> {
-        unreachable!()
-    }
-}
-
 impl<'a, 'b, S: MoveResolver> DeltaStorage<'a, 'b, S> {
     pub fn new(base: &'a S, delta: &'b ChangeSet) -> Self {
         Self { base, delta }
@@ -120,8 +96,8 @@ fn apply_changes<K, V>(
 where
     K: Ord + Debug,
 {
-    use btree_map::Entry::*;
     use Op::*;
+    use btree_map::Entry::*;
 
     for (k, op) in changes.into_iter() {
         match (map.entry(k), op) {
@@ -225,17 +201,5 @@ impl ModuleResolver for InMemoryStorage {
             return Ok(account_storage.modules.get(module_id.name()).cloned());
         }
         Ok(None)
-    }
-}
-
-impl ResourceResolver for InMemoryStorage {
-    type Error = ();
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unreachable!()
     }
 }

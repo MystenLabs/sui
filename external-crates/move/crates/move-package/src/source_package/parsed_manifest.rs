@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::AccountAddress;

@@ -25,7 +25,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     cancel: CancellationToken,
     mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
     end_checkpoint_opt: Option<CheckpointSequenceNumber>,
-    mvr_mode: bool,
 ) -> IndexerResult<()>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -62,7 +61,7 @@ where
             // The batch will consist of contiguous checkpoints and at most one epoch boundary at
             // the end.
             if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
-                commit_checkpoints(&state, batch, epoch, &metrics, mvr_mode).await;
+                commit_checkpoints(&state, batch, epoch, &metrics).await;
                 batch = vec![];
             }
             if let Some(epoch_number) = epoch_number_option {
@@ -82,7 +81,7 @@ where
             }
         }
         if !batch.is_empty() {
-            commit_checkpoints(&state, batch, None, &metrics, mvr_mode).await;
+            commit_checkpoints(&state, batch, None, &metrics).await;
             batch = vec![];
         }
 
@@ -110,7 +109,6 @@ async fn commit_checkpoints<S>(
     indexed_checkpoint_batch: Vec<CheckpointDataToCommit>,
     epoch: Option<EpochToCommit>,
     metrics: &IndexerMetrics,
-    mvr_mode: bool,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -139,16 +137,14 @@ async fn commit_checkpoints<S>(
             packages,
             epoch: _,
         } = indexed_checkpoint;
-        // In MVR mode, persist only object_history, packages, checkpoints, and epochs
-        if !mvr_mode {
-            tx_batch.push(transactions);
-            events_batch.push(events);
-            tx_indices_batch.push(tx_indices);
-            event_indices_batch.push(event_indices);
-            display_updates_batch.extend(display_updates.into_iter());
-            object_changes_batch.push(object_changes);
-            object_versions_batch.push(object_versions);
-        }
+
+        tx_batch.push(transactions);
+        events_batch.push(events);
+        tx_indices_batch.push(tx_indices);
+        event_indices_batch.push(event_indices);
+        display_updates_batch.extend(display_updates.into_iter());
+        object_changes_batch.push(object_changes);
+        object_versions_batch.push(object_versions);
         object_history_changes_batch.push(object_history_changes);
         checkpoint_batch.push(checkpoint);
         packages_batch.push(packages);
@@ -179,23 +175,22 @@ async fn commit_checkpoints<S>(
         .collect::<Vec<StoredRawCheckpoint>>();
 
     {
-        let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
-        let mut persist_tasks = Vec::new();
-        // In MVR mode, persist only packages and object history
-        persist_tasks.push(state.persist_packages(packages_batch));
-        persist_tasks.push(state.persist_object_history(object_history_changes_batch.clone()));
-        if !mvr_mode {
-            persist_tasks.push(state.persist_transactions(tx_batch));
-            persist_tasks.push(state.persist_tx_indices(tx_indices_batch));
-            persist_tasks.push(state.persist_events(events_batch));
-            persist_tasks.push(state.persist_event_indices(event_indices_batch));
-            persist_tasks.push(state.persist_displays(display_updates_batch));
-            persist_tasks.push(state.persist_objects(object_changes_batch.clone()));
-            persist_tasks
-                .push(state.persist_full_objects_history(object_history_changes_batch.clone()));
-            persist_tasks.push(state.persist_objects_version(object_versions_batch.clone()));
-            persist_tasks.push(state.persist_raw_checkpoints(raw_checkpoints_batch));
-        }
+        let _step_1_guard: prometheus::HistogramTimer =
+            metrics.checkpoint_db_commit_latency_step_1.start_timer();
+
+        let mut persist_tasks = vec![
+            state.persist_packages(packages_batch),
+            state.persist_object_history(object_history_changes_batch.clone()),
+            state.persist_transactions(tx_batch),
+            state.persist_tx_indices(tx_indices_batch),
+            state.persist_events(events_batch),
+            state.persist_event_indices(event_indices_batch),
+            state.persist_displays(display_updates_batch),
+            state.persist_objects(object_changes_batch.clone()),
+            state.persist_full_objects_history(object_history_changes_batch.clone()),
+            state.persist_objects_version(object_versions_batch.clone()),
+            state.persist_raw_checkpoints(raw_checkpoints_batch),
+        ];
 
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));

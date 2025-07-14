@@ -3,7 +3,8 @@
 
 use super::error::Result;
 use super::ObjectStore;
-use crate::base_types::{EpochId, MoveObjectType, ObjectID, SequenceNumber, SuiAddress};
+use crate::balance_change::{derive_balance_changes, BalanceChange};
+use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
     ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
@@ -14,13 +15,21 @@ use crate::full_checkpoint_content::CheckpointData;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
 };
-use crate::transaction::VerifiedTransaction;
+use crate::object::Object;
+use crate::storage::{get_transaction_input_objects, get_transaction_output_objects};
+use crate::transaction::{TransactionData, VerifiedTransaction};
+use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::Arc;
 use typed_store_error::TypedStoreError;
+
+pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
+pub type PackageVersionsIterator<'a> =
+    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
 
 pub trait ReadStore: ObjectStore {
     //
@@ -134,16 +143,12 @@ pub trait ReadStore: ObjectStore {
     //
 
     /// Get a "full" checkpoint for purposes of state-sync
-    /// "full" checkpoints include: header, contents, transactions, effects
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents>;
-
-    /// Get a "full" checkpoint for purposes of state-sync
-    /// "full" checkpoints include: header, contents, transactions, effects
+    /// "full" checkpoints include: header, contents, transactions, effects.
+    /// sequence_number is optional since we can always query it using the digest.
+    /// However if it is provided, we can avoid an extra db lookup.
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents>;
 
@@ -154,7 +159,6 @@ pub trait ReadStore: ObjectStore {
         checkpoint: VerifiedCheckpoint,
         checkpoint_contents: CheckpointContents,
     ) -> anyhow::Result<CheckpointData> {
-        use super::ObjectKey;
         use crate::effects::TransactionEffectsAPI;
         use crate::full_checkpoint_content::CheckpointTransaction;
         use std::collections::HashMap;
@@ -202,47 +206,8 @@ pub trait ReadStore: ObjectStore {
                     .expect("event was already checked to be present")
             });
 
-            let input_object_keys = fx
-                .modified_at_versions()
-                .into_iter()
-                .map(|(object_id, version)| ObjectKey(object_id, version))
-                .collect::<Vec<_>>();
-
-            let input_objects = self
-                .multi_get_objects_by_key(&input_object_keys)
-                .into_iter()
-                .enumerate()
-                .map(|(idx, maybe_object)| {
-                    maybe_object.ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "missing input object key {:?} from tx {}",
-                            input_object_keys[idx],
-                            tx.digest()
-                        )
-                    })
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
-
-            let output_object_keys = fx
-                .all_changed_objects()
-                .into_iter()
-                .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
-                .collect::<Vec<_>>();
-
-            let output_objects = self
-                .multi_get_objects_by_key(&output_object_keys)
-                .into_iter()
-                .enumerate()
-                .map(|(idx, maybe_object)| {
-                    maybe_object.ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "missing output object key {:?} from tx {}",
-                            output_object_keys[idx],
-                            tx.digest()
-                        )
-                    })
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
+            let input_objects = get_transaction_input_objects(&self, &fx)?;
+            let output_objects = get_transaction_output_objects(&self, &fx)?;
 
             let full_transaction = CheckpointTransaction {
                 transaction: (*tx).clone().into(),
@@ -352,18 +317,12 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).multi_get_events(event_digests)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
-        (*self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents> {
-        (*self).get_full_checkpoint_contents(digest)
+        (*self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
@@ -462,18 +421,12 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).multi_get_events(event_digests)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents(digest)
+        (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
@@ -572,18 +525,12 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         (**self).multi_get_events(event_digests)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents(digest)
+        (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
@@ -610,21 +557,39 @@ pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
 
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
+
+    fn get_type_layout(&self, type_tag: &TypeTag) -> Result<Option<MoveTypeLayout>> {
+        match type_tag {
+            TypeTag::Bool => Ok(Some(MoveTypeLayout::Bool)),
+            TypeTag::U8 => Ok(Some(MoveTypeLayout::U8)),
+            TypeTag::U64 => Ok(Some(MoveTypeLayout::U64)),
+            TypeTag::U128 => Ok(Some(MoveTypeLayout::U128)),
+            TypeTag::Address => Ok(Some(MoveTypeLayout::Address)),
+            TypeTag::Signer => Ok(Some(MoveTypeLayout::Signer)),
+            TypeTag::Vector(type_tag) => Ok(self
+                .get_type_layout(type_tag)?
+                .map(|layout| MoveTypeLayout::Vector(Box::new(layout)))),
+            TypeTag::Struct(struct_tag) => self.get_struct_layout(struct_tag),
+            TypeTag::U16 => Ok(Some(MoveTypeLayout::U16)),
+            TypeTag::U32 => Ok(Some(MoveTypeLayout::U32)),
+            TypeTag::U256 => Ok(Some(MoveTypeLayout::U256)),
+        }
+    }
+    fn get_struct_layout(&self, type_tag: &StructTag) -> Result<Option<MoveTypeLayout>>;
 }
 
-pub type DynamicFieldIteratorItem =
-    Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>;
+pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub trait RpcIndexes: Send + Sync {
-    fn get_transaction_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<CheckpointSequenceNumber>>;
+    fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
-    fn account_owned_objects_info_iter(
+    fn get_transaction_info(&self, digest: &TransactionDigest) -> Result<Option<TransactionInfo>>;
+
+    fn owned_objects_iter(
         &self,
         owner: SuiAddress,
-        cursor: Option<ObjectID>,
-    ) -> Result<Box<dyn Iterator<Item = Result<AccountOwnedObjectInfo, TypedStoreError>> + '_>>;
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>;
 
     fn dynamic_field_iter(
         &self,
@@ -633,13 +598,30 @@ pub trait RpcIndexes: Send + Sync {
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>>;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
+
+    fn get_balance(&self, owner: &SuiAddress, coin_type: &StructTag)
+        -> Result<Option<BalanceInfo>>;
+
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> Result<BalanceIterator<'_>>;
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<PackageVersionsIterator<'_>>;
 }
 
-pub struct AccountOwnedObjectInfo {
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct OwnedObjectInfo {
     pub owner: SuiAddress,
+    pub object_type: StructTag,
+    pub balance: Option<u64>,
     pub object_id: ObjectID,
     pub version: SequenceNumber,
-    pub type_: MoveObjectType,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -660,15 +642,12 @@ impl DynamicFieldKey {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct DynamicFieldIndexInfo {
     // field_id of this dynamic field is a part of the Key
-    pub dynamic_field_type: DynamicFieldType,
+    pub dynamic_field_kind: DynamicFieldType,
+
     pub name_type: TypeTag,
     pub name_value: Vec<u8>,
-    // TODO do we want to also store the type of the value? We can get this for free for
-    // DynamicFields, but for DynamicObjects it would require a lookup in the DB on init, or
-    // scanning the transaction's output objects for the coorisponding Object to retrieve its type
-    // information.
-    //
-    // pub value_type: TypeTag,
+    pub value_type: TypeTag,
+
     /// ObjectId of the child object when `dynamic_field_type == DynamicFieldType::DynamicObject`
     pub dynamic_object_id: Option<ObjectID>,
 }
@@ -677,4 +656,56 @@ pub struct DynamicFieldIndexInfo {
 pub struct CoinInfo {
     pub coin_metadata_object_id: Option<ObjectID>,
     pub treasury_object_id: Option<ObjectID>,
+    pub regulated_coin_metadata_object_id: Option<ObjectID>,
+}
+
+#[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
+pub struct BalanceInfo {
+    pub balance: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct TransactionInfo {
+    pub checkpoint: u64,
+    pub balance_changes: Vec<BalanceChange>,
+    pub object_types: HashMap<ObjectID, ObjectType>,
+}
+
+impl TransactionInfo {
+    pub fn new(
+        _transaction: &TransactionData,
+        effects: &TransactionEffects,
+        input_objects: &[Object],
+        output_objects: &[Object],
+        checkpoint: u64,
+    ) -> TransactionInfo {
+        let balance_changes = derive_balance_changes(effects, input_objects, output_objects);
+
+        let object_types = input_objects
+            .iter()
+            .chain(output_objects)
+            .map(|object| (object.id(), ObjectType::from(object)))
+            .collect();
+
+        TransactionInfo {
+            checkpoint,
+            balance_changes,
+            object_types,
+        }
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize, Eq, PartialEq, Debug)]
+pub struct EpochInfo {
+    pub epoch: u64,
+    pub protocol_version: Option<u64>,
+    pub start_timestamp_ms: Option<u64>,
+    pub end_timestamp_ms: Option<u64>,
+    pub start_checkpoint: Option<u64>,
+    pub end_checkpoint: Option<u64>,
+    pub reference_gas_price: Option<u64>,
+    // System State as of the start of the epoch
+    pub system_state: Option<crate::sui_system_state::SuiSystemState>,
+    // pub end_of_epoch_transaction: Option<TransactionDigest>,
+    // pub epoch_commitments: Vec<sui_types::messages_checkpoint::CheckpointCommitment>,
 }

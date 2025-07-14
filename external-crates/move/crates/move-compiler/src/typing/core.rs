@@ -5,25 +5,25 @@
 use crate::{
     debug_display, diag,
     diagnostics::{
+        Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{NameResolution, TypeSafety},
         warning_filters::WarningFilters,
-        Diagnostic, DiagnosticReporter, Diagnostics,
     },
     editions::FeatureGate,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
-        IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID, TVar, Type,
-        TypeName, TypeName_, Type_, UseFun, UseFunKind, Var,
+        IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID, TVar, Type, Type_,
+        TypeName, TypeName_, UseFun, UseFunKind, Var,
     },
     parser::ast::{
-        Ability_, ConstantName, DatatypeName, DocComment, Field, FunctionName, VariantName,
-        ENTRY_MODIFIER,
+        Ability_, ConstantName, DatatypeName, DocComment, ENTRY_MODIFIER, Field, FunctionName,
+        VariantName,
     },
     shared::{
         ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
-        known_attributes::{TestingAttribute, VerificationAttribute},
+        known_attributes::{TestingAttribute, ModeAttribute},
         matching::{new_match_var_name, MatchContext},
         program_info::*,
         string_utils::{debug_print, format_oxford_list},
@@ -1102,6 +1102,11 @@ impl<'env, 'outer> Context<'env, 'outer> {
         }
     }
 
+    // pass in a location for a better error location
+    pub fn update_named_block_type(&mut self, name: BlockLabel, ty: Type) {
+        self.named_block_map.insert(name, ty);
+    }
+
     pub fn named_block_type_opt(&self, name: BlockLabel) -> Option<Type> {
         self.named_block_map.get(&name).cloned()
     }
@@ -1277,18 +1282,28 @@ impl TVarCounter {
 #[derive(Clone, Debug)]
 pub struct Subst {
     tvars: HashMap<TVar, Type>,
-    num_vars: HashMap<TVar, Loc>,
+    tvar_constraints: HashMap<TVar, VarConstraint>,
+}
+
+#[derive(Clone, Debug)]
+// This will eventually hold constraints like `Void` and `String` as well
+pub enum VarConstraint {
+    Num(Loc),
 }
 
 impl Subst {
     pub fn empty() -> Self {
         Self {
             tvars: HashMap::new(),
-            num_vars: HashMap::new(),
+            tvar_constraints: HashMap::new(),
         }
     }
 
     pub fn insert(&mut self, tvar: TVar, bt: Type) {
+        self.tvars.insert(tvar, bt);
+    }
+
+    pub fn insert_with_constraint(&mut self, tvar: TVar, bt: Type) {
         self.tvars.insert(tvar, bt);
     }
 
@@ -1298,26 +1313,48 @@ impl Subst {
 
     pub fn new_num_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
         let tvar = counter.next();
-        assert!(self.num_vars.insert(tvar, loc).is_none());
+        assert!(
+            self.tvar_constraints
+                .insert(tvar, VarConstraint::Num(loc))
+                .is_none()
+        );
         tvar
     }
 
-    pub fn set_num_var(&mut self, tvar: TVar, loc: Loc) {
-        self.num_vars.entry(tvar).or_insert(loc);
-        if let Some(sp!(_, Type_::Var(next))) = self.get(tvar) {
-            let next = *next;
-            self.set_num_var(next, loc)
+    pub fn set_constraint_opt(&mut self, tvar: TVar, constraint_opt: Option<VarConstraint>) {
+        if let Some(constraint) = constraint_opt {
+            assert!(self.tvar_constraints.insert(tvar, constraint).is_none());
         }
     }
 
-    pub fn is_num_var(&self, tvar: TVar) -> bool {
-        self.num_vars.contains_key(&tvar)
+    pub fn is_num_var(&self, tvar: &TVar) -> bool {
+        self.tvar_constraints
+            .get(tvar)
+            .map(|constraint| constraint.is_num_var())
+            .unwrap_or(false)
+    }
+}
+
+impl VarConstraint {
+    pub fn is_num_var(&self) -> bool {
+        match self {
+            VarConstraint::Num(_) => true,
+        }
+    }
+
+    pub fn loc(&self) -> Loc {
+        match self {
+            VarConstraint::Num(loc) => *loc,
+        }
     }
 }
 
 impl ast_debug::AstDebug for Subst {
     fn ast_debug(&self, w: &mut ast_debug::AstWriter) {
-        let Subst { tvars, num_vars } = self;
+        let Subst {
+            tvars,
+            tvar_constraints: var_constraints,
+        } = self;
 
         w.write("tvars:");
         w.indent(4, |w| {
@@ -1331,7 +1368,7 @@ impl ast_debug::AstDebug for Subst {
         });
         w.write("num_vars:");
         w.indent(4, |w| {
-            let mut num_vars = num_vars.keys().collect::<Vec<_>>();
+            let mut num_vars = var_constraints.keys().collect::<Vec<_>>();
             num_vars.sort();
             for tvar in num_vars {
                 w.writeln(format!("{:?}", tvar))
@@ -1370,8 +1407,8 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
             match subst.get(last_id) {
                 Some(sp!(_, Var(_))) => unreachable!(),
                 Some(t) => error_format_nested(t, subst),
-                None if nested && subst.is_num_var(last_id) => "{integer}".to_string(),
-                None if subst.is_num_var(last_id) => return "integer".to_string(),
+                None if nested && subst.is_num_var(&last_id) => "{integer}".to_string(),
+                None if subst.is_num_var(&last_id) => return "integer".to_string(),
                 None => "_".to_string(),
             }
         }
@@ -1404,11 +1441,7 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
             error_format_nested(ty, subst)
         ),
     };
-    if nested {
-        res
-    } else {
-        format!("'{}'", res)
-    }
+    if nested { res } else { format!("'{}'", res) }
 }
 
 //**************************************************************************************************
@@ -2076,7 +2109,7 @@ pub fn public_testing_visibility(
     callee_entry: Option<Loc>,
 ) -> Option<PublicForTesting> {
     // is_testing && (is_entry || is_sui_init)
-    if !env.flags().is_testing() {
+    if !env.test_mode() {
         return None;
     }
 
@@ -2105,7 +2138,7 @@ fn report_visibility_error_(
         (call_loc, call_msg),
         (vis_loc, vis_msg),
     );
-    if context.env().flags().is_testing() {
+    if context.env().test_mode() {
         if let Some(case) = public_for_testing {
             let (test_loc, test_msg) = match case {
                 PublicForTesting::Entry(entry_loc) => {
@@ -2114,7 +2147,7 @@ fn report_visibility_error_(
                     but only from testing contexts, e.g. '#[{}]' or '#[{}]'",
                         ENTRY_MODIFIER,
                         TestingAttribute::TEST,
-                        TestingAttribute::TEST_ONLY,
+                        ModeAttribute::TEST_ONLY,
                     );
                     (entry_loc, entry_msg)
                 }
@@ -2191,20 +2224,28 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
 
 pub fn solve_constraints(context: &mut Context) {
     use BuiltinTypeName_ as BT;
-    let num_vars = context.subst.num_vars.clone();
+
+    let var_constraints = context.subst.tvar_constraints.clone();
     let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
-    for (num_var, loc) in num_vars {
-        let tvar = sp(loc, Type_::Var(num_var));
-        match unfold_type(&subst, tvar.clone()).value {
-            Type_::UnresolvedError | Type_::Anything => {
-                let next_subst = join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
-                    .unwrap()
-                    .0;
-                subst = next_subst;
+
+    for (var, constraint) in var_constraints.into_iter() {
+        match constraint {
+            VarConstraint::Num(loc) => {
+                let tvar = sp(loc, Type_::Var(var));
+                match unfold_type(&subst, tvar.clone()).value {
+                    Type_::UnresolvedError | Type_::Anything => {
+                        let next_subst =
+                            join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
+                                .unwrap()
+                                .0;
+                        subst = next_subst;
+                    }
+                    _ => (),
+                }
             }
-            _ => (),
         }
     }
+
     context.subst = subst;
 
     let constraints = std::mem::take(&mut context.constraints);
@@ -2341,8 +2382,8 @@ fn solve_builtin_type_constraint(
     op: &'static str,
     ty: Type,
 ) {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     let t = unfold_type(&context.subst, ty);
     let tloc = t.loc;
     let mk_tmsg = || {
@@ -2386,8 +2427,8 @@ fn solve_builtin_type_constraint(
 }
 
 fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: &Type) {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     let sp!(tyloc, unfolded_) = unfold_type(&context.subst, ty.clone());
     match unfolded_ {
         Var(_) => unreachable!(),
@@ -2405,8 +2446,8 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
 }
 
 fn solve_single_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: &Type) {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     let sp!(tyloc, unfolded_) = unfold_type(&context.subst, ty.clone());
     match unfolded_ {
         Var(_) => unreachable!(),
@@ -2893,8 +2934,8 @@ fn join_impl(
     lhs: &Type,
     rhs: &Type,
 ) -> Result<(Subst, Type), TypingError> {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     use TypingCase::*;
     match (lhs, rhs) {
         (sp!(_, Anything), other) | (other, sp!(_, Anything)) => Ok((subst, other.clone())),
@@ -2913,7 +2954,7 @@ fn join_impl(
                     return Err(TypingError::InvariantError(
                         Box::new(lhs.clone()),
                         Box::new(rhs.clone()),
-                    ))
+                    ));
                 }
                 // imm <: imm
                 // mut <: imm
@@ -2925,7 +2966,7 @@ fn join_impl(
                     return Err(TypingError::SubtypeError(
                         Box::new(lhs.clone()),
                         Box::new(rhs.clone()),
-                    ))
+                    ));
                 }
             };
             let (subst, t) = join_impl(counter, subst, case, t1, t2)?;
@@ -3042,6 +3083,18 @@ fn join_impl_types(
     Ok((subst, tys))
 }
 
+pub fn join_var_constraints(
+    lhs: Option<VarConstraint>,
+    rhs: Option<VarConstraint>,
+) -> Result<Option<VarConstraint>, TypingError> {
+    match (&lhs, &rhs) {
+        (Some(VarConstraint::Num(_)), Some(VarConstraint::Num(_))) => Ok(rhs),
+        (Some(VarConstraint::Num(_)), None) => Ok(lhs),
+        (None, Some(VarConstraint::Num(_))) => Ok(rhs),
+        (None, None) => Ok(None),
+    }
+}
+
 fn join_tvar(
     counter: &mut TVarCounter,
     mut subst: Subst,
@@ -3064,15 +3117,13 @@ fn join_tvar(
     };
 
     let new_tvar = counter.next();
-    let num_loc_1 = subst.num_vars.get(&last_id1);
-    let num_loc_2 = subst.num_vars.get(&last_id2);
-    match (num_loc_1, num_loc_2) {
-        (_, Some(nloc)) | (Some(nloc), _) => {
-            let nloc = *nloc;
-            subst.set_num_var(new_tvar, nloc);
-        }
-        _ => (),
-    }
+
+    // join constraints
+    let constraints_1 = subst.tvar_constraints.get(&last_id1).cloned();
+    let constraints_2 = subst.tvar_constraints.get(&last_id2).cloned();
+    let new_constraint_opt = join_var_constraints(constraints_1, constraints_2)?;
+    subst.set_constraint_opt(new_tvar, new_constraint_opt);
+
     subst.insert(last_id1, sp(loc1, Var(new_tvar)));
     subst.insert(last_id2, sp(loc2, Var(new_tvar)));
 
@@ -3136,7 +3187,7 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
     }
 
     // check not necessary for soundness but improves error message structure
-    if !check_num_tvar(subst, loc, tvar, &ty) {
+    if !check_num_tvar(subst, loc, &tvar, &ty) {
         return Ok(false);
     }
 
@@ -3153,7 +3204,7 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
     Ok(true)
 }
 
-fn check_num_tvar(subst: &Subst, _loc: Loc, tvar: TVar, ty: &Type) -> bool {
+fn check_num_tvar(subst: &Subst, _loc: Loc, tvar: &TVar, ty: &Type) -> bool {
     !subst.is_num_var(tvar) || check_num_tvar_(subst, ty)
 }
 
@@ -3167,7 +3218,7 @@ fn check_num_tvar_(subst: &Subst, ty: &Type) -> bool {
             let last_tvar = forward_tvar(subst, *v);
             match subst.get(last_tvar) {
                 Some(sp!(_, Var(_))) => unreachable!(),
-                None => subst.is_num_var(last_tvar),
+                None => subst.is_num_var(&last_tvar),
                 Some(t) => check_num_tvar_(subst, t),
             }
         }

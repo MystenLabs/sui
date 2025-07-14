@@ -329,7 +329,11 @@ async fn test_upgrade_package_happy_path() {
         .unwrap();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
     let binary_config = to_binary_config(&config);
-    let normalized_modules = package.move_package().normalize(&binary_config).unwrap();
+    let pool = &mut move_binary_format::normalized::RcPool::new();
+    let normalized_modules = package
+        .move_package()
+        .normalize(pool, &binary_config, /* include code */ true)
+        .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
         .functions

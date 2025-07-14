@@ -28,6 +28,7 @@ fn test_reference_of_reference() {
 fn no_verify_locals_good() {
     let compiled_module_good = CompiledModule {
         version: move_binary_format::file_format_common::VERSION_MAX,
+        publishable: true,
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex(0),
@@ -135,6 +136,7 @@ fn big_signature_test() {
 
     let module = CompiledModule {
         version: 5,
+        publishable: true,
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {
             address: AddressIdentifierIndex(0),

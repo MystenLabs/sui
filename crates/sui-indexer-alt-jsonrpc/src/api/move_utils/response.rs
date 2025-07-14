@@ -111,12 +111,12 @@ fn normalized_type(sig: &OpenSignatureBody) -> SuiMoveNormalizedType {
         S::U128 => T::U128,
         S::U256 => T::U256,
         S::Vector(sig) => T::Vector(Box::new(normalized_type(sig))),
-        S::Datatype(t, params) => T::Struct {
-            address: t.package.to_canonical_string(/* with_prefix */ true),
-            module: t.module.to_string(),
-            name: t.name.to_string(),
-            type_arguments: params.iter().map(normalized_type).collect(),
-        },
+        S::Datatype(t, params) => T::new_struct(
+            t.package.to_canonical_string(/* with_prefix */ true),
+            t.module.to_string(),
+            t.name.to_string(),
+            params.iter().map(normalized_type).collect(),
+        ),
         S::TypeParameter(ix) => T::TypeParameter(*ix),
     }
 }

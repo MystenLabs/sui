@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, fmt::Display, sync::Arc, sync::OnceLock};
 
 use self::known_attributes::AttributePosition;
 use crate::{
+    FullyCompiledProgram,
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
         self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
@@ -16,7 +17,6 @@ use crate::{
     shared::{unique_map::UniqueMap, *},
     sui_mode::info::SuiInfo,
     typing::ast::{self as T},
-    FullyCompiledProgram,
 };
 use move_core_types::runtime_value;
 use move_ir_types::location::Loc;

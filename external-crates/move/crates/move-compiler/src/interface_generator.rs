@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::shared::{NumberFormat, NumericalAddress};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use move_binary_format::file_format::{
     Ability, AbilitySet, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
     FunctionDefinition, ModuleHandle, SignatureToken, StructDefinition, StructFieldInformation,
@@ -91,7 +91,7 @@ pub fn write_module_to_string(
         members.push(format!("    {}", DISCLAIMER));
     }
     for fdef in externally_visible_funs {
-        members.push(format!(" #[{}]", NATIVE_INTERFACE));
+        // members.push(format!(" #[{}]", NATIVE_INTERFACE));
         members.push(write_function_def(&mut context, fdef));
     }
     if has_externally_visible_funs {

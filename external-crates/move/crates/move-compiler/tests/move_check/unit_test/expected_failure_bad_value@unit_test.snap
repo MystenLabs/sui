@@ -6,31 +6,28 @@ info:
   lint: false
 ---
 error[E10003]: invalid attribute value
-  ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:7:24
+  ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:7:35
   │
 7 │     #[expected_failure(abort_code=true)]
-  │                        ^^^^^^^^^^^^^^^
-  │                        │          │
-  │                        │          Unsupported value in this assignment
-  │                        Invalid value in attribute assignment
+  │                                   ^^^^ Invalid value in attribute assignment
+  │
+  = Expected a u64 literal or named constant
 
 error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:11:24
+   ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:11:35
    │
 11 │     #[expected_failure(abort_code=x"")]
-   │                        ^^^^^^^^^^^^^^
-   │                        │          │
-   │                        │          Unsupported value in this assignment
-   │                        Invalid value in attribute assignment
+   │                                   ^^^ Invalid value in attribute assignment
+   │
+   = Expected a u64 literal or named constant
 
 error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:15:24
+   ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:15:35
    │
 15 │     #[expected_failure(abort_code=b"")]
-   │                        ^^^^^^^^^^^^^^
-   │                        │          │
-   │                        │          Unsupported value in this assignment
-   │                        Invalid value in attribute assignment
+   │                                   ^^^ Invalid value in attribute assignment
+   │
+   = Expected a u64 literal or named constant
 
 error[E10003]: invalid attribute value
    ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:19:35
@@ -42,10 +39,9 @@ error[E10003]: invalid attribute value
    │                                   ^^^ Invalid value in attribute assignment
 
 error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:23:24
+   ┌─ tests/move_check/unit_test/expected_failure_bad_value.move:23:35
    │
 23 │     #[expected_failure(abort_code=@0xC0FFEE)]
-   │                        ^^^^^^^^^^^^^^^^^^^^
-   │                        │          │
-   │                        │          Unsupported value in this assignment
-   │                        Invalid value in attribute assignment
+   │                                   ^^^^^^^^^ Invalid value in attribute assignment
+   │
+   = Expected a u64 literal or named constant

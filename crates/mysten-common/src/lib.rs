@@ -5,7 +5,6 @@ use once_cell::sync::Lazy;
 use tracing::warn;
 
 pub mod logging;
-pub mod metrics;
 pub mod random;
 pub mod random_util;
 pub mod sync;

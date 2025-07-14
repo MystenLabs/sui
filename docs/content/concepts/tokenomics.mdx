@@ -117,6 +117,33 @@ The distinction between third-party owned vs validator-owned rewards and stake i
 
 {@include: ../snippets/staking-pool-reqs.mdx}
 
+#### Understanding the voting power formula
+
+SIP-39 uses the following formula to determine if a validator can join the set:
+
+```
+S / (S + T) > V / 10000
+```
+
+Where:
+- S = The validator candidate's stake amount
+- T = Total amount already staked in the network
+- V = Minimum voting power threshold (3 in the final phase)
+- 10000 = Total voting power units in the Sui system
+
+This formula checks if the validator would have at least V voting power after joining. Let's break it down:
+
+1. S / (S + T) calculates what proportion of the total stake the validator would control
+2. When multiplied by 10000, this gives their voting power in Sui's standardized units
+3. The validator can join if this value is greater than or equal to the threshold V
+
+For example, with a network stake of 7.69B SUI and V=3:
+- A validator with 2.31M SUI would have: 2,310,000 / (2,310,000 + 7,694,950,773) ≈ 0.0003 proportion
+- Converting to voting power: 0.0003 × 10000 ≈ 3 units
+- Since 3 ≥ 3, they meet the threshold to join
+
+As the total network stake changes, the minimum required amount will adjust automatically.
+
 ## Related links
 
 - [The Sui Smart Contracts Platform: Economics and Incentives](https://docs.sui.io/paper/tokenomics.pdf): Whitepaper that details Sui tokenomics.

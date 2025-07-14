@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
-import { Callout, Container, Strong } from '@radix-ui/themes';
-import { ReactElement, ReactNode } from 'react';
+import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { Callout, Container, Strong } from "@radix-ui/themes";
+import { ReactElement, ReactNode } from "react";
 
 interface Props {
-	title: string;
-	children: ReactNode;
+    title: string;
+    children: ReactNode;
 }
 
 /**
@@ -16,18 +16,18 @@ interface Props {
  * underneath.
  */
 export function Error({ title, children }: Props): ReactElement {
-	return (
-		<Container size="1" px="2">
-			<Callout.Root color="red" role="alert" size="3" variant="surface">
-				<Callout.Icon>
-					<ExclamationTriangleIcon />
-				</Callout.Icon>
-				<Callout.Text>
-					<Strong>{title}</Strong>
-					<br />
-					{children}
-				</Callout.Text>
-			</Callout.Root>
-		</Container>
-	);
+    return (
+        <Container size="1" px="2">
+            <Callout.Root color="red" role="alert" size="3" variant="surface">
+                <Callout.Icon>
+                    <ExclamationTriangleIcon />
+                </Callout.Icon>
+                <Callout.Text>
+                    <Strong>{title}</Strong>
+                    <br />
+                    {children}
+                </Callout.Text>
+            </Callout.Root>
+        </Container>
+    );
 }

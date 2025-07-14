@@ -1,6 +1,24 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+
+/**
+ * This code supports two types of traces, one being a superset of the other:
+ * - a trace representing execution of a single top-level Move functtion
+ * - a trace containing traces representing external events in addtion to
+ *   traces of multiple top-level Move functions.
+ *
+ * The second, more general trace type, can interleave external events (represented
+ * in the JSON schema by `JSONTraceExt` interface) with those representing events
+ * related to Move function execution (represented in the JSON schema by
+ * `JSONTraceOpenFrame`, `JSONTraceInstruction`, `JSONTraceEffect`, and
+ * `JSONTraceCloseFrame` interfaces). In this trace, events related to
+ * Move function execution are demarcated by Move call start and end events.
+ * The first trace type will only contain events related Move function execution,
+ * with no special demarcation.
+ */
+
+
 import * as fs from 'fs';
 import { FRAME_LIFETIME, ModuleInfo } from './utils';
 import {
@@ -9,7 +27,10 @@ import {
     IRuntimeVariableLoc,
     IRuntimeGlobalLoc,
     IRuntimeLoc,
-    IRuntimeRefValue
+    IRuntimeRefValue,
+    ExtEventKind as ExtEventKind,
+    ExtEventSummary,
+    IMoveCallInfo
 } from './runtime';
 import {
     IDebugInfo,
@@ -19,6 +40,7 @@ import {
     ILoc,
     IDebugInfoFunction
 } from './debug_info_utils';
+import { decompress } from 'fzstd';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -32,7 +54,7 @@ interface JSONStructTypeDescription {
     address: string;
     module: string;
     name: string;
-    type_args: string[];
+    type_args: JSONBaseType[];
 }
 
 interface JSONStructType {
@@ -43,7 +65,7 @@ interface JSONVectorType {
     vector: JSONBaseType;
 }
 
-type JSONBaseType = string | JSONStructType | JSONVectorType;
+type JSONBaseType = string | JSONStructType | JSONVectorType | JSONStructTypeDescription;
 
 enum JSONTraceRefType {
     Mut = 'Mut',
@@ -55,11 +77,12 @@ interface JSONTraceType {
     ref_type?: JSONTraceRefType
 }
 
-type JSONTraceRuntimeValueType = boolean | number | string | JSONTraceRuntimeValueType[] | JSONTraceCompound;
+type JSONTraceMoveValue = {
+    type: JSONBaseType;
+    value: boolean | number | string | JSONTraceMoveValue[] | JSONTraceCompound
+};
 
-interface JSONTraceFields {
-    [key: string]: JSONTraceRuntimeValueType;
-}
+type JSONTraceFields = [string, JSONTraceMoveValue][];
 
 interface JSONTraceCompound {
     fields: JSONTraceFields;
@@ -70,7 +93,7 @@ interface JSONTraceCompound {
 
 interface JSONTraceRefValueContent {
     location: JSONTraceLocation;
-    snapshot: JSONTraceRuntimeValueType;
+    snapshot: JSONTraceMoveValue;
 }
 
 interface JSONTraceMutRefValue {
@@ -82,7 +105,7 @@ interface JSONTraceImmRefValue {
 }
 
 interface JSONTraceRuntimeValueContent {
-    value: JSONTraceRuntimeValueType;
+    value: JSONTraceMoveValue;
 }
 
 interface JSONTraceRuntimeValue {
@@ -162,7 +185,7 @@ interface JSONTracePopEffect {
 interface JSONDataLoadEffect {
     ref_type: JSONTraceRefType;
     location: JSONTraceLocation;
-    snapshot: JSONTraceRuntimeValueType;
+    snapshot: JSONTraceMoveValue;
 }
 
 interface JSONTraceEffect {
@@ -181,11 +204,57 @@ interface JSONTraceCloseFrame {
     return_: JSONTraceRuntimeValueContent[];
 }
 
+interface JSONExtMoveCallSummary {
+    MoveCall: IMoveCallInfo
+}
+
+interface JSONExtSummary {
+    ExternalEvent: String
+}
+
+interface JSONTraceExtMoveValueInfo {
+    type_: JSONTraceType;
+    value: JSONTraceMoveValue;
+}
+
+interface JSONTraceExtMoveValueSingle {
+    name: string;
+    info: JSONTraceExtMoveValueInfo;
+}
+
+interface JSONTraceExtMoveValueVector {
+    name: string;
+    type_: JSONTraceType;
+    value: JSONTraceMoveValue[];
+}
+
+interface JSONTraceExtMoveValue {
+    Single: JSONTraceExtMoveValueSingle;
+    Vector: JSONTraceExtMoveValueVector
+}
+
+interface JSONTraceSummaryEvent {
+    name: string;
+    events: [JSONExtMoveCallSummary | JSONExtSummary][]
+}
+
+interface JSONTraceExtEvent {
+    description: string;
+    name: string;
+    values: JSONTraceExtMoveValue[];
+}
+
+type JSONTraceExt =
+    | { Summary: JSONTraceSummaryEvent }
+    | { ExternalEvent: JSONTraceExtEvent }
+    | string;
+
 interface JSONTraceEvent {
     OpenFrame?: JSONTraceOpenFrame;
     Instruction?: JSONTraceInstruction;
     Effect?: JSONTraceEffect;
     CloseFrame?: JSONTraceCloseFrame;
+    External?: JSONTraceExt;
 }
 
 interface JSONTraceRootObject {
@@ -227,7 +296,9 @@ export enum TraceEventKind {
     OpenFrame,
     CloseFrame,
     Instruction,
-    Effect
+    Effect,
+    ExternalSummary,
+    ExternalEvent
 }
 
 /**
@@ -260,7 +331,31 @@ export type TraceEvent =
         bcodeLoc?: ILoc,
         kind: TraceInstructionKind
     }
-    | { type: TraceEventKind.Effect, effect: EventEffect };
+    | { type: TraceEventKind.Effect, effect: EventEffect }
+    | {
+        type: TraceEventKind.ExternalSummary,
+        id: number,
+        name: string,
+        summary: ExtEventSummary[]
+    }
+    | { type: TraceEventKind.ExternalEvent, event: ExternalEventInfo };
+
+export type ExternalEventInfo =
+    | {
+        kind: ExtEventKind.MoveCallStart
+    } | {
+        kind: ExtEventKind.MoveCallEnd
+    } | {
+        kind: ExtEventKind.ExtEventStart
+        id: number
+        description: string
+        name: string
+        localsTypes: string[]
+        localsNames: string[]
+        localsValues: RuntimeValueType[]
+    } | {
+        kind: ExtEventKind.ExtEventEnd
+    };
 
 /**
  * Kind of an effect of an instruction.
@@ -355,33 +450,56 @@ interface ITraceGenFrameInfo {
  * An ID of a virtual frame representing a macro defined in the same file
  * where it is inlined.
  */
-const INLINED_FRAME_ID_SAME_FILE = -1;
+export const INLINED_FRAME_ID_SAME_FILE = Number.MAX_SAFE_INTEGER - 1;
+
 /**
  * An ID of a virtual frame representing a macro defined in a different file
  * than file where it is inlined.
  */
-const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
+export const INLINED_FRAME_ID_DIFFERENT_FILE = Number.MAX_SAFE_INTEGER - 2;
+
+/**
+ * An ID of a virtual frame representing external events summary.
+ */
+export const EXT_SUMMARY_FRAME_ID = Number.MAX_SAFE_INTEGER - 3;
+
+/**
+ * An ID of a virtual frame representing external event.
+ */
+export const EXT_EVENT_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
+
 
 /**
  * Reads a Move VM execution trace from a JSON file.
  *
  * @param traceFilePath path to the trace JSON file.
- * @param sourceMapsHashMap a map from file hash to a source map.
- * @param sourceMapsModMap a map from stringified module info to a source map.
- * @param bcodeMapModMap a map from stringified module info to a bytecode map.
+ * @param srcDebugInfosHashMap a map from file hash to debug info.
+ * @param srcDebugInfosModMap a map from stringified module info to debug info.
+ * @param bcodeDebugInfosModMap a map from stringified module info to debug info.
  * @param filesMap a map from file hash to file info (for both source files
  * and disassembled bytecode files).
  * @returns execution trace.
  * @throws Error with a descriptive error message if reading trace has failed.
  */
-export function readTrace(
+export async function readTrace(
     traceFilePath: string,
-    sourceMapsHashMap: Map<string, IDebugInfo>,
-    sourceMapsModMap: Map<string, IDebugInfo>,
-    bcodeMapModMap: Map<string, IDebugInfo>,
+    srcDebugInfosHashMap: Map<string, IDebugInfo>,
+    srcDebugInfosModMap: Map<string, IDebugInfo>,
+    bcodeDebugInfosModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
-): ITrace {
-    const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
+): Promise<ITrace> {
+    const buf = Buffer.from(fs.readFileSync(traceFilePath));
+    const decompressed = await decompress(buf);
+    const [header, ...rest] = new TextDecoder().decode(decompressed).trimEnd().split('\n');
+    const jsonVersion: number = JSON.parse(header).version;
+    const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
+        return JSON.parse(line);
+    });
+
+    const traceJSON: JSONTraceRootObject = {
+        events: jsonEvents,
+        version: jsonVersion,
+    };
     if (traceJSON.events.length === 0) {
         throw new Error('Trace contains no events');
     }
@@ -437,7 +555,7 @@ export function readTrace(
                 addr: frame.module.address,
                 name: frame.module.name
             };
-            const sourceMap = sourceMapsModMap.get(JSON.stringify(modInfo));
+            const sourceMap = srcDebugInfosModMap.get(JSON.stringify(modInfo));
             if (!sourceMap) {
                 throw new Error('Source map for module '
                     + modInfo.name
@@ -463,7 +581,7 @@ export function readTrace(
             let optimizedBcodeLines = undefined;
             let bcodeFunEntry = undefined;
             let bcodeFilePath = undefined;
-            const bcodeMap = bcodeMapModMap.get(JSON.stringify(modInfo));
+            const bcodeMap = bcodeDebugInfosModMap.get(JSON.stringify(modInfo));
             if (bcodeMap) {
                 bcodeFileHash = bcodeMap.fileHash;
                 optimizedBcodeLines = bcodeMap.optimizedLines;
@@ -528,7 +646,7 @@ export function readTrace(
             }
 
             const differentFileVirtualFramePop = processInstructionIfMacro(
-                sourceMapsHashMap,
+                srcDebugInfosHashMap,
                 events,
                 frameInfoStack,
                 event.Instruction.pc,
@@ -540,7 +658,7 @@ export function readTrace(
                 // we may still land in a macro defined in the same file, in which case
                 // we need to push another virtual frame for this instruction right away
                 processInstructionIfMacro(
-                    sourceMapsHashMap,
+                    srcDebugInfosHashMap,
                     events,
                     frameInfoStack,
                     event.Instruction.pc,
@@ -552,15 +670,6 @@ export function readTrace(
             if (instBcodeFileLoc) {
                 recordTracedLine(filesMap, tracedBcodeLines, instBcodeFileLoc);
             }
-            // re-read frame info as it may have changed as a result of processing
-            // and inlined call
-            frameInfo = frameInfoStack[frameInfoStack.length - 1];
-            const filePath = frameInfo.srcFilePath;
-            const lines = tracedSrcLines.get(filePath) || new Set<number>();
-            // floc is still good as the pc_locs used for its computation
-            // do not change as a result of processing inlined frames
-            lines.add(instSrcFileLoc.loc.line);
-            tracedSrcLines.set(filePath, lines);
             events.push({
                 type: TraceEventKind.Instruction,
                 pc: event.Instruction.pc,
@@ -570,16 +679,28 @@ export function readTrace(
                     ? TraceInstructionKind[name as keyof typeof TraceInstructionKind]
                     : TraceInstructionKind.UNKNOWN
             });
+            // re-read frame info as it may have changed as a result of processing
+            // and inlined call
+            frameInfo = frameInfoStack[frameInfoStack.length - 1];
 
             // Set end of lifetime for all locals to the max instruction PC ever seen
-            // for a given local (if they are live after this instructions, they will
+            // for a given local (if they are alive after this instructions, they will
             // be reset to FRAME_LIFETIME when processing subsequent effects).
             // All instructions in a given function, regardless of whether they are
             // in the inlined portion of the code or not, reset variable lifetimes.
-            const nonInlinedFrameID = frameInfo.ID !== INLINED_FRAME_ID_SAME_FILE &&
-                frameInfo.ID !== INLINED_FRAME_ID_DIFFERENT_FILE
-                ? frameInfo.ID
-                : frameInfoStack[frameInfoStack.length - 2].ID;
+            let nonInlinedFrameID = frameInfo.ID;
+            if (frameInfo.ID === INLINED_FRAME_ID_SAME_FILE || frameInfo.ID === INLINED_FRAME_ID_DIFFERENT_FILE) {
+                // Search from the top of the stack to find the first non-inlined frame.
+                // It's guaranteed that there is at least one non-inlined frame on the stack.
+                for (let i = frameInfoStack.length - 1; i >= 0; i--) {
+                    const currentFrame = frameInfoStack[i];
+                    if (currentFrame.ID !== INLINED_FRAME_ID_SAME_FILE &&
+                        currentFrame.ID !== INLINED_FRAME_ID_DIFFERENT_FILE) {
+                        nonInlinedFrameID = currentFrame.ID;
+                        break;
+                    }
+                }
+            }
             const lifetimeEnds = localLifetimeEnds.get(nonInlinedFrameID) || [];
             const lifetimeEndsMax = localLifetimeEndsMax.get(nonInlinedFrameID) || [];
             for (let i = 0; i < lifetimeEnds.length; i++) {
@@ -636,6 +757,89 @@ export function readTrace(
                     effect: {
                         type: TraceEffectKind.ExecutionError,
                         msg: effect.ExecutionError
+                    }
+                });
+            }
+        } else if (event.External) {
+            const external = event.External;
+            if (typeof external === 'string') {
+                if (external === ExtEventKind.MoveCallStart) {
+                    events.push({
+                        type: TraceEventKind.ExternalEvent,
+                        event: {
+                            kind: ExtEventKind.MoveCallStart
+                        }
+                    });
+                } else if (external === ExtEventKind.MoveCallEnd) {
+                    events.push({
+                        type: TraceEventKind.ExternalEvent,
+                        event: {
+                            kind: ExtEventKind.MoveCallEnd
+                        }
+                    });
+                }
+            } else if ('Summary' in external) {
+                const summary: ExtEventSummary[] = external.Summary.events.map((s) => {
+                    if (typeof s === 'object' && 'MoveCall' in s &&
+                        s.MoveCall && typeof s.MoveCall === 'object' &&
+                        'pkg' in s.MoveCall && 'module' in s.MoveCall && 'function' in s.MoveCall) {
+
+                        const info: IMoveCallInfo = {
+                            pkg: s.MoveCall.pkg as string,
+                            module: s.MoveCall.module as string,
+                            function: s.MoveCall.function as string
+                        };
+                        return info;
+                    } else if (typeof s === 'object' && 'ExternalEvent' in s && s.ExternalEvent) {
+                        return s.ExternalEvent.toString();
+                    } else {
+                        throw new Error('Unexpected external summary event: ' + JSON.stringify(s));
+                    }
+                });
+                events.push({
+                    type: TraceEventKind.ExternalSummary,
+                    id: EXT_SUMMARY_FRAME_ID,
+                    name: external.Summary.name,
+                    summary
+                });
+
+            } else if ('ExternalEvent' in external) {
+                const localsTypes: string[] = [];
+                const localsNames: string[] = [];
+                const localsValues: RuntimeValueType = [];
+                for (const v of external.ExternalEvent.values) {
+                    if (v.Single) {
+                        const type_ = v.Single.info.type_;
+                        localsTypes.push(JSONTraceTypeToString(type_.type_, type_.ref_type));
+                        localsNames.push(v.Single.name);
+                        localsValues.push(traceRuntimeValueFromJSON(v.Single.info.value));
+                    } else if (v.Vector) {
+                        const type_ = v.Vector.type_;
+                        localsTypes.push(`vector<${JSONTraceTypeToString(type_.type_, type_.ref_type)}>`);
+
+                        localsNames.push(v.Vector.name);
+                        localsValues.push(v.Vector.value.map((v) => {
+                            return traceRuntimeValueFromJSON(v);
+                        }));
+                    }
+                }
+                events.push({
+                    type: TraceEventKind.ExternalEvent,
+                    event: {
+                        kind: ExtEventKind.ExtEventStart,
+                        id: EXT_EVENT_FRAME_ID,
+                        description: external.ExternalEvent.description,
+                        name: external.ExternalEvent.name,
+                        localsTypes,
+                        localsNames,
+                        localsValues
+                    }
+                });
+                // Additional marker to make stepping through event frames easier
+                events.push({
+                    type: TraceEventKind.ExternalEvent,
+                    event: {
+                        kind: ExtEventKind.ExtEventEnd
                     }
                 });
             }
@@ -869,10 +1073,38 @@ function processInstructionIfMacro(
 }
 
 
-
+/**
+ * Converts a JSON trace compound type to a string representation.
+ * @param refPrefix prefix for the reference type.
+ * @param address address of the package.
+ * @param module name of the module.
+ * @param name name of the type.
+ * @param typeArgs type arguments of the compound type.
+ * @returns string representation of the compound type.
+ * */
+function JSONCompoundTypeToString(
+    refPrefix: string,
+    address: string,
+    module: string,
+    name: string,
+    typeArgs: JSONBaseType[]
+): string {
+    return refPrefix
+        + JSONTraceAddressToHexString(address)
+        + '::'
+        + module
+        + '::'
+        + name
+        + (typeArgs.length === 0
+            ? ''
+            : '<' + typeArgs.map((t) => JSONTraceTypeToString(t)).join(',') + '>');
+}
 
 /**
  * Converts a JSON trace type to a string representation.
+ * @param baseType base type.
+ * @param refType reference type.
+ * @returns string representation of the type.
  */
 function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefType): string {
     const refPrefix = refType === JSONTraceRefType.Mut
@@ -884,13 +1116,18 @@ function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefTyp
         return refPrefix + baseType;
     } else if ('vector' in baseType) {
         return refPrefix + `vector<${JSONTraceTypeToString(baseType.vector)}>`;
+    } else if ('struct' in baseType) {
+        return JSONCompoundTypeToString(refPrefix,
+            baseType.struct.address,
+            baseType.struct.module,
+            baseType.struct.name,
+            baseType.struct.type_args);
     } else {
-        return refPrefix
-            + JSONTraceAddressToHexString(baseType.struct.address)
-            + "::"
-            + baseType.struct.module
-            + "::"
-            + baseType.struct.name;
+        return JSONCompoundTypeToString(refPrefix,
+            baseType.address,
+            baseType.module,
+            baseType.name,
+            baseType.type_args);
     }
 }
 
@@ -975,26 +1212,45 @@ function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
 /**
  * Converts a JSON trace runtime value to a runtime trace value.
  *
- * @param value JSON trace runtime value.
+ * @param moveValue JSON trace runtime value.
  * @returns runtime trace value.
  */
-function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeValueType {
-    if (typeof value === 'boolean'
-        || typeof value === 'number'
-        || typeof value === 'string') {
-        return String(value);
-    } else if (Array.isArray(value)) {
-        return value.map(item => traceRuntimeValueFromJSON(item));
-    } else {
+function traceRuntimeValueFromJSON(moveValue: JSONTraceMoveValue): RuntimeValueType {
+    if (
+        moveValue.type === 'U8' ||
+        moveValue.type === 'U16' ||
+        moveValue.type === 'U32' ||
+        moveValue.type === 'U64' ||
+        moveValue.type === 'U128' ||
+        moveValue.type === 'Bool' ||
+        moveValue.type === 'Address') {
+        return String(moveValue.value);
+    } else if (moveValue.type === 'U256' && Array.isArray(moveValue.value)) {
+        let result = 0n;
+        const arr: string[] = moveValue.value as unknown as string[];
+        for (let i = 0; i < arr.length; i++) {
+            const word = BigInt(arr[i]);
+            result += word << BigInt(64 * i);
+        }
+        return String(result);
+    } else if (moveValue.type === 'Vector' && Array.isArray(moveValue.value)) {
+        return moveValue.value.map(item => traceRuntimeValueFromJSON(item));
+    } else if (Array.isArray(moveValue.value)) {
+        throw new Error("Impossible");
+    } else if ((moveValue.type === 'Struct' || moveValue.type === 'Variant') && typeof moveValue.value === 'object' && 'type_' in moveValue.value) {
         const fields: [string, RuntimeValueType][] =
-            Object.entries(value.fields).map(([key, value]) => [key, traceRuntimeValueFromJSON(value)]);
+            moveValue.value.fields.map(([key, value]) =>
+                [key, traceRuntimeValueFromJSON(value)]
+            );
         const compoundValue: IRuntimeCompoundValue = {
             fields,
-            type: value.type,
-            variantName: value.variant_name,
-            variantTag: value.variant_tag
+            type: JSONTraceTypeToString(moveValue.value.type_ as JSONBaseType),
+            variantName: moveValue.value.variant_name,
+            variantTag: moveValue.value.variant_tag,
         };
         return compoundValue;
+    } else {
+        throw new Error("Impossible");
     }
 }
 
@@ -1038,6 +1294,23 @@ function eventToString(event: TraceEvent): string {
                 + event.bcodeLoc;
         case TraceEventKind.Effect:
             return `Effect ${effectToString(event.effect)}`;
+        case TraceEventKind.ExternalSummary:
+            let events = '';
+            for (const c of event.summary) {
+                if (typeof c === 'object' && 'pkg' in c && 'module ' in c && 'function' in c) {
+                    events += (c.pkg
+                        + '::'
+                        + c.module
+                        + '::'
+                        + c.function);
+                } else {
+                    events += c.toString();
+                }
+                events += '\n';
+            }
+            return events;
+        case TraceEventKind.ExternalEvent:
+            return event.event.kind;
     }
 }
 

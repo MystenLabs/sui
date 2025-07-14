@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::TransactionEffects;
-use crate::message::{MessageField, MessageFields, MessageMerge};
 use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 use tap::Pipe;
 
 //
@@ -53,19 +56,17 @@ impl MessageFields for TransactionEffects {
 impl From<sui_sdk_types::TransactionEffects> for TransactionEffects {
     fn from(value: sui_sdk_types::TransactionEffects) -> Self {
         let mut message = Self::default();
-        message.merge(&value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(&value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<&sui_sdk_types::TransactionEffects> for TransactionEffects {
-    fn merge(
-        &mut self,
-        source: &sui_sdk_types::TransactionEffects,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<&sui_sdk_types::TransactionEffects> for TransactionEffects {
+    fn merge(&mut self, source: &sui_sdk_types::TransactionEffects, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(super::Bcs::serialize(&source).unwrap());
+            let mut bcs = super::Bcs::serialize(&source).unwrap();
+            bcs.name = Some("TransactionEffects".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
@@ -79,7 +80,7 @@ impl MessageMerge<&sui_sdk_types::TransactionEffects> for TransactionEffects {
     }
 }
 
-impl MessageMerge<&TransactionEffects> for TransactionEffects {
+impl Merge<&TransactionEffects> for TransactionEffects {
     fn merge(
         &mut self,
         TransactionEffects {
@@ -98,7 +99,7 @@ impl MessageMerge<&TransactionEffects> for TransactionEffects {
             unchanged_shared_objects,
             auxiliary_data_digest,
         }: &TransactionEffects,
-        mask: &crate::field_mask::FieldMaskTree,
+        mask: &FieldMaskTree,
     ) {
         if mask.contains(Self::BCS_FIELD.name) {
             self.bcs = bcs.clone();
@@ -174,7 +175,7 @@ impl TryFrom<&TransactionEffects> for sui_sdk_types::TransactionEffects {
 // TransactionEffectsV1
 //
 
-impl MessageMerge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
+impl Merge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
     fn merge(
         &mut self,
         sui_sdk_types::TransactionEffectsV1 {
@@ -194,7 +195,7 @@ impl MessageMerge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
             events_digest,
             dependencies,
         }: &sui_sdk_types::TransactionEffectsV1,
-        mask: &crate::field_mask::FieldMaskTree,
+        mask: &FieldMaskTree,
     ) {
         use super::ChangedObject;
         use super::UnchangedSharedObject;
@@ -415,7 +416,7 @@ impl MessageMerge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
 // TransactionEffectsV2
 //
 
-impl MessageMerge<&sui_sdk_types::TransactionEffectsV2> for TransactionEffects {
+impl Merge<&sui_sdk_types::TransactionEffectsV2> for TransactionEffects {
     fn merge(
         &mut self,
         sui_sdk_types::TransactionEffectsV2 {
@@ -431,7 +432,7 @@ impl MessageMerge<&sui_sdk_types::TransactionEffectsV2> for TransactionEffects {
             unchanged_shared_objects,
             auxiliary_data_digest,
         }: &sui_sdk_types::TransactionEffectsV2,
-        mask: &crate::field_mask::FieldMaskTree,
+        mask: &FieldMaskTree,
     ) {
         if mask.contains(Self::VERSION_FIELD.name) {
             self.version = Some(2);
@@ -477,6 +478,12 @@ impl MessageMerge<&sui_sdk_types::TransactionEffectsV2> for TransactionEffects {
                 .into_iter()
                 .map(Into::into)
                 .collect();
+        }
+
+        for object in self.changed_objects.iter_mut().chain(&mut self.gas_object) {
+            if object.output_digest.is_some() && object.output_version.is_none() {
+                object.output_version = Some(*lamport_version);
+            }
         }
 
         if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
@@ -691,6 +698,7 @@ impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedSharedObject
                 UnchangedSharedObjectKind::Canceled
             }
             PerEpochConfig => UnchangedSharedObjectKind::PerEpochConfig,
+            PerEpochConfigWithSequenceNumber { .. } => todo!(),
         };
 
         message.set_kind(kind);

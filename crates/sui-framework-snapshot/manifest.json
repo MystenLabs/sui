@@ -1768,5 +1768,185 @@
         "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
       }
     ]
+  },
+  "81": {
+    "git_revision": "fbb68879cbd1",
+    "packages": [
+      {
+        "name": "MoveStdlib",
+        "path": "crates/sui-framework/packages/move-stdlib",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "name": "Sui",
+        "path": "crates/sui-framework/packages/sui-framework",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "name": "SuiSystem",
+        "path": "crates/sui-framework/packages/sui-system",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      {
+        "name": "DeepBook",
+        "path": "crates/sui-framework/packages/deepbook",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+      },
+      {
+        "name": "Bridge",
+        "path": "crates/sui-framework/packages/bridge",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
+      }
+    ]
+  },
+  "82": {
+    "git_revision": "3802482bd4e3",
+    "packages": [
+      {
+        "name": "MoveStdlib",
+        "path": "crates/sui-framework/packages/move-stdlib",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "name": "Sui",
+        "path": "crates/sui-framework/packages/sui-framework",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "name": "SuiSystem",
+        "path": "crates/sui-framework/packages/sui-system",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      {
+        "name": "DeepBook",
+        "path": "crates/sui-framework/packages/deepbook",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+      },
+      {
+        "name": "Bridge",
+        "path": "crates/sui-framework/packages/bridge",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
+      }
+    ]
+  },
+  "84": {
+    "git_revision": "25804c243d07",
+    "packages": [
+      {
+        "name": "MoveStdlib",
+        "path": "crates/sui-framework/packages/move-stdlib",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "name": "Sui",
+        "path": "crates/sui-framework/packages/sui-framework",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "name": "SuiSystem",
+        "path": "crates/sui-framework/packages/sui-system",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      {
+        "name": "DeepBook",
+        "path": "crates/sui-framework/packages/deepbook",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+      },
+      {
+        "name": "Bridge",
+        "path": "crates/sui-framework/packages/bridge",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
+      }
+    ]
+  },
+  "85": {
+    "git_revision": "af5297b292c3",
+    "packages": [
+      {
+        "name": "MoveStdlib",
+        "path": "crates/sui-framework/packages/move-stdlib",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "name": "Sui",
+        "path": "crates/sui-framework/packages/sui-framework",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "name": "SuiSystem",
+        "path": "crates/sui-framework/packages/sui-system",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      {
+        "name": "DeepBook",
+        "path": "crates/sui-framework/packages/deepbook",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+      },
+      {
+        "name": "Bridge",
+        "path": "crates/sui-framework/packages/bridge",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
+      }
+    ]
+  },
+  "86": {
+    "git_revision": "2c930c25f8d3",
+    "packages": [
+      {
+        "name": "MoveStdlib",
+        "path": "crates/sui-framework/packages/move-stdlib",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "name": "Sui",
+        "path": "crates/sui-framework/packages/sui-framework",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "name": "SuiSystem",
+        "path": "crates/sui-framework/packages/sui-system",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      {
+        "name": "DeepBook",
+        "path": "crates/sui-framework/packages/deepbook",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+      },
+      {
+        "name": "Bridge",
+        "path": "crates/sui-framework/packages/bridge",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
+      }
+    ]
+  },
+  "88": {
+    "git_revision": "209f0da8e316",
+    "packages": [
+      {
+        "name": "MoveStdlib",
+        "path": "crates/sui-framework/packages/move-stdlib",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "name": "Sui",
+        "path": "crates/sui-framework/packages/sui-framework",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "name": "SuiSystem",
+        "path": "crates/sui-framework/packages/sui-system",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      {
+        "name": "DeepBook",
+        "path": "crates/sui-framework/packages/deepbook",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+      },
+      {
+        "name": "Bridge",
+        "path": "crates/sui-framework/packages/bridge",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
+      }
+    ]
   }
 }

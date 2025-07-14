@@ -10,15 +10,15 @@ const { hardline, join } = doc.builders;
  * Print a source node.
  */
 export default function (path: AstPath<Node>): treeFn | null {
-	switch (path.node.type) {
-		case SourceFile.SourceFile:
-			return printSourceFile;
-	}
-	return null;
+    switch (path.node.type) {
+        case SourceFile.SourceFile:
+            return printSourceFile;
+    }
+    return null;
 }
 
 export enum SourceFile {
-	SourceFile = 'source_file',
+    SourceFile = 'source_file',
 }
 
 /**
@@ -34,5 +34,5 @@ export enum SourceFile {
  * ```
  */
 function printSourceFile(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return [join(hardline, path.map(print, 'namedAndEmptyLineChildren')), hardline];
+    return [join(hardline, path.map(print, 'namedAndEmptyLineChildren')), hardline];
 }

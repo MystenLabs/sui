@@ -5,10 +5,10 @@
 #![forbid(unsafe_code)]
 
 use crate::tasks::{
-    taskify, InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice,
-    TaskCommand, TaskInput,
+    InitCommand, PrintBytecodeCommand, PublishCommand, RunCommand, SyntaxChoice, TaskCommand,
+    TaskInput, taskify,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::file_format::CompiledModule;
@@ -17,13 +17,14 @@ use move_command_line_common::{
     env::read_bool_env_var,
     files::{MOVE_EXTENSION, MOVE_IR_EXTENSION},
     insta_assert,
+    testing::InstaOptions,
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{warning_filters::WarningFiltersBuilder, Diagnostics},
-    editions::{Edition, Flavor},
-    shared::{files::MappedFiles, NumericalAddress, PackageConfig},
     FullyCompiledProgram,
+    compiled_unit::AnnotatedCompiledUnit,
+    diagnostics::{Diagnostics, warning_filters::WarningFiltersBuilder},
+    editions::{Edition, Flavor},
+    shared::{NumericalAddress, PackageConfig, files::MappedFiles},
 };
 use move_core_types::parsing::{
     address::ParsedAddress,
@@ -774,6 +775,7 @@ pub async fn run_tasks_with_adapter<'a, Adapter>(
     path: &Path,
     mut adapter: Adapter,
     mut output: String,
+    insta_options: Option<InstaOptions>,
 ) -> Result<()>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -806,10 +808,19 @@ where
         handle_known_task(&mut output, &mut adapter, task).await;
     }
 
-    insta_assert! {
-        input_path: path,
-        contents: output,
+    if let Some(options) = insta_options {
+        insta_assert! {
+            input_path: path,
+            contents: output,
+            options: options,
+        }
+    } else {
+        insta_assert! {
+            input_path: path,
+            contents: output,
+        }
     }
+
     Ok(())
 }
 
@@ -818,6 +829,7 @@ where
 pub async fn run_test_impl<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<Arc<FullyCompiledProgram>>,
+    insta_options: Option<InstaOptions>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
@@ -828,7 +840,7 @@ where
     Adapter::Subcommand: Debug,
 {
     let (output, adapter) = create_adapter::<Adapter>(path, fully_compiled_program_opt).await?;
-    run_tasks_with_adapter(path, adapter, output).await?;
+    run_tasks_with_adapter(path, adapter, output, insta_options).await?;
     Ok(())
 }
 

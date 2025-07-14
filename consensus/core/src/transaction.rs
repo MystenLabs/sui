@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{collections::BTreeMap, sync::Arc};
 
+use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
 use parking_lot::Mutex;
@@ -10,11 +11,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{error, warn};
 
-use crate::{
-    block::{BlockRef, Transaction, TransactionIndex},
-    context::Context,
-    Round,
-};
+use crate::{block::Transaction, context::Context};
 
 /// The maximum number of transactions pending to the queue to be pulled for block proposal
 const MAX_PENDING_TRANSACTIONS: usize = 2_000;
@@ -28,14 +25,22 @@ pub(crate) struct TransactionsGuard {
     // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
 
-    included_in_block_ack: oneshot::Sender<(BlockRef, oneshot::Receiver<BlockStatus>)>,
+    // When the transactions are included in a block, this will be signalled with
+    // the following information
+    included_in_block_ack: oneshot::Sender<(
+        // The block reference in which the transactions have been included
+        BlockRef,
+        // The indices of the transactions that have been included in the block
+        Vec<TransactionIndex>,
+        // A receiver to notify the submitter about the block status
+        oneshot::Receiver<BlockStatus>,
+    )>,
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
 /// The transactions are submitted to a channel which is shared between the TransactionConsumer and the TransactionClient
 /// and are pulled every time the `next` method is called.
 pub(crate) struct TransactionConsumer {
-    context: Arc<Context>,
     tx_receiver: Receiver<TransactionsGuard>,
     max_transactions_in_block_bytes: u64,
     max_num_transactions_in_block: u64,
@@ -72,7 +77,6 @@ impl TransactionConsumer {
                 .protocol_config
                 .max_transactions_in_block_bytes(),
             max_num_transactions_in_block: context.protocol_config.max_num_transactions_in_block(),
-            context,
             pending_transactions: None,
             block_status_subscribers: Arc::new(Mutex::new(BTreeMap::new())),
         }
@@ -107,8 +111,14 @@ impl TransactionConsumer {
 
             total_bytes += transactions_bytes;
 
-            // The transactions can be consumed, register its ack.
-            acks.push(t.included_in_block_ack);
+            // Calculate indices for this batch
+            let start_idx = transactions.len() as TransactionIndex;
+            let indices: Vec<TransactionIndex> =
+                (start_idx..start_idx + t.transactions.len() as TransactionIndex).collect();
+
+            // The transactions can be consumed, register its ack and transaction
+            // indices to be sent with the ack.
+            acks.push((t.included_in_block_ack, indices));
             transactions.extend(t.transactions);
             None
         };
@@ -130,27 +140,20 @@ impl TransactionConsumer {
         }
 
         let block_status_subscribers = self.block_status_subscribers.clone();
-        let gc_enabled = self.context.protocol_config.gc_depth() > 0;
         (
             transactions,
             Box::new(move |block_ref: BlockRef| {
                 let mut block_status_subscribers = block_status_subscribers.lock();
 
-                for ack in acks {
+                for (ack, tx_indices) in acks {
                     let (status_tx, status_rx) = oneshot::channel();
 
-                    if gc_enabled {
-                        block_status_subscribers
-                            .entry(block_ref)
-                            .or_default()
-                            .push(status_tx);
-                    } else {
-                        // When gc is not enabled, then report directly the block as sequenced while tx is acknowledged for inclusion.
-                        // As blocks can never get garbage collected it is there is actually no meaning to do otherwise and also is safer for edge cases.
-                        status_tx.send(BlockStatus::Sequenced(block_ref)).ok();
-                    }
+                    block_status_subscribers
+                        .entry(block_ref)
+                        .or_default()
+                        .push(status_tx);
 
-                    let _ = ack.send((block_ref, status_rx));
+                    let _ = ack.send((block_ref, tx_indices, status_rx));
                 }
             }),
             limit_reached,
@@ -262,8 +265,14 @@ impl TransactionClient {
     pub async fn submit(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<(BlockRef, oneshot::Receiver<BlockStatus>), ClientError> {
-        // TODO: Support returning the block refs for transactions that span multiple blocks
+    ) -> Result<
+        (
+            BlockRef,
+            Vec<TransactionIndex>,
+            oneshot::Receiver<BlockStatus>,
+        ),
+        ClientError,
+    > {
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
             .await
@@ -283,7 +292,14 @@ impl TransactionClient {
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
-    ) -> Result<oneshot::Receiver<(BlockRef, oneshot::Receiver<BlockStatus>)>, ClientError> {
+    ) -> Result<
+        oneshot::Receiver<(
+            BlockRef,
+            Vec<TransactionIndex>,
+            oneshot::Receiver<BlockStatus>,
+        )>,
+        ClientError,
+    > {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
 
         let mut bundle_size = 0;
@@ -375,13 +391,13 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::{BlockDigest, BlockRef};
     use futures::{stream::FuturesUnordered, StreamExt};
     use sui_protocol_config::ProtocolConfig;
     use tokio::time::timeout;
 
     use crate::transaction::NoopTransactionVerifier;
     use crate::{
-        block::{BlockDigest, BlockRef},
         block_verifier::SignedBlockVerifier,
         context::Context,
         transaction::{BlockStatus, LimitReached, TransactionClient, TransactionConsumer},
@@ -440,7 +456,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn block_status_update_gc_enabled() {
+    async fn block_status_update() {
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_consensus_max_transaction_size_bytes_for_testing(2_000); // 2KB
             config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
@@ -475,11 +491,20 @@ mod tests {
             }
         }
 
+        let mut transaction_count = 0;
         // Now iterate over all the waiters. Everyone should have been acknowledged.
         let mut block_status_waiters = Vec::new();
         while let Some(result) = included_in_block_waiters.next().await {
-            let (block_ref, block_status_waiter) =
+            let (block_ref, tx_indices, block_status_waiter) =
                 result.expect("Block inclusion waiter shouldn't fail");
+            // tx is submitted one at a time so tx acks should only return one tx index
+            assert_eq!(tx_indices.len(), 1);
+            // The first transaction in the block should have index 0, the second one 1, etc.
+            // because we submit 2 transactions per block, the index should be 0 then 1 and then
+            // reset back to 0 for the next block.
+            assert_eq!(tx_indices[0], transaction_count % 2);
+            transaction_count += 1;
+
             block_status_waiters.push((block_ref, block_status_waiter));
         }
 
@@ -503,60 +528,6 @@ mod tests {
             } else {
                 assert!(matches!(block_status, BlockStatus::Sequenced(_)));
             }
-        }
-
-        // Ensure internal structure is clear
-        assert!(consumer.block_status_subscribers.lock().is_empty());
-    }
-
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn block_status_update_gc_disabled() {
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_consensus_max_transaction_size_bytes_for_testing(2_000); // 2KB
-            config.set_consensus_max_transactions_in_block_bytes_for_testing(2_000);
-            config.set_consensus_gc_depth_for_testing(0);
-            config
-        });
-
-        let context = Arc::new(Context::new_for_test(4).0);
-        let (client, tx_receiver) = TransactionClient::new(context.clone());
-        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone());
-
-        // submit the transactions and include 2 of each on a new block
-        let mut included_in_block_waiters = FuturesUnordered::new();
-        for i in 1..=10 {
-            let transaction =
-                bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
-            let w = client
-                .submit_no_wait(vec![transaction])
-                .await
-                .expect("Shouldn't submit successfully transaction");
-            included_in_block_waiters.push(w);
-
-            // Every 2 transactions simulate the creation of a new block and acknowledge the inclusion of the transactions
-            if i % 2 == 0 {
-                let (transactions, ack_transactions, _limit_reached) = consumer.next();
-                assert_eq!(transactions.len(), 2);
-                ack_transactions(BlockRef::new(
-                    i,
-                    AuthorityIndex::new_for_test(0),
-                    BlockDigest::MIN,
-                ));
-            }
-        }
-
-        // Now iterate over all the waiters. Everyone should have been acknowledged.
-        let mut block_status_waiters = Vec::new();
-        while let Some(result) = included_in_block_waiters.next().await {
-            let (block_ref, block_status_waiter) =
-                result.expect("Block inclusion waiter shouldn't fail");
-            block_status_waiters.push((block_ref, block_status_waiter));
-        }
-
-        // Now iterate over all the block status waiters. Everyone should have been notified and everyone should be considered sequenced.
-        for (_block_ref, waiter) in block_status_waiters {
-            let block_status = waiter.await.expect("Block status waiter shouldn't fail");
-            assert!(matches!(block_status, BlockStatus::Sequenced(_)));
         }
 
         // Ensure internal structure is clear

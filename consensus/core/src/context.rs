@@ -6,6 +6,7 @@ use std::{sync::Arc, time::SystemTime};
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 #[cfg(test)]
 use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
+use consensus_types::block::BlockTimestampMs;
 use sui_protocol_config::ProtocolConfig;
 #[cfg(test)]
 use tempfile::TempDir;
@@ -13,12 +14,14 @@ use tokio::time::Instant;
 
 #[cfg(test)]
 use crate::metrics::test_metrics;
-use crate::{block::BlockTimestampMs, metrics::Metrics};
+use crate::metrics::Metrics;
 
 /// Context contains per-epoch configuration and metrics shared by all components
 /// of this authority.
 #[derive(Clone)]
 pub(crate) struct Context {
+    /// Timestamp of the start of the current epoch.
+    pub epoch_start_timestamp_ms: u64,
     /// Index of this authority in the committee.
     pub own_index: AuthorityIndex,
     /// Committee of the current epoch.
@@ -35,6 +38,7 @@ pub(crate) struct Context {
 
 impl Context {
     pub(crate) fn new(
+        epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -43,6 +47,7 @@ impl Context {
         clock: Arc<Clock>,
     ) -> Self {
         Self {
+            epoch_start_timestamp_ms,
             own_index,
             committee,
             parameters,
@@ -64,10 +69,11 @@ impl Context {
         let clock = Arc::new(Clock::default());
 
         let context = Context::new(
+            0,
             AuthorityIndex::new_for_test(0),
             committee,
             Parameters {
-                db_path: temp_dir.into_path(),
+                db_path: temp_dir.keep(),
                 ..Default::default()
             },
             ProtocolConfig::get_for_max_version_UNSAFE(),
@@ -75,6 +81,12 @@ impl Context {
             clock,
         );
         (context, keypairs)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_epoch_start_timestamp_ms(mut self, epoch_start_timestamp_ms: u64) -> Self {
+        self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
+        self
     }
 
     #[cfg(test)]

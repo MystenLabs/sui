@@ -9,8 +9,8 @@ use crate::{
     native_functions::NativeFunction, runtime::VMRuntime, session::Session,
 };
 use move_binary_format::{
-    errors::{Location, VMResult},
     CompiledModule,
+    errors::{Location, VMResult},
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,

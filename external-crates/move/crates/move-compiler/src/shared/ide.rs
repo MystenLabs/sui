@@ -10,8 +10,8 @@ use crate::{
     },
     naming::ast as N,
     parser::ast as P,
-    shared::string_utils::format_oxford_list,
     shared::Name,
+    shared::string_utils::format_oxford_list,
     typing::ast as T,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
@@ -340,7 +340,7 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                         |AutocompleteMethod {
                              method_name,
                              target_function: (mident, _),
-                         }| format!("{mident}::{method_name}"),
+                         }| { format!("{mident}::{method_name}") },
                     )
                     .chain(fields.into_iter().map(|(n, _)| format!("{n}")))
                     .collect::<Vec<_>>();
@@ -438,7 +438,9 @@ impl fmt::Display for PatternSuggestion {
                 module,
                 enum_name,
                 variant_name,
-            } => write!(f, "{module}::{enum_name}::{variant_name}"),
+            } => {
+                write!(f, "{module}::{enum_name}::{variant_name}")
+            }
         }
     }
 }

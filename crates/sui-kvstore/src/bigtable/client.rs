@@ -22,23 +22,28 @@ use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use std::time::Instant;
-use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::base_types::{EpochId, ObjectID, TransactionDigest};
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
+use sui_types::messages_consensus::TimestampMs;
 use sui_types::object::Object;
-use sui_types::storage::ObjectKey;
+use sui_types::storage::{EpochInfo, ObjectKey};
 use tonic::body::BoxBody;
 use tonic::codegen::Service;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::Streaming;
 use tracing::error;
 
+use super::proto::bigtable::v2::row_filter::{Chain, Filter};
+use super::proto::bigtable::v2::RowFilter;
+
 const OBJECTS_TABLE: &str = "objects";
 const TRANSACTIONS_TABLE: &str = "transactions";
 const CHECKPOINTS_TABLE: &str = "checkpoints";
 const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
 const WATERMARK_TABLE: &str = "watermark";
+const EPOCHS_TABLE: &str = "epochs";
 
 const COLUMN_FAMILY_NAME: &str = "sui";
 const DEFAULT_COLUMN_QUALIFIER: &str = "";
@@ -67,11 +72,12 @@ pub struct BigTableClient {
     client: BigtableInternalClient<AuthChannel>,
     client_name: String,
     metrics: Option<Arc<KvMetrics>>,
+    app_profile_id: Option<String>,
 }
 
 #[async_trait]
 impl KeyValueStoreWriter for BigTableClient {
-    async fn save_objects(&mut self, objects: &[&Object]) -> Result<()> {
+    async fn save_objects(&mut self, objects: &[&Object], timestamp_ms: TimestampMs) -> Result<()> {
         let mut items = Vec::with_capacity(objects.len());
         for object in objects {
             let object_key = ObjectKey(object.id(), object.version());
@@ -80,12 +86,15 @@ impl KeyValueStoreWriter for BigTableClient {
                 vec![(DEFAULT_COLUMN_QUALIFIER, bcs::to_bytes(object)?)],
             ));
         }
-        self.multi_set(OBJECTS_TABLE, items).await
+        self.multi_set(OBJECTS_TABLE, items, Some(timestamp_ms))
+            .await
     }
 
     async fn save_transactions(&mut self, transactions: &[TransactionData]) -> Result<()> {
         let mut items = Vec::with_capacity(transactions.len());
+        let mut timestamp_ms = None;
         for transaction in transactions {
+            timestamp_ms = Some(transaction.timestamp);
             let cells = vec![
                 (
                     TRANSACTION_COLUMN_QUALIFIER,
@@ -107,11 +116,13 @@ impl KeyValueStoreWriter for BigTableClient {
             ];
             items.push((transaction.transaction.digest().inner().to_vec(), cells));
         }
-        self.multi_set(TRANSACTIONS_TABLE, items).await
+        self.multi_set(TRANSACTIONS_TABLE, items, timestamp_ms)
+            .await
     }
 
     async fn save_checkpoint(&mut self, checkpoint: &CheckpointData) -> Result<()> {
         let summary = &checkpoint.checkpoint_summary.data();
+        let timestamp = summary.timestamp_ms;
         let contents = &checkpoint.checkpoint_contents;
         let signatures = &checkpoint.checkpoint_summary.auth_sig();
         let key = summary.sequence_number.to_be_bytes().to_vec();
@@ -126,7 +137,7 @@ impl KeyValueStoreWriter for BigTableClient {
                 bcs::to_bytes(contents)?,
             ),
         ];
-        self.multi_set(CHECKPOINTS_TABLE, [(key.clone(), cells)])
+        self.multi_set(CHECKPOINTS_TABLE, [(key.clone(), cells)], Some(timestamp))
             .await?;
         self.multi_set(
             CHECKPOINTS_BY_DIGEST_TABLE,
@@ -134,6 +145,7 @@ impl KeyValueStoreWriter for BigTableClient {
                 checkpoint.checkpoint_summary.digest().inner().to_vec(),
                 vec![(DEFAULT_COLUMN_QUALIFIER, key)],
             )],
+            Some(timestamp),
         )
         .await
     }
@@ -143,6 +155,20 @@ impl KeyValueStoreWriter for BigTableClient {
         self.multi_set(
             WATERMARK_TABLE,
             [(key, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
+            None,
+        )
+        .await
+    }
+
+    async fn save_epoch(&mut self, epoch: EpochInfo) -> Result<()> {
+        let key = epoch.epoch.to_be_bytes().to_vec();
+        self.multi_set(
+            EPOCHS_TABLE,
+            [(
+                key,
+                vec![(DEFAULT_COLUMN_QUALIFIER, bcs::to_bytes(&epoch)?)],
+            )],
+            epoch.end_timestamp_ms.or(epoch.start_timestamp_ms),
         )
         .await
     }
@@ -153,7 +179,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_objects(&mut self, object_keys: &[ObjectKey]) -> Result<Vec<Object>> {
         let keys: Result<_, _> = object_keys.iter().map(Self::raw_object_key).collect();
         let mut objects = vec![];
-        for row in self.multi_get(OBJECTS_TABLE, keys?).await? {
+        for row in self.multi_get(OBJECTS_TABLE, keys?, None).await? {
             for (_, value) in row {
                 objects.push(bcs::from_bytes(&value)?);
             }
@@ -167,7 +193,7 @@ impl KeyValueStoreReader for BigTableClient {
     ) -> Result<Vec<TransactionData>> {
         let keys = transactions.iter().map(|tx| tx.inner().to_vec()).collect();
         let mut result = vec![];
-        for row in self.multi_get(TRANSACTIONS_TABLE, keys).await? {
+        for row in self.multi_get(TRANSACTIONS_TABLE, keys, None).await? {
             let mut transaction = None;
             let mut effects = None;
             let mut events = None;
@@ -206,7 +232,7 @@ impl KeyValueStoreReader for BigTableClient {
             .map(|sq| sq.to_be_bytes().to_vec())
             .collect();
         let mut checkpoints = vec![];
-        for row in self.multi_get(CHECKPOINTS_TABLE, keys).await? {
+        for row in self.multi_get(CHECKPOINTS_TABLE, keys, None).await? {
             let mut summary = None;
             let mut contents = None;
             let mut signatures = None;
@@ -238,7 +264,7 @@ impl KeyValueStoreReader for BigTableClient {
     ) -> Result<Option<Checkpoint>> {
         let key = digest.inner().to_vec();
         let mut response = self
-            .multi_get(CHECKPOINTS_BY_DIGEST_TABLE, vec![key])
+            .multi_get(CHECKPOINTS_BY_DIGEST_TABLE, vec![key], None)
             .await?;
         if let Some(row) = response.pop() {
             if let Some((_, value)) = row.into_iter().next() {
@@ -263,6 +289,40 @@ impl KeyValueStoreReader for BigTableClient {
         }
     }
 
+    async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>> {
+        let sequence_number = self.get_latest_checkpoint().await?;
+        if sequence_number == 0 {
+            return Ok(None);
+        }
+
+        // Fetch just the summary for the latest checkpoint sequence number.
+        let mut response = self
+            .multi_get(
+                CHECKPOINTS_TABLE,
+                vec![(sequence_number - 1).to_be_bytes().to_vec()],
+                Some(RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(
+                        CHECKPOINT_SUMMARY_COLUMN_QUALIFIER.into(),
+                    )),
+                }),
+            )
+            .await?;
+
+        let Some(row) = response.pop() else {
+            return Ok(None);
+        };
+
+        let mut summary: Option<CheckpointSummary> = None;
+        for (column, value) in row {
+            match std::str::from_utf8(&column)? {
+                CHECKPOINT_SUMMARY_COLUMN_QUALIFIER => summary = Some(bcs::from_bytes(&value)?),
+                _ => error!("unexpected column {:?} in checkpoints table", column),
+            }
+        }
+
+        Ok(summary)
+    }
+
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
         let upper_limit = Self::raw_object_key(&ObjectKey::max_for_id(object_id))?;
         if let Some((_, row)) = self.reversed_scan(OBJECTS_TABLE, upper_limit).await?.pop() {
@@ -271,6 +331,32 @@ impl KeyValueStoreReader for BigTableClient {
             }
         }
         Ok(None)
+    }
+
+    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>> {
+        let key = epoch_id.to_be_bytes().to_vec();
+        Ok(
+            match self.multi_get(EPOCHS_TABLE, vec![key], None).await?.pop() {
+                Some(mut row) => row
+                    .pop()
+                    .map(|value| bcs::from_bytes(&value.1))
+                    .transpose()?,
+                None => None,
+            },
+        )
+    }
+
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>> {
+        let upper_limit = u64::MAX.to_be_bytes().to_vec();
+        Ok(
+            match self.reversed_scan(EPOCHS_TABLE, upper_limit).await?.pop() {
+                Some((_, mut row)) => row
+                    .pop()
+                    .map(|value| bcs::from_bytes(&value.1))
+                    .transpose()?,
+                None => None,
+            },
+        )
     }
 }
 
@@ -288,6 +374,7 @@ impl BigTableClient {
             client: BigtableInternalClient::new(auth_channel),
             client_name: "local".to_string(),
             metrics: None,
+            app_profile_id: None,
         })
     }
 
@@ -297,6 +384,7 @@ impl BigTableClient {
         timeout: Option<Duration>,
         client_name: String,
         registry: Option<&Registry>,
+        app_profile_id: Option<String>,
     ) -> Result<Self> {
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
@@ -330,6 +418,7 @@ impl BigTableClient {
             client: BigtableInternalClient::new(auth_channel),
             client_name,
             metrics: registry.map(KvMetrics::new),
+            app_profile_id,
         })
     }
 
@@ -342,8 +431,11 @@ impl BigTableClient {
 
     pub async fn read_rows(
         &mut self,
-        request: ReadRowsRequest,
+        mut request: ReadRowsRequest,
     ) -> Result<Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>> {
+        if let Some(ref app_profile_id) = self.app_profile_id {
+            request.app_profile_id = app_profile_id.clone();
+        }
         let mut result = vec![];
         let mut response = self.client.read_rows(request).await?.into_inner();
 
@@ -403,9 +495,10 @@ impl BigTableClient {
         &mut self,
         table_name: &str,
         values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
+        timestamp_ms: Option<TimestampMs>,
     ) -> Result<()> {
         for chunk in values.into_iter().collect::<Vec<_>>().chunks(50_000) {
-            self.multi_set_internal(table_name, chunk.iter().cloned())
+            self.multi_set_internal(table_name, chunk.iter().cloned(), timestamp_ms)
                 .await?;
         }
         Ok(())
@@ -415,8 +508,16 @@ impl BigTableClient {
         &mut self,
         table_name: &str,
         values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
+        timestamp_ms: Option<TimestampMs>,
     ) -> Result<()> {
         let mut entries = vec![];
+        let timestamp_micros = timestamp_ms
+            .map(|tst| {
+                tst.checked_mul(1000)
+                    .expect("timestamp multiplication overflow") as i64
+            })
+            // default to -1 for current Bigtable server time
+            .unwrap_or(-1);
         for (row_key, cells) in values {
             let mutations = cells
                 .into_iter()
@@ -425,8 +526,7 @@ impl BigTableClient {
                         family_name: COLUMN_FAMILY_NAME.to_string(),
                         column_qualifier: column_name.to_owned().into_bytes(),
                         // The timestamp of the cell into which new data should be written.
-                        // Use -1 for current Bigtable server time.
-                        timestamp_micros: -1,
+                        timestamp_micros,
                         value,
                     })),
                 })
@@ -459,56 +559,72 @@ impl BigTableClient {
         &mut self,
         table_name: &str,
         keys: Vec<Vec<u8>>,
+        filter: Option<RowFilter>,
     ) -> Result<Vec<Vec<(Bytes, Bytes)>>> {
         let start_time = Instant::now();
         let num_keys_requested = keys.len();
-        let result = self.multi_get_internal(table_name, keys).await;
+        let result = self.multi_get_internal(table_name, keys, filter).await;
         let elapsed_ms = start_time.elapsed().as_millis() as f64;
-        let labels = [&self.client_name, table_name];
-        match &self.metrics {
-            None => result,
-            Some(metrics) => match result {
-                Err(e) => {
-                    metrics.kv_get_errors.with_label_values(&labels).inc();
-                    Err(e)
-                }
-                Ok(result) => {
-                    metrics
-                        .kv_get_batch_size
-                        .with_label_values(&labels)
-                        .observe(num_keys_requested as f64);
-                    if num_keys_requested > result.len() {
-                        metrics
-                            .kv_get_not_found
-                            .with_label_values(&labels)
-                            .inc_by((num_keys_requested - result.len()) as u64);
-                    }
-                    metrics
-                        .kv_get_success
-                        .with_label_values(&labels)
-                        .inc_by(result.len() as u64);
 
-                    metrics
-                        .kv_get_latency_ms
-                        .with_label_values(&labels)
-                        .observe(elapsed_ms);
-                    if num_keys_requested > 0 {
-                        metrics
-                            .kv_get_latency_ms_per_key
-                            .with_label_values(&labels)
-                            .observe(elapsed_ms / num_keys_requested as f64);
-                    }
-                    Ok(result)
-                }
-            },
+        let Some(metrics) = &self.metrics else {
+            return result;
+        };
+
+        let labels = [&self.client_name, table_name];
+        let Ok(rows) = &result else {
+            metrics.kv_get_errors.with_label_values(&labels).inc();
+            return result;
+        };
+
+        metrics
+            .kv_get_batch_size
+            .with_label_values(&labels)
+            .observe(num_keys_requested as f64);
+
+        if num_keys_requested > rows.len() {
+            metrics
+                .kv_get_not_found
+                .with_label_values(&labels)
+                .inc_by((num_keys_requested - rows.len()) as u64);
         }
+
+        metrics
+            .kv_get_success
+            .with_label_values(&labels)
+            .inc_by(rows.len() as u64);
+
+        metrics
+            .kv_get_latency_ms
+            .with_label_values(&labels)
+            .observe(elapsed_ms);
+
+        if num_keys_requested > 0 {
+            metrics
+                .kv_get_latency_ms_per_key
+                .with_label_values(&labels)
+                .observe(elapsed_ms / num_keys_requested as f64);
+        }
+
+        result
     }
 
     pub async fn multi_get_internal(
         &mut self,
         table_name: &str,
         keys: Vec<Vec<u8>>,
+        filter: Option<RowFilter>,
     ) -> Result<Vec<Vec<(Bytes, Bytes)>>> {
+        let version_filter = RowFilter {
+            filter: Some(Filter::CellsPerColumnLimitFilter(1)),
+        };
+        let filter = Some(match filter {
+            Some(filter) => RowFilter {
+                filter: Some(Filter::Chain(Chain {
+                    filters: vec![filter, version_filter],
+                })),
+            },
+            None => version_filter,
+        });
         let request = ReadRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
             rows_limit: keys.len() as i64,
@@ -516,6 +632,7 @@ impl BigTableClient {
                 row_keys: keys,
                 row_ranges: vec![],
             }),
+            filter,
             ..ReadRowsRequest::default()
         };
         let mut result = vec![];

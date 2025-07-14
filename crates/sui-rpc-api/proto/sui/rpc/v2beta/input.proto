@@ -5,6 +5,8 @@ syntax = "proto3";
 
 package sui.rpc.v2beta;
 
+import "google/protobuf/struct.proto";
+
 // An input to a user transaction.
 message Input {
   enum InputKind {
@@ -45,4 +47,9 @@ message Input {
   // Controls whether the caller asks for a mutable reference to the shared
   // object.
   optional bool mutable = 6;
+
+  // A literal value
+  //
+  // INPUT ONLY
+  optional google.protobuf.Value literal = 1000;
 }

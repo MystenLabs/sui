@@ -1,0 +1,4 @@
+---
+source: crates/move-package-alt/tests/parsing_tests.rs
+---
+Manifest { package: PackageMetadata { name: Located { file: "tests/data/manifest_parsing_valid/missing_required_envs_segment/Move.toml", value: Spanned { span: 17..23, value: "test" } }, edition: Located { file: "tests/data/manifest_parsing_valid/missing_required_envs_segment/Move.toml", value: Spanned { span: 34..40, value: "2024" } }, metadata: () }, environments: {}, dependencies: {}, dep_overrides: {} }

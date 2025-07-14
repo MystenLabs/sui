@@ -19,6 +19,7 @@ serde-reflection.workspace = true
 sui-types.workspace = true
 sui-protocol-config.workspace = true
 sui-package-management.workspace = true
+mysten-common.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

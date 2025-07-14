@@ -1134,6 +1134,17 @@ pub fn generate_genesis_system_object(
                 vec![],
             )?;
         }
+
+        if protocol_config.enable_accumulators() {
+            builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("accumulator").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )?;
+        }
+
         if protocol_config.enable_coin_deny_list_v1() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),

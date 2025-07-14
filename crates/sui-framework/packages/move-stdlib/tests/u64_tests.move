@@ -4,7 +4,8 @@
 #[test_only]
 module std::u64_tests;
 
-use std::{integer_tests, unit_test::assert_eq};
+use std::integer_tests;
+use std::unit_test::assert_eq;
 
 const BIT_SIZE: u8 = 64;
 const MAX: u64 = 0xFFFF_FFFF_FFFF_FFFF;

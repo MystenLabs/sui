@@ -2,13 +2,11 @@
 title: Query the Pool
 ---
 
-{@include: ../../snippets/deepbook.mdx}
-
 The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBook Design](./design.mdx#pool) to learn more about the structure of pools.
 
 To perform trades, you pass a `BalanceManager` and `TradeProof` into the relevant `Pool`. Unlike `Pool`s, `BalanceManager` shared objects can contain any type of token, such that the same `BalanceManager` can access multiple `Pool`s to interact with many different trade pairings. See [BalanceManager](./balance-manager.mdx) to learn more.
 
-## API 
+## API
 
 DeepBook exposes a set of endpoints that can be used to query any pool.
 
@@ -18,17 +16,29 @@ Accessor to check whether the pool is whitelisted.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=whitelisted noComments}
 
-### Check quote quantity against base
+### Check quote quantity against base (DEEP fees)
 
-Dry run to determine the quote quantity out for a given base quantity.
+Dry run to determine the quote quantity out for a given base quantity. Uses DEEP as fee.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_quote_quantity_out noComments}
 
-### Check base quantity against quote
+### Check base quantity against quote (DEEP fees)
 
-Dry run to determine the base quantity out for a given quote quantity.
+Dry run to determine the base quantity out for a given quote quantity. Uses DEEP as fee.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_base_quantity_out noComments}
+
+### Check quote quantity against base (input token fees)
+
+Dry run to determine the quote quantity out for a given base quantity. Uses input token as fee.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_quote_quantity_out_input_fee noComments}
+
+### Check base quantity against quote (input token fees)
+
+Dry run to determine the base quantity out for a given quote quantity. Uses input token as fee.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_base_quantity_out_input_fee noComments}
 
 ### Check quote quantity against quote or base
 
@@ -42,7 +52,7 @@ Returns the DEEP required for an order if it's a taker or maker given quantity a
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=get_order_deep_required noComments}
 
-### Retrieve mid price for a pool 
+### Retrieve mid price for a pool
 
 Returns the mid price of the pool.
 
@@ -101,6 +111,14 @@ Returns the locked balance for a `BalanceManager` in the pool (`base_quantity`, 
 Returns the trade parameters for the pool (`taker_fee`, `maker_fee`, `stake_required`).
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=pool_trade_params noComments}
+
+Returns the trade parameters for the next epoch for the currently leading proposal of the pool (`taker_fee`, `maker_fee`, `stake_required`).
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=pool_trade_params_next noComments}
+
+Returns the quorum needed to pass proposal in the current epoch.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=quorum noComments}
 
 Returns the book parameters for the pool (`tick_size`, `lot_size`, `min_size`).
 

@@ -199,7 +199,7 @@ pub enum ExecutionFailureStatus {
     #[error("The shared object operation is not allowed.")]
     SharedObjectOperationNotAllowed,
 
-    #[error("Certificate cannot be executed due to a dependency on a deleted shared object")]
+    #[error("Certificate cannot be executed due to a dependency on a deleted shared object or an object that was transferred out of consensus")]
     InputObjectDeleted,
 
     #[error("Certificate is cancelled due to congestion on shared objects: {congested_objects}")]
@@ -216,6 +216,29 @@ pub enum ExecutionFailureStatus {
 
     #[error("Certificate is cancelled because randomness could not be generated this epoch")]
     ExecutionCancelledDueToRandomnessUnavailable,
+
+    #[error(
+        "Move vector element (passed to MakeMoveVec) with size {value_size} is larger \
+        than the maximum size {max_scaled_size}. Note that this maximum is scaled based on the \
+        type of the vector element."
+    )]
+    MoveVectorElemTooBig {
+        value_size: u64,
+        max_scaled_size: u64,
+    },
+
+    #[error(
+        "Move value (possibly an upgrade ticket or a dev-inspect value) with size {value_size} \
+        is larger than the maximum size  {max_scaled_size}. Note that this maximum is scaled based \
+        on the type of the value."
+    )]
+    MoveRawValueTooBig {
+        value_size: u64,
+        max_scaled_size: u64,
+    },
+
+    #[error("A valid linkage was unable to be determined for the transaction")]
+    InvalidLinkage,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }
@@ -231,7 +254,7 @@ pub struct MoveLocation {
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct MoveLocationOpt(pub Option<MoveLocation>);
 
-#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize, Hash, Error)]
 pub enum CommandArgumentError {
     #[error("The type of the value does not match the expected type")]
     TypeMismatch,
@@ -282,6 +305,15 @@ pub enum CommandArgumentError {
         multiple arguments."
     )]
     InvalidArgumentArity,
+    #[error(
+        "Object passed to TransferObject does not have public transfer, i.e. the `store` \
+        ability"
+    )]
+    InvalidTransferObject,
+    #[error(
+        "First argument to MakeMoveVec is not an object. If no type is specified for MakeMoveVec, all arguments must be the same object type."
+    )]
+    InvalidMakeMoveVecNonObjectArgument,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
@@ -395,6 +427,16 @@ impl ExecutionStatus {
         } else {
             None
         }
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        matches!(
+            self,
+            ExecutionStatus::Failure {
+                error: ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion { .. },
+                ..
+            }
+        )
     }
 }
 

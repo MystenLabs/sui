@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use criterion::{criterion_group, criterion_main, measurement::Measurement, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main, measurement::Measurement};
 use language_benchmarks::{measurement::wall_time_measurement, move_vm::bench};
 
 //

@@ -5,7 +5,10 @@ module shared_no_tto::shared_cash_register;
 
 use common::identified_payment::{Self, IdentifiedPayment};
 use std::string::String;
-use sui::{coin::Coin, dynamic_field, sui::SUI, vec_set::{Self, VecSet}};
+use sui::coin::Coin;
+use sui::dynamic_field;
+use sui::sui::SUI;
+use sui::vec_set::{Self, VecSet};
 
 const EInvalidOwner: u64 = 0;
 const EInvalidPaymentID: u64 = 1;

@@ -115,11 +115,11 @@ Response: {
 task 15, lines 63-68:
 //# run-graphql --show-usage --show-headers --show-service-version
 Headers: {
-    "content-type": "application/json",
-    "content-length": "157",
-    "x-sui-rpc-version": "42.43.44-testing-no-sha",
-    "vary": "origin, access-control-request-method, access-control-request-headers",
     "access-control-allow-origin": "*",
+    "content-length": "157",
+    "content-type": "application/json",
+    "vary": "origin, access-control-request-method, access-control-request-headers",
+    "x-sui-rpc-version": "42.43.44-testing-no-sha",
 }
 Service version: 42.43.44-testing-no-sha
 Response: {

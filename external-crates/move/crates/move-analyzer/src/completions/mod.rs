@@ -7,12 +7,15 @@ use crate::{
         dot::dot_completions,
         name_chain::{name_chain_completions, use_decl_completions},
         snippets::{init_completion, object_completion},
-        utils::{completion_item, PRIMITIVE_TYPE_COMPLETIONS},
+        utils::{PRIMITIVE_TYPE_COMPLETIONS, completion_item},
     },
     context::Context,
-    symbols::{self, CursorContext, PrecomputedPkgInfo, SymbolicatorRunner, Symbols},
+    symbols::{
+        self, Symbols, compilation::PrecomputedPkgInfo, cursor::CursorContext,
+        runner::SymbolicatorRunner,
+    },
 };
-use lsp_server::Request;
+use lsp_server::{Message, Request, Response};
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
@@ -38,7 +41,7 @@ use vfs::VfsPath;
 mod dot;
 mod name_chain;
 mod snippets;
-mod utils;
+pub mod utils;
 
 /// List of completion items corresponding to each one of Move's keywords.
 ///
@@ -81,7 +84,6 @@ pub fn on_completion_request(
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     implicit_deps: Dependencies,
-    auto_import: bool,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
@@ -107,7 +109,7 @@ pub fn on_completion_request(
         &path,
         pos,
         implicit_deps,
-        auto_import,
+        context.auto_imports,
     )
     .unwrap_or_default();
     let completions_len = completions.len();
@@ -115,12 +117,8 @@ pub fn on_completion_request(
     let result =
         serde_json::to_value(completions).expect("could not serialize completion response");
     eprintln!("about to send completion response with {completions_len} items");
-    let response = lsp_server::Response::new_ok(request.id.clone(), result);
-    if let Err(err) = context
-        .connection
-        .sender
-        .send(lsp_server::Message::Response(response))
-    {
+    let response = Response::new_ok(request.id.clone(), result);
+    if let Err(err) = context.connection.sender.send(Message::Response(response)) {
         eprintln!("could not send completion response: {:?}", err);
     }
 }
@@ -192,7 +190,7 @@ fn compute_completions_new_symbols(
     };
     let cursor_path = path.to_path_buf();
     let cursor_info = Some((&cursor_path, cursor_position));
-    let (symbols, _diags) = symbols::get_symbols(
+    let (symbols, _) = symbols::get_symbols(
         pkg_dependencies,
         ide_files_root,
         &pkg_path,

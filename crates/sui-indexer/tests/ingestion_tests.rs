@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::sync::Arc;
-use std::time::Duration;
 
-use diesel::dsl::count_star;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
@@ -14,13 +12,8 @@ use sui_indexer::models::{
     checkpoints::StoredCheckpoint, objects::StoredObject, objects::StoredObjectSnapshot,
     transactions::StoredTransaction,
 };
-use sui_indexer::schema::epochs;
-use sui_indexer::schema::events;
-use sui_indexer::schema::full_objects_history;
-use sui_indexer::schema::objects_history;
 use sui_indexer::schema::{checkpoints, objects, objects_snapshot, transactions};
 use sui_indexer::store::indexer_store::IndexerStore;
-use sui_indexer::test_utils::set_up_on_mvr_mode;
 use sui_indexer::test_utils::{
     set_up, set_up_with_start_and_end_checkpoints, wait_for_checkpoint, wait_for_objects_snapshot,
 };
@@ -344,102 +337,5 @@ pub async fn test_epoch_boundary() -> Result<(), IndexerError> {
         .expect("Failed reading checkpoint from PostgresDB");
     assert_eq!(db_checkpoint.sequence_number, 3);
     assert_eq!(db_checkpoint.epoch, 1);
-    Ok(())
-}
-
-#[tokio::test]
-pub async fn test_mvr_mode() -> Result<(), IndexerError> {
-    let tempdir = tempdir().unwrap();
-    let mut sim = Simulacrum::new();
-    let data_ingestion_path = tempdir.path().to_path_buf();
-    sim.set_data_ingestion_path(data_ingestion_path.clone());
-
-    // Create 3 checkpoints and epochs of sequence number 0 through 2 inclusive
-    for _ in 0..=2 {
-        let transfer_recipient = SuiAddress::random_for_testing_only();
-        let (transaction, _) = sim.transfer_txn(transfer_recipient);
-        let (_, err) = sim.execute_transaction(transaction.clone()).unwrap();
-        assert!(err.is_none());
-
-        // creates checkpoint and advances epoch
-        sim.advance_epoch(true);
-    }
-
-    sim.create_checkpoint(); // advance to checkpoint 4 to stabilize indexer
-
-    let (_, pg_store, _, _database) =
-        set_up_on_mvr_mode(Arc::new(sim), data_ingestion_path, true).await;
-    wait_for_checkpoint(&pg_store, 4).await?;
-    let mut connection = pg_store.pool().dedicated_connection().await.unwrap();
-    let db_checkpoint: StoredCheckpoint = checkpoints::table
-        .order(checkpoints::sequence_number.desc())
-        .first::<StoredCheckpoint>(&mut connection)
-        .await
-        .expect("Failed reading checkpoint from PostgresDB");
-    let db_epoch = epochs::table
-        .order(epochs::epoch.desc())
-        .select(epochs::epoch)
-        .first::<i64>(&mut connection)
-        .await
-        .expect("Failed reading epoch from PostgresDB");
-
-    assert_eq!(db_checkpoint.sequence_number, 4);
-    assert_eq!(db_checkpoint.epoch, db_epoch);
-
-    // Check that other tables have not been written to
-    assert_eq!(
-        0_i64,
-        transactions::table
-            .select(count_star())
-            .first::<i64>(&mut connection)
-            .await
-            .expect("Failed to count * transactions")
-    );
-    assert_eq!(
-        0_i64,
-        events::table
-            .select(count_star())
-            .first::<i64>(&mut connection)
-            .await
-            .expect("Failed to count * transactions")
-    );
-    assert_eq!(
-        0_i64,
-        full_objects_history::table
-            .select(count_star())
-            .first::<i64>(&mut connection)
-            .await
-            .expect("Failed to count * transactions")
-    );
-
-    // Check that objects_history is being correctly pruned. At epoch 3, we should only have data
-    // between 2 and 3 inclusive.
-    loop {
-        let history_objects = objects_history::table
-            .select(objects_history::checkpoint_sequence_number)
-            .load::<i64>(&mut connection)
-            .await?;
-
-        let has_invalid_entries = history_objects.iter().any(|&elem| elem < 2);
-
-        if !has_invalid_entries {
-            // No more invalid entries found, exit the loop
-            break;
-        }
-
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
-
-    // After the loop, verify all entries are within expected range
-    let final_check = objects_history::table
-        .select(objects_history::checkpoint_sequence_number)
-        .order_by(objects_history::checkpoint_sequence_number.asc())
-        .load::<i64>(&mut connection)
-        .await?;
-
-    for elem in final_check {
-        assert!(elem >= 2);
-    }
-
     Ok(())
 }

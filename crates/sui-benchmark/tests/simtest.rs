@@ -38,7 +38,7 @@ mod test {
         register_fail_point_async, register_fail_point_if, register_fail_points, sim_test,
     };
     use sui_protocol_config::{
-        ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
+        Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
         ProtocolVersion,
     };
     use sui_simulator::tempfile::TempDir;
@@ -97,8 +97,38 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000, 1).await;
+        let test_cluster = build_test_cluster(2, 3000, 1).await;
         test_simulated_load(test_cluster, 60).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_mainnet_config() {
+        chain_config_smoke_test(Chain::Mainnet).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_testnet_config() {
+        chain_config_smoke_test(Chain::Testnet).await;
+    }
+
+    async fn chain_config_smoke_test(chain: Chain) {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = init_test_cluster_builder(2, 3000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
+            .with_num_unpruned_validators(1)
+            .with_chain_override(chain)
+            .build()
+            .await
+            .into();
+        test_simulated_load(test_cluster, 30).await;
     }
 
     // Ensure that with half the committee enabling v2 and half not,
@@ -117,7 +147,7 @@ mod test {
                 ..Default::default()
             })
             .with_submit_delay_step_override_millis(3000)
-            .with_state_accumulator_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
+            .with_global_state_hash_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
             .build()
             .await
             .into();
@@ -420,6 +450,7 @@ mod test {
             }
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
+        register_fail_point_async("randomness-delay", || delay_failpoint(10..1000, 0.5));
 
         test_simulated_load(test_cluster, 120).await;
     }
@@ -487,6 +518,10 @@ mod test {
                         allowed_txn_cost_overage_burst_limit_us: rng.gen_range(0..500_000),
                         randomness_scalar: rng.gen_range(10..=50),
                         max_estimate_us: 1_500_000,
+                        stored_observations_num_included_checkpoints: 10,
+                        stored_observations_limit: rng.gen_range(1..=20),
+                        stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
                     },
                 ),
             ]
@@ -671,8 +706,18 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_mysticeti_fastpath() {
+        unsafe {
+            std::env::set_var("TRANSACTION_DRIVER", "100");
+        }
+
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
+        test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
-        let path = nondeterministic!(TempDir::new().unwrap()).into_path();
+        let path = nondeterministic!(TempDir::new().unwrap()).keep();
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 5000)
                 .with_data_ingestion_dir(path.clone())
@@ -779,6 +824,15 @@ mod test {
     }
 
     async fn test_protocol_upgrade_compatibility_impl() {
+        // Override record_time_estimate_processed for protocol version 87 in tests
+        // it is currently set to true in 87 in mainnet only
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut config| {
+            if version.as_u64() == 87 {
+                config.set_record_time_estimate_processed_for_testing(true);
+            }
+            config
+        });
+
         let max_ver = ProtocolVersion::MAX.as_u64();
         let manifest = sui_framework_snapshot::load_bytecode_snapshot_manifest();
 
@@ -813,7 +867,7 @@ mod test {
                 info!("Targeting protocol version: {version}");
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
                 info!("All nodes are at protocol version: {version}");
-                // Let all nodes run for a few epochs at this version.
+                // Let all nodes run for a few epochs at this version
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 if version == max_ver {
                     break;
@@ -1023,6 +1077,7 @@ mod test {
         shared_counter_max_tip: u64,
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
+        party_weight: u32,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1045,6 +1100,8 @@ mod test {
                 expected_failure_config: ExpectedFailurePayloadCfg {
                     failure_type: ExpectedFailureType::try_from(0).unwrap(),
                 },
+                // TODO: Set this to 1 once party object is enabled in mainnet protocol config.
+                party_weight: 0,
             }
         }
     }
@@ -1128,6 +1185,7 @@ mod test {
             expected_failure: config.expected_failure_weight,
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
+            party: config.party_weight,
         };
 
         let workload_config = WorkloadConfig {

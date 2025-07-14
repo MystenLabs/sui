@@ -10,20 +10,20 @@ const {} = doc.builders;
 export const NODE_TYPE = 'continue_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printContinueExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printContinueExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `continue_expression` node.
  */
 function printContinueExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	if (path.node.nonFormattingChildren.length === 1) {
-		return ['continue ', path.call(print, 'nonFormattingChildren', 0)];
-	}
+    if (path.node.nonFormattingChildren.length === 1) {
+        return ['continue ', path.call(print, 'nonFormattingChildren', 0)];
+    }
 
-	return 'continue';
+    return 'continue';
 }

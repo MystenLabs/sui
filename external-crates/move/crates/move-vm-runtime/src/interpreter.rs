@@ -27,7 +27,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{
         self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Variant,
-        VariantRef, Vector, VectorRef,
+        VariantRef, Vector, VectorRef, VectorSpecialization,
     },
     views::TypeView,
 };
@@ -115,6 +115,9 @@ impl Interpreter {
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
 
+        let link_context = data_store
+            .link_context()
+            .map_err(|e| e.finish(Location::Undefined))?;
         open_initial_frame!(
             tracer,
             &args,
@@ -122,7 +125,7 @@ impl Interpreter {
             &function,
             loader,
             gas_meter,
-            data_store.link_context()
+            link_context
         );
 
         if function.is_native() {
@@ -132,7 +135,9 @@ impl Interpreter {
                     .push(arg)
                     .map_err(|e| e.finish(Location::Undefined))?;
             }
-            let link_context = data_store.link_context();
+            let link_context = data_store
+                .link_context()
+                .map_err(|e| e.finish(Location::Undefined))?;
             let resolver = function.get_resolver(link_context, loader);
 
             let return_values = interpreter
@@ -188,7 +193,9 @@ impl Interpreter {
                 .map_err(|e| self.set_location(e))?;
         }
 
-        let link_context = data_store.link_context();
+        let link_context = data_store
+            .link_context()
+            .map_err(|e| e.finish(Location::Undefined))?;
         let mut current_frame = self
             .make_new_frame(function, ty_args, locals)
             .map_err(|err| self.set_location(err))?;
@@ -1271,7 +1278,8 @@ impl Frame {
                     interpreter.operand_stack.last_n(*num as usize)?,
                 )?;
                 let elements = interpreter.operand_stack.popn(*num as u16)?;
-                let value = Vector::pack(&ty, elements)?;
+                let specialization: VectorSpecialization = (&ty).try_into()?;
+                let value = Vector::pack(specialization, elements)?;
                 interpreter.operand_stack.push(value)?;
             }
             Bytecode::VecLen(si) => {
@@ -1430,11 +1438,7 @@ impl Frame {
             for instruction in &code[self.pc as usize..] {
                 trace!(
                     &self.function,
-                    &self.locals,
-                    self.pc,
-                    instruction,
-                    resolver,
-                    interpreter
+                    &self.locals, self.pc, instruction, resolver, interpreter
                 );
 
                 fail_point!("move_vm::interpreter_loop", |_| {
@@ -1563,11 +1567,15 @@ impl Frame {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Struct Definition not resolved".to_string())
                 })?;
-                check_depth!(struct_type
-                    .depth
-                    .as_ref()
-                    .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
-                    .solve(&[])?)
+                check_depth!(
+                    struct_type
+                        .depth
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED)
+                        })?
+                        .solve(&[])?
+                )
             }
             Type::DatatypeInstantiation(inst) => {
                 let (si, ty_args) = &**inst;
@@ -1583,18 +1591,22 @@ impl Frame {
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Struct Definition not resolved".to_string())
                 })?;
-                check_depth!(struct_type
-                    .depth
-                    .as_ref()
-                    .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
-                    .solve(&ty_arg_depths)?)
+                check_depth!(
+                    struct_type
+                        .depth
+                        .as_ref()
+                        .ok_or_else(|| {
+                            PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED)
+                        })?
+                        .solve(&ty_arg_depths)?
+                )
             }
             // NB: substitution must be performed before calling this function
             Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Type parameter should be fully resolved".to_string()),
-                )
+                );
             }
         };
 

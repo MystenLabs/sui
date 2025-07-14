@@ -22,7 +22,7 @@ const MaxPublicInputs: u64 = 8; // This must match the corresponding constant in
 
 /// Represents an elliptic curve construction to be used in the verifier. Currently we support BLS12-381 and BN254.
 /// This should be given as the first parameter to `prepare_verifying_key` or `verify_groth16_proof`.
-public struct Curve has store, copy, drop {
+public struct Curve has copy, drop, store {
     id: u8,
 }
 
@@ -33,7 +33,7 @@ public fun bls12381(): Curve { Curve { id: 0 } }
 public fun bn254(): Curve { Curve { id: 1 } }
 
 /// A `PreparedVerifyingKey` consisting of four components in serialized form.
-public struct PreparedVerifyingKey has store, copy, drop {
+public struct PreparedVerifyingKey has copy, drop, store {
     vk_gamma_abc_g1_bytes: vector<u8>,
     alpha_g1_beta_g2_bytes: vector<u8>,
     gamma_g2_neg_pc_bytes: vector<u8>,
@@ -66,7 +66,7 @@ public fun pvk_to_bytes(pvk: PreparedVerifyingKey): vector<vector<u8>> {
 }
 
 /// A `PublicProofInputs` wrapper around its serialized bytes.
-public struct PublicProofInputs has store, copy, drop {
+public struct PublicProofInputs has copy, drop, store {
     bytes: vector<u8>,
 }
 
@@ -79,7 +79,7 @@ public fun public_proof_inputs_from_bytes(bytes: vector<u8>): PublicProofInputs 
 }
 
 /// A `ProofPoints` wrapper around the serialized form of three proof points.
-public struct ProofPoints has store, copy, drop {
+public struct ProofPoints has copy, drop, store {
     bytes: vector<u8>,
 }
 

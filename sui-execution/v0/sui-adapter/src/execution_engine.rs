@@ -89,6 +89,7 @@ mod checked {
             epoch_timestamp_ms,
             // Those values are unused in execution versions before 3 (or latest)
             1,
+            1,
             1_000_000,
             None,
             protocol_config,
@@ -504,6 +505,9 @@ mod checked {
             }
             TransactionKind::EndOfEpochTransaction(_) => {
                 panic!("EndOfEpochTransaction should not exist in execution layer v0");
+            }
+            TransactionKind::ProgrammableSystemTransaction(_) => {
+                panic!("ProgrammableSystemTransaction should not exist in execution layer v0");
             }
         }
     }

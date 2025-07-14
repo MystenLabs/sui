@@ -3,25 +3,26 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(hidden_glob_reexports)]
 use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 use move_binary_format::{
+    IndexKind,
     compatibility::Compatibility,
     errors::{Location, VMError},
     file_format::{AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken},
-    normalized, IndexKind,
+    normalized,
 };
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{FileHash, MOVE_COMPILED_EXTENSION};
 use move_compiler::{
-    diagnostics::{self, report_diagnostics, Diagnostic, Diagnostics},
+    diagnostics::{self, Diagnostic, Diagnostics, report_diagnostics},
     shared::files::FileName,
 };
 use move_core_types::{
     account_address::AccountAddress,
     effects::{ChangeSet, Op},
     language_storage::{ModuleId, TypeTag},
-    transaction_argument::TransactionArgument,
+    runtime_value::MoveValue,
     vm_status::{StatusCode, StatusType},
 };
 use move_ir_types::location::Loc;
@@ -94,7 +95,7 @@ pub(crate) fn explain_publish_changeset(changeset: &ChangeSet) {
 pub(crate) fn explain_type_error(
     script_params: &[SignatureToken],
     signers: &[AccountAddress],
-    txn_args: &[TransactionArgument],
+    txn_args: &[MoveValue],
 ) {
     use SignatureToken::*;
     let expected_num_signers = script_params
@@ -156,11 +157,14 @@ pub(crate) fn explain_publish_error(
             println!("Module {} exists already.", module_id);
         }
         BACKWARD_INCOMPATIBLE_MODULE_UPDATE => {
-            println!("Breaking change detected--publishing aborted. Re-run with --ignore-breaking-changes to publish anyway.");
+            println!(
+                "Breaking change detected--publishing aborted. Re-run with --ignore-breaking-changes to publish anyway."
+            );
 
             let old_module = state.get_module_by_id(&module_id)?.unwrap();
-            let old_api = normalized::Module::new(&old_module);
-            let new_api = normalized::Module::new(module);
+            let pool = &mut normalized::RcPool::new();
+            let old_api = normalized::Module::new(pool, &old_module, /* include code */ true);
+            let new_api = normalized::Module::new(pool, module, /* include code */ true);
 
             if (Compatibility {
                 check_datatype_layout: true,
@@ -172,7 +176,10 @@ pub(crate) fn explain_publish_error(
             {
                 // TODO: we could choose to make this more precise by walking the global state and looking for published
                 // structs of this type. but probably a bad idea
-                println!("Layout API for structs of module {} has changed. Need to do a data migration of published structs", module_id)
+                println!(
+                    "Layout API for structs of module {} has changed. Need to do a data migration of published structs",
+                    module_id
+                )
             } else if (Compatibility {
                 check_datatype_layout: false,
                 check_private_entry_linking: true,
@@ -183,7 +190,10 @@ pub(crate) fn explain_publish_error(
             {
                 // TODO: this will report false positives if we *are* simultaneously redeploying all dependent modules.
                 // but this is not easy to check without walking the global state and looking for everything
-                println!("Linking API for structs/functions of module {} has changed. Need to redeploy all dependent modules.", module_id)
+                println!(
+                    "Linking API for structs/functions of module {} has changed. Need to redeploy all dependent modules.",
+                    module_id
+                )
             }
         }
         CYCLIC_MODULE_DEPENDENCY => {
@@ -278,7 +288,7 @@ pub(crate) fn explain_execution_error(
     script_parameters: &[SignatureToken],
     vm_type_args: &[TypeTag],
     signers: &[AccountAddress],
-    txn_args: &[TransactionArgument],
+    txn_args: &[MoveValue],
 ) -> Result<()> {
     use StatusCode::*;
     match (error.location(), error.major_status(), error.sub_status()) {

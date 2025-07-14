@@ -10,16 +10,21 @@
     "test": "npm run compile && mocha --config ./.mocharc.yaml"
   },
   "devDependencies": {
+    "@types/lodash.snakecase": "^4.1.9",
     "@types/node": "20.x",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
-    "eslint": "^8.57.0",
-    "line-diff": "^2.1.1",
-    "mocha": "10.2.0",
-    "typescript": "^5.4.5",
     "@vscode/debugadapter": "^1.56.0",
     "@vscode/debugadapter-testsupport": "^1.56.0",
     "@vscode/debugprotocol": "1.66.0",
-    "toml": "^3.0.0"
+    "eslint": "^8.57.0",
+    "line-diff": "^2.1.1",
+    "mocha": "10.2.0",
+    "toml": "^3.0.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "fzstd": "^0.1.1",
+    "lodash.snakecase": "^4.1.1"
   }
 }

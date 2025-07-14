@@ -7,9 +7,10 @@ use super::Transaction;
 use super::TransactionEffects;
 use super::TransactionEvents;
 use super::UserSignature;
-use crate::message::MessageMerge;
-use crate::message::MessageMergeFrom;
-use crate::message::{MessageField, MessageFields};
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 
 impl ExecutedTransaction {
     pub const DIGEST_FIELD: &'static MessageField = &MessageField::new("digest");
@@ -44,8 +45,8 @@ impl MessageFields for ExecutedTransaction {
     ];
 }
 
-impl MessageMerge<&ExecutedTransaction> for ExecutedTransaction {
-    fn merge(&mut self, source: &ExecutedTransaction, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&ExecutedTransaction> for ExecutedTransaction {
+    fn merge(&mut self, source: &ExecutedTransaction, mask: &FieldMaskTree) {
         let ExecutedTransaction {
             digest,
             transaction,

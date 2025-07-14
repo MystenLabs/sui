@@ -145,28 +145,26 @@ The command creates a `policy` directory with a `sources` folder and `Move.toml`
 In the `sources` folder, create a source file named `day_of_week.move`. Copy and paste the following code into the file:
 
 ```move
-module policy::day_of_week {
-    use sui::object::{Self, UID};
-    use sui::package;
-    use sui::tx_context::TxContext;
+module policy::day_of_week;
 
-    struct UpgradeCap has key, store {
-        id: UID,
-        cap: package::UpgradeCap,
-        day: u8,
-    }
+use sui::package;
 
-    /// Day is not a week day (number in range 0 <= day < 7).
-    const ENotWeekDay: u64 = 1;
+/// Day is not a week day (number in range 0 <= day < 7).
+const ENotWeekDay: u64 = 1;
 
-    public fun new_policy(
-        cap: package::UpgradeCap,
-        day: u8,
-        ctx: &mut TxContext,
-    ): UpgradeCap {
-        assert!(day < 7, ENotWeekDay);
-        UpgradeCap { id: object::new(ctx), cap, day }
-    }
+public struct UpgradeCap has key, store {
+    id: UID,
+    cap: package::UpgradeCap,
+    day: u8,
+}
+
+public fun new_policy(
+    cap: package::UpgradeCap,
+    day: u8,
+    ctx: &mut TxContext,
+): UpgradeCap {
+    assert!(day < 7, ENotWeekDay);
+    UpgradeCap { id: object::new(ctx), cap, day }
 }
 ```
 
@@ -185,8 +183,7 @@ After the `new_policy` function, add a `week_day` function to get the current we
 
 ```move
 fun week_day(ctx: &TxContext): u8 {
-    let days_since_unix_epoch =
-        tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
+    let days_since_unix_epoch = ctx.epoch_timestamp_ms() / MS_IN_DAY;
     // The unix epoch (1st Jan 1970) was a Thursday so shift days
     // since the epoch by 3 so that 0 = Monday.
     ((days_since_unix_epoch + 3) % 7 as u8)
@@ -206,7 +203,7 @@ public fun authorize_upgrade(
     ctx: &TxContext,
 ): package::UpgradeTicket {
     assert!(week_day(ctx) == cap.day, ENotAllowedDay);
-    package::authorize_upgrade(&mut cap.cap, policy, digest)
+    cap.cap.authorize_upgrade(policy, digest)
 }
 ```
 
@@ -219,74 +216,71 @@ public fun commit_upgrade(
     cap: &mut UpgradeCap,
     receipt: package::UpgradeReceipt,
 ) {
-    package::commit_upgrade(&mut cap.cap, receipt)
+    cap.cap.commit_upgrade(receipt)
 }
 
 public fun make_immutable(cap: UpgradeCap) {
     let UpgradeCap { id, cap, day: _ } = cap;
-    object::delete(id);
-    package::make_immutable(cap);
+    id.delete();
+    cap.make_immutable()
 }
 ```
 
 The final code in your `day_of_week.move` file should resemble the following:
 
 ```move
-module policy::day_of_week {
-    use sui::object::{Self, UID};
-    use sui::package;
-    use sui::tx_context::TxContext;
+module policy::day_of_week;
 
-    struct UpgradeCap has key, store {
-        id: UID,
-        cap: package::UpgradeCap,
-        day: u8,
-    }
+use sui::package;
 
-    // Day is not a week day (number in range 0 <= day < 7).
-    const ENotWeekDay: u64 = 1;
-    const ENotAllowedDay: u64 = 2;
-    const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
+// Day is not a week day (number in range 0 <= day < 7).
+const ENotWeekDay: u64 = 1;
+const ENotAllowedDay: u64 = 2;
+const MS_IN_DAY: u64 = 24 * 60 * 60 * 1000;
 
-    public fun new_policy(
-        cap: package::UpgradeCap,
-        day: u8,
-        ctx: &mut TxContext,
-    ): UpgradeCap {
-        assert!(day < 7, ENotWeekDay);
-        UpgradeCap { id: object::new(ctx), cap, day }
-    }
+public struct UpgradeCap has key, store {
+    id: UID,
+    cap: package::UpgradeCap,
+    day: u8,
+}
 
-    fun week_day(ctx: &TxContext): u8 {
-        let days_since_unix_epoch =
-            sui::tx_context::epoch_timestamp_ms(ctx) / MS_IN_DAY;
-        // The unix epoch (1st Jan 1970) was a Thursday so shift days
-        // since the epoch by 3 so that 0 = Monday.
-        ((days_since_unix_epoch + 3) % 7 as u8)
-    }
+public fun new_policy(
+    cap: package::UpgradeCap,
+    day: u8,
+    ctx: &mut TxContext,
+): UpgradeCap {
+    assert!(day < 7, ENotWeekDay);
+    UpgradeCap { id: object::new(ctx), cap, day }
+}
 
-    public fun authorize_upgrade(
-        cap: &mut UpgradeCap,
-        policy: u8,
-        digest: vector<u8>,
-        ctx: &TxContext,
-    ): package::UpgradeTicket {
-        assert!(week_day(ctx) == cap.day, ENotAllowedDay);
-        package::authorize_upgrade(&mut cap.cap, policy, digest)
-    }
+fun week_day(ctx: &TxContext): u8 {
+    let days_since_unix_epoch = ctx.epoch_timestamp_ms() / MS_IN_DAY;
+    // The unix epoch (1st Jan 1970) was a Thursday so shift days
+    // since the epoch by 3 so that 0 = Monday.
+    ((days_since_unix_epoch + 3) % 7 as u8)
+}
 
-    public fun commit_upgrade(
-        cap: &mut UpgradeCap,
-        receipt: package::UpgradeReceipt,
-    ) {
-        package::commit_upgrade(&mut cap.cap, receipt)
-    }
+public fun authorize_upgrade(
+    cap: &mut UpgradeCap,
+    policy: u8,
+    digest: vector<u8>,
+    ctx: &TxContext,
+): package::UpgradeTicket {
+    assert!(week_day(ctx) == cap.day, ENotAllowedDay);
+    cap.cap.authorize_upgrade(policy, digest)
+}
 
-    public fun make_immutable(cap: UpgradeCap) {
-        let UpgradeCap { id, cap, day: _ } = cap;
-        object::delete(id);
-        package::make_immutable(cap);
-    }
+public fun commit_upgrade(
+    cap: &mut UpgradeCap,
+    receipt: package::UpgradeReceipt,
+) {
+    cap.cap.commit_upgrade(receipt)
+}
+
+public fun make_immutable(cap: UpgradeCap) {
+    let UpgradeCap { id, cap, day: _ } = cap;
+    id.delete();
+    cap.make_immutable()
 }
 ```
 

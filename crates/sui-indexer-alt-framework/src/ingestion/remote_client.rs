@@ -100,11 +100,11 @@ impl IngestionClientTrait for RemoteIngestionClient {
                 error: status_code_to_error(code),
             }),
 
-            // For everything else, assume it's a permanent error and don't retry.
-            code => {
-                error!(checkpoint, %code, "Permanent error, giving up!");
-                Err(FetchError::Permanent(status_code_to_error(code)))
-            }
+            // Still retry on other unsuccessful codes, but the reason is unclear.
+            code => Err(FetchError::Transient {
+                reason: "unknown",
+                error: status_code_to_error(code),
+            }),
         }
     }
 }
@@ -118,7 +118,6 @@ pub(crate) mod tests {
     use crate::metrics::tests::test_metrics;
     use axum::http::StatusCode;
     use std::sync::Mutex;
-    use tokio_util::sync::CancellationToken;
     use wiremock::{
         matchers::{method, path_regex},
         Mock, MockServer, Request, Respond, ResponseTemplate,
@@ -140,72 +139,15 @@ pub(crate) mod tests {
         IngestionClient::new_remote(Url::parse(&uri).unwrap(), test_metrics()).unwrap()
     }
 
-    fn assert_http_error(error: Error, checkpoint: u64, code: StatusCode) {
-        let Error::FetchError(c, inner) = error else {
-            panic!("Expected FetchError, got: {:?}", error);
-        };
-        assert_eq!(c, checkpoint);
-        let Some(http_error) = inner.downcast_ref::<HttpError>() else {
-            panic!("Expected HttpError, got: {:?}", inner);
-        };
-        assert_eq!(http_error, &HttpError::Http(code));
-    }
-
     #[tokio::test]
     async fn fail_on_not_found() {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
         let client = remote_test_client(server.uri());
-        let error = client
-            .fetch(42, &CancellationToken::new())
-            .await
-            .unwrap_err();
+        let error = client.fetch(42).await.unwrap_err();
 
         assert!(matches!(error, Error::NotFound(42)));
-    }
-
-    #[tokio::test]
-    async fn fail_on_client_error() {
-        let server = MockServer::start().await;
-        respond_with(&server, status(StatusCode::IM_A_TEAPOT)).await;
-
-        let client = remote_test_client(server.uri());
-        let error = client
-            .fetch(42, &CancellationToken::new())
-            .await
-            .unwrap_err();
-
-        assert_http_error(error, 42, StatusCode::IM_A_TEAPOT);
-    }
-
-    /// Even if the server is repeatedly returning transient errors, it is possible to cancel the
-    /// fetch request via its cancellation token.
-    #[tokio::test]
-    async fn fail_on_cancel() {
-        let cancel = CancellationToken::new();
-        let server = MockServer::start().await;
-
-        // This mock server repeatedly returns internal server errors, but will also send a
-        // cancellation with the second request (this is a bit of a contrived test set-up).
-        let times: Mutex<u64> = Mutex::new(0);
-        let server_cancel = cancel.clone();
-        respond_with(&server, move |_: &Request| {
-            let mut times = times.lock().unwrap();
-            *times += 1;
-
-            if *times > 2 {
-                server_cancel.cancel();
-            }
-
-            status(StatusCode::INTERNAL_SERVER_ERROR)
-        })
-        .await;
-
-        let client = remote_test_client(server.uri());
-        let error = client.fetch(42, &cancel.clone()).await.unwrap_err();
-
-        assert!(matches!(error, Error::Cancelled));
     }
 
     /// Assume that failures to send the request to the remote store are due to temporary
@@ -228,20 +170,16 @@ pub(crate) mod tests {
                     status(StatusCode::MOVED_PERMANENTLY).append_header("Location", r.url.as_str())
                 }
 
-                // Subsequently, requests will fail with a permanent error, this is what we expect
-                // to see.
-                _ => status(StatusCode::IM_A_TEAPOT),
+                // Subsequently, requests will succeed.
+                _ => status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42)),
             }
         })
         .await;
 
         let client = remote_test_client(server.uri());
-        let error = client
-            .fetch(42, &CancellationToken::new())
-            .await
-            .unwrap_err();
+        let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_http_error(error, 42, StatusCode::IM_A_TEAPOT);
+        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
     }
 
     /// Assume that certain errors will recover by themselves, and keep retrying with an
@@ -254,22 +192,19 @@ pub(crate) mod tests {
         respond_with(&server, move |_: &Request| {
             let mut times = times.lock().unwrap();
             *times += 1;
-            status(match *times {
-                1 => StatusCode::INTERNAL_SERVER_ERROR,
-                2 => StatusCode::REQUEST_TIMEOUT,
-                3 => StatusCode::TOO_MANY_REQUESTS,
-                _ => StatusCode::IM_A_TEAPOT,
-            })
+            match *times {
+                1 => status(StatusCode::INTERNAL_SERVER_ERROR),
+                2 => status(StatusCode::REQUEST_TIMEOUT),
+                3 => status(StatusCode::TOO_MANY_REQUESTS),
+                _ => status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42)),
+            }
         })
         .await;
 
         let client = remote_test_client(server.uri());
-        let error = client
-            .fetch(42, &CancellationToken::new())
-            .await
-            .unwrap_err();
+        let checkpoint = client.fetch(42).await.unwrap();
 
-        assert_http_error(error, 42, StatusCode::IM_A_TEAPOT);
+        assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
     }
 
     /// Treat deserialization failure as another kind of transient error -- all checkpoint data
@@ -290,7 +225,8 @@ pub(crate) mod tests {
         .await;
 
         let client = remote_test_client(server.uri());
-        let checkpoint = client.fetch(42, &CancellationToken::new()).await.unwrap();
+        let checkpoint = client.fetch(42).await.unwrap();
+
         assert_eq!(42, checkpoint.checkpoint_summary.sequence_number)
     }
 }

@@ -23,7 +23,7 @@ simple_visitor!(
             let resulting_value = match &op.value {
                 // warning reported elsewhere
                 BinOp_::Div | BinOp_::Mod if rhs.as_value().is_some_and(|v| v.value.is_zero()) => {
-                    return false
+                    return false;
                 }
                 BinOp_::Sub | BinOp_::Mod | BinOp_::Xor => "'0'",
                 BinOp_::Div => "'1'",

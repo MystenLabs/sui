@@ -12,7 +12,7 @@ use sui_config::node::{
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
     CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig,
     ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
-    StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -45,7 +45,7 @@ pub struct ValidatorConfigBuilder {
     firewall_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
-    state_accumulator_v2: bool,
+    global_state_hash_v2: bool,
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
 }
@@ -53,7 +53,7 @@ pub struct ValidatorConfigBuilder {
 impl ValidatorConfigBuilder {
     pub fn new() -> Self {
         Self {
-            state_accumulator_v2: true,
+            global_state_hash_v2: true,
             ..Default::default()
         }
     }
@@ -127,8 +127,8 @@ impl ValidatorConfigBuilder {
         self
     }
 
-    pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
-        self.state_accumulator_v2 = enabled;
+    pub fn with_global_state_hash_v2_enabled(mut self, enabled: bool) -> Self {
+        self.global_state_hash_v2 = enabled;
         self
     }
 
@@ -148,7 +148,7 @@ impl ValidatorConfigBuilder {
         let key_path = get_key_path(&validator.key_pair);
         let config_directory = self
             .config_directory
-            .unwrap_or_else(|| mysten_common::tempdir().unwrap().into_path());
+            .unwrap_or_else(|| mysten_common::tempdir().unwrap().keep());
         let db_path = config_directory
             .join(AUTHORITIES_DB_NAME)
             .join(key_path.clone());
@@ -227,7 +227,6 @@ impl ValidatorConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
             indexer_max_subscriptions: Default::default(),
@@ -247,7 +246,7 @@ impl ValidatorConfigBuilder {
             jsonrpc_server_type: None,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
-            state_accumulator_v2: self.state_accumulator_v2,
+            state_accumulator_v2: self.global_state_hash_v2,
             enable_soft_bundle: true,
             enable_validator_tx_finalizer: true,
             verifier_signing_config: VerifierSigningConfig::default(),
@@ -432,7 +431,7 @@ impl FullnodeConfigBuilder {
         let key_path = get_key_path(&validator_config.key_pair);
         let config_directory = self
             .config_directory
-            .unwrap_or_else(|| mysten_common::tempdir().unwrap().into_path());
+            .unwrap_or_else(|| mysten_common::tempdir().unwrap().keep());
 
         let p2p_config = {
             let seed_peers = network_config
@@ -535,7 +534,6 @@ impl FullnodeConfigBuilder {
             transaction_deny_config: Default::default(),
             certificate_deny_config: Default::default(),
             state_debug_dump_config: Default::default(),
-            state_archive_write_config: StateArchiveConfig::default(),
             state_archive_read_config: vec![],
             state_snapshot_write_config: StateSnapshotConfig::default(),
             indexer_max_subscriptions: Default::default(),

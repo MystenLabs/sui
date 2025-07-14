@@ -15,7 +15,7 @@ pub mod transitions;
 
 use crate::config::{Args, EXECUTE_UNVERIFIED_MODULE, RUN_ON_VM};
 use bytecode_generator::BytecodeGenerator;
-use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 use getrandom::getrandom;
 use module_generation::generate_module;
 use move_binary_format::{
@@ -38,7 +38,7 @@ use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::{DeltaStorage, InMemoryStorage};
 use move_vm_types::gas::UnmeteredGasMeter;
 use once_cell::sync::Lazy;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::{fs, io::Write, panic, thread};
 use tracing::{debug, error, info};
 
@@ -54,9 +54,9 @@ static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
     let mut storage = InMemoryStorage::new();
     let (_, compiled_units) = Compiler::from_files(
         None,
-        move_stdlib::move_stdlib_files(),
+        move_stdlib::source_files(),
         vec![],
-        move_stdlib::move_stdlib_named_addresses(),
+        move_stdlib::named_addresses(),
     )
     .build_and_report()
     .unwrap();
@@ -300,7 +300,7 @@ pub fn bytecode_generation(
             }
             Err(e) => {
                 error!("{}", e);
-                let uid = rng.gen::<u64>();
+                let uid = rng.r#gen::<u64>();
                 output_error_case(module.clone(), output_path.clone(), uid, tid);
                 if EXECUTE_UNVERIFIED_MODULE {
                     Some(module.clone())
@@ -324,7 +324,7 @@ pub fn bytecode_generation(
                         }
                         _ => {
                             error!("{}", e);
-                            let uid = rng.gen::<u64>();
+                            let uid = rng.r#gen::<u64>();
                             output_error_case(module.clone(), output_path.clone(), uid, tid);
                         }
                     },

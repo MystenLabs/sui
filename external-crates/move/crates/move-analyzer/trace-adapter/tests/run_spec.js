@@ -20,14 +20,14 @@ const UB = process.env['UB'];
  * takes DAP runtime as argument and returns a string representing
  * test result
  */
-global.run_spec = function (dirname, action) {
+global.run_spec = function(dirname, action) {
     const test_dir = path.basename(dirname);
     describe(test_dir, () => {
         it(test_dir, () => {
             const rt = new runtime.Runtime();
             // assume that the test is always in the `test` function
             // of the `m` module
-            const traceInfo = test_dir +  '::' + 'm::test';
+            const traceInfo = test_dir + '::' + 'm::test';
             return rt.start(path.join(dirname, 'sources', `m.move`), traceInfo, true).then(() => {
                 handleTestResult(dirname, action, rt);
             });
@@ -36,19 +36,37 @@ global.run_spec = function (dirname, action) {
     });
 };
 
-global.run_spec_replay = function (dirname, action) {
+global.run_spec_replay = function(dirname, action) {
     const test_dir = path.basename(dirname);
     describe(test_dir, () => {
         it(test_dir, () => {
             const rt = new runtime.Runtime();
             const traceInfo = ''; // unused when trace comes from replay tool
-            return rt.start(path.join(dirname, 'trace.json'), traceInfo, true).then(() => {
+            return rt.start(findTraceFilePath(dirname), traceInfo, true).then(() => {
                 handleTestResult(dirname, action, rt);
             });
         });
     });
 };
 
+function findTraceFilePath(dirname) {
+    const traceFileName = 'trace.json.zst';
+    const entries = fs.readdirSync(dirname, { withFileTypes: true });
+
+    if (entries.some(entry => entry.isFile() && entry.name === traceFileName)) {
+        return path.join(dirname, traceFileName);
+    }
+
+    for (const entry of entries) {
+        if (entry.isDirectory()) {
+            const subdirPath = path.join(dirname, entry.name);
+            const result = findTraceFilePath(subdirPath);
+            if (result) return result;
+        }
+    }
+
+    return null;
+}
 
 function handleTestResult(dirname, action, rt) {
     const result = action(rt);
@@ -68,4 +86,3 @@ function handleTestResult(dirname, action, rt) {
         assert.fail(`${out_diff}\nCurrent output does not match the expected one (run with UB=1 to save the current output)`);
     }
 }
-

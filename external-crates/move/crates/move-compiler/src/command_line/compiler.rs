@@ -18,17 +18,17 @@ use crate::{
     expansion, hlir, interface_generator, naming,
     parser::{self, *},
     shared::{
-        files::{FilesSourceText, MappedFiles},
         CompilationEnv, Flags, IndexedPhysicalPackagePath, IndexedVfsPackagePath, NamedAddressMap,
         NamedAddressMaps, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
+        files::{FilesSourceText, MappedFiles},
     },
     to_bytecode,
     typing::{self, visitor::TypingVisitorObj},
     unit_test,
 };
 use move_command_line_common::files::{
-    extension_equals, find_filenames_and_keep_specified, DEBUG_INFO_EXTENSION,
-    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
+    DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, extension_equals,
+    find_filenames_and_keep_specified,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
@@ -41,9 +41,9 @@ use std::{
     sync::Arc,
 };
 use vfs::{
+    VfsPath,
     impls::{memory::MemoryFS, physical::PhysicalFS},
     path::VfsFileType,
-    VfsPath,
 };
 
 //**************************************************************************************************
@@ -890,7 +890,7 @@ pub fn move_check_for_errors(
 
         let (compiler, cfgir) = compiler.run::<PASS_CFGIR>()?.into_ast();
         let compilation_env = compiler.compilation_env();
-        if compilation_env.flags().is_testing() {
+        if compilation_env.test_mode() {
             unit_test::plan_builder::construct_test_plan(compilation_env, None, &cfgir);
         }
 
@@ -984,7 +984,7 @@ fn run(
                         pre_compiled_lib.clone(),
                         prog,
                     );
-                    let prog = verification_attribute_filter::program(compilation_env, prog);
+                    let prog = mode_attribute_filter::program(compilation_env, prog);
                     expansion::translate::program(compilation_env, pre_compiled_lib.clone(), prog)
                 };
                 rec(

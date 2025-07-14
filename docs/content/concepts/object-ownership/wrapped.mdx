@@ -5,12 +5,12 @@ title: Wrapped Objects
 In many programming languages, you organize data structures in layers by nesting complex data structures in another data structure. In Move, you can organize data structures by putting a field of `struct` type in another, like the following:
 
 ```move
-struct Foo has key {
+public struct Foo has key {
     id: UID,
     bar: Bar,
 }
 
-struct Bar has store {
+public struct Bar has store {
     value: u64,
 }
 ```
@@ -22,7 +22,7 @@ In the preceding example, `Bar` is a normal struct, but it is not a Sui object s
 The following code turns `Bar` into an object, which you can still wrap in `Foo`:
 
 ```move
-struct Bar has key, store {
+public struct Bar has key, store {
     id: UID,
     value: u64,
 }
@@ -47,7 +47,7 @@ The following example implementation of a trusted swap demonstrates how to use d
 First, define such an object type:
 
 ```move
-struct Object has key, store {
+public struct Object has key, store {
     id: UID,
     scarcity: u8,
     style: u8,
@@ -70,7 +70,7 @@ Another common solution is to send your object to a pool - such as an NFT market
 To swap objects, the same address must own both objects. Anyone who wants to swap their object can send their objects to the third party, such as a site that offers swapping services, and the third party helps perform the swap and send the objects to the appropriate owner. To ensure that you retain custody of your objects (such as coins and NFTs) and not give full custody to the third party, use direct wrapping. To define a wrapper object type:
 
 ```move
-struct SwapRequest has key {
+public struct SwapRequest has key {
     id: UID,
     owner: address,
     object: Object,
@@ -91,7 +91,7 @@ public fun request_swap(
 
     let request = SwapRequest {
         id: object::new(ctx),
-        owner: tx_context::sender(ctx),
+        owner: ctx.sender(),
         object,
         fee: coin::into_balance(fee),
     };
@@ -137,15 +137,14 @@ transfer::transfer(o2, owner1);
 The preceding code sends `o1` to the original owner of `o2`, and sends `o2` to the original owner of `o1`. The service can then delete the wrapping `SwapRequest` objects:
 
 ```move
-object::delete(id1);
-object::delete(id2);
+id1.delete();
+id2.delete();
 ```
 
 Finally, the service merges together the `fee1` and `fee2`, and returns it.  The service provider can then turn it into a coin, or merge it into some larger pool where it collects all fees:
 
 ```move
-balance::join(&mut fee1, fee2);
-fee1
+fee1.join(fee2);
 ```
 
 After this call, the two objects are swapped and the service provider takes the service fee.
@@ -163,7 +162,7 @@ When Sui object type `Bar` is directly wrapped into `Foo`, there is not much fle
 To demonstrate this use case, design a simple game character: A warrior with a sword and shield. A warrior might have a sword and shield, or might not have either. The warrior should be able to add a sword and shield, and replace the current ones at any time. To design this, define a `SimpleWarrior` type:
 
 ```move
-struct SimpleWarrior has key {
+public struct SimpleWarrior has key {
     id: UID,
     sword: Option<Sword>,
     shield: Option<Shield>,
@@ -173,12 +172,12 @@ struct SimpleWarrior has key {
 Each `SimpleWarrior` type has an optional `sword` and `shield` wrapped in it, defined as:
 
 ```move
-struct Sword has key, store {
+public struct Sword has key, store {
     id: UID,
     strength: u8,
 }
 
-struct Shield has key, store {
+public struct Shield has key, store {
     id: UID,
     armor: u8,
 }
@@ -193,7 +192,7 @@ public fun create_warrior(ctx: &mut TxContext) {
         sword: option::none(),
         shield: option::none(),
     };
-    transfer::transfer(warrior, tx_context::sender(ctx))
+    transfer::transfer(warrior, ctx.sender())
 }
 ```
 
@@ -201,11 +200,11 @@ You can then define functions to equip new swords or new shields:
 
 ```move
 public fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mut TxContext) {
-    if (option::is_some(&warrior.sword)) {
-        let old_sword = option::extract(&mut warrior.sword);
-        transfer::transfer(old_sword, tx_context::sender(ctx));
+    if (warrior.sword.is_some()) {
+        let old_sword = warrior.sword.extract();
+        transfer::transfer(old_sword, ctx.sender());
     };
-    option::fill(&mut warrior.sword, sword);
+    warrior.sword.fill(sword);
 }
 ```
 
@@ -224,12 +223,12 @@ The concept of wrapping objects in a vector field of another Sui object is very 
 Wrapping through vector resembles:
 
 ```move
-struct Pet has key, store {
+public struct Pet has key, store {
     id: UID,
     cuteness: u64,
 }
 
-struct Farm has key {
+public struct Farm has key {
     id: UID,
     pets: vector<Pet>,
 }

@@ -3,7 +3,7 @@
 // tabWidth: 4
 // useModuleLabel: true
 
-module prettier::dot_expression;
+module prettier::vector_expression;
 
 fun vector_simple() {
     // should be printed as is
@@ -14,11 +14,11 @@ fun vector_simple() {
 
     // should be expanded to multiple lines
     vector[
-        alice,
+        alice, // comments should be preserved
         bob,
         carl,
         dave,
-        eve
+        eve,
     ];
 }
 
@@ -38,7 +38,7 @@ fun vector_lists() {
     // expanded, with each vector on a new line
     vector[
         vector[1, 2, 3, 4, 5],
-        vector[1, 2, 3, 4, 5]
+        vector[1, 2, 3, 4, 5],
     ];
 
     // any vector breaking in a list breaks the list
@@ -61,7 +61,7 @@ fun vector_lists() {
     vector[
         { alice + bob + carl },
         { 2 },
-        { 3 }
+        { 3 },
     ];
 
     // when block broken, it gets expanded and
@@ -77,7 +77,7 @@ fun vector_lists() {
     vector[
         (
             alice + bob + carl + dave + smith
-        )
+        ),
     ];
 
     // expression list in a vector should always break

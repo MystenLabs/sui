@@ -14,27 +14,32 @@
 
 use crate::{
     completions::utils::{
-        call_completion_item, completion_item, mod_defs, PRIMITIVE_TYPE_COMPLETIONS,
+        PRIMITIVE_TYPE_COMPLETIONS, addr_to_ide_string, call_completion_item, completion_item,
+        import_insertion_info, mod_defs,
     },
     symbols::{
-        expansion_mod_ident_to_map_key, AutoImportInsertionInfo, AutoImportInsertionKind,
-        ChainCompletionKind, ChainInfo, CursorContext, DefInfo, FunType, MemberDef, MemberDefInfo,
-        ModuleDefs, Symbols, VariantInfo,
+        Symbols,
+        cursor::{ChainCompletionKind, ChainInfo, CursorContext},
+        def_info::{DefInfo, FunType, VariantInfo},
+        mod_defs::{AutoImportInsertionInfo, MemberDef, MemberDefInfo, ModuleDefs},
     },
+    utils::expansion_mod_ident_to_map_key,
 };
 use itertools::Itertools;
-use lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
-    TextEdit,
-};
+use lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat};
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     parser::ast as P,
-    shared::{ide::AliasAutocompleteInfo, Identifier, Name, NumericalAddress},
+    shared::{Identifier, Name, NumericalAddress, ide::AliasAutocompleteInfo},
 };
-use move_ir_types::location::{sp, Loc};
+use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
+
+use super::utils::{
+    all_mod_consts_to_import, all_mod_enums_to_import, all_mod_functions_to_import,
+    all_mod_structs_to_import, auto_import_text_edit,
+};
 
 /// Describes kind of the name access chain component.
 enum ChainComponentKind {
@@ -99,18 +104,20 @@ pub fn name_chain_completions(
         .cloned()
         .unwrap_or_else(AliasAutocompleteInfo::new);
 
-    eprintln!("found access chain for auto-completion (adddreses: {}, modules: {}, members: {}, tparams: {}",
-              info.addresses.len(), info.modules.len(), info.members.len(), info.type_params.len());
+    eprintln!(
+        "found access chain for auto-completion (adddreses: {}, modules: {}, members: {}, tparams: {}",
+        info.addresses.len(),
+        info.modules.len(),
+        info.members.len(),
+        info.type_params.len()
+    );
 
     // if we are auto-completing for an access chain, there is no need to include default completions
     completion_finalized = true;
 
     let mut import_insertion_info_opt = None;
     if auto_import {
-        import_insertion_info_opt = cursor
-            .module
-            .and_then(|m| mod_defs(symbols, &m.value))
-            .and_then(|m| m.import_insert_info);
+        import_insertion_info_opt = import_insertion_info(symbols, cursor);
     }
 
     if leading_name.loc.contains(&cursor.loc) {
@@ -151,8 +158,11 @@ pub fn name_chain_completions(
                         mod_ident.module.value().as_str(),
                         CompletionItemKind::MODULE,
                     );
-                    let auto_import_text =
-                        format!("use {}::{}", mod_ident.address, mod_ident.module);
+                    let auto_import_text = format!(
+                        "use {}::{}",
+                        addr_to_ide_string(&mod_ident.address),
+                        mod_ident.module
+                    );
                     add_auto_import_to_completion_item(
                         &mut item,
                         auto_import_text,
@@ -178,22 +188,23 @@ pub fn name_chain_completions(
                 );
             }
         }
-    } else if let Some(next_kind) =
-        first_in_scope_name_chain_component_kind(symbols, &info, leading_name)
-    {
-        completions_for_name_chain_entry(
-            symbols,
-            cursor,
-            &info,
-            ChainComponentInfo::new(leading_name.loc, next_kind),
-            chain_kind,
-            &path_entries,
-            /* path_index */ 0,
-            colon_colon_triggered,
-            inside_use,
-            &mut completions,
-        );
     } else {
+        let component_kinds =
+            first_in_scope_name_chain_component_kind(symbols, &info, leading_name);
+        for next_kind in component_kinds {
+            completions_for_name_chain_entry(
+                symbols,
+                cursor,
+                &info,
+                ChainComponentInfo::new(leading_name.loc, next_kind),
+                chain_kind,
+                &path_entries,
+                /* path_index */ 0,
+                colon_colon_triggered,
+                inside_use,
+                &mut completions,
+            );
+        }
         imports_for_name_chain_entry(
             symbols,
             cursor,
@@ -554,7 +565,8 @@ fn struct_completion(
 /// If source module is specified, and it is different from the module of the member,
 /// then only public members are included in the completion, unless modules are
 /// in the same package, in which case package members are also included. No members are included
-/// if a circular dependency is detected.
+/// if a circular dependency is detected. This exclusion is needed to generate
+/// correct copletions for auto-imports.
 fn single_name_member_completion(
     symbols: &Symbols,
     cursor: &CursorContext,
@@ -562,39 +574,8 @@ fn single_name_member_completion(
     member_alias: &Symbol,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
-    src_mod_ident_opt: Option<ModuleIdent>,
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
-
-    fn exclude_member(
-        mod_defs: &ModuleDefs,
-        src_mod_ident_opt: Option<ModuleIdent>,
-        visibility: &Visibility,
-    ) -> bool {
-        if let Some(src_mod_ident) = src_mod_ident_opt {
-            if mod_defs.neighbors.contains_key(&src_mod_ident) {
-                // circular dependency detected, exclude member
-                // TODO: this only works if there are "true" dependencies
-                // in the source files as the compiler does not populate
-                // the `neighbors` map using `use` statements - should we
-                // fix this at some point?
-                return true;
-            }
-            if mod_defs.ident != src_mod_ident.value {
-                match visibility {
-                    Visibility::Internal => true,
-                    Visibility::Package(_) => mod_defs.ident.address != src_mod_ident.value.address,
-                    _ => false,
-                }
-            } else {
-                // same module, include member regardless of visibility
-                false
-            }
-        } else {
-            // no source module, include member regardless of visibility
-            false
-        }
-    }
 
     // is it a function?
     if let Some(fdef) = mod_defs.functions.get(member_name) {
@@ -603,7 +584,7 @@ fn single_name_member_completion(
         }
         let Some(DefInfo::Function(
             _,
-            visibility,
+            _,
             fun_type,
             _,
             type_args,
@@ -615,9 +596,6 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
-            return vec![];
-        }
         return vec![call_completion_item(
             &mod_defs.ident,
             matches!(fun_type, FunType::Macro),
@@ -636,26 +614,12 @@ fn single_name_member_completion(
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
             return vec![];
         }
-        let Some(DefInfo::Struct(_, _, visibility, ..)) = symbols.def_info(&member_def.name_loc)
-        else {
-            return vec![];
-        };
-        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
-            return vec![];
-        }
         return struct_completion(cursor, &mod_defs.ident, *member_alias, member_def);
     }
 
     // is it an enum?
-    if let Some(member_def) = mod_defs.enums.get(member_name) {
+    if mod_defs.enums.get(member_name).is_some() {
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
-            return vec![];
-        }
-        let Some(DefInfo::Enum(_, _, visibility, ..)) = symbols.def_info(&member_def.name_loc)
-        else {
-            return vec![];
-        };
-        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![completion_item(
@@ -667,9 +631,6 @@ fn single_name_member_completion(
     // is it a const?
     if mod_defs.constants.get(member_name).is_some() {
         if !matches!(chain_kind, CT::All) {
-            return vec![];
-        }
-        if exclude_member(mod_defs, src_mod_ident_opt, &Visibility::Internal) {
             return vec![];
         }
         return vec![completion_item(
@@ -703,47 +664,34 @@ fn all_single_name_member_completions(
                 member_alias,
                 member_name,
                 chain_kind,
-                None,
             );
             completions.extend(member_completions);
         }
     }
     // member auto-imports
     if let Some(auto_import_pos) = import_insertion_info_opt {
-        if let Some(src_mod_ident) = cursor.module {
-            // need source module information to filter out auto-imports
-            // of non-public module members
-            let all_mod_members = symbols.file_mods.values().flatten().map(|mod_defs| {
-                (
-                    sp(mod_defs.name_loc, mod_defs.ident),
-                    mod_defs.functions.keys().chain(
-                        mod_defs
-                            .structs
-                            .keys()
-                            .chain(mod_defs.enums.keys().chain(mod_defs.constants.keys())),
-                    ),
-                )
-            });
-            for (mod_ident, import_members) in all_mod_members {
-                let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
+        let all_mod_members = all_mod_functions_to_import(symbols, cursor)
+            .chain(all_mod_structs_to_import(symbols, cursor))
+            .chain(all_mod_enums_to_import(symbols, cursor))
+            .chain(all_mod_consts_to_import(symbols, cursor));
+        for (mod_ident, import_members) in all_mod_members {
+            let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
+                continue;
+            };
+            for member_name in import_members {
+                // exclude members that are already imported
+                if members_info.contains_key(&(mod_ident, member_name)) {
                     continue;
-                };
-                for member_name in import_members {
-                    // exclude members that are already imported
-                    if members_info.contains_key(&(mod_ident, *member_name)) {
-                        continue;
-                    }
-                    let member_imports = member_auto_imports(
-                        symbols,
-                        cursor,
-                        mod_defs,
-                        member_name,
-                        chain_kind,
-                        src_mod_ident,
-                        auto_import_pos,
-                    );
-                    completions.extend(member_imports);
                 }
+                let member_imports = member_auto_imports(
+                    symbols,
+                    cursor,
+                    mod_defs,
+                    &member_name,
+                    chain_kind,
+                    auto_import_pos,
+                );
+                completions.extend(member_imports);
             }
         }
     }
@@ -759,7 +707,6 @@ fn member_auto_imports(
     mod_defs: &ModuleDefs,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
-    src_mod_ident: ModuleIdent,
     auto_import_pos: AutoImportInsertionInfo,
 ) -> Vec<CompletionItem> {
     let mut member_completions = single_name_member_completion(
@@ -769,13 +716,14 @@ fn member_auto_imports(
         member_name,
         member_name,
         chain_kind,
-        Some(src_mod_ident),
     );
     let mod_ident = mod_defs.ident;
     member_completions.iter_mut().for_each(|item| {
         let auto_import_text = format!(
             "use {}::{}::{}",
-            mod_ident.address, mod_ident.module, member_name,
+            addr_to_ide_string(&mod_ident.address),
+            mod_ident.module,
+            member_name,
         );
         add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
     });
@@ -797,32 +745,10 @@ fn add_auto_import_to_completion_item(
         });
     }
     item.detail = Some(format!("({})", import_text));
-    let r = Range {
-        start: import_insertion_info.pos,
-        end: import_insertion_info.pos,
-    };
-    match import_insertion_info.kind {
-        AutoImportInsertionKind::AfterLastImport => {
-            item.additional_text_edits = Some(vec![TextEdit {
-                range: r,
-                new_text: format!(
-                    "\n{}{};",
-                    " ".repeat(import_insertion_info.tabulation),
-                    import_text
-                ),
-            }])
-        }
-        AutoImportInsertionKind::BeforeFirstMember => {
-            item.additional_text_edits = Some(vec![TextEdit {
-                range: r,
-                new_text: format!(
-                    "{};\n\n{}",
-                    import_text,
-                    " ".repeat(import_insertion_info.tabulation)
-                ),
-            }])
-        }
-    }
+    item.additional_text_edits = Some(vec![auto_import_text_edit(
+        import_text,
+        import_insertion_info,
+    )]);
 }
 
 /// Checks if a given module identifier represents a module in a package identifier by
@@ -1007,9 +933,6 @@ fn imports_for_name_chain_entry(
     let Some(auto_import_pos) = import_insertion_info_opt else {
         return;
     };
-    let Some(src_mod_ident) = cursor.module else {
-        return;
-    };
     if at_colon_colon
         || (!path_entries.is_empty() && path_entries[path_index].loc.contains(&cursor.loc))
     {
@@ -1034,7 +957,6 @@ fn imports_for_name_chain_entry(
                             mod_defs,
                             member_name,
                             chain_kind,
-                            src_mod_ident,
                             auto_import_pos,
                         ))
                     });
@@ -1205,20 +1127,23 @@ fn all_packages(symbols: &Symbols, info: &AliasAutocompleteInfo) -> BTreeSet<Str
     addresses
 }
 
-/// Computes the kind of the fist chain component that is already
-/// in scope (was already imported).
+/// Computes a list of all possible kinds of the first chain component that are already
+/// in scope (were already imported).
 fn first_in_scope_name_chain_component_kind(
     symbols: &Symbols,
     info: &AliasAutocompleteInfo,
     leading_name: P::LeadingNameAccess,
-) -> Option<ChainComponentKind> {
+) -> Vec<ChainComponentKind> {
+    let mut component_kinds = vec![];
     match leading_name.value {
         P::LeadingNameAccess_::Name(n) => {
             if is_package_name(symbols, info, n) {
-                Some(ChainComponentKind::Package(leading_name))
-            } else if let Some(mod_ident) = info.modules.get(&n.value) {
-                Some(ChainComponentKind::Module(*mod_ident))
-            } else if let Some((mod_ident, member_name)) =
+                component_kinds.push(ChainComponentKind::Package(leading_name));
+            }
+            if let Some(mod_ident) = info.modules.get(&n.value) {
+                component_kinds.push(ChainComponentKind::Module(*mod_ident))
+            }
+            if let Some((mod_ident, member_name)) =
                 info.members
                     .iter()
                     .find_map(|((mod_ident, member_name), alias_names)| {
@@ -1229,28 +1154,23 @@ fn first_in_scope_name_chain_component_kind(
                         }
                     })
             {
-                Some(ChainComponentKind::Member(mod_ident, *member_name))
-            } else {
-                None
+                component_kinds.push(ChainComponentKind::Member(mod_ident, *member_name))
             }
         }
         P::LeadingNameAccess_::AnonymousAddress(addr) => {
             if is_package_address(symbols, info, addr) {
-                Some(ChainComponentKind::Package(leading_name))
-            } else {
-                None
+                component_kinds.push(ChainComponentKind::Package(leading_name))
             }
         }
         P::LeadingNameAccess_::GlobalAddress(n) => {
             // if leading name is global address then the first component can only be a
             // package
             if is_package_name(symbols, info, n) {
-                Some(ChainComponentKind::Package(leading_name))
-            } else {
-                None
+                component_kinds.push(ChainComponentKind::Package(leading_name))
             }
         }
-    }
+    };
+    component_kinds
 }
 
 /// Computes auto-completions for module uses.

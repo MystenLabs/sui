@@ -4,8 +4,8 @@
 
 extern crate test_generation;
 use move_binary_format::file_format::{
-    empty_module, Bytecode, CompiledModule, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
-    ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
+    Bytecode, CompiledModule, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
+    ModuleHandleIndex, Signature, SignatureIndex, SignatureToken, empty_module,
 };
 use move_core_types::identifier::Identifier;
 use std::collections::HashMap;

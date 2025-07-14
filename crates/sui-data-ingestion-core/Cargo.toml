@@ -28,6 +28,7 @@ tempfile.workspace = true
 tap.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc-api.workspace = true
+once_cell.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

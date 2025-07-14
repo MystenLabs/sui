@@ -107,14 +107,22 @@ Refer to [Running a Full node](#running-a-full-node) for instructions relevant t
 When you are ready to run `sui-node` in your production environment, you can set up your Full node by completing the following steps:
 
 1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
-    `cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml`
+    ```sh
+    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
+    ```
 1. Download the genesis blob for the network to use:
     - [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
-        `curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob`
+        ```sh
+        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+        ```
     - [Testnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob):
-        `curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob`
+        ```sh
+        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/testnet/genesis.blob
+        ```
     - [Mainnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob):
-        `curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob`
+        ```sh
+        $ curl -fLJO https://github.com/MystenLabs/sui-genesis/raw/main/mainnet/genesis.blob
+        ```
 1. For Testnet or Mainnet: Edit the `fullnode.yaml` file to include peer nodes for state synchronization. Append the following to the end of the current configuration:
 
     <Tabs groupId="network">

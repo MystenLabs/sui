@@ -49,6 +49,7 @@ mysten-common.workspace = true
 enum_dispatch.workspace = true
 sui-json-rpc-api.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-metrics-push-client.workspace = true
 hex-literal = { version = "0.3.4", optional = true }
 test-cluster = { workspace = true, optional = true }
 

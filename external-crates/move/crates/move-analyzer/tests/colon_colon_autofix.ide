@@ -1,0 +1,30 @@
+// Tests completions of various code snippets
+{
+  "AccessChainQuickFixTest": {
+    "project": "tests/autofix",
+    "file_tests": {
+      "colon_colon.move": [
+        {
+          "err_line": 5,
+          "err_col": 36,
+          "err_msg": "Unbound type 'PubStruct' in current scope"
+        },
+        {
+          "err_line": 9,
+          "err_col": 33,
+          "err_msg": "Unbound function 'create_struct' in current scope"
+        },
+        {
+          "err_line": 14,
+          "err_col": 16,
+          "err_msg": "Unbound type 'another_dep' in current scope"
+        },
+        {
+          "err_line": 19,
+          "err_col": 29,
+          "err_msg": "Could not resolve the name 'another_dep'"
+        }
+      ]
+    }
+  }
+}

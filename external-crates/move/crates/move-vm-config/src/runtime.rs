@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::verifier::{VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN};
+use crate::verifier::{DEFAULT_MAX_CONSTANT_VECTOR_LEN, VerifierConfig};
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format_common::VERSION_MAX;
 #[cfg(feature = "tracing")]
@@ -50,10 +50,10 @@ impl Default for VMConfig {
             max_binary_format_version: VERSION_MAX,
             runtime_limits_config: VMRuntimeLimitsConfig::default(),
             enable_invariant_violation_check_in_swap_loc: true,
-            check_no_extraneous_bytes_during_deserialization: false,
+            check_no_extraneous_bytes_during_deserialization: true,
             profiler_config: None,
             error_execution_state: true,
-            binary_config: BinaryConfig::with_extraneous_bytes_check(false),
+            binary_config: BinaryConfig::with_extraneous_bytes_check(true),
             rethrow_serialization_type_layout_errors: false,
             max_type_to_layout_nodes: Some(512),
             variant_nodes: true,

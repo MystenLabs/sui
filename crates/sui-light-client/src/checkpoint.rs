@@ -8,13 +8,10 @@ use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::Read;
-use std::sync::Arc;
 use std::{fs, io::Write};
-use sui_archival::read_manifest;
 use sui_config::genesis::Genesis;
+use sui_data_ingestion_core::end_of_epoch_data;
 use sui_sdk::SuiClientBuilder;
-use sui_storage::object_store::http::HttpDownloaderBuilder;
-use sui_storage::object_store::ObjectStoreGetExt;
 use sui_types::committee::Committee;
 use sui_types::messages_checkpoint::EndOfEpochData;
 use sui_types::{
@@ -22,6 +19,8 @@ use sui_types::{
     messages_checkpoint::CheckpointSummary,
 };
 use tracing::info;
+
+const CHECKPOINT_BUCKET_TIMEOUT_SECS: u64 = 5;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CheckpointsList {
@@ -84,11 +83,6 @@ fn write_checkpoint_general(
 
 /// Downloads the list of end of epoch checkpoints from the archive store or the GraphQL endpoint
 async fn sync_checkpoint_list_to_latest(config: &Config) -> anyhow::Result<CheckpointsList> {
-    // Check if we have any source configured
-    if config.graphql_url.is_none() && config.archive_store_config.is_none() {
-        return Err(anyhow!("No checkpoint sources configured - both GraphQL URL and Archive Store config are missing"));
-    }
-
     // Try getting checkpoints from GraphQL if URL is configured
     let graphql_list = if config.graphql_url.is_some() {
         match sync_checkpoint_list_to_latest_using_graphql(config).await {
@@ -107,19 +101,17 @@ async fn sync_checkpoint_list_to_latest(config: &Config) -> anyhow::Result<Check
     };
 
     // Try getting checkpoints from archive store if configured
-    let archive_list = if config.archive_store_config.is_some() {
-        match sync_checkpoint_list_to_latest_using_archive(config).await {
-            Ok(list) => list,
-            Err(e) => {
-                info!("Failed to get checkpoints from archive: {}", e);
-                CheckpointsList {
-                    checkpoints: vec![],
-                }
+    let archive_list = match sync_checkpoint_list_to_latest_using_checkpoint_bucket(
+        config.object_store_url.clone(),
+    )
+    .await
+    {
+        Ok(list) => list,
+        Err(e) => {
+            info!("Failed to get checkpoints from archive: {}", e);
+            CheckpointsList {
+                checkpoints: vec![],
             }
-        }
-    } else {
-        CheckpointsList {
-            checkpoints: vec![],
         }
     };
 
@@ -154,21 +146,12 @@ fn merge_checkpoint_lists(list1: &CheckpointsList, list2: &CheckpointsList) -> V
 }
 
 /// Downloads the list of end of epoch checkpoints from the archive store
-async fn sync_checkpoint_list_to_latest_using_archive(
-    config: &Config,
+async fn sync_checkpoint_list_to_latest_using_checkpoint_bucket(
+    archive_url: String,
 ) -> anyhow::Result<CheckpointsList> {
     info!("Syncing checkpoints from Archive store");
-    let Some(archive_store_config) = &config.archive_store_config else {
-        return Err(anyhow!("Archive store config is not provided"));
-    };
-    let remote_object_store: Arc<dyn ObjectStoreGetExt> = if archive_store_config.no_sign_request {
-        archive_store_config.make_http()?
-    } else {
-        Arc::new(archive_store_config.make()?)
-    };
-    let manifest = read_manifest(remote_object_store).await?;
-    let checkpoints = manifest.get_all_end_of_epoch_checkpoint_seq_numbers()?;
-    //write_checkpoint_list(config, &CheckpointsList { checkpoints })?;
+    let checkpoints =
+        end_of_epoch_data(archive_url, vec![], CHECKPOINT_BUCKET_TIMEOUT_SECS).await?;
     Ok(CheckpointsList { checkpoints })
 }
 

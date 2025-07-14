@@ -28,6 +28,7 @@ pub struct TrafficControllerMetrics {
     pub error_client_threshold: IntGauge,
     pub spam_proxied_client_threshold: IntGauge,
     pub error_proxied_client_threshold: IntGauge,
+    pub dry_run_enabled: IntGauge,
 }
 
 impl TrafficControllerMetrics {
@@ -154,6 +155,12 @@ impl TrafficControllerMetrics {
             error_proxied_client_threshold: register_int_gauge_with_registry!(
                 "error_proxied_client_threshold",
                 "Error proxied client threshold",
+                registry
+            )
+            .unwrap(),
+            dry_run_enabled: register_int_gauge_with_registry!(
+                "dry_run_enabled",
+                "If 1, dry run mode is enabled and traffic will not be blocked",
                 registry
             )
             .unwrap(),

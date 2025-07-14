@@ -9,10 +9,10 @@ use sui::clock::{Self, Clock};
 /// Error that the feature is not available on this network.
 const ENotSupportedError: u64 = 0;
 #[allow(unused_const)]
-/// Error that the attestation input failed to be parsed. 
+/// Error that the attestation input failed to be parsed.
 const EParseError: u64 = 1;
 #[allow(unused_const)]
-/// Error that the attestation failed to be verified. 
+/// Error that the attestation failed to be verified.
 const EVerifyError: u64 = 2;
 #[allow(unused_const)]
 /// Error that the PCRs are invalid.
@@ -21,11 +21,11 @@ const EInvalidPCRsError: u64 = 3;
 /// Represents a PCR entry with an index and value.
 public struct PCREntry has drop {
     index: u8,
-    value: vector<u8>
+    value: vector<u8>,
 }
 
 /// Nitro Attestation Document defined for AWS.
-public struct NitroAttestationDocument has drop  {
+public struct NitroAttestationDocument has drop {
     /// Issuing Nitro hypervisor module ID.
     module_id: vector<u8>,
     /// UTC time when document was created, in milliseconds since UNIX epoch.
@@ -39,20 +39,17 @@ public struct NitroAttestationDocument has drop  {
     public_key: Option<vector<u8>>,
     /// Additional signed user data, defined by protocol.
     user_data: Option<vector<u8>>,
-    /// An optional cryptographic nonce provided by the attestation consumer as a proof of 
+    /// An optional cryptographic nonce provided by the attestation consumer as a proof of
     /// authenticity.
     nonce: Option<vector<u8>>,
 }
 
-/// @param attestation: attesttaion documents bytes data. 
+/// @param attestation: attesttaion documents bytes data.
 /// @param clock: the clock object.
 ///
-/// Returns the parsed NitroAttestationDocument after verifying the attestation, 
-/// may abort with errors described above. 
-entry fun load_nitro_attestation(
-    attestation: vector<u8>,
-    clock: &Clock
-): NitroAttestationDocument {
+/// Returns the parsed NitroAttestationDocument after verifying the attestation,
+/// may abort with errors described above.
+entry fun load_nitro_attestation(attestation: vector<u8>, clock: &Clock): NitroAttestationDocument {
     load_nitro_attestation_internal(&attestation, clock::timestamp_ms(clock))
 }
 
@@ -68,8 +65,8 @@ public fun digest(attestation: &NitroAttestationDocument): &vector<u8> {
     &attestation.digest
 }
 
-/// Returns a list of mapping PCREntry containg the index and the PCR bytes. 
-/// Currently AWS supports PCR0, PCR1, PCR2, PCR3, PCR4, PCR8. 
+/// Returns a list of mapping PCREntry containg the index and the PCR bytes.
+/// Currently AWS supports PCR0, PCR1, PCR2, PCR3, PCR4, PCR8.
 public fun pcrs(attestation: &NitroAttestationDocument): &vector<PCREntry> {
     &attestation.pcrs
 }

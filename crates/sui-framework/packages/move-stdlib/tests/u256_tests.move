@@ -4,7 +4,8 @@
 #[test_only]
 module std::u256_tests;
 
-use std::{integer_tests, unit_test::assert_eq};
+use std::integer_tests;
+use std::unit_test::assert_eq;
 
 const BIT_SIZE: u8 = 255;
 const MAX: u256 = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF;

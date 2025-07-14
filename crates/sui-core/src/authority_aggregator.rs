@@ -882,7 +882,19 @@ where
                     Box::pin(async move {
                         let request =
                             ObjectInfoRequest::latest_object_info_request(object_id, /* generate_layout */ LayoutGenerationOption::None);
-                        client.handle_object_info_request(request).await
+                        let mut retry_count = 0;
+                        loop {
+                            match client.handle_object_info_request(request.clone()).await {
+                                Ok(object_info) => return Ok(object_info),
+                                Err(err) => {
+                                    retry_count += 1;
+                                    if retry_count > 3 {
+                                        return Err(err);
+                                    }
+                                    tokio::time::sleep(Duration::from_secs(1)).await;
+                                }
+                            }
+                        }
                     })
                 },
                 |mut state, name, weight, result| {

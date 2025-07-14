@@ -100,12 +100,9 @@ pub fn transaction_deferral_within_limit(
 #[cfg(test)]
 mod object_cost_tests {
     use super::*;
+    use typed_store::rocks::{DBMap, MetricConf};
     use typed_store::DBMapUtils;
     use typed_store::Map;
-    use typed_store::{
-        rocks::{DBMap, MetricConf},
-        traits::{TableSummary, TypedStoreDebug},
-    };
 
     #[tokio::test]
     async fn test_deferral_key_sort_order() {

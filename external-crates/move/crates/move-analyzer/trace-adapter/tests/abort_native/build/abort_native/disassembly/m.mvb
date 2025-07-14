@@ -1,0 +1,40 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+use 0000000000000000000000000000000000000000000000000000000000000002::address;
+
+foo(v#0#0: vector<u8>, p#0#0: u64): u64 * address {
+L2:	addr#1#0: address
+L3:	val#1#0: u64
+B0:
+	0: CopyLoc[1](p#0#0: u64)
+	1: MoveLoc[1](p#0#0: u64)
+	2: Add
+	3: StLoc[3](val#1#0: u64)
+	4: MoveLoc[0](v#0#0: vector<u8>)
+	5: Call address::from_bytes(vector<u8>): address
+	6: StLoc[2](addr#1#0: address)
+	7: MoveLoc[3](val#1#0: u64)
+	8: MoveLoc[2](addr#1#0: address)
+	9: Ret
+}
+
+test() {
+B0:
+	0: LdU8(42)
+	1: Call vector::singleton<u8>(u8): vector<u8>
+	2: LdU64(42)
+	3: Call foo(vector<u8>, u64): u64 * address
+	4: Pop
+	5: Pop
+	6: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

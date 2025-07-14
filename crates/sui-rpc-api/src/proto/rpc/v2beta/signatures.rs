@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::SignatureScheme;
-use crate::{
-    message::{MessageField, MessageFields, MessageMerge},
-    proto::TryFromProtoError,
-};
+use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
+use sui_sdk_types::PasskeyPublicKey;
 use tap::Pipe;
 
 //
@@ -466,17 +468,13 @@ impl TryFrom<&super::SignatureScheme> for sui_sdk_types::SignatureScheme {
 impl From<sui_sdk_types::SimpleSignature> for super::UserSignature {
     fn from(value: sui_sdk_types::SimpleSignature) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::SimpleSignature> for super::UserSignature {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::SimpleSignature,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::SimpleSignature> for super::UserSignature {
+    fn merge(&mut self, source: sui_sdk_types::SimpleSignature, mask: &FieldMaskTree) {
         let scheme: super::SignatureScheme = source.scheme().into();
         let (signature, public_key) = match &source {
             sui_sdk_types::SimpleSignature::Ed25519 {
@@ -623,6 +621,10 @@ impl From<&sui_sdk_types::MultisigMemberPublicKey> for super::MultisigMemberPubl
                 message.zklogin = Some(zklogin_id.into());
                 SignatureScheme::Zklogin
             }
+            Passkey(public_key) => {
+                message.public_key = Some(public_key.inner().as_bytes().to_vec().into());
+                SignatureScheme::Passkey
+            }
         };
 
         message.set_scheme(scheme);
@@ -653,7 +655,10 @@ impl TryFrom<&super::MultisigMemberPublicKey> for sui_sdk_types::MultisigMemberP
                     .ok_or_else(|| TryFromProtoError::missing("zklogin"))?
                     .try_into()?,
             ),
-            SignatureScheme::Multisig | SignatureScheme::Bls12381 | SignatureScheme::Passkey => {
+            SignatureScheme::Passkey => Self::Passkey(PasskeyPublicKey::new(
+                Secp256r1PublicKey::from_bytes(value.public_key())?,
+            )),
+            SignatureScheme::Multisig | SignatureScheme::Bls12381 => {
                 return Err(TryFromProtoError::from_error(
                     "invalid MultisigMemberPublicKey scheme",
                 ))
@@ -752,6 +757,10 @@ impl From<&sui_sdk_types::MultisigMemberSignature> for super::MultisigMemberSign
                 message.zklogin = Some((**zklogin_id).clone().into());
                 SignatureScheme::Zklogin
             }
+            Passkey(p) => {
+                message.passkey = Some(p.clone().into());
+                SignatureScheme::Passkey
+            }
         };
 
         message.set_scheme(scheme);
@@ -782,7 +791,14 @@ impl TryFrom<&super::MultisigMemberSignature> for sui_sdk_types::MultisigMemberS
                     .ok_or_else(|| TryFromProtoError::missing("zklogin"))?
                     .try_into()?,
             )),
-            SignatureScheme::Multisig | SignatureScheme::Bls12381 | SignatureScheme::Passkey => {
+            SignatureScheme::Passkey => Self::Passkey(
+                value
+                    .passkey
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("passkey"))?
+                    .try_into()?,
+            ),
+            SignatureScheme::Multisig | SignatureScheme::Bls12381 => {
                 return Err(TryFromProtoError::from_error(
                     "invalid MultisigMemberSignature scheme",
                 ))
@@ -874,17 +890,13 @@ impl MessageFields for super::UserSignature {
 impl From<sui_sdk_types::UserSignature> for super::UserSignature {
     fn from(value: sui_sdk_types::UserSignature) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::UserSignature> for super::UserSignature {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::UserSignature,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::UserSignature> for super::UserSignature {
+    fn merge(&mut self, source: sui_sdk_types::UserSignature, mask: &FieldMaskTree) {
         use sui_sdk_types::UserSignature::*;
 
         if mask.contains(Self::BCS_FIELD.name) {
@@ -920,8 +932,8 @@ impl MessageMerge<sui_sdk_types::UserSignature> for super::UserSignature {
     }
 }
 
-impl MessageMerge<&super::UserSignature> for super::UserSignature {
-    fn merge(&mut self, source: &super::UserSignature, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&super::UserSignature> for super::UserSignature {
+    fn merge(&mut self, source: &super::UserSignature, mask: &FieldMaskTree) {
         let super::UserSignature {
             bcs,
             scheme,

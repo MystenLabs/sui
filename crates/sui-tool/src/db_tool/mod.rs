@@ -14,7 +14,7 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
-use typed_store::rocks::MetricConf;
+use typed_store::rocks::{safe_drop_db, MetricConf};
 pub mod db_dump;
 mod index_search;
 
@@ -200,7 +200,7 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
         DbToolCommand::PrintObject(o) => print_object(&db_path, o),
         DbToolCommand::PrintCheckpoint(d) => print_checkpoint(&db_path, d),
         DbToolCommand::PrintCheckpointContent(d) => print_checkpoint_content(&db_path, d),
-        DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
+        DbToolCommand::ResetDB => reset_db_to_genesis(&db_path).await,
         DbToolCommand::RewindCheckpointExecution(d) => {
             rewind_checkpoint_execution(&db_path, d.epoch, d.checkpoint_sequence_number)
         }
@@ -342,7 +342,7 @@ pub fn print_checkpoint_content(
     Ok(())
 }
 
-pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
+pub async fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     // Follow the below steps to test:
     //
     // Get a db snapshot. Either generate one by running stress locally and enabling db checkpoints or download one from S3 bucket (pretty big in size though).
@@ -372,24 +372,14 @@ pub fn reset_db_to_genesis(path: &Path) -> anyhow::Result<()> {
     //   num-epochs-to-retain: 18446744073709551615
     //   max-checkpoints-in-batch: 10
     //   max-transactions-in-batch: 1000
-    let perpetual_db = AuthorityPerpetualTables::open_tables_read_write(
+    safe_drop_db(
         path.join("store").join("perpetual"),
-        MetricConf::default(),
-        None,
-        None,
-    );
-    perpetual_db.reset_db_for_execution_since_genesis()?;
+        std::time::Duration::from_secs(60),
+    )
+    .await?;
 
     let checkpoint_db = CheckpointStore::new(&path.join("checkpoints"));
     checkpoint_db.reset_db_for_execution_since_genesis()?;
-
-    let epoch_db = AuthorityEpochTables::open_tables_read_write(
-        path.join("store"),
-        MetricConf::default(),
-        None,
-        None,
-    );
-    epoch_db.reset_db_for_execution_since_genesis()?;
 
     Ok(())
 }

@@ -1,0 +1,6 @@
+// Tests autocompletion with control expressions (`if`, `while` and `match`).
+
+#[allow(ide_path_autocomplete)]
+module a::m {
+
+}

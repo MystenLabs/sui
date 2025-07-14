@@ -1184,8 +1184,8 @@ mod checked {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
-            Owner::ConsensusV2 { .. } => {
-                unimplemented!("ConsensusV2 does not exist for this execution version")
+            Owner::ConsensusAddressOwner { .. } => {
+                unimplemented!("ConsensusAddressOwner does not exist for this execution version")
             }
         };
         let owner = obj.owner.clone();
@@ -1235,6 +1235,7 @@ mod checked {
             CallArg::Object(obj_arg) => {
                 load_object_arg(vm, state_view, session, input_object_map, obj_arg)?
             }
+            CallArg::BalanceWithdraw(_) => unreachable!("Impossible to hit BalanceWithdraw in v0"),
         })
     }
 
@@ -1371,6 +1372,7 @@ mod checked {
             old_obj_ver.unwrap_or_default(),
             contents,
             protocol_config,
+            /* system_mutation */ false,
         )
     }
 }

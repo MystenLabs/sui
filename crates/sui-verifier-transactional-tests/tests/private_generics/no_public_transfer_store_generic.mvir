@@ -52,3 +52,15 @@ module 0x0.m {
         return move(c);
     }
 }
+
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.party;
+
+    t<T: key + store>(s: T, p: party.Party) {
+        label l0:
+        transfer.party_transfer<T>(move(s), move(p));
+        return;
+    }
+}

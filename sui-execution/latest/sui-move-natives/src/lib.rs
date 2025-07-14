@@ -34,17 +34,17 @@ use self::{
     tx_context::{
         TxContextDeriveIdCostParams, TxContextEpochCostParams, TxContextEpochTimestampMsCostParams,
         TxContextFreshIdCostParams, TxContextGasBudgetCostParams, TxContextGasPriceCostParams,
-        TxContextIdsCreatedCostParams, TxContextReplaceCostParams, TxContextSenderCostParams,
-        TxContextSponsorCostParams,
+        TxContextIdsCreatedCostParams, TxContextRGPCostParams, TxContextReplaceCostParams,
+        TxContextSenderCostParams, TxContextSponsorCostParams,
     },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
-use crate::crypto::group_ops;
 use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
+use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
@@ -119,6 +119,7 @@ pub struct NativesCostTable {
 
     // Transfer
     pub transfer_transfer_internal_cost_params: TransferInternalCostParams,
+    pub transfer_party_transfer_internal_cost_params: PartyTransferInternalCostParams,
     pub transfer_freeze_object_cost_params: TransferFreezeObjectCostParams,
     pub transfer_share_object_cost_params: TransferShareObjectCostParams,
 
@@ -129,6 +130,7 @@ pub struct NativesCostTable {
     pub tx_context_epoch_cost_params: TxContextEpochCostParams,
     pub tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams,
     pub tx_context_sponsor_cost_params: TxContextSponsorCostParams,
+    pub tx_context_rgp_cost_params: TxContextRGPCostParams,
     pub tx_context_gas_price_cost_params: TxContextGasPriceCostParams,
     pub tx_context_gas_budget_cost_params: TxContextGasBudgetCostParams,
     pub tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams,
@@ -350,6 +352,11 @@ impl NativesCostTable {
                     .transfer_transfer_internal_cost_base()
                     .into(),
             },
+            transfer_party_transfer_internal_cost_params: PartyTransferInternalCostParams {
+                transfer_party_transfer_internal_cost_base: protocol_config
+                    .transfer_party_transfer_internal_cost_base_as_option()
+                    .map(Into::into),
+            },
             transfer_freeze_object_cost_params: TransferFreezeObjectCostParams {
                 transfer_freeze_object_cost_base: protocol_config
                     .transfer_freeze_object_cost_base()
@@ -402,6 +409,12 @@ impl NativesCostTable {
                 } else {
                     DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
                 },
+            },
+            tx_context_rgp_cost_params: TxContextRGPCostParams {
+                tx_context_rgp_cost_base: protocol_config
+                    .tx_context_rgp_cost_base_as_option()
+                    .unwrap_or(DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST)
+                    .into(),
             },
             tx_context_gas_price_cost_params: TxContextGasPriceCostParams {
                 tx_context_gas_price_cost_base: if protocol_config.move_native_context() {
@@ -1097,6 +1110,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         (
             "transfer",
+            "party_transfer_impl",
+            make_native!(transfer::party_transfer_internal),
+        ),
+        (
+            "transfer",
             "freeze_object_impl",
             make_native!(transfer::freeze_object),
         ),
@@ -1141,6 +1159,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "native_sponsor",
             make_native!(tx_context::sponsor),
         ),
+        ("tx_context", "native_rgp", make_native!(tx_context::rgp)),
         (
             "tx_context",
             "native_gas_price",

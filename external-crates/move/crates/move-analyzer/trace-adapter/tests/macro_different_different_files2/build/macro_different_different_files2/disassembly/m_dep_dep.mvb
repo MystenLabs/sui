@@ -1,0 +1,11 @@
+// Move bytecode v6
+module 0.m_dep_dep {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

@@ -5,18 +5,18 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::{
-    framework::{run_test_impl, CompiledState, MaybeNamedCompiledModule, MoveTestAdapter},
+    framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
 use move_binary_format::{
-    errors::{Location, VMError, VMResult},
     CompiledModule,
+    errors::{Location, VMError, VMResult},
 };
 use move_command_line_common::files::verify_and_create_named_address_mapping;
-use move_compiler::{editions::Edition, shared::PackagePaths, FullyCompiledProgram};
+use move_compiler::{FullyCompiledProgram, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
     account_address::AccountAddress,
@@ -24,14 +24,14 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     runtime_value::MoveValue,
 };
-use move_stdlib::move_stdlib_named_addresses;
+use move_stdlib::named_addresses as move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
 use move_vm_config::runtime::VMConfig;
 use move_vm_runtime::{
     move_vm::MoveVM,
     session::{SerializedReturnValues, Session},
 };
-use move_vm_test_utils::{gas_schedule::GasStatus, InMemoryStorage};
+use move_vm_test_utils::{InMemoryStorage, gas_schedule::GasStatus};
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 
@@ -299,8 +299,8 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
-            paths: move_stdlib::move_stdlib_files(),
-            named_address_map: move_stdlib::move_stdlib_named_addresses(),
+            paths: move_stdlib::source_files(),
+            named_address_map: move_stdlib::named_addresses(),
         }],
         None,
         move_compiler::Flags::empty(),
@@ -319,9 +319,9 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
 static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     let (files, units_res) = move_compiler::Compiler::from_files(
         None,
-        move_stdlib::move_stdlib_files(),
+        move_stdlib::source_files(),
         vec![],
-        move_stdlib::move_stdlib_named_addresses(),
+        move_stdlib::named_addresses(),
     )
     .build()
     .unwrap();
@@ -350,6 +350,10 @@ fn test_vm_config() -> VMConfig {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    run_test_impl::<SimpleVMTestAdapter>(path, Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
-        .await
+    run_test_impl::<SimpleVMTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        None,
+    )
+    .await
 }

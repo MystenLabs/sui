@@ -11,7 +11,7 @@ use move_core_types::{
     effects::ChangeSet,
     identifier::Identifier,
     language_storage::ModuleId,
-    runtime_value::{serialize_values, MoveValue},
+    runtime_value::{MoveValue, serialize_values},
     u256::U256,
     vm_status::StatusCode,
 };

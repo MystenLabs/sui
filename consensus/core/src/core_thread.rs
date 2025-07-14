@@ -11,6 +11,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use consensus_types::block::{BlockRef, Round};
 use mysten_metrics::{
     monitored_mpsc::{channel, Receiver, Sender, WeakSender},
     monitored_scope, spawn_logged_monitored_task,
@@ -21,7 +22,7 @@ use tokio::sync::{oneshot, watch};
 use tracing::warn;
 
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::VerifiedBlock,
     commit::CertifiedCommits,
     context::Context,
     core::Core,
@@ -459,7 +460,6 @@ mod test {
     use super::*;
     use crate::{
         block_manager::BlockManager,
-        block_verifier::NoopBlockVerifier,
         commit_observer::CommitObserver,
         context::Context,
         core::CoreSignals,
@@ -479,11 +479,7 @@ mod test {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let block_manager = BlockManager::new(
-            context.clone(),
-            dag_state.clone(),
-            Arc::new(NoopBlockVerifier),
-        );
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
         let (blocks_sender, _blocks_receiver) =
@@ -501,9 +497,10 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store,
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),

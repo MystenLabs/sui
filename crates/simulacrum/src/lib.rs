@@ -571,15 +571,9 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         self.store().get_transaction_events(event_digest)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
-        todo!()
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        _sequence_number: Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
         _digest: &sui_types::messages_checkpoint::CheckpointContentsDigest,
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
@@ -607,6 +601,14 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
 
     fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
         None
+    }
+
+    fn get_struct_layout(
+        &self,
+        _: &move_core_types::language_storage::StructTag,
+    ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
+    {
+        Ok(None)
     }
 }
 

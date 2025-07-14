@@ -47,6 +47,23 @@ pub trait ExecutionMode {
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
     ) -> Result<(), ExecutionError>;
+
+    // == Arg/Result V2 ==
+
+    const TRACK_EXECUTION: bool;
+
+    fn add_argument_update_v2(
+        acc: &mut Self::ArgumentUpdates,
+        arg: Argument,
+        bytes: Vec<u8>,
+        type_: TypeTag,
+    ) -> Result<(), ExecutionError>;
+
+    fn finish_command_v2(
+        acc: &mut Self::ExecutionResults,
+        argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
+        command_result: Vec<(Vec<u8>, TypeTag)>,
+    ) -> Result<(), ExecutionError>;
 }
 
 #[derive(Copy, Clone)]
@@ -93,6 +110,25 @@ impl ExecutionMode for Normal {
     ) -> Result<(), ExecutionError> {
         Ok(())
     }
+
+    const TRACK_EXECUTION: bool = false;
+
+    fn add_argument_update_v2(
+        _acc: &mut Self::ArgumentUpdates,
+        _arg: Argument,
+        _bytes: Vec<u8>,
+        _type_: TypeTag,
+    ) -> Result<(), ExecutionError> {
+        invariant_violation!("should not be called");
+    }
+
+    fn finish_command_v2(
+        _acc: &mut Self::ExecutionResults,
+        _argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
+        _command_result: Vec<(Vec<u8>, TypeTag)>,
+    ) -> Result<(), ExecutionError> {
+        invariant_violation!("should not be called");
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -138,6 +174,25 @@ impl ExecutionMode for Genesis {
         _command_result: &[Value],
     ) -> Result<(), ExecutionError> {
         Ok(())
+    }
+
+    const TRACK_EXECUTION: bool = false;
+
+    fn add_argument_update_v2(
+        _acc: &mut Self::ArgumentUpdates,
+        _arg: Argument,
+        _bytes: Vec<u8>,
+        _type_: TypeTag,
+    ) -> Result<(), ExecutionError> {
+        invariant_violation!("should not be called");
+    }
+
+    fn finish_command_v2(
+        _acc: &mut Self::ExecutionResults,
+        _argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
+        _command_result: Vec<(Vec<u8>, TypeTag)>,
+    ) -> Result<(), ExecutionError> {
+        invariant_violation!("should not be called");
     }
 }
 
@@ -190,6 +245,25 @@ impl ExecutionMode for System {
         _command_result: &[Value],
     ) -> Result<(), ExecutionError> {
         Ok(())
+    }
+
+    const TRACK_EXECUTION: bool = false;
+
+    fn add_argument_update_v2(
+        _acc: &mut Self::ArgumentUpdates,
+        _arg: Argument,
+        _bytes: Vec<u8>,
+        _type_: TypeTag,
+    ) -> Result<(), ExecutionError> {
+        invariant_violation!("should not be called");
+    }
+
+    fn finish_command_v2(
+        _acc: &mut Self::ExecutionResults,
+        _argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
+        _command_result: Vec<(Vec<u8>, TypeTag)>,
+    ) -> Result<(), ExecutionError> {
+        invariant_violation!("should not be called");
     }
 }
 
@@ -250,6 +324,27 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
         acc.push((argument_updates, command_bytes));
         Ok(())
     }
+
+    const TRACK_EXECUTION: bool = true;
+
+    fn add_argument_update_v2(
+        acc: &mut Self::ArgumentUpdates,
+        arg: Argument,
+        bytes: Vec<u8>,
+        type_: TypeTag,
+    ) -> Result<(), ExecutionError> {
+        acc.push((arg, bytes, type_));
+        Ok(())
+    }
+
+    fn finish_command_v2(
+        acc: &mut Self::ExecutionResults,
+        argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
+        command_result: Vec<(Vec<u8>, TypeTag)>,
+    ) -> Result<(), ExecutionError> {
+        acc.push((argument_updates, command_result));
+        Ok(())
+    }
 }
 
 fn value_to_bytes_and_tag(
@@ -260,7 +355,7 @@ fn value_to_bytes_and_tag(
         Value::Object(obj) => {
             let tag = resolver.get_type_tag(&obj.type_)?;
             let mut bytes = vec![];
-            obj.write_bcs_bytes(&mut bytes);
+            obj.write_bcs_bytes(&mut bytes, None)?;
             (tag, bytes)
         }
         Value::Raw(RawValueType::Any, bytes) => {

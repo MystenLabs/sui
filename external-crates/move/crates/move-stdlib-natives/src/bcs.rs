@@ -16,7 +16,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
-    values::{values_impl::Reference, Value},
+    values::{Value, values_impl::Reference},
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};
@@ -68,7 +68,7 @@ fn native_to_bytes(
     };
     // serialize value
     let val = ref_to_val.read_ref()?;
-    let serialized_value = match val.simple_serialize(&layout) {
+    let serialized_value = match val.typed_serialize(&layout) {
         Some(serialized_value) => serialized_value,
         None => {
             // If we run out of gas when charging for failure, we don't want the `OUT_OF_GAS` error

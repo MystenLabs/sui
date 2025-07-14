@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::message::{MessageField, MessageFields};
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
 
 // Include the generated proto definitions
 include!("../../generated/sui.rpc.v2beta.rs");
@@ -23,12 +24,14 @@ mod tests {
 mod balance_change;
 mod checkpoint;
 mod effects;
+mod epoch;
 mod events;
 mod execute_transaction;
 mod executed_transaction;
 mod execution_status;
 mod object;
 mod signatures;
+mod system_state;
 mod transaction;
 
 //

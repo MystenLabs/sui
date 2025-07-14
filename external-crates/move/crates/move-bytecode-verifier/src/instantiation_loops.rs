@@ -22,12 +22,12 @@ use move_binary_format::{
 };
 use move_core_types::vm_status::StatusCode;
 use petgraph::{
+    Graph,
     algo::tarjan_scc,
     graph::{EdgeIndex, NodeIndex},
     visit::EdgeRef,
-    Graph,
 };
-use std::collections::{hash_map, HashMap, HashSet};
+use std::collections::{HashMap, HashSet, hash_map};
 
 /// Data attached to each node.
 /// Each node corresponds to a type formal of a generic function in the module.

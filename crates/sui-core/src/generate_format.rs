@@ -19,7 +19,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     AggregateAuthoritySignature, AuthorityQuorumSignInfo, AuthorityStrongQuorumSignInfo,
 };
-use sui_types::effects::TransactionEvents;
+use sui_types::effects::{AccumulatorOperation, AccumulatorValue, TransactionEvents};
 use sui_types::event::Event;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution_status::{
@@ -33,7 +33,8 @@ use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
 use sui_types::transaction::{
-    GenesisObject, SenderSignedData, StoredExecutionTimeObservations, TransactionData,
+    GenesisObject, Reservation, SenderSignedData, StoredExecutionTimeObservations, TransactionData,
+    WithdrawFrom, WithdrawTypeParam,
 };
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
@@ -199,6 +200,9 @@ fn get_registry() -> Result<Registry> {
     tracer
         .trace_type::<ExecutionFailureStatus>(&samples)
         .unwrap();
+    tracer.trace_type::<Reservation>(&samples).unwrap();
+    tracer.trace_type::<WithdrawFrom>(&samples).unwrap();
+    tracer.trace_type::<WithdrawTypeParam>(&samples).unwrap();
     tracer.trace_type::<CallArg>(&samples).unwrap();
     tracer.trace_type::<ObjectArg>(&samples).unwrap();
     tracer.trace_type::<Data>(&samples).unwrap();
@@ -239,6 +243,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ObjectIn>(&samples).unwrap();
     tracer.trace_type::<ObjectOut>(&samples).unwrap();
     tracer.trace_type::<UnchangedSharedKind>(&samples).unwrap();
+    tracer.trace_type::<AccumulatorValue>(&samples).unwrap();
+    tracer.trace_type::<AccumulatorOperation>(&samples).unwrap();
     tracer.trace_type::<TransactionEffects>(&samples).unwrap();
 
     // uncomment once GenericSignature is added
@@ -292,9 +298,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<TransactionData>(&samples).unwrap();
     tracer.trace_type::<GenesisObject>(&samples).unwrap();
     tracer.trace_type::<CheckpointCommitment>(&samples).unwrap();
-    tracer
-        .trace_type::<sui_types::object::Authenticator>(&samples)
-        .unwrap();
 
     tracer.registry()
 }

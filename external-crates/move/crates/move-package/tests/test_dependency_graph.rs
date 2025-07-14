@@ -44,6 +44,7 @@ fn no_dep_graph() {
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
         Dependencies::default(), /* implicit deps */
+        /* force_lock_file */ false,
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -167,6 +168,7 @@ fn always_deps() {
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
         /* implicit_deps */ Dependencies::default(),
+        /* force_lock_file */ false,
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -253,16 +255,18 @@ fn merge_simple() {
         }),
     )]);
     let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
-    assert!(outer
-        .merge(
-            dep_graphs,
-            &DependencyKind::default(),
-            dependencies,
-            &BTreeMap::new(),
-            &orig_names,
-            Symbol::from("Root")
-        )
-        .is_ok(),);
+    assert!(
+        outer
+            .merge(
+                dep_graphs,
+                &DependencyKind::default(),
+                dependencies,
+                &BTreeMap::new(),
+                &orig_names,
+                Symbol::from("Root")
+            )
+            .is_ok(),
+    );
     assert_eq!(
         outer.topological_order(),
         vec![Symbol::from("Root"), Symbol::from("A")],
@@ -308,16 +312,18 @@ fn merge_into_root() {
         }),
     )]);
     let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
-    assert!(outer
-        .merge(
-            dep_graphs,
-            &DependencyKind::default(),
-            dependencies,
-            &BTreeMap::new(),
-            &orig_names,
-            Symbol::from("Root")
-        )
-        .is_ok());
+    assert!(
+        outer
+            .merge(
+                dep_graphs,
+                &DependencyKind::default(),
+                dependencies,
+                &BTreeMap::new(),
+                &orig_names,
+                Symbol::from("Root")
+            )
+            .is_ok()
+    );
 
     assert_eq!(
         outer.topological_order(),
@@ -475,16 +481,18 @@ fn merge_overlapping() {
         ),
     ]);
     let orig_names: BTreeMap<Symbol, Symbol> = dependencies.keys().map(|k| (*k, *k)).collect();
-    assert!(outer
-        .merge(
-            dep_graphs,
-            &DependencyKind::default(),
-            dependencies,
-            &BTreeMap::new(),
-            &orig_names,
-            Symbol::from("Root")
-        )
-        .is_ok());
+    assert!(
+        outer
+            .merge(
+                dep_graphs,
+                &DependencyKind::default(),
+                dependencies,
+                &BTreeMap::new(),
+                &orig_names,
+                Symbol::from("Root")
+            )
+            .is_ok()
+    );
 }
 
 #[test]
@@ -578,6 +586,7 @@ fn immediate_dependencies() {
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
         /* implicit_deps */ Dependencies::default(),
+        /* force_lock_file */ false,
     );
     let (graph, _) = dep_graph_builder
         .get_graph(

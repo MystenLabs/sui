@@ -16,7 +16,7 @@ use std::uq32_32::{
     from_int,
     from_quotient,
     from_raw,
-    to_raw,
+    to_raw
 };
 
 #[test]

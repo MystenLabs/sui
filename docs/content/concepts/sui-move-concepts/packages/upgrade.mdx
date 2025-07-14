@@ -26,7 +26,7 @@ public fun increment(c: &mut Counter) {
 Then, your package upgrade might add an emit event to the `increment` function:
 
 ```move
-struct Progress has copy, drop {
+public struct Progress has copy, drop {
     reached: u64
 }
 
@@ -52,26 +52,22 @@ When you create packages that involve shared objects, you need to think about up
 Considering the earlier `counter` example, which might have started life as follows:
 
 ```move
-module example::counter {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::TxContext;
+module example::counter;
 
-    struct Counter has key {
-        id: UID,
-        value: u64,
-    }
+public struct Counter has key {
+    id: UID,
+    value: u64,
+}
 
-    fun init(ctx: &mut TxContext) {
-        transfer::share_object(Counter {
-            id: object::new(ctx),
-            value: 0,
-        })
-    }
+fun init(ctx: &mut TxContext) {
+    transfer::share_object(Counter {
+        id: object::new(ctx),
+        value: 0,
+    })
+}
 
-    public fun increment(c: &mut Counter) {
-        c.value = c.value + 1;
-    }
+public fun increment(c: &mut Counter) {
+    c.value = c.value + 1;
 }
 ```
 
@@ -85,54 +81,48 @@ To ensure that upgrades to this package can limit access of the shared object to
 An upgrade-aware `counter` module that incorporates all these ideas looks as follows:
 
 ```move
-module example::counter {
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+module example::counter;
 
-    // 1. Track the current version of the module
-    const VERSION: u64 = 1;
+/// Not the right admin for this counter
+const ENotAdmin: u64 = 0;
 
-    struct Counter has key {
-        id: UID,
-        // 2. Track the current version of the shared object
-        version: u64,
-        // 3. Associate the `Counter` with its `AdminCap`
-        admin: ID,
-        value: u64,
-    }
+/// Calling functions from the wrong package version
+const EWrongVersion: u64 = 1;
 
-    struct AdminCap has key {
-        id: UID,
-    }
+// 1. Track the current version of the module
+const VERSION: u64 = 1;
 
-    /// Not the right admin for this counter
-    const ENotAdmin: u64 = 0;
+public struct Counter has key {
+    id: UID,
+    // 2. Track the current version of the shared object
+    version: u64,
+    // 3. Associate the `Counter` with its `AdminCap`
+    admin: ID,
+    value: u64,
+}
 
-    /// Calling functions from the wrong package version
-    const EWrongVersion: u64 = 1;
+public struct AdminCap has key {
+    id: UID,
+}
 
-    fun init(ctx: &mut TxContext) {
-        let admin = AdminCap {
-            id: object::new(ctx),
-        };
+fun init(ctx: &mut TxContext) {
+    let admin = AdminCap { id: object::new(ctx) };
 
-        transfer::share_object(Counter {
-            id: object::new(ctx),
-            version: VERSION,
-            admin: object::id(&admin),
-            value: 0,
-        });
+    transfer::share_object(Counter {
+        id: object::new(ctx),
+        version: VERSION,
+        admin: object::id(&admin),
+        value: 0,
+    });
 
-        transfer::transfer(admin, tx_context::sender(ctx));
-    }
+    transfer::transfer(admin, ctx.sender());
+}
 
-    public fun increment(c: &mut Counter) {
-        // 4. Guard the entry of all functions that access the shared object
-        //    with a version check.
-        assert!(c.version == VERSION, EWrongVersion);
-        c.value = c.value + 1;
-    }
+public fun increment(c: &mut Counter) {
+    // 4. Guard the entry of all functions that access the shared object
+    //    with a version check.
+    assert!(c.version == VERSION, EWrongVersion);
+    c.value = c.value + 1;
 }
 ```
 
@@ -144,69 +134,66 @@ To upgrade a module using this pattern requires making two extra changes, on top
 The following module is an upgraded `counter` that emits `Progress` events as originally discussed, but also provides tools for an admin (`AdminCap` holder) to prevent accesses to the counter from older package versions:
 
 ```move
-module example::counter {
-    use sui::event;
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+module example::counter;
 
-    // 1. Bump the `VERSION` of the package.
-    const VERSION: u64 = 2;
+use sui::event;
 
-    struct Counter has key {
-        id: UID,
-        version: u64,
-        admin: ID,
-        value: u64,
+/// Not the right admin for this counter
+const ENotAdmin: u64 = 0;
+
+/// Migration is not an upgrade
+const ENotUpgrade: u64 = 1;
+
+/// Calling functions from the wrong package version
+const EWrongVersion: u64 = 2;
+
+// 1. Bump the `VERSION` of the package.
+const VERSION: u64 = 2;
+
+public struct Counter has key {
+    id: UID,
+    version: u64,
+    admin: ID,
+    value: u64,
+}
+
+public struct AdminCap has key {
+    id: UID,
+}
+
+public struct Progress has copy, drop {
+    reached: u64,
+}
+
+fun init(ctx: &mut TxContext) {
+    let admin = AdminCap {
+        id: object::new(ctx),
+    };
+
+    transfer::share_object(Counter {
+        id: object::new(ctx),
+        version: VERSION,
+        admin: object::id(&admin),
+        value: 0,
+    });
+
+    transfer::transfer(admin, ctx.sender());
+}
+
+public fun increment(c: &mut Counter) {
+    assert!(c.version == VERSION, EWrongVersion);
+    c.value = c.value + 1;
+
+    if (c.value % 100 == 0) {
+        event::emit(Progress { reached: c.value })
     }
+}
 
-    struct AdminCap has key {
-        id: UID,
-    }
-
-    struct Progress has copy, drop {
-        reached: u64,
-    }
-
-    /// Not the right admin for this counter
-    const ENotAdmin: u64 = 0;
-
-    /// Migration is not an upgrade
-    const ENotUpgrade: u64 = 1;
-
-    /// Calling functions from the wrong package version
-    const EWrongVersion: u64 = 2;
-
-    fun init(ctx: &mut TxContext) {
-        let admin = AdminCap {
-            id: object::new(ctx),
-        };
-
-        transfer::share_object(Counter {
-            id: object::new(ctx),
-            version: VERSION,
-            admin: object::id(&admin),
-            value: 0,
-        });
-
-        transfer::transfer(admin, tx_context::sender(ctx));
-    }
-
-    public fun increment(c: &mut Counter) {
-        assert!(c.version == VERSION, EWrongVersion);
-        c.value = c.value + 1;
-
-        if (c.value % 100 == 0) {
-            event::emit(Progress { reached: c.value })
-        }
-    }
-
-    // 2. Introduce a migrate function
-    entry fun migrate(c: &mut Counter, a: &AdminCap) {
-        assert!(c.admin == object::id(a), ENotAdmin);
-        assert!(c.version < VERSION, ENotUpgrade);
-        c.version = VERSION;
-    }
+// 2. Introduce a migrate function
+entry fun migrate(c: &mut Counter, a: &AdminCap) {
+    assert!(c.admin == object::id(a), ENotAdmin);
+    assert!(c.version < VERSION, ENotUpgrade);
+    c.version = VERSION;
 }
 ```
 

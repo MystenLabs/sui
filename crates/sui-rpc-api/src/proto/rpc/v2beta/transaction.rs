@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::Transaction;
-use crate::message::{MessageField, MessageFields, MessageMerge};
 use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 use tap::Pipe;
 
 //
@@ -36,19 +39,17 @@ impl MessageFields for Transaction {
 impl From<sui_sdk_types::Transaction> for Transaction {
     fn from(value: sui_sdk_types::Transaction) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::Transaction> for Transaction {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::Transaction,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::Transaction> for Transaction {
+    fn merge(&mut self, source: sui_sdk_types::Transaction, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(super::Bcs::serialize(&source).unwrap());
+            let mut bcs = super::Bcs::serialize(&source).unwrap();
+            bcs.name = Some("TransactionData".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
@@ -77,8 +78,8 @@ impl MessageMerge<sui_sdk_types::Transaction> for Transaction {
     }
 }
 
-impl MessageMerge<&Transaction> for Transaction {
-    fn merge(&mut self, source: &Transaction, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&Transaction> for Transaction {
+    fn merge(&mut self, source: &Transaction, mask: &FieldMaskTree) {
         let Transaction {
             bcs,
             digest,
@@ -261,6 +262,16 @@ impl TryFrom<&super::TransactionExpiration> for sui_sdk_types::TransactionExpira
 // TransactionKind
 //
 
+impl From<super::ProgrammableTransaction> for super::TransactionKind {
+    fn from(value: super::ProgrammableTransaction) -> Self {
+        Self {
+            kind: Some(super::transaction_kind::Kind::ProgrammableTransaction(
+                value,
+            )),
+        }
+    }
+}
+
 impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
     fn from(value: sui_sdk_types::TransactionKind) -> Self {
         use super::transaction_kind::Kind;
@@ -279,6 +290,7 @@ impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
             ConsensusCommitPrologueV2(prologue) => Kind::ConsensusCommitPrologueV2(prologue.into()),
             ConsensusCommitPrologueV3(prologue) => Kind::ConsensusCommitPrologueV3(prologue.into()),
             ConsensusCommitPrologueV4(prologue) => Kind::ConsensusCommitPrologueV4(prologue.into()),
+            ProgrammableSystemTransaction(_) => return Self::default(),
         };
 
         Self { kind: Some(kind) }
@@ -335,7 +347,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologue> for super::ConsensusCommitProl
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: None,
@@ -359,7 +371,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         Ok(Self {
             epoch,
@@ -374,7 +386,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV2> for super::ConsensusCommitPr
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
@@ -398,7 +410,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -421,7 +433,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV3> for super::ConsensusCommitPr
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
@@ -447,7 +459,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -488,9 +500,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV4> for super::ConsensusCommitPr
         Self {
             epoch: Some(epoch),
             round: Some(round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
-                commit_timestamp_ms,
-            )),
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(commit_timestamp_ms)),
             consensus_commit_digest: Some(consensus_commit_digest.to_string()),
             sub_dag_index,
             consensus_determined_version_assignments: Some(
@@ -514,7 +524,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -556,18 +566,29 @@ impl From<sui_sdk_types::ConsensusDeterminedVersionAssignments>
     for super::ConsensusDeterminedVersionAssignments
 {
     fn from(value: sui_sdk_types::ConsensusDeterminedVersionAssignments) -> Self {
-        use super::consensus_determined_version_assignments::Kind;
         use sui_sdk_types::ConsensusDeterminedVersionAssignments::*;
 
-        let kind = match value {
+        let mut message = Self::default();
+
+        let version = match value {
             CanceledTransactions {
                 canceled_transactions,
-            } => Kind::CanceledTransactions(super::CanceledTransactions {
-                canceled_transactions: canceled_transactions.into_iter().map(Into::into).collect(),
-            }),
+            } => {
+                message.canceled_transactions =
+                    canceled_transactions.into_iter().map(Into::into).collect();
+                1
+            }
+            CanceledTransactionsV2 {
+                canceled_transactions,
+            } => {
+                message.canceled_transactions =
+                    canceled_transactions.into_iter().map(Into::into).collect();
+                2
+            }
         };
 
-        Self { kind: Some(kind) }
+        message.version = Some(version);
+        message
     }
 }
 
@@ -577,21 +598,26 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ConsensusDeterminedVersionAssignments) -> Result<Self, Self::Error> {
-        use super::consensus_determined_version_assignments::Kind;
-
-        match value
-            .kind
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("kind"))?
-        {
-            Kind::CanceledTransactions(super::CanceledTransactions {
-                canceled_transactions,
-            }) => Self::CanceledTransactions {
-                canceled_transactions: canceled_transactions
+        match value.version() {
+            1 => Self::CanceledTransactions {
+                canceled_transactions: value
+                    .canceled_transactions
                     .iter()
-                    .map(TryInto::try_into)
+                    .map(TryFrom::try_from)
                     .collect::<Result<_, _>>()?,
             },
+            2 => Self::CanceledTransactionsV2 {
+                canceled_transactions: value
+                    .canceled_transactions
+                    .iter()
+                    .map(TryFrom::try_from)
+                    .collect::<Result<_, _>>()?,
+            },
+            _ => {
+                return Err(TryFromProtoError::from_error(
+                    "unknown ConsensusDeterminedVersionAssignments version",
+                ))
+            }
         }
         .pipe(Ok)
     }
@@ -638,6 +664,43 @@ impl TryFrom<&super::CanceledTransaction> for sui_sdk_types::CanceledTransaction
     }
 }
 
+impl From<sui_sdk_types::CanceledTransactionV2> for super::CanceledTransaction {
+    fn from(value: sui_sdk_types::CanceledTransactionV2) -> Self {
+        Self {
+            digest: Some(value.digest.to_string()),
+            version_assignments: value
+                .version_assignments
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<&super::CanceledTransaction> for sui_sdk_types::CanceledTransactionV2 {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &super::CanceledTransaction) -> Result<Self, Self::Error> {
+        let digest = value
+            .digest
+            .as_ref()
+            .ok_or_else(|| TryFromProtoError::missing("digest"))?
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
+
+        let version_assignments = value
+            .version_assignments
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            digest,
+            version_assignments,
+        })
+    }
+}
+
 //
 // VersionAssignment
 //
@@ -646,6 +709,7 @@ impl From<sui_sdk_types::VersionAssignment> for super::VersionAssignment {
     fn from(value: sui_sdk_types::VersionAssignment) -> Self {
         Self {
             object_id: Some(value.object_id.to_string()),
+            start_version: None,
             version: Some(value.version),
         }
     }
@@ -666,6 +730,41 @@ impl TryFrom<&super::VersionAssignment> for sui_sdk_types::VersionAssignment {
             .ok_or_else(|| TryFromProtoError::missing("version"))?;
 
         Ok(Self { object_id, version })
+    }
+}
+
+impl From<sui_sdk_types::VersionAssignmentV2> for super::VersionAssignment {
+    fn from(value: sui_sdk_types::VersionAssignmentV2) -> Self {
+        Self {
+            object_id: Some(value.object_id.to_string()),
+            start_version: Some(value.start_version),
+            version: Some(value.version),
+        }
+    }
+}
+
+impl TryFrom<&super::VersionAssignment> for sui_sdk_types::VersionAssignmentV2 {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &super::VersionAssignment) -> Result<Self, Self::Error> {
+        let object_id = value
+            .object_id
+            .as_ref()
+            .ok_or_else(|| TryFromProtoError::missing("object_id"))?
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
+        let start_version = value
+            .start_version
+            .ok_or_else(|| TryFromProtoError::missing("version"))?;
+        let version = value
+            .version
+            .ok_or_else(|| TryFromProtoError::missing("version"))?;
+
+        Ok(Self {
+            object_id,
+            start_version,
+            version,
+        })
     }
 }
 
@@ -908,7 +1007,7 @@ impl From<sui_sdk_types::ChangeEpoch> for super::ChangeEpoch {
             computation_charge: Some(value.computation_charge),
             storage_rebate: Some(value.storage_rebate),
             non_refundable_storage_fee: Some(value.non_refundable_storage_fee),
-            epoch_start_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            epoch_start_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.epoch_start_timestamp_ms,
             )),
             system_packages: value.system_packages.into_iter().map(Into::into).collect(),
@@ -944,7 +1043,7 @@ impl TryFrom<&super::ChangeEpoch> for sui_sdk_types::ChangeEpoch {
             .ok_or_else(|| TryFromProtoError::missing("non_refundable_storage_fee"))?;
         let epoch_start_timestamp_ms = epoch_start_timestamp
             .ok_or_else(|| TryFromProtoError::missing("epoch_start_timestamp_ms"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         Ok(Self {
             epoch,
@@ -1017,6 +1116,8 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
             StoreExecutionTimeObservations(observations) => {
                 Kind::ExecutionTimeObservations(observations.into())
             }
+            AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
+            CoinRegistryCreate => return Self::default(),
         };
 
         Self { kind: Some(kind) }
@@ -1050,6 +1151,7 @@ impl TryFrom<&super::EndOfEpochTransactionKind> for sui_sdk_types::EndOfEpochTra
             Kind::ExecutionTimeObservations(execution_time_observations) => {
                 Self::StoreExecutionTimeObservations(execution_time_observations.try_into()?)
             }
+            Kind::AccumulatorRootCreate(()) => Self::AccumulatorRootCreate,
         }
         .pipe(Ok)
     }
@@ -1423,6 +1525,44 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
 // Argument
 //
 
+impl super::Argument {
+    pub fn gas() -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Gas.into()),
+            input: None,
+            result: None,
+            subresult: None,
+        }
+    }
+
+    pub fn new_input(input: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Input.into()),
+            input: Some(input.into()),
+            result: None,
+            subresult: None,
+        }
+    }
+
+    pub fn new_result(command: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Result.into()),
+            input: None,
+            result: Some(command.into()),
+            subresult: None,
+        }
+    }
+
+    pub fn nested_result(command: u16, subresult: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Result.into()),
+            input: None,
+            result: Some(command.into()),
+            subresult: Some(subresult.into()),
+        }
+    }
+}
+
 impl From<sui_sdk_types::Argument> for super::Argument {
     fn from(value: sui_sdk_types::Argument) -> Self {
         use super::argument::ArgumentKind;
@@ -1433,15 +1573,15 @@ impl From<sui_sdk_types::Argument> for super::Argument {
         let kind = match value {
             Gas => ArgumentKind::Gas,
             Input(input) => {
-                message.index = Some(input.into());
+                message.input = Some(input.into());
                 ArgumentKind::Input
             }
             Result(result) => {
-                message.index = Some(result.into());
+                message.result = Some(result.into());
                 ArgumentKind::Result
             }
             NestedResult(result, subresult) => {
-                message.index = Some(result.into());
+                message.result = Some(result.into());
                 message.subresult = Some(subresult.into());
                 ArgumentKind::Result
             }
@@ -1465,15 +1605,15 @@ impl TryFrom<&super::Argument> for sui_sdk_types::Argument {
             ArgumentKind::Gas => Self::Gas,
             ArgumentKind::Input => {
                 let input = value
-                    .index
-                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .input
+                    .ok_or_else(|| TryFromProtoError::missing("input"))?
                     .try_into()?;
                 Self::Input(input)
             }
             ArgumentKind::Result => {
                 let result = value
-                    .index
-                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .result
+                    .ok_or_else(|| TryFromProtoError::missing("result"))?
                     .try_into()?;
 
                 if let Some(subresult) = value.subresult {
@@ -1490,6 +1630,38 @@ impl TryFrom<&super::Argument> for sui_sdk_types::Argument {
 //
 // Command
 //
+
+impl From<super::command::Command> for super::Command {
+    fn from(value: super::command::Command) -> Self {
+        Self {
+            command: Some(value),
+        }
+    }
+}
+
+impl From<super::MoveCall> for super::command::Command {
+    fn from(value: super::MoveCall) -> Self {
+        Self::MoveCall(value)
+    }
+}
+
+impl From<super::MoveCall> for super::Command {
+    fn from(value: super::MoveCall) -> Self {
+        super::command::Command::from(value).into()
+    }
+}
+
+impl From<super::TransferObjects> for super::command::Command {
+    fn from(value: super::TransferObjects) -> Self {
+        Self::TransferObjects(value)
+    }
+}
+
+impl From<super::TransferObjects> for super::Command {
+    fn from(value: super::TransferObjects) -> Self {
+        super::command::Command::from(value).into()
+    }
+}
 
 impl From<sui_sdk_types::Command> for super::Command {
     fn from(value: sui_sdk_types::Command) -> Self {

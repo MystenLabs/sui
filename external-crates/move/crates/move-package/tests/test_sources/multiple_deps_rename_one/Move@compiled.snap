@@ -36,6 +36,8 @@ CompiledPackageInfo {
             no_lint: false,
             lint: false,
         },
+        modes: [],
         implicit_dependencies: {},
+        force_lock_file: false,
     },
 }

@@ -8,8 +8,8 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{
@@ -56,10 +56,12 @@ impl Processor for TxKinds {
 
 #[async_trait::async_trait]
 impl Handler for TxKinds {
+    type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(tx_kinds::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -67,11 +69,11 @@ impl Handler for TxKinds {
             .await?)
     }
 
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_tx,
@@ -95,7 +97,7 @@ mod tests {
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
-    async fn get_all_tx_kinds(conn: &mut db::Connection<'_>) -> Result<Vec<i64>> {
+    async fn get_all_tx_kinds(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_kinds::table
             .select(tx_kinds::tx_sequence_number)
             .load(conn)
@@ -105,7 +107,7 @@ mod tests {
     #[tokio::test]
     async fn test_tx_kinds_pruning_complains_if_no_mapping() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let result = TxKinds.prune(0, 2, &mut conn).await;
 
@@ -121,7 +123,7 @@ mod tests {
     #[tokio::test]
     async fn test_tx_kinds_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();

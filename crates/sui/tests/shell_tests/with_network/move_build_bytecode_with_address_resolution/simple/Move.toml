@@ -1,8 +1,0 @@
-[package]
-name = "simple"
-edition = "2024.beta"
-
-[dependencies]
-
-[addresses]
-simple = "0x0"

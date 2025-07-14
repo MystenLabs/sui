@@ -4,20 +4,23 @@
 use super::Bcs;
 use super::Event;
 use super::TransactionEvents;
-use crate::message::MessageMergeFrom;
-use crate::message::{MessageField, MessageFields, MessageMerge};
 use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 
 //
 // Event
 //
 
 impl Event {
-    const PACKAGE_ID_FIELD: &'static MessageField = &MessageField::new("package_id");
-    const MODULE_FIELD: &'static MessageField = &MessageField::new("module");
-    const SENDER_FIELD: &'static MessageField = &MessageField::new("sender");
-    const EVENT_TYPE_FIELD: &'static MessageField = &MessageField::new("event_type");
-    const CONTENTS_FIELD: &'static MessageField = &MessageField::new("contents");
+    pub const PACKAGE_ID_FIELD: &'static MessageField = &MessageField::new("package_id");
+    pub const MODULE_FIELD: &'static MessageField = &MessageField::new("module");
+    pub const SENDER_FIELD: &'static MessageField = &MessageField::new("sender");
+    pub const EVENT_TYPE_FIELD: &'static MessageField = &MessageField::new("event_type");
+    pub const CONTENTS_FIELD: &'static MessageField = &MessageField::new("contents");
+    pub const JSON_FIELD: &'static MessageField = &MessageField::new("json");
 }
 
 impl MessageFields for Event {
@@ -27,19 +30,20 @@ impl MessageFields for Event {
         Self::SENDER_FIELD,
         Self::EVENT_TYPE_FIELD,
         Self::CONTENTS_FIELD,
+        Self::JSON_FIELD,
     ];
 }
 
 impl From<sui_sdk_types::Event> for Event {
     fn from(value: sui_sdk_types::Event) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::Event> for Event {
-    fn merge(&mut self, source: sui_sdk_types::Event, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<sui_sdk_types::Event> for Event {
+    fn merge(&mut self, source: sui_sdk_types::Event, mask: &FieldMaskTree) {
         if mask.contains(Self::PACKAGE_ID_FIELD.name) {
             self.package_id = Some(source.package_id.to_string());
         }
@@ -65,14 +69,15 @@ impl MessageMerge<sui_sdk_types::Event> for Event {
     }
 }
 
-impl MessageMerge<&Event> for Event {
-    fn merge(&mut self, source: &Event, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&Event> for Event {
+    fn merge(&mut self, source: &Event, mask: &FieldMaskTree) {
         let Event {
             package_id,
             module,
             sender,
             event_type,
             contents,
+            json,
         } = source;
 
         if mask.contains(Self::PACKAGE_ID_FIELD.name) {
@@ -93,6 +98,10 @@ impl MessageMerge<&Event> for Event {
 
         if mask.contains(Self::CONTENTS_FIELD.name) {
             self.contents = contents.clone();
+        }
+
+        if mask.contains(Self::JSON_FIELD.name) {
+            self.json = json.clone();
         }
     }
 }
@@ -151,10 +160,10 @@ impl TryFrom<&Event> for sui_sdk_types::Event {
 //
 
 impl TransactionEvents {
-    const BCS_FIELD: &'static MessageField =
+    pub const BCS_FIELD: &'static MessageField =
         &MessageField::new("bcs").with_message_fields(super::Bcs::FIELDS);
-    const DIGEST_FIELD: &'static MessageField = &MessageField::new("digest");
-    const EVENTS_FIELD: &'static MessageField =
+    pub const DIGEST_FIELD: &'static MessageField = &MessageField::new("digest");
+    pub const EVENTS_FIELD: &'static MessageField =
         &MessageField::new("events").with_message_fields(Event::FIELDS);
 }
 
@@ -173,14 +182,12 @@ impl From<sui_sdk_types::TransactionEvents> for TransactionEvents {
     }
 }
 
-impl MessageMerge<sui_sdk_types::TransactionEvents> for TransactionEvents {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::TransactionEvents,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::TransactionEvents> for TransactionEvents {
+    fn merge(&mut self, source: sui_sdk_types::TransactionEvents, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(super::Bcs::serialize(&source).unwrap());
+            let mut bcs = super::Bcs::serialize(&source).unwrap();
+            bcs.name = Some("TransactionEvents".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
@@ -197,8 +204,8 @@ impl MessageMerge<sui_sdk_types::TransactionEvents> for TransactionEvents {
     }
 }
 
-impl MessageMerge<&TransactionEvents> for TransactionEvents {
-    fn merge(&mut self, source: &TransactionEvents, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&TransactionEvents> for TransactionEvents {
+    fn merge(&mut self, source: &TransactionEvents, mask: &FieldMaskTree) {
         let TransactionEvents {
             bcs,
             digest,

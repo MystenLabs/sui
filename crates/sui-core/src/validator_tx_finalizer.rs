@@ -193,7 +193,7 @@ where
                 }
             }
             Err(err) => {
-                error!(?tx_digest, ?err, "Failed to finalize transaction");
+                debug!(?tx_digest, "Failed to finalize transaction: {err}");
             }
         }
     }
@@ -274,9 +274,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::authority::AuthorityState;
+    use crate::authority::{AuthorityState, ExecutionEnv};
     use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
     use crate::authority_client::AuthorityAPI;
+    use crate::execution_scheduler::SchedulingSource;
     use crate::validator_tx_finalizer::ValidatorTxFinalizer;
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
@@ -303,8 +304,9 @@ mod tests {
     use sui_types::messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-        TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+        RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
+        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
     };
     use sui_types::object::Object;
     use sui_types::sui_system_state::SuiSystemState;
@@ -322,6 +324,14 @@ mod tests {
 
     #[async_trait]
     impl AuthorityAPI for MockAuthorityClient {
+        async fn submit_transaction(
+            &self,
+            _request: RawSubmitTxRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<RawSubmitTxResponse, SuiError> {
+            unimplemented!();
+        }
+
         async fn handle_transaction(
             &self,
             transaction: Transaction,
@@ -351,7 +361,7 @@ mod tests {
                     &VerifiedExecutableTransaction::new_from_certificate(
                         VerifiedCertificate::new_unchecked(certificate),
                     ),
-                    None,
+                    ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                     &epoch_store,
                 )
                 .await?;
@@ -377,6 +387,14 @@ mod tests {
             _request: HandleCertificateRequestV3,
             _client_addr: Option<SocketAddr>,
         ) -> Result<HandleCertificateResponseV3, SuiError> {
+            unimplemented!()
+        }
+
+        async fn wait_for_effects(
+            &self,
+            _request: RawWaitForEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<RawWaitForEffectsResponse, SuiError> {
             unimplemented!()
         }
 

@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Bcs, Object};
-use crate::message::{MessageField, MessageFields, MessageMerge};
 use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 use tap::Pipe;
 
 //
@@ -30,6 +33,7 @@ impl Object {
     pub const PREVIOUS_TRANSACTION_FIELD: &'static MessageField =
         &MessageField::new("previous_transaction");
     pub const STORAGE_REBATE_FIELD: &'static MessageField = &MessageField::new("storage_rebate");
+    pub const JSON_FIELD: &'static MessageField = &MessageField::new("json");
 }
 
 impl MessageFields for Object {
@@ -47,19 +51,20 @@ impl MessageFields for Object {
         Self::LINKAGE_TABLE_FIELD,
         Self::PREVIOUS_TRANSACTION_FIELD,
         Self::STORAGE_REBATE_FIELD,
+        Self::JSON_FIELD,
     ];
 }
 
 impl From<sui_sdk_types::Object> for Object {
     fn from(value: sui_sdk_types::Object) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<&Object> for Object {
-    fn merge(&mut self, source: &Object, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&Object> for Object {
+    fn merge(&mut self, source: &Object, mask: &FieldMaskTree) {
         let Object {
             bcs,
             object_id,
@@ -74,6 +79,7 @@ impl MessageMerge<&Object> for Object {
             linkage_table,
             previous_transaction,
             storage_rebate,
+            json,
         } = source;
 
         if mask.contains(Self::BCS_FIELD.name) {
@@ -127,13 +133,19 @@ impl MessageMerge<&Object> for Object {
         if mask.contains(Self::LINKAGE_TABLE_FIELD.name) {
             self.linkage_table = linkage_table.clone();
         }
+
+        if mask.contains(Self::JSON_FIELD.name) {
+            self.json = json.clone();
+        }
     }
 }
 
-impl MessageMerge<sui_sdk_types::Object> for Object {
-    fn merge(&mut self, source: sui_sdk_types::Object, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<sui_sdk_types::Object> for Object {
+    fn merge(&mut self, source: sui_sdk_types::Object, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(super::Bcs::serialize(&source).unwrap());
+            let mut bcs = super::Bcs::serialize(&source).unwrap();
+            bcs.name = Some("Object".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
@@ -171,12 +183,8 @@ impl MessageMerge<sui_sdk_types::Object> for Object {
     }
 }
 
-impl MessageMerge<&sui_sdk_types::MoveStruct> for Object {
-    fn merge(
-        &mut self,
-        source: &sui_sdk_types::MoveStruct,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<&sui_sdk_types::MoveStruct> for Object {
+    fn merge(&mut self, source: &sui_sdk_types::MoveStruct, mask: &FieldMaskTree) {
         if mask.contains(Self::OBJECT_TYPE_FIELD.name) {
             self.object_type = Some(source.object_type().to_string());
         }
@@ -194,12 +202,8 @@ impl MessageMerge<&sui_sdk_types::MoveStruct> for Object {
     }
 }
 
-impl MessageMerge<&sui_sdk_types::MovePackage> for Object {
-    fn merge(
-        &mut self,
-        source: &sui_sdk_types::MovePackage,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<&sui_sdk_types::MovePackage> for Object {
+    fn merge(&mut self, source: &sui_sdk_types::MovePackage, mask: &FieldMaskTree) {
         if mask.contains(Self::OBJECT_TYPE_FIELD.name) {
             self.object_type = Some(PACKAGE_TYPE.to_owned());
         }
@@ -457,16 +461,10 @@ impl From<sui_sdk_types::GenesisObject> for Object {
 
         match value.data() {
             sui_sdk_types::ObjectData::Struct(move_struct) => {
-                message.merge(
-                    move_struct,
-                    &crate::field_mask::FieldMaskTree::new_wildcard(),
-                );
+                message.merge(move_struct, &FieldMaskTree::new_wildcard());
             }
             sui_sdk_types::ObjectData::Package(move_package) => {
-                message.merge(
-                    move_package,
-                    &crate::field_mask::FieldMaskTree::new_wildcard(),
-                );
+                message.merge(move_package, &FieldMaskTree::new_wildcard());
             }
         }
 
@@ -562,6 +560,14 @@ impl From<sui_sdk_types::Owner> for super::Owner {
                 OwnerKind::Shared
             }
             Immutable => OwnerKind::Immutable,
+            ConsensusAddress {
+                start_version,
+                owner,
+            } => {
+                message.version = Some(start_version);
+                message.address = Some(owner.to_string());
+                OwnerKind::ConsensusAddress
+            }
         };
 
         message.set_kind(kind);
@@ -591,6 +597,13 @@ impl TryFrom<&super::Owner> for sui_sdk_types::Owner {
             ),
             OwnerKind::Shared => Self::Shared(value.version()),
             OwnerKind::Immutable => Self::Immutable,
+            OwnerKind::ConsensusAddress => Self::ConsensusAddress {
+                start_version: value.version(),
+                owner: value
+                    .address()
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+            },
         }
         .pipe(Ok)
     }

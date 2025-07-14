@@ -46,7 +46,7 @@ module prettier::other {
         character.add(
             AppKey {},
             BattleApp {
-                stats,
+                stats, // this comment should not be wiped
                 wins: 0,
                 losses: 0,
                 current_battle: option::none(),

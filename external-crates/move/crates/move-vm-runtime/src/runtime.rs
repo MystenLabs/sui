@@ -12,9 +12,9 @@ use crate::{
     tracing2::tracer::VMTracer,
 };
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{AbilitySet, LocalIndex},
     CompiledModule, IndexKind,
+    errors::{Location, PartialVMError, PartialVMResult, VMResult, verification_error},
+    file_format::{AbilitySet, LocalIndex},
 };
 use move_bytecode_verifier::script_signature;
 use move_core_types::{
@@ -281,7 +281,7 @@ impl VMRuntime {
             })?
         };
 
-        let bytes = value.simple_serialize(&layout).ok_or_else(|| {
+        let bytes = value.typed_serialize(&layout).ok_or_else(|| {
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message("failed to serialize return values".to_string())
         })?;
@@ -346,14 +346,13 @@ impl VMRuntime {
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
-        let return_values = Interpreter::entrypoint(
+        let return_values = self.execute_function_with_values_impl(
             func,
             ty_args,
             deserialized_args,
             data_store,
             gas_meter,
             extensions,
-            &self.loader,
             tracer,
         )?;
 
@@ -385,6 +384,28 @@ impl VMRuntime {
         })
     }
 
+    fn execute_function_with_values_impl(
+        &self,
+        func: Arc<Function>,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+        data_store: &mut impl DataStore,
+        gas_meter: &mut impl GasMeter,
+        extensions: &mut NativeContextExtensions,
+        tracer: &mut Option<VMTracer<'_>>,
+    ) -> VMResult<Vec<Value>> {
+        Interpreter::entrypoint(
+            func,
+            ty_args,
+            args,
+            data_store,
+            gas_meter,
+            extensions,
+            &self.loader,
+            tracer,
+        )
+    }
+
     pub(crate) fn execute_function(
         &self,
         module: &ModuleId,
@@ -397,6 +418,89 @@ impl VMRuntime {
         bypass_declared_entry_check: bool,
         tracer: Option<&mut MoveTraceBuilder>,
     ) -> VMResult<SerializedReturnValues> {
+        let (
+            func,
+            LoadedFunctionInstantiation {
+                parameters,
+                return_,
+                instruction_length: _,
+                definition_index: _,
+            },
+        ) = self.load_and_check_function(
+            module,
+            function_name,
+            &type_arguments,
+            data_store,
+            bypass_declared_entry_check,
+        )?;
+
+        // execute the function
+        self.execute_function_impl(
+            func,
+            type_arguments,
+            parameters,
+            return_,
+            serialized_args,
+            data_store,
+            gas_meter,
+            extensions,
+            &mut tracer.map(VMTracer::new),
+        )
+    }
+
+    pub(crate) fn execute_function_with_values(
+        &self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        type_arguments: Vec<Type>,
+        args: Vec<Value>,
+        data_store: &mut impl DataStore,
+        gas_meter: &mut impl GasMeter,
+        extensions: &mut NativeContextExtensions,
+        bypass_declared_entry_check: bool,
+        tracer: Option<&mut MoveTraceBuilder>,
+    ) -> VMResult<Vec<Value>> {
+        let (func, _) = self.load_and_check_function(
+            module,
+            function_name,
+            &type_arguments,
+            data_store,
+            bypass_declared_entry_check,
+        )?;
+        if func.arg_count() != args.len() {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!(
+                        "'{}::{}' has {} arguments, but got {}",
+                        module,
+                        function_name,
+                        func.arg_count(),
+                        args.len()
+                    ))
+                    .finish(Location::Undefined),
+            );
+        }
+
+        // execute the function
+        self.execute_function_with_values_impl(
+            func,
+            type_arguments,
+            args,
+            data_store,
+            gas_meter,
+            extensions,
+            &mut tracer.map(VMTracer::new),
+        )
+    }
+
+    fn load_and_check_function(
+        &self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        type_arguments: &[Type],
+        data_store: &mut impl DataStore,
+        bypass_declared_entry_check: bool,
+    ) -> VMResult<(Arc<Function>, LoadedFunctionInstantiation)> {
         use move_binary_format::file_format::SignatureIndex;
         fn check_is_entry(
             _resolver: &CompiledModule,
@@ -419,36 +523,16 @@ impl VMRuntime {
             check_is_entry
         };
         // load the function
-        let (
-            compiled,
-            _,
-            func,
-            LoadedFunctionInstantiation {
-                parameters,
-                return_,
-            },
-        ) = self
-            .loader
-            .load_function(module, function_name, &type_arguments, data_store)?;
+        let (compiled, _, func, loaded_instantiation) =
+            self.loader
+                .load_function(module, function_name, type_arguments, data_store)?;
 
         script_signature::verify_module_function_signature_by_name(
             compiled.as_ref(),
             function_name,
             additional_signature_checks,
         )?;
-
-        // execute the function
-        self.execute_function_impl(
-            func,
-            type_arguments,
-            parameters,
-            return_,
-            serialized_args,
-            data_store,
-            gas_meter,
-            extensions,
-            &mut tracer.map(VMTracer::new),
-        )
+        Ok((func, loaded_instantiation))
     }
 
     pub(crate) fn loader(&self) -> &Loader {
@@ -487,6 +571,17 @@ impl VMRuntime {
             .load_type_by_name(struct_name, module_id, data_store)
     }
 
+    /// Attempt to load a type tag to a `Type` without loading any additional modules.
+    /// This may fail if the type tag is not already loaded in the VM.
+    /// NB: the type tag _must_ be defining ID based.
+    pub fn try_load_cached_type(&self, type_tag: &TypeTag) -> VMResult<Option<Type>> {
+        self.loader.try_load_cached_type(type_tag)
+    }
+
+    pub fn load_type_tag(&self, type_tag: &TypeTag, data_store: &impl DataStore) -> VMResult<Type> {
+        self.loader.load_type(type_tag, data_store)
+    }
+
     pub fn execute_function_bypass_visibility(
         &self,
         module: &ModuleId,
@@ -510,6 +605,41 @@ impl VMRuntime {
 
         let bypass_declared_entry_check = true;
         self.execute_function(
+            module,
+            function_name,
+            ty_args,
+            args,
+            data_store,
+            gas_meter,
+            extensions,
+            bypass_declared_entry_check,
+            tracer,
+        )
+    }
+
+    pub fn execute_function_with_values_bypass_visibility(
+        &self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<Type>,
+        args: Vec<Value>,
+        data_store: &mut impl DataStore,
+        gas_meter: &mut impl GasMeter,
+        extensions: &mut NativeContextExtensions,
+        tracer: Option<&mut MoveTraceBuilder>,
+    ) -> VMResult<Vec<Value>> {
+        move_vm_profiler::tracing_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
+            if gas_meter.get_profiler_mut().is_none() {
+                gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                    function_name.to_string(),
+                    gas_meter.remaining_gas().into(),
+                ));
+            }
+        }
+
+        let bypass_declared_entry_check = true;
+        self.execute_function_with_values(
             module,
             function_name,
             ty_args,

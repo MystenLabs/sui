@@ -4,18 +4,17 @@
 use anyhow::{Context, Error};
 use move_binary_format::normalized::{Field, Type};
 use move_bytecode_source_map::source_map::SourceName;
-use move_core_types::identifier::Identifier;
 use move_ir_types::location::Loc;
 use regex::Regex;
 use std::fmt;
 use std::sync::LazyLock;
 
-pub(super) struct FormattedType<'f> {
-    type_: &'f Type,
+pub(super) struct FormattedType<'f, S: fmt::Display> {
+    type_: &'f Type<S>,
     type_params: &'f [SourceName],
 }
 
-impl fmt::Display for FormattedType<'_> {
+impl<S: fmt::Display> fmt::Display for FormattedType<'_, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
             write!(
@@ -35,21 +34,22 @@ impl fmt::Display for FormattedType<'_> {
     }
 }
 
-pub(super) enum FormattedIdentifier<'f> {
+pub(super) enum FormattedIdentifier<'f, S: fmt::Display> {
     Positional(usize),
-    Named(&'f Identifier),
+    Named(&'f S),
 }
 
-pub(super) struct FormattedField<'f> {
-    pub(super) identifier: FormattedIdentifier<'f>,
-    pub(super) type_: FormattedType<'f>,
+pub(super) struct FormattedField<'f, S: fmt::Display> {
+    pub(super) identifier: FormattedIdentifier<'f, S>,
+    pub(super) type_: FormattedType<'f, S>,
 }
 
-impl<'f> FormattedField<'f> {
-    pub(super) fn new(f: &'f Field, type_params: &'f [SourceName]) -> Self {
+impl<'f, S: fmt::Display> FormattedField<'f, S> {
+    pub(super) fn new(f: &'f Field<S>, type_params: &'f [SourceName]) -> Self {
         static RE_POS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^pos(\d+)$").unwrap());
+        let display_name = format!("{}", f.name);
         let identifier = if let Some(ix) = RE_POS
-            .captures(f.name.as_str())
+            .captures(display_name.as_str())
             .and_then(|c| c.get(1))
             .and_then(|m| m.as_str().parse::<usize>().ok())
         {
@@ -68,7 +68,7 @@ impl<'f> FormattedField<'f> {
     }
 }
 
-impl fmt::Display for FormattedField<'_> {
+impl<S: fmt::Display> fmt::Display for FormattedField<'_, S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use FormattedIdentifier as FI;
         match self.identifier {
@@ -82,8 +82,8 @@ impl fmt::Display for FormattedField<'_> {
 }
 
 /// Returns a string representation of a parameter and updates its secondary label to include its location.
-pub(super) fn format_param(
-    param: &Type,
+pub(super) fn format_param<S: fmt::Display>(
+    param: &Type<S>,
     type_params: Vec<SourceName>,
     secondary: &mut Vec<(Loc, String)>,
 ) -> Result<String, Error> {
@@ -102,25 +102,19 @@ pub(super) fn format_param(
         Type::Vector(t) => {
             format!("vector<{}>", format_param(t, type_params, secondary)?)
         }
-        Type::MutableReference(t) => {
+        Type::Reference(true, t) => {
             format!("&mut {}", format_param(t, type_params, secondary)?)
         }
-        Type::Reference(t) => {
+        Type::Reference(false, t) => {
             format!("&{}", format_param(t, type_params, secondary)?)
         }
-        Type::Struct {
-            address,
-            module,
-            name,
-            type_arguments,
-            ..
-        } if !type_arguments.is_empty() => {
+        Type::Datatype(dt) if !dt.type_arguments.is_empty() => {
             format!(
                 "{}::{}::{}<{}>",
-                address.to_hex_literal(),
-                module,
-                name,
-                type_arguments
+                dt.module.address.to_hex_literal(),
+                dt.module.name,
+                dt.name,
+                dt.type_arguments
                     .iter()
                     .map(|t| format_param(t, type_params.clone(), secondary))
                     .collect::<Result<Vec<_>, _>>()?

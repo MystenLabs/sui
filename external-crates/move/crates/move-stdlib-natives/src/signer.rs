@@ -13,7 +13,7 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
-    values::{values_impl::SignerRef, Value},
+    values::{Value, values_impl::SignerRef},
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};

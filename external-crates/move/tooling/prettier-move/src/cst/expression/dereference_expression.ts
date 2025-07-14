@@ -10,24 +10,24 @@ const {} = doc.builders;
 export const NODE_TYPE = 'dereference_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printDereferenceExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printDereferenceExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `dereference_expression` node.
- * 
+ *
  * Inside:
  * - `*`
  * - `_expression`
  */
 function printDereferenceExpression(
-	path: AstPath<Node>,
-	options: MoveOptions,
-	print: printFn,
+    path: AstPath<Node>,
+    options: MoveOptions,
+    print: printFn,
 ): Doc {
-	return ['*', path.call(print, 'nonFormattingChildren', 0)];
+    return ['*', path.call(print, 'nonFormattingChildren', 0)];
 }

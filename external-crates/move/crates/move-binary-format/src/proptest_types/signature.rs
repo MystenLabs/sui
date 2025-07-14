@@ -7,9 +7,9 @@ use crate::file_format::{
     TableIndex, TypeParameterIndex,
 };
 use proptest::{
-    collection::{vec, SizeRange},
+    collection::{SizeRange, vec},
     prelude::*,
-    sample::{select, Index as PropIndex},
+    sample::{Index as PropIndex, select},
 };
 
 #[derive(Clone, Debug)]

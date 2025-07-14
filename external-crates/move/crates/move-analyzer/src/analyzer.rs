@@ -6,10 +6,11 @@ use anyhow::Result;
 use crossbeam::channel::{bounded, select};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
-    notification::Notification as _, request::Request as _, CompletionOptions, Diagnostic,
+    CodeActionKind, CodeActionOptions, CodeActionProviderCapability, CompletionOptions, Diagnostic,
     HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TypeDefinitionProviderCapability, WorkDoneProgressOptions,
+    TypeDefinitionProviderCapability, WorkDoneProgressOptions, notification::Notification as _,
+    request::Request as _,
 };
 use move_compiler::linters::LintLevel;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -20,11 +21,23 @@ use std::{
 };
 
 use crate::{
-    completions::on_completion_request, context::Context, inlay_hints, symbols,
+    code_action,
+    completions::on_completion_request,
+    context::Context,
+    inlay_hints,
+    symbols::{
+        self,
+        compilation::PrecomputedPkgInfo,
+        requests::{
+            on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
+            on_hover_request, on_references_request,
+        },
+        runner::SymbolicatorRunner,
+    },
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
-use vfs::{impls::memory::MemoryFS, VfsPath};
+use vfs::{VfsPath, impls::memory::MemoryFS};
 
 const LINT_NONE: &str = "none";
 const LINT_DEFAULT: &str = "default";
@@ -46,9 +59,7 @@ pub fn run(implicit_deps: Dependencies) {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols_map = Arc::new(Mutex::new(BTreeMap::new()));
-    let pkg_deps = Arc::new(Mutex::new(
-        BTreeMap::<PathBuf, symbols::PrecomputedPkgInfo>::new(),
-    ));
+    let pkg_deps = Arc::new(Mutex::new(BTreeMap::<PathBuf, PrecomputedPkgInfo>::new()));
     let ide_files_root: VfsPath = MemoryFS::new().into();
 
     let (id, client_response) = connection
@@ -108,6 +119,13 @@ pub fn run(implicit_deps: Dependencies) {
                 resolve_provider: None,
             },
         ))),
+        code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
+            code_action_kinds: Some(vec![CodeActionKind::QUICKFIX]),
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
+            resolve_provider: None,
+        })),
         ..Default::default()
     })
     .expect("could not serialize server capabilities");
@@ -134,7 +152,7 @@ pub fn run(implicit_deps: Dependencies) {
     };
     eprintln!("linting level {:?}", lint);
 
-    let symbolicator_runner = symbols::SymbolicatorRunner::new(
+    let symbolicator_runner = SymbolicatorRunner::new(
         ide_files_root.clone(),
         symbols_map.clone(),
         pkg_deps.clone(),
@@ -150,7 +168,7 @@ pub fn run(implicit_deps: Dependencies) {
     // to be available right after the client is initialized.
     if let Some(uri) = initialize_params.root_uri {
         let build_path = uri.to_file_path().unwrap();
-        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&build_path) {
+        if let Some(p) = SymbolicatorRunner::root_dir(&build_path) {
             if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
                 Arc::new(Mutex::new(BTreeMap::new())),
                 ide_files_root.clone(),
@@ -169,6 +187,12 @@ pub fn run(implicit_deps: Dependencies) {
     let context = Context {
         connection,
         symbols: symbols_map.clone(),
+        auto_imports: initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("autoImports"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
         inlay_type_hints: initialize_params
             .initialization_options
             .as_ref()
@@ -183,6 +207,10 @@ pub fn run(implicit_deps: Dependencies) {
             .unwrap_or_default(),
     };
 
+    eprintln!(
+        "auto imports during auto-completion enabled: {}",
+        context.auto_imports
+    );
     eprintln!("inlay type hints enabled: {}", context.inlay_type_hints);
     eprintln!("inlay param hints enabled: {}", context.inlay_param_hints);
 
@@ -282,7 +310,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecomputedPkgInfo>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     shutdown_request_received: bool,
     implicit_deps: Dependencies,
 ) -> bool {
@@ -308,25 +336,33 @@ fn on_request(
             ide_files_root.clone(),
             pkg_dependencies,
             implicit_deps,
-            true, // auto-imports enabled
         ),
         lsp_types::request::GotoDefinition::METHOD => {
-            symbols::on_go_to_def_request(context, request);
+            on_go_to_def_request(context, request);
         }
         lsp_types::request::GotoTypeDefinition::METHOD => {
-            symbols::on_go_to_type_def_request(context, request);
+            on_go_to_type_def_request(context, request);
         }
         lsp_types::request::References::METHOD => {
-            symbols::on_references_request(context, request);
+            on_references_request(context, request);
         }
         lsp_types::request::HoverRequest::METHOD => {
-            symbols::on_hover_request(context, request);
+            on_hover_request(context, request);
         }
         lsp_types::request::DocumentSymbolRequest::METHOD => {
-            symbols::on_document_symbol_request(context, request);
+            on_document_symbol_request(context, request);
         }
         lsp_types::request::InlayHintRequest::METHOD => {
             inlay_hints::on_inlay_hint_request(context, request);
+        }
+        lsp_types::request::CodeActionRequest::METHOD => {
+            code_action::on_code_action_request(
+                context,
+                request,
+                ide_files_root.clone(),
+                pkg_dependencies,
+                implicit_deps,
+            );
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");
@@ -352,7 +388,7 @@ fn on_response(_context: &Context, _response: &Response) {
 
 fn on_notification(
     ide_files_root: VfsPath,
-    symbolicator_runner: &symbols::SymbolicatorRunner,
+    symbolicator_runner: &SymbolicatorRunner,
     notification: &Notification,
 ) {
     match notification.method.as_str() {

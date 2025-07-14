@@ -16,21 +16,23 @@ use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
 use api::write::Write;
 use config::RpcConfig;
-use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
 use prometheus::Registry;
 use serde_json::json;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::pg_reader::db::DbArgs;
+use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
-use sui_pg_db::DbArgs;
+use timeout::TimeoutLayer;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::{info, warn};
 use url::Url;
 
-use crate::api::governance::Governance;
+use crate::api::governance::{DelegationGovernance, Governance};
 use crate::context::Context;
 
 pub mod api;
@@ -41,6 +43,7 @@ pub mod data;
 mod error;
 mod metrics;
 mod paginate;
+mod timeout;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
@@ -53,9 +56,10 @@ pub struct RpcArgs {
     #[clap(long, default_value_t = Self::default().max_in_flight_requests)]
     pub max_in_flight_requests: u32,
 
-    /// Threshold in ms for logging slow requests. Requests that take longer than this will be logged as warnings.
-    #[clap(long, default_value_t = Self::default().slow_request_threshold_ms)]
-    pub slow_request_threshold_ms: u64,
+    /// Requests that take longer than this (in milliseconds) to respond to will be terminated, and
+    /// the query itself will be logged as a warning.
+    #[clap(long, default_value_t = Self::default().request_timeout_ms)]
+    pub request_timeout_ms: u64,
 }
 
 pub struct RpcService {
@@ -68,6 +72,9 @@ pub struct RpcService {
     /// Metrics for the RPC service.
     metrics: Arc<RpcMetrics>,
 
+    /// Maximum time a request can take to complete.
+    request_timeout: Duration,
+
     /// All the methods added to the server so far.
     modules: jsonrpsee::RpcModule<()>,
 
@@ -76,15 +83,12 @@ pub struct RpcService {
 
     /// Cancellation token controlling all services.
     cancel: CancellationToken,
-
-    /// Threshold for logging slow requests.
-    slow_request_threshold: Duration,
 }
 
 impl RpcArgs {
     /// Requests that take longer than this should be logged for debugging.
-    fn slow_request_threshold(&self) -> Duration {
-        Duration::from_millis(self.slow_request_threshold_ms)
+    fn request_timeout(&self) -> Duration {
+        Duration::from_millis(self.request_timeout_ms)
     }
 }
 
@@ -96,19 +100,13 @@ impl RpcService {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
-        let RpcArgs {
-            rpc_listen_address,
-            max_in_flight_requests,
-            slow_request_threshold_ms,
-        } = rpc_args;
-
         let metrics = RpcMetrics::new(registry);
 
         let server = ServerBuilder::new()
             .http_only()
             // `jsonrpsee` calls this a limit on connections, but it is implemented as a limit on
             // requests.
-            .max_connections(max_in_flight_requests)
+            .max_connections(rpc_args.max_in_flight_requests)
             .max_response_body_size(u32::MAX)
             .set_batch_request_config(BatchRequestConfig::Disabled);
 
@@ -124,13 +122,13 @@ impl RpcService {
         );
 
         Ok(Self {
-            rpc_listen_address,
+            rpc_listen_address: rpc_args.rpc_listen_address,
             server,
             metrics,
+            request_timeout: rpc_args.request_timeout(),
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
-            slow_request_threshold: Duration::from_millis(slow_request_threshold_ms),
         })
     }
 
@@ -155,10 +153,10 @@ impl RpcService {
             rpc_listen_address,
             server,
             metrics,
+            request_timeout,
             mut modules,
             schema,
             cancel,
-            slow_request_threshold,
         } = self;
 
         info!("Starting JSON-RPC service on {rpc_listen_address}",);
@@ -169,11 +167,12 @@ impl RpcService {
             .register_method("rpc.discover", move |_, _, _| json!(schema.clone()))
             .context("Failed to add schema discovery method")?;
 
-        let middleware = RpcServiceBuilder::new().layer(MetricsLayer::new(
-            metrics,
-            modules.method_names().map(|n| n.to_owned()).collect(),
-            slow_request_threshold,
-        ));
+        let middleware = RpcServiceBuilder::new()
+            .layer(TimeoutLayer::new(request_timeout))
+            .layer(MetricsLayer::new(
+                metrics,
+                modules.method_names().map(|n| n.to_owned()).collect(),
+            ));
 
         let handle = server
             .set_rpc_middleware(middleware)
@@ -212,7 +211,7 @@ impl Default for RpcArgs {
         Self {
             rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
             max_in_flight_requests: 2000,
-            slow_request_threshold_ms: 60_000,
+            request_timeout_ms: 60_000,
         }
     }
 }
@@ -230,8 +229,8 @@ pub struct NodeArgs {
 /// will signal cancellation on the token when it is shutting down.
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not work.
-/// The only exception is the `DelegationCoins` module, which is controlled by `node_args.fullnode_rpc_url`,
-/// which can be omitted to disable reads from this RPC.
+/// The only exceptions are the `DelegationCoins` and `DelegationGovernance` modules, which are controlled
+/// by `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
 ///
 /// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
 /// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
@@ -246,6 +245,7 @@ pub async fn start_rpc(
     database_url: Option<Url>,
     bigtable_instance: Option<String>,
     db_args: DbArgs,
+    bigtable_args: BigtableArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -253,7 +253,6 @@ pub async fn start_rpc(
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let slow_request_threshold = rpc_args.slow_request_threshold();
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
@@ -261,17 +260,18 @@ pub async fn start_rpc(
         database_url,
         bigtable_instance,
         db_args,
+        bigtable_args,
         rpc_config,
         rpc.metrics(),
-        slow_request_threshold,
         registry,
         cancel.child_token(),
     )
     .await?;
 
     let system_package_task = SystemPackageTask::new(
-        context.clone(),
         system_package_task_args,
+        context.pg_reader().clone(),
+        context.package_resolver().clone(),
         cancel.child_token(),
     );
 
@@ -291,9 +291,13 @@ pub async fn start_rpc(
             fullnode_rpc_url.clone(),
             context.config().node.clone(),
         )?)?;
+        rpc.add_module(DelegationGovernance::new(
+            fullnode_rpc_url.clone(),
+            context.config().node.clone(),
+        )?)?;
         rpc.add_module(Write::new(fullnode_rpc_url, context.config().node.clone())?)?;
     } else {
-        warn!("No fullnode rpc url provided, DelegationCoins and Write modules will not be added.");
+        warn!("No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added.");
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
@@ -537,7 +541,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_received
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             1
         );
@@ -545,7 +549,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_succeeded
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             0
         );
@@ -553,7 +557,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_failed
-                .with_label_values(&["<UNKNOWN>", &format!("{METHOD_NOT_FOUND_CODE}")])
+                .with_label_values(&["UNKNOWN:test_baz", &format!("{METHOD_NOT_FOUND_CODE}")])
                 .get(),
             1
         );

@@ -11,17 +11,17 @@ export const NODE_TYPE = 'binary_expression';
 
 // TODO: re-enable binary expression once we figure out how to achieve it.
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return () => path.node.text;
-		// TODO: re-enable binary expression once we figure out how to achieve it.
-		// return printBinaryExpression;
-	} else if (path.node.type === 'binary_operator') {
-		// return printBinaryOperator;
-		// TODO: re-enable binary expression once we figure out how to achieve it.
-		return () => path.node.text;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return () => path.node.text;
+        // TODO: re-enable binary expression once we figure out how to achieve it.
+        // return printBinaryExpression;
+    } else if (path.node.type === 'binary_operator') {
+        // return printBinaryOperator;
+        // TODO: re-enable binary expression once we figure out how to achieve it.
+        return () => path.node.text;
+    }
 
-	return null;
+    return null;
 }
 
 /**
@@ -29,25 +29,25 @@ export default function (path: AstPath<Node>): treeFn | null {
  * (Currently disabled)
  */
 function printBinaryExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	if (path.node.nonFormattingChildren.length != 3) {
-		throw new Error('`binary_expression` node should have 3 children');
-	}
+    if (path.node.nonFormattingChildren.length != 3) {
+        throw new Error('`binary_expression` node should have 3 children');
+    }
 
-	const [one, two, three] = path.map(print, 'nonFormattingChildren');
-	const rhs = path.node.nonFormattingChildren[2];
+    const [one, two, three] = path.map(print, 'nonFormattingChildren');
+    const rhs = path.node.nonFormattingChildren[2];
 
-	if (rhs?.type === 'block' || rhs?.type === 'expression_list') {
-		return [one!, ' ', two!, ' ', three!];
-	}
+    if (rhs?.type === 'block' || rhs?.type === 'expression_list') {
+        return [one!, ' ', two!, ' ', three!];
+    }
 
-	return [one!, ' ', two!, group([line, three!], { shouldBreak: false })];
+    return [one!, ' ', two!, group([line, three!], { shouldBreak: false })];
 }
 
 /**
  * Print `binary_operator` node.
  */
 export function printBinaryOperator(path: AstPath<Node>, _opt: MoveOptions, _p: printFn): Doc {
-	return path.node.text;
+    return path.node.text;
 }
 
 /**

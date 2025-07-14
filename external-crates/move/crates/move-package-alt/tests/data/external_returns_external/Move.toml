@@ -1,0 +1,14 @@
+# Broken external resolver produces another external dependency
+
+[package]
+name = "example"
+edition = "2025"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+default = "default"
+
+[dependencies.mock.r.mock-resolver]
+output.default.result = { r.mock-resolver = "." }
+stderr = "stderr output"

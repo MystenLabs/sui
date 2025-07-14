@@ -4,47 +4,37 @@
 use std::collections::BTreeMap;
 
 use move_package_alt::{
-    dependency::{self, Pinned, PinnedDependencyInfo, Unpinned},
+    dependency::{self, DependencySet, PinnedDependencyInfo},
     errors::PackageResult,
     flavor::MoveFlavor,
     package::PackageName,
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename = "kebab-case")]
-pub struct OnChainDependency {
-    on_chain: bool,
-}
-
+#[derive(Debug)]
 pub struct SuiFlavor;
 
 impl MoveFlavor for SuiFlavor {
-    type FlavorDependency<P: ?Sized> = OnChainDependency;
-
-    fn pin(
-        &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Unpinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, Self::FlavorDependency<Pinned>>> {
-        todo!()
-    }
-
-    fn fetch(
-        &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Pinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, std::path::PathBuf>> {
-        todo!()
+    fn name() -> String {
+        "sui".to_string()
     }
 
     type PublishedMetadata = (); // TODO
 
-    type EnvironmentID = (); // TODO
+    type EnvironmentID = String; // TODO
 
     type AddressInfo = (); // TODO
 
     type PackageMetadata = (); // TODO
 
-    fn implicit_deps(&self, id: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>> {
+    fn default_environments() -> BTreeMap<String, Self::EnvironmentID> {
+        todo!()
+    }
+
+    fn implicit_deps(
+        &self,
+        environments: impl Iterator<Item = Self::EnvironmentID>,
+    ) -> DependencySet<PinnedDependencyInfo> {
         todo!()
     }
 }

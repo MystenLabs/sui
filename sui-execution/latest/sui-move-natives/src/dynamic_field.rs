@@ -54,7 +54,6 @@ macro_rules! get_or_fetch_object {
         object_runtime.get_or_fetch_child_object(
             $parent,
             $child_id,
-            &child_ty,
             &layout,
             &annotated_layout,
             MoveObjectType::from(tag),
@@ -132,7 +131,7 @@ pub fn hash_type_and_key(
         Ok(Some(layout)) => layout,
         _ => return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE)),
     };
-    let Some(k_bytes) = k.simple_serialize(&k_layout) else {
+    let Some(k_bytes) = k.typed_serialize(&k_layout) else {
         return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };
     let Ok(id) = derive_dynamic_field_id(parent, &k_tag, &k_bytes) else {
@@ -229,13 +228,7 @@ pub fn add_child_object(
     );
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
-    object_runtime.add_child_object(
-        parent,
-        child_id,
-        &child_ty,
-        MoveObjectType::from(tag),
-        child,
-    )?;
+    object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 

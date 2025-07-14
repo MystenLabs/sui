@@ -1,0 +1,12 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 8-11:
+//# run-graphql
+Response: {
+  "data": {
+    "chainIdentifier": "a69e23aa"
+  }
+}

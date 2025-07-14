@@ -6,7 +6,7 @@
 
 use crate::{
     diag,
-    diagnostics::codes::{custom, DiagnosticInfo, Severity},
+    diagnostics::codes::{DiagnosticInfo, Severity, custom},
     expansion::ast::ModuleIdent,
     naming::ast as N,
     parser::ast::DatatypeName,
@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    LinterDiagnosticCategory, LinterDiagnosticCode, COIN_MOD_NAME, COIN_STRUCT_NAME,
-    LINT_WARNING_PREFIX,
+    COIN_MOD_NAME, COIN_STRUCT_NAME, LINT_WARNING_PREFIX, LinterDiagnosticCategory,
+    LinterDiagnosticCode,
 };
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(

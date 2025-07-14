@@ -12,78 +12,74 @@ Shared objects require the `key` ability.
 The following example creates a shop to sell digital donuts. Everyone needs access to the shop to purchase donuts from it, so the example creates the shop as a shared object using `sui::transfer::share_object`.
 
 ```move
-module examples::donuts {
-    use sui::transfer;
-    use sui::sui::SUI;
-    use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
-    use sui::balance::{Self, Balance};
-    use sui::tx_context::{Self, TxContext};
+module examples::donuts;
 
-    /// For when Coin balance is too low.
-    const ENotEnough: u64 = 0;
+use sui::sui::SUI;
+use sui::coin::{Self, Coin};
+use sui::balance::{Self, Balance};
 
-    /// Capability that grants an owner the right to collect profits.
-    struct ShopOwnerCap has key { id: UID }
+/// For when Coin balance is too low.
+const ENotEnough: u64 = 0;
 
-    /// A purchasable Donut. For simplicity's sake we ignore implementation.
-    struct Donut has key { id: UID }
+/// Capability that grants an owner the right to collect profits.
+public struct ShopOwnerCap has key { id: UID }
 
-    /// A shared object. `key` ability is required.
-    struct DonutShop has key {
-        id: UID,
-        price: u64,
-        balance: Balance<SUI>
-    }
+/// A purchasable Donut. For simplicity's sake we ignore implementation.
+public struct Donut has key { id: UID }
 
-    /// Init function is often ideal place for initializing
-    /// a shared object as it is called only once.
-    fun init(ctx: &mut TxContext) {
-        transfer::transfer(ShopOwnerCap {
-            id: object::new(ctx)
-        }, tx_context::sender(ctx));
+/// A shared object. `key` ability is required.
+public struct DonutShop has key {
+    id: UID,
+    price: u64,
+    balance: Balance<SUI>
+}
 
-        // Share the object to make it accessible to everyone!
-        transfer::share_object(DonutShop {
-            id: object::new(ctx),
-            price: 1000,
-            balance: balance::zero()
-        })
-    }
+/// Init function is often ideal place for initializing
+/// a shared object as it is called only once.
+fun init(ctx: &mut TxContext) {
+    transfer::transfer(ShopOwnerCap {
+        id: object::new(ctx)
+    }, ctx.sender());
 
-    /// Entry function available to everyone who owns a Coin.
-    public fun buy_donut(
-        shop: &mut DonutShop, payment: &mut Coin<SUI>, ctx: &mut TxContext
-    ) {
-        assert!(coin::value(payment) >= shop.price, ENotEnough);
+    // Share the object to make it accessible to everyone!
+    transfer::share_object(DonutShop {
+        id: object::new(ctx),
+        price: 1000,
+        balance: balance::zero()
+    })
+}
 
-        // Take amount = `shop.price` from Coin<SUI>
-        let coin_balance = coin::balance_mut(payment);
-        let paid = balance::split(coin_balance, shop.price);
+/// Entry function available to everyone who owns a Coin.
+public fun buy_donut(
+    shop: &mut DonutShop, payment: &mut Coin<SUI>, ctx: &mut TxContext
+) {
+    assert!(coin::value(payment) >= shop.price, ENotEnough);
 
-        // Put the coin to the Shop's balance
-        balance::join(&mut shop.balance, paid);
+    // Take amount = `shop.price` from Coin<SUI>
+    let paid = payment.balance_mut.split(shop.price);
 
-        transfer::transfer(Donut {
-            id: object::new(ctx)
-        }, tx_context::sender(ctx))
-    }
+    // Put the coin to the Shop's balance
+    shop.balance.join(paid);
 
-    /// Consume donut and get nothing...
-    public fun eat_donut(d: Donut) {
-        let Donut { id } = d;
-        object::delete(id);
-    }
+    transfer::transfer(Donut {
+        id: object::new(ctx)
+    }, ctx.sender())
+}
 
-    /// Take coin from `DonutShop` and transfer it to tx sender.
-    /// Requires authorization with `ShopOwnerCap`.
-    public fun collect_profits(
-        _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut TxContext
-    ) {
-        let amount = balance::value(&shop.balance);
-        let profits = coin::take(&mut shop.balance, amount, ctx);
+/// Consume donut and get nothing...
+public fun eat_donut(d: Donut) {
+    let Donut { id } = d;
+    id.delete();
+}
 
-        transfer::public_transfer(profits, tx_context::sender(ctx))
-    }
+/// Take coin from `DonutShop` and transfer it to tx sender.
+/// Requires authorization with `ShopOwnerCap`.
+public fun collect_profits(
+    _: &ShopOwnerCap, shop: &mut DonutShop, ctx: &mut TxContext
+) {
+    let amount = shop.balance.value();
+    let profits = shop.balance.split(amount).into_coin(ctx);
+
+    transfer::public_transfer(profits, ctx.sender())
 }
 ```

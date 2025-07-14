@@ -180,7 +180,8 @@ fn test_certificates() {
         .verify_signatures_authenticated(
             &committee,
             &Default::default(),
-            Arc::new(VerifiedDigestCache::new_empty())
+            Arc::new(VerifiedDigestCache::new_empty()),
+            None,
         )
         .is_ok());
 
@@ -1022,7 +1023,7 @@ fn verify_sender_signature_correctly_with_flag() {
 #[test]
 fn test_change_epoch_transaction() {
     let tx = VerifiedTransaction::new_change_epoch(1, ProtocolVersion::MIN, 0, 0, 0, 0, 0, vec![]);
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject::SUI_SYSTEM_OBJ
@@ -1042,7 +1043,7 @@ fn test_change_epoch_transaction() {
 #[test]
 fn test_consensus_commit_prologue_transaction() {
     let tx = VerifiedTransaction::new_consensus_commit_prologue(0, 0, 42);
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject {
@@ -1071,7 +1072,7 @@ fn test_consensus_commit_prologue_v2_transaction() {
         42,
         ConsensusCommitDigest::default(),
     );
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject {
@@ -1101,7 +1102,7 @@ fn test_consensus_commit_prologue_v3_transaction() {
         ConsensusCommitDigest::default(),
         ConsensusDeterminedVersionAssignments::empty_for_testing(),
     );
-    assert!(tx.contains_shared_object());
+    assert!(tx.is_consensus_tx());
     assert_eq!(
         tx.shared_input_objects().next().unwrap(),
         SharedInputObject {
@@ -1346,6 +1347,7 @@ fn test_certificate_digest() {
             &committee,
             &Default::default(),
             Arc::new(VerifiedDigestCache::new_empty()),
+            None,
         )
         .unwrap();
         cert
@@ -1389,31 +1391,31 @@ fn check_approx_effects_components_size() {
     use std::mem::size_of;
 
     assert!(
-        size_of::<GasCostSummary>() < APPROX_SIZE_OF_GAS_COST_SUMMARY,
+        size_of::<GasCostSummary>() <= APPROX_SIZE_OF_GAS_COST_SUMMARY,
         "Update APPROX_SIZE_OF_GAS_COST_SUMMARY constant"
     );
     assert!(
-        size_of::<EpochId>() < APPROX_SIZE_OF_EPOCH_ID,
+        size_of::<EpochId>() <= APPROX_SIZE_OF_EPOCH_ID,
         "Update APPROX_SIZE_OF_EPOCH_ID constant"
     );
     assert!(
-        size_of::<Option<TransactionEventsDigest>>() < APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST,
+        size_of::<Option<TransactionEventsDigest>>() <= APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST,
         "Update APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST constant"
     );
     assert!(
-        size_of::<ObjectRef>() < APPROX_SIZE_OF_OBJECT_REF,
+        size_of::<ObjectRef>() <= APPROX_SIZE_OF_OBJECT_REF,
         "Update APPROX_SIZE_OF_OBJECT_REF constant"
     );
     assert!(
-        size_of::<TransactionDigest>() < APPROX_SIZE_OF_TX_DIGEST,
+        size_of::<TransactionDigest>() <= APPROX_SIZE_OF_TX_DIGEST,
         "Update APPROX_SIZE_OF_TX_DIGEST constant"
     );
     assert!(
-        size_of::<Owner>() < APPROX_SIZE_OF_OWNER,
+        size_of::<Owner>() <= APPROX_SIZE_OF_OWNER,
         "Update APPROX_SIZE_OF_OWNER constant"
     );
     assert!(
-        size_of::<ExecutionStatus>() < APPROX_SIZE_OF_EXECUTION_STATUS,
+        size_of::<ExecutionStatus>() <= APPROX_SIZE_OF_EXECUTION_STATUS,
         "Update APPROX_SIZE_OF_EXECUTION_STATUS constant"
     );
 }

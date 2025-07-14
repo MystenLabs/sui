@@ -44,7 +44,7 @@ Sui is for the community. Contribute for the benefit of all.
 - [Repo contributing guidelines](https://docs.sui.io/contribute-to-sui-repos)
 - [Style guide](https://docs.sui.io/style-guide)
 - [Localization](https://docs.sui.io/localize-sui-docs)
-- [Code of conduct](https://docs.sui.io/contribute/code-of-conduct)
+- [Code of conduct](https://docs.sui.io/code-of-conduct)
 
 ## License
 

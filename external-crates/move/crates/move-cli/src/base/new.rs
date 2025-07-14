@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{self, ensure, Context};
+use anyhow::{self, Context, ensure};
 use clap::*;
 use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;

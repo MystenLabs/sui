@@ -7,7 +7,7 @@ repository = "https://github.com/diem/diem"
 homepage = "https://diem.com"
 license = "Apache-2.0"
 publish = false
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 proptest = { workspace = true, optional = true }
@@ -22,8 +22,8 @@ move-vm-profiler.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+move-core-types = { workspace = true, features = ["fuzzing"] }
 
 [features]
 default = []
 fuzzing = ["proptest", "move-binary-format/fuzzing"]
-

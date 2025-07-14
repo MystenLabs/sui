@@ -87,4 +87,12 @@ module Completion::colon_colon {
             SomeEnum::
         }
     }
+
+
+    fun import_module_same_name_as_pkg(): {
+        use Completion::Completion;
+        // must understand that Completion is both package name and (imported) module name
+        // and auto-complete other modules but also SomeStruct defined here
+        let s: Completion::
+    }
 }

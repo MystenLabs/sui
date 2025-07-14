@@ -4,6 +4,7 @@
 
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
+    FullyCompiledProgram,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
@@ -18,8 +19,7 @@ use crate::{
         Ability, Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName,
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
-    shared::{unique_map::UniqueMap, *},
-    FullyCompiledProgram,
+    shared::{known_attributes::AttributeKind_, unique_map::UniqueMap, *},
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
@@ -220,7 +220,8 @@ fn module(
         }
     ) = ident;
     let ir_module = IR::ModuleDefinition {
-        specified_version: compilation_env.flags().bytecode_version(),
+        specified_version: compilation_env.bytecode_version(),
+        publishable: compilation_env.publishable(),
         loc: ident_loc,
         identifier: IR::ModuleIdent {
             address: MoveAddress::new(addr_bytes.into_bytes()),
@@ -517,7 +518,7 @@ fn constant(
         signature,
         value,
     } = c;
-    let is_error_constant = attributes.contains_key_(&known_attributes::ErrorAttribute.into());
+    let is_error_constant = attributes.contains_key_(&AttributeKind_::Error);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
     let value = value.unwrap();
@@ -1040,9 +1041,9 @@ fn convert_unpack_type(unpack_type: H::UnpackType) -> IR::UnpackType {
 
 #[growing_stack]
 fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
-    use Value_ as V;
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
+    use Value_ as V;
     let sp!(loc, e_) = e.exp;
     match e_ {
         E::Unreachable => panic!("ICE should not compile dead code"),
@@ -1246,8 +1247,8 @@ fn module_call(
 }
 
 fn unary_op(code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
-    use UnaryOp_ as O;
     use IR::Bytecode_ as B;
+    use UnaryOp_ as O;
     code.push(sp(
         loc,
         match op_ {

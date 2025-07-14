@@ -1,18 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use crate::digests::{ObjectDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI, UnchangedSharedKind};
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus, MoveLocation};
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter, Write};
 
+use super::object_change::AccumulatorWriteV1;
 use super::{IDOperation, ObjectChange};
 
 /// The response from processing a transaction or a certified transaction
@@ -117,6 +119,10 @@ impl TransactionEffectsV1 {
     pub fn wrapped(&self) -> &[ObjectRef] {
         &self.wrapped
     }
+
+    pub fn shared_objects(&self) -> &[ObjectRef] {
+        &self.shared_objects
+    }
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV1 {
@@ -146,6 +152,17 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             })
             .cloned()
             .collect()
+    }
+
+    fn move_abort(&self) -> Option<(MoveLocation, u64)> {
+        let ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::MoveAbort(move_location, code),
+            ..
+        } = self.status()
+        else {
+            return None;
+        };
+        Some((move_location.clone(), *code))
     }
 
     fn lamport_version(&self) -> SequenceNumber {
@@ -195,7 +212,17 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn transferred_from_consensus(&self) -> Vec<ObjectRef> {
-        // ConsensusV2 objects cannot exist with effects v1
+        // Transferrable consensus objects cannot exist with effects v1
+        vec![]
+    }
+
+    fn transferred_to_consensus(&self) -> Vec<ObjectRef> {
+        // Transferrable consensus objects cannot exist with effects v1
+        vec![]
+    }
+
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef> {
+        // Transferrable consensus objects cannot exist with effects v1
         vec![]
     }
 
@@ -268,6 +295,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .collect()
     }
 
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
+        // v1 did not have accumulator events
+        vec![]
+    }
+
     fn gas_object(&self) -> (ObjectRef, Owner) {
         self.gas_object.clone()
     }
@@ -298,6 +330,10 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
                 _ => None,
             })
             .collect()
+    }
+
+    fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)> {
+        vec![]
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {

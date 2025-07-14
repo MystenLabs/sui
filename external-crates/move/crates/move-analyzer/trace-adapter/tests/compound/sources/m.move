@@ -2,24 +2,24 @@
 // (structs, enums, vectors).
 module compound::m;
 
-public enum SomeEnum has drop {
-    PositionalVariant(u64, u64),
+public enum SomeEnum<T> has drop {
+    PositionalVariant(u64, T),
     NamedVariant { field1: u64, field2: u64 },
 }
 
-public struct SomeStruct has drop {
+public struct SomeStruct<T, S> has drop {
     simple_field: u64,
-    enum_field: SomeEnum,
-    another_enum_field: SomeEnum,
+    enum_field: SomeEnum<S>,
+    another_enum_field: SomeEnum<S>,
     vec_simple_field: vector<u64>,
-    vec_struct_field: vector<SimpleStruct>,
+    vec_struct_field: vector<T>,
 }
 
-public struct SimpleStruct has drop, copy {
-    field: u64,
+public struct SimpleStruct<T> has drop, copy {
+    field: T,
 }
 
-fun foo(mut some_struct: SomeStruct, p: u64): SomeStruct {
+fun foo(mut some_struct: SomeStruct<SimpleStruct<u64>, u64>, p: u64): SomeStruct<SimpleStruct<u64>, u64> {
     let pos_variant = SomeEnum::PositionalVariant(p, p);
     let named_variant = SomeEnum::NamedVariant {
         field1: p,
@@ -37,7 +37,7 @@ fun foo(mut some_struct: SomeStruct, p: u64): SomeStruct {
     some_struct
 }
 
-fun some_struct(): SomeStruct {
+fun some_struct(): SomeStruct<SimpleStruct<u64>, u64> {
     SomeStruct {
         simple_field: 0,
         enum_field: SomeEnum::PositionalVariant(0, 0),

@@ -37,7 +37,7 @@ Use address-owned objects in cases where you want or need only a single owner fo
 An example of an object that is frequently address-owned is that of a [Coin object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/coin.move). If address `0xA11CE` had a coin `C` with 100 SUI and wanted to pay address `0xB0B` 100 SUI, `0xA11CE` could do so by transferring `C` to `0xB0B`.
 
 ```move
-sui::transfer::public_transfer(C, @0xB0B);
+transfer::public_transfer(C, @0xB0B);
 ```
 
 This results in `C` having a new address owner of `0xB0B`, and `0xB0B` can later use that 100 SUI coin.

@@ -69,17 +69,6 @@ Use tabs to divide repetitive content that doesn't typically apply to all audien
 
 To create a tabbed section:
 
-1. At the top of your file (after the frontmatter), `import` the `Tabs` and `TabItem` components.
-    ```tsx
-    ---
-    title: Page title
-    description: Optional short description.
-    ---
-
-    import Tabs from '@theme/Tabs';
-    import TabItem from '@theme/TabItem';
-
-    ```
 1. Add the `<Tabs>` element where you want the tabbed content to go. Include the optional `groupId` property if there are other `Tabs` with the same selections. For example, `<Tabs groupId="operating-systems">` persists users' selections across other `Tabs` with the same `groupId` value.
 1. Add a `<TabItem>` element for each section of content as a child of the `Tabs` element. Each `TabItem` needs both `value` and `label` property values. If you're using `groupId` in the parent `Tabs`, make sure the `value` value remains consistent across `TabItem`s that are intended to show the same type of information.
 1. Close each `</TabItem>` and the parent `</Tabs>`.

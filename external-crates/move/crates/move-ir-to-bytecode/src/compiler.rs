@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::context::{CompiledDependency, Context, MaterializedPools, TABLE_MAX_SIZE};
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use move_binary_format::{
     file_format::{
         Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant,
@@ -28,8 +28,8 @@ use move_symbol_pool::Symbol;
 use std::{
     clone::Clone,
     collections::{
-        hash_map::Entry::{Occupied, Vacant},
         BTreeSet, HashMap, HashSet,
+        hash_map::Entry::{Occupied, Vacant},
     },
     fmt::Write,
 };
@@ -174,7 +174,9 @@ impl FunctionFrame {
     // Manage the stack info for the function
     fn push(&mut self) -> Result<()> {
         if self.cur_stack_depth == i64::MAX {
-            bail!("ICE Stack depth accounting overflow. The compiler can only support a maximum stack depth of up to i64::max_value")
+            bail!(
+                "ICE Stack depth accounting overflow. The compiler can only support a maximum stack depth of up to i64::max_value"
+            )
         }
         self.cur_stack_depth += 1;
         self.max_stack_depth = std::cmp::max(self.max_stack_depth, self.cur_stack_depth);
@@ -183,7 +185,9 @@ impl FunctionFrame {
 
     fn pop(&mut self) -> Result<()> {
         if self.cur_stack_depth == i64::MIN {
-            bail!("ICE Stack depth accounting underflow. The compiler can only support a minimum stack depth of up to i64::min_value")
+            bail!(
+                "ICE Stack depth accounting underflow. The compiler can only support a minimum stack depth of up to i64::min_value"
+            )
         }
         self.cur_stack_depth -= 1;
         Ok(())
@@ -360,7 +364,8 @@ pub fn compile_module<'a>(
     verify_module(&module)?;
 
     let current_module = module.identifier;
-    let mut context = Context::new(module.loc, HashMap::new(), current_module)?;
+    let publishable = module.publishable;
+    let mut context = Context::new(module.loc, publishable, HashMap::new(), current_module)?;
     for dep in dependencies {
         context.add_compiled_dependency(dep)?;
     }
@@ -455,6 +460,7 @@ pub fn compile_module<'a>(
     ) = context.materialize_pools();
     let mut compiled_module = CompiledModule {
         version: VERSION_MAX,
+        publishable,
         module_handles,
         self_module_handle_idx,
         datatype_handles,
@@ -523,6 +529,7 @@ fn compile_explicit_dependency_declarations(
     dependencies: Vec<ModuleDependency>,
 ) -> Result<()> {
     let mut dependencies_acc = outer_context.take_dependencies();
+    let publishable = outer_context.publishable();
     for dependency in dependencies {
         let ModuleDependency {
             name: mname,
@@ -532,6 +539,7 @@ fn compile_explicit_dependency_declarations(
         let current_module = outer_context.module_ident(&mname)?;
         let mut context = Context::new(
             outer_context.decl_location(),
+            outer_context.publishable(),
             dependencies_acc,
             *current_module,
         )?;
@@ -576,6 +584,7 @@ fn compile_explicit_dependency_declarations(
         ) = context.materialize_pools();
         let compiled_module = CompiledModule {
             version: VERSION_MAX,
+            publishable,
             module_handles,
             self_module_handle_idx,
             datatype_handles,

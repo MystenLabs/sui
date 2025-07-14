@@ -1,0 +1,5 @@
+[package]
+name = "name"
+edition = "2025"
+
+[package]

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     event::Event,
@@ -79,6 +80,8 @@ pub struct ExecutionResultsV2 {
     pub deleted_object_ids: BTreeSet<ObjectID>,
     /// All Move events emitted in this transaction.
     pub user_events: Vec<Event>,
+    /// All accumulator events emitted in this transaction.
+    pub accumulator_events: Vec<AccumulatorEvent>,
 }
 
 pub type ExecutionResult = (
@@ -93,6 +96,7 @@ impl ExecutionResultsV2 {
         self.created_object_ids.clear();
         self.deleted_object_ids.clear();
         self.user_events.clear();
+        self.accumulator_events.clear();
     }
 
     pub fn merge_results(&mut self, new_results: Self) {
@@ -103,6 +107,8 @@ impl ExecutionResultsV2 {
         self.deleted_object_ids
             .extend(new_results.deleted_object_ids);
         self.user_events.extend(new_results.user_events);
+        self.accumulator_events
+            .extend(new_results.accumulator_events);
     }
 
     pub fn update_version_and_previous_tx(
@@ -168,21 +174,30 @@ impl ExecutionResultsV2 {
                 }
             }
 
-            // Record start version for ConsensusV2 objects.
-            if let Owner::ConsensusV2 { start_version, .. } = &mut obj.owner {
+            // Record start version for ConsensusAddressOwner objects.
+            if let Owner::ConsensusAddressOwner {
+                start_version,
+                owner,
+            } = &mut obj.owner
+            {
                 debug_assert!(!self.deleted_object_ids.contains(id));
 
-                if let Some(Owner::ConsensusV2 {
+                if let Some(Owner::ConsensusAddressOwner {
                     start_version: previous_start_version,
-                    ..
+                    owner: previous_owner,
                 }) = input_objects.get(id).map(|obj| &obj.owner)
                 {
-                    // Assign existing start_version in case a ConsensusV2 object was
-                    // transferred to the same Owner type.
-                    *start_version = *previous_start_version;
+                    if owner == previous_owner {
+                        // Assign existing start_version in case a ConsensusAddressOwner object was
+                        // transferred to the same owner.
+                        *start_version = *previous_start_version;
+                    } else {
+                        // If owner changes, we need to begin a new stream.
+                        *start_version = lamport_version;
+                    }
                 } else {
-                    // ConsensusV2 object was created, transferred from another Owner type,
-                    // or unwrapped, so we begin a new stream.
+                    // ConsensusAddressOwner object was created, transferred from another Owner
+                    // type, or unwrapped, so we begin a new stream.
                     *start_version = lamport_version;
                 }
             }

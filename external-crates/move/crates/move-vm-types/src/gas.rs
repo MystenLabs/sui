@@ -97,7 +97,7 @@ pub trait GasMeter {
     fn charge_ld_const(&mut self, size: NumBytes) -> PartialVMResult<()>;
 
     fn charge_ld_const_after_deserialization(&mut self, val: impl ValueView)
-        -> PartialVMResult<()>;
+    -> PartialVMResult<()>;
 
     fn charge_copy_loc(&mut self, val: impl ValueView) -> PartialVMResult<()>;
 

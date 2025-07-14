@@ -76,6 +76,9 @@ const SIZE_BUCKETS: &[f64] = &[
     10_000_000.0,
 ]; // size in bytes
 
+// Because of indirect finalization, the round delay should be at most 3 rounds.
+const ROUND_DELAY_BUCKETS: &[f64] = &[0.0, 0.5, 1.0, 2.0, 3.0, 4.0];
+
 pub(crate) struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) network_metrics: NetworkMetrics,
@@ -97,6 +100,8 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 }
 
 pub(crate) struct NodeMetrics {
+    pub(crate) authority_index: IntGaugeVec,
+    pub(crate) protocol_version: IntGauge,
     pub(crate) block_commit_latency: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) proposed_block_size: Histogram,
@@ -113,11 +118,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
+    pub(crate) commit_observer_last_recovered_commit_index: IntGauge,
     pub(crate) core_add_blocks_batch_size: Histogram,
     pub(crate) core_check_block_refs_batch_size: Histogram,
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
+    pub(crate) handler_received_block_missing_ancestors: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
     pub(crate) accepted_block_time_drift_ms: IntCounterVec,
@@ -127,18 +134,18 @@ pub(crate) struct NodeMetrics {
     pub(crate) dag_state_store_read_count: IntCounterVec,
     pub(crate) dag_state_store_write_count: IntCounter,
     pub(crate) fetch_blocks_scheduler_inflight: IntGauge,
-    pub(crate) fetch_blocks_scheduler_skipped: IntCounterVec,
     pub(crate) synchronizer_fetched_blocks_by_peer: IntCounterVec,
     pub(crate) synchronizer_missing_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_current_missing_blocks_by_authority: IntGaugeVec,
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_fetch_failures: IntCounterVec,
+    pub(crate) synchronizer_skipped_fetch_requests: IntCounterVec,
+    pub(crate) synchronizer_process_fetched_failures: IntCounterVec,
     pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
     pub(crate) network_excluded_ancestors_sent_to_fetch: IntCounterVec,
     pub(crate) network_excluded_ancestors_count_by_authority: IntCounterVec,
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
-    pub(crate) rejected_future_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
@@ -159,6 +166,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) missing_blocks_after_fetch_total: IntCounter,
     pub(crate) num_of_bad_nodes: IntGauge,
     pub(crate) quorum_receive_latency: Histogram,
+    pub(crate) block_receive_delay: IntCounterVec,
     pub(crate) reputation_scores: IntGaugeVec,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
@@ -201,12 +209,32 @@ pub(crate) struct NodeMetrics {
     pub(crate) round_tracker_propagation_delays: Histogram,
     pub(crate) round_tracker_last_propagation_delay: IntGauge,
     pub(crate) round_prober_request_errors: IntCounterVec,
+    pub(crate) certifier_gc_round: IntGauge,
+    pub(crate) certifier_own_reject_votes: IntCounterVec,
+    pub(crate) certifier_output_blocks: IntCounterVec,
+    pub(crate) certifier_rejected_transactions: IntCounterVec,
+    pub(crate) certifier_accepted_transactions: IntCounterVec,
+    pub(crate) finalizer_buffered_commits: IntGauge,
+    pub(crate) finalizer_round_delay: Histogram,
+    pub(crate) finalizer_transaction_status: IntCounterVec,
+    pub(crate) finalizer_output_commits: IntCounterVec,
     pub(crate) uptime: Histogram,
 }
 
 impl NodeMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
+            authority_index: register_int_gauge_vec_with_registry!(
+                "authority_index",
+                "The index of the authority",
+                &["name"],
+                registry,
+            ).unwrap(),
+            protocol_version: register_int_gauge_with_registry!(
+                "protocol_version",
+                "The protocol version used in this epoch",
+                registry,
+            ).unwrap(),
             block_commit_latency: register_histogram_with_registry!(
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
@@ -304,6 +332,11 @@ impl NodeMetrics {
                 &["peer"],
                 registry,
             ).unwrap(),
+            commit_observer_last_recovered_commit_index: register_int_gauge_with_registry!(
+                "commit_observer_last_recovered_commit_index",
+                "The last commit index recovered by the commit observer",
+                registry,
+            ).unwrap(),
             core_add_blocks_batch_size: register_histogram_with_registry!(
                 "core_add_blocks_batch_size",
                 "The number of blocks received from Core for processing on a single batch",
@@ -330,6 +363,12 @@ impl NodeMetrics {
                 "core_skipped_proposals",
                 "Number of proposals skipped in the Core, per reason",
                 &["reason"],
+                registry,
+            ).unwrap(),
+            handler_received_block_missing_ancestors: register_int_counter_vec_with_registry!(
+                "handler_received_block_missing_ancestors",
+                "Number of missing ancestors in blocks received in the handler, separated by peer",
+                &["authority"],
                 registry,
             ).unwrap(),
             highest_accepted_authority_round: register_int_gauge_vec_with_registry!(
@@ -381,12 +420,6 @@ impl NodeMetrics {
                 "Designates whether the synchronizer scheduler task to fetch blocks is currently running",
                 registry,
             ).unwrap(),
-            fetch_blocks_scheduler_skipped: register_int_counter_vec_with_registry!(
-                "fetch_blocks_scheduler_skipped",
-                "Number of times the scheduler skipped fetching blocks",
-                &["reason"],
-                registry
-            ).unwrap(),
             synchronizer_fetched_blocks_by_peer: register_int_counter_vec_with_registry!(
                 "synchronizer_fetched_blocks_by_peer",
                 "Number of fetched blocks per peer authority via the synchronizer and also by block authority",
@@ -414,6 +447,18 @@ impl NodeMetrics {
             synchronizer_fetch_failures: register_int_counter_vec_with_registry!(
                 "synchronizer_fetch_failures",
                 "Number of fetch failures against each peer",
+                &["peer", "type"],
+                registry,
+            ).unwrap(),
+            synchronizer_skipped_fetch_requests: register_int_counter_vec_with_registry!(
+                "synchronizer_skipped_fetch_requests",
+                "Number of fetch requests skipped against each peer, because the peer is saturated",
+                &["peer"],
+                registry,
+            ).unwrap(),
+            synchronizer_process_fetched_failures: register_int_counter_vec_with_registry!(
+                "synchronizer_process_fetched_failures",
+                "Number of failures for processing fetched blocks against each peer",
                 &["peer", "type"],
                 registry,
             ).unwrap(),
@@ -445,23 +490,28 @@ impl NodeMetrics {
                 "Number of times this node tried to fetch the last own block from peers",
                 registry,
             ).unwrap(),
-            // TODO: add a short status label.
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
                 &["authority", "source", "error"],
                 registry,
             ).unwrap(),
+            certifier_rejected_transactions: register_int_counter_vec_with_registry!(
+                "certifier_rejected_transactions",
+                "Number of transactions rejected by authority in transaction certifier",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            certifier_accepted_transactions: register_int_counter_vec_with_registry!(
+                "certifier_accepted_transactions",
+                "Number of transactions accepted by authority in transaction certifier",
+                &["authority"],
+                registry,
+            ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
                 "rejected_blocks",
                 "Number of blocks rejected before verifications",
                 &["reason"],
-                registry,
-            ).unwrap(),
-            rejected_future_blocks: register_int_counter_vec_with_registry!(
-                "rejected_future_blocks",
-                "Number of blocks rejected because their timestamp is too far in the future",
-                &["authority"],
                 registry,
             ).unwrap(),
             subscribed_blocks: register_int_counter_vec_with_registry!(
@@ -563,6 +613,12 @@ impl NodeMetrics {
                 "quorum_receive_latency",
                 "The time it took to receive a new round quorum of blocks",
                 registry
+            ).unwrap(),
+            block_receive_delay: register_int_counter_vec_with_registry!(
+                "block_receive_delay",
+                "Total delay from the start of the round to receiving the block, in milliseconds per authority",
+                &["authority"],
+                registry,
             ).unwrap(),
             reputation_scores: register_int_gauge_vec_with_registry!(
                 "reputation_scores",
@@ -798,6 +854,46 @@ impl NodeMetrics {
                 "round_prober_request_errors",
                 "Number of errors when probing against peers per error type",
                 &["error_type"],
+                registry
+            ).unwrap(),
+            certifier_gc_round: register_int_gauge_with_registry!(
+                "certifier_gc_round",
+                "The current GC round of the certifier",
+                registry
+            ).unwrap(),
+            certifier_own_reject_votes: register_int_counter_vec_with_registry!(
+                "certifier_own_reject_votes",
+                "Number of own reject votes against each peer authority",
+                &["authority"],
+                registry
+            ).unwrap(),
+            certifier_output_blocks: register_int_counter_vec_with_registry!(
+                "certifier_output_blocks",
+                "Number of output blocks certified by the certifier, grouped by type.",
+                &["type"],
+                registry
+            ).unwrap(),
+            finalizer_buffered_commits: register_int_gauge_with_registry!(
+                "finalizer_buffered_commits",
+                "The number of commits buffered in the finalizer",
+                registry,
+            ).unwrap(),
+            finalizer_round_delay: register_histogram_with_registry!(
+                "finalizer_round_delay",
+                "The delay between the round of the last committed block and the round of the finalized commit.",
+                ROUND_DELAY_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            finalizer_transaction_status: register_int_counter_vec_with_registry!(
+                "finalizer_transaction_status",
+                "Number of transactions finalized by the finalizer, grouped by status.",
+                &["status"],
+                registry
+            ).unwrap(),
+            finalizer_output_commits: register_int_counter_vec_with_registry!(
+                "finalizer_output_commits",
+                "Number of output commits finalized by the finalizer, grouped by type.",
+                &["type"],
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

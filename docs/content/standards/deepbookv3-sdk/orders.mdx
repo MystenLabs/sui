@@ -37,10 +37,8 @@ placeMarketOrder({ params: PlaceMarketOrderParams });
 
 Use `cancelOrder` to cancel an existing order that is identified by the `orderId` thqt you provide. The call returns a function that takes a `Transaction` object.
 
-::: warn
-
+:::warning
 The `orderId` is the protocol `orderId` generated during order placement, which is different from the client `orderId`.
-
 :::
 
 **Parameters**

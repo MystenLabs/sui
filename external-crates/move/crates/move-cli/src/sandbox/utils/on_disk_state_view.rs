@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{DEFAULT_BUILD_DIR, DEFAULT_STORAGE_DIR};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use move_binary_format::file_format::{CompiledModule, FunctionDefinitionIndex};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
-    language_storage::{ModuleId, StructTag},
-    resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    language_storage::ModuleId,
+    resolver::{LinkageResolver, ModuleResolver},
 };
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
@@ -240,18 +240,6 @@ impl ModuleResolver for OnDiskStateView {
     type Error = anyhow::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.get_module_bytes(module_id)
-    }
-}
-
-impl ResourceResolver for OnDiskStateView {
-    type Error = anyhow::Error;
-
-    fn get_resource(
-        &self,
-        _address: &AccountAddress,
-        _struct_tag: &StructTag,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        unimplemented!()
     }
 }
 

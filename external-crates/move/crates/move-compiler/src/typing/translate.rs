@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
-    diagnostics::{codes::*, Diagnostic},
+    FullyCompiledProgram, diag,
+    diagnostics::{Diagnostic, codes::*},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
-        AbilitySet, Attribute, AttributeName_, AttributeValue_, Attribute_, DottedUsage, Fields,
-        Friend, ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
+        AbilitySet, DottedUsage, Fields, Friend, ModuleAccess_, ModuleIdent, ModuleIdent_,
+        Mutability, Value_, Visibility,
     },
     ice, ice_assert,
     naming::ast::{
         self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, ResolvedUseFuns, TParam,
-        TParamID, Type, TypeName, TypeName_, Type_,
+        TParamID, Type, Type_, TypeName, TypeName_,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, DocComment, Field, FunctionName,
@@ -21,7 +21,9 @@ use crate::{
     },
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
-        known_attributes::{ErrorAttribute, SyntaxAttribute, TestingAttribute, VerificationAttribute},
+        known_attributes::{
+            AttributeKind_, ErrorAttribute, KnownAttribute, MinorCode_, SyntaxAttribute, TestingAttribute, VerificationAttribute
+        },
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, NamingProgramInfo, TypingProgramInfo},
         string_utils::{debug_print, make_ascii_titlecase},
@@ -32,14 +34,13 @@ use crate::{
     typing::{
         ast::{self as T},
         core::{
-            self, global_use_funs, public_testing_visibility, report_visibility_error, Context,
-            ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
+            self, Context, ModuleContext, PublicForTesting, ResolvedFunctionType, Subst,
+            global_use_funs, public_testing_visibility, report_visibility_error,
         },
         dependency_ordering, expand, infinite_instantiations, macro_expand, match_analysis,
         recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
-    FullyCompiledProgram,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -1404,6 +1405,18 @@ fn join<T: ToString, F: FnOnce() -> T>(
     }
 }
 
+fn join_named_block_type<T: ToString, F: FnOnce() -> T>(
+    context: &mut Context,
+    name: BlockLabel,
+    loc: Loc,
+    msg: F,
+    exp_type: Type,
+) {
+    let block_ty = context.named_block_type(name, loc);
+    let loop_ty = join(context, loc, msg, exp_type, block_ty);
+    context.update_named_block_type(name, loop_ty);
+}
+
 fn invariant_no_report(
     context: &mut Context,
     pre_lhs: Type,
@@ -1730,8 +1743,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     None
                 }
             };
-            let result_type = core::make_tvar(context, aloc);
-            let earms = match_arms(context, &esubject.ty, &result_type, narms_, &ref_mut);
+            let (result_type, earms) = match_arms(context, &esubject.ty, &aloc, narms_, &ref_mut);
             (result_type, TE::Match(esubject, sp(aloc, earms)))
         }
         NE::While(name, nb, nloop) => {
@@ -1744,11 +1756,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 eb.ty.clone(),
                 Type_::bool(bloc),
             );
-            let (_has_break, ty, body) = loop_body(context, eloc, name, false, nloop);
+            let (_has_break, ty, body) =
+                loop_body(context, eloc, name, /* while_loop */ true, nloop);
             (sp(eloc, ty.value), TE::While(name, eb, body))
         }
         NE::Loop(name, nloop) => {
-            let (has_break, ty, body) = loop_body(context, eloc, name, true, nloop);
+            let (has_break, ty, body) =
+                loop_body(context, eloc, name, /* while_loop */ false, nloop);
             let eloop = TE::Loop {
                 name,
                 has_break,
@@ -1833,13 +1847,12 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
         }
         NE::Give(usage, name, rhs) => {
             let break_rhs = exp(context, rhs);
-            let loop_ty = context.named_block_type(name, eloc);
-            subtype(
+            join_named_block_type(
                 context,
+                name,
                 eloc,
                 || format!("Invalid {usage}"),
                 break_rhs.ty.clone(),
-                loop_ty,
             );
             (sp(eloc, Type_::Anything), TE::Give(name, break_rhs))
         }
@@ -1924,11 +1937,16 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (eloc, format!("Struct '{m}::{n}' can only be instantiated within its defining module '{m}'")),
+                    (
+                        eloc,
+                        format!(
+                            "Struct '{m}::{n}' can only be instantiated within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.struct_declared_loc(&m, &n),
-                        format!("Struct defined in module '{m}'")
-                    )
+                        format!("Struct defined in module '{m}'"),
+                    ),
                 );
             }
             (bt, TE::Pack(m, n, targs, tfields))
@@ -1961,11 +1979,16 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (eloc, format!("Enum variant '{m}::{e}::{v}' can only be instantiated within its defining module '{m}'")),
+                    (
+                        eloc,
+                        format!(
+                            "Enum variant '{m}::{e}::{v}' can only be instantiated within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.enum_declared_loc(&m, &e),
-                        format!("Enum defined in module '{m}'")
-                    )
+                        format!("Enum defined in module '{m}'"),
+                    ),
                 );
             }
             (bt, TE::PackVariant(m, e, v, targs, tfields))
@@ -2160,11 +2183,11 @@ fn loop_body(
     context: &mut Context,
     eloc: Loc,
     name: BlockLabel,
-    is_loop: bool,
+    while_loop: bool,
     nloop: Box<N::Exp>,
 ) -> (bool, Type, Box<T::Exp>) {
     // set while break to ()
-    if !is_loop {
+    if while_loop {
         let while_loop_type = context.named_block_type(name, eloc);
         // while loop breaks must break with unit
         subtype(
@@ -2199,20 +2222,31 @@ fn loop_body(
 fn match_arms(
     context: &mut Context,
     subject_type: &Type,
-    result_type: &Type,
+    arms_loc: &Loc,
     narms: Vec<N::MatchArm>,
     ref_mut: &Option<bool>,
-) -> Vec<T::MatchArm> {
-    narms
+) -> (Type, Vec<T::MatchArm>) {
+    let arms = narms
         .into_iter()
-        .map(|narm| match_arm(context, subject_type, result_type, narm, ref_mut))
-        .collect()
+        .map(|narm| match_arm(context, subject_type, narm, ref_mut))
+        .collect::<Vec<_>>();
+    let result_type = arms
+        .iter()
+        .fold(core::make_tvar(context, *arms_loc), |ty, arm| {
+            join(
+                context,
+                *arms_loc,
+                || "invalid match arm",
+                ty,
+                arm.value.rhs.ty.clone(),
+            )
+        });
+    (result_type, arms)
 }
 
 fn match_arm(
     context: &mut Context,
     subject_type: &Type,
-    result_type: &Type,
     sp!(aloc, arm_): N::MatchArm,
     ref_mut: &Option<bool>,
 ) -> T::MatchArm {
@@ -2250,7 +2284,6 @@ fn match_arm(
     );
 
     let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
-
     for (pat_var, guard_var) in guard_binders.clone() {
         use Type_::*;
         let ety = binder_map.get(&pat_var).unwrap().clone();
@@ -2277,14 +2310,6 @@ fn match_arm(
     }
 
     let rhs = exp(context, rhs);
-    subtype(
-        context,
-        rhs.exp.loc,
-        || "Invalid right-hand side expression",
-        rhs.ty.clone(),
-        result_type.clone(),
-    );
-
     sp(
         aloc,
         T::MatchArm_ {
@@ -2324,9 +2349,9 @@ fn match_pattern_(
     use T::UnannotatedPat_ as TP;
 
     macro_rules! rtype {
-        ($ty:expr) => {
+        ($loc:expr, $ty:expr) => {
             if let Some(mut_) = mut_ref {
-                sp($ty.loc, Type_::Ref(*mut_, Box::new($ty)))
+                sp($loc, Type_::Ref(*mut_, Box::new($ty)))
             } else {
                 $ty
             }
@@ -2360,28 +2385,35 @@ fn match_pattern_(
                 if matches!(fty.value, N::Type_::UnresolvedError) {
                     field_error = true;
                 }
-                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty.clone());
-                subtype(
+                let mut tpat =
+                    match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(tpat.pat.loc, fty.clone());
+                let pat_ty = subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
+                tpat.ty = pat_ty;
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (loc, format!("Enum variant '{m}::{enum_}::{variant}' can only be matched within its defining module '{m}'")),
+                    (
+                        loc,
+                        format!(
+                            "Enum variant '{m}::{enum_}::{variant}' can only be matched within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.enum_declared_loc(&m, &enum_),
-                        format!("Enum defined in module '{m}'")
-                    )
+                        format!("Enum defined in module '{m}'"),
+                    ),
                 );
             }
-            let bt = rtype!(bt);
+            let bt = rtype!(loc, bt);
             let pat_ = if field_error {
                 TP::ErrorPat
             } else if let Some(mut_) = mut_ref {
@@ -2407,15 +2439,17 @@ fn match_pattern_(
                 if matches!(fty.value, N::Type_::UnresolvedError) {
                     field_error = true;
                 }
-                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty.clone());
-                subtype(
+                let mut tpat =
+                    match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(tpat.pat.loc, fty.clone());
+                let pat_ty = subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
+                tpat.ty = pat_ty;
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2426,7 +2460,7 @@ fn match_pattern_(
                 );
                 context.add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
-            let bt = rtype!(bt);
+            let bt = rtype!(loc, bt);
             let pat_ = if field_error {
                 TP::ErrorPat
             } else if let Some(mut_) = mut_ref {
@@ -2459,7 +2493,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Constant(m, const_)))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Constant(m, const_)))
         }
         P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
@@ -2490,7 +2524,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Literal(v)))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Literal(v)))
         }
         P::Wildcard => {
             let ty = core::make_tvar(context, loc);
@@ -2500,7 +2534,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Wildcard))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Wildcard))
         }
         P::Or(lhs, rhs) => {
             let lpat = match_pattern_(context, *lhs, mut_ref, rhs_binders, wildcard_needs_drop);
@@ -2849,10 +2883,15 @@ fn lvalue(
             if !context.is_current_module(&m) {
                 report_visibility_error(
                     context,
-                    (loc, format!("Struct '{m}::{n}' can only be used in deconstruction {verb} within its defining module '{m}'")),
+                    (
+                        loc,
+                        format!(
+                            "Struct '{m}::{n}' can only be used in deconstruction {verb} within its defining module '{m}'"
+                        ),
+                    ),
                     (
                         context.struct_declared_loc(&m, &n),
-                        format!("Struct defined in module '{m}'")
+                        format!("Struct defined in module '{m}'"),
                     ),
                 );
             }
@@ -2899,8 +2938,8 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
 //**************************************************************************************************
 
 fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Type {
-    use TypeName_::*;
     use Type_::*;
+    use TypeName_::*;
     const UNINFERRED_MSG: &str =
         "Could not infer the type before field access. Try annotating here";
     let msg = || format!("Unbound field '{}'", field);
@@ -2914,7 +2953,7 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
             ));
             context.error_type(loc)
         }
-        sp!(tloc, Var(i)) if !context.subst.is_num_var(i) => {
+        sp!(tloc, Var(i)) if !context.subst.is_num_var(&i) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -3783,8 +3822,8 @@ fn exp_to_borrow_(
     base_type: Type,
     warn_on_constant: bool,
 ) -> Box<T::Exp> {
-    use Type_::*;
     use T::UnannotatedExp_ as TE;
+    use Type_::*;
     if warn_on_constant {
         warn_on_constant_borrow(context, eb.exp.loc, &eb)
     };
@@ -3940,8 +3979,8 @@ fn type_to_type_name_(
     error_msg: String,
     report_error: bool,
 ) -> Option<TypeName> {
-    use TypeName_ as TN;
     use Type_ as Ty;
+    use TypeName_ as TN;
     match &ty.value {
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
         t => {
@@ -4079,30 +4118,20 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             value: _,
         } = context.constant_info(module_ident, constant_name).clone();
         const_name = Some((defined_loc, *constant_name));
-        if let Some(err_attribute) = attributes.get_(&known_attributes::ErrorAttribute.into()) {
-            let attribute_fmt_msg = || {
-                format!(
-                "Expected only an error code or nothing for an error annotation, e.g., '{}' or '{}({} = <num>)'",
-                ErrorAttribute::ERROR,
-                ErrorAttribute::ERROR,
-                ErrorAttribute::CODE,
-            )
-            };
-            let error_code = match &err_attribute.value {
-                Attribute_::Name(_) => None,
-                Attribute_::Assigned(_, _) => {
-                    context.add_diag(diag!(
-                        Declarations::InvalidAttribute,
-                        (err_attribute.loc, attribute_fmt_msg())
-                    ));
-                    None
-                }
-                Attribute_::Parameterized(_, inner) => error_constant_attr_params(context, inner),
+        if let Some(err_attribute) = attributes.get_(&known_attributes::AttributeKind_::Error) {
+            let known_attributes::KnownAttribute::Error(ErrorAttribute { code }) =
+                err_attribute.value
+            else {
+                context.add_diag(ice!((
+                    err_attribute.loc,
+                    "Expected an 'error' attribute based on kind"
+                )));
+                return;
             };
             let econst = T::UnannotatedExp_::ErrorConstant {
                 line_number_loc: *const_loc,
                 error_constant: Some(*constant_name),
-                error_code,
+                error_code: code,
             };
             *e = T::exp(u64_type.clone(), sp(*const_loc, econst));
         }
@@ -4143,66 +4172,6 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
         e.ty = context.error_type(e.ty.loc);
         e.exp = sp(e.exp.loc, T::UnannotatedExp_::UnresolvedError);
     }
-}
-
-fn error_constant_attr_params(
-    context: &mut Context,
-    attributes: &UniqueMap<Spanned<AttributeName_>, Spanned<Attribute_>>,
-) -> Option<u8> {
-    let mut code = None;
-    const ERR_MSG: &str =
-        "Invalid attribute, expected an argument of the form 'code = <num>' where '<num>' is a u8";
-    for (_, _, sp!(arg_loc, arg)) in attributes.iter() {
-        match arg {
-            Attribute_::Assigned(name, rhs) => {
-                if name.value.as_str() != ErrorAttribute::CODE {
-                    context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
-                    continue;
-                };
-                let AttributeValue_::Value(sp!(_, value_)) = &rhs.value else {
-                    context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
-                    continue;
-                };
-                let new_err_code = match value_ {
-                    Value_::InferredNum(value) => {
-                        let new_err_code = u8::try_from(*value).ok();
-                        if new_err_code.is_none() {
-                            context.add_diag(diag!(
-                                Declarations::InvalidAttribute,
-                                (*arg_loc, "Error code must be a u8")
-                            ));
-                        }
-                        new_err_code
-                    }
-                    Value_::U8(value) => Some(*value),
-                    Value_::Address(_)
-                    | Value_::U16(_)
-                    | Value_::U32(_)
-                    | Value_::U64(_)
-                    | Value_::U128(_)
-                    | Value_::U256(_)
-                    | Value_::Bool(_)
-                    | Value_::Bytearray(_) => {
-                        context.add_diag(diag!(
-                            Declarations::InvalidAttribute,
-                            (*arg_loc, "Error code must be a u8")
-                        ));
-                        None
-                    }
-                };
-                if code.is_some() {
-                    assert!(context.env().has_errors());
-                    continue;
-                } else {
-                    code = new_err_code;
-                }
-            }
-            _ => {
-                context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
-            }
-        }
-    }
-    code
 }
 
 fn builtin_call(
@@ -4823,39 +4792,127 @@ fn convert_macro_arg_to_block(context: &mut Context, sp!(loc, ne_): N::Exp) -> N
 // Utils
 //**************************************************************************************************
 
-macro_rules! process_attributes_impl {
-    ($rec:ident, $context:ident, $all_attributes: expr) => {
-        for (_, _, attr) in $all_attributes {
-            match &attr.value {
-                Attribute_::Name(_) => (),
-                Attribute_::Parameterized(_, attrs) => $rec($context, attrs),
-                Attribute_::Assigned(_, val) => {
-                    let AttributeValue_::ModuleAccess(mod_access) = &val.value else {
-                        continue;
-                    };
-                    if let ModuleAccess_::ModuleAccess(mident, name) = mod_access.value {
-                        // conservatively assume that each `ModuleAccess` refers to a constant name
-                        $context
-                            .used_module_members
-                            .entry(mident.value)
-                            .or_default()
-                            .insert(name.value);
-                    }
+// Traverses an ExternalAttributeValue and returns any (ModuleIdent, Name) found.
+//
+// Specifically, if the value is a ModuleAccess then we pattern-match on its inner value
+// and insert the module identifier and name into the set.
+fn collect_external_attribute_value_module_members(
+    value: &known_attributes::ExternalAttributeValue,
+) -> BTreeSet<(ModuleIdent, Name)> {
+    let mut set = BTreeSet::new();
+    if let known_attributes::ExternalAttributeValue_::ModuleAccess(mod_access) = &value.value {
+        // We assume mod_access.value is of type ModuleAccess_
+        if let ModuleAccess_::ModuleAccess(mident, name) = &mod_access.value {
+            set.insert((*mident, *name));
+        }
+    }
+    set
+}
+
+// Traverses a single ExternalAttributeEntry and returns any module accesses found.
+fn collect_external_attribute_entry_module_members(
+    entry: &known_attributes::ExternalAttributeEntry,
+) -> BTreeSet<(ModuleIdent, Name)> {
+    let mut set = BTreeSet::new();
+    use known_attributes::ExternalAttributeEntry_ as EAE;
+    match &entry.value {
+        EAE::Name(_) => {
+            // Nothing to collect.
+        }
+        EAE::Assigned(_, boxed_value) => {
+            set.extend(collect_external_attribute_value_module_members(boxed_value));
+        }
+        EAE::Parameterized(_, entries) => {
+            set.extend(collect_external_attribute_entries_module_members(entries));
+        }
+    }
+    set
+}
+
+// Traverses a collection of ExternalAttributeEntries and returns the union of all
+// module accesses found.
+fn collect_external_attribute_entries_module_members(
+    entries: &known_attributes::ExternalAttributeEntries,
+) -> BTreeSet<(ModuleIdent, Name)> {
+    let mut set = BTreeSet::new();
+    // Assuming entries.iter() yields pairs of (_key, &ExternalAttributeEntry)
+    for (_, _, entry) in entries.iter() {
+        set.extend(collect_external_attribute_entry_module_members(entry));
+    }
+    set
+}
+
+// Traverses a KnownAttribute and returns all module accesses found inside it.
+//
+// For most variants there is nothing to collect. For External attributes,
+// the function recurs into the nested entries.
+pub fn collect_known_attribute_module_members(
+    attr: &KnownAttribute,
+) -> BTreeSet<(ModuleIdent, Name)> {
+    let mut set = BTreeSet::new();
+    use KnownAttribute::*;
+    match attr {
+        BytecodeInstruction(_)
+        | DefinesPrimitive(_)
+        | Deprecation(_)
+        | Diagnostic(_)
+        | Error(_)
+        | Mode(_)
+        | Syntax(_) => {
+            // No nested module accesses.
+        }
+        Testing(test_attr) => {
+            // For Testing attributes we currently assume that none contain module accesses.
+            if let known_attributes::TestingAttribute::ExpectedFailure(expected_failure) = test_attr
+            {
+                if let known_attributes::ExpectedFailure::ExpectedWithError {
+                    minor_code: Some(sp!(_, MinorCode_::Constant(mident, name))),
+                    ..
+                } = expected_failure.as_ref()
+                {
+                    set.insert((*mident, *name));
                 }
             }
         }
-    };
+        External(ext_attr) => {
+            set.extend(collect_external_attribute_entries_module_members(
+                &ext_attr.attrs,
+            ));
+        }
+    }
+    set
 }
 
 fn process_module_attributes<T: TName>(
     context: &mut ModuleContext,
-    all_attributes: &UniqueMap<T, Attribute>,
+    all_attributes: &UniqueMap<T, Spanned<KnownAttribute>>,
 ) {
-    process_attributes_impl!(process_module_attributes, context, all_attributes);
+    for attr in all_attributes.iter().map(|(_, _, value)| value) {
+        let names = collect_known_attribute_module_members(&attr.value);
+        for (mident, name) in names {
+            context
+                .used_module_members
+                .entry(mident.value)
+                .or_default()
+                .insert(name.value);
+        }
+    }
 }
 
-fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMap<T, Attribute>) {
-    process_attributes_impl!(process_attributes, context, all_attributes);
+fn process_attributes<T: TName>(
+    context: &mut Context,
+    all_attributes: &UniqueMap<T, Spanned<KnownAttribute>>,
+) {
+    for attr in all_attributes.iter().map(|(_, _, value)| value) {
+        let names = collect_known_attribute_module_members(&attr.value);
+        for (mident, name) in names {
+            context
+                .used_module_members
+                .entry(mident.value)
+                .or_default()
+                .insert(name.value);
+        }
+    }
 }
 
 //**************************************************************************************************

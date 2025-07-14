@@ -11,7 +11,7 @@ There are various ways to use object fields to store primitive data and other ob
 
 Fortunately, Sui provides *dynamic fields* with arbitrary names (not just identifiers), added and removed on-the-fly (not fixed at publish), which only affect gas when they are accessed, and can store heterogeneous values. Use the libraries in this topic to interact with this kind of field.
 
-### Fields versus object fields
+## Fields versus object fields
 
 There are two flavors of dynamic field -- "fields" and "object fields" -- which differ based on how you store their values:
 
@@ -20,11 +20,11 @@ There are two flavors of dynamic field -- "fields" and "object fields" -- which 
 | Fields | Can store any value that has `store`, however an object stored in this kind of field is considered wrapped and is not accessible via its ID by external tools (explorers, wallets, and so on) accessing storage.| [`dynamic_field`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/dynamic_field.move) |
 | Object field | Values must be objects (have the `key` ability, and `id: UID` as the first field), but are still accessible at their ID to external tools.| [`dynamic_object_field`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move) |
 
-### Field names
+## Field names
 
 Unlike an object's regular fields where names must be Move identifiers, dynamic field names can be any value that has `copy`, `drop`, and `store`. This includes all Move primitives (integers, Booleans, byte strings), and structs whose contents all have `copy`, `drop`, and `store`.
 
-### Adding dynamic fields
+## Adding dynamic fields
 
 Use the `add` function from the relevant Sui framework module to add dynamic fields:
 
@@ -53,7 +53,7 @@ This function takes the `Child` object by value and makes it a dynamic field of 
 
 It is an error to overwrite a field (attempt to add a field with the same `<Name>` type and value as one that is already defined), and a transaction that does this fails. You can modify fields in-place by borrowing them mutably and you can overwrite them safely (such as to change its value type) by removing the old value first.
 
-### Accessing dynamic fields
+## Accessing dynamic fields
 
 You can reference dynamic fields by reference using the following APIs:
 
@@ -85,7 +85,7 @@ The `<Value>` type passed to `borrow` and `borrow_mut` must match the type of th
 
 You must access dynamic object field values through these APIs. A transaction that attempts to use those objects as inputs (by value or by reference), is rejected for having invalid inputs.
 
-### Removing a dynamic field
+## Removing a dynamic field
 
 Similar to unwrapping an object held in a regular field, you can remove a dynamic field, exposing its value:
 
@@ -105,7 +105,7 @@ The value that is returned can be interacted with just like any other value (bec
 
 Similar to borrowing a field, a transaction that attempts to remove a non-existent field, or a field with a different `Value` type, fails.
 
-### Deleting an object with dynamic fields
+## Deleting an object with dynamic fields
 
 It is possible to delete an object that has (potentially non-`drop`) dynamic fields still defined on it. Because field values can be accessed only via the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
 

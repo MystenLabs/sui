@@ -9,14 +9,14 @@ use crate::{
     naming::ast::BuiltinTypeName_,
     parser::ast::{DatatypeName, VariantName},
     shared::{
+        Identifier,
         ide::{IDEAnnotation, MissingMatchArmsInfo, PatternSuggestion},
         matching::{MatchContext, PatternMatrix},
         string_utils::{debug_print, format_oxford_list},
-        Identifier,
     },
     typing::{
         ast as T,
-        core::{error_format, Context, Subst},
+        core::{Context, Subst, error_format},
         visitor::TypingMutVisitorContext,
     },
 };

@@ -8,6 +8,7 @@ use crate::consensus_validator::SuiTxValidator;
 use crate::mysticeti_adapter::LazyMysticetiClient;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
+use consensus_core::CommitConsumerMonitor;
 use enum_dispatch::enum_dispatch;
 use fastcrypto::traits::KeyPair as _;
 use mysten_metrics::RegistryService;
@@ -19,8 +20,8 @@ use sui_config::{ConsensusConfig, NodeConfig};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::committee::EpochId;
 use sui_types::error::SuiResult;
-use sui_types::messages_consensus::ConsensusTransaction;
-use tokio::sync::{Mutex, MutexGuard};
+use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+use tokio::sync::{broadcast, Mutex, MutexGuard};
 use tokio::time::{sleep, timeout};
 use tracing::info;
 
@@ -46,6 +47,8 @@ pub trait ConsensusManagerTrait {
     async fn shutdown(&self);
 
     async fn is_running(&self) -> bool;
+
+    fn replay_waiter(&self) -> ReplayWaiter;
 }
 
 // Wraps the underlying consensus protocol managers to make calling
@@ -160,6 +163,10 @@ impl ConsensusManagerTrait for ConsensusManager {
         let active = self.active.lock();
         *active
     }
+
+    fn replay_waiter(&self) -> ReplayWaiter {
+        self.mysticeti_manager.replay_waiter()
+    }
 }
 
 /// A ConsensusClient that can be updated internally at any time. This usually happening during epoch
@@ -215,9 +222,44 @@ impl ConsensusClient for UpdatableConsensusClient {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<BlockStatusReceiver> {
+    ) -> SuiResult<(Vec<ConsensusPosition>, BlockStatusReceiver)> {
         let client = self.get().await;
         client.submit(transactions, epoch_store).await
+    }
+}
+
+/// Waits for consensus to finish replaying at consensus handler.
+pub struct ReplayWaiter {
+    consumer_monitor_receiver: broadcast::Receiver<Arc<CommitConsumerMonitor>>,
+}
+
+impl ReplayWaiter {
+    pub(crate) fn new(
+        consumer_monitor_receiver: broadcast::Receiver<Arc<CommitConsumerMonitor>>,
+    ) -> Self {
+        Self {
+            consumer_monitor_receiver,
+        }
+    }
+
+    pub(crate) async fn wait_for_replay(mut self) {
+        loop {
+            info!("Waiting for consensus to start replaying ...");
+            let Ok(monitor) = self.consumer_monitor_receiver.recv().await else {
+                continue;
+            };
+            info!("Waiting for consensus handler to finish replaying ...");
+            monitor.replay_complete().await;
+            break;
+        }
+    }
+}
+
+impl Clone for ReplayWaiter {
+    fn clone(&self) -> Self {
+        Self {
+            consumer_monitor_receiver: self.consumer_monitor_receiver.resubscribe(),
+        }
     }
 }
 

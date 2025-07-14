@@ -9,30 +9,28 @@ error[E02015]: invalid attribute
   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:5:7
   │
 5 │     #[syntax]
-  │       ^^^^^^ Expected a parameter list of syntax method usage forms, e.g., 'syntax(index)'
+  │       ^^^^^^ Attribute 'syntax' does not support name-only usage. Expected parameterized attribute as '#[syntax(<kind>)]'
 
 error[E02015]: invalid attribute
   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:8:14
   │
 8 │     #[syntax(index(A))]
-  │              ^^^^^ Expected a standalone syntax method identifier, e.g., 'syntax(index)'
+  │              ^^^^^^^^ Attribute 'index' does not support parameters. Expected name only, as 'index'
 
 error[E02015]: invalid attribute
    ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:14:7
    │
 14 │     #[syntax = index]
-   │       ^^^^^^^^^^^^^^ Expected a parameter list of syntax method usage forms, e.g., 'syntax(index)'
+   │       ^^^^^^^^^^^^^^ Attribute 'syntax' does not support assignment. Expected parameterized attribute as '#[syntax(<kind>)]'
 
 error[E02015]: invalid attribute
    ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:17:14
    │
 17 │     #[syntax(index = foo)]
-   │              ^^^^^ Expected a standalone syntax method identifier, e.g., 'syntax(index)'
+   │              ^^^^^^^^^^^ Attribute 'index' does not support assignment. Expected name only, as 'index'
 
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:22:21
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/naming/syntax_annotation_invalid.move:22:7
    │
 22 │     #[syntax(index, index)]
-   │              -----  ^^^^^ Duplicate attribute 'index' attached to the same item
-   │              │       
-   │              Attribute previously given here
+   │       ^^^^^^^^^^^^^^^^^^^^ Attribute syntax expects exactly one argument, found 2.

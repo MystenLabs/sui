@@ -98,7 +98,8 @@ warning[W10007]: issue with attribute value
   ┌─ ./tests/AModuleTestsShouldAllFail.move:9:24
   │
 9 │     #[expected_failure(abort_code = 0)]
-  │                        ^^^^^^^^^^   - Replace value with constant from expected module or add `location=...` attribute.
-  │                        │             
-  │                        WARNING: passes for an abort from any module.
+  │                        ^^^^^^^^^^^^^^
+  │                        │            │
+  │                        │            Replace value with a constant from expected module or add 'location=...'
+  │                        WARNING: passes for an abort from any module
 

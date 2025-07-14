@@ -7,7 +7,15 @@
 //! TODO: major modules, etc
 
 #![allow(unused)]
+#![warn(unused_imports)]
+pub mod cli;
+pub mod compatibility;
 pub mod dependency;
 pub mod errors;
 pub mod flavor;
+pub mod git;
+pub mod graph;
 pub mod package;
+pub mod schema;
+#[cfg(test)]
+pub mod test_utils;

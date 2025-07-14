@@ -245,7 +245,7 @@ impl TestRunner {
         // Call `execute_certificate` instead of `execute_certificate_with_execution_error` to make sure we go through TM
         let effects = self
             .authority_state
-            .execute_certificate(&ct, &epoch_store)
+            .wait_for_certificate_execution(&ct, &epoch_store)
             .await
             .unwrap();
 
@@ -1769,8 +1769,8 @@ async fn test_have_deleted_owned_object() {
 
         assert!(cache.get_object(&new_child.0.0).is_some());
         // Should not show as deleted for either versions
-        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(new_child.0.0, new_child.0.1, 0));
-        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(new_child.0.0, child.0.1, 0));
+        assert!(!cache.fastpath_stream_ended_at_version_or_after(new_child.0.0, new_child.0.1, 0));
+        assert!(!cache.fastpath_stream_ended_at_version_or_after(new_child.0.0, child.0.1, 0));
 
         let effects = runner
             .run({
@@ -1787,13 +1787,13 @@ async fn test_have_deleted_owned_object() {
 
         let deleted_child = effects.deleted().into_iter().find(|(id, _, _)| *id == new_child.0 .0).unwrap();
         assert!(cache.get_object(&deleted_child.0).is_none());
-        assert!(cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, deleted_child.1, 0));
-        assert!(cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, new_child.0.1, 0));
-        assert!(cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, child.0.1, 0));
+        assert!(cache.fastpath_stream_ended_at_version_or_after(deleted_child.0, deleted_child.1, 0));
+        assert!(cache.fastpath_stream_ended_at_version_or_after(deleted_child.0, new_child.0.1, 0));
+        assert!(cache.fastpath_stream_ended_at_version_or_after(deleted_child.0, child.0.1, 0));
         // Should not show as deleted for versions after this though
-        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, deleted_child.1.next(), 0));
+        assert!(!cache.fastpath_stream_ended_at_version_or_after(deleted_child.0, deleted_child.1.next(), 0));
         // Should not show as deleted for other epochs outside of our current epoch too
-        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, deleted_child.1, 1));
+        assert!(!cache.fastpath_stream_ended_at_version_or_after(deleted_child.0, deleted_child.1, 1));
     }
     }
 }

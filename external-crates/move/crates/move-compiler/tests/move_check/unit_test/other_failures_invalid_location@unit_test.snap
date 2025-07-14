@@ -27,46 +27,40 @@ error[E10004]: invalid usage of known attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:18:24
    │
 18 │     #[expected_failure(major_status=4004)]
-   │                        ^^^^^^^^^^^^ Expected 'location' following 'major_status'
+   │                        ^^^^^^^^^^^^^^^^^ Expected 'location' following 'major_status'
 
 error[E10004]: invalid usage of known attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:22:24
    │
 22 │     #[expected_failure(major_status=4016, minor_code=0)]
-   │                        ^^^^^^^^^^^^ Expected 'location' following 'major_status'
+   │                        ^^^^^^^^^^^^^^^^^ Expected 'location' following 'major_status'
 
-error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:26:38
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:22:43
+   │
+22 │     #[expected_failure(major_status=4016, minor_code=0)]
+   │                                           ^^^^^^^^^^ Unknown field 'minor_code' for 'expected_failure'. Expected one of: 'abort_code', 'arithmetic_error', 'location', 'major_status', 'minor_status', 'out_of_gas', or 'vector_error'
+
+error[E03002]: unbound module
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:26:47
    │
 26 │     #[expected_failure(vector_error, location=x)]
-   │                                      ^^^^^^^^^^
-   │                                      │        │
-   │                                      │        Expected a module identifier, e.g. 'std::vector'
-   │                                      Invalid value in attribute assignment
+   │                                               ^ Unbound module alias 'x'
 
-error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:30:36
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:30:53
    │
 30 │     #[expected_failure(out_of_gas, location=0x1::m::t0)]
-   │                                    ^^^^^^^^^^^^^^^^^^^
-   │                                    │        │
-   │                                    │        Expected a module identifier, e.g. 'std::vector'
-   │                                    Invalid value in attribute assignment
+   │                                                     ^^ Unexpected module member access. Expected a module identifier only
 
-error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:34:43
+error[E03002]: unbound module
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:34:52
    │
 34 │     #[expected_failure(major_status=4004, location=self)]
-   │                                           ^^^^^^^^^^^^^
-   │                                           │        │
-   │                                           │        Expected a module identifier, e.g. 'std::vector'
-   │                                           Invalid value in attribute assignment
+   │                                                    ^^^^ Unbound module alias 'self'
 
-error[E10003]: invalid attribute value
+error[E02015]: invalid attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:38:59
    │
 38 │     #[expected_failure(major_status=4016, minor_status=0, location=0)]
-   │                                                           ^^^^^^^^^^
-   │                                                           │        │
-   │                                                           │        Expected a module identifier, e.g. 'std::vector'
-   │                                                           Invalid value in attribute assignment
+   │                                                           ^^^^^^^^ Field 'location' must be a module identifier

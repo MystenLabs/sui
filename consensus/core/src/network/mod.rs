@@ -21,14 +21,14 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
+use consensus_types::block::{BlockRef, Round};
 use futures::Stream;
 
 use crate::{
-    block::{BlockRef, ExtendedBlock, VerifiedBlock},
+    block::{ExtendedBlock, VerifiedBlock},
     commit::{CommitRange, TrustedCommit},
     context::Context,
     error::ConsensusResult,
-    Round,
 };
 
 // Anemo generated RPC stubs.
@@ -96,6 +96,7 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
@@ -159,6 +160,7 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
+        breadth_first: bool,
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from the peer.

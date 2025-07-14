@@ -1,0 +1,7 @@
+[package]
+name = "name"
+edition = "2025"
+authors = [1]
+
+[environments]
+mainnet = "35834a8a"

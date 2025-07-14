@@ -18,9 +18,9 @@ You can see this function's use in one of the [color_object example module](http
 
 ```move
 {
-    ts::next_tx(&mut ts, alice);
+    ts.next_tx(alice);
     // Create a new ColorObject
-    let c = new(255, 0, 255, ts::ctx(&mut ts));
+    let c = new(255, 0, 255, ts.ctx());
     // Make it immutable.
     transfer::public_freeze_object(c);
 };
@@ -73,10 +73,10 @@ let scenario = &mut scenario_val;
     let ctx = test_scenario::ctx(scenario);
     color_object::create_immutable(255, 0, 255, ctx);
 };
-test_scenario::next_tx(scenario, sender1);
+scenario.next_tx(sender1);
 {
     // has_most_recent_for_sender returns false for immutable objects.
-    assert!(!test_scenario::has_most_recent_for_sender<ColorObject>(scenario), 0);
+    assert!(!test_scenario::has_most_recent_for_sender<ColorObject>(scenario))
 };
 ```
 
@@ -87,11 +87,11 @@ The `has_most_recent_for_sender<ColorObject>` function no longer returns `true`,
 ```move
 // Any sender can work.
 let sender2 = @0x2;
-test_scenario::next_tx(scenario, sender2);
+scenario.next_tx(sender2);
 {
     let object = test_scenario::take_immutable<ColorObject>(scenario);
     let (red, green, blue) = color_object::get_color(object);
-    assert!(red == 255 && green == 0 && blue == 255, 0);
+    assert!(red == 255 && green == 0 && blue == 255)
     test_scenario::return_immutable(object);
 };
 ```

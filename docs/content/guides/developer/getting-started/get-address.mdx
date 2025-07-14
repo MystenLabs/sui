@@ -16,20 +16,9 @@ If you'd like to understand how a Sui address is derived from private keys and o
 
 Sui provides multiple ways to obtain a Sui address. The following are the two most common. 
 
-### Sui Wallet
-
-One of the most straightforward ways to obtain a Sui address for first-time users is through the [Sui Wallet Chrome browser extension](https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil). After you install the extension, there are several ways to create an address. 
-
-Open the Chrome Sui Wallet browser extension and then:
-- Use your gmail/twitch/facebook account (ZkLogin) and follow the on-screen instructions
-- Click **More Options** → **Create a new passphrase account**. Then follow the on-screen instructions. 
-
-For more information on the Sui Wallet and how to keep it secure, see the [Sui Wallet documentation](https://mysten-docs-site.vercel.app/wallet). 
-
 ### Command line interface
 
 If you are using the Sui command line interface (CLI) to interact with the Sui network, you can use the `sui client` command to generate a new address. By default, when the Sui CLI runs for the first time it will prompt you to set up your local wallet, and then it generates one Sui address and the associated secret recovery phrase. Make sure you write down the secret recovery phrase and store it in a safe place. 
-
 
 To generate a new Sui address use `sui client new-address ed25519`, which specifies the keypair scheme flag to be of type `ed25519`.
 
@@ -42,3 +31,22 @@ To see all the generated addresses in the local wallet on your machine, run `sui
 The private keys associated with the Sui addresses are stored locally on the machine where the CLI is installed, in the `~/.sui/sui_config/sui.keystore` file. Make sure you do not expose this to anyone, as they can use it to get access to your account.
 
 :::
+
+### Sui wallets
+
+One of the most straightforward ways to obtain a Sui address for first-time users is through wallets that access the Sui network. Unlike the cli option, wallets connected to the Sui network provide visual workflows that might be preferable to some users. The Sui Foundation does not offer this type of wallet, but there are several options available from builders on the Sui network. 
+
+The following Chrome extension wallets integrate with your browser and have a UI workflow that walks you through the process of creating an address. Consult documentation for your chosen extension for the exact process of obtaining an address.
+
+:::info
+
+Links to these extensions are provided for your convenience. Their inclusion is not an endorsement, recommendation, or approval of any kind. Perform your own due diligence before making a decision on what extension to use.
+
+:::
+
+- [Slush — A Sui wallet](https://chromewebstore.google.com/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil): Formerly known as Sui Wallet, Slush is a wallet from the same team that built Sui - Mysten Labs.
+- [Suiet | Sui Wallet](https://chromewebstore.google.com/detail/suiet-sui-wallet/khpkpbbcccdmmclmpigdgddabeilkdpd): The Suiet wallet for everyone, built on the Sui blockchain. 
+- [Glass wallet](https://chromewebstore.google.com/detail/glass-wallet-sui-wallet/loinekcabhlmhjjbocijdoimmejangoa): Glass Wallet is a non-custodial wallet that allows you to control your coins, keys, and NFT securely.
+- [Martian Aptos & Sui Wallet Extension](https://chromewebstore.google.com/detail/martian-aptos-sui-wallet/efbglgofoippbgcjepnhiblaibcnclgk): Martian is a self-custodial crypto wallet for Aptos and Sui.
+- [Surf Wallet](https://chromewebstore.google.com/detail/surf-wallet/emeeapjkbcbpbpgaagfchmcgglmebnen): Surf Wallet is a platform that allows for convenient and secure transfer of tokens and collection of NFTs on the blockchain.
+- Visit the [chrome web store](https://chromewebstore.google.com/search/sui%20wallet) for a complete list of available Sui wallet extensions.

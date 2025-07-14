@@ -1,0 +1,72 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+use 0000000000000000000000000000000000000000000000000000000000000002::tx_context;
+
+struct SomeObject has key {
+	id: UID,
+	num: u8
+}
+
+foo(o#0#0: SomeObject, p#0#0: u8): u64 {
+L2:	%#1: ID
+L3:	%#2: vector<u8>
+L4:	n#1#0: u8
+L5:	num#1#0: u8
+B0:
+	0: ImmBorrowLoc[0](o#0#0: SomeObject)
+	1: Call object::id<SomeObject>(&SomeObject): ID
+	2: StLoc[2](%#1: ID)
+	3: ImmBorrowLoc[2](%#1: ID)
+	4: Call object::id_to_bytes(&ID): vector<u8>
+	5: StLoc[3](%#2: vector<u8>)
+	6: ImmBorrowLoc[3](%#2: vector<u8>)
+	7: LdU64(0)
+	8: VecImmBorrow(9)
+	9: ReadRef
+	10: StLoc[4](n#1#0: u8)
+	11: MoveLoc[0](o#0#0: SomeObject)
+	12: Unpack[0](SomeObject)
+	13: StLoc[5](num#1#0: u8)
+	14: Call object::delete(UID)
+	15: MoveLoc[4](n#1#0: u8)
+	16: CastU64
+	17: MoveLoc[5](num#1#0: u8)
+	18: CastU64
+	19: Add
+	20: MoveLoc[1](p#0#0: u8)
+	21: CastU64
+	22: Add
+	23: Ret
+}
+
+test() {
+L0:	ctx#1#0: TxContext
+B0:
+	0: Call tx_context::dummy(): TxContext
+	1: StLoc[0](ctx#1#0: TxContext)
+	2: MutBorrowLoc[0](ctx#1#0: TxContext)
+	3: Call object::new(&mut TxContext): UID
+	4: LdU8(42)
+	5: Pack[0](SomeObject)
+	6: LdU8(42)
+	7: Call foo(SomeObject, u8): u64
+	8: MutBorrowLoc[0](ctx#1#0: TxContext)
+	9: Call object::new(&mut TxContext): UID
+	10: LdU8(42)
+	11: Pack[0](SomeObject)
+	12: LdU8(42)
+	13: Call foo(SomeObject, u8): u64
+	14: Add
+	15: Pop
+	16: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

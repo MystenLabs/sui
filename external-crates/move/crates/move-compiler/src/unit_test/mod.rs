@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compiled_unit::NamedCompiledModule, shared::files::MappedFiles, shared::NumericalAddress,
+    compiled_unit::NamedCompiledModule, shared::NumericalAddress, shared::files::MappedFiles,
 };
 use move_binary_format::CompiledModule;
 use move_core_types::{

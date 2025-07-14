@@ -7,7 +7,7 @@ use move_binary_format::errors::PartialVMError;
 use move_bytecode_utils::Modules;
 use move_core_types::vm_status::StatusCode;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 /// Run sanity checks on storage and build dirs. This is primarily intended for testing the CLI;
 /// doctor should never fail unless `publish --ignore-breaking changes` is used or files under

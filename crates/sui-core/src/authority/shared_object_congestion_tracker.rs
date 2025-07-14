@@ -13,7 +13,7 @@ use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::Round;
 use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
-use tracing::trace;
+use tracing::{debug, trace};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct Params {
@@ -151,10 +151,10 @@ impl SharedObjectCongestionTracker {
         trace!(
             "created SharedObjectCongestionTracker with
              {} initial object debts,
-             mode: {mode:?}, 
-             max_accumulated_txn_cost_per_object_in_commit: {max_accumulated_txn_cost_per_object_in_commit:?}, 
-             gas_budget_based_txn_cost_cap_factor: {gas_budget_based_txn_cost_cap_factor:?}, 
-             gas_budget_based_txn_cost_absolute_cap: {gas_budget_based_txn_cost_absolute_cap:?}, 
+             mode: {mode:?},
+             max_accumulated_txn_cost_per_object_in_commit: {max_accumulated_txn_cost_per_object_in_commit:?},
+             gas_budget_based_txn_cost_cap_factor: {gas_budget_based_txn_cost_cap_factor:?},
+             gas_budget_based_txn_cost_absolute_cap: {gas_budget_based_txn_cost_absolute_cap:?},
              max_txn_cost_overage_per_object_in_commit: {max_txn_cost_overage_per_object_in_commit:?}",
             object_execution_cost.len(),
         );
@@ -226,14 +226,23 @@ impl SharedObjectCongestionTracker {
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
                 Some(std::cmp::min(cert.gas_budget(), self.get_tx_cost_cap(cert)))
             }
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => Some(
-                execution_time_estimator
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {
+                let estimate_us = execution_time_estimator
                     .expect("`execution_time_estimator` must be set for PerObjectCongestionControlMode::ExecutionTimeEstimate")
                     .get_estimate(cert.transaction_data())
                     .as_micros()
                     .try_into()
-                    .unwrap_or(u64::MAX),
-            ),
+                    .unwrap_or(u64::MAX);
+                if estimate_us >= 15_000 {
+                    let digest = cert.digest();
+                    debug!(
+                        ?digest,
+                        "expensive tx cost estimate detected: {estimate_us}us"
+                    );
+                }
+
+                Some(estimate_us)
+            }
         }
     }
 
@@ -251,7 +260,7 @@ impl SharedObjectCongestionTracker {
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.is_empty() {
-            // This is an owned object only transaction. No need to defer.
+            // No shared object used by this transaction. No need to defer.
             return None;
         }
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
@@ -272,7 +281,7 @@ impl SharedObjectCongestionTracker {
         // Note that the congested objects here may be caused by transaction dependency of other congested objects.
         // Consider in a consensus commit, there are many transactions touching object A, and later in processing the
         // consensus commit, there is a transaction touching both object A and B. Although there are fewer transactions
-        // touching object B, becase it's starting execution is delayed due to dependency to other transactions on
+        // touching object B, because it's starting execution is delayed due to dependency to other transactions on
         // object A, it may be shown up as congested objects.
         let mut congested_objects = vec![];
         for obj in shared_input_objects {
@@ -310,11 +319,15 @@ impl SharedObjectCongestionTracker {
         execution_time_estimator: Option<&ExecutionTimeEstimator>,
         cert: &VerifiedExecutableTransaction,
     ) {
+        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
+        if shared_input_objects.is_empty() {
+            return;
+        }
+
         let Some(tx_cost) = self.get_tx_cost(execution_time_estimator, cert) else {
             return;
         };
 
-        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         let end_cost = start_cost.saturating_add(tx_cost);
 
@@ -727,6 +740,10 @@ mod object_cost_tests {
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 max_estimate_us: u64::MAX,
                 randomness_scalar: 0,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -855,6 +872,10 @@ mod object_cost_tests {
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 randomness_scalar: 0,
                 max_estimate_us: u64::MAX,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1025,6 +1046,10 @@ mod object_cost_tests {
                 allowed_txn_cost_overage_burst_limit_us: 1_500_000,
                 randomness_scalar: 0,
                 max_estimate_us: u64::MAX,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1217,6 +1242,10 @@ mod object_cost_tests {
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 randomness_scalar: 0,
                 max_estimate_us: u64::MAX,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1386,6 +1415,10 @@ mod object_cost_tests {
                 allowed_txn_cost_overage_burst_limit_us: 1_600 * 5,
                 randomness_scalar: 0,
                 max_estimate_us: u64::MAX,
+                stored_observations_num_included_checkpoints: 10,
+                stored_observations_limit: u64::MAX,
+                stake_weighted_median_threshold: 0,
+                default_none_duration_for_new_keys: false,
             }),
         )]
         mode: PerObjectCongestionControlMode,

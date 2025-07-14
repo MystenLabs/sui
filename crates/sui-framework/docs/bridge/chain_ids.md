@@ -61,56 +61,56 @@ title: Module `bridge::chain_ids`
 ## Constants
 
 
-<a name="bridge_chain_ids_SuiMainnet"></a>
+<a name="bridge_chain_ids_SUI_MAINNET"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiMainnet">SuiMainnet</a>: u8 = 0;
+<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_MAINNET">SUI_MAINNET</a>: u8 = 0;
 </code></pre>
 
 
 
-<a name="bridge_chain_ids_SuiTestnet"></a>
+<a name="bridge_chain_ids_SUI_TESTNET"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiTestnet">SuiTestnet</a>: u8 = 1;
+<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_TESTNET">SUI_TESTNET</a>: u8 = 1;
 </code></pre>
 
 
 
-<a name="bridge_chain_ids_SuiCustom"></a>
+<a name="bridge_chain_ids_SUI_CUSTOM"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiCustom">SuiCustom</a>: u8 = 2;
+<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_CUSTOM">SUI_CUSTOM</a>: u8 = 2;
 </code></pre>
 
 
 
-<a name="bridge_chain_ids_EthMainnet"></a>
+<a name="bridge_chain_ids_ETH_MAINNET"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_EthMainnet">EthMainnet</a>: u8 = 10;
+<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_MAINNET">ETH_MAINNET</a>: u8 = 10;
 </code></pre>
 
 
 
-<a name="bridge_chain_ids_EthSepolia"></a>
+<a name="bridge_chain_ids_ETH_SEPOLIA"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_EthSepolia">EthSepolia</a>: u8 = 11;
+<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_SEPOLIA">ETH_SEPOLIA</a>: u8 = 11;
 </code></pre>
 
 
 
-<a name="bridge_chain_ids_EthCustom"></a>
+<a name="bridge_chain_ids_ETH_CUSTOM"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_EthCustom">EthCustom</a>: u8 = 12;
+<pre><code><b>const</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_CUSTOM">ETH_CUSTOM</a>: u8 = 12;
 </code></pre>
 
 
@@ -139,7 +139,7 @@ title: Module `bridge::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_mainnet">sui_mainnet</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiMainnet">SuiMainnet</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_mainnet">sui_mainnet</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_MAINNET">SUI_MAINNET</a> }
 </code></pre>
 
 
@@ -161,7 +161,7 @@ title: Module `bridge::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_testnet">sui_testnet</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiTestnet">SuiTestnet</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_testnet">sui_testnet</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_TESTNET">SUI_TESTNET</a> }
 </code></pre>
 
 
@@ -183,7 +183,7 @@ title: Module `bridge::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_custom">sui_custom</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiCustom">SuiCustom</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_sui_custom">sui_custom</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_CUSTOM">SUI_CUSTOM</a> }
 </code></pre>
 
 
@@ -205,7 +205,7 @@ title: Module `bridge::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_eth_mainnet">eth_mainnet</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_EthMainnet">EthMainnet</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_eth_mainnet">eth_mainnet</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_MAINNET">ETH_MAINNET</a> }
 </code></pre>
 
 
@@ -227,7 +227,7 @@ title: Module `bridge::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_eth_sepolia">eth_sepolia</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_EthSepolia">EthSepolia</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_eth_sepolia">eth_sepolia</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_SEPOLIA">ETH_SEPOLIA</a> }
 </code></pre>
 
 
@@ -249,7 +249,7 @@ title: Module `bridge::chain_ids`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_eth_custom">eth_custom</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_EthCustom">EthCustom</a> }
+<pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_eth_custom">eth_custom</a>(): u8 { <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_CUSTOM">ETH_CUSTOM</a> }
 </code></pre>
 
 
@@ -321,13 +321,13 @@ title: Module `bridge::chain_ids`
 
 <pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_assert_valid_chain_id">assert_valid_chain_id</a>(id: u8) {
     <b>assert</b>!(
-        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiMainnet">SuiMainnet</a> ||
-        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiTestnet">SuiTestnet</a> ||
-        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiCustom">SuiCustom</a> ||
-        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_EthMainnet">EthMainnet</a> ||
-        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_EthSepolia">EthSepolia</a> ||
-        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_EthCustom">EthCustom</a>,
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>
+        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_MAINNET">SUI_MAINNET</a> ||
+        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_TESTNET">SUI_TESTNET</a> ||
+        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_CUSTOM">SUI_CUSTOM</a> ||
+        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_MAINNET">ETH_MAINNET</a> ||
+        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_SEPOLIA">ETH_SEPOLIA</a> ||
+        id == <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_CUSTOM">ETH_CUSTOM</a>,
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_EInvalidBridgeRoute">EInvalidBridgeRoute</a>,
     )
 }
 </code></pre>
@@ -353,16 +353,16 @@ title: Module `bridge::chain_ids`
 
 <pre><code><b>public</b> <b>fun</b> <a href="../bridge/chain_ids.md#bridge_chain_ids_valid_routes">valid_routes</a>(): vector&lt;<a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a>&gt; {
     vector[
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiMainnet">SuiMainnet</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthMainnet">EthMainnet</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthMainnet">EthMainnet</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiMainnet">SuiMainnet</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiTestnet">SuiTestnet</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthSepolia">EthSepolia</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiTestnet">SuiTestnet</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthCustom">EthCustom</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiCustom">SuiCustom</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthCustom">EthCustom</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiCustom">SuiCustom</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthSepolia">EthSepolia</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiTestnet">SuiTestnet</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthSepolia">EthSepolia</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiCustom">SuiCustom</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthCustom">EthCustom</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiTestnet">SuiTestnet</a> },
-        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_EthCustom">EthCustom</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SuiCustom">SuiCustom</a> }
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_MAINNET">SUI_MAINNET</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_MAINNET">ETH_MAINNET</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_MAINNET">ETH_MAINNET</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_MAINNET">SUI_MAINNET</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_TESTNET">SUI_TESTNET</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_SEPOLIA">ETH_SEPOLIA</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_TESTNET">SUI_TESTNET</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_CUSTOM">ETH_CUSTOM</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_CUSTOM">SUI_CUSTOM</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_CUSTOM">ETH_CUSTOM</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_CUSTOM">SUI_CUSTOM</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_SEPOLIA">ETH_SEPOLIA</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_SEPOLIA">ETH_SEPOLIA</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_TESTNET">SUI_TESTNET</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_SEPOLIA">ETH_SEPOLIA</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_CUSTOM">SUI_CUSTOM</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_CUSTOM">ETH_CUSTOM</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_TESTNET">SUI_TESTNET</a> },
+        <a href="../bridge/chain_ids.md#bridge_chain_ids_BridgeRoute">BridgeRoute</a> { source: <a href="../bridge/chain_ids.md#bridge_chain_ids_ETH_CUSTOM">ETH_CUSTOM</a>, destination: <a href="../bridge/chain_ids.md#bridge_chain_ids_SUI_CUSTOM">SUI_CUSTOM</a> },
     ]
 }
 </code></pre>

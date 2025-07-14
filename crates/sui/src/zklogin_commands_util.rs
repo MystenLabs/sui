@@ -211,10 +211,10 @@ pub async fn perform_zk_login_test_tx(
 fn get_config(network: &str) -> (&str, &str) {
     match network {
         "devnet" => (
-            "https://faucet.devnet.sui.io/gas",
+            "https://faucet.devnet.sui.io/v2/gas",
             "https://rpc.devnet.sui.io:443",
         ),
-        "localnet" => ("http://127.0.0.1:9123/gas", "http://127.0.0.1:9000"),
+        "localnet" => ("http://127.0.0.1:9123/v2/gas", "http://127.0.0.1:9000"),
         _ => panic!("Invalid network"),
     }
 }

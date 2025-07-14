@@ -4,7 +4,7 @@
 
 use crate::{loaded_data::runtime_types::Type, values::*, views::*};
 use move_binary_format::errors::*;
-use move_core_types::{account_address::AccountAddress, u256::U256};
+use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256};
 
 #[test]
 fn locals() -> PartialVMResult<()> {
@@ -194,8 +194,8 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
         Value::struct_(Struct::pack([])),
         Value::struct_(Struct::pack([Value::u8(0), Value::bool(false)])),
-        Value::vector_for_testing_only([]),
-        Value::vector_for_testing_only([Value::u8(0), Value::u8(1)]),
+        Vector::pack(VectorSpecialization::Container, [])?,
+        Vector::pack(VectorSpecialization::U8, [Value::u8(0), Value::u8(1)])?,
     ];
 
     let mut locals = Locals::new(vals.len());
@@ -230,4 +230,24 @@ fn test_vm_value_vector_u64_casting() {
 #[test]
 fn assert_sizes() {
     assert_eq!(size_of::<Value>(), 16);
+}
+
+#[test]
+fn signer_equivalence() -> PartialVMResult<()> {
+    let addr = AccountAddress::TWO;
+    let signer = Value::signer(addr);
+
+    assert_eq!(
+        signer.serialize(),
+        signer.typed_serialize(&runtime_value::MoveTypeLayout::Signer)
+    );
+
+    assert_eq!(
+        signer.serialize(),
+        signer.typed_serialize(&runtime_value::MoveTypeLayout::Struct(Box::new(
+            runtime_value::MoveStructLayout(Box::new(vec![runtime_value::MoveTypeLayout::Address]))
+        )))
+    );
+
+    Ok(())
 }

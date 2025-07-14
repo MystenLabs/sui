@@ -92,7 +92,8 @@ impl DependencyCache {
                     if let Ok(mut output) = Command::new("git")
                         .args([
                             OsStr::new("clone"),
-                            OsStr::new("--depth=1"),
+                            OsStr::new("--filter=tree:0"),
+                            OsStr::new("--no-checkout"),
                             os_git_url,
                             git_path.as_os_str(),
                         ])
@@ -240,12 +241,12 @@ impl DependencyCache {
 
                     if !status.success() {
                         return Err(anyhow::anyhow!(
-                        "Failed to reset to latest Git state '{}' for package '{}', to skip set \
+                            "Failed to reset to latest Git state '{}' for package '{}', to skip set \
                          --skip-fetch-latest-git-deps | Exit status: {}",
-                        git_rev,
-                        dep_name,
-                        status
-                    ));
+                            git_rev,
+                            dep_name,
+                            status
+                        ));
                     }
                 }
 

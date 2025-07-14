@@ -7,37 +7,37 @@
 
 use crate::{
     cfgir::{
+        CFGContext,
         absint::JoinResult,
         cfg::ImmForwardCFG,
         visitor::{
-            calls_special_function, LocalState, SimpleAbsInt, SimpleAbsIntConstructor,
-            SimpleDomain, SimpleExecutionContext,
+            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
+            SimpleExecutionContext, calls_special_function,
         },
-        CFGContext,
     },
     diag,
     diagnostics::{
-        codes::{custom, DiagnosticInfo, Severity},
         Diagnostic, Diagnostics,
+        codes::{DiagnosticInfo, Severity, custom},
     },
     expansion::ast::ModuleIdent,
     hlir::ast::{
         BaseType, BaseType_, Exp, LValue, LValue_, Label, ModuleCall, SingleType, SingleType_,
-        Type, TypeName_, Type_, UnannotatedExp_, Var,
+        Type, Type_, TypeName_, UnannotatedExp_, Var,
     },
     naming::ast::BuiltinTypeName_,
     parser::ast::{Ability_, DatatypeName},
     shared::{
-        program_info::{DatatypeKind, TypingProgramInfo},
         Identifier,
+        program_info::{DatatypeKind, TypingProgramInfo},
     },
     sui_mode::{
+        SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME,
         info::{SuiInfo, TransferKind},
         linters::{
-            type_abilities, LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX,
-            PUBLIC_SHARE_FUN, SHARE_FUN, TRANSFER_MOD_NAME,
+            LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_SHARE_FUN,
+            SHARE_FUN, TRANSFER_MOD_NAME, type_abilities,
         },
-        SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME,
     },
 };
 use move_core_types::account_address::AccountAddress;

@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    IndexKind,
     errors::{
-        bounds_error, offset_out_of_bounds as offset_out_of_bounds_error, verification_error,
-        PartialVMError, PartialVMResult,
+        PartialVMError, PartialVMResult, bounds_error,
+        offset_out_of_bounds as offset_out_of_bounds_error, verification_error,
     },
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, DatatypeHandle,
@@ -16,7 +17,6 @@ use crate::{
         VariantInstantiationHandle, VariantJumpTable,
     },
     internals::ModuleIndex,
-    IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 
@@ -810,7 +810,10 @@ impl<'a> BoundsChecker<'a> {
     ) -> PartialVMError {
         match self.context {
             BoundsCheckingContext::Module => {
-                let msg = format!("Indexing into bytecode {} during bounds checking but 'current_function' was not set", cur_bytecode_offset);
+                let msg = format!(
+                    "Indexing into bytecode {} during bounds checking but 'current_function' was not set",
+                    cur_bytecode_offset
+                );
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(msg)
             }
             BoundsCheckingContext::ModuleFunction(current_function_index) => {

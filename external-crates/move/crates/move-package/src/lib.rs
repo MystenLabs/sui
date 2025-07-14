@@ -10,14 +10,17 @@ pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::*;
 use lock_file::LockFile;
 use move_compiler::{
-    editions::{Edition, Flavor}, Flags
+    Flags,
+    editions::{Edition, Flavor},
+    shared::known_attributes::ModeAttribute,
 };
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
+use move_symbol_pool::Symbol;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
 use source_package::{
@@ -116,9 +119,25 @@ pub struct BuildConfig {
     #[clap(flatten)]
     pub lint_flag: LintFlag,
 
+    /// Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
+    /// annodations during compiltaion.
+    #[arg(
+        long = "mode",
+        value_name = "MODE",
+        value_parser = parse_symbol,
+        action = ArgAction::Append,
+        global = true
+    )]
+    pub modes: Vec<Symbol>,
+
     /// Additional dependencies to be automatically included in every package
     #[clap(skip)]
     pub implicit_dependencies: Dependencies,
+
+    /// Forces use of lock file without checking if it needs to be updated
+    /// (regenerates it only if it doesn't exist)
+    #[clap(skip)]
+    pub force_lock_file: bool,
 }
 
 #[derive(
@@ -239,11 +258,8 @@ impl BuildConfig {
         Ok(())
     }
 
-    // NOTE: If there are no renamings, then the root package has the global resolution of all named
-    // addresses in the package graph in scope. So we can simply grab all of the source files
-    // across all packages and build the Move model from that.
-    // TODO: In the future we will need a better way to do this to support renaming in packages
-    // where we want to support building a Move model.
+    // If a `address_derivation_fn_opt` is passed, this function will be used for changes to the
+    // address mapping in the resolution graph before compilation and model creation.
     pub fn move_model_for_package<W: Write>(
         self,
         path: &Path,
@@ -252,6 +268,13 @@ impl BuildConfig {
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
+        Self::move_model_for_resolution_graph(resolved_graph, writer)
+    }
+
+    pub fn move_model_for_resolution_graph<W: Write>(
+        resolved_graph: ResolvedGraph,
+        writer: &mut W,
+    ) -> Result<source_model::Model> {
         let _mutx = PackageLock::lock(); // held until function returns
         model_builder::build(resolved_graph, writer)
     }
@@ -291,6 +314,7 @@ impl BuildConfig {
             writer,
             install_dir.clone(),
             self.implicit_dependencies.clone(),
+            self.force_lock_file,
         );
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),
@@ -324,7 +348,7 @@ impl BuildConfig {
     }
 
     pub fn compiler_flags(&self) -> Flags {
-        let flags = if self.test_mode {
+        let flags = if self.test_mode || self.modes.contains(&ModeAttribute::TEST.into()) {
             Flags::testing()
         } else {
             Flags::empty()
@@ -334,6 +358,7 @@ impl BuildConfig {
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)
+            .set_modes(self.modes.clone())
     }
 
     pub fn update_lock_file_toolchain_version(
@@ -370,4 +395,14 @@ impl BuildConfig {
         lock.commit(lock_file)?;
         Ok(())
     }
+
+    /// Indicates if the package was built with configurations that mean it may be published, i.e.,
+    /// it was not built in test mode or similar.
+    pub fn publishable(&self) -> bool {
+        self.compiler_flags().publishable()
+    }
+}
+
+fn parse_symbol(s: &str) -> Result<Symbol, String> {
+    Ok(Symbol::from(s))
 }

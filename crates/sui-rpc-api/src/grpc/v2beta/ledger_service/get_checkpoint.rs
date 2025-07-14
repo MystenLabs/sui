@@ -2,10 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::CheckpointNotFoundError;
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMerge;
-use crate::message::MessageMergeFrom;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2beta::get_checkpoint_request::CheckpointId;
 use crate::proto::rpc::v2beta::Checkpoint;
@@ -16,11 +12,14 @@ use crate::proto::rpc::v2beta::Transaction;
 use crate::proto::rpc::v2beta::TransactionEffects;
 use crate::proto::rpc::v2beta::TransactionEvents;
 use crate::proto::rpc::v2beta::UserSignature;
-use crate::proto::types::timestamp_ms_to_proto;
+use crate::proto::timestamp_ms_to_proto;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
 use sui_sdk_types::CheckpointDigest;
 
 #[tracing::instrument(skip(service))]
@@ -114,6 +113,7 @@ pub fn get_checkpoint(
     Ok(checkpoint)
 }
 
+#[allow(unused)]
 pub(crate) fn checkpoint_data_to_checkpoint_proto(
     checkpoint_data: sui_types::full_checkpoint_content::CheckpointData,
     read_mask: &FieldMaskTree,

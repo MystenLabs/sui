@@ -8,17 +8,16 @@ pub mod test_reporter;
 pub mod test_runner;
 
 use crate::test_runner::TestRunner;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::*;
 use move_binary_format::CompiledModule;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
-    self,
+    self, Compiler, Flags, PASS_CFGIR,
     compiled_unit::NamedCompiledModule,
     diagnostics,
     shared::{self, NumericalAddress},
     unit_test::{self, TestPlan},
-    Compiler, Flags, PASS_CFGIR,
 };
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
@@ -124,8 +123,8 @@ pub struct UnitTestingConfig {
     pub deterministic_generation: bool,
 
     // Enable tracing for tests
-    #[clap(long = TRACE_FLAG, value_name = "PATH")]
-    pub trace_execution: Option<Option<String>>,
+    #[clap(long = TRACE_FLAG)]
+    pub trace_execution: bool,
 }
 
 fn format_module_id(
@@ -157,7 +156,7 @@ impl UnitTestingConfig {
             rand_num_iters: Some(DEFAULT_RAND_ITERS),
             seed: None,
             deterministic_generation: false,
-            trace_execution: None,
+            trace_execution: false,
         }
     }
 
@@ -269,10 +268,10 @@ impl UnitTestingConfig {
         }
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
-        let trace_location = match &self.trace_execution {
-            Some(None) => Some("traces".to_string()),
-            Some(Some(path)) => Some(path.clone()),
-            None => None,
+        let trace_location = if self.trace_execution {
+            Some("traces".to_string())
+        } else {
+            None
         };
         let mut test_runner = TestRunner::new(
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
@@ -289,7 +288,7 @@ impl UnitTestingConfig {
         .unwrap();
 
         if let Some(filter_str) = &self.filter {
-            test_runner.filter(filter_str)
+            test_runner.filter(filter_str)?;
         }
 
         let test_results = test_runner.run(&shared_writer).unwrap();

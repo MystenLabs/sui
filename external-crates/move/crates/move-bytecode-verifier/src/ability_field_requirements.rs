@@ -6,9 +6,9 @@
 //! abilities required by the struct's abilities
 use crate::ability_cache::AbilityCache;
 use move_binary_format::{
-    errors::{verification_error, Location, PartialVMResult, VMResult},
-    file_format::{AbilitySet, CompiledModule, StructFieldInformation, TableIndex},
     IndexKind,
+    errors::{Location, PartialVMResult, VMResult, verification_error},
+    file_format::{AbilitySet, CompiledModule, StructFieldInformation, TableIndex},
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;

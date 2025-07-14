@@ -10,7 +10,7 @@ use std::{
     fmt::Formatter,
 };
 
-use move_binary_format::{file_format::TypeParameterIndex, normalized::Type as MType};
+use move_binary_format::file_format::TypeParameterIndex;
 use move_core_types::language_storage::{StructTag, TypeTag};
 
 use crate::{
@@ -86,18 +86,18 @@ impl PrimitiveType {
     }
 
     /// Attempt to convert this type into a normalized::Type
-    pub fn into_normalized_type(self) -> Option<MType> {
+    pub fn into_type_tag(self) -> Option<TypeTag> {
         use PrimitiveType::*;
         Some(match self {
-            Bool => MType::Bool,
-            U8 => MType::U8,
-            U16 => MType::U16,
-            U32 => MType::U32,
-            U64 => MType::U64,
-            U128 => MType::U128,
-            U256 => MType::U256,
-            Address => MType::Address,
-            Signer => MType::Signer,
+            Bool => TypeTag::Bool,
+            U8 => TypeTag::U8,
+            U16 => TypeTag::U16,
+            U32 => TypeTag::U32,
+            U64 => TypeTag::U64,
+            U128 => TypeTag::U128,
+            U256 => TypeTag::U256,
+            Address => TypeTag::Address,
+            Signer => TypeTag::Signer,
             Num | Range | EventStore => return None,
         })
     }
@@ -389,47 +389,38 @@ impl Type {
             _ => {}
         }
     }
-
-    /// Attempt to convert this type into a normalized::Type
-    pub fn into_datatype_ty(self, env: &GlobalEnv) -> Option<MType> {
-        use Type::*;
-        match self {
-            Datatype(mid, sid, ts) => env.get_datatype(mid, sid, &ts),
+    /// Attempt to convert this type into a language_storage::StructTag
+    pub fn into_struct_tag(self, env: &GlobalEnv) -> Option<StructTag> {
+        match self.into_type_tag(env)? {
+            TypeTag::Struct(tag) => Some(*tag),
             _ => None,
         }
     }
 
-    /// Attempt to convert this type into a normalized::Type
-    pub fn into_normalized_type(self, env: &GlobalEnv) -> Option<MType> {
-        use Type::*;
-        match self {
-            Primitive(p) => Some(p.into_normalized_type().expect("Invariant violation: unexpected spec primitive")),
-            Datatype(mid, sid, ts) =>
-                env.get_datatype(mid, sid, &ts),
-            Vector(et) => Some(MType::Vector(
-                Box::new(et.into_normalized_type(env)
-                    .expect("Invariant violation: vector type argument contains incomplete, tuple, or spec type"))
-            )),
-            Reference(r, t) =>
-                if r {
-                    Some(MType::MutableReference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
-                } else {
-                    Some(MType::Reference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
-                }
-            TypeParameter(idx) => Some(MType::TypeParameter(idx)),
-            Tuple(..) | Error | Fun(..) | TypeDomain(..) | ResourceDomain(..) | Var(..) =>
-                None
-        }
-    }
-
-    /// Attempt to convert this type into a language_storage::StructTag
-    pub fn into_struct_tag(self, env: &GlobalEnv) -> Option<StructTag> {
-        self.into_datatype_ty(env)?.into_struct_tag()
-    }
-
     /// Attempt to convert this type into a language_storage::TypeTag
     pub fn into_type_tag(self, env: &GlobalEnv) -> Option<TypeTag> {
-        self.into_normalized_type(env)?.into_type_tag()
+        use Type::*;
+        match self {
+            Primitive(p) => Some(
+                p.into_type_tag()
+                    .expect("Invariant violation: unexpected spec primitive"),
+            ),
+            Datatype(mid, sid, ts) => Some(TypeTag::Struct(Box::new(
+                env.get_struct_tag(mid, sid, &ts)?,
+            ))),
+            Vector(et) => Some(TypeTag::Vector(Box::new(et.into_type_tag(env).expect(
+                "Invariant violation: vector type argument contains \
+                     incomplete, tuple, or spec type",
+            )))),
+            TypeParameter(_)
+            | Reference(_, _)
+            | Tuple(..)
+            | Error
+            | Fun(..)
+            | TypeDomain(..)
+            | ResourceDomain(..)
+            | Var(..) => None,
+        }
     }
 
     /// Create a `Type` from `t`

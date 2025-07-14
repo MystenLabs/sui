@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::sui_client_config::SuiClientConfig;
+use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use crate::SuiClient;
-use anyhow::anyhow;
+use anyhow::{anyhow, ensure};
+use futures::future;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -25,14 +26,11 @@ pub struct WalletContext {
     request_timeout: Option<std::time::Duration>,
     client: Arc<RwLock<Option<SuiClient>>>,
     max_concurrent_requests: Option<u64>,
+    env_override: Option<String>,
 }
 
 impl WalletContext {
-    pub fn new(
-        config_path: &Path,
-        request_timeout: Option<std::time::Duration>,
-        max_concurrent_requests: Option<u64>,
-    ) -> Result<Self, anyhow::Error> {
+    pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
                 "Cannot open wallet config file at {:?}. Err: {err}",
@@ -43,15 +41,35 @@ impl WalletContext {
         let config = config.persisted(config_path);
         let context = Self {
             config,
-            request_timeout,
+            request_timeout: None,
             client: Default::default(),
-            max_concurrent_requests,
+            max_concurrent_requests: None,
+            env_override: None,
         };
         Ok(context)
     }
 
+    pub fn with_request_timeout(mut self, request_timeout: std::time::Duration) -> Self {
+        self.request_timeout = Some(request_timeout);
+        self
+    }
+
+    pub fn with_max_concurrent_requests(mut self, max_concurrent_requests: u64) -> Self {
+        self.max_concurrent_requests = Some(max_concurrent_requests);
+        self
+    }
+
+    pub fn with_env_override(mut self, env_override: String) -> Self {
+        self.env_override = Some(env_override);
+        self
+    }
+
     pub fn get_addresses(&self) -> Vec<SuiAddress> {
         self.config.keystore.addresses()
+    }
+
+    pub fn get_env_override(&self) -> Option<String> {
+        self.env_override.clone()
     }
 
     pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
@@ -62,12 +80,24 @@ impl WalletContext {
         } else {
             drop(read);
             let client = self
-                .config
                 .get_active_env()?
                 .create_rpc_client(self.request_timeout, self.max_concurrent_requests)
                 .await?;
             self.client.write().await.insert(client).clone()
         })
+    }
+
+    pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {
+        if self.env_override.is_some() {
+            self.config.get_env(&self.env_override).ok_or_else(|| {
+                anyhow!(
+                    "Environment configuration not found for env [{}]",
+                    self.env_override.as_deref().unwrap_or("None")
+                )
+            })
+        } else {
+            self.config.get_active_env()
+        }
     }
 
     // TODO: Ger rid of mut
@@ -168,6 +198,27 @@ impl WalletContext {
         } else {
             Ok(None)
         }
+    }
+
+    /// Infer the sender of a transaction based on the gas objects provided. If no gas objects are
+    /// provided, assume the active address is the sender.
+    pub async fn infer_sender(&mut self, gas: &[ObjectID]) -> Result<SuiAddress, anyhow::Error> {
+        if gas.is_empty() {
+            return self.active_address();
+        }
+
+        // Find the owners of all supplied object IDs
+        let owners = future::try_join_all(gas.iter().map(|id| self.get_object_owner(id))).await?;
+
+        // SAFETY `gas` is non-empty.
+        let owner = owners.first().copied().unwrap();
+
+        ensure!(
+            owners.iter().all(|o| o == &owner),
+            "Cannot infer sender, not all gas objects have the same owner."
+        );
+
+        Ok(owner)
     }
 
     /// Find a gas object which fits the budget

@@ -4,7 +4,7 @@
 
 use crate::abstract_state::{AbstractValue, BorrowState};
 use move_binary_format::file_format::{AbilitySet, Bytecode, Signature, SignatureToken};
-use rand::{rngs::StdRng, Rng};
+use rand::{Rng, rngs::StdRng};
 use std::collections::{HashMap, VecDeque};
 use tracing::debug;
 

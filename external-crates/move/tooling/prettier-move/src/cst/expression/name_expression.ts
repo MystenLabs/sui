@@ -10,11 +10,11 @@ const {} = doc.builders;
 export const NODE_TYPE = 'name_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printNameExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printNameExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
@@ -24,5 +24,5 @@ export default function (path: AstPath<Node>): treeFn | null {
  * - `type_arguments`
  */
 function printNameExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return path.map(print, 'nonFormattingChildren');
+    return path.map(print, 'nonFormattingChildren');
 }

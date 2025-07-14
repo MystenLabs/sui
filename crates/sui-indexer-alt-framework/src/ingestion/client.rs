@@ -12,12 +12,12 @@ use sui_rpc_api::client::AuthInterceptor;
 use sui_rpc_api::Client;
 use sui_storage::blob::Blob;
 use tokio_util::bytes::Bytes;
-use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::{debug, warn};
 use url::Url;
 
 use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
+use crate::ingestion::slow_future_monitor::with_slow_future_monitor;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::Result as IngestionResult;
 use crate::metrics::CheckpointLagMetricReporter;
@@ -26,6 +26,13 @@ use crate::types::full_checkpoint_content::CheckpointData;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Threshold for logging warnings about slow HTTP operations during checkpoint fetching.
+///
+/// Operations that take longer than this duration will trigger a warning log, but will
+/// continue executing without being canceled. This helps identify network issues or
+/// slow remote stores without interrupting the ingestion process.
+const SLOW_OPERATION_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[async_trait::async_trait]
 pub(crate) trait IngestionClientTrait: Send + Sync {
@@ -36,8 +43,6 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
 pub enum FetchError {
     #[error("Checkpoint not found")]
     NotFound,
-    #[error("Failed to fetch checkpoint due to permanent error: {0}")]
-    Permanent(#[from] anyhow::Error),
     #[error("Failed to fetch checkpoint due to {reason}: {error}")]
     Transient {
         reason: &'static str,
@@ -48,6 +53,7 @@ pub enum FetchError {
 
 pub type FetchResult = Result<FetchData, FetchError>;
 
+#[derive(Clone)]
 pub enum FetchData {
     Raw(Bytes),
     CheckpointData(CheckpointData),
@@ -108,16 +114,11 @@ impl IngestionClient {
         &self,
         checkpoint: u64,
         retry_interval: Duration,
-        cancel: &CancellationToken,
     ) -> IngestionResult<Arc<CheckpointData>> {
         let backoff = Constant::new(retry_interval);
         let fetch = || async move {
             use backoff::Error as BE;
-            if cancel.is_cancelled() {
-                return Err(BE::permanent(IngestionError::Cancelled));
-            }
-
-            self.fetch(checkpoint, cancel).await.map_err(|e| match e {
+            self.fetch(checkpoint).await.map_err(|e| match e {
                 IngestionError::NotFound(checkpoint) => {
                     debug!(checkpoint, "Checkpoint not found, retrying...");
                     self.metrics.total_ingested_not_found_retries.inc();
@@ -137,30 +138,27 @@ impl IngestionClient {
     /// implementation that returns a [FetchError::Transient] error variant, or within this
     /// function if we fail to deserialize the result as [CheckpointData].
     ///
-    /// The function will immediately return on:
-    ///
-    /// - Non-transient errors determined by the client implementation, this includes both the
-    ///   [FetchError::NotFound] and [FetchError::Permanent] variants.
-    ///
-    /// - Cancellation of the supplied `cancel` token.
-    pub(crate) async fn fetch(
-        &self,
-        checkpoint: u64,
-        cancel: &CancellationToken,
-    ) -> IngestionResult<Arc<CheckpointData>> {
+    /// The function will immediately return if the checkpoint is not found.
+    pub(crate) async fn fetch(&self, checkpoint: u64) -> IngestionResult<Arc<CheckpointData>> {
         let client = self.client.clone();
         let request = move || {
             let client = client.clone();
             async move {
-                if cancel.is_cancelled() {
-                    return Err(BE::permanent(IngestionError::Cancelled));
-                }
-
-                let fetch_data = client.fetch(checkpoint).await.map_err(|err| match err {
+                let fetch_data = with_slow_future_monitor(
+                    client.fetch(checkpoint),
+                    SLOW_OPERATION_WARNING_THRESHOLD,
+                    /* on_threshold_exceeded =*/
+                    || {
+                        warn!(
+                            checkpoint,
+                            threshold_ms = SLOW_OPERATION_WARNING_THRESHOLD.as_millis(),
+                            "Slow checkpoint fetch operation detected"
+                        );
+                    },
+                )
+                .await
+                .map_err(|err| match err {
                     FetchError::NotFound => BE::permanent(IngestionError::NotFound(checkpoint)),
-                    FetchError::Permanent(error) => {
-                        BE::permanent(IngestionError::FetchError(checkpoint, error))
-                    }
                     FetchError::Transient { reason, error } => self.metrics.inc_retry(
                         checkpoint,
                         reason,
@@ -168,7 +166,7 @@ impl IngestionClient {
                     ),
                 })?;
 
-                Ok(match fetch_data {
+                Ok::<CheckpointData, backoff::Error<IngestionError>>(match fetch_data {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
                         Blob::from_bytes(&bytes).map_err(|e| {
@@ -236,5 +234,185 @@ impl IngestionClient {
         );
 
         Ok(Arc::new(data))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use dashmap::DashMap;
+    use prometheus::Registry;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::time::timeout;
+    use tokio_util::bytes::Bytes;
+
+    use crate::ingestion::test_utils::test_checkpoint_data;
+
+    use super::*;
+
+    /// Mock implementation of IngestionClientTrait for testing
+    #[derive(Default)]
+    struct MockIngestionClient {
+        checkpoints: DashMap<u64, FetchData>,
+        transient_failures: DashMap<u64, usize>,
+        not_found_failures: DashMap<u64, usize>,
+    }
+
+    #[async_trait::async_trait]
+    impl IngestionClientTrait for MockIngestionClient {
+        async fn fetch(&self, checkpoint: u64) -> FetchResult {
+            // Check for not found failures
+            if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint) {
+                if *remaining > 0 {
+                    *remaining -= 1;
+                    return Err(FetchError::NotFound);
+                }
+            }
+
+            // Check for transient failures
+            if let Some(mut remaining) = self.transient_failures.get_mut(&checkpoint) {
+                if *remaining > 0 {
+                    *remaining -= 1;
+                    return Err(FetchError::Transient {
+                        reason: "mock_transient_error",
+                        error: anyhow::anyhow!("Mock transient error"),
+                    });
+                }
+            }
+
+            // Return the checkpoint data if it exists
+            self.checkpoints
+                .get(&checkpoint)
+                .as_deref()
+                .cloned()
+                .ok_or(FetchError::NotFound)
+        }
+    }
+
+    fn setup_test() -> (IngestionClient, Arc<MockIngestionClient>) {
+        let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
+        let metrics = IndexerMetrics::new(&registry);
+        let mock_client = Arc::new(MockIngestionClient::default());
+        let client = IngestionClient::new_impl(mock_client.clone(), metrics);
+        (client, mock_client)
+    }
+
+    #[tokio::test]
+    async fn test_fetch_raw_bytes_success() {
+        let (client, mock) = setup_test();
+
+        // Create test data using test_checkpoint_data
+        let bytes = Bytes::from(test_checkpoint_data(1));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes.clone()));
+
+        // Fetch and verify
+        let result = client.fetch(1).await.unwrap();
+        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_checkpoint_data_success() {
+        let (client, mock) = setup_test();
+
+        // Create test data using test_checkpoint_data
+        let bytes = test_checkpoint_data(1);
+        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        mock.checkpoints
+            .insert(1, FetchData::CheckpointData(checkpoint_data.clone()));
+
+        // Fetch and verify
+        let result = client.fetch(1).await.unwrap();
+        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_not_found() {
+        let (client, _) = setup_test();
+
+        // Try to fetch non-existent checkpoint
+        let result = client.fetch(1).await;
+        assert!(matches!(result, Err(IngestionError::NotFound(1))));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_transient_error_with_retry() {
+        let (client, mock) = setup_test();
+
+        // Create test data using test_checkpoint_data
+        let bytes = test_checkpoint_data(1);
+        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+
+        // Add checkpoint to mock with 2 transient failures
+        mock.checkpoints
+            .insert(1, FetchData::CheckpointData(checkpoint_data.clone()));
+        mock.transient_failures.insert(1, 2);
+
+        // Fetch and verify it succeeds after retries
+        let result = client.fetch(1).await.unwrap();
+        assert_eq!(*result.checkpoint_summary.sequence_number(), 1);
+
+        // Verify that exactly 2 retries were recorded
+        let retries = client
+            .metrics
+            .total_ingested_transient_retries
+            .with_label_values(&["mock_transient_error"])
+            .get();
+        assert_eq!(retries, 2);
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_checkpoint_with_retry() {
+        let (client, mock) = setup_test();
+
+        // Create test data using test_checkpoint_data
+        let bytes = test_checkpoint_data(1);
+        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+
+        // Add checkpoint to mock with 1 not_found failures
+        mock.checkpoints
+            .insert(1, FetchData::CheckpointData(checkpoint_data));
+        mock.not_found_failures.insert(1, 1);
+
+        // Wait for checkpoint with short retry interval
+        let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
+        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+
+        // Verify that exactly 1 retry was recorded
+        let retries = client.metrics.total_ingested_not_found_retries.get();
+        assert_eq!(retries, 1);
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_checkpoint_instant() {
+        let (client, mock) = setup_test();
+
+        // Create test data using test_checkpoint_data
+        let bytes = test_checkpoint_data(1);
+        let checkpoint_data: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+
+        // Add checkpoint to mock with no failures - data should be available immediately
+        mock.checkpoints
+            .insert(1, FetchData::CheckpointData(checkpoint_data));
+
+        // Wait for checkpoint with short retry interval
+        let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();
+        assert_eq!(result.checkpoint_summary.sequence_number(), &1);
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_permanent_deserialization_error() {
+        let (client, mock) = setup_test();
+
+        // Add invalid data that will cause a deserialization error
+        mock.checkpoints
+            .insert(1, FetchData::Raw(Bytes::from("invalid data")));
+
+        // wait_for should keep retrying on deserialization errors and timeout
+        timeout(
+            Duration::from_secs(1),
+            client.wait_for(1, Duration::from_millis(50)),
+        )
+        .await
+        .unwrap_err();
     }
 }

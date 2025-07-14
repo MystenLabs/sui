@@ -30,8 +30,8 @@ use move_vm_runtime::{
     session::{SerializedReturnValues, Session},
 };
 use move_vm_test_utils::{
-    gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
     InMemoryStorage,
+    gas_schedule::{Gas, GasStatus, INITIAL_COST_SCHEDULE},
 };
 #[cfg(feature = "tracing")]
 use move_vm_types::gas::GasMeter;
@@ -384,6 +384,7 @@ fn make_module(
 
     let module = CompiledModule {
         version: 6,
+        publishable: true,
         // Module definition
         self_module_handle_idx: ModuleHandleIndex(0),
         module_handles: vec![ModuleHandle {

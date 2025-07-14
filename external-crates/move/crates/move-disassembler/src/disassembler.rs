@@ -7,20 +7,20 @@ use clap::Parser;
 use inline_colorization as IC;
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
+    CompiledModule,
     file_format::{
         Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, Constant, ConstantPoolIndex,
         DatatypeTyParameter, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinitionIndex,
         FunctionHandle, JumpTableInner, ModuleHandle, Signature, SignatureIndex, SignatureToken,
         StructDefinitionIndex, StructFieldInformation, TableIndex, TypeSignature, Visibility,
     },
-    CompiledModule,
 };
 use move_bytecode_source_map::{
     mapping::SourceMapping,
     source_map::{FunctionSourceMap, SourceMap, SourceName},
 };
 use move_command_line_common::{
-    display::{try_render_constant, RenderResult},
+    display::{RenderResult, try_render_constant},
     files::FileHash,
 };
 use move_compiler::compiled_unit::CompiledUnit;
@@ -872,7 +872,6 @@ impl Disassembler<'_> {
         let cfg_opt = if self.options.print_basic_blocks {
             let cfg: BTreeMap<_, _> = VMControlFlowGraph::new(&code.code, &code.jump_tables)
                 .blocks()
-                .into_iter()
                 .enumerate()
                 .map(|(block_number, pc_start)| (pc_start, block_number))
                 .collect();

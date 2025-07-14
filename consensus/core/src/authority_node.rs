@@ -39,7 +39,7 @@ use crate::{
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     transaction_certifier::TransactionCertifier,
-    CommitConsumer, CommitConsumerMonitor,
+    CommitConsumer,
 };
 
 /// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
@@ -53,6 +53,7 @@ pub enum ConsensusAuthority {
 impl ConsensusAuthority {
     pub async fn start(
         network_type: ConsensusNetwork,
+        epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -72,6 +73,7 @@ impl ConsensusAuthority {
         match network_type {
             ConsensusNetwork::Anemo => {
                 let authority = AuthorityNode::start(
+                    epoch_start_timestamp_ms,
                     own_index,
                     committee,
                     parameters,
@@ -89,6 +91,7 @@ impl ConsensusAuthority {
             }
             ConsensusNetwork::Tonic => {
                 let authority = AuthorityNode::start(
+                    epoch_start_timestamp_ms,
                     own_index,
                     committee,
                     parameters,
@@ -121,13 +124,6 @@ impl ConsensusAuthority {
         }
     }
 
-    pub async fn replay_complete(&self) {
-        match self {
-            Self::WithAnemo(authority) => authority.replay_complete().await,
-            Self::WithTonic(authority) => authority.replay_complete().await,
-        }
-    }
-
     #[cfg(test)]
     fn context(&self) -> &Arc<Context> {
         match self {
@@ -153,7 +149,6 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
-    commit_consumer_monitor: Arc<CommitConsumerMonitor>,
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
@@ -173,6 +168,7 @@ where
     N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
 {
     pub(crate) async fn start(
+        epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -192,10 +188,15 @@ where
             "Invalid own index {}",
             own_index
         );
-        let own_hostname = &committee.authority(own_index).hostname;
+        let own_hostname = committee.authority(own_index).hostname.clone();
         info!(
-            "Starting consensus authority {} {}, {:?}, boot counter {}",
-            own_index, own_hostname, protocol_config.version, boot_counter
+            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}, last processed commit index {}",
+            own_index,
+            own_hostname,
+            protocol_config.version,
+            epoch_start_timestamp_ms,
+            boot_counter,
+            commit_consumer.last_processed_commit_index
         );
         info!(
             "Consensus authorities: {}",
@@ -207,6 +208,7 @@ where
         info!("Consensus parameters: {:?}", parameters);
         info!("Consensus committee: {:?}", committee);
         let context = Arc::new(Context::new(
+            epoch_start_timestamp_ms,
             own_index,
             committee,
             parameters,
@@ -215,6 +217,18 @@ where
             clock,
         ));
         let start_time = Instant::now();
+
+        context
+            .metrics
+            .node_metrics
+            .authority_index
+            .with_label_values(&[&own_hostname])
+            .set(context.own_index.value() as i64);
+        context
+            .metrics
+            .node_metrics
+            .protocol_version
+            .set(context.protocol_config.version.as_u64() as i64);
 
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
@@ -250,7 +264,10 @@ where
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
         );
-        transaction_certifier.recover(block_verifier.as_ref());
+        transaction_certifier.recover(
+            block_verifier.as_ref(),
+            commit_consumer.last_processed_commit_index,
+        );
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
             context.clone(),
@@ -271,8 +288,7 @@ where
                 .is_zero();
         info!("Sync last known own block: {sync_last_known_own_block}");
 
-        let block_manager =
-            BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
+        let block_manager = BlockManager::new(context.clone(), dag_state.clone());
 
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -286,9 +302,10 @@ where
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
+            transaction_certifier.clone(),
             leader_schedule.clone(),
-        );
+        )
+        .await;
 
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
@@ -400,7 +417,6 @@ where
             synchronizer,
             commit_syncer_handle,
             round_prober_handle,
-            commit_consumer_monitor,
             proposed_block_handler,
             leader_timeout_handle,
             core_thread_handle,
@@ -455,10 +471,6 @@ where
     pub(crate) fn transaction_client(&self) -> Arc<TransactionClient> {
         self.transaction_client.clone()
     }
-
-    pub(crate) async fn replay_complete(&self) {
-        self.commit_consumer_monitor.replay_complete().await;
-    }
 }
 
 #[cfg(test)]
@@ -473,6 +485,7 @@ mod tests {
 
     use consensus_config::{local_committee_and_keys, Parameters};
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
+    use mysten_metrics::RegistryService;
     use prometheus::Registry;
     use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
@@ -497,7 +510,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let parameters = Parameters {
-            db_path: temp_dir.into_path(),
+            db_path: temp_dir.keep(),
             ..Default::default()
         };
         let txn_verifier = NoopTransactionVerifier {};
@@ -510,6 +523,7 @@ mod tests {
 
         let authority = ConsensusAuthority::start(
             network_type,
+            0,
             own_index,
             committee,
             parameters,
@@ -536,22 +550,16 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-        #[values(0, 5, 10)] gc_depth: u32,
+        #[values(5, 10)] gc_depth: u32,
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
-
-        if gc_depth == 0 {
-            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
-            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
-            protocol_config.set_mysticeti_fastpath_for_testing(false);
-        }
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
             .map(|_| TempDir::new().unwrap())
@@ -651,7 +659,7 @@ mod tests {
     ) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         let (committee, keypairs) = local_committee_and_keys(0, vec![1; num_authorities]);
         let protocol_config: ProtocolConfig = ProtocolConfig::get_for_max_version_UNSAFE();
@@ -745,10 +753,10 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
-    async fn test_amnesia_recovery_success(#[values(0, 5, 10)] gc_depth: u32) {
+    async fn test_amnesia_recovery_success(#[values(5, 10)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
-        DBMetrics::init(&db_registry);
+        DBMetrics::init(RegistryService::new(db_registry));
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
@@ -760,12 +768,6 @@ mod tests {
 
         let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         protocol_config.set_consensus_gc_depth_for_testing(gc_depth);
-
-        if gc_depth == 0 {
-            protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
-            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
-            protocol_config.set_mysticeti_fastpath_for_testing(false);
-        }
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
@@ -907,6 +909,7 @@ mod tests {
 
         let authority = ConsensusAuthority::start(
             network_type,
+            0,
             index,
             committee,
             parameters,
