@@ -22,6 +22,7 @@ use crate::{
 
 use super::{
     address::Address,
+    gas_input::GasInput,
     transaction_effects::{EffectsContents, TransactionEffects},
 };
 
@@ -58,6 +59,19 @@ impl Transaction {
 
 #[Object]
 impl TransactionContents {
+    /// The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
+    async fn gas_input(&self) -> Result<Option<GasInput>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let transaction_data = content.data()?;
+        Ok(Some(GasInput::from_gas_data(
+            self.scope.clone(),
+            transaction_data.gas_data().clone(),
+        )))
+    }
+
     /// The address corresponding to the public key that signed this transaction. System transactions do not have senders.
     async fn sender(&self) -> Result<Option<Address>, RpcError> {
         let Some(content) = &self.contents else {

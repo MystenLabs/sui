@@ -117,6 +117,25 @@ type FeatureFlag {
 }
 
 
+type GasInput {
+	"""
+	Address of the owner of the gas object(s) used.
+	"""
+	gasSponsor: Address
+	"""
+	An unsigned integer specifying the number of native tokens per gas unit this transaction will pay (in MIST).
+	"""
+	gasPrice: BigInt
+	"""
+	The maximum SUI that can be expended by executing this transaction
+	"""
+	gasBudget: BigInt
+	"""
+	Objects used to pay for a transaction's execution and storage
+	"""
+	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+}
+
 """
 Interface implemented by GraphQL types representing entities that are identified by an address.
 
@@ -737,6 +756,10 @@ type Transaction {
 	The results to the chain of executing this transaction.
 	"""
 	effects: TransactionEffects
+	"""
+	The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
+	"""
+	gasInput: GasInput
 	"""
 	The address corresponding to the public key that signed this transaction. System transactions do not have senders.
 	"""
