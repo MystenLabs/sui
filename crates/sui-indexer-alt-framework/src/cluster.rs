@@ -24,19 +24,19 @@ use crate::{
 /// Bundle of arguments for setting up an indexer cluster (an Indexer and its associated Metrics
 /// service). This struct is offered as a convenience for the common case of parsing command-line
 /// arguments for a binary running a standalone indexer and its metrics service.
-#[derive(clap::Parser, Debug)]
+#[derive(clap::Parser, Debug, Default)]
 pub struct Args {
     /// What to index and in what time range.
     #[clap(flatten)]
-    indexer_args: IndexerArgs,
+    pub indexer_args: IndexerArgs,
 
     /// Where to get checkpoint data from.
     #[clap(flatten)]
-    client_args: ClientArgs,
+    pub client_args: Option<ClientArgs>,
 
     /// How to expose metrics.
     #[clap(flatten)]
-    metrics_args: MetricsArgs,
+    pub metrics_args: MetricsArgs,
 }
 
 /// An opinionated [IndexerCluster] that spins up an [Indexer] implementation using Postgres as its
@@ -55,7 +55,7 @@ pub struct IndexerCluster {
 pub struct IndexerClusterBuilder {
     database_url: Option<Url>,
     db_args: DbArgs,
-    args: Option<Args>,
+    args: Args,
     ingestion_config: IngestionConfig,
     migrations: Option<&'static EmbeddedMigrations>,
     metric_label: Option<String>,
@@ -91,8 +91,31 @@ impl IndexerClusterBuilder {
     /// - `IndexerArgs`: Controls what to index (checkpoint range, which pipelines to run, watermark behavior)
     /// - `ClientArgs`: Specifies where to fetch checkpoint data from (remote store, local path, or RPC)
     /// - `MetricsArgs`: Configures how to expose Prometheus metrics (address to serve on)
+    ///
+    /// This overwrites any previously set args.
     pub fn with_args(mut self, args: Args) -> Self {
-        self.args = Some(args);
+        self.args = args;
+        self
+    }
+
+    /// Set indexer arguments (what to index and in what time range).
+    /// This overwrites any previously set indexer args.
+    pub fn with_indexer_args(mut self, args: IndexerArgs) -> Self {
+        self.args.indexer_args = args;
+        self
+    }
+
+    /// Set client arguments (where to get checkpoint data from).
+    /// This overwrites any previously set client args.
+    pub fn with_client_args(mut self, args: ClientArgs) -> Self {
+        self.args.client_args = Some(args);
+        self
+    }
+
+    /// Set metrics arguments (how to expose metrics).
+    /// This overwrites any previously set metrics args.
+    pub fn with_metrics_args(mut self, args: MetricsArgs) -> Self {
+        self.args.metrics_args = args;
         self
     }
 
@@ -125,7 +148,6 @@ impl IndexerClusterBuilder {
     /// - Metrics registry creation fails
     pub async fn build(self) -> Result<IndexerCluster> {
         let database_url = self.database_url.context("database_url is required")?;
-        let args = self.args.context("args is required")?;
 
         tracing_subscriber::fmt::init();
 
@@ -134,13 +156,14 @@ impl IndexerClusterBuilder {
         let registry = Registry::new_custom(self.metric_label, None)
             .context("Failed to create Prometheus registry.")?;
 
-        let metrics = MetricsService::new(args.metrics_args, registry, cancel.child_token());
+        let metrics = MetricsService::new(self.args.metrics_args, registry, cancel.child_token());
+        let client_args = self.args.client_args.context("client_args is required")?;
 
         let indexer = Indexer::new_from_pg(
             database_url,
             self.db_args,
-            args.indexer_args,
-            args.client_args,
+            self.args.indexer_args,
+            client_args,
             self.ingestion_config,
             self.migrations,
             metrics.registry(),
@@ -226,6 +249,7 @@ mod tests {
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
+    use crate::ingestion::ClientArgs;
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
     use crate::postgres::{
@@ -322,13 +346,13 @@ mod tests {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
 
         let args = Args {
-            client_args: ClientArgs {
+            client_args: Some(ClientArgs {
                 local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
                 remote_store_url: None,
                 rpc_api_url: None,
                 rpc_username: None,
                 rpc_password: None,
-            },
+            }),
             indexer_args: IndexerArgs {
                 first_checkpoint: Some(0),
                 last_checkpoint: Some(9),
@@ -402,5 +426,95 @@ mod tests {
         assert_pipeline_metric!(watermark_checkpoint_in_db, 9);
         assert_pipeline_metric!(watermark_transaction, 20);
         assert_pipeline_metric!(watermark_transaction_in_db, 20);
+    }
+
+    #[test]
+    fn test_individual_methods_override_bundled_args() {
+        let builder = IndexerClusterBuilder::new()
+            .with_args(Args {
+                indexer_args: IndexerArgs {
+                    first_checkpoint: Some(100),
+                    ..Default::default()
+                },
+                client_args: Some(ClientArgs {
+                    local_ingestion_path: Some("/bundled".into()),
+                    ..Default::default()
+                }),
+                metrics_args: MetricsArgs {
+                    metrics_address: "127.0.0.1:8080".parse().unwrap(),
+                },
+            })
+            .with_indexer_args(IndexerArgs {
+                first_checkpoint: Some(200),
+                ..Default::default()
+            })
+            .with_client_args(ClientArgs {
+                local_ingestion_path: Some("/individual".into()),
+                ..Default::default()
+            })
+            .with_metrics_args(MetricsArgs {
+                metrics_address: "127.0.0.1:9090".parse().unwrap(),
+            });
+
+        assert_eq!(builder.args.indexer_args.first_checkpoint, Some(200));
+        assert_eq!(
+            builder
+                .args
+                .client_args
+                .unwrap()
+                .local_ingestion_path
+                .unwrap()
+                .to_string_lossy(),
+            "/individual"
+        );
+        assert_eq!(
+            builder.args.metrics_args.metrics_address.to_string(),
+            "127.0.0.1:9090"
+        );
+    }
+
+    #[test]
+    fn test_bundled_args_override_individual_methods() {
+        let builder = IndexerClusterBuilder::new()
+            .with_indexer_args(IndexerArgs {
+                first_checkpoint: Some(200),
+                ..Default::default()
+            })
+            .with_client_args(ClientArgs {
+                local_ingestion_path: Some("/individual".into()),
+                ..Default::default()
+            })
+            .with_metrics_args(MetricsArgs {
+                metrics_address: "127.0.0.1:9090".parse().unwrap(),
+            })
+            .with_args(Args {
+                indexer_args: IndexerArgs {
+                    first_checkpoint: Some(100),
+                    ..Default::default()
+                },
+                client_args: Some(ClientArgs {
+                    local_ingestion_path: Some("/bundled".into()),
+                    ..Default::default()
+                }),
+                metrics_args: MetricsArgs {
+                    metrics_address: "127.0.0.1:8080".parse().unwrap(),
+                },
+            });
+
+        assert_eq!(builder.args.indexer_args.first_checkpoint, Some(100));
+        assert_eq!(
+            builder
+                .args
+                .client_args
+                .unwrap()
+                .local_ingestion_path
+                .unwrap()
+                .to_string_lossy(),
+            "/bundled"
+        );
+        assert_eq!(
+            builder.args.metrics_args.metrics_address.to_string(),
+            "127.0.0.1:8080"
+        );
     }
 }
