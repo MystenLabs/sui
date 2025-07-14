@@ -16,7 +16,7 @@ Checkpoint created: 2
 
 task 3, line 17:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 4, lines 19-36:
 //# run-graphql
@@ -66,7 +66,7 @@ Checkpoint created: 6
 
 task 8, line 44:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 9, line 46:
 //# create-checkpoint

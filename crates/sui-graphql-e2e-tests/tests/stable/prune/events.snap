@@ -30,7 +30,7 @@ Checkpoint created: 1
 
 task 5, line 45:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 6, line 47:
 //# run Test::M1::emit_a --sender A --args object(2,0) 1
