@@ -113,4 +113,3 @@ fn optimize_instruction(instruction: &mut Instruction, final_jumps: &LabelMap) -
         _ => false,
     }
 }
-
