@@ -9,70 +9,147 @@ use indexmap::IndexSet;
 use std::rc::Rc;
 use sui_types::error::ExecutionError;
 
-/// We more or less have a new sym counter for each reference we make
-/// We do not include the `Rc` in this type itself to make it clear where we are relying on the
-/// Rc's reference counting for correctness
-type AbstractLocation = u64;
-
-/// Simple counter for abstract locations.
-struct AbstractLocationCounter(u64);
-
-struct AbstractReference {
-    /// the roots this locations borrows from
-    borrows_from: IndexSet<Rc<AbstractLocation>>,
-    /// The root location of the reference, extensions borrow from this `root` and all locations
-    /// this reference borrows from
-    root: Rc<AbstractLocation>,
+/// A dot-star like extension, but with a unique identifier. Deltas can be compared between
+/// different Deltas of the same command, otherwise they behave like .* in the regex based
+/// implementation. This means that it represents an arbitrary field extension of the reference
+/// in question. However, due to invariants within reference safety, for mutable references these
+/// extensions cannot with other references from the same command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Delta {
+    command: u16,
+    result: u16,
 }
+
+/// A path points to an abstract memory location, rooted in an input or command result. Any
+/// extension is the result from a reference being returned from a command.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Path {
+    root: T::Location,
+    extensions: Vec<Delta>,
+}
+
+struct PathSet(IndexSet<Path>);
 
 enum Value {
     NonRef,
-    Ref {
-        is_mut: bool,
-        data: Rc<AbstractReference>,
-    },
+    Ref { is_mut: bool, paths: Rc<PathSet> },
 }
 
 struct Location {
-    // Much like a reference, this tracks used to track if the location is borrowed
-    // However, this is not used if the value is a reference (since you cannot borrow a reference)
-    root: Rc<AbstractLocation>,
+    // A singleton set pointing to the location itself
+    self_path: Rc<PathSet>,
     value: Option<Value>,
 }
 
 struct Context {
-    counter: AbstractLocationCounter,
     tx_context: Location,
     gas: Location,
-    inputs: Vec<Location>,
+    object_inputs: Vec<Location>,
+    pure_inputs: Vec<Location>,
+    receiving_inputs: Vec<Location>,
     results: Vec<Vec<Location>>,
 }
 
-impl AbstractLocationCounter {
-    fn new() -> Self {
-        Self(0)
-    }
-
-    fn next(&mut self) -> AbstractLocation {
-        let abs = self.0;
-        self.0 += 1;
-        abs
-    }
+enum PathComparison {
+    /// `self` is a strict prefix of `other`
+    Prefix,
+    /// `self` and `other` are the same path
+    Aliases,
+    /// `self` extends `other`
+    Extends,
+    /// `self` and `other` point to distinct regions of memory. They might however be rooted
+    /// in the same parent region, i.e. the same `root` location or a prefix of the same
+    /// `extensions`
+    Disjoint,
 }
 
-impl AbstractReference {
-    fn new(
-        counter: &mut AbstractLocationCounter,
-        borrows_from: IndexSet<Rc<AbstractLocation>>,
-    ) -> Self {
+impl Path {
+    fn initial(location: T::Location) -> Self {
         Self {
-            root: Rc::new(counter.next()),
-            borrows_from,
+            root: location,
+            extensions: vec![],
         }
     }
 
-    fn has_extensions(&self) -> bool {
-        Rc::strong_count(&self.root) > 1
+    /// See `PathComparison` for the meaning of the return value
+    fn compare(&self, other: &Self) -> PathComparison {
+        if self.root != other.root {
+            return PathComparison::Disjoint;
+        };
+        let mut self_extensions = self.extensions.iter();
+        let mut other_extensions = other.extensions.iter();
+        loop {
+            match (self_extensions.next(), other_extensions.next()) {
+                (Some(self_ext), Some(other_ext)) => {
+                    if self_ext.command != other_ext.command {
+                        // Cannot compare `Delta` from distinct commands, as such we do assume
+                        // the possibility that `self` extends `other`
+                        return PathComparison::Extends;
+                    }
+                    if self_ext.result != other_ext.result {
+                        // If the command is the same, but the result is different, we know that
+                        // they must be disjoint. Or they are immutable references, in which case
+                        // we do not care.
+                        return PathComparison::Disjoint;
+                    }
+                }
+                (None, Some(_)) => return PathComparison::Prefix,
+                (Some(_), None) => return PathComparison::Extends,
+                (None, None) => return PathComparison::Aliases,
+            }
+        }
+    }
+
+    /// Create a new `Path` that extends the current path with the given `extension`.
+    fn extend(&self, extension: Delta) -> Self {
+        let mut new_extensions = self.extensions.clone();
+        new_extensions.push(extension);
+        Self {
+            root: self.root,
+            extensions: new_extensions,
+        }
+    }
+}
+
+impl PathSet {
+    /// Should be used only for `call` for creating initial path sets.
+    fn empty() -> Self {
+        Self(IndexSet::new())
+    }
+
+    fn initial(location: T::Location) -> Self {
+        Self(IndexSet::from([Path::initial(location)]))
+    }
+
+    /// Returns true if any path in `self` is non-`Disjoint` with any path in `other`.
+    /// Excludes `Aliases` if `allow_aliases` is true.
+    fn conflicts(&self, other: &Self, allow_aliases: bool) -> bool {
+        self.0.iter().any(|self_path| {
+            other
+                .0
+                .iter()
+                .any(|other_path| match self_path.compare(other_path) {
+                    PathComparison::Disjoint => false,
+                    PathComparison::Aliases => !allow_aliases,
+                    PathComparison::Prefix | PathComparison::Extends => true,
+                })
+        })
+    }
+
+    /// Insert all paths from `other` into `self`.
+    fn union(&mut self, other: &PathSet) {
+        // We might be able to optimize this slightly by not including paths that are extensions
+        // of existing paths
+        self.0.extend(other.0.iter().cloned());
+    }
+
+    /// Create a new `PathSet` where all paths in `self` are extended with the given `extension`.
+    fn extend(&self, extension: Delta) -> Self {
+        let mut new_paths = IndexSet::with_capacity(self.0.len());
+        for path in &self.0 {
+            new_paths.insert(path.extend(extension));
+        }
+        Self(new_paths)
     }
 }
 
@@ -80,9 +157,9 @@ impl Value {
     fn copy(&self) -> Value {
         match self {
             Value::NonRef => Value::NonRef,
-            Value::Ref { is_mut, data } => Value::Ref {
+            Value::Ref { is_mut, paths } => Value::Ref {
                 is_mut: *is_mut,
-                data: data.clone(),
+                paths: paths.clone(),
             },
         }
     }
@@ -93,11 +170,11 @@ impl Value {
             Value::NonRef => {
                 anyhow::bail!("Cannot freeze a non-reference value")
             }
-            Value::Ref { is_mut, data } => {
+            Value::Ref { is_mut, paths } => {
                 anyhow::ensure!(is_mut, "Cannot freeze an immutable reference");
                 Ok(Value::Ref {
                     is_mut: false,
-                    data,
+                    paths,
                 })
             }
         }
@@ -105,33 +182,10 @@ impl Value {
 }
 
 impl Location {
-    fn non_ref(counter: &mut AbstractLocationCounter) -> Self {
+    fn non_ref(location: T::Location) -> Self {
         Self {
-            root: Rc::new(counter.next()),
+            self_path: Rc::new(PathSet::initial(location)),
             value: Some(Value::NonRef),
-        }
-    }
-
-    /// returns true if the location is borrowed.
-    /// It does not check if the reference (if present) is borrowed.
-    fn is_borrowed(&self) -> anyhow::Result<bool> {
-        let location_is_borrowed = Rc::strong_count(&self.root) > 1;
-        match &self.value {
-            None => {
-                anyhow::ensure!(
-                    !location_is_borrowed,
-                    "A location without a value should not be borrowed"
-                );
-                Ok(false)
-            }
-            Some(Value::Ref { .. }) => {
-                anyhow::ensure!(
-                    !location_is_borrowed,
-                    "A reference value's location should not be borrowed"
-                );
-                Ok(false)
-            }
-            Some(Value::NonRef) => Ok(location_is_borrowed),
         }
     }
 
@@ -142,52 +196,33 @@ impl Location {
         Ok(value.copy())
     }
 
-    fn take(&mut self) -> anyhow::Result<Value> {
+    fn move_value(&mut self) -> anyhow::Result<Value> {
         let Some(value) = self.value.take() else {
             anyhow::bail!("Use of invalid memory location")
         };
-        // we have to check this after moving the value to ensure we are not considering
-        // whether a reference stored here is borrowed
-        if self.is_borrowed()? {
-            anyhow::bail!("Cannot move borrowed value")
-        }
         Ok(value)
     }
 
     fn use_(&mut self, usage: &T::Usage) -> anyhow::Result<Value> {
         match usage {
-            T::Usage::Move(_) => self.take(),
-            T::Usage::Copy { borrowed, .. } => {
-                let Some(borrowed) = borrowed.get().copied() else {
-                    anyhow::bail!("`borrowed` was not set for location usage")
-                };
-                anyhow::ensure!(
-                    self.is_borrowed()? == borrowed,
-                    "Value borrowed status does not match usage marked borrowed status"
-                );
-                self.copy_value()
-            }
+            T::Usage::Move(_) => self.move_value(),
+            T::Usage::Copy { .. } => self.copy_value(),
         }
     }
 
-    fn borrow(
-        &mut self,
-        counter: &mut AbstractLocationCounter,
-        is_mut: bool,
-    ) -> anyhow::Result<Value> {
-        match &self.value {
-            None => {
-                anyhow::bail!("Borrow of invalid memory location")
-            }
-            Some(Value::Ref { .. }) => {
+    fn borrow(&mut self, is_mut: bool) -> anyhow::Result<Value> {
+        let Some(value) = self.value.as_ref() else {
+            anyhow::bail!("Borrow of invalid memory location")
+        };
+        match value {
+            Value::Ref { .. } => {
                 anyhow::bail!("Cannot borrow a reference")
             }
-            Some(Value::NonRef) => {
+            Value::NonRef => {
                 // a new reference that borrows from this location
-                let borrows_from = IndexSet::from([self.root.clone()]);
                 Ok(Value::Ref {
                     is_mut,
-                    data: Rc::new(AbstractReference::new(counter, borrows_from)),
+                    paths: self.self_path.clone(),
                 })
             }
         }
@@ -196,29 +231,46 @@ impl Location {
 
 impl Context {
     fn new(txn: &T::Transaction) -> Self {
-        let mut counter = AbstractLocationCounter::new();
-        let tx_context = Location::non_ref(&mut counter);
-        let gas = Location::non_ref(&mut counter);
-        let inputs = txn
-            .inputs
-            .iter()
-            .map(|_| Location::non_ref(&mut counter))
+        let T::Transaction {
+            bytes: _,
+            objects,
+            pure,
+            receiving,
+            commands: _,
+        } = txn;
+        let tx_context = Location::non_ref(T::Location::TxContext);
+        let gas = Location::non_ref(T::Location::GasCoin);
+        let object_inputs = (0..objects.len())
+            .map(|i| Location::non_ref(T::Location::ObjectInput(i as u16)))
+            .collect();
+        let pure_inputs = (0..pure.len())
+            .map(|i| Location::non_ref(T::Location::PureInput(i as u16)))
+            .collect();
+        let receiving_inputs = (0..receiving.len())
+            .map(|i| Location::non_ref(T::Location::ReceivingInput(i as u16)))
             .collect();
         Self {
-            counter,
             tx_context,
             gas,
-            inputs,
+            object_inputs,
+            pure_inputs,
+            receiving_inputs,
             results: vec![],
         }
     }
 
+    fn current_command(&self) -> u16 {
+        self.results.len() as u16
+    }
+
     fn add_result_values(&mut self, results: impl IntoIterator<Item = Value>) {
+        let command = self.current_command();
         self.results.push(
             results
                 .into_iter()
-                .map(|v| Location {
-                    root: Rc::new(self.counter.next()),
+                .enumerate()
+                .map(|(i, v)| Location {
+                    self_path: Rc::new(PathSet::initial(T::Location::Result(command, i as u16))),
                     value: Some(v),
                 })
                 .collect(),
@@ -232,44 +284,129 @@ impl Context {
         }));
     }
 
-    fn location(
-        &mut self,
-        loc: T::Location,
-    ) -> anyhow::Result<(&mut AbstractLocationCounter, &mut Location)> {
-        let location = match loc {
+    fn location(&self, loc: T::Location) -> anyhow::Result<&Location> {
+        Ok(match loc {
+            T::Location::TxContext => &self.tx_context,
+            T::Location::GasCoin => &self.gas,
+            T::Location::ObjectInput(i) => self
+                .object_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Object input index out of bounds {i}"))?,
+            T::Location::PureInput(i) => self
+                .pure_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Pure input index out of bounds {i}"))?,
+            T::Location::ReceivingInput(i) => self
+                .receiving_inputs
+                .get(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Receiving input index out of bounds {i}"))?,
+            T::Location::Result(i, j) => self
+                .results
+                .get(i as usize)
+                .and_then(|r| r.get(j as usize))
+                .ok_or_else(|| anyhow::anyhow!("Result index out of bounds ({i},{j})"))?,
+        })
+    }
+
+    fn location_mut(&mut self, loc: T::Location) -> anyhow::Result<&mut Location> {
+        Ok(match loc {
             T::Location::TxContext => &mut self.tx_context,
             T::Location::GasCoin => &mut self.gas,
-            T::Location::Input(i) => self
-                .inputs
+            T::Location::ObjectInput(i) => self
+                .object_inputs
                 .get_mut(i as usize)
-                .ok_or_else(|| anyhow::anyhow!("Input index out of bounds {i}"))?,
+                .ok_or_else(|| anyhow::anyhow!("Object input index out of bounds {i}"))?,
+            T::Location::PureInput(i) => self
+                .pure_inputs
+                .get_mut(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Pure input index out of bounds {i}"))?,
+            T::Location::ReceivingInput(i) => self
+                .receiving_inputs
+                .get_mut(i as usize)
+                .ok_or_else(|| anyhow::anyhow!("Receiving input index out of bounds {i}"))?,
             T::Location::Result(i, j) => self
                 .results
                 .get_mut(i as usize)
                 .and_then(|r| r.get_mut(j as usize))
                 .ok_or_else(|| anyhow::anyhow!("Result index out of bounds ({i},{j})"))?,
-        };
-        Ok((&mut self.counter, location))
+        })
+    }
+
+    fn check_usage(&self, usage: &T::Usage, location: &Location) -> anyhow::Result<()> {
+        // by marking "allow alias" as `false`, we will also check for `Alias` paths, i.e. paths
+        // that point to the location itself without any extensions.
+        let is_borrowed = self.any_conflicts(&location.self_path, /* allow alias */ false);
+        match usage {
+            T::Usage::Move(_) => {
+                anyhow::ensure!(!is_borrowed, "Cannot move a value that is borrowed");
+            }
+            T::Usage::Copy { borrowed, .. } => {
+                let Some(borrowed) = borrowed.get().copied() else {
+                    anyhow::bail!("Borrowed flag not set for copy usage");
+                };
+                anyhow::ensure!(
+                    borrowed == is_borrowed,
+                    "Cannot copy a value that is borrowed"
+                );
+            }
+        }
+        Ok(())
     }
 
     fn argument(&mut self, sp!(_, (arg, _)): &T::Argument) -> anyhow::Result<Value> {
-        let (counter, location) = self.location(arg.location())?;
-        let value = match arg {
+        let location = self.location(arg.location())?;
+        match arg {
+            T::Argument__::Use(usage)
+            | T::Argument__::Freeze(usage)
+            | T::Argument__::Read(usage) => self.check_usage(usage, location)?,
+            T::Argument__::Borrow(_, _) => (),
+        };
+        let location = self.location_mut(arg.location())?;
+        Ok(match arg {
             T::Argument__::Use(usage) => location.use_(usage)?,
             T::Argument__::Freeze(usage) => location.use_(usage)?.freeze()?,
-            T::Argument__::Borrow(is_mut, _) => location.borrow(counter, *is_mut)?,
+            T::Argument__::Borrow(is_mut, _) => location.borrow(*is_mut)?,
             T::Argument__::Read(usage) => {
                 location.use_(usage)?;
                 Value::NonRef
             }
-        };
-        Ok(value)
+        })
     }
 
     fn arguments(&mut self, args: &[T::Argument]) -> anyhow::Result<Vec<Value>> {
         args.iter()
             .map(|arg| self.argument(arg))
             .collect::<anyhow::Result<Vec<_>>>()
+    }
+
+    fn all_references(&self) -> impl Iterator<Item = Rc<PathSet>> {
+        let Self {
+            tx_context,
+            gas,
+            object_inputs,
+            pure_inputs,
+            receiving_inputs,
+            results,
+        } = self;
+        std::iter::once(tx_context)
+            .chain(std::iter::once(gas))
+            .chain(object_inputs)
+            .chain(pure_inputs)
+            .chain(receiving_inputs)
+            .chain(results.iter().flat_map(|r| r))
+            .filter_map(|v| -> Option<Rc<PathSet>> {
+                match v.value.as_ref() {
+                    Some(Value::Ref { paths, .. }) => Some(paths.clone()),
+                    Some(Value::NonRef) | None => None,
+                }
+            })
+    }
+
+    /// Returns true if any of the references in a given `T::LOcation` conflict with the paths in
+    /// `paths`. Excludes `Aliases` if `allow_aliases` is true.
+    fn any_conflicts(&self, paths: &PathSet, allow_aliases: bool) -> bool {
+        self.all_references()
+            .any(|other| paths.conflicts(&*other, allow_aliases))
     }
 }
 
@@ -291,7 +428,10 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
     let mut context = Context::new(txn);
     let T::Transaction {
-        inputs: _,
+        bytes: _,
+        objects: _,
+        pure: _,
+        receiving: _,
         commands,
     } = txn;
     for (c, result_tys) in commands {
@@ -321,13 +461,14 @@ fn command(
         }
         T::Command_::SplitCoins(_, coin, amounts) => {
             context.arguments(amounts)?;
-            context.argument(coin)?;
+            let coin_value = context.argument(coin)?;
+            write_ref(context, coin_value)?;
             context.add_results(result_tys);
         }
         T::Command_::MergeCoins(_, target, coins) => {
             context.arguments(coins)?;
             let target_value = context.argument(target)?;
-            write_ref(target_value)?;
+            write_ref(context, target_value)?;
         }
         T::Command_::MakeMoveVec(_, arguments) => {
             context.arguments(arguments)?;
@@ -343,7 +484,7 @@ fn command(
     Ok(())
 }
 
-fn write_ref(value: Value) -> anyhow::Result<()> {
+fn write_ref(context: &Context, value: Value) -> anyhow::Result<()> {
     match value {
         Value::NonRef => {
             anyhow::bail!("Cannot write to a non-reference value");
@@ -352,9 +493,12 @@ fn write_ref(value: Value) -> anyhow::Result<()> {
         Value::Ref { is_mut: false, .. } => {
             anyhow::bail!("Cannot write to an immutable reference");
         }
-        Value::Ref { is_mut: true, data } => {
+        Value::Ref {
+            is_mut: true,
+            paths,
+        } => {
             anyhow::ensure!(
-                !data.has_extensions(),
+                !context.any_conflicts(&paths, /* allow alias */ false),
                 "Cannot write to a mutable reference that has extensions"
             );
             Ok(())
@@ -368,54 +512,60 @@ fn call(
     arguments: Vec<Value>,
 ) -> anyhow::Result<()> {
     let return_ = &signature.return_;
-    let mut all_locations: IndexSet<Rc<AbstractLocation>> = IndexSet::new();
-    let mut imm_locations: IndexSet<Rc<AbstractLocation>> = IndexSet::new();
-    let mut mut_locations: IndexSet<Rc<AbstractLocation>> = IndexSet::new();
+    let mut all_paths: PathSet = PathSet::empty();
+    let mut imm_paths: PathSet = PathSet::empty();
+    let mut mut_paths: PathSet = PathSet::empty();
     for arg in arguments {
         match arg {
             Value::NonRef => (),
-            Value::Ref { is_mut: true, data } => {
+            Value::Ref {
+                is_mut: true,
+                paths,
+            } => {
+                // Allow alias conflicts with references not passed as arguments
                 anyhow::ensure!(
-                    !data.has_extensions(),
+                    !context.any_conflicts(&paths, /* allow alias */ true),
                     "Cannot transfer a mutable ref with extensions"
                 );
-                all_locations.extend(data.borrows_from.iter().cloned());
-                // mutable borrows must be unique going into a call
-                for loc in &data.borrows_from {
-                    let was_new = mut_locations.insert(loc.clone());
-                    // if not new, then the location was already passed to the call
-                    anyhow::ensure!(was_new, "Double mutable borrow");
-                }
+                // All mutable argument references must be disjoint from all other references
+                anyhow::ensure!(
+                    !mut_paths.conflicts(&paths, /* allow alias */ false),
+                    "Double mutable borrow"
+                );
+                all_paths.union(&*paths);
+                mut_paths.union(&*paths);
             }
             Value::Ref {
                 is_mut: false,
-                data,
+                paths,
             } => {
-                all_locations.extend(data.borrows_from.iter().cloned());
-                imm_locations.extend(data.borrows_from.iter().cloned());
+                all_paths.union(&*paths);
+                imm_paths.union(&*paths);
             }
         }
     }
-    for mut_loc in &mut_locations {
-        anyhow::ensure!(
-            !imm_locations.contains(mut_loc),
-            "Mutable and immutable borrows cannot overlap"
-        );
-    }
-    let counter = &mut context.counter;
+    // All mutable references must be disjoint from all immutable references
+    anyhow::ensure!(
+        !imm_paths.conflicts(&mut_paths, /* allow alias */ false),
+        "Mutable and immutable borrows cannot overlap"
+    );
+    let command = context.current_command();
     let result_values = return_
         .iter()
-        .map(|ty| {
+        .enumerate()
+        .map(|(i, ty)| {
+            let delta = Delta {
+                command,
+                result: i as u16,
+            };
             match ty {
                 T::Type::Reference(/* is mut */ true, _) => Value::Ref {
                     is_mut: true,
-                    data: Rc::new(AbstractReference::new(counter, mut_locations.clone())),
+                    paths: Rc::new(mut_paths.extend(delta)),
                 },
-                // technically the immutable references could borrow from each other, but it does
-                // not matter in practice since we cannot write to them or their extensions
                 T::Type::Reference(/* is mut */ false, _) => Value::Ref {
-                    is_mut: true,
-                    data: Rc::new(AbstractReference::new(counter, all_locations.clone())),
+                    is_mut: false,
+                    paths: Rc::new(imm_paths.extend(delta)),
                 },
                 _ => Value::NonRef,
             }
