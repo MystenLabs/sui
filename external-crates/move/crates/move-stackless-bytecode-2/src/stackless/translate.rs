@@ -342,12 +342,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::Pack(struct_ref) => {
             let args = make_vec!(struct_ref.struct_.fields.0.len(), Register(pop!()));
             assign_reg!(
-                [push!(
-                    struct_ref
-                        .struct_
-                        .subst_signature(struct_ref.type_arguments.clone())
-                        .into()
-                )] = RValue::Data {
+                [push!(struct_ref_to_type(struct_ref).into())] = RValue::Data {
                     op: DataOp::Pack(struct_ref.clone()),
                     args
                 }
@@ -772,9 +767,7 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::PackVariant(bx) => {
             let args = make_vec!(bx.variant.fields.0.len(), Register(pop!()));
             Instruction::AssignReg {
-                lhs: vec![push!(
-                    bx.enum_.subst_signature(bx.instantiation.clone()).into()
-                )],
+                lhs: vec![push!(variant_ref_to_type(bx).into())],
                 rhs: RValue::Data {
                     op: DataOp::PackVariant(bx.clone()),
                     args,
@@ -789,7 +782,7 @@ pub(crate) fn bytecode<K: SourceKind>(
             };
             let lhs = make_vec!(
                 bx.variant.fields.0.len(),
-                push!(bx.enum_.subst_signature(bx.instantiation.clone()).into())
+                push!(variant_ref_to_type(bx).into())
             );
             Instruction::AssignReg { lhs, rhs }
         }
@@ -799,10 +792,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 op: DataOp::UnpackVariantImmRef(bx.clone()),
                 args: vec![Register(pop!())],
             };
-            let ref_type = Type::Reference(
-                false,
-                bx.enum_.subst_signature(bx.instantiation.clone()).into(),
-            );
+            let ref_type = Type::Reference(false, variant_ref_to_type(bx).into());
             let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
             Instruction::AssignReg { lhs, rhs }
         }
@@ -812,10 +802,7 @@ pub(crate) fn bytecode<K: SourceKind>(
                 op: DataOp::UnpackVariant(bx.clone()),
                 args: vec![Register(pop!())],
             };
-            let ref_type = Type::Reference(
-                true,
-                bx.enum_.subst_signature(bx.instantiation.clone()).into(),
-            );
+            let ref_type = Type::Reference(true, variant_ref_to_type(bx).into());
             let lhs = make_vec!(bx.variant.fields.0.len(), push!(ref_type.clone().into()));
             Instruction::AssignReg { lhs, rhs }
         }
@@ -838,4 +825,29 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::MoveFromDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
         IB::MoveToDeprecated(_bx) => Instruction::NotImplemented(format!("{:?}", op)),
     }
+}
+
+fn struct_ref_to_type(struct_ref: &N::StructRef<Symbol>) -> N::Type<Symbol> {
+    let signature = (*struct_ref.type_arguments)
+        .iter()
+        .map(|ty| ty.as_ref().clone())
+        .collect::<Vec<_>>();
+    let dty = struct_ref
+        .struct_
+        .datatype(signature)
+        .expect("Wrong datatype in struct reference");
+    N::Type::Datatype(dty.into())
+}
+
+fn variant_ref_to_type(variant_ref: &N::VariantRef<Symbol>) -> N::Type<Symbol> {
+    let signature = variant_ref
+        .instantiation
+        .iter()
+        .map(|ty| ty.as_ref().clone())
+        .collect::<Vec<_>>();
+    let dty = variant_ref
+        .enum_
+        .datatype(signature)
+        .expect("Wrong datatype in variant reference");
+    N::Type::Datatype(dty.into())
 }

@@ -9,7 +9,7 @@ use crate::file_format::{
     StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
     VariantDefinition, VariantHandleIndex, VariantInstantiationHandleIndex, VariantTag, Visibility,
 };
-use indexmap::{Equivalent, IndexMap};
+use indexmap::IndexMap;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -126,7 +126,6 @@ pub struct Struct<S: Hash + Eq> {
     // Defining module name
     pub defining_module: ModuleId<S>,
     pub name: S,
-    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub fields: Fields<S>,
@@ -173,7 +172,6 @@ pub struct Enum<S: Hash + Eq> {
     // Defining module name
     pub defining_module: ModuleId<S>,
     pub name: S,
-    pub datatype: Datatype<S>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
     pub variants: IndexMap<S, Rc<Variant<S>>>,
@@ -832,7 +830,6 @@ impl<S: Hash + Eq> Struct<S> {
         Struct {
             defining_module,
             name,
-            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             fields,
@@ -849,7 +846,6 @@ impl<S: Hash + Eq> Struct<S> {
         let Self {
             defining_module,
             name,
-            datatype,
             abilities,
             type_parameters,
             fields,
@@ -976,7 +972,6 @@ impl<S: Hash + Eq> Function<S> {
             is_entry: def.is_entry,
             type_parameters: fhandle.type_parameters.clone(),
             parameters: tables.signatures[fhandle.parameters.0 as usize].clone(),
-            locals,
             return_: tables.signatures[fhandle.return_.0 as usize].clone(),
             code_included: include_code,
             locals,
@@ -1003,7 +998,6 @@ impl<S: Hash + Eq> Function<S> {
             locals,
             return_,
             code_included,
-            locals: _,
             jump_tables,
             code,
         } = self;
@@ -1059,7 +1053,6 @@ impl<S: Hash + Eq> Enum<S> {
         Enum {
             defining_module,
             name,
-            datatype,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             variants,
@@ -1072,7 +1065,6 @@ impl<S: Hash + Eq> Enum<S> {
         let Self {
             defining_module,
             name,
-            datatype,
             abilities,
             type_parameters,
             variants,
