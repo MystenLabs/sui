@@ -28,6 +28,7 @@ struct Path {
     extensions: Vec<Delta>,
 }
 
+#[derive(Debug)]
 struct PathSet(IndexSet<Path>);
 
 enum Value {
@@ -48,6 +49,9 @@ struct Context {
     pure_inputs: Vec<Location>,
     receiving_inputs: Vec<Location>,
     results: Vec<Vec<Location>>,
+    // Temporary set of locations borrowed by arguments seen thus far for the current command.
+    // Used exclusively for checking the validity copy/move.
+    arg_roots: IndexSet<T::Location>,
 }
 
 enum PathComparison {
@@ -256,6 +260,7 @@ impl Context {
             pure_inputs,
             receiving_inputs,
             results: vec![],
+            arg_roots: IndexSet::new(),
         }
     }
 
@@ -335,7 +340,8 @@ impl Context {
     fn check_usage(&self, usage: &T::Usage, location: &Location) -> anyhow::Result<()> {
         // by marking "allow alias" as `false`, we will also check for `Alias` paths, i.e. paths
         // that point to the location itself without any extensions.
-        let is_borrowed = self.any_conflicts(&location.self_path, /* allow alias */ false);
+        let is_borrowed = self.any_conflicts(&location.self_path, /* allow alias */ false)
+            || self.arg_roots.contains(&usage.location());
         match usage {
             T::Usage::Move(_) => {
                 anyhow::ensure!(!is_borrowed, "Cannot move a value that is borrowed");
@@ -346,7 +352,10 @@ impl Context {
                 };
                 anyhow::ensure!(
                     borrowed == is_borrowed,
-                    "Cannot copy a value that is borrowed"
+                    "Borrowed flag mismatch for copy usage: expected {borrowed}, got {is_borrowed} \
+                    location {:?} for in command {}",
+                    location.self_path,
+                    self.current_command()
                 );
             }
         }
@@ -362,7 +371,7 @@ impl Context {
             T::Argument__::Borrow(_, _) => (),
         };
         let location = self.location_mut(arg.location())?;
-        Ok(match arg {
+        let value = match arg {
             T::Argument__::Use(usage) => location.use_(usage)?,
             T::Argument__::Freeze(usage) => location.use_(usage)?.freeze()?,
             T::Argument__::Borrow(is_mut, _) => location.borrow(*is_mut)?,
@@ -370,7 +379,13 @@ impl Context {
                 location.use_(usage)?;
                 Value::NonRef
             }
-        })
+        };
+        if let Value::Ref { paths, .. } = &value {
+            for p in &paths.0 {
+                self.arg_roots.insert(p.root);
+            }
+        }
+        Ok(value)
     }
 
     fn arguments(&mut self, args: &[T::Argument]) -> anyhow::Result<Vec<Value>> {
@@ -387,6 +402,7 @@ impl Context {
             pure_inputs,
             receiving_inputs,
             results,
+            arg_roots: _,
         } = self;
         std::iter::once(tx_context)
             .chain(std::iter::once(gas))
@@ -435,7 +451,9 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
         commands,
     } = txn;
     for (c, result_tys) in commands {
+        debug_assert!(context.arg_roots.is_empty());
         command(&mut context, c, result_tys)?;
+        context.arg_roots.clear();
     }
     Ok(())
 }
