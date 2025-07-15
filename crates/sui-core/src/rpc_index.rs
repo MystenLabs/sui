@@ -50,7 +50,7 @@ use typed_store::TypedStoreError;
 
 const CURRENT_DB_VERSION: u64 = 3;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
-const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
+const BALANCE_FLUSH_THRESHOLD: usize = usize::MAX;
 
 fn bulk_ingestion_write_options() -> WriteOptions {
     let mut opts = WriteOptions::default();
