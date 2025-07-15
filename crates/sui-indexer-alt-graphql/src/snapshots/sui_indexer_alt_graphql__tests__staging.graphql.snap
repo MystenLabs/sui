@@ -37,6 +37,10 @@ type Checkpoint {
 	"""
 	digest: String
 	"""
+	A 32-byte hash that uniquely identifies the checkpoint's content, encoded in Base58.
+	"""
+	contentDigest: String
+	"""
 	The epoch that this checkpoint is part of.
 	"""
 	epoch: Epoch
