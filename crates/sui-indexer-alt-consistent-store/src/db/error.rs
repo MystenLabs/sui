@@ -6,8 +6,11 @@ pub(crate) enum Error {
     #[error("BCS error: {0}")]
     Bcs(#[from] bcs::Error),
 
-    #[error("Bincode error: {0}")]
-    Bincode(#[from] bincode::Error),
+    #[error("Key decode error: {0}")]
+    KeyDecode(#[from] bincode::error::DecodeError),
+
+    #[error("Key encode error: {0}")]
+    KeyEncode(#[from] bincode::error::EncodeError),
 
     #[error("Internal error: {0:?}")]
     Internal(#[from] anyhow::Error),

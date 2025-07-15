@@ -4,6 +4,7 @@
 
 use std::{borrow::Borrow, marker::PhantomData, ops::RangeBounds, sync::Arc};
 
+use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::{error::Error, iter, key, Db};
@@ -18,7 +19,7 @@ pub(crate) struct DbMap<K, V> {
 
 impl<K, V> DbMap<K, V>
 where
-    K: Serialize + DeserializeOwned,
+    K: Encode + Decode<()>,
     V: Serialize + DeserializeOwned,
 {
     /// Open a new `DbMap` for the column family `cf` in database `db`.
@@ -78,7 +79,7 @@ where
     /// Like `iter` but the bound does not have to be given in the key type `K`. This is useful for
     /// phrasing queries on a prefix of the key, if it is not possible to provide an "all-zeroes"
     /// or "all-ones" representation of corresponding suffix in `K`.
-    pub(crate) fn range<J: Serialize>(
+    pub(crate) fn range<J: Encode>(
         &self,
         checkpoint: u64,
         range: impl RangeBounds<J>,
@@ -89,7 +90,7 @@ where
     /// Like `iter_rev` but the bound does not have to be given in the key type `K`. This is useful
     /// for phrasing queries on a prefix of the key, if it is not possible to provide an
     /// "all-zeroes" or "all-ones" representation of corresponding suffix in `K`.
-    pub(crate) fn range_rev<J: Serialize>(
+    pub(crate) fn range_rev<J: Encode>(
         &self,
         checkpoint: u64,
         range: impl RangeBounds<J>,
