@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 10 tasks
+processed 13 tasks
 
 init:
 A: object(0,0)
@@ -36,11 +36,15 @@ mutated: object(1,0), object(3,0)
 deleted: object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 3295512, non_refundable_storage_fee: 33288
 
-task 5, line 39:
+task 5, lines 39-41:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 6, lines 41-62:
+task 7, line 44:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 46-67:
 //# run-graphql
 Response: {
   "data": {
@@ -68,7 +72,7 @@ Response: {
   }
 }
 
-task 7, lines 64-85:
+task 9, lines 69-90:
 //# run-graphql
 Response: {
   "data": {
@@ -100,7 +104,7 @@ Response: {
   }
 }
 
-task 8, lines 88-105:
+task 10, lines 93-110:
 //# run-graphql
 Response: {
   "data": {
@@ -124,7 +128,7 @@ Response: {
   }
 }
 
-task 9, lines 107-124:
+task 11, lines 112-129:
 //# run-graphql
 Response: {
   "data": {
@@ -142,6 +146,27 @@ Response: {
               "version": 4
             }
           ]
+        }
+      }
+    }
+  }
+}
+
+task 12, lines 131-152:
+//# run-graphql
+Response: {
+  "data": {
+    "systemTransaction": {
+      "gasInput": {
+        "gasSponsor": null,
+        "gasPrice": "1",
+        "gasBudget": "0",
+        "gasPayment": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "nodes": []
         }
       }
     }
