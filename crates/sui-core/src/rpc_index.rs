@@ -50,7 +50,7 @@ use typed_store::TypedStoreError;
 
 const CURRENT_DB_VERSION: u64 = 3;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
-const BALANCE_FLUSH_THRESHOLD: usize = usize::MAX;
+const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
 
 fn bulk_ingestion_write_options() -> WriteOptions {
     let mut opts = WriteOptions::default();
@@ -1046,6 +1046,13 @@ impl RpcIndexStore {
 
                     cf_options.options.set_write_buffer_size(buffer_size);
                     cf_options.options.set_max_write_buffer_number(buffer_count);
+                    // disable write stalling
+                    cf_options
+                        .options
+                        .set_soft_pending_compaction_bytes_limit(0);
+                    cf_options
+                        .options
+                        .set_hard_pending_compaction_bytes_limit(0);
 
                     // Calculate batch size limit: default to half the buffer size or 128MB, whichever is smaller
                     batch_size_limit = if let Some(limit) =
