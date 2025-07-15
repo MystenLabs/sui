@@ -7,7 +7,8 @@ use sui_default_config::DefaultConfig;
 
 /// Configuration for setting up a RocksDB database.
 #[DefaultConfig]
-pub(crate) struct DbConfig {
+#[serde(deny_unknown_fields)]
+pub struct DbConfig {
     /// The amount of data to keep in memory before flushing to disk, in MiB.
     pub write_buffer_size_mb: usize,
 
