@@ -728,7 +728,7 @@ impl CheckpointStore {
         F: Fn() -> Option<CheckpointSequenceNumber>,
     {
         notify_read
-            .read(&[seq], |seqs| {
+            .read("notify_read_checkpoint_watermark", &[seq], |seqs| {
                 let seq = seqs[0];
                 let Some(highest) = get_watermark() else {
                     return vec![None];
@@ -1387,7 +1387,10 @@ impl CheckpointBuilder {
                 .await?;
             let root_effects = self
                 .effects_store
-                .notify_read_executed_effects(&root_digests)
+                .notify_read_executed_effects(
+                    "CheckpointBuilder::resolve_checkpoint_transactions",
+                    &root_digests,
+                )
                 .in_monitored_scope("CheckpointNotifyRead")
                 .await;
 
@@ -3217,6 +3220,7 @@ mod tests {
     impl TransactionCacheRead for HashMap<TransactionDigest, TransactionEffects> {
         fn notify_read_executed_effects(
             &self,
+            _: &str,
             digests: &[TransactionDigest],
         ) -> BoxFuture<'_, Vec<TransactionEffects>> {
             std::future::ready(
@@ -3230,6 +3234,7 @@ mod tests {
 
         fn notify_read_executed_effects_digests(
             &self,
+            _: &str,
             digests: &[TransactionDigest],
         ) -> BoxFuture<'_, Vec<TransactionEffectsDigest>> {
             std::future::ready(

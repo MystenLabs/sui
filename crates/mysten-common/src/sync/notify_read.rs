@@ -6,16 +6,24 @@ use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
+use tokio::time::interval;
+use tracing::warn;
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
+
+/// Interval duration for logging waiting keys when reads take too long
+const LONG_WAIT_LOG_INTERVAL_SECS: u64 = 10;
 
 pub struct NotifyRead<K, V> {
     pending: Vec<Mutex<HashMap<K, Registrations<V>>>>,
@@ -116,22 +124,97 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     }
 }
 
-impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> NotifyRead<K, V> {
-    pub async fn read(&self, keys: &[K], fetch: impl FnOnce(&[K]) -> Vec<Option<V>>) -> Vec<V> {
+impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: Clone + Unpin>
+    NotifyRead<K, V>
+{
+    pub async fn read(
+        &self,
+        task_name: &str,
+        keys: &[K],
+        fetch: impl FnOnce(&[K]) -> Vec<Option<V>>,
+    ) -> Vec<V> {
         let registrations = self.register_all(keys);
 
         let results = fetch(keys);
 
-        let results = results
-            .into_iter()
-            .zip(registrations)
-            .map(|(a, r)| match a {
-                // Note that Some() clause also drops registration that is already fulfilled
-                Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
-            });
+        // Track which keys are still waiting
+        let waiting_keys: Arc<Mutex<HashSet<K>>> = Arc::new(Mutex::new(
+            keys.iter()
+                .zip(results.iter())
+                .filter(|&(_key, result)| result.is_none())
+                .map(|(key, _result)| key.clone())
+                .collect(),
+        ));
 
-        join_all(results).await
+        // Spawn logging task if there are waiting keys
+        let log_handle = if !waiting_keys.lock().is_empty() {
+            let waiting_keys_clone = Arc::clone(&waiting_keys);
+            let start_time = Instant::now();
+            let task_name = task_name.to_string();
+
+            Some(tokio::spawn(async move {
+                let mut interval = interval(Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS));
+                interval.tick().await; // Skip first immediate tick
+
+                loop {
+                    interval.tick().await;
+                    let current_waiting = waiting_keys_clone.lock();
+                    if current_waiting.is_empty() {
+                        break;
+                    }
+                    let keys_vec: Vec<_> = current_waiting.iter().cloned().collect();
+                    drop(current_waiting); // Release lock before logging
+
+                    let elapsed_secs = start_time.elapsed().as_secs();
+
+                    warn!(
+                        "[{}] Still waiting for {}s for {} keys: {:?}",
+                        task_name,
+                        elapsed_secs,
+                        keys_vec.len(),
+                        keys_vec
+                    );
+
+                    if task_name == "CheckpointBuilder::resolve_checkpoint_transactions" {
+                        debug_assert!(
+                            elapsed_secs < 60,
+                            "CheckpointBuilder::resolve_checkpoint_transactions is stuck"
+                        );
+                    }
+                }
+            }))
+        } else {
+            None
+        };
+
+        let results =
+            results
+                .into_iter()
+                .zip(registrations)
+                .zip(keys.iter())
+                .map(|((a, r), key)| match a {
+                    // Note that Some() clause also drops registration that is already fulfilled
+                    Some(ready) => Either::Left(futures::future::ready(ready)),
+                    None => {
+                        let waiting_keys = Arc::clone(&waiting_keys);
+                        let key = key.clone();
+                        Either::Right(async move {
+                            let result = r.await;
+                            // Remove this key from the waiting set
+                            waiting_keys.lock().remove(&key);
+                            result
+                        })
+                    }
+                });
+
+        let resolved_values = join_all(results).await;
+
+        // Cancel the logging task
+        if let Some(handle) = log_handle {
+            handle.abort();
+        }
+
+        resolved_values
     }
 }
 
