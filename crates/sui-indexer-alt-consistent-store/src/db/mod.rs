@@ -10,6 +10,7 @@ use std::{
 };
 
 use anyhow::Context;
+use bincode::Encode;
 use rocksdb::AsColumnFamilyRef;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sui_indexer_alt_framework::store::CommitterWatermark;
@@ -214,7 +215,7 @@ impl Db {
         key: &K,
     ) -> Result<Option<V>, Error>
     where
-        K: Serialize,
+        K: Encode,
         V: DeserializeOwned,
     {
         let s = self.at_snapshot(checkpoint)?;
@@ -237,7 +238,7 @@ impl Db {
         keys: impl IntoIterator<Item = &'k K>,
     ) -> Result<Vec<Result<Option<V>, Error>>, Error>
     where
-        K: Serialize + 'k,
+        K: Encode + 'k,
         V: DeserializeOwned,
     {
         let s = self.at_snapshot(checkpoint)?;
@@ -271,7 +272,7 @@ impl Db {
         range: impl RangeBounds<J>,
     ) -> Result<iter::FwdIter<'_, K, V>, Error>
     where
-        J: Serialize,
+        J: Encode,
     {
         let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
             return Ok(iter::FwdIter::new(None));
@@ -298,7 +299,7 @@ impl Db {
         range: impl RangeBounds<J>,
     ) -> Result<iter::RevIter<'_, K, V>, Error>
     where
-        J: Serialize,
+        J: Encode,
     {
         let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
             return Ok(iter::RevIter::new(None));
@@ -340,7 +341,7 @@ impl Db {
         range: impl RangeBounds<J>,
     ) -> Result<IterBounds<'_>, Error>
     where
-        J: Serialize,
+        J: Encode,
     {
         let s = self.at_snapshot(checkpoint)?;
 
