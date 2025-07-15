@@ -20,7 +20,7 @@ use self::error::Error;
 pub(crate) mod config;
 mod error;
 mod iter;
-mod key;
+pub(crate) mod key;
 pub(crate) mod map;
 
 /// Name of the column family the database adds, to manage the checkpoint watermark.
