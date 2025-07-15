@@ -600,14 +600,16 @@ impl AuthorityEpochTables {
         use typed_store::tidehunter_util::{
             default_cells_per_mutex, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 1024;
+        const MUTEXES: usize = 2 * 1024;
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         const VALUE_CACHE_SIZE: usize = 5000;
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
-        let pending_checkpoint_signatures_config = KeySpaceConfig::new().disable_unload();
+        let pending_checkpoint_signatures_config = KeySpaceConfig::new()
+            .disable_unload()
+            .with_value_cache_size(1000);
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let object_ref_indexing = KeyIndexing::hash();
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
@@ -784,11 +786,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
-            ),
-            (
-                "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
+                ThConfig::new_with_indexing(KeyIndexing::Hash, MUTEXES, uniform_key),
             ),
             (
                 "dkg_processed_messages_v2".to_string(),
@@ -820,7 +818,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "congestion_control_object_debts".to_string(),
-                ThConfig::new_with_config(32, MUTEXES, uniform_key, bloom_config.clone()),
+                ThConfig::new_with_config(32, MUTEXES, uniform_key, lru_bloom_config.clone()),
             ),
             (
                 "congestion_control_randomness_object_debts".to_string(),

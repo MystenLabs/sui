@@ -85,28 +85,31 @@ impl RocksDBStore {
     #[cfg(tidehunter)]
     pub(crate) fn new(path: &str) -> Self {
         tracing::warn!("Consensus store using tidehunter");
-        use typed_store::tidehunter_util::{KeyIndexing, KeyType, ThConfig};
+        use typed_store::tidehunter_util::{KeyIndexing, KeySpaceConfig, KeyType, ThConfig};
         const MUTEXES: usize = 1024;
         let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
         let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
         let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
-        let u32_prefix = KeyType::prefix_uniform(2, 4);
-        let u64_prefix = KeyType::prefix_uniform(6, 4);
+        let u32_prefix = KeyType::prefix_uniform(3, 0);
+        let u64_prefix = KeyType::prefix_uniform(6, 0);
+        let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
         let configs = vec![
             (
                 Self::BLOCKS_CF.to_string(),
-                ThConfig::new_with_indexing(
+                ThConfig::new_with_config_indexing(
                     index_index_digest_key.clone(),
                     MUTEXES,
                     u32_prefix.clone(),
+                    override_dirty_keys_config.clone(),
                 ),
             ),
             (
                 Self::DIGESTS_BY_AUTHORITIES_CF.to_string(),
-                ThConfig::new_with_indexing(
+                ThConfig::new_with_config_indexing(
                     index_index_digest_key.clone(),
                     MUTEXES,
                     u64_prefix.clone(),
+                    override_dirty_keys_config.clone(),
                 ),
             ),
             (
@@ -115,7 +118,12 @@ impl RocksDBStore {
             ),
             (
                 Self::COMMIT_VOTES_CF.to_string(),
-                ThConfig::new_with_indexing(commit_vote_key, 1024, u32_prefix.clone()),
+                ThConfig::new_with_config_indexing(
+                    commit_vote_key,
+                    MUTEXES,
+                    u32_prefix.clone(),
+                    override_dirty_keys_config.clone(),
+                ),
             ),
             (
                 Self::COMMIT_INFO_CF.to_string(),
