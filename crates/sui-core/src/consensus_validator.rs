@@ -6,12 +6,13 @@ use std::sync::Arc;
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::TransactionIndex;
 use fastcrypto_tbls::dkg_v1;
+use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
-    transaction::Transaction,
+    transaction::{Transaction, TransactionDataAPI as _},
 };
 use tap::TapFallible;
 use tracing::{debug, info, warn};
@@ -150,9 +151,29 @@ impl SuiTxValidator {
                 continue;
             };
 
+            let digest = *tx.digest();
+            let input_objects = if digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                tx.transaction_data().input_objects().unwrap().iter().map(|o| format!("{:?}:{:?}:{}", o.object_id(), o.version(), o.is_shared_object())).join(",")
+            } else {
+                "".to_string()
+            };
             if let Err(e) = self.vote_transaction(&epoch_store, tx) {
                 debug!("Failed to vote transaction: {:?}", e);
                 result.push(i as TransactionIndex);
+                if digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                    tracing::error!(
+                        "SuiTxValidator: rejected {:?}; inputs: {:?}; error: {:?}",
+                        digest, input_objects, e,
+                    );
+                }
+            } else {
+                if digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                    tracing::error!(
+                        "SuiTxValidator: accepted {:?}; inputs: {:?}",
+                        digest,
+                        input_objects,
+                    );
+                }
             }
         }
 

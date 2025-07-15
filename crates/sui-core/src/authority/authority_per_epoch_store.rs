@@ -3193,6 +3193,17 @@ impl AuthorityPerEpochStore {
                     .map(TransactionKey::Digest)
             })
             .collect();
+        for r in roots.iter() {
+            let digest = r.unwrap_digest();
+            if digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                tracing::error!(
+                    "EpochStore: Adding user transaction to roots: {}; epoch: {}; round: {}",
+                    digest,
+                    self.epoch(),
+                    consensus_commit_info.round
+                );
+            }
+        }
         let mut randomness_roots: BTreeSet<_> = sequenced_randomness_transactions
             .iter()
             .filter_map(|transaction| {

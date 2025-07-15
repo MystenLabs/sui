@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
 use consensus_types::block::TransactionIndex;
+use itertools::Itertools;
 use lru::LruCache;
 use mysten_common::{debug_fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::{
@@ -36,7 +37,7 @@ use sui_types::{
         ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
-    transaction::{SenderSignedData, VerifiedTransaction},
+    transaction::{SenderSignedData, TransactionDataAPI as _, VerifiedTransaction},
 };
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, instrument, trace_span, warn};
@@ -1328,6 +1329,25 @@ impl ConsensusBlockHandler {
                         continue;
                     }
                     let tx = VerifiedTransaction::new_unchecked(*tx);
+                    if tx.digest().to_string()
+                        == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string()
+                    {
+                        tracing::error!(
+                            "ConsensusBlockHandler: Executing user transaction: {}; input: {:?}",
+                            tx.digest(),
+                            tx.transaction_data()
+                                .input_objects()
+                                .unwrap()
+                                .iter()
+                                .map(|o| format!(
+                                    "{:?}:{}:{}",
+                                    o.object_id(),
+                                    o.version().unwrap(),
+                                    o.is_shared_object()
+                                ))
+                                .join(","),
+                        );
+                    }
                     executable_transactions.push(Schedulable::Transaction(
                         VerifiedExecutableTransaction::new_from_consensus(
                             tx,

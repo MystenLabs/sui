@@ -1559,6 +1559,9 @@ impl AuthorityState {
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let process_certificate_start_time = tokio::time::Instant::now();
         let tx_digest = *certificate.digest();
+        if tx_digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+            tracing::error!("AuthorityState: processing transaction: {:?}; expected_effects_digest: {:?}", tx_digest, expected_effects_digest);
+        }
 
         let _scope = monitored_scope("Execution::process_certificate");
 
@@ -1576,6 +1579,9 @@ impl AuthorityState {
         let execution_guard = match execution_guard {
             Ok(execution_guard) => execution_guard,
             Err(err) => {
+                if tx_digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                    tracing::error!("AuthorityState: processing transaction: {:?}; execution_guard: {:?}", tx_digest, err);
+                }
                 tx_guard.release();
                 return Err(err);
             }
@@ -1603,6 +1609,9 @@ impl AuthorityState {
             epoch_store,
         ) {
             Err(e) => {
+                if tx_digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                    tracing::error!("AuthorityState: processing transaction: {:?}; error executing transaction: {:?}", tx_digest, e);
+                }
                 info!(name = ?self.name, ?tx_digest, "Error executing transaction: {e}");
                 tx_guard.release();
                 return Err(e);
@@ -1614,9 +1623,15 @@ impl AuthorityState {
 
         let effects = transaction_outputs.effects.clone();
         if scheduling_source == SchedulingSource::MysticetiFastPath {
+            if tx_digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                tracing::error!("AuthorityState: processing transaction: {:?}; write_fastpath_transaction_outputs: {:?}", tx_digest, transaction_outputs.output_keys);
+            }
             self.get_cache_writer()
                 .write_fastpath_transaction_outputs(transaction_outputs.into());
         } else {
+            if tx_digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+                tracing::error!("AuthorityState: processing transaction: {:?}; commit_certificate", tx_digest);
+            }
             let commit_result = self.commit_certificate(
                 certificate,
                 transaction_outputs,
@@ -1705,6 +1720,9 @@ impl AuthorityState {
 
         let tx_digest = certificate.digest();
         let output_keys = transaction_outputs.output_keys.clone();
+        if tx_digest.to_string() == "7rwj5PgXH5QBWpHW9aEt3MHKeb2jtticdjpXYcBEAUin".to_string() {
+            tracing::error!("AuthorityState: Commiting transaction: {:?}; output_keys: {:?}", tx_digest, output_keys);
+        }
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
