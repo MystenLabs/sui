@@ -765,6 +765,10 @@ type Transaction {
 	"""
 	effects: TransactionEffects
 	"""
+	This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
+	"""
+	expiration: Epoch
+	"""
 	The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
 	"""
 	gasInput: GasInput

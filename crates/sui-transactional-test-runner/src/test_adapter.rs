@@ -93,7 +93,7 @@ use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind}
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{
     move_package::MovePackage,
-    transaction::{Argument, CallArg},
+    transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
 };
 use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
@@ -880,6 +880,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 gas_payment,
                 dev_inspect,
                 dry_run,
+                expiration,
                 inputs,
             }) => {
                 if dev_inspect && self.is_simulator() {
@@ -929,37 +930,46 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let summary = if !dev_inspect && !dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
+                    let expiration = expiration
+                        .map(TransactionExpiration::Epoch)
+                        .unwrap_or(TransactionExpiration::None);
                     let transaction = self.sign_sponsor_txn(
                         sender,
                         sponsor,
                         gas_payment.unwrap_or_default(),
                         |sender, sponsor, gas| {
-                            TransactionData::new_programmable_allow_sponsor(
+                            let mut tx_data = TransactionData::new_programmable_allow_sponsor(
                                 sender,
                                 gas,
                                 ProgrammableTransaction { inputs, commands },
                                 gas_budget,
                                 gas_price,
                                 sponsor,
-                            )
+                            );
+                            *tx_data.expiration_mut_for_testing() = expiration;
+                            tx_data
                         },
                     );
                     self.execute_txn(transaction).await?
                 } else if dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
+                    let expiration = expiration
+                        .map(TransactionExpiration::Epoch)
+                        .unwrap_or(TransactionExpiration::None);
                     let sender = self.get_sender(sender);
                     let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
                     let payments = self.get_payments(sponsor, gas_payment.unwrap_or_default());
 
-                    let transaction = TransactionData::new_programmable(
+                    let mut transaction = TransactionData::new_programmable(
                         sender.address,
                         payments,
                         ProgrammableTransaction { inputs, commands },
                         gas_budget,
                         gas_price,
                     );
+                    *transaction.expiration_mut_for_testing() = expiration;
                     self.dry_run(transaction).await?
                 } else {
                     assert!(
