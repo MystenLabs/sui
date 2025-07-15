@@ -3494,6 +3494,10 @@ impl AuthorityPerEpochStore {
             consensus_commit_info,
             indirect_state_observer,
         );
+        debug!(
+            "Created consensus commit prologue transaction: {:?}",
+            transaction.digest()
+        );
         let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
                 transactions.push_front(Schedulable::Transaction(processed_tx.clone()));
