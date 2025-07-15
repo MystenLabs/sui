@@ -31,6 +31,15 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `divide_into_n`](#sui_coin_divide_into_n)
 -  [Function `zero`](#sui_coin_zero)
 -  [Function `destroy_zero`](#sui_coin_destroy_zero)
+-  [Function `migrate_metadata_to_registry`](#sui_coin_migrate_metadata_to_registry)
+-  [Function `migrate_immutable_metadata_to_registry`](#sui_coin_migrate_immutable_metadata_to_registry)
+-  [Function `migrate_regulated_metadata_to_registry`](#sui_coin_migrate_regulated_metadata_to_registry)
+-  [Function `create_and_register_coin_data`](#sui_coin_create_and_register_coin_data)
+-  [Function `create_currency_v2`](#sui_coin_create_currency_v2)
+-  [Function `create_regulated_currency_v3`](#sui_coin_create_regulated_currency_v3)
+-  [Function `register_supply`](#sui_coin_register_supply)
+-  [Function `init_register_supply`](#sui_coin_init_register_supply)
+-  [Function `metadata_to_coin_data`](#sui_coin_metadata_to_coin_data)
 -  [Function `create_currency`](#sui_coin_create_currency)
 -  [Function `create_regulated_currency_v2`](#sui_coin_create_regulated_currency_v2)
 -  [Function `migrate_regulated_currency_to_v2`](#sui_coin_migrate_regulated_currency_to_v2)
@@ -50,6 +59,7 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 -  [Function `update_symbol`](#sui_coin_update_symbol)
 -  [Function `update_description`](#sui_coin_update_description)
 -  [Function `update_icon_url`](#sui_coin_update_icon_url)
+-  [Function `destroy_metadata`](#sui_coin_destroy_metadata)
 -  [Function `get_decimals`](#sui_coin_get_decimals)
 -  [Function `get_name`](#sui_coin_get_name)
 -  [Function `get_symbol`](#sui_coin_get_symbol)
@@ -72,6 +82,7 @@ tokens and coins. <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a></code> c
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
 <b>use</b> <a href="../sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../sui/balance.md#sui_balance">sui::balance</a>;
+<b>use</b> <a href="../sui/coin_registry.md#sui_coin_registry">sui::coin_registry</a>;
 <b>use</b> <a href="../sui/config.md#sui_config">sui::config</a>;
 <b>use</b> <a href="../sui/deny_list.md#sui_deny_list">sui::deny_list</a>;
 <b>use</b> <a href="../sui/dynamic_field.md#sui_dynamic_field">sui::dynamic_field</a>;
@@ -378,6 +389,26 @@ Trying to split a coin more times than its balance allows.
 
 
 <pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_ENotEnough">ENotEnough</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_coin_EMetadataNotFound"></a>
+
+The metadata for the coin type was not found.
+
+
+<pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_EMetadataNotFound">EMetadataNotFound</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_coin_EMetadataCapNotClaimed"></a>
+
+The metadata for the coin type was not claimed.
+
+
+<pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_EMetadataCapNotClaimed">EMetadataCapNotClaimed</a>: u64 = 4;
 </code></pre>
 
 
@@ -829,6 +860,349 @@ Destroy a coin with value zero
 
 </details>
 
+<a name="sui_coin_migrate_metadata_to_registry"></a>
+
+## Function `migrate_metadata_to_registry`
+
+migration for owned metadata to the metadata registry
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_migrate_metadata_to_registry">migrate_metadata_to_registry</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, metadata: <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_migrate_metadata_to_registry">migrate_metadata_to_registry</a>&lt;T&gt;(
+    registry: &<b>mut</b> CoinRegistry,
+    metadata: <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>if</b> (!registry.exists&lt;T&gt;()) registry.register_coin_data(metadata.to_coin_data(ctx));
+    metadata.<a href="../sui/coin.md#sui_coin_destroy_metadata">destroy_metadata</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_migrate_immutable_metadata_to_registry"></a>
+
+## Function `migrate_immutable_metadata_to_registry`
+
+migration for frozen/shared metadata to the metadata registry
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_migrate_immutable_metadata_to_registry">migrate_immutable_metadata_to_registry</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_migrate_immutable_metadata_to_registry">migrate_immutable_metadata_to_registry</a>&lt;T&gt;(
+    registry: &<b>mut</b> CoinRegistry,
+    metadata: &<a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    registry.register_coin_data(metadata.to_coin_data(ctx));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_migrate_regulated_metadata_to_registry"></a>
+
+## Function `migrate_regulated_metadata_to_registry`
+
+migration of regulated metadata to the metadata registry
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_migrate_regulated_metadata_to_registry">migrate_regulated_metadata_to_registry</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, regulated_metadata: &<a href="../sui/coin.md#sui_coin_RegulatedCoinMetadata">sui::coin::RegulatedCoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_migrate_regulated_metadata_to_registry">migrate_regulated_metadata_to_registry</a>&lt;T&gt;(
+    registry: &<b>mut</b> CoinRegistry,
+    regulated_metadata: &<a href="../sui/coin.md#sui_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt;,
+) {
+    registry.register_regulated&lt;T&gt;(regulated_metadata.deny_cap_object);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_create_and_register_coin_data"></a>
+
+## Function `create_and_register_coin_data`
+
+Enables the creation and registration of coin data for TreasuryCap holders. This
+function can be used to circumvent the migration functions if desired.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_and_register_coin_data">create_and_register_coin_data</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, cap: &<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, decimals: u8, symbol: <a href="../std/string.md#std_string_String">std::string::String</a>, name: <a href="../std/string.md#std_string_String">std::string::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_and_register_coin_data">create_and_register_coin_data</a>&lt;T&gt;(
+    registry: &<b>mut</b> CoinRegistry,
+    cap: &<a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> coin_data: CoinData&lt;T&gt; = <a href="../sui/coin_registry.md#sui_coin_registry_create_coin_data">coin_registry::create_coin_data</a>(
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        option::none(),
+        option::some(cap.id.to_inner()),
+        option::none(),
+        option::none(),
+        ctx,
+    );
+    registry.register_coin_data(coin_data);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_create_currency_v2"></a>
+
+## Function `create_currency_v2`
+
+Create a new currency type <code>T</code> as and return the <code><a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a></code> for
+<code>T</code>, the <code>MetadataCap</code> for <code>T</code>, and the <code>InitCoinData</code> object to the caller.
+The <code>InitCoinData</code> object must be provided to the <code>transfer_to_registry</code> function
+via the <code>CoinRegistry</code> object after this function is called.
+Can only be called with a <code>one-time-witness</code> type, ensuring that there's
+only one <code><a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a></code> per <code>T</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_currency_v2">create_currency_v2</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../std/string.md#std_string_String">std::string::String</a>, name: <a href="../std/string.md#std_string_String">std::string::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/string.md#std_string_String">std::string::String</a>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_InitCoinData">sui::coin_registry::InitCoinData</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_currency_v2">create_currency_v2</a>&lt;T: drop&gt;(
+    witness: T,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &<b>mut</b> TxContext,
+): (<a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, MetadataCap&lt;T&gt;, InitCoinData&lt;T&gt;) {
+    // Make sure there's only one instance of the type T
+    <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">sui::types::is_one_time_witness</a>(&witness), <a href="../sui/coin.md#sui_coin_EBadWitness">EBadWitness</a>);
+    <b>let</b> treasury_cap = <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        <a href="../sui/coin.md#sui_coin_total_supply">total_supply</a>: <a href="../sui/balance.md#sui_balance_create_supply">balance::create_supply</a>(witness),
+    };
+    <b>let</b> <b>mut</b> init_coin_data: InitCoinData&lt;T&gt; = <a href="../sui/coin_registry.md#sui_coin_registry_create_coin_data_init">coin_registry::create_coin_data_init</a>(
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        option::none(),
+        option::some(treasury_cap.id.to_inner()),
+        option::none(),
+        option::none(),
+        ctx,
+    );
+    <b>let</b> metadata_cap = <a href="../sui/coin_registry.md#sui_coin_registry_create_cap">coin_registry::create_cap</a>(init_coin_data.inner_mut(), ctx);
+    (treasury_cap, metadata_cap, init_coin_data)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_create_regulated_currency_v3"></a>
+
+## Function `create_regulated_currency_v3`
+
+This creates a new currency, via <code><a href="../sui/coin.md#sui_coin_create_currency_v2">create_currency_v2</a></code>, but with an extra capability that
+allows for specific addresses to have their coins frozen. When an address is added to the
+deny list, it is immediately unable to interact with the currency's coin as input objects.
+Additionally at the start of the next epoch, they will be unable to receive the currency's
+coin.
+The <code>allow_global_pause</code> flag enables an additional API that will cause all addresses to
+be denied. Note however, that this doesn't affect per-address entries of the deny list and
+will not change the result of the "contains" APIs.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_regulated_currency_v3">create_regulated_currency_v3</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../std/string.md#std_string_String">std::string::String</a>, name: <a href="../std/string.md#std_string_String">std::string::String</a>, description: <a href="../std/string.md#std_string_String">std::string::String</a>, icon_url: <a href="../std/string.md#std_string_String">std::string::String</a>, allow_global_pause: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (<a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_MetadataCap">sui::coin_registry::MetadataCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_DenyCapV2">sui::coin::DenyCapV2</a>&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_InitCoinData">sui::coin_registry::InitCoinData</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_create_regulated_currency_v3">create_regulated_currency_v3</a>&lt;T: drop&gt;(
+    witness: T,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    allow_global_pause: bool,
+    ctx: &<b>mut</b> TxContext,
+): (<a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, MetadataCap&lt;T&gt;, <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;, InitCoinData&lt;T&gt;) {
+    <b>let</b> (treasury_cap, metadata_cap, <b>mut</b> init_coin_data) = <a href="../sui/coin.md#sui_coin_create_currency_v2">create_currency_v2</a>(
+        witness,
+        decimals,
+        symbol,
+        name,
+        description,
+        icon_url,
+        ctx,
+    );
+    <b>let</b> deny_cap = <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        allow_global_pause,
+    };
+    init_coin_data.inner_mut().set_regulated(deny_cap.id.to_inner());
+    (treasury_cap, metadata_cap, deny_cap, init_coin_data)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_register_supply"></a>
+
+## Function `register_supply`
+
+Allows the treasury cap holder to freeze the currency supply by
+storing the <code>Supply</code> object in the <code>CoinRegistry</code> object
+and destroying the treasury cap. The coin's <code>MetadataCap</code> must be
+claimed before calling this function.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_register_supply">register_supply</a>&lt;T&gt;(registry: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_CoinRegistry">sui::coin_registry::CoinRegistry</a>, cap: <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_register_supply">register_supply</a>&lt;T&gt;(registry: &<b>mut</b> CoinRegistry, cap: <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;) {
+    <b>assert</b>!(registry.exists&lt;T&gt;(), <a href="../sui/coin.md#sui_coin_EMetadataNotFound">EMetadataNotFound</a>);
+    <b>assert</b>!(registry.data&lt;T&gt;().meta_data_cap_claimed(), <a href="../sui/coin.md#sui_coin_EMetadataCapNotClaimed">EMetadataCapNotClaimed</a>);
+    registry.<a href="../sui/coin.md#sui_coin_register_supply">register_supply</a>(cap.into_supply());
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_init_register_supply"></a>
+
+## Function `init_register_supply`
+
+Allows the caller to freeze supply on module init before transferring the <code>InitCoinData</code>
+object to the <code>CoinRegistry</code> object.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_init_register_supply">init_register_supply</a>&lt;T&gt;(init_data: &<b>mut</b> <a href="../sui/coin_registry.md#sui_coin_registry_InitCoinData">sui::coin_registry::InitCoinData</a>&lt;T&gt;, cap: <a href="../sui/coin.md#sui_coin_TreasuryCap">sui::coin::TreasuryCap</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_init_register_supply">init_register_supply</a>&lt;T&gt;(init_data: &<b>mut</b> InitCoinData&lt;T&gt;, cap: <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;) {
+    <b>assert</b>!(init_data.inner().meta_data_cap_claimed(), <a href="../sui/coin.md#sui_coin_EMetadataCapNotClaimed">EMetadataCapNotClaimed</a>);
+    init_data.inner_mut().set_supply(cap.into_supply());
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_metadata_to_coin_data"></a>
+
+## Function `metadata_to_coin_data`
+
+Create a new <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> object from the old <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> object.
+
+
+<pre><code><b>fun</b> <a href="../sui/coin.md#sui_coin_metadata_to_coin_data">metadata_to_coin_data</a>&lt;T&gt;(metadata_v1: &<a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin_registry.md#sui_coin_registry_CoinData">sui::coin_registry::CoinData</a>&lt;T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/coin.md#sui_coin_metadata_to_coin_data">metadata_to_coin_data</a>&lt;T&gt;(metadata_v1: &<a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext): CoinData&lt;T&gt; {
+    <b>let</b> icon_url = metadata_v1
+        .<a href="../sui/coin.md#sui_coin_get_icon_url">get_icon_url</a>()
+        .map!(|u| u.inner_url().to_string())
+        .destroy_or!(b"".to_string());
+    <a href="../sui/coin_registry.md#sui_coin_registry_create_coin_data">coin_registry::create_coin_data</a>&lt;T&gt;(
+        metadata_v1.decimals,
+        metadata_v1.name,
+        metadata_v1.symbol.to_string(),
+        metadata_v1.description,
+        icon_url,
+        option::none(),
+        option::none(),
+        option::none(),
+        option::none(),
+        ctx,
+    )
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_coin_create_currency"></a>
 
 ## Function `create_currency`
@@ -858,20 +1232,23 @@ type, ensuring that there's only one <code><a href="../sui/coin.md#sui_coin_Trea
 ): (<a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     // Make sure there's only one instance of the type T
     <b>assert</b>!(<a href="../sui/types.md#sui_types_is_one_time_witness">sui::types::is_one_time_witness</a>(&witness), <a href="../sui/coin.md#sui_coin_EBadWitness">EBadWitness</a>);
-    (
-        <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a> {
-            id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-            <a href="../sui/coin.md#sui_coin_total_supply">total_supply</a>: <a href="../sui/balance.md#sui_balance_create_supply">balance::create_supply</a>(witness),
-        },
-        <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
-            id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
-            decimals,
-            name: string::utf8(name),
-            symbol: ascii::string(symbol),
-            description: string::utf8(description),
-            icon_url,
-        },
-    )
+    <b>let</b> treasury_cap = <a href="../sui/coin.md#sui_coin_TreasuryCap">TreasuryCap</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        <a href="../sui/coin.md#sui_coin_total_supply">total_supply</a>: <a href="../sui/balance.md#sui_balance_create_supply">balance::create_supply</a>(witness),
+    };
+    <b>let</b> metadata = <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
+        id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
+        decimals,
+        name: string::utf8(name),
+        symbol: ascii::string(symbol),
+        description: string::utf8(description),
+        icon_url,
+    };
+    <a href="../sui/transfer.md#sui_transfer_public_transfer">transfer::public_transfer</a>(
+        metadata.to_coin_data(ctx),
+        coin_registry_id().to_address(),
+    );
+    (treasury_cap, metadata)
 }
 </code></pre>
 
@@ -930,6 +1307,12 @@ will not change the result of the "contains" APIs.
         coin_metadata_object: <a href="../sui/object.md#sui_object_id">object::id</a>(&metadata),
         deny_cap_object: <a href="../sui/object.md#sui_object_id">object::id</a>(&deny_cap),
     });
+    <b>let</b> <b>mut</b> coin_data = metadata.to_coin_data(ctx);
+    coin_data.set_regulated(deny_cap.id.to_inner());
+    <a href="../sui/transfer.md#sui_transfer_public_transfer">transfer::public_transfer</a>(
+        coin_data,
+        coin_registry_id().to_address(),
+    );
     (treasury_cap, deny_cap, metadata)
 }
 </code></pre>
@@ -1446,6 +1829,32 @@ Update the url of the coin in <code><a href="../sui/coin.md#sui_coin_CoinMetadat
     <a href="../sui/url.md#sui_url">url</a>: ascii::String,
 ) {
     metadata.icon_url = option::some(<a href="../sui/url.md#sui_url_new_unsafe">url::new_unsafe</a>(<a href="../sui/url.md#sui_url">url</a>));
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_coin_destroy_metadata"></a>
+
+## Function `destroy_metadata`
+
+Destroy legacy <code><a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a></code> object
+
+
+<pre><code><b>fun</b> <a href="../sui/coin.md#sui_coin_destroy_metadata">destroy_metadata</a>&lt;T&gt;(metadata: <a href="../sui/coin.md#sui_coin_CoinMetadata">sui::coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/coin.md#sui_coin_destroy_metadata">destroy_metadata</a>&lt;T&gt;(metadata: <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
+    <b>let</b> <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> { id, .. } = metadata;
+    id.delete()
 }
 </code></pre>
 

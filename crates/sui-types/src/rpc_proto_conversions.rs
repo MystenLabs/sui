@@ -2126,7 +2126,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 Kind::ExecutionTimeObservations(observations.into())
             }
             K::AccumulatorRootCreate => Kind::AccumulatorRootCreate(()),
-            // K::CoinRegistryCreate => Kind::CoinRegistryCreate(()),
+            K::CoinRegistryCreate => Kind::CoinRegistryCreate(()),
         };
 
         Self { kind: Some(kind) }
