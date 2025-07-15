@@ -159,17 +159,12 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction_with_multi_signers(
         tx_data,
         vec![
+            test_cluster.wallet.config.keystore.export(&sender).unwrap(),
             test_cluster
                 .wallet
                 .config
                 .keystore
-                .get_key(&sender)
-                .unwrap(),
-            test_cluster
-                .wallet
-                .config
-                .keystore
-                .get_key(&sponsor)
+                .export(&sponsor)
                 .unwrap(),
         ],
     );
@@ -834,11 +829,11 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     context
         .config
         .keystore
-        .add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
+        .import(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
     context
         .config
         .keystore
-        .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
 
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
@@ -1172,7 +1167,7 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
     )
     .unwrap();
     let tx =
-        to_sender_signed_transaction(tx_data, context.config.keystore.get_key(&sender).unwrap());
+        to_sender_signed_transaction(tx_data, context.config.keystore.export(&sender).unwrap());
 
     let digest = *tx.digest();
     let _res = transaction_orchestrator

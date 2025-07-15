@@ -5,7 +5,6 @@ use crate::{
     clever_error_rendering::render_clever_error_opt,
     client_ptb::ptb::PTB,
     displays::Pretty,
-    key_identity::{get_identity_address, KeyIdentity},
     upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
@@ -50,6 +49,7 @@ use sui_json_rpc_types::{
     SuiProtocolConfigValue, SuiRawData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_conflicting_addresses, check_invalid_dependencies,
@@ -836,7 +836,7 @@ impl SuiClientCommands {
                 coin_type,
                 with_coins,
             } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let client = context.get_client().await?;
 
                 let mut objects: Vec<Coin> = Vec::new();
@@ -1350,7 +1350,7 @@ impl SuiClientCommands {
                 processing,
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
-                let to = get_identity_address(Some(to), context)?;
+                let to = context.get_identity_address(Some(to))?;
                 let client = context.get_client().await?;
 
                 let tx_kind = client
@@ -1382,7 +1382,7 @@ impl SuiClientCommands {
                 processing,
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
-                let to = get_identity_address(Some(to), context)?;
+                let to = context.get_identity_address(Some(to))?;
                 let client = context.get_client().await?;
 
                 let tx_kind = client
@@ -1431,7 +1431,7 @@ impl SuiClientCommands {
                 );
                 let recipients = recipients
                     .into_iter()
-                    .map(|x| get_identity_address(Some(x), context))
+                    .map(|x| context.get_identity_address(Some(x)))
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
@@ -1487,7 +1487,7 @@ impl SuiClientCommands {
                 );
                 let recipients = recipients
                     .into_iter()
-                    .map(|x| get_identity_address(Some(x), context))
+                    .map(|x| context.get_identity_address(Some(x)))
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
@@ -1523,7 +1523,7 @@ impl SuiClientCommands {
                     !input_coins.is_empty(),
                     "PayAllSui transaction requires a non-empty list of input coins"
                 );
-                let recipient = get_identity_address(Some(recipient), context)?;
+                let recipient = context.get_identity_address(Some(recipient))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
                 let client = context.get_client().await?;
 
@@ -1545,7 +1545,7 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::Objects { address } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let client = context.get_client().await?;
                 let mut objects: Vec<SuiObjectResponse> = Vec::new();
                 let mut cursor = None;
@@ -1578,7 +1578,7 @@ impl SuiClientCommands {
                 derivation_path,
                 word_length,
             } => {
-                let (address, phrase, scheme) = context.config.keystore.generate_and_add_new_key(
+                let (address, phrase, scheme) = context.config.keystore.generate(
                     key_scheme,
                     alias.clone(),
                     derivation_path,
@@ -1587,7 +1587,7 @@ impl SuiClientCommands {
 
                 let alias = match alias {
                     Some(x) => x,
-                    None => context.config.keystore.get_alias_by_address(&address)?,
+                    None => context.config.keystore.get_alias(&address)?,
                 };
 
                 SuiClientCommandResult::NewAddress(NewAddressOutput {
@@ -1599,23 +1599,17 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::RemoveAddress { alias_or_address } => {
-                let address: SuiAddress = match context
-                    .config
-                    .keystore
-                    .get_address_by_alias(alias_or_address.clone())
-                {
-                    Ok(addr) => *addr,
-                    Err(_) => SuiAddress::from_str(&alias_or_address)
-                        .map_err(|e| anyhow!("Invalid address or alias: {}", e))?,
-                };
+                let identity = KeyIdentity::from_str(&alias_or_address)
+                    .map_err(|e| anyhow!("Invalid address or alias: {}", e))?;
+                let address: SuiAddress = context.config.keystore.get_by_identity(identity)?;
 
-                context.config.keystore.remove_key(address)?;
+                context.config.keystore.remove(address)?;
 
                 SuiClientCommandResult::RemoveAddress(RemoveAddressOutput { alias_or_address })
             }
 
             SuiClientCommands::Gas { address } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let coins = context
                     .gas_objects(address)
                     .await?
@@ -1626,7 +1620,7 @@ impl SuiClientCommands {
                 SuiClientCommandResult::Gas(coins)
             }
             SuiClientCommands::Faucet { address, url } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let url = if let Some(url) = url {
                     ensure!(
                         !url.starts_with("https://faucet.testnet.sui.io"),
@@ -1802,7 +1796,7 @@ impl SuiClientCommands {
                 }
 
                 if let Some(address) = address {
-                    let address = get_identity_address(Some(address), context)?;
+                    let address = context.get_identity_address(Some(address))?;
                     if !context.config.keystore.addresses().contains(&address) {
                         return Err(anyhow!("Address {} not managed by wallet", address));
                     }
