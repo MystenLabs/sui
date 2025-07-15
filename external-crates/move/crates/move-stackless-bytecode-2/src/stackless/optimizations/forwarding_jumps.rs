@@ -13,10 +13,6 @@ pub fn optimize(function: &mut Function) -> bool {
     };
     let changed = optimize_(&mut function.basic_blocks, &mut env);
     if changed {
-        // TODO should we recompute CFG??
-        // cfg.recopmute();
-        // remap_in_order(function.entry_label, &mut function.basic_blocks);
-        // let instrs = function.basic_blocks.iter().map(|(_, bb)|bb.to_string()).collect::<Vec<String>>().join("\n");
         env.removed_blocks.iter().for_each(|label| {
             function.basic_blocks.remove(label);
         });
@@ -118,76 +114,3 @@ fn optimize_instruction(instruction: &mut Instruction, final_jumps: &LabelMap) -
     }
 }
 
-// TODO remove this function if not needed
-// fn remap_in_order(start: Label, blocks: &mut BasicBlocks) {
-//     let mut remapping = blocks
-//         .keys()
-//         .copied().
-//         enumerate()
-//         .map(|(i, label)| (label, i as Label))
-//         .collect::<LabelMap>();
-//     remapping.insert(start, start);
-//     let owned_blocks = std::mem::take(blocks);
-//     let (_start, remapped_blocks) = remap_labels(&remapping, start, owned_blocks);
-//     *blocks = remapped_blocks;
-// }
-
-//**************************************************************************************************
-// Label util
-//**************************************************************************************************
-
-// TODO remove this function if not needed
-// pub fn remap_labels(
-//     remapping: &LabelMap,
-//     start: Label,
-//     blocks: BasicBlocks,
-// ) -> (Label, BasicBlocks) {
-//     let blocks = blocks
-//         .into_iter()
-//         .map(|(label, mut block)| {
-//             remap_block_labels(remapping, &mut block);
-//             (remapping[&label], block)
-//         })
-//         .collect();
-//     (remapping[&start], blocks)
-// }
-
-// TODO remove this function if not needed
-// fn remap_block_labels(remapping: &LabelMap, block: &mut BasicBlock) {
-//     for instruction in block.instructions.iter_mut() {
-//         remap_instruction_labels(remapping, instruction);
-//     }
-// }
-
-// TODO remove this function if not needed
-// fn remap_instruction_labels(remapping: &LabelMap, instruction: &mut Instruction) {
-//     match instruction {
-//         Instruction::Jump(target) => {
-//             if let Some(label) = remapping.get(target) {
-//                 *target = *label;
-//             } else {
-//                 panic!("Jump target {:?} not found in remapping {:?}", target, remapping);
-//             }
-//         }
-//         Instruction::JumpIf {
-//             then_label,
-//             else_label,
-//             ..
-//         } => {
-//             *then_label = remapping[then_label];
-//             *else_label = remapping[else_label];
-//         }
-//         Instruction::VariantSwitch { cases, .. } => {
-//             for case in cases {
-//                 *case = remapping[case];
-//             }
-//         }
-//         Instruction::Return(_)
-//         | Instruction::AssignReg { .. }
-//         | Instruction::StoreLoc { .. }
-//         | Instruction::Abort(_)
-//         | Instruction::Nop
-//         | Instruction::Drop(_)
-//         | Instruction::NotImplemented(_) => (),
-//     }
-// }
