@@ -1,23 +1,20 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    cfg::{ControlFlowGraph, StacklessControlFlowGraph},
-    stackless::{
-        ast::{
-            self, BasicBlock, Instruction, RValue,
-            Trivial::{Immediate, Register},
-            Value,
-        },
-        context::Context,
-        optimizations::optimize,
+use crate::stackless::{
+    ast::{
+        self, BasicBlock, Instruction, RValue,
+        Trivial::{Immediate, Register},
+        Value,
     },
+    context::Context,
+    optimizations::optimize,
 };
 
+use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::{
     file_format::JumpTableInner, normalized as N, normalized::Bytecode as IB,
 };
-
 use move_model_2::{
     model::{Model as Model2, Module, Package},
     source_kind::SourceKind,
@@ -101,7 +98,11 @@ pub(crate) fn function<K: SourceKind>(
             basic_blocks: BTreeMap::new(),
         });
     }
-    let cfg = StacklessControlFlowGraph::new(code, function.jump_tables());
+
+    let jump_tables = function.jump_tables();
+
+    let cfg =
+        move_abstract_interpreter::control_flow_graph::VMControlFlowGraph::new(code, jump_tables);
 
     let mut basic_blocks = BTreeMap::new();
 
