@@ -1557,6 +1557,10 @@ impl Merge<crate::object::Object> for Object {
             self.storage_rebate = Some(source.storage_rebate);
         }
 
+        if mask.contains(Self::BALANCE_FIELD) {
+            self.balance = source.as_coin_maybe().map(|coin| coin.balance.value());
+        }
+
         self.merge(&source.data, mask);
     }
 }
