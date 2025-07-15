@@ -82,10 +82,10 @@ num = "0.4.0"
 num_cpus = "1.13.0"
 once_cell = "1.7.2"
 ouroboros = "0.17.2"
+packed_struct = "0.10.1"
 parking_lot = "0.11.1"
 paste = "1.0.5"
 path-clean = "1.0.1"
-packed_struct = "0.10.1"
 petgraph = "0.8.1"
 phf = { version = "0.11", features = ["macros"] }
 plotters = { version = "0.3.0", default-features = false, features = ["evcxr", "line_series", "histogram"] }
@@ -177,7 +177,7 @@ move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-package-alt = { path = "crates/move-package-alt" }
-move-proc-macros = { path = "crates/move-proc-macros" }
+move-proc-macros = { path = "crates/move-proc-macros"}
 move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }

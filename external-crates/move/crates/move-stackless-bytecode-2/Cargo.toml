@@ -1,0 +1,32 @@
+[package]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+tempfile.workspace = true
+
+move-abstract-interpreter.workspace = true
+move-binary-format.workspace = true
+move-command-line-common.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
+move-model-2.workspace = true
+move-model.workspace = true
+move-package.workspace = true
+move-stackless-bytecode.workspace = true
+move-symbol-pool.workspace = true
+move-vm-runtime.workspace = true
+move-core-types.workspace = true
+bcs.workspace = true
+
+[dev-dependencies]
+move-stdlib.workspace = true
+datatest-stable.workspace = true
+
+[[test]]
+name = "tests"
+harness = false

@@ -943,6 +943,11 @@ impl<S: Hash + Eq> Function<S> {
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
     }
+
+    pub fn jump_tables(&self) -> &[Rc<VariantJumpTable<S>>] {
+        assert!(self.code_included);
+        &self.jump_tables
+    }
 }
 
 impl<S: Hash + Eq> Enum<S> {
@@ -1609,7 +1614,7 @@ impl<S: Hash + Eq> Bytecode<S> {
         self.is_unconditional_branch() || self.is_conditional_branch()
     }
 
-    pub fn offsets(&self, jump_tables: &[VariantJumpTable<S>]) -> Vec<CodeOffset> {
+    pub fn offsets(&self, jump_tables: &[Rc<VariantJumpTable<S>>]) -> Vec<CodeOffset> {
         match self {
             Bytecode::BrTrue(offset) | Bytecode::BrFalse(offset) | Bytecode::Branch(offset) => {
                 vec![*offset]
@@ -1700,7 +1705,7 @@ impl<S: Hash + Eq> Bytecode<S> {
     fn get_successors(
         pc: CodeOffset,
         code: &[Bytecode<S>],
-        jump_tables: &[VariantJumpTable<S>],
+        jump_tables: &[Rc<VariantJumpTable<S>>],
     ) -> Vec<CodeOffset> {
         assert!(
             // The program counter must remain within the bounds of the code
@@ -1734,7 +1739,7 @@ impl<S: Hash + Eq> Bytecode<S> {
 
 impl<S: Hash + Eq> move_abstract_interpreter::control_flow_graph::Instruction for Bytecode<S> {
     type Index = CodeOffset;
-    type VariantJumpTables = [VariantJumpTable<S>];
+    type VariantJumpTables = [Rc<VariantJumpTable<S>>];
 
     const ENTRY_BLOCK_ID: CodeOffset = 0;
 
