@@ -281,6 +281,16 @@ impl AuthorityPerpetualTables {
                 ),
             ),
             (
+                "events".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32 + 8,
+                    MUTEXES,
+                    uniform_key,
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
                 "events_2".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
