@@ -1453,6 +1453,316 @@ impl<S: Hash + Eq> Bytecode<S> {
     }
 }
 
+impl<S: Hash + Eq> Bytecode<S> {
+    pub fn is_unconditional_branch(&self) -> bool {
+        match self {
+            Bytecode::Ret | Bytecode::Abort | Bytecode::Branch(_) => true,
+            Bytecode::VariantSwitch(_) => true,
+            Bytecode::Pop
+            | Bytecode::BrTrue(_)
+            | Bytecode::BrFalse(_)
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::Pack(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveToDeprecated(_) => false,
+        }
+    }
+
+    pub fn is_conditional_branch(&self) -> bool {
+        match self {
+            Bytecode::BrTrue(_) | Bytecode::BrFalse(_) => true,
+            Bytecode::Pop
+            | Bytecode::Ret
+            | Bytecode::Branch(_)
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::Pack(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Abort
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::VariantSwitch(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveToDeprecated(_) => false,
+        }
+    }
+
+    pub fn is_branch(&self) -> bool {
+        self.is_unconditional_branch() || self.is_conditional_branch()
+    }
+
+    pub fn offsets(&self, jump_tables: &[VariantJumpTable<S>]) -> Vec<CodeOffset> {
+        match self {
+            Bytecode::BrTrue(offset) | Bytecode::BrFalse(offset) | Bytecode::Branch(offset) => {
+                vec![*offset]
+            }
+            Bytecode::VariantSwitch(jt) => {
+                let JumpTableInner::Full(offsets) = &jt.jump_table;
+
+                assert!(
+                    // The jump table index must be within the bounds of the jump tables. This is
+                    // checked in the bounds checker.
+                    // TODO is this really necessary?
+                    jump_tables.iter().any(|jt_| jt_.equivalent(jt)),
+                    "Jump table index out of bounds"
+                );
+
+                offsets.clone()
+            }
+            Bytecode::Ret | Bytecode::Abort => vec![],
+            Bytecode::Pop
+            | Bytecode::LdU8(_)
+            | Bytecode::LdU64(_)
+            | Bytecode::LdU128(_)
+            | Bytecode::CastU8
+            | Bytecode::CastU64
+            | Bytecode::CastU128
+            | Bytecode::LdConst(_)
+            | Bytecode::LdTrue
+            | Bytecode::LdFalse
+            | Bytecode::CopyLoc(_)
+            | Bytecode::MoveLoc(_)
+            | Bytecode::StLoc(_)
+            | Bytecode::Call(_)
+            | Bytecode::Pack(_)
+            | Bytecode::Unpack(_)
+            | Bytecode::ReadRef
+            | Bytecode::WriteRef
+            | Bytecode::FreezeRef
+            | Bytecode::MutBorrowLoc(_)
+            | Bytecode::ImmBorrowLoc(_)
+            | Bytecode::MutBorrowField(_)
+            | Bytecode::ImmBorrowField(_)
+            | Bytecode::Add
+            | Bytecode::Sub
+            | Bytecode::Mul
+            | Bytecode::Mod
+            | Bytecode::Div
+            | Bytecode::BitOr
+            | Bytecode::BitAnd
+            | Bytecode::Xor
+            | Bytecode::Or
+            | Bytecode::And
+            | Bytecode::Not
+            | Bytecode::Eq
+            | Bytecode::Neq
+            | Bytecode::Lt
+            | Bytecode::Gt
+            | Bytecode::Le
+            | Bytecode::Ge
+            | Bytecode::Nop
+            | Bytecode::Shl
+            | Bytecode::Shr
+            | Bytecode::VecPack(_)
+            | Bytecode::VecLen(_)
+            | Bytecode::VecImmBorrow(_)
+            | Bytecode::VecMutBorrow(_)
+            | Bytecode::VecPushBack(_)
+            | Bytecode::VecPopBack(_)
+            | Bytecode::VecUnpack(_)
+            | Bytecode::VecSwap(_)
+            | Bytecode::LdU16(_)
+            | Bytecode::LdU32(_)
+            | Bytecode::LdU256(_)
+            | Bytecode::CastU16
+            | Bytecode::CastU32
+            | Bytecode::CastU256
+            | Bytecode::PackVariant(_)
+            | Bytecode::UnpackVariant(_)
+            | Bytecode::UnpackVariantImmRef(_)
+            | Bytecode::UnpackVariantMutRef(_)
+            | Bytecode::MutBorrowGlobalDeprecated(_)
+            | Bytecode::ImmBorrowGlobalDeprecated(_)
+            | Bytecode::ExistsDeprecated(_)
+            | Bytecode::MoveFromDeprecated(_)
+            | Bytecode::MoveToDeprecated(_) => vec![],
+        }
+    }
+
+    fn get_successors(
+        pc: CodeOffset,
+        code: &[Bytecode<S>],
+        jump_tables: &[VariantJumpTable<S>],
+    ) -> Vec<CodeOffset> {
+        assert!(
+            // The program counter must remain within the bounds of the code
+            pc < u16::MAX && (pc as usize) < code.len(),
+            "Program counter out of bounds"
+        );
+
+        let bytecode = &code[pc as usize];
+        let mut v = vec![];
+
+        v.extend(bytecode.offsets(jump_tables));
+
+        let next_pc = pc + 1;
+        if next_pc >= code.len() as CodeOffset {
+            return v;
+        }
+
+        if !bytecode.is_unconditional_branch() && !v.contains(&next_pc) {
+            // avoid duplicates
+            v.push(pc + 1);
+        }
+
+        // always give successors in ascending order
+        // NB: the size of `v` is generally quite small (bounded by maximum # of variants allowed
+        // in a variant jump table), so a sort here is not a performance concern.
+        v.sort();
+
+        v
+    }
+}
+
+impl<S: Hash + Eq> move_abstract_interpreter::control_flow_graph::Instruction for Bytecode<S> {
+    type Index = CodeOffset;
+    type VariantJumpTables = [VariantJumpTable<S>];
+
+    const ENTRY_BLOCK_ID: CodeOffset = 0;
+
+    fn get_successors(
+        pc: Self::Index,
+        code: &[Self],
+        jump_tables: &Self::VariantJumpTables,
+    ) -> Vec<Self::Index> {
+        Bytecode::get_successors(pc, code, jump_tables)
+    }
+
+    fn offsets(&self, jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index> {
+        self.offsets(jump_tables)
+    }
+
+    fn usize_as_index(i: usize) -> Self::Index {
+        i as CodeOffset
+    }
+
+    fn index_as_usize(i: Self::Index) -> usize {
+        i as usize
+    }
+
+    fn is_branch(&self) -> bool {
+        self.is_branch()
+    }
+}
+
 fn signature_to_single_type<S: Hash + Eq>(
     tables: &Tables<S>,
     sig_idx: SignatureIndex,
