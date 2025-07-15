@@ -10,25 +10,25 @@
 //!   greater than positive integers.
 //! - Structs are compared by lexicographically, as a tuple of their fields.
 //! - Collections are first ordered by size, then by their elements in lexicographic order.
-use bincode::Options;
-use serde::{de::DeserializeOwned, Serialize};
+use bincode::{error::DecodeError, Decode, Encode};
 
 #[inline]
-pub(crate) fn encode<T: Serialize>(x: &T) -> Vec<u8> {
-    bincode::DefaultOptions::new()
+pub(crate) fn encode<T: Encode>(x: &T) -> Vec<u8> {
+    let config = bincode::config::standard()
         .with_big_endian()
-        .with_fixint_encoding()
-        .serialize(x)
-        .expect("failed to serialize key")
+        .with_fixed_int_encoding();
+
+    bincode::encode_to_vec(x, config).expect("failed to serialize key")
 }
 
 #[allow(dead_code)]
 #[inline]
-pub(crate) fn decode<T: DeserializeOwned>(b: &[u8]) -> Result<T, bincode::Error> {
-    bincode::DefaultOptions::new()
+pub(crate) fn decode<T: Decode<()>>(b: &[u8]) -> Result<T, DecodeError> {
+    let config = bincode::config::standard()
         .with_big_endian()
-        .with_fixint_encoding()
-        .deserialize(b)
+        .with_fixed_int_encoding();
+
+    Ok(bincode::decode_from_slice(b, config)?.0)
 }
 
 /// Modify the key `bs` in place to be the lexicographically next key.

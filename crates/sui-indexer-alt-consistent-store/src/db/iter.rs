@@ -4,7 +4,8 @@
 
 use std::marker::PhantomData;
 
-use serde::{de::DeserializeOwned, Serialize};
+use bincode::{Decode, Encode};
+use serde::de::DeserializeOwned;
 
 use super::{error::Error, key};
 
@@ -31,7 +32,7 @@ impl<'d, K, V> FwdIter<'d, K, V> {
     /// Move the iterator's cursor so that it will yield the first key greater than or equal to
     /// `probe`. The probe type `J` can differ from the key type `K`, to allow for seeking
     /// prefixes.
-    pub(crate) fn seek<J: Serialize>(&mut self, probe: &J) {
+    pub(crate) fn seek<J: Encode>(&mut self, probe: &J) {
         if let Some(inner) = &mut self.inner {
             inner.seek(key::encode(probe));
         }
@@ -49,7 +50,7 @@ impl<'d, K, V> RevIter<'d, K, V> {
     /// Move the iterator's cursor so that it will yield the first key less than or equal to
     /// `probe`. The probe type `J` can differ from the key type `K`, to allow for seeking
     /// prefixes.
-    pub(crate) fn seek<J: Serialize>(&mut self, probe: &J) {
+    pub(crate) fn seek<J: Encode>(&mut self, probe: &J) {
         if let Some(inner) = &mut self.inner {
             inner.seek_for_prev(key::encode(probe));
         }
@@ -58,7 +59,7 @@ impl<'d, K, V> RevIter<'d, K, V> {
 
 impl<K, V> Iterator for FwdIter<'_, K, V>
 where
-    K: DeserializeOwned,
+    K: Decode<()>,
     V: DeserializeOwned,
 {
     type Item = Result<(K, V), Error>;
@@ -80,7 +81,7 @@ where
 
 impl<K, V> Iterator for RevIter<'_, K, V>
 where
-    K: DeserializeOwned,
+    K: Decode<()>,
     V: DeserializeOwned,
 {
     type Item = Result<(K, V), Error>;
@@ -103,7 +104,7 @@ where
 #[inline]
 fn decode_item<K, V>(iter: &rocksdb::DBRawIterator<'_>) -> Option<Result<(K, V), Error>>
 where
-    K: DeserializeOwned,
+    K: Decode<()>,
     V: DeserializeOwned,
 {
     if !iter.valid() {
@@ -114,7 +115,7 @@ where
         };
     }
 
-    let k = match key::decode(iter.key()?).map_err(Error::Bincode) {
+    let k = match key::decode(iter.key()?).map_err(Error::KeyDecode) {
         Ok(k) => k,
         Err(e) => return Some(Err(e)),
     };
