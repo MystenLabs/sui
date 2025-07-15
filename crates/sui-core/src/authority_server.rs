@@ -578,8 +578,7 @@ impl ValidatorService {
         };
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let tx_digest = transaction.digest();
-        let _span = error_span!("validator_state_submit_transaction", ?tx_digest);
+        let span = error_span!("ValidatorService::handle_submit_transaction", tx_digest = ?transaction.digest());
 
         state
             .handle_vote_transaction(&epoch_store, transaction.clone())
@@ -592,7 +591,6 @@ impl ValidatorService {
         let _latency_metric_guard = metrics
             .handle_submit_transaction_consensus_latency
             .start_timer();
-        let span = error_span!("submit_transaction", tx_digest = ?transaction.digest());
         self.handle_submit_to_consensus_for_position(
             nonempty![ConsensusTransaction::new_user_transaction_message(
                 &self.state.name,
@@ -1130,12 +1128,13 @@ impl ValidatorService {
             });
         };
 
-        match request.epoch.cmp(&epoch_store.epoch()) {
+        let local_epoch = epoch_store.epoch();
+        match request.consensus_position.epoch.cmp(&local_epoch) {
             Ordering::Less => {
                 // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
                 // if response from this validator is desired.
                 let response = WaitForEffectsResponse::Expired {
-                    epoch: epoch_store.epoch() as u32,
+                    epoch: local_epoch,
                     round: 0,
                 };
                 return Ok(response);
@@ -1143,8 +1142,8 @@ impl ValidatorService {
             Ordering::Greater => {
                 // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
                 return Err(SuiError::WrongEpoch {
-                    expected_epoch: epoch_store.epoch(),
-                    actual_epoch: request.epoch,
+                    expected_epoch: local_epoch,
+                    actual_epoch: request.consensus_position.epoch,
                 });
             }
             Ordering::Equal => {
@@ -1153,13 +1152,13 @@ impl ValidatorService {
             }
         };
 
-        consensus_tx_status_cache.check_position_too_ahead(&request.transaction_position)?;
+        consensus_tx_status_cache.check_position_too_ahead(&request.consensus_position)?;
 
         // Because we need to associate effects with a specific transaction position,
         // we need to first make sure that this specific position is accepted by consensus,
         // either with fastpath certified or post-commit finalized.
         let first_status = consensus_tx_status_cache
-            .notify_read_transaction_status_change(request.transaction_position, None)
+            .notify_read_transaction_status_change(request.consensus_position, None)
             .await;
         debug!(
             tx_digest = ?request.transaction_digest,
@@ -1179,7 +1178,7 @@ impl ValidatorService {
             },
             NotifyReadConsensusTxStatusResult::Expired(round) => {
                 return Ok(WaitForEffectsResponse::Expired {
-                    epoch: epoch_store.epoch() as u32,
+                    epoch: epoch_store.epoch(),
                     round,
                 });
             }
@@ -1192,7 +1191,7 @@ impl ValidatorService {
         let (effects, fastpath_outputs) = loop {
             let transactions = [request.transaction_digest];
             tokio::select! {
-                second_status = consensus_tx_status_cache.notify_read_transaction_status_change(request.transaction_position, Some(cur_status)) => {
+                second_status = consensus_tx_status_cache.notify_read_transaction_status_change(request.consensus_position, Some(cur_status)) => {
                     debug!(
                         tx_digest = ?request.transaction_digest,
                         "Observed consensus transaction status: {:?}",
@@ -1211,7 +1210,7 @@ impl ValidatorService {
                         }
                         NotifyReadConsensusTxStatusResult::Expired(round) => {
                             return Ok(WaitForEffectsResponse::Expired {
-                                epoch: epoch_store.epoch() as u32,
+                                epoch: epoch_store.epoch(),
                                 round,
                             });
                         }

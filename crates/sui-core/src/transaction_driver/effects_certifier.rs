@@ -45,7 +45,6 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
-        epoch: EpochId,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
@@ -56,14 +55,12 @@ impl EffectsCertifier {
                 authority_aggregator,
                 tx_digest,
                 consensus_position,
-                epoch,
                 options,
             ),
             self.get_full_effects_with_retry(
                 authority_aggregator,
                 tx_digest,
                 consensus_position,
-                epoch,
                 options,
             ),
         );
@@ -84,7 +81,7 @@ impl EffectsCertifier {
                         return Ok(self.get_effects_response(
                             effects_digest,
                             executed_data,
-                            epoch,
+                            consensus_position.epoch,
                             tx_digest,
                         ));
                     }
@@ -98,7 +95,6 @@ impl EffectsCertifier {
                     authority_aggregator,
                     tx_digest,
                     consensus_position,
-                    epoch,
                     options,
                 )
                 .await;
@@ -110,7 +106,6 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
-        epoch: EpochId,
         options: &SubmitTransactionOptions,
     ) -> Result<(TransactionEffectsDigest, ExecutedData), TransactionDriverError>
     where
@@ -125,9 +120,8 @@ impl EffectsCertifier {
             .collect::<Vec<_>>();
 
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            epoch,
             transaction_digest: *tx_digest,
-            transaction_position: consensus_position,
+            consensus_position,
             include_details: true,
         })
         .map_err(TransactionDriverError::SerializationError)?;
@@ -211,7 +205,6 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
-        epoch: EpochId,
         options: &SubmitTransactionOptions,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
@@ -223,9 +216,8 @@ impl EffectsCertifier {
             .collect::<Vec<_>>();
         let committee = authority_aggregator.committee.clone();
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            epoch,
             transaction_digest: *tx_digest,
-            transaction_position: consensus_position,
+            consensus_position,
             include_details: false,
         })
         .map_err(TransactionDriverError::SerializationError)?;

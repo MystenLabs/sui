@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::{
-    committee::EpochId,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::{TransactionEffects, TransactionEvents},
     error::SuiError,
@@ -15,9 +14,8 @@ use sui_types::{
 };
 
 pub(crate) struct WaitForEffectsRequest {
-    pub epoch: EpochId,
+    pub consensus_position: ConsensusPosition,
     pub transaction_digest: TransactionDigest,
-    pub transaction_position: ConsensusPosition,
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,
@@ -70,7 +68,7 @@ pub enum WaitForEffectsResponse {
     },
     // The transaction position is expired at the committed round.
     Expired {
-        epoch: u32,
+        epoch: u64,
         round: u32,
     },
 }
@@ -85,16 +83,15 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
                 error: err.to_string(),
             }
         })?;
-        let transaction_position = bcs::from_bytes(&value.transaction_position).map_err(|err| {
+        let consensus_position = bcs::from_bytes(&value.consensus_position).map_err(|err| {
             SuiError::GrpcMessageDeserializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_position".to_string(),
+                type_info: "RawWaitForEffectsRequest.consensus_position".to_string(),
                 error: err.to_string(),
             }
         })?;
         Ok(Self {
-            epoch: value.epoch,
+            consensus_position,
             transaction_digest,
-            transaction_position,
             include_details: value.include_details,
         })
     }
@@ -205,16 +202,15 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
                 error: err.to_string(),
             })?
             .into();
-        let transaction_position = bcs::to_bytes(&value.transaction_position)
+        let consensus_position = bcs::to_bytes(&value.consensus_position)
             .map_err(|err| SuiError::GrpcMessageSerializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_position".to_string(),
+                type_info: "RawWaitForEffectsRequest.consensus_position".to_string(),
                 error: err.to_string(),
             })?
             .into();
         Ok(Self {
-            epoch: value.epoch,
+            consensus_position,
             transaction_digest,
-            transaction_position,
             include_details: value.include_details,
         })
     }

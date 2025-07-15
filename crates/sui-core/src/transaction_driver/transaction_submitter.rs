@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-const SUBMIT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(2);
+const SUBMIT_TRANSACTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct TransactionSubmitter {
     metrics: Arc<TransactionDriverMetrics>,

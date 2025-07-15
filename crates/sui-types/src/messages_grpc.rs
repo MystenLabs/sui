@@ -241,18 +241,15 @@ pub struct SubmitTxResponse {
 
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsRequest {
-    #[prost(uint64, tag = "1")]
-    pub epoch: u64,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub consensus_position: Bytes,
 
     #[prost(bytes = "bytes", tag = "2")]
-    pub transaction_position: Bytes,
-
-    #[prost(bytes = "bytes", tag = "3")]
     pub transaction_digest: Bytes,
 
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
-    #[prost(bool, tag = "4")]
+    #[prost(bool, tag = "3")]
     pub include_details: bool,
 }
 
@@ -322,8 +319,8 @@ pub enum RawRejectReason {
 #[derive(Clone, prost::Message)]
 pub struct RawExpiredStatus {
     // Validator's current epoch.
-    #[prost(uint32, tag = "1")]
-    pub epoch: u32,
+    #[prost(uint64, tag = "1")]
+    pub epoch: u64,
     // Validator's current round. 0 if it is not yet checked.
     #[prost(uint32, tag = "2")]
     pub round: u32,
