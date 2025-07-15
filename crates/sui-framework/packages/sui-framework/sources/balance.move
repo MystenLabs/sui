@@ -146,14 +146,14 @@ public fun create_supply_for_testing<T>(): Supply<T> {
 #[allow(unused_function)]
 fun send_to_account<T>(balance: Balance<T>, recipient: address) {
     let Balance { value } = balance;
-    let accumulator = accumulator::get_accumulator_field_address<Balance<T>>(recipient);
+    let accumulator = accumulator::accumulator_address<Balance<T>>(recipient);
     accumulator::emit_deposit_event<Balance<T>>(accumulator, recipient, value);
 }
 
 #[allow(unused_function)]
 fun withdraw_from_account<T>(amount: u64, ctx: &TxContext): Balance<T> {
     let owner = ctx.sender();
-    let accumulator = accumulator::get_accumulator_field_address<Balance<T>>(owner);
+    let accumulator = accumulator::accumulator_address<Balance<T>>(owner);
     let credit = Balance { value: amount };
     accumulator::emit_withdraw_event<Balance<T>>(accumulator, owner, amount);
     credit
