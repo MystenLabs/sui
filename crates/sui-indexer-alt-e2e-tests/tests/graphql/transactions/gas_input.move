@@ -38,6 +38,11 @@ module test::simple {
 
 //# create-checkpoint
 
+// Test system transaction created by advance-clock
+//# advance-clock --duration-ns 1000000
+
+//# create-checkpoint
+
 //# run-graphql
 { # Test basic single gas payment transaction
   basicTransaction: transaction(digest: "@{digest_2}") {
@@ -113,6 +118,29 @@ module test::simple {
           hasNextPage
           hasPreviousPage
           startCursor
+        }
+        nodes {
+          address
+          version
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # Test system transaction GasInput
+  systemTransaction: transaction(digest: "@{digest_6}") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+      gasPayment {
+        pageInfo {
+          hasNextPage
+          hasPreviousPage
         }
         nodes {
           address
