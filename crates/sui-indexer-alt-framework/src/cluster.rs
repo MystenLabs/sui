@@ -37,6 +37,14 @@ pub struct Args {
     /// How to expose metrics.
     #[clap(flatten)]
     pub metrics_args: MetricsArgs,
+
+    /// PostgreSQL database connection URL.
+    ///
+    /// This field is required when parsing from the command line. The `Option`
+    /// wrapper is a workaround to enable a `Default` implementation for `Args`,
+    /// allowing a default instance to be created for inline configurations.
+    #[clap(long, required = true)]
+    pub database_url: Option<Url>,
 }
 
 /// An opinionated [IndexerCluster] that spins up an [Indexer] implementation using Postgres as its
@@ -53,7 +61,6 @@ pub struct IndexerCluster {
 /// Builder for creating an IndexerCluster with a fluent API
 #[derive(Default)]
 pub struct IndexerClusterBuilder {
-    database_url: Option<Url>,
     db_args: DbArgs,
     args: Args,
     ingestion_config: IngestionConfig,
@@ -72,7 +79,7 @@ impl IndexerClusterBuilder {
     /// This should be a valid PostgreSQL connection urls, e.g.:
     /// - `postgres://user:password@host:5432/mydb`
     pub fn with_database_url(mut self, url: Url) -> Self {
-        self.database_url = Some(url);
+        self.args.database_url = Some(url);
         self
     }
 
@@ -147,7 +154,7 @@ impl IndexerClusterBuilder {
     /// - Database connection cannot be established
     /// - Metrics registry creation fails
     pub async fn build(self) -> Result<IndexerCluster> {
-        let database_url = self.database_url.context("database_url is required")?;
+        let database_url = self.args.database_url.context("database_url is required")?;
 
         tracing_subscriber::fmt::init();
 
@@ -359,10 +366,10 @@ mod tests {
                 ..Default::default()
             },
             metrics_args: MetricsArgs { metrics_address },
+            database_url: Some(url.clone()),
         };
 
         let mut indexer = IndexerCluster::builder()
-            .with_database_url(url.clone())
             .with_args(args)
             .build()
             .await
@@ -443,6 +450,7 @@ mod tests {
                 metrics_args: MetricsArgs {
                     metrics_address: "127.0.0.1:8080".parse().unwrap(),
                 },
+                database_url: Some(Url::parse("postgres://postgres@pikachu:123").unwrap()),
             })
             .with_indexer_args(IndexerArgs {
                 first_checkpoint: Some(200),
@@ -454,7 +462,8 @@ mod tests {
             })
             .with_metrics_args(MetricsArgs {
                 metrics_address: "127.0.0.1:9090".parse().unwrap(),
-            });
+            })
+            .with_database_url(Url::parse("postgres://postgres@pikachu:456").unwrap());
 
         assert_eq!(builder.args.indexer_args.first_checkpoint, Some(200));
         assert_eq!(
@@ -470,6 +479,10 @@ mod tests {
         assert_eq!(
             builder.args.metrics_args.metrics_address.to_string(),
             "127.0.0.1:9090"
+        );
+        assert_eq!(
+            builder.args.database_url.unwrap().to_string(),
+            "postgres://postgres@pikachu:456"
         );
     }
 
@@ -487,6 +500,7 @@ mod tests {
             .with_metrics_args(MetricsArgs {
                 metrics_address: "127.0.0.1:9090".parse().unwrap(),
             })
+            .with_database_url(Url::parse("postgres://postgres@pikachu:456").unwrap())
             .with_args(Args {
                 indexer_args: IndexerArgs {
                     first_checkpoint: Some(100),
@@ -499,6 +513,7 @@ mod tests {
                 metrics_args: MetricsArgs {
                     metrics_address: "127.0.0.1:8080".parse().unwrap(),
                 },
+                database_url: Some(Url::parse("postgres://postgres@pikachu:123").unwrap()),
             });
 
         assert_eq!(builder.args.indexer_args.first_checkpoint, Some(100));
@@ -515,6 +530,10 @@ mod tests {
         assert_eq!(
             builder.args.metrics_args.metrics_address.to_string(),
             "127.0.0.1:8080"
+        );
+        assert_eq!(
+            builder.args.database_url.unwrap().to_string(),
+            "postgres://postgres@pikachu:123"
         );
     }
 }
