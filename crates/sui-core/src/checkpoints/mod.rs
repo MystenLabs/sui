@@ -214,9 +214,13 @@ impl CheckpointStoreTables {
         use typed_store::tidehunter_util::{
             default_cells_per_mutex, KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 1024;
-        let sequence_key = KeyType::prefix_uniform(2, 4);
-        let config_u64 = ThConfig::new(8, MUTEXES, sequence_key);
+        const MUTEXES: usize = 4 * 1024;
+        let u64_sequence_key = KeyType::prefix_uniform(6, 0);
+        let override_dirty_keys_config = KeySpaceConfig::new()
+            .with_max_dirty_keys(64_000)
+            .with_value_cache_size(1000);
+        let config_u64 =
+            ThConfig::new_with_config(8, MUTEXES, u64_sequence_key, override_dirty_keys_config);
         let digest_config = ThConfig::new_with_rm_prefix(
             32,
             MUTEXES,
@@ -224,6 +228,11 @@ impl CheckpointStoreTables {
             KeySpaceConfig::default(),
             vec![0, 0, 0, 0, 0, 0, 0, 32],
         );
+        let watermarks_config = KeySpaceConfig::new()
+            .with_value_cache_size(10)
+            .disable_unload();
+        let lru_config = KeySpaceConfig::new().with_value_cache_size(1000);
+        let checkpoint_by_digest_config = digest_config.clone().with_config(lru_config.clone());
         let configs = vec![
             ("checkpoint_content", digest_config.clone()),
             (
@@ -232,10 +241,13 @@ impl CheckpointStoreTables {
             ),
             ("full_checkpoint_content", config_u64.clone()),
             ("certified_checkpoints", config_u64.clone()),
-            ("checkpoint_by_digest", digest_config.clone()),
+            ("checkpoint_by_digest", checkpoint_by_digest_config),
             ("locally_computed_checkpoints", config_u64.clone()),
             ("epoch_last_checkpoint_map", config_u64.clone()),
-            ("watermarks", ThConfig::new(4, 1, KeyType::uniform(1))),
+            (
+                "watermarks",
+                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config),
+            ),
         ];
         Self::open_tables_read_write(
             path.to_path_buf(),
