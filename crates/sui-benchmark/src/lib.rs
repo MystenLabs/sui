@@ -25,8 +25,8 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
+use sui_protocol_config::Chain;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::gas::GasCostSummary;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::EffectsFinalityInfo;
 use sui_types::quorum_driver_types::FinalizedEffects;
@@ -46,6 +46,7 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
+use sui_types::{digests::ChainIdentifier, gas::GasCostSummary};
 use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
@@ -356,6 +357,28 @@ impl LocalValidatorAggregatorProxy {
             response.events.unwrap_or_default(),
         ))
     }
+
+    fn use_transaction_driver(&self) -> bool {
+        if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
+            if let Ok(tx_driver_percentage) = v.parse::<u8>() {
+                if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
+                    let random_value = rand::thread_rng().gen_range(1..=100);
+                    if random_value <= tx_driver_percentage {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if ChainIdentifier::default().chain() == Chain::Unknown {
+            let random_value = rand::thread_rng().gen_range(1..=100);
+            if random_value <= 50 {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 #[async_trait]
@@ -387,19 +410,12 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         let tx_digest = *tx.digest();
-        if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
-            if let Ok(tx_driver_percentage) = v.parse::<u8>() {
-                if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                    let random_value = rand::thread_rng().gen_range(1..=100);
-                    if random_value <= tx_driver_percentage {
-                        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-                        return (
-                            ClientType::TransactionDriver,
-                            self.submit_transaction_block(tx).await,
-                        );
-                    }
-                }
-            }
+        if self.use_transaction_driver() {
+            debug!("Using TransactionDriver for transaction {:?}", tx_digest);
+            return (
+                ClientType::TransactionDriver,
+                self.submit_transaction_block(tx).await,
+            );
         }
 
         debug!("Using QuorumDriver for transaction {tx_digest:?}");
