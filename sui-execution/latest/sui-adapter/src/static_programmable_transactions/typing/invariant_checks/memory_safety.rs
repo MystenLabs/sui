@@ -20,11 +20,21 @@ struct Delta {
     result: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum RootLocation {
+    /// The result of a command, specifically a `MoveCall`, without any input references.
+    /// These calls will always abort, but we still must track them.
+    Unknown {
+        command: u16,
+    },
+    Known(T::Location),
+}
+
 /// A path points to an abstract memory location, rooted in an input or command result. Any
 /// extension is the result from a reference being returned from a command.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Path {
-    root: T::Location,
+    root: RootLocation,
     extensions: Vec<Delta>,
 }
 
@@ -70,7 +80,7 @@ enum PathComparison {
 impl Path {
     fn initial(location: T::Location) -> Self {
         Self {
-            root: location,
+            root: RootLocation::Known(location),
             extensions: vec![],
         }
     }
@@ -125,6 +135,17 @@ impl PathSet {
         Self(IndexSet::from([Path::initial(location)]))
     }
 
+    fn unknown_root(command: u16) -> Self {
+        Self(IndexSet::from([Path {
+            root: RootLocation::Unknown { command },
+            extensions: vec![],
+        }]))
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Returns true if any path in `self` is non-`Disjoint` with any path in `other`.
     /// Excludes `Aliases` if `allow_aliases` is true.
     fn conflicts(&self, other: &Self, allow_aliases: bool) -> bool {
@@ -158,6 +179,18 @@ impl PathSet {
 }
 
 impl Value {
+    /// Create a new reference value
+    fn ref_(is_mut: bool, paths: PathSet) -> anyhow::Result<Value> {
+        anyhow::ensure!(
+            !paths.is_empty(),
+            "Cannot create a reference with an empty path set"
+        );
+        Ok(Value::Ref {
+            is_mut,
+            paths: Rc::new(paths),
+        })
+    }
+
     fn copy(&self) -> Value {
         match self {
             Value::NonRef => Value::NonRef,
@@ -223,6 +256,10 @@ impl Location {
                 anyhow::bail!("Cannot borrow a reference")
             }
             Value::NonRef => {
+                anyhow::ensure!(
+                    !self.self_path.is_empty(),
+                    "Cannot have an empty location to borrow from"
+                );
                 // a new reference that borrows from this location
                 Ok(Value::Ref {
                     is_mut,
@@ -382,7 +419,12 @@ impl Context {
         };
         if let Value::Ref { paths, .. } = &value {
             for p in &paths.0 {
-                self.arg_roots.insert(p.root);
+                match p.root {
+                    RootLocation::Unknown { .. } => (),
+                    RootLocation::Known(location) => {
+                        self.arg_roots.insert(location);
+                    }
+                }
             }
         }
         Ok(value)
@@ -568,6 +610,16 @@ fn call(
         "Mutable and immutable borrows cannot overlap"
     );
     let command = context.current_command();
+    let mut_paths = if mut_paths.is_empty() {
+        PathSet::unknown_root(command)
+    } else {
+        mut_paths
+    };
+    let all_paths = if all_paths.is_empty() {
+        PathSet::unknown_root(command)
+    } else {
+        all_paths
+    };
     let result_values = return_
         .iter()
         .enumerate()
@@ -577,18 +629,16 @@ fn call(
                 result: i as u16,
             };
             match ty {
-                T::Type::Reference(/* is mut */ true, _) => Value::Ref {
-                    is_mut: true,
-                    paths: Rc::new(mut_paths.extend(delta)),
-                },
-                T::Type::Reference(/* is mut */ false, _) => Value::Ref {
-                    is_mut: false,
-                    paths: Rc::new(imm_paths.extend(delta)),
-                },
-                _ => Value::NonRef,
+                T::Type::Reference(/* is mut */ true, _) => {
+                    Value::ref_(true, mut_paths.extend(delta))
+                }
+                T::Type::Reference(/* is mut */ false, _) => {
+                    Value::ref_(false, all_paths.extend(delta))
+                }
+                _ => Ok(Value::NonRef),
             }
         })
-        .collect::<Vec<_>>();
+        .collect::<anyhow::Result<Vec<_>>>()?;
     context.add_result_values(result_values);
     Ok(())
 }
