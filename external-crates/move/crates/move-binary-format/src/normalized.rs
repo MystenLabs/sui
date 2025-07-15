@@ -994,9 +994,9 @@ impl<S: Hash + Eq> Function<S> {
             is_entry,
             type_parameters,
             parameters,
+            locals,
             return_,
             code_included,
-            locals: _,
             jump_tables,
             code,
         } = self;
@@ -1009,9 +1009,15 @@ impl<S: Hash + Eq> Function<S> {
             && is_entry == &other.is_entry
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
+            && locals == &other.locals
             && return_ == &other.return_
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
+    }
+
+    pub fn jump_tables(&self) -> &[Rc<VariantJumpTable<S>>] {
+        assert!(self.code_included);
+        &self.jump_tables
     }
 }
 
@@ -1025,7 +1031,6 @@ impl<S: Hash + Eq> Enum<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.enum_handle);
-
         let name = pool.intern(m.identifier_at(handle.name));
 
         let defining_module_handle = m.module_handle_at(handle.module);

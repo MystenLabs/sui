@@ -1,0 +1,6 @@
+[package]
+name = "Branch"
+edition = "2024.beta"
+
+[addresses]
+branch = "0x0"
