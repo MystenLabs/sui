@@ -245,6 +245,7 @@ impl SharedObjectCongestionTracker {
                 Some(estimate_us)
             }
         };
+        debug!("observe indirect state: {:?}", tx_cost);
         indirect_state_observer.observe_indirect_state(&tx_cost);
         tx_cost
     }
