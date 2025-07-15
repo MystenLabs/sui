@@ -10,7 +10,6 @@ pub mod displays;
 pub mod fire_drill;
 pub mod genesis_ceremony;
 pub mod genesis_inspector;
-pub mod key_identity;
 pub mod keytool;
 pub mod mvr_resolver;
 pub mod sui_commands;

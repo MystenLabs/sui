@@ -366,7 +366,7 @@ pub fn new_wallet_context_from_cluster(
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
     keystore
-        .add_key(None, SuiKeyPair::Ed25519(key_pair))
+        .import(None, SuiKeyPair::Ed25519(key_pair))
         .unwrap();
     SuiClientConfig {
         keystore,
