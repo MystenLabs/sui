@@ -73,6 +73,14 @@ impl CheckpointContents {
         Ok(Some(summary.digest().base58_encode()))
     }
 
+    /// A 32-byte hash that uniquely identifies the checkpoint's content, encoded in Base58.
+    async fn content_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(summary.content_digest.base58_encode()))
+    }
+
     /// The epoch that this checkpoint is part of.
     async fn epoch(&self) -> Option<Epoch> {
         let (summary, _, _) = self.contents.as_ref()?;
