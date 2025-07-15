@@ -185,26 +185,16 @@ fn transaction_to_response(
             if let Some(event_mask) = submask.subtree(TransactionEvents::EVENTS_FIELD.name) {
                 if event_mask.contains(Event::JSON_FIELD.name) {
                     for (message, event) in message.events.iter_mut().zip(&events.0) {
-                        message.json = struct_tag_sdk_to_core(event.type_.clone())
-                            .ok()
-                            .and_then(|struct_tag| {
-                                let layout = service
-                                    .reader
-                                    .inner()
-                                    .get_struct_layout(&struct_tag)
-                                    .ok()
-                                    .flatten()?;
-                                Some((layout, &event.contents))
-                            })
-                            .and_then(|(layout, contents)| {
-                                sui_types::proto_value::ProtoVisitorBuilder::new(
-                                    service.config.max_json_move_value_size(),
+                        message.json = struct_tag_sdk_to_core(event.type_.clone()).ok().and_then(
+                            |struct_tag| {
+                                crate::grpc::v2beta2::render_json(
+                                    service,
+                                    &struct_tag,
+                                    &event.contents,
                                 )
-                                .deserialize_value(contents, &layout)
-                                .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
-                                .ok()
                                 .map(Box::new)
-                            });
+                            },
+                        );
                     }
                 }
             }
