@@ -22,6 +22,8 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 
+move-core-types.workspace = true
+
 sui-default-config.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
 

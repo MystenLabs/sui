@@ -14490,6 +14490,7 @@ dependencies = [
  "bcs",
  "bincode 2.0.1",
  "futures",
+ "move-core-types",
  "ouroboros 0.17.2",
  "prometheus",
  "rocksdb",

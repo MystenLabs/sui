@@ -53,7 +53,7 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
             consistency_config.stride,
             consistency_config.buffer_size,
             indexer_args.first_checkpoint,
-            cancel.clone(),
+            cancel.child_token(),
         );
 
         let indexer = framework::Indexer::new(
@@ -62,7 +62,7 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
             client_args,
             ingestion_config,
             registry,
-            cancel.clone(),
+            cancel.child_token(),
         )
         .await
         .context("Failed to create indexer")?;
