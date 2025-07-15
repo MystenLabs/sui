@@ -322,8 +322,8 @@ pub struct RawExpiredStatus {
     #[prost(uint64, tag = "1")]
     pub epoch: u64,
     // Validator's current round. 0 if it is not yet checked.
-    #[prost(uint32, tag = "2")]
-    pub round: u32,
+    #[prost(uint32, optional, tag = "2")]
+    pub round: Option<u32>,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

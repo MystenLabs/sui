@@ -166,14 +166,12 @@ impl EffectsCertifier {
                     }
                     WaitForEffectsResponse::Expired { epoch, round } => {
                         if attempts >= MAX_ATTEMPTS {
-                            return Err(TransactionDriverError::TransactionExpired(
-                                round.to_string(),
-                            ));
+                            return Err(TransactionDriverError::TransactionStatusExpired);
                         }
                         tracing::debug!(
-                            "Transaction expired at epoch {}, round {}, retrying...",
+                            "Transaction status expired at epoch {}, round {}, retrying...",
                             epoch,
-                            round
+                            round.unwrap_or(0),
                         );
                     }
                 },
@@ -315,7 +313,7 @@ impl EffectsCertifier {
                         "{} at epoch {}, round {}",
                         name.concise(),
                         epoch,
-                        round,
+                        round.unwrap_or(0),
                     ));
                     self.metrics.expiration_acks.inc();
                     if let InsertResult::Failed { error } =

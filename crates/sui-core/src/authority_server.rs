@@ -1135,7 +1135,7 @@ impl ValidatorService {
                 // if response from this validator is desired.
                 let response = WaitForEffectsResponse::Expired {
                     epoch: local_epoch,
-                    round: 0,
+                    round: None,
                 };
                 return Ok(response);
             }
@@ -1179,7 +1179,7 @@ impl ValidatorService {
             NotifyReadConsensusTxStatusResult::Expired(round) => {
                 return Ok(WaitForEffectsResponse::Expired {
                     epoch: epoch_store.epoch(),
-                    round,
+                    round: Some(round),
                 });
             }
         };
@@ -1211,7 +1211,7 @@ impl ValidatorService {
                         NotifyReadConsensusTxStatusResult::Expired(round) => {
                             return Ok(WaitForEffectsResponse::Expired {
                                 epoch: epoch_store.epoch(),
-                                round,
+                                round: Some(round),
                             });
                         }
                     }

@@ -66,10 +66,11 @@ pub enum WaitForEffectsResponse {
         // The rejection reason known locally.
         reason: RejectReason,
     },
-    // The transaction position is expired at the committed round.
+    // The transaction position is expired, with the local epoch and committed round.
+    // When round is None, the expiration is due to lagging epoch in the request.
     Expired {
         epoch: u64,
-        round: u32,
+        round: Option<u32>,
     },
 }
 
