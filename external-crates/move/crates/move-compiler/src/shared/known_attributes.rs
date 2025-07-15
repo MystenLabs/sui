@@ -177,12 +177,20 @@ pub enum AttributePosition {
     Spec,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerificationAttribute {
     // Denotes a function is a spec
-    Spec,
+    Spec {
+        focus: bool,
+        prove: bool,
+        target: Option<ModuleIdent>,
+        no_opaque: bool,
+        ignore_abort: bool,
+    },
     // Denotes a function is only used by specs, only included in compilation in verify mode
-    SpecOnly,
+    SpecOnly {
+        inv_target: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -223,27 +231,6 @@ impl AttributeKind_ {
 }
 
 impl KnownAttribute {
-    // LEGACY ? 
-    pub fn resolve(attribute_str: impl AsRef<str>) -> Option<Self> {
-        Some(match attribute_str.as_ref() {
-            TestingAttribute::TEST => TestingAttribute::Test.into(),
-            TestingAttribute::EXPECTED_FAILURE => TestingAttribute::ExpectedFailure(Box::new(ExpectedFailure::Expected)).into(),
-            TestingAttribute::RAND_TEST => TestingAttribute::RandTest.into(),
-            VerificationAttribute::SPEC => VerificationAttribute::Spec.into(),
-            VerificationAttribute::SPEC_ONLY => VerificationAttribute::SpecOnly.into(),
-            BytecodeInstructionAttribute::BYTECODE_INSTRUCTION => BytecodeInstructionAttribute.into(),
-            DiagnosticAttribute::ALLOW => DiagnosticAttribute::Allow { allow_set: BTreeSet::new() }.into(),
-            DiagnosticAttribute::LINT_ALLOW => DiagnosticAttribute::LintAllow { allow_set: BTreeSet::new() }.into(),
-            DefinesPrimitiveAttribute::DEFINES_PRIM => DefinesPrimitiveAttribute { name: sp(Loc::invalid(), Symbol::from("unknown")) }.into(),
-            ExternalAttribute::EXTERNAL => ExternalAttribute { attrs: UniqueMap::new() }.into(),
-            SyntaxAttribute::SYNTAX => SyntaxAttribute { kind: sp(Loc::invalid(), Symbol::from("unknown")) }.into(),
-            ErrorAttribute::ERROR => ErrorAttribute { code: None }.into(),
-            DeprecationAttribute::DEPRECATED => DeprecationAttribute { note: None }.into(),
-            ModeAttribute::MODE => ModeAttribute { modes: UniqueSet::new() }.into(),
-            _ => return None,
-        })
-    }
-
     pub const fn name(&self) -> &str {
         match self {
             Self::BytecodeInstruction(attr) => attr.name(),
@@ -294,10 +281,21 @@ impl VerificationAttribute {
     pub const SPEC: &'static str = "spec";
     pub const SPEC_ONLY: &'static str = "spec_only";
 
+
+    // Spec arguments
+    pub const PROVE_NAME: &'static str = "prove";
+    pub const FOCUS_NAME: &'static str = "focus";
+    pub const TARGET_NAME: &'static str = "target";
+    pub const NO_OPAQUE_NAME: &'static str = "no_opaque";
+    pub const IGNORE_ABORT_NAME: &'static str = "ignore_abort";
+
+    // Spec only arguments
+    pub const INV_TARGET_NAME: &'static str = "inv_target";
+
     pub const fn name(&self) -> &str {
         match self {
-            Self::Spec => Self::SPEC,
-            Self::SpecOnly => Self::SPEC_ONLY
+            Self::Spec { .. } => Self::SPEC,
+            Self::SpecOnly { .. } => Self::SPEC_ONLY,
         }
     }
 
@@ -318,15 +316,15 @@ impl VerificationAttribute {
             Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
 
         match self {
-            Self::Spec => &FUNCTION_POSITIONS,
-            Self::SpecOnly => &VERIFY_ONLY_POSITIONS
+            Self::Spec { .. } => &FUNCTION_POSITIONS,
+            Self::SpecOnly { .. } => &VERIFY_ONLY_POSITIONS
         }
     }
 
     pub fn attribute_kind(&self) -> AttributeKind_ {
         match self {
-            Self::Spec => AttributeKind_::Spec,
-            Self::SpecOnly => AttributeKind_::SpecOnly,
+            Self::Spec { .. } => AttributeKind_::Spec,
+            Self::SpecOnly { .. } => AttributeKind_::SpecOnly,
         }
     }
 }
@@ -934,8 +932,42 @@ impl AstDebug for ExpectedFailure {
 impl AstDebug for VerificationAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            VerificationAttribute::Spec => w.write("spec"),
-            VerificationAttribute::SpecOnly =>  w.write("spec_only"),
+            VerificationAttribute::Spec { focus, prove, target, no_opaque, ignore_abort } => {
+                w.write("spec(");
+                let mut first = true;
+                if *focus {
+                    if !first { w.write(", "); }
+                    w.write("focus");
+                    first = false;
+                }
+                if *prove {
+                    if !first { w.write(", "); }
+                    w.write("prove");
+                    first = false;
+                }
+                if let Some(target) = target {
+                    if !first { w.write(", "); }
+                    w.write(format!("target = {}", target));
+                    first = false;
+                }
+                if *no_opaque {
+                    if !first { w.write(", "); }
+                    w.write("no_opaque");
+                    first = false;
+                }
+                if *ignore_abort {
+                    if !first { w.write(", "); }
+                    w.write(format!("ignore_abort = {}", ignore_abort));
+                }
+                w.write(")");
+            }
+            VerificationAttribute::SpecOnly { inv_target } => {
+                w.write("spec_only(");
+                if *inv_target {
+                    w.write("inv_target");
+                }
+                w.write(")");
+            }
         }
     }
 }

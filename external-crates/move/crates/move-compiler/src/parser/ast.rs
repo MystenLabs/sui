@@ -228,8 +228,16 @@ pub enum Attribute_ {
     },
     RandomTest,
     // -- verification attributes  --------------------
-    Spec,
-    SpecOnly,
+    Spec {
+        focus: bool,
+        prove: bool,
+        target: Option<NameAccessChain>,
+        no_opaque: bool,
+        ignore_abort: bool,
+    },
+    SpecOnly {
+        inv_target: bool,
+    },
 }
 
 pub type Attribute = Spanned<Attribute_>;
@@ -880,8 +888,8 @@ impl Attribute_ {
             Attribute_::Test => AK::Test.name(),
             Attribute_::ExpectedFailure { .. } => AK::ExpectedFailure.name(),
             Attribute_::RandomTest => AK::RandTest.name(),
-            Attribute_::Spec => AK::Spec.name(),
-            Attribute_::SpecOnly => AK::SpecOnly.name(),
+            Attribute_::Spec { .. } => AK::Spec.name(),
+            Attribute_::SpecOnly { .. } => AK::SpecOnly.name(),
         }
     }
 
@@ -1744,11 +1752,41 @@ impl AstDebug for Attribute_ {
             A::RandomTest => {
                 w.write("rand_test");
             },
-            A::Spec => {
-                w.write("spec");
+            A::Spec { focus, prove, target, no_opaque, ignore_abort }  => {
+                w.write("spec(");
+                let mut first = true;
+                if *focus {
+                    if !first { w.write(", "); }
+                    w.write("focus");
+                    first = false;
+                }
+                if *prove {
+                    if !first { w.write(", "); }
+                    w.write("prove");
+                    first = false;
+                }
+                if let Some(target) = target {
+                    if !first { w.write(", "); }
+                    w.write(format!("target = {}", target));
+                    first = false;
+                }
+                if *no_opaque {
+                    if !first { w.write(", "); }
+                    w.write("no_opaque");
+                    first = false;
+                }
+                if *ignore_abort {
+                    if !first { w.write(", "); }
+                    w.write(format!("ignore_abort = {}", ignore_abort));
+                }
+                w.write(")");
             },
-            A::SpecOnly => {
-                w.write("spec_only");
+            A::SpecOnly { inv_target } => {
+                if *inv_target {
+                    w.write("spec_only(inv_target)");
+                } else {
+                    w.write("spec_only()");
+                } 
             },
         }
     }

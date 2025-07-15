@@ -463,25 +463,175 @@ fn parse_verify_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<A
     }
 }
 
+fn parse_spec_parametized(context: &mut Context, loc: &Loc, inner_attrs: &Spanned<Vec<ParsedAttribute>>) -> Vec<Attribute> {
+    let sp!(inner_loc, attrs) = inner_attrs;
+
+    let mut focus: bool = false;
+    let mut prove: bool = false;
+    let mut target: Option<NameAccessChain> = None;
+    let mut no_opaque: bool = false;
+    let mut ignore_abort: bool = false;
+
+    let mut visited = BTreeSet::new();
+
+    for inner_attr in attrs.into_iter() {
+        match &inner_attr.value {
+            ParsedAttribute_::Name(kind) => {
+                let prop = kind.value.to_string();
+                if !visited.insert(prop.clone()) {
+                    let msg = format!(
+                        "Duplicate {} parameter '{}'",
+                        KA::VerificationAttribute::SPEC,
+                        prop
+                    );
+                    context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
+                    return vec![];
+                }
+                if prop == KA::VerificationAttribute::FOCUS_NAME {
+                    focus = true;
+                } else if prop == KA::VerificationAttribute::PROVE_NAME  {
+                    prove = true;
+                } else if prop == KA::VerificationAttribute::NO_OPAQUE_NAME  {
+                    no_opaque = true;
+                } else if prop == KA::VerificationAttribute::IGNORE_ABORT_NAME {
+                    ignore_abort = true;
+                } else {
+                    let msg = format!(
+                        "Unknown {} name parameter '{}'. Expected one of: {}, {}, {}, {}",
+                        KA::VerificationAttribute::SPEC,
+                        prop,
+                        KA::VerificationAttribute::FOCUS_NAME,
+                        KA::VerificationAttribute::PROVE_NAME,
+                        KA::VerificationAttribute::NO_OPAQUE_NAME,
+                        KA::VerificationAttribute::IGNORE_ABORT_NAME,
+                    );
+                    context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
+                    return vec![];
+                }
+            }
+            ParsedAttribute_::Assigned(kind, val) => {
+                let prop = kind.value.to_string();
+
+                if !visited.insert(prop.clone()) {
+                    let msg = format!(
+                        "Duplicate {} parameter '{}'",
+                        KA::VerificationAttribute::SPEC,
+                        prop
+                    );
+                    context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
+                    return vec![];
+                }
+
+                if prop == KA::VerificationAttribute::FOCUS_NAME {
+                    let AttributeValue_::ModuleAccess(ref access) = val.value else {
+                        let msg = format!(
+                            "Expected module access for {} parameter '{}'",
+                            KA::VerificationAttribute::SPEC,
+                            prop
+                        );
+                        context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
+                        return vec![];
+                    };
+                    target = Some(access.clone());
+                } else {
+                    let msg = format!(
+                        "Unknown {} assign parameter '{}'. Expected: {}",
+                        KA::VerificationAttribute::SPEC,
+                        prop,
+                        KA::VerificationAttribute::TARGET_NAME,
+
+                    );
+                    context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
+                    return vec![];
+                }
+            }
+            ParsedAttribute_::Parameterized(_, _) => {
+                let msg = make_attribute_format_error(
+                    &inner_attr.value,
+                    &format!(
+                        "Internal parameterized attributes are not allowed for {}",
+                        KA::VerificationAttribute::SPEC
+                    ),
+                );
+                context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
+                return vec![];
+            }
+        }
+    }
+
+    vec![sp(*loc, Attribute_::Spec { prove, focus, target, no_opaque, ignore_abort })]
+
+}
+
 fn parse_spec(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
    use ParsedAttribute_ as PA;
     let sp!(loc, attr) = attribute;
     match attr {
         // Valid: a bare identifier is required.
         PA::Name(_) => {
-            vec![sp(loc, Attribute_::Spec)]
+            vec![sp(loc, Attribute_::Spec { 
+                focus: false,
+                prove: false,
+                ignore_abort: false,
+                no_opaque: false,
+                target: None,
+            })]
         }
-        // Invalid: any assignment or parameterized use is not allowed.
-        PA::Assigned(_, _) | PA::Parameterized(_, _) => {
+        PA::Parameterized(_, inner_attrs) => {
+            parse_spec_parametized(context, &loc, &inner_attrs)
+        }
+        // Invalid: any assignment use is not allowed.
+        PA::Assigned(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
-                &format!("'#[{}]' with no arguments", KA::VerificationAttribute::SPEC),
+                &format!(
+                    "either '#[{fail}]' or #[{fail}(<arg>, ...)]'",
+                    fail = KA::VerificationAttribute::SPEC_ONLY,
+                ),
             );
-            let mut diag = diag!(Declarations::InvalidAttribute, (loc, msg));
-            diag.add_note("Input values will be randomly generated for this test.");
-            context.add_diag(diag);
+            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
             vec![]
         }
+    }
+}
+
+fn parse_spec_only_parametized(context: &mut Context, loc: &Loc, inner_attrs: &Spanned<Vec<ParsedAttribute>>) -> Vec<Attribute> {
+    let sp!(inner_loc, attrs) = inner_attrs;
+    if attrs.len() > 1 {
+        let msg = format!(
+            "Attribute {} expects exactly one argument, found {}.",
+            KA::VerificationAttribute::SPEC_ONLY,
+            attrs.len()
+        );
+        let diag = diag!(Attributes::InvalidUsage, (*inner_loc, msg));
+        context.add_diag(diag);
+        return vec![];
+    }
+    let inner_attr = attrs.into_iter().next();
+    if inner_attr.is_none() {
+        return vec![sp(*loc, Attribute_::SpecOnly { inv_target: false })];
+    }
+
+    if let Some(kind) = expect_name_attr(context, inner_attr.unwrap().clone()) {
+        if kind.value != KA::VerificationAttribute::INV_TARGET_NAME.into() {
+            let msg = format!(
+                "Invalid attribute name {} for {}.",
+                kind.value,
+                KA::VerificationAttribute::SPEC_ONLY,
+            );
+            let diag = diag!(Attributes::InvalidUsage, (*inner_loc, msg));
+            context.add_diag(diag);
+            return vec![];
+        }
+        vec![sp(*loc, Attribute_::SpecOnly { inv_target: true })]
+    } else {
+        let msg = format!(
+            "Expected name attribute for {}",
+            KA::VerificationAttribute::SPEC_ONLY,
+        );
+        let diag = diag!(Attributes::InvalidUsage, (*inner_loc, msg));
+        context.add_diag(diag);
+        vec![]
     }
 }
 
@@ -489,19 +639,27 @@ fn parse_spec_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<Att
    use ParsedAttribute_ as PA;
     let sp!(loc, attr) = attribute;
     match attr {
-        // Valid: a bare identifier is required.
         PA::Name(_) => {
-            vec![sp(loc, Attribute_::SpecOnly)]
+            vec![sp(
+                loc,
+                Attribute_::SpecOnly {
+                    inv_target: false,
+                },
+            )]
         }
-        // Invalid: any assignment or parameterized use is not allowed.
-        PA::Assigned(_, _) | PA::Parameterized(_, _) => {
+        PA::Parameterized(_, inner_attrs) => {
+            parse_spec_only_parametized(context, &loc, &inner_attrs)
+        }
+        // Invalid: any assignment use is not allowed.
+        PA::Assigned(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
-                &format!("'#[{}]' with no arguments", KA::VerificationAttribute::SPEC_ONLY),
+                &format!(
+                    "either '#[{fail}]' or #[{fail}(<arg>, ...)]'",
+                    fail = KA::VerificationAttribute::SPEC_ONLY,
+                ),
             );
-            let mut diag = diag!(Declarations::InvalidAttribute, (loc, msg));
-            diag.add_note("Input values will be randomly generated for this test.");
-            context.add_diag(diag);
+            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
             vec![]
         }
     }

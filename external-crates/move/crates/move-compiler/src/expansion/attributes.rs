@@ -307,8 +307,15 @@ fn attribute(
             KA::Testing(TestingAttribute::ExpectedFailure(Box::new(failure)))
         }
         PA::RandomTest => KA::Testing(A::TestingAttribute::RandTest),
-        PA::Spec => KA::Verification(A::VerificationAttribute::Spec),
-        PA::SpecOnly => KA::Verification(A::VerificationAttribute::SpecOnly),
+        PA::Spec { focus, prove, ignore_abort, no_opaque, target } => 
+            KA::Verification(A::VerificationAttribute::Spec { 
+                focus,
+                prove,
+                ignore_abort,
+                no_opaque,
+                target: target.map(|t| context.name_access_chain_to_module_ident(t))?,
+            }),
+        PA::SpecOnly { inv_target}  => KA::Verification(A::VerificationAttribute::SpecOnly { inv_target } ),
     };
     Some(sp(loc, attr_))
 }

@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::DiagnosticReporter,
     parser::{
         ast as P,
         filter::{filter_program, FilterContext},
     },
-    shared::{known_attributes::{KnownAttribute, VerificationAttribute}, CompilationEnv},
+    shared::{CompilationEnv},
 };
 
 use move_ir_types::location::Loc;
@@ -15,7 +14,6 @@ use move_symbol_pool::Symbol;
 
 struct Context<'env> {
     env: &'env CompilationEnv,
-    reporter: DiagnosticReporter<'env>,
     is_source_def: bool,
     has_spec_code: bool,
     current_package: Option<Symbol>,
@@ -23,10 +21,8 @@ struct Context<'env> {
 
 impl<'env> Context<'env> {
     fn new(env: &'env CompilationEnv) -> Self {
-        let reporter = env.diagnostic_reporter_at_top_level();
         Self {
             env,
-            reporter,
             is_source_def: false,
             has_spec_code: false,
             current_package: None,
@@ -52,8 +48,8 @@ impl FilterContext for Context<'_> {
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
         //
         let is_spec_only = flattened_attrs.iter().find(|(_, attr)| {
-            matches!(attr, VerificationAttribute::SpecOnly)
-                || matches!(attr, VerificationAttribute::Spec)
+            matches!(attr, P::Attribute_::SpecOnly { .. })
+                || matches!(attr, P::Attribute_::Spec { .. })
         });
         self.has_spec_code = self.has_spec_code || is_spec_only.is_some();
         is_spec_only.is_some()
@@ -119,14 +115,15 @@ pub fn program(compilation_env: &CompilationEnv, prog: P::Program) -> P::Program
 
 fn verification_attributes(
     attrs: &P::Attributes,
-) -> Vec<(Loc, VerificationAttribute)> {
+) -> Vec<(Loc, P::Attribute_)> {
     attrs
         .value
         .0
         .iter()
         .filter_map(
-            |attr| match KnownAttribute::resolve(attr.value.attribute_name())? {
-                KnownAttribute::Verification(verify_attr) => Some((attr.loc, verify_attr)),
+            |attr| match &attr.value {
+                P::Attribute_::Spec { .. } => Some((attr.loc, attr.value.clone())),
+                P::Attribute_::SpecOnly { .. } => Some((attr.loc, attr.value.clone())),
                 _ => None,
             },
         )
