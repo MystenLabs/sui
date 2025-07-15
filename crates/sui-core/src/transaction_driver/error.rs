@@ -25,7 +25,7 @@ pub enum TransactionDriverError {
     ExecutionDataNotFound(String),
     #[error("Transaction rejected with reason: {0}")]
     TransactionRejected(String),
-    #[error("Transaction expired at round: {0}")]
+    #[error("Transaction expired at validators: {0}")]
     TransactionExpired(String),
     #[error("Transaction rejected with reason: {0} & expired with reason: {1}")]
     TransactionRejectedOrExpired(String, String),

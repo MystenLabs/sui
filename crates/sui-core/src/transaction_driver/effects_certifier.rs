@@ -348,6 +348,10 @@ impl EffectsCertifier {
                     return Err(TransactionDriverError::TransactionRejected(
                         rejected_errors.join(", "),
                     ));
+                } else if expired_weight >= committee.validity_threshold() {
+                    return Err(TransactionDriverError::TransactionExpired(
+                        expired_errors.join(", "),
+                    ));
                 }
             }
         }
@@ -405,4 +409,487 @@ impl EffectsCertifier {
     }
 }
 
-// TODO(fastpath): Add tests for EffectsCertifier
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
+        authority_client::AuthorityAPI,
+        wait_for_effects_request::{
+            ExecutedData, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
+        },
+    };
+    use async_trait::async_trait;
+    use consensus_types::block::BlockRef;
+    use std::{
+        collections::{BTreeMap, HashMap},
+        net::SocketAddr,
+        sync::{Arc, Mutex as StdMutex},
+    };
+    use sui_types::{
+        base_types::AuthorityName,
+        committee::Committee,
+        digests::{TransactionDigest, TransactionEffectsDigest},
+        effects::TransactionEffects,
+        error::SuiError,
+        messages_checkpoint::{
+            CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
+        },
+        messages_consensus::ConsensusPosition,
+        messages_grpc::{
+            HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+            HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+            HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+            RawSubmitTxResponse, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
+            SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        },
+        sui_system_state::SuiSystemState,
+        transaction::{CertifiedTransaction, Transaction},
+    };
+    use tokio::time::{sleep, Duration};
+
+    // Mock AuthorityAPI for testing
+    #[derive(Clone)]
+    struct MockAuthority {
+        _name: AuthorityName,
+        ack_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
+        full_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
+        delay: Option<Duration>,
+        should_timeout: bool,
+    }
+
+    impl MockAuthority {
+        fn new(name: AuthorityName) -> Self {
+            Self {
+                _name: name,
+                ack_responses: Arc::new(StdMutex::new(HashMap::new())),
+                full_responses: Arc::new(StdMutex::new(HashMap::new())),
+                delay: None,
+                should_timeout: false,
+            }
+        }
+
+        fn set_ack_response(&self, tx_digest: TransactionDigest, response: WaitForEffectsResponse) {
+            self.ack_responses
+                .lock()
+                .unwrap()
+                .insert(tx_digest, response);
+        }
+
+        fn set_full_response(
+            &self,
+            tx_digest: TransactionDigest,
+            response: WaitForEffectsResponse,
+        ) {
+            self.full_responses
+                .lock()
+                .unwrap()
+                .insert(tx_digest, response);
+        }
+    }
+
+    #[async_trait]
+    impl AuthorityAPI for MockAuthority {
+        async fn wait_for_effects(
+            &self,
+            request: RawWaitForEffectsRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<RawWaitForEffectsResponse, SuiError> {
+            if self.should_timeout {
+                sleep(Duration::from_secs(10)).await;
+            }
+
+            if let Some(delay) = self.delay {
+                sleep(delay).await;
+            }
+
+            let wait_request: WaitForEffectsRequest = request.try_into()?;
+
+            // Choose the right response based on include_details flag
+            let responses = if wait_request.include_details {
+                &self.full_responses
+            } else {
+                &self.ack_responses
+            };
+
+            let responses = responses.lock().unwrap();
+
+            if let Some(response) = responses.get(&wait_request.transaction_digest) {
+                let raw_response: RawWaitForEffectsResponse = response
+                    .clone()
+                    .try_into()
+                    .map_err(|_| SuiError::Unknown("Conversion failed".to_string()))?;
+                Ok(raw_response)
+            } else {
+                Err(SuiError::Unknown("No response configured".to_string()))
+            }
+        }
+
+        async fn submit_transaction(
+            &self,
+            _request: RawSubmitTxRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<RawSubmitTxResponse, SuiError> {
+            unimplemented!();
+        }
+
+        async fn handle_transaction(
+            &self,
+            _transaction: Transaction,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<HandleTransactionResponse, SuiError> {
+            unimplemented!();
+        }
+
+        async fn handle_certificate_v2(
+            &self,
+            _certificate: CertifiedTransaction,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<HandleCertificateResponseV2, SuiError> {
+            unimplemented!();
+        }
+
+        async fn handle_certificate_v3(
+            &self,
+            _request: HandleCertificateRequestV3,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<HandleCertificateResponseV3, SuiError> {
+            unimplemented!()
+        }
+
+        async fn handle_soft_bundle_certificates_v3(
+            &self,
+            _request: HandleSoftBundleCertificatesRequestV3,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
+            unimplemented!()
+        }
+
+        async fn handle_object_info_request(
+            &self,
+            _request: ObjectInfoRequest,
+        ) -> Result<ObjectInfoResponse, SuiError> {
+            unimplemented!()
+        }
+
+        async fn handle_transaction_info_request(
+            &self,
+            _request: TransactionInfoRequest,
+        ) -> Result<TransactionInfoResponse, SuiError> {
+            unimplemented!()
+        }
+
+        async fn handle_checkpoint(
+            &self,
+            _request: CheckpointRequest,
+        ) -> Result<CheckpointResponse, SuiError> {
+            unimplemented!()
+        }
+
+        async fn handle_checkpoint_v2(
+            &self,
+            _request: CheckpointRequestV2,
+        ) -> Result<CheckpointResponseV2, SuiError> {
+            unimplemented!()
+        }
+
+        async fn handle_system_state_object(
+            &self,
+            _request: SystemStateRequest,
+        ) -> Result<SuiSystemState, SuiError> {
+            unimplemented!()
+        }
+    }
+
+    fn create_test_authority_aggregator() -> AuthorityAggregator<MockAuthority> {
+        let (committee, _) = Committee::new_simple_test_committee_of_size(4);
+        let mut authority_clients = BTreeMap::new();
+
+        for (name, _) in committee.members() {
+            let mock_authority = MockAuthority::new(*name);
+            authority_clients.insert(*name, mock_authority);
+        }
+
+        AuthorityAggregatorBuilder::from_committee(committee)
+            .build_custom_clients(authority_clients)
+    }
+
+    fn create_test_effects_digest(value: u8) -> TransactionEffectsDigest {
+        TransactionEffectsDigest::new([value; 32])
+    }
+
+    fn create_test_transaction_digest(value: u8) -> TransactionDigest {
+        TransactionDigest::new([value; 32])
+    }
+
+    fn create_test_executed_data() -> ExecutedData {
+        ExecutedData {
+            effects: TransactionEffects::default(),
+            events: None,
+            input_objects: Vec::new(),
+            output_objects: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_successful_certified_effects() {
+        telemetry_subscribers::init_for_testing();
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+        let certifier = EffectsCertifier::new(metrics);
+
+        let tx_digest = create_test_transaction_digest(1);
+        let effects_digest = create_test_effects_digest(2);
+        let executed_data = create_test_executed_data();
+
+        // Set up successful responses from all authorities
+        let executed_response_full = WaitForEffectsResponse::Executed {
+            effects_digest,
+            details: Some(Box::new(executed_data.clone())),
+        };
+
+        let executed_response_ack = WaitForEffectsResponse::Executed {
+            effects_digest,
+            details: None,
+        };
+
+        for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+            let client = safe_client.authority_client();
+            client.set_ack_response(tx_digest, executed_response_ack.clone());
+            client.set_full_response(tx_digest, executed_response_full.clone());
+        }
+
+        let consensus_position = ConsensusPosition {
+            block: BlockRef::MIN,
+            index: 0,
+        };
+        let epoch = 1;
+        let options = SubmitTransactionOptions::default();
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &tx_digest,
+                consensus_position,
+                epoch,
+                &options,
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        match response.effects.finality_info {
+            EffectsFinalityInfo::QuorumExecuted(returned_epoch) => {
+                assert_eq!(returned_epoch, epoch);
+            }
+            _ => panic!("Expected QuorumExecuted finality info"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transaction_rejected() {
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+        let certifier = EffectsCertifier::new(metrics);
+
+        let tx_digest = create_test_transaction_digest(1);
+
+        // Set up rejected responses from all authorities
+        let rejected_response = WaitForEffectsResponse::Rejected {
+            reason: RejectReason::None,
+        };
+
+        for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+            let client = safe_client.authority_client();
+            client.set_ack_response(tx_digest, rejected_response.clone());
+        }
+
+        let consensus_position = ConsensusPosition {
+            block: BlockRef::MIN,
+            index: 0,
+        };
+        let epoch = 1;
+        let options = SubmitTransactionOptions::default();
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &tx_digest,
+                consensus_position,
+                epoch,
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::TransactionRejected(reason) => {
+                assert!(reason.contains("Rejected with no reason"));
+            }
+            e => panic!("Expected TransactionRejected error, got: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transaction_expired() {
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+        let certifier = EffectsCertifier::new(metrics);
+
+        let tx_digest = create_test_transaction_digest(1);
+
+        // Set up expired responses from all authorities
+        let expired_response = WaitForEffectsResponse::Expired(42);
+
+        for (_, safe_client) in authority_aggregator.authority_clients.iter() {
+            let client = safe_client.authority_client();
+            client.set_ack_response(tx_digest, expired_response.clone());
+        }
+
+        let consensus_position = ConsensusPosition {
+            block: BlockRef::MIN,
+            index: 0,
+        };
+        let epoch = 1;
+        let options = SubmitTransactionOptions::default();
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &tx_digest,
+                consensus_position,
+                epoch,
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::TransactionExpired(errors) => {
+                assert!(errors.contains("42"));
+            }
+            e => panic!("Expected TransactionExpired error, got: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mixed_rejected_and_expired() {
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+        let certifier = EffectsCertifier::new(metrics);
+
+        let tx_digest = create_test_transaction_digest(1);
+
+        let rejected_response = WaitForEffectsResponse::Rejected {
+            reason: RejectReason::None,
+        };
+        let expired_response = WaitForEffectsResponse::Expired(42);
+
+        // Set up mixed responses
+        let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+        for (i, authority_name) in authorities.iter().enumerate() {
+            let client = authority_aggregator
+                .authority_clients
+                .get(authority_name)
+                .unwrap()
+                .authority_client();
+            if i % 2 == 0 {
+                client.set_ack_response(tx_digest, rejected_response.clone());
+            } else {
+                client.set_ack_response(tx_digest, expired_response.clone());
+            }
+        }
+
+        let consensus_position = ConsensusPosition {
+            block: BlockRef::MIN,
+            index: 0,
+        };
+        let epoch = 1;
+        let options = SubmitTransactionOptions::default();
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &tx_digest,
+                consensus_position,
+                epoch,
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::TransactionRejectedOrExpired(
+                rejected_errors,
+                expired_errors,
+            ) => {
+                assert!(expired_errors.contains("42"));
+                assert!(rejected_errors.contains("Rejected with no reason"));
+            }
+            e => panic!("Unexpected error type: {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_forked_execution() {
+        let authority_aggregator = Arc::new(create_test_authority_aggregator());
+        let metrics = Arc::new(TransactionDriverMetrics::new_for_tests());
+        let certifier = EffectsCertifier::new(metrics);
+
+        let tx_digest = create_test_transaction_digest(1);
+        let effects_digest1 = create_test_effects_digest(2);
+        let effects_digest2 = create_test_effects_digest(3);
+
+        // Set up conflicting effects digests
+        let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
+        for (i, authority_name) in authorities.iter().enumerate() {
+            let client = authority_aggregator
+                .authority_clients
+                .get(authority_name)
+                .unwrap()
+                .authority_client();
+            let digest = if i % 2 == 0 {
+                effects_digest1
+            } else {
+                effects_digest2
+            };
+            let response = WaitForEffectsResponse::Executed {
+                effects_digest: digest,
+                details: None,
+            };
+            client.set_ack_response(tx_digest, response);
+        }
+
+        let consensus_position = ConsensusPosition {
+            block: BlockRef::MIN,
+            index: 0,
+        };
+        let epoch = 1;
+        let options = SubmitTransactionOptions::default();
+
+        let result = certifier
+            .get_certified_finalized_effects(
+                &authority_aggregator,
+                &tx_digest,
+                consensus_position,
+                epoch,
+                &options,
+            )
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            TransactionDriverError::ForkedExecution {
+                total_responses_weight,
+                executed_weight,
+                rejected_weight: _,
+                expired_weight: _,
+                errors: _,
+            } => {
+                assert_eq!(total_responses_weight, 10000);
+                assert_eq!(executed_weight, 10000);
+            }
+            e => panic!("Expected ForkedExecution error, got: {:?}", e),
+        }
+    }
+}

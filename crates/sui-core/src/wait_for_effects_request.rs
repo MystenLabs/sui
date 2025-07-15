@@ -59,6 +59,7 @@ impl std::fmt::Display for RejectReason {
     }
 }
 
+#[derive(Clone)]
 pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
