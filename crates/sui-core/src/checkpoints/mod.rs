@@ -2822,6 +2822,7 @@ fn poll_count<Fut>(future: Fut) -> PollCounter<Fut> {
 mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::transaction_outputs::TransactionOutputs;
     use futures::future::BoxFuture;
     use futures::FutureExt as _;
     use std::collections::{BTreeMap, HashMap};
@@ -3130,7 +3131,10 @@ mod tests {
             unimplemented!()
         }
 
-        fn is_tx_fastpath_executed(&self, _: &TransactionDigest) -> bool {
+        fn get_mysticeti_fastpath_outputs(
+            &self,
+            _: &TransactionDigest,
+        ) -> Option<Arc<TransactionOutputs>> {
             unimplemented!()
         }
 
