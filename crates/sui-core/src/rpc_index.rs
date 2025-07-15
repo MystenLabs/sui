@@ -218,6 +218,10 @@ pub struct PackageVersionInfo {
     pub storage_id: ObjectID,
 }
 
+fn default_table_options() -> typed_store::rocks::DBOptions {
+    typed_store::rocks::default_db_options().disable_write_throttling()
+}
+
 fn balance_delta_merge_operator(
     _key: &[u8],
     existing_val: Option<&[u8]>,
@@ -242,7 +246,7 @@ fn balance_delta_merge_operator(
 }
 
 fn balance_table_options() -> typed_store::rocks::DBOptions {
-    typed_store::rocks::default_db_options()
+    default_table_options()
         .set_merge_operator_associative("balance_merge", balance_delta_merge_operator)
 }
 
@@ -282,34 +286,40 @@ struct IndexStoreTables {
     /// This is useful to help know the highest checkpoint that was indexed in the event that the
     /// node was running with indexes enabled, then run for a period of time with indexes disabled,
     /// and then run with them enabled again so that the tables can be reinitialized.
+    #[default_options_override_fn = "default_table_options"]
     watermark: DBMap<Watermark, CheckpointSequenceNumber>,
 
     /// An index of extra metadata for Epochs.
     ///
     /// Only contains entries for transactions which have yet to be pruned from the main database.
+    #[default_options_override_fn = "default_table_options"]
     epochs: DBMap<EpochId, EpochInfo>,
 
     /// An index of extra metadata for Transactions.
     ///
     /// Only contains entries for transactions which have yet to be pruned from the main database.
+    #[default_options_override_fn = "default_table_options"]
     transactions: DBMap<TransactionDigest, TransactionInfo>,
 
     /// An index of object ownership.
     ///
     /// Allows an efficient iterator to list all objects currently owned by a specific user
     /// account.
+    #[default_options_override_fn = "default_table_options"]
     owner: DBMap<OwnerIndexKey, OwnerIndexInfo>,
 
     /// An index of dynamic fields (children objects).
     ///
     /// Allows an efficient iterator to list all of the dynamic fields owned by a particular
     /// ObjectID.
+    #[default_options_override_fn = "default_table_options"]
     dynamic_field: DBMap<DynamicFieldKey, ()>,
 
     /// An index of Coin Types
     ///
     /// Allows looking up information related to published Coins, like the ObjectID of its
     /// coorisponding CoinMetadata.
+    #[default_options_override_fn = "default_table_options"]
     coin: DBMap<CoinIndexKey, CoinIndexInfo>,
 
     /// An index of Balances.
@@ -322,6 +332,7 @@ struct IndexStoreTables {
     ///
     /// Maps original package ID and version to the storage ID of that version.
     /// Allows efficient listing of all versions of a package.
+    #[default_options_override_fn = "default_table_options"]
     package_version: DBMap<PackageVersionKey, PackageVersionInfo>,
     // NOTE: Authors and Reviewers before adding any new tables ensure that they are either:
     // - bounded in size by the live object set
