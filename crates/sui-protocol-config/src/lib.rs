@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 88;
+const MAX_PROTOCOL_VERSION: u64 = 89;
 
 // Record history of protocol version allocations here:
 //
@@ -249,6 +249,7 @@ const MAX_PROTOCOL_VERSION: u64 = 88;
 // Version 88: Update `sui-system` package to use `calculate_rewards` function.
 //             Define the cost for the native Move function `rgp`.
 //             Ignore execution time observations after validator stops accepting certs.
+// Version 89: Standard library improvements.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3825,6 +3826,7 @@ impl ProtocolConfig {
                             },
                         );
                 }
+                89 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
