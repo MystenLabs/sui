@@ -10,6 +10,7 @@ use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_tbls::{dkg_v1, dkg_v1::Output, nodes, nodes::PartyId};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
@@ -592,7 +593,9 @@ impl RandomnessManager {
             return Ok(());
         }
         let Some((_, party_id)) = self.authority_info.get(authority) else {
-            error!("random beacon: received DKG Message from unknown authority: {authority:?}");
+            debug_fatal!(
+                "random beacon: received DKG Message from unknown authority: {authority:?}"
+            );
             return Ok(());
         };
         if *party_id != msg.sender() {

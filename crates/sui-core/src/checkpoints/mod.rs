@@ -1179,7 +1179,7 @@ impl CheckpointBuilder {
                     });
                 }
                 Err(e) => {
-                    error!("Error while making checkpoint, will retry in 1s: {:?}", e);
+                    debug_fatal!("Error while making checkpoint, will retry in 1s: {:?}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     self.metrics.checkpoint_errors.inc();
                     return;
@@ -2058,7 +2058,7 @@ impl CheckpointAggregator {
         info!("Starting CheckpointAggregator");
         loop {
             if let Err(e) = self.run_and_notify().await {
-                error!(
+                debug_fatal!(
                     "Error while aggregating checkpoint, will retry in 1s: {:?}",
                     e
                 );
@@ -2275,9 +2275,9 @@ impl CheckpointSignatureAggregator {
                     format!("{:?} (total stake: {})", digest, total_stake)
                 })
                 .collect::<Vec<String>>();
-            error!(
-                checkpoint_seq = self.summary.sequence_number,
-                "Split brain detected in checkpoint signature aggregation! Remaining stake: {:?}, Digests by stake: {:?}",
+            debug_fatal!(
+                "Split brain detected in checkpoint signature aggregation for checkpoint {:?}. Remaining stake: {:?}, Digests by stake: {:?}",
+                self.summary.sequence_number,
                 self.signatures_by_digest.uncommitted_stake(),
                 digests_by_stake_messages,
             );
