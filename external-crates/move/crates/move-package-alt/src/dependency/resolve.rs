@@ -35,6 +35,7 @@ pub type ResolverResult<T> = Result<T, ResolverError>;
 
 /// A [ResolvedDependency] is like a [CombinedDependency] except that it no longer has
 /// externally resolved dependencies
+#[derive(Debug)]
 pub struct ResolvedDependency(pub(super) Dependency<Resolved>);
 
 #[derive(Error, Debug)]

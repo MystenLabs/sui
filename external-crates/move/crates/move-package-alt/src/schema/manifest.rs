@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer, de};
 use serde_spanned::Spanned;
 
 use super::{
-    EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishedID, ResolverName,
+    EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
 };
 
 // TODO: look at Brandon's serialization code (https://github.com/MystenLabs/sui-rust-sdk/blob/master/crates/sui-sdk-types/src/object.rs)
@@ -17,8 +17,7 @@ pub type EnvironmentID = String;
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
 // user-editable files
 #[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
     pub package: PackageMetadata,
 
@@ -63,9 +62,8 @@ pub struct ReplacementDependency {
     #[serde(flatten, default)]
     pub dependency: Option<DefaultDependency>,
 
-    #[serde(default)]
-    // TODO: we need original id too
-    pub published_at: Option<PublishedID>,
+    #[serde(flatten, default)]
+    pub addresses: Option<PublishAddresses>,
 
     #[serde(default)]
     pub use_environment: Option<EnvironmentName>,

@@ -7,11 +7,19 @@ use serde::{Deserialize, Serialize};
 pub type EnvironmentName = String;
 pub type PackageName = Identifier;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PublishedID(pub AccountAddress);
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OriginalID(pub AccountAddress);
+
+/// A pair of published-at and original-id; appears in various places
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct PublishAddresses {
+    pub published_at: PublishedID,
+    pub original_id: OriginalID,
+}
 
 /// A serialized dependency of the form `{ local = <path> }`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -31,6 +39,18 @@ pub struct OnChainDepInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(try_from = "bool", into = "bool")]
 pub struct ConstTrue;
+
+impl From<u16> for OriginalID {
+    fn from(value: u16) -> Self {
+        Self(AccountAddress::from_suffix(value))
+    }
+}
+
+impl From<u16> for PublishedID {
+    fn from(value: u16) -> Self {
+        Self(AccountAddress::from_suffix(value))
+    }
+}
 
 impl TryFrom<bool> for ConstTrue {
     type Error = &'static str;

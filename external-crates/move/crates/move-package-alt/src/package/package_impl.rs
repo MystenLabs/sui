@@ -11,13 +11,17 @@ use crate::{
         legacy::LegacyData,
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
-    dependency::{PinnedDependencyInfo, pin},
+    dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::lockfile::Lockfiles,
-    schema::{LocalDepInfo, LockfileDependencyInfo, OriginalID, Publication, PublishedID},
+    schema::{
+        LocalDepInfo, LockfileDependencyInfo, OriginalID, Publication, PublishAddresses,
+        PublishedID,
+    },
 };
 use move_core_types::identifier::Identifier;
+use tracing::debug;
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -30,15 +34,23 @@ pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
     manifest: Manifest<F>,
+
     /// A [`PackagePath`] representing the canonical path to the package directory.
     path: PackagePath,
+
     /// The on-chain publish information per environment
     /// TODO(manos): Replace this with a type as it's used in many places.
     publish_data: BTreeMap<EnvironmentName, Publication<F>>,
+
     /// The way this package should be serialized to the lockfile
     source: LockfileDependencyInfo,
+
     /// Optional legacy information for a supplied package.
     pub legacy_data: Option<LegacyData>,
+
+    /// The pinned direct dependencies for this package
+    /// Note: for legacy packages, this information will be stored in `legacy_data`.
+    deps: DependencySet<PinnedDependencyInfo>,
 }
 
 impl<F: MoveFlavor> Package<F> {
@@ -48,12 +60,9 @@ impl<F: MoveFlavor> Package<F> {
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>) -> PackageResult<Self> {
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let source = LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() });
 
-        Self::load_internal(
-            path,
-            LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }),
-        )
-        .await
+        Self::load_internal(path, source).await
     }
 
     /// Fetch [dep] and load a package from the fetched source
@@ -74,12 +83,14 @@ impl<F: MoveFlavor> Package<F> {
         // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
+            let deps = pin::<F>(manifest.dependencies().clone(), &manifest.environments()).await?;
             return Ok(Self {
                 manifest,
                 path,
                 publish_data,
                 source,
                 legacy_data: None,
+                deps,
             });
         }
 
@@ -100,6 +111,7 @@ impl<F: MoveFlavor> Package<F> {
             publish_data: Default::default(),
             source,
             legacy_data: Some(legacy_manifest.legacy_data),
+            deps: DependencySet::new(),
         })
     }
 
@@ -113,7 +125,7 @@ impl<F: MoveFlavor> Package<F> {
             .map(|l| l.published().clone())
             .map(|x| {
                 x.into_iter()
-                    .map(|(env, pub_info)| (pub_info.chain_id.clone(), pub_info))
+                    .map(|(env, pub_info)| (env.clone(), pub_info))
                     .collect()
             })
             .unwrap_or_default();
@@ -131,11 +143,12 @@ impl<F: MoveFlavor> Package<F> {
         self.manifest().package_name()
     }
 
-    /// TODO: comment
+    /// The contents of the manifest file for the package
     pub fn manifest(&self) -> &Manifest<F> {
         &self.manifest
     }
 
+    /// A dependency that points to this package.
     pub fn dep_for_self(&self) -> &LockfileDependencyInfo {
         &self.source
     }
@@ -145,11 +158,16 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
-    pub async fn direct_deps(
+    /// Returns an error if `env` is not declared in the manifest (TODO: remove this restriction?)
+    pub fn direct_deps(
         &self,
         env: &EnvironmentName,
     ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
-        let mut deps = self.manifest.dependencies();
+        debug!(
+            "requested deps for {} in env {}",
+            self.manifest.package_name(),
+            env
+        );
 
         // TODO: This will probably go away after our discussions.
         if self.manifest().environments().get(env).is_none() && self.legacy_data.is_none() {
@@ -159,50 +177,30 @@ impl<F: MoveFlavor> Package<F> {
             )));
         }
 
-        let envs: BTreeMap<_, _> = self
-            .manifest()
-            .environments()
-            .iter()
-            .filter(|(e, _)| *e == env)
-            .map(|(env, id)| (env.clone(), id.clone()))
-            .collect();
-        let pinned_deps = pin::<F>(deps.clone(), &envs).await?;
+        Ok(self.deps.deps_for(env).cloned().unwrap_or_default())
+    }
 
-        Ok(pinned_deps
-            .into_iter()
-            .map(|(_, id, dep)| (id, dep))
-            .collect())
+    /// Return the published addresses for this package in `env` if it is published
+    fn publication(&self, env: &EnvironmentName) -> Option<&PublishAddresses> {
+        self.publish_data
+            .get(env)
+            .map(|publication| &publication.addresses)
+            .or_else(|| {
+                self.legacy_data
+                    .as_ref()
+                    .and_then(|legacy| legacy.publication(env))
+            })
     }
 
     /// Tries to get the `published-at` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn published_at(&self, env: &EnvironmentName) -> PackageResult<PublishedID> {
-        if let Some(publish_data) = self.publish_data.get(env) {
-            return Ok(publish_data.published_at.clone());
-        }
-
-        self.legacy_data
-            .as_ref()
-            .and_then(|d| d.published_at(env))
-            .ok_or(PackageError::Generic(format!(
-                "Package {} does not have a `published-at` ID for environment: `{env}`",
-                self.name()
-            )))
+    pub fn published_at(&self, env: &EnvironmentName) -> Option<PublishedID> {
+        self.publication(env).map(|data| data.published_at.clone())
     }
 
     /// Tries to get the `original-id` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    pub fn original_id(&self, env: &EnvironmentName) -> PackageResult<OriginalID> {
-        if let Some(publish_data) = self.publish_data.get(env) {
-            return Ok(publish_data.original_id.clone());
-        }
-
-        self.legacy_data
-            .as_ref()
-            .and_then(|d| d.original_id(env))
-            .ok_or(PackageError::Generic(format!(
-                "Package {} does not have an `original-id` for environment: `{env}`",
-                self.name()
-            )))
+    pub fn original_id(&self, env: &EnvironmentName) -> Option<OriginalID> {
+        self.publication(env).map(|data| data.original_id.clone())
     }
 }
