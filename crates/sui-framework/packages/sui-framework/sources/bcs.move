@@ -162,14 +162,7 @@ public fun peel_vec_length(bcs: &mut BCS): u64 {
 /// functionality of peeling each value.
 public macro fun peel_vec<$T>($bcs: &mut BCS, $peel: |&mut BCS| -> $T): vector<$T> {
     let bcs = $bcs;
-    let len = bcs.peel_vec_length();
-    let mut i = 0;
-    let mut res = vector[];
-    while (i < len) {
-        res.push_back($peel(bcs));
-        i = i + 1;
-    };
-    res
+    vector::tabulate!(bcs.peel_vec_length(), |_| $peel(bcs))
 }
 
 /// Peel a vector of `address` from serialized bytes.
