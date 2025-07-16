@@ -140,7 +140,7 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
 
     for env in manifest.environments().keys() {
         let deps = deps.deps_for(env).unwrap();
-        let pinned = dependency::pin::<Vanilla>(deps.clone(), &env)
+        let pinned = dependency::pin::<Vanilla>(deps.clone(), env)
             .await
             .map_err(|e| e.to_string())?;
         for (name, dep) in pinned {

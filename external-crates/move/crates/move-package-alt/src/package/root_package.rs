@@ -38,21 +38,6 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
 
 /// Root package is the "public" entrypoint for operations with the package management.
 /// It's like a facade for all functionality, controlled by this.
-///
-///
-/// APIs:
-///
-/// 1. List available environments (path)
-/// 2. load(env) -> Self | Loads root package for specified env | All the validation happens at load!!
-///     - load(): Smart, pin if necessary
-///     - load_force_repin(): Forcefully re-pin stuff
-///     - load_ignore_digests(): Load from lockfile and does not even try
-/// 3. package_name, edition (self), publish_data, package_path
-/// 4. dependencies(): return deps (direct / transitive): TBD (We need to figure out HOW they are needed!)
-/// 5. named_address_table(): Return the named addr table calculated for the compiler.
-/// 6. set_publish_data(): Saves the necessary information after upgrade/publishing.
-/// (to discuss: 7.) save_lockfile_to_disk(): (Maybe hide this inside setters (e.g. `set_publish_data`))
-
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     pub fn environments(
         path: impl AsRef<Path>,
@@ -63,7 +48,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         if let Ok(modern_manifest) = Manifest::<F>::read_from_file(package_path.path()) {
             // TODO(manos): Decide on validation (e.g. if modern manifest declares environments differently,
             // we should error?!)
-            environments.extend(modern_manifest.environments().into_iter());
+            environments.extend(modern_manifest.environments());
         }
 
         Ok(environments)
@@ -349,13 +334,13 @@ pkg_b = { local = "../pkg_b" }"#,
         let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
             project.file(
                 "Move.toml",
-                &&basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id()),
+                (&basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id())),
             )
         });
 
         pkg_git.change_file(
             "Move.toml",
-            &&basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id()),
+            (&basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id())),
         );
         pkg_git_repo.commit();
         pkg_git.change_file(
