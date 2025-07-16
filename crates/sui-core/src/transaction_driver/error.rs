@@ -25,8 +25,8 @@ pub enum TransactionDriverError {
     ExecutionDataNotFound(String),
     #[error("Transaction rejected with reason: {0}")]
     TransactionRejected(String),
-    #[error("Transaction expired at round: {0}")]
-    TransactionExpired(String),
+    #[error("Transaction status expired at peer validator")]
+    TransactionStatusExpired,
     #[error("Transaction rejected with reason: {0} & expired with reason: {1}")]
     TransactionRejectedOrExpired(String, String),
     #[error("Forked execution results: total_responses_weight {total_responses_weight}, executed_weight {executed_weight}, rejected_weight {rejected_weight}, expired_weight {expired_weight}, Errors: {errors:?}")]

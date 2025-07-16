@@ -3,6 +3,7 @@
 
 use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, TransactionDigest};
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
+use crate::committee::EpochId;
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
 use crate::error::SuiError;
 use crate::execution::ExecutionTimeObservationKey;
@@ -39,8 +40,10 @@ pub type Round = u64;
 pub type TimestampMs = u64;
 
 /// The position of a transaction in consensus.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ConsensusPosition {
+    // Epoch of the consensus instance.
+    pub epoch: EpochId,
     // Block containing a transaction.
     pub block: BlockRef,
     // Index of the transaction in the block.
@@ -66,6 +69,18 @@ impl TryFrom<&[u8]> for ConsensusPosition {
             type_info: "ConsensusPosition".to_string(),
             error: e.to_string(),
         })
+    }
+}
+
+impl std::fmt::Display for ConsensusPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "P(E{}, {}, {})", self.epoch, self.block, self.index)
+    }
+}
+
+impl std::fmt::Debug for ConsensusPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "P(E{}, {:?}, {})", self.epoch, self.block, self.index)
     }
 }
 

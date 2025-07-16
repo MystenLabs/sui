@@ -8,6 +8,7 @@ use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
@@ -97,18 +98,19 @@ async fn test_wait_for_effects_position_mismatch() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position1 = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
     let tx_position2 = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN + 1,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position1,
+        consensus_position: tx_position1,
         include_details: true,
     })
     .unwrap();
@@ -141,14 +143,14 @@ async fn test_wait_for_effects_post_commit_rejected() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: tx_position,
         include_details: true,
     })
     .unwrap();
@@ -187,14 +189,14 @@ async fn test_wait_for_effects_epoch_mismatch() {
 
     let tx_digest = TransactionDigest::random();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 1,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: tx_position,
         include_details: true,
     })
     .unwrap();
@@ -212,14 +214,14 @@ async fn test_wait_for_effects_timeout() {
 
     let tx_digest = TransactionDigest::random();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: tx_position,
         include_details: true,
     })
     .unwrap();
@@ -237,14 +239,14 @@ async fn test_wait_for_effects_quorum_rejected() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: tx_position,
         include_details: true,
     })
     .unwrap();
@@ -281,14 +283,14 @@ async fn test_wait_for_effects_fastpath_certified() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: tx_position,
         // Also test the case where details are not requested.
         include_details: false,
     })
@@ -342,14 +344,14 @@ async fn test_wait_for_effects_finalized() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: tx_position,
         // Also test the case where details are not requested.
         include_details: false,
     })
@@ -402,14 +404,14 @@ async fn test_wait_for_effects_expired() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: tx_position,
         include_details: true,
     })
     .unwrap();
@@ -445,5 +447,5 @@ async fn test_wait_for_effects_expired() {
         .try_into()
         .unwrap();
 
-    assert!(matches!(response, WaitForEffectsResponse::Expired(_)));
+    assert!(matches!(response, WaitForEffectsResponse::Expired { .. }));
 }

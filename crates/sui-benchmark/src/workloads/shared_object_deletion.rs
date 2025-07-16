@@ -280,6 +280,7 @@ impl Workload<dyn Payload> for SharedCounterDeletionWorkload {
         }
         self.counters = join_all(futures).await;
     }
+
     async fn make_test_payloads(
         &self,
         _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
@@ -315,5 +316,9 @@ impl Workload<dyn Payload> for SharedCounterDeletionWorkload {
             .map(|b| Box::<dyn Payload>::from(b))
             .collect();
         payloads
+    }
+
+    fn name(&self) -> &str {
+        "SharedObjectDeletion"
     }
 }

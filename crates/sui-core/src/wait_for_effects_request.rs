@@ -2,22 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::{
-    committee::EpochId,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::{TransactionEffects, TransactionEvents},
     error::SuiError,
-    messages_consensus::{ConsensusPosition, Round},
+    messages_consensus::ConsensusPosition,
     messages_grpc::{
-        RawExecutedData, RawExecutedStatus, RawRejectReason, RawRejectedStatus,
+        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectReason, RawRejectedStatus,
         RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
     },
     object::Object,
 };
 
 pub(crate) struct WaitForEffectsRequest {
-    pub epoch: EpochId,
+    pub consensus_position: ConsensusPosition,
     pub transaction_digest: TransactionDigest,
-    pub transaction_position: ConsensusPosition,
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,
@@ -68,8 +66,12 @@ pub enum WaitForEffectsResponse {
         // The rejection reason known locally.
         reason: RejectReason,
     },
-    // The transaction position is expired at the committed round.
-    Expired(Round),
+    // The transaction position is expired, with the local epoch and committed round.
+    // When round is None, the expiration is due to lagging epoch in the request.
+    Expired {
+        epoch: u64,
+        round: Option<u32>,
+    },
 }
 
 impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
@@ -82,16 +84,15 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
                 error: err.to_string(),
             }
         })?;
-        let transaction_position = bcs::from_bytes(&value.transaction_position).map_err(|err| {
+        let consensus_position = bcs::from_bytes(&value.consensus_position).map_err(|err| {
             SuiError::GrpcMessageDeserializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_position".to_string(),
+                type_info: "RawWaitForEffectsRequest.consensus_position".to_string(),
                 error: err.to_string(),
             }
         })?;
         Ok(Self {
-            epoch: value.epoch,
+            consensus_position,
             transaction_digest,
-            transaction_position,
             include_details: value.include_details,
         })
     }
@@ -180,7 +181,10 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                 };
                 Ok(Self::Rejected { reason })
             }
-            Some(RawValidatorTransactionStatus::Expired(round)) => Ok(Self::Expired(round)),
+            Some(RawValidatorTransactionStatus::Expired(expired)) => Ok(Self::Expired {
+                epoch: expired.epoch,
+                round: expired.round,
+            }),
             None => Err(SuiError::GrpcMessageDeserializeError {
                 type_info: "RawWaitForEffectsResponse.inner".to_string(),
                 error: "RawWaitForEffectsResponse.inner is None".to_string(),
@@ -199,16 +203,15 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
                 error: err.to_string(),
             })?
             .into();
-        let transaction_position = bcs::to_bytes(&value.transaction_position)
+        let consensus_position = bcs::to_bytes(&value.consensus_position)
             .map_err(|err| SuiError::GrpcMessageSerializeError {
-                type_info: "RawWaitForEffectsRequest.transaction_position".to_string(),
+                type_info: "RawWaitForEffectsRequest.consensus_position".to_string(),
                 error: err.to_string(),
             })?
             .into();
         Ok(Self {
-            epoch: value.epoch,
+            consensus_position,
             transaction_digest,
-            transaction_position,
             include_details: value.include_details,
         })
     }
@@ -304,7 +307,9 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                     message,
                 })
             }
-            WaitForEffectsResponse::Expired(round) => RawValidatorTransactionStatus::Expired(round),
+            WaitForEffectsResponse::Expired { epoch, round } => {
+                RawValidatorTransactionStatus::Expired(RawExpiredStatus { epoch, round })
+            }
         };
         Ok(RawWaitForEffectsResponse { inner: Some(inner) })
     }

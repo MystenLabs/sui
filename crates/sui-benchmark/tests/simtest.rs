@@ -125,6 +125,8 @@ mod test {
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
+            // Disable TransactionDriver in chain configide override tests.
+            .transaction_driver_percentage(0)
             .build()
             .await
             .into();
@@ -854,6 +856,8 @@ mod test {
                 )
                 .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
                 .with_stake_subsidy_start_epoch(10)
+                // Disable TransactionDriver in upgrade compatibility tests.
+                .transaction_driver_percentage(0)
                 .build()
                 .await,
         );
@@ -1139,8 +1143,15 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
-            Arc::new(LocalValidatorAggregatorProxy::from_genesis(&genesis, &registry, None).await);
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_genesis(
+                &genesis,
+                &registry,
+                None,
+                test_cluster.transaction_driver_percentage(),
+            )
+            .await,
+        );
 
         let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
         let system_state_observer = {

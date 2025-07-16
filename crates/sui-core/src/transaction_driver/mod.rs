@@ -81,9 +81,6 @@ where
         let timer = Instant::now();
 
         let mut attempts = 0;
-        // TODO(fastpath): Remove MAX_ATTEMPTS. Retry until unretriable error.
-        const MAX_ATTEMPTS: usize = 10;
-
         loop {
             attempts += 1;
             // TODO(fastpath): Check local state before submitting transaction
@@ -104,13 +101,10 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
-                    if attempts >= MAX_ATTEMPTS {
-                        return Err(e);
-                    }
+                    // TODO(fastpath): Break when the error is unretriable.
                     tracing::warn!(
-                        "Failed to submit transaction {tx_digest} (attempt {}/{}): {}",
+                        "Failed to finalize transaction {tx_digest} (attempt {}): {}",
                         attempts,
-                        MAX_ATTEMPTS,
                         e
                     );
                 }
@@ -126,8 +120,6 @@ where
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
-        let committee = auth_agg.committee.clone();
-        let epoch = committee.epoch();
 
         // Get consensus position using TransactionSubmitter
         let consensus_position = self
@@ -137,13 +129,7 @@ where
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .get_certified_finalized_effects(
-                &auth_agg,
-                tx_digest,
-                consensus_position,
-                epoch,
-                options,
-            )
+            .get_certified_finalized_effects(&auth_agg, tx_digest, consensus_position, options)
             .await
     }
 

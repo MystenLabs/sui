@@ -18,6 +18,7 @@ use consensus_types::block::BlockRef;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::{
+    committee::EpochId,
     crypto::AuthorityKeyPair,
     error::SuiError,
     executable_transaction::VerifiedExecutableTransaction,
@@ -105,6 +106,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         // dummy consensus position
         // TODO(fastpath): Return the actual consensus position
         let consensus_position = ConsensusPosition {
+            epoch: EpochId::MIN,
             block: BlockRef::MIN,
             index: 0,
         };
