@@ -39,6 +39,7 @@ pub struct LegacyData {
 }
 
 impl LegacyData {
+    /// Return the published addresses of this package in `env`, if there is one
     pub fn publication(&self, env: &EnvironmentName) -> Option<&PublishAddresses> {
         self.legacy_environments
             .get(env)

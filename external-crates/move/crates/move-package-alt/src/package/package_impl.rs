@@ -180,6 +180,7 @@ impl<F: MoveFlavor> Package<F> {
         Ok(self.deps.deps_for(env).cloned().unwrap_or_default())
     }
 
+    /// Return the published addresses for this package in `env` if it is published
     fn publication(&self, env: &EnvironmentName) -> Option<&PublishAddresses> {
         self.publish_data
             .get(env)
@@ -193,14 +194,12 @@ impl<F: MoveFlavor> Package<F> {
 
     /// Tries to get the `published-at` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    // TODO: this should probably just return an Option
     pub fn published_at(&self, env: &EnvironmentName) -> Option<PublishedID> {
         self.publication(env).map(|data| data.published_at.clone())
     }
 
     /// Tries to get the `original-id` entry for the given package,
     /// including support for backwards compatibility (legacy packages)
-    // TODO: this should probably just return an Option
     pub fn original_id(&self, env: &EnvironmentName) -> Option<OriginalID> {
         self.publication(env).map(|data| data.original_id.clone())
     }

@@ -46,6 +46,11 @@ pub enum LinkageError {
         "Package <TODO: p1> depends on itself (<TODO: p1> -> <TODO: p2> -> <TODO: p3> -> <TODO: p1>)"
     )]
     CyclicDependencies(Cycle<NodeIndex>),
+
+    #[error(
+        "Package <TODO: p1> depends on a different version of itself (<TODO: p1> → <TODO: p1> → ...); both <TODO: p1> and <TODO: pn> have the original id <TODO>"
+    )]
+    DependsOnSelf,
 }
 
 pub type LinkageResult<T> = Result<T, LinkageError>;
@@ -54,10 +59,19 @@ pub type LinkageResult<T> = Result<T, LinkageError>;
 type LinkageTable = BTreeMap<OriginalID, NodeIndex>;
 
 impl<F: MoveFlavor> PackageGraph<F> {
-    /// Construct and return a linkage table for the root package of `self`
+    /// Construct and return a linkage table for the root package of `self`.
+    ///
+    /// The linkage table for a given package indicates which package nodes it should use for its
+    /// transitive dependencies. The linkage must be consistent - if any node depends
+    /// (transitively) multiple versions of the same package (as determined by their original IDs),
+    /// then that node must specify `override = true` in its manifest.
+    ///
+    /// This method checks that the entire graph has consistent linkage, but only returns the
+    /// linkage for the root node.
     pub fn linkage(&self) -> LinkageResult<LinkageTable> {
+        // we compute the linkage in reverse topological order, so that the linkage for a package's
+        // dependencies have been computed before we compute its linkage
         let sorted = toposort(&self.inner, None).map_err(LinkageError::CyclicDependencies)?;
-        let root = sorted[0];
 
         let mut linkages: BTreeMap<NodeIndex, LinkageTable> = BTreeMap::new();
         for node in sorted.iter().rev() {
@@ -74,7 +88,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             // compute the linkage for `node` by iterating all transitive deps and looking for
             // duplicates
             let mut linkage = LinkageTable::new();
-            let overrides = self.overrides(*node);
+            let overrides = self.override_nodes(*node);
             for (original_id, nodes) in transitive_deps.into_iter() {
                 linkage.insert(
                     original_id.clone(),
@@ -88,46 +102,61 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 if old_entry.is_some() {
                     // this means a package depends on another package that has the same original
                     // id (but it's a different package since we already checked for cycles)
-                    todo!()
+                    return Err(LinkageError::DependsOnSelf);
                 }
             }
 
             linkages.insert(*node, linkage);
         }
 
+        let root = sorted[0];
         Ok(linkages
             .remove(&sorted[0]) // root package is first in topological order
             .expect("all linkages have been computed"))
     }
 
-    /// Returns the original IDs of the packages that are overridden in `node` (only published
-    /// packages are returned)
-    fn overrides(&self, node: NodeIndex) -> BTreeMap<OriginalID, NodeIndex> {
-        let env = &self.inner[node].use_env;
+    /// Returns the the packages that are overridden in `node`, keyed by their original IDs (only
+    /// published packages are returned)
+    fn override_nodes(&self, node_id: NodeIndex) -> BTreeMap<OriginalID, NodeIndex> {
+        // TODO: if the overrides are in the package graph itself instead of in the node, this
+        // would be easier
+        let node = &self.inner[node_id];
+        let env = &node.use_env;
 
-        let overrides: BTreeSet<PackageName> = self.inner[node]
+        // get the set of package names that are overridden
+        let overrides: BTreeSet<PackageName> = node
             .package
             .direct_deps(env)
-            .unwrap()
+            .unwrap() // TODO: move the override into the edge so that we don't have to check here
             .into_iter()
             .filter_map(|(name, dep)| if dep.is_override() { Some(name) } else { None })
             .collect();
 
+        // now traverse the edges to find the original ids of those overridden packages
         self.inner
-            .edges(node)
+            .edges(node_id)
             .filter(|edge| overrides.contains(edge.weight()))
             .filter_map(|edge| {
-                // Note: if the package is unpublished, we omit it (thus the filter_map)
-                self.inner[edge.target()]
-                    .package
-                    .original_id(env)
-                    .map(|oid| (oid, edge.target()))
+                let dep_node = edge.target();
+                let dep = &self.inner[dep_node].package;
+
+                // Note: if the dep is unpublished, we omit it by returning `None` (which is
+                // dropped by `filter_map`)
+                let Some(original_id) = dep.original_id(env) else {
+                    return None;
+                };
+
+                // otherwise we add the package to the output
+                Some((original_id, dep_node))
             })
             .collect()
     }
 
-    /// Given a (nonempty) set of transitive dependencies all having `original_id`, choose the correct one (or
-    /// produce an error).
+    /// Given a (nonempty) set of transitive dependencies all having `original_id`, choose the correct one or
+    /// produce an error as follows:
+    ///  - If there is an override, return that
+    ///  - Otherwise if there is only one such package, return it
+    ///  - Otherwise return an error message
     fn select_dep(
         &self,
         root: &NodeIndex,
@@ -301,5 +330,34 @@ mod tests {
 
         assert!(scenario.graph_for("root").await.linkage().is_err());
         assert!(scenario.graph_for("a").await.linkage().is_err());
+    }
+
+    /// `root` depends on `a1` which depends on `b` which depends on `a2`.
+    /// Computing linkgage for both `a1` and `root` should fail because `a1` depends transitively
+    /// on a different version of itself
+    #[test(tokio::test)]
+    async fn test_dep_on_different_version_of_self() {
+        let scenario = TestPackageGraph::new(["root", "b"])
+            .add_published("a1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("a2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a1"), ("a1", "b"), ("b", "a2")])
+            .build();
+
+        assert!(scenario.graph_for("root").await.linkage().is_err());
+        assert!(scenario.graph_for("a1").await.linkage().is_err());
+    }
+
+    /// `root` depends on `a` which depends on `b` twice (as `b` and `b2`)
+    /// Computing linkage for both `root` and `a` should succeed (although this is arguably a
+    /// corner case)
+    #[test(tokio::test)]
+    async fn test_double_dep() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_deps([("root", "a"), ("a", "b")])
+            .add_dep("a", "b", |dep| dep.name("b2"))
+            .build();
+
+        scenario.graph_for("root").await.linkage().unwrap();
+        scenario.graph_for("a").await.linkage().unwrap();
     }
 }
