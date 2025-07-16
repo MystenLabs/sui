@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{collections::BTreeMap, sync::Arc};
 
+use consensus_config::Epoch;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
@@ -220,6 +221,7 @@ impl TransactionConsumer {
 
 #[derive(Clone)]
 pub struct TransactionClient {
+    context: Arc<Context>,
     sender: Sender<TransactionsGuard>,
     max_transaction_size: u64,
     max_transactions_in_block_bytes: u64,
@@ -255,9 +257,15 @@ impl TransactionClient {
                 max_transactions_in_block_count: context
                     .protocol_config
                     .max_num_transactions_in_block(),
+                context: context.clone(),
             },
             receiver,
         )
+    }
+
+    /// Returns the current epoch of this client.
+    pub fn epoch(&self) -> Epoch {
+        self.context.committee.epoch()
     }
 
     /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included

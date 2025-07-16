@@ -264,6 +264,7 @@ pub struct LocalValidatorAggregatorProxy {
     td: Arc<TransactionDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+    td_percentage: u8,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -271,11 +272,26 @@ impl LocalValidatorAggregatorProxy {
         genesis: &Genesis,
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
+        transaction_driver_percentage: Option<u8>,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
+
+        let td_percentage = 'td: {
+            if let Some(tx_driver_percentage) = transaction_driver_percentage {
+                break 'td tx_driver_percentage;
+            }
+            if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
+                if let Ok(tx_driver_percentage) = v.parse::<u8>() {
+                    if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
+                        break 'td tx_driver_percentage;
+                    }
+                }
+            }
+            0
+        };
 
         Self::new_impl(
             aggregator,
@@ -283,6 +299,7 @@ impl LocalValidatorAggregatorProxy {
             reconfig_fullnode_rpc_url,
             clients,
             committee,
+            td_percentage,
         )
         .await
     }
@@ -293,6 +310,7 @@ impl LocalValidatorAggregatorProxy {
         reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
+        td_percentage: u8,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
         let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
@@ -337,6 +355,7 @@ impl LocalValidatorAggregatorProxy {
             td,
             clients,
             committee,
+            td_percentage,
         }
     }
 
@@ -387,18 +406,14 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         let tx_digest = *tx.digest();
-        if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
-            if let Ok(tx_driver_percentage) = v.parse::<u8>() {
-                if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                    let random_value = rand::thread_rng().gen_range(1..=100);
-                    if random_value <= tx_driver_percentage {
-                        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-                        return (
-                            ClientType::TransactionDriver,
-                            self.submit_transaction_block(tx).await,
-                        );
-                    }
-                }
+        if self.td_percentage > 0 {
+            let random_value = rand::thread_rng().gen_range(1..=100);
+            if random_value <= self.td_percentage {
+                debug!("Using TransactionDriver for transaction {:?}", tx_digest);
+                return (
+                    ClientType::TransactionDriver,
+                    self.submit_transaction_block(tx).await,
+                );
             }
         }
 
@@ -494,6 +509,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             td: self.td.clone(),
             clients: self.clients.clone(),
             committee: self.committee.clone(),
+            td_percentage: self.td_percentage,
         })
     }
 

@@ -615,6 +615,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         /* (transaction, serialized length) */
+        let epoch = self.epoch_store.epoch();
         let mut transactions = vec![];
         let timestamp = consensus_commit.commit_timestamp_ms();
         let leader_author = consensus_commit.leader_author_index();
@@ -717,6 +718,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 self.last_consensus_stats.stats.inc_num_messages(author);
                 for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
                     let position = ConsensusPosition {
+                        epoch,
                         block,
                         index: tx_index as TransactionIndex,
                     };
@@ -1285,7 +1287,7 @@ impl ConsensusBlockHandler {
 
         let _scope = monitored_scope("ConsensusBlockHandler::handle_certified_blocks");
         self.metrics.consensus_block_handler_block_processed.inc();
-
+        let epoch = self.epoch_store.epoch();
         let parsed_transactions = blocks_output
             .blocks
             .into_iter()
@@ -1300,6 +1302,7 @@ impl ConsensusBlockHandler {
         for (block, transactions) in parsed_transactions.into_iter() {
             for (txn_idx, parsed) in transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
+                    epoch,
                     block,
                     index: txn_idx as TransactionIndex,
                 };
@@ -1741,6 +1744,7 @@ mod tests {
         let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
         for txn_idx in 0..transactions.len() {
             let position = ConsensusPosition {
+                epoch: epoch_store.epoch(),
                 block: block.reference(),
                 index: txn_idx as TransactionIndex,
             };

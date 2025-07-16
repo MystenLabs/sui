@@ -557,6 +557,10 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .map(|b| Box::<dyn Payload>::from(Box::new(b)))
             .collect()
     }
+
+    fn name(&self) -> &str {
+        "Adversarial"
+    }
 }
 
 struct AdversarialPayloadArgs {

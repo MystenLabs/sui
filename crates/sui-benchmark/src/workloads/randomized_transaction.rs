@@ -530,4 +530,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
             .map(|b| Box::<dyn Payload>::from(b))
             .collect()
     }
+
+    fn name(&self) -> &str {
+        "RandomizedTransaction"
+    }
 }

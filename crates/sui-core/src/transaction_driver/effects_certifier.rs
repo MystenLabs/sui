@@ -45,7 +45,6 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
-        epoch: EpochId,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
@@ -56,14 +55,12 @@ impl EffectsCertifier {
                 authority_aggregator,
                 tx_digest,
                 consensus_position,
-                epoch,
                 options,
             ),
             self.get_full_effects_with_retry(
                 authority_aggregator,
                 tx_digest,
                 consensus_position,
-                epoch,
                 options,
             ),
         );
@@ -84,7 +81,7 @@ impl EffectsCertifier {
                         return Ok(self.get_effects_response(
                             effects_digest,
                             executed_data,
-                            epoch,
+                            consensus_position.epoch,
                             tx_digest,
                         ));
                     }
@@ -98,7 +95,6 @@ impl EffectsCertifier {
                     authority_aggregator,
                     tx_digest,
                     consensus_position,
-                    epoch,
                     options,
                 )
                 .await;
@@ -110,7 +106,6 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
-        epoch: EpochId,
         options: &SubmitTransactionOptions,
     ) -> Result<(TransactionEffectsDigest, ExecutedData), TransactionDriverError>
     where
@@ -125,9 +120,8 @@ impl EffectsCertifier {
             .collect::<Vec<_>>();
 
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            epoch,
             transaction_digest: *tx_digest,
-            transaction_position: consensus_position,
+            consensus_position,
             include_details: true,
         })
         .map_err(TransactionDriverError::SerializationError)?;
@@ -170,13 +164,15 @@ impl EffectsCertifier {
                         }
                         tracing::debug!("Transaction rejected, retrying... Reason: {}", reason);
                     }
-                    WaitForEffectsResponse::Expired(round) => {
+                    WaitForEffectsResponse::Expired { epoch, round } => {
                         if attempts >= MAX_ATTEMPTS {
-                            return Err(TransactionDriverError::TransactionExpired(
-                                round.to_string(),
-                            ));
+                            return Err(TransactionDriverError::TransactionStatusExpired);
                         }
-                        tracing::debug!("Transaction expired at round {}, retrying...", round);
+                        tracing::debug!(
+                            "Transaction status expired at epoch {}, round {}, retrying...",
+                            epoch,
+                            round.unwrap_or(0),
+                        );
                     }
                 },
                 Ok(Err(e)) => {
@@ -207,7 +203,6 @@ impl EffectsCertifier {
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: ConsensusPosition,
-        epoch: EpochId,
         options: &SubmitTransactionOptions,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
@@ -219,9 +214,8 @@ impl EffectsCertifier {
             .collect::<Vec<_>>();
         let committee = authority_aggregator.committee.clone();
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-            epoch,
             transaction_digest: *tx_digest,
-            transaction_position: consensus_position,
+            consensus_position,
             include_details: false,
         })
         .map_err(TransactionDriverError::SerializationError)?;
@@ -235,13 +229,21 @@ impl EffectsCertifier {
             let future = async move {
                 // Keep retrying transient errors until cancellation.
                 loop {
-                    if let Ok(Ok(response)) = timeout(
+                    let result = timeout(
                         WAIT_FOR_EFFECTS_TIMEOUT,
                         client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
                     )
-                    .await
-                    {
-                        return (name, response);
+                    .await;
+                    match result {
+                        Ok(Ok(response)) => {
+                            return (name, response);
+                        }
+                        Ok(Err(e)) => {
+                            tracing::trace!("Wait for effects acknowledgement: error: {:?}", e);
+                        }
+                        Err(_) => {
+                            tracing::trace!("Wait for effects acknowledgement: timeout");
+                        }
                     };
                     let delay_ms = rand::thread_rng().gen_range(1000..2000);
                     sleep(Duration::from_millis(delay_ms)).await;
@@ -306,8 +308,13 @@ impl EffectsCertifier {
                         debug_fatal!("Failed to insert rejection vote: {:?}", error);
                     }
                 }
-                WaitForEffectsResponse::Expired(round) => {
-                    expired_errors.push(format!("{}: {}", name.concise(), round));
+                WaitForEffectsResponse::Expired { epoch, round } => {
+                    expired_errors.push(format!(
+                        "{} at epoch {}, round {}",
+                        name.concise(),
+                        epoch,
+                        round.unwrap_or(0),
+                    ));
                     self.metrics.expiration_acks.inc();
                     if let InsertResult::Failed { error } =
                         expired_aggregator.insert_generic(name, ())

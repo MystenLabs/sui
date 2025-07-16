@@ -11,6 +11,7 @@ use consensus_types::block::BlockRef;
 use prometheus::Registry;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use sui_types::committee::EpochId;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{
@@ -134,6 +135,7 @@ impl MockConsensusClient {
         // TODO(fastpath): Add some way to simulate consensus positions across blocks
         Ok((
             vec![ConsensusPosition {
+                epoch: EpochId::MIN,
                 block: BlockRef::MIN,
                 index: 0,
             }],
