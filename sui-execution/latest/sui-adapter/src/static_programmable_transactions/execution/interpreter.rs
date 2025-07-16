@@ -321,7 +321,6 @@ fn execute_command<Mode: ExecutionMode>(
         .zip(drop_values)
         .map(|(value, drop)| if !drop { Some(value) } else { None })
         .collect::<Vec<_>>();
-
     context.result(result)?;
     Ok(())
 }

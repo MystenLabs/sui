@@ -524,12 +524,12 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
 }
 
 fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
+    let i = context.current_command();
     // process the command
     debug_assert!(context.arg_roots.is_empty());
     command_(context, c)?;
     context.arg_roots.clear();
     // drop unused result values
-    let i = context.current_command();
     let dropped_locations = c
         .value
         .drop_values
