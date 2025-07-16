@@ -571,14 +571,14 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
-        let storage_id = get_module_on_chain(link_context, function.module_id(), loader);
+        let version_id = get_version_id(link_context, function.module_id(), loader);
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
             function.name().to_string(),
             function.module_id().clone(),
-            storage_id,
+            version_id,
             call_args
                 .into_iter()
                 .map(|(trace_value, _)| trace_value)
@@ -693,14 +693,14 @@ impl VMTracer<'_> {
                 return_types: function_type_info.return_types.clone(),
             },
         );
-        let module_on_chain = get_module_on_chain(link_context, function.module_id(), loader);
+        let version_id = get_version_id(link_context, function.module_id(), loader);
 
         self.trace.open_frame(
             self.current_frame_identifier()?,
             function.index(),
             function.name().to_string(),
             function.module_id().clone(),
-            module_on_chain,
+            version_id,
             call_args,
             function_type_info.ty_args,
             function_type_info
@@ -1798,13 +1798,13 @@ impl FunctionTypeInfo {
     }
 }
 
-fn get_module_on_chain(
+fn get_version_id(
     link_context: AccountAddress,
     runtime_id: &ModuleId,
     loader: &Loader,
-) -> ModuleId {
+) -> AccountAddress {
     let (_, loaded_module) = loader.get_module(link_context, runtime_id);
-    loaded_module.id.clone()
+    *loaded_module.id.address()
 }
 
 /// Get the type layout of a constant.

@@ -9,7 +9,10 @@ use move_binary_format::{
     file_format::{Bytecode, FunctionDefinitionIndex as BinaryFunctionDefinitionIndex},
     file_format_common::instruction_opcode,
 };
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, TypeTag},
+};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::{fmt::Display, sync::mpsc::Receiver};
@@ -114,7 +117,7 @@ pub struct Frame {
     pub frame_id: TraceIndex,
     pub function_name: String,
     pub module: ModuleId,
-    pub module_on_chain: ModuleId,
+    pub version_id: AccountAddress,
     // External pointer out into the module -- the `FunctionDefinitionIndex` in the module.
     pub binary_member_index: u16,
     pub type_instantiation: Vec<TypeTag>,
@@ -333,7 +336,7 @@ impl MoveTraceBuilder {
         binary_member_index: BinaryFunctionDefinitionIndex,
         name: String,
         module: ModuleId,
-        module_on_chain: ModuleId,
+        version_id: AccountAddress,
         parameters: Vec<TraceValue>,
         type_instantiation: Vec<TypeTag>,
         return_types: Vec<TypeTagWithRefs>,
@@ -345,7 +348,7 @@ impl MoveTraceBuilder {
             frame_id,
             function_name: name,
             module,
-            module_on_chain,
+            version_id,
             binary_member_index: binary_member_index.0,
             type_instantiation,
             parameters,
