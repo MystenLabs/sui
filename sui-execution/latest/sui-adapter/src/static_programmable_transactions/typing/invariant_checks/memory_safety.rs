@@ -460,7 +460,7 @@ impl Context {
             })
     }
 
-    /// Returns true if any of the references in a given `T::LOcation` conflict with the paths in
+    /// Returns true if any of the references in a given `T::Location` conflict with the paths in
     /// `paths`. Excludes `Aliases` if `allow_aliases` is true.
     fn any_conflicts(&self, paths: &PathSet, allow_aliases: bool) -> bool {
         self.all_references()
@@ -471,11 +471,18 @@ impl Context {
 /// Verifies memory safety of a transaction. This is a re-implementation of `verify::memory_safety`
 /// using an alternative approach given the newness of the Regex based borrow graph in that
 /// implementation.
-/// This approach uses `Rc`s to track the borrowing of memory locations in the PTB. This only works
-/// given the limited construction of references and their usage. If more direct aliasing and
-/// extensions were possible, this implementation would not be expressive enough. In other words,
-/// this implementation assumes that all extensions are the result of a "call" (a ".*" extension in
-/// the regex based implementation).
+/// This is a set based approach were each reference is represent as a set of paths. A path
+/// is has a root (basically a `T::Location` plus some edge case massaging) and a list of extensions
+/// resulting from Move function calls. Each one of those Move calls gets a `Delta` extension for
+/// each return value. The `Delta` is like the ".*" in the regex based implementation but where it
+/// carries a sense of identity. This identity allows for invariants from the return values of the
+/// Move call to be leveraged. For example, mutable references returned from a call cannot overlap.
+/// If we just used ".*", we would not be able to express this invariant without some sense of
+/// identity for the reference itself (which is what is going on in the Regex based implementation).
+/// This implementation stems from research work for the Move borrow checker, but would normally
+/// not be expressive enough in the presence of control flow. Luckily, PTBs do not have control flow
+/// so we can use this approach as a safety net for the Regex based implementation until that
+/// code is sufficiently. tested and hardened.
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
