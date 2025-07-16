@@ -1426,10 +1426,7 @@ impl AuthorityState {
         }
 
         let scheduling_source = execution_env.scheduling_source;
-        let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath()
-            && !certificate.is_consensus_tx()
-            && scheduling_source == SchedulingSource::NonFastPath
-        {
+        let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath() {
             tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
         } else {
             None
@@ -1438,6 +1435,10 @@ impl AuthorityState {
         let (transaction_outputs, timings, execution_error_opt) = if let Some(outputs) =
             mysticeti_fp_outputs
         {
+            assert!(
+                !certificate.is_consensus_tx(),
+                "Mysticeti fastpath executed transactions cannot be consensus transactions"
+            );
             // If this transaction is not scheduled from fastpath, it must be either
             // from consensus or from checkpoint, i.e. it must be finalized.
             // To avoid re-executing fastpath transactions, we check if the outputs are already
