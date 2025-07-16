@@ -273,7 +273,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         for name in names {
             let pkg_path = root_path.join("packages").join(name);
-            let package = Package::<Vanilla>::load_root(&pkg_path, &env)
+            let package = RootPackage::<Vanilla>::load(&pkg_path, env)
                 .await
                 .unwrap();
             assert_eq!(
@@ -402,14 +402,14 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
         root_pkg_manifest = root_pkg_manifest.replace("../pkg_git", pkg_git.root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env)
+        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
             .await
             .unwrap();
 
         let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
         let git_dep = pinned_deps.first_key_value().unwrap().1;
 
-        match git_dep.source {
+        match &git_dep.source {
             LockfileDependencyInfo::Git(p) => {
                 assert_eq!(&p.rev.to_string(), commits.first().unwrap())
             }

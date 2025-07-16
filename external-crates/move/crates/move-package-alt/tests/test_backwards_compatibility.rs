@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use move_package_alt::{
-    flavor::Vanilla,
+    flavor::{vanilla, Vanilla},
     package::{Package, paths::PackagePath, root_package::RootPackage},
 };
 
@@ -37,8 +37,10 @@ async fn test_legacy_parsing() {
 async fn test_modern_with_legacy() {
     let folder = Path::new("tests/compatibility/compatibility_modern_with_legacy");
 
+    let default_env = vanilla::default_environment();
+
     let package_path = PackagePath::new(folder.to_path_buf()).unwrap();
-    let graph = RootPackage::<Vanilla>::load(&package_path, None)
+    let graph = RootPackage::<Vanilla>::load(&package_path, default_env)
         .await
         .unwrap();
 

@@ -127,10 +127,14 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let manifest = Manifest::<Vanilla>::read_from_file(input_path).unwrap();
 
     let deps: DependencySet<CombinedDependency> = manifest.dependencies();
+    let mut output = DependencySet::<PinnedDependencyInfo>::new();
     debug!("{deps:?}");
 
     add_bindir();
-    let pinned = dependency::pin::<Vanilla>(deps, &manifest.environments()).await;
+    for env in manifest.environments().keys() {
+        let pinned = dependency::pin::<Vanilla>(deps, &env).await.map_err(|e| e.to_string())?;
+        // TODO: Continue
+    }
 
     let output = match pinned {
         Ok(ref deps) => format!("{deps:#?}"),

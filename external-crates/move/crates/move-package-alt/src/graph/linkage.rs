@@ -248,7 +248,7 @@ mod tests {
     async fn test_compatible() {
         let scenario = TestPackageGraph::new(["root", "a", "b", "c"])
             .add_published("d1", OriginalID::from(1), PublishedID::from(1))
-            .add_published("d2", OriginalID::from(1), PublishedID::from(2))
+            .add_published("d2", OriginalID::from(1), PublishedID::from(1))
             .add_deps([
                 ("root", "a"),
                 ("a", "b"),
