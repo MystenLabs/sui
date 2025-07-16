@@ -1,0 +1,19 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 276
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_2024/verification/spec_only_do_filter_invariant.move:6:9
+  │
+6 │         invariant!(something);
+  │         ^^^^^^^^^ Unbound function 'invariant' in current scope
+
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/verification/spec_only_do_filter_invariant.move:6:20
+  │
+6 │         invariant!(something);
+  │                    ^^^^^^^^^ Unbound variable 'something'

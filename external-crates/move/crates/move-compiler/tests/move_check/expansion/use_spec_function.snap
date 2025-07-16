@@ -1,11 +1,12 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 277
 info:
   flavor: core
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/use_spec_function.move:3:5
   │
 3 │     spec module {
@@ -37,9 +38,9 @@ error[E03002]: unbound module
 
 error[E01002]: unexpected token
    ┌─ tests/move_check/expansion/use_spec_function.move:14:5
-   │  
-14 │ ╭     spec t {
-15 │ │         ensures foo();
-16 │ │         ensures baz();
-17 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+   │
+14 │     spec t {
+   │     ^^^^
+   │     │
+   │     Unexpected 'spec'
+   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'

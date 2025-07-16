@@ -1,7 +1,9 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 276
 info:
   flavor: core
-  edition: legacy
+  edition: 2024.alpha
   lint: false
 ---
+

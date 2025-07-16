@@ -1,11 +1,12 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 277
 info:
   flavor: core
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:4:5
   │
 4 │     spec module {
@@ -110,10 +111,20 @@ error[E01002]: unexpected token
    │     Unexpected 'spec'
    │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:37:5
-   │  
-37 │ ╭     spec module {
-38 │ │         fun foo(): bool { true }
-39 │ │     }
-   │ ╰─────^ Specification blocks are deprecated and are no longer used
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:34:17
+   │
+34 │     spec module {
+   │                 ^
+   │                 │
+   │                 Unexpected '{'
+   │                 Expected an address or an identifier
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:37:17
+   │
+37 │     spec module {
+   │                 ^
+   │                 │
+   │                 Unexpected '{'
+   │                 Expected an address or an identifier

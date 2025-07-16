@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 277
 info:
   flavor: core
   edition: legacy
@@ -21,103 +22,38 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03004]: unbound type
+error[E01002]: unexpected token
   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:4:9
   │
 4 │         spec {
-  │         ^^^^ Unbound type 'spec' in current scope
-
-error[E03009]: unbound variable
-  ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:5:13
-  │
-5 │             assume x > 42;
-  │             ^^^^^^ Unbound variable 'assume'
+  │         ^^^^
+  │         │
+  │         Unexpected 'spec'
+  │         Expected an expression term
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:5:20
+  ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:9:17
   │
-5 │             assume x > 42;
-  │                    ^
-  │                    │
-  │                    Unexpected 'x'
-  │                    Expected ',' or '}'
+9 │         while ({spec {assert x < 42;}; n < 64}) {
+  │                 ^^^^
+  │                 │
+  │                 Unexpected 'spec'
+  │                 Expected an expression term
 
 error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:5:26
+  ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:9:36
   │
-4 │         spec {
-  │              - To match this '{'
-5 │             assume x > 42;
-  │                          ^ Expected '}'
+9 │         while ({spec {assert x < 42;}; n < 64}) {
+  │                                    ^
+  │                                    │
+  │                                    Unexpected ';'
+  │                                    Expected ')'
 
-error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:9
-   │
-32 │         spec {} + 1;
-   │         ^^^^^^^
-   │         │
-   │         Invalid argument to '+'
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-
-error[E04007]: incompatible types
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:17
-   │
-32 │         spec {} + 1;
-   │         ------- ^ - Found: integer. It is not compatible with the other type.
-   │         │       │  
-   │         │       Incompatible arguments to '+'
-   │         Found: '()'. It is not compatible with the other type.
-
-error[E04003]: built-in operation not supported
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:32:19
-   │
-32 │         spec {} + 1;
-   │         -------   ^ Invalid argument to '+'
-   │         │          
-   │         Found: '()'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-
-warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:9
-   │
-33 │         spec {} && spec {};
-   │         ^^^^^^^ Specification blocks are deprecated and are no longer used
-
-error[E04007]: incompatible types
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:9
-   │
-33 │         spec {} && spec {};
-   │         ^^^^^^^ -- Expected: 'bool'
-   │         │        
-   │         Invalid argument to '&&'
-   │         Given: '()'
-
-warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:20
-   │
-33 │         spec {} && spec {};
-   │                    ^^^^^^^ Specification blocks are deprecated and are no longer used
-
-error[E04007]: incompatible types
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:33:20
-   │
-33 │         spec {} && spec {};
-   │                 -- ^^^^^^^
-   │                 │  │
-   │                 │  Invalid argument to '&&'
-   │                 │  Given: '()'
-   │                 Expected: 'bool'
-
-error[E04004]: expected a single non-reference type
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:34:9
-   │
-34 │         &mut spec {};
-   │         ^^^^^^^^^^^^
-   │         │    │
-   │         │    Expected a single non-reference type, but found: '()'
-   │         Invalid borrow
-
-warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:34:14
-   │
-34 │         &mut spec {};
-   │              ^^^^^^^ Specification blocks are deprecated and are no longer used
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/spec_parsing_inside_fun.move:9:38
+  │
+9 │         while ({spec {assert x < 42;}; n < 64}) {
+  │                                      ^
+  │                                      │
+  │                                      Unexpected ';'
+  │                                      Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'

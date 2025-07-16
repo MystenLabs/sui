@@ -1,0 +1,13 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 276
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_2024/verification/spec_only_do_filter_function.move:5:9
+  │
+5 │         bar()
+  │         ^^^ Unbound function 'bar' in current scope

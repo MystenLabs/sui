@@ -1,5 +1,6 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 277
 info:
   flavor: core
   edition: legacy
@@ -34,4 +35,4 @@ error[E01002]: unexpected token
   │ ^
   │ 
   │ Unexpected end-of-file
-  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+  │ Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'

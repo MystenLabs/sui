@@ -1,11 +1,12 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 277
 info:
   flavor: core
   edition: legacy
   lint: false
 ---
-warning[W00001]: DEPRECATED. will be removed
+error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:3:5
   │
 3 │     spec module {
@@ -14,8 +15,11 @@ warning[W00001]: DEPRECATED. will be removed
   │     Unexpected 'spec'
   │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
 
-warning[W00001]: DEPRECATED. will be removed
-   ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:10:9
-   │
-10 │         spec {};
-   │         ^^^^^^^ Specification blocks are deprecated and are no longer used
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/spec_block_in_spec_context.move:3:17
+  │
+3 │     spec module {
+  │                 ^
+  │                 │
+  │                 Unexpected '{'
+  │                 Expected an address or an identifier
