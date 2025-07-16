@@ -9,12 +9,12 @@ index a342267d27..47fd7e4ee1 100644
 -rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]
 +rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "--cfg", "msim"]
 diff --git a/Cargo.toml b/Cargo.toml
-index 3a9a60d2db..8478f0365e 100644
+index 4af4ba3596..0e6314d81d 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -779,3 +779,5 @@ sui-execution = { path = "sui-execution" }
- async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
- async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
- async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18" }
+@@ -783,3 +783,5 @@ sui-execution = { path = "sui-execution" }
+ async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+ async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+ async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 +tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e" }
 +futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e" }
