@@ -67,7 +67,7 @@ if [ -n "$LOG_LEVEL" ]; then
     echo "Error: LOG_LEVEL cannot contain spaces"
     exit 1
   fi
-  cmd="$cmd -f log_level=$LOG_LEVEL"
+  cmd="$cmd -f rust_log_filter=$LOG_LEVEL"
 fi
 
 echo Running: $cmd
