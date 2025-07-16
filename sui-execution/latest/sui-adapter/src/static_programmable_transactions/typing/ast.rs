@@ -26,9 +26,14 @@ pub struct Transaction {
     pub commands: Commands,
 }
 
+/// The original index into the `input` vector of the transaction, before the inputs were split
+/// into their respective categories (objects, pure, or receiving).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InputIndex(pub u16);
+
 #[derive(Debug)]
 pub struct ObjectInput {
-    pub original_input_index: u16,
+    pub original_input_index: InputIndex,
     pub arg: ObjectArg,
     pub ty: Type,
 }
@@ -37,7 +42,7 @@ pub type ByteIndex = usize;
 
 #[derive(Debug)]
 pub struct PureInput {
-    pub original_input_index: u16,
+    pub original_input_index: InputIndex,
     // A index into `byte` table of BCS bytes
     pub byte_index: ByteIndex,
     // the type that the BCS bytes will be deserialized into
@@ -48,7 +53,7 @@ pub struct PureInput {
 
 #[derive(Debug)]
 pub struct ReceivingInput {
-    pub original_input_index: u16,
+    pub original_input_index: InputIndex,
     pub object_ref: ObjectRef,
     pub ty: Type,
     // Information about where this constraint came from

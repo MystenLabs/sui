@@ -96,7 +96,9 @@ fn check_pure_input<Mode: ExecutionMode>(
     } = pure;
     let Some(bcs_bytes) = bytes.get_index(*byte_index) else {
         invariant_violation!(
-            "Unbound byte index {byte_index} for pure input at index {original_input_index}"
+            "Unbound byte index {} for pure input at index {}",
+            byte_index,
+            original_input_index.0
         );
     };
     let BytesConstraint { command, argument } = constraint;

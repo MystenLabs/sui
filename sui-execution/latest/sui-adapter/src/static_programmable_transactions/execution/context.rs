@@ -116,7 +116,7 @@ struct Locations {
     /// The runtime value for the Gas coin, None if no gas coin is provided
     gas: Option<(InputObjectMetadata, Locals)>,
     /// The runtime value for the input objects args
-    input_object_metadata: Vec<(/* original input index */ u16, InputObjectMetadata)>,
+    input_object_metadata: Vec<(T::InputIndex, InputObjectMetadata)>,
     object_inputs: Locals,
     pure_input_bytes: IndexSet<Vec<u8>>,
     pure_input_metadata: Vec<T::PureInput>,
@@ -183,7 +183,7 @@ impl Locations {
                     .ok_or_else(|| {
                         make_invariant_violation!(
                             "Pure input {} bytes out of bounds at index {}",
-                            metadata.original_input_index,
+                            metadata.original_input_index.0,
                             metadata.byte_index,
                         )
                     })?;
@@ -1022,13 +1022,17 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             T::Location::GasCoin => TxArgument::GasCoin,
             T::Location::Result(i, j) => TxArgument::NestedResult(i, j),
             T::Location::ObjectInput(i) => {
-                TxArgument::Input(self.locations.input_object_metadata[i as usize].0)
+                TxArgument::Input(self.locations.input_object_metadata[i as usize].0.0)
             }
             T::Location::PureInput(i) => TxArgument::Input(
-                self.locations.pure_input_metadata[i as usize].original_input_index,
+                self.locations.pure_input_metadata[i as usize]
+                    .original_input_index
+                    .0,
             ),
             T::Location::ReceivingInput(i) => TxArgument::Input(
-                self.locations.receiving_input_metadata[i as usize].original_input_index,
+                self.locations.receiving_input_metadata[i as usize]
+                    .original_input_index
+                    .0,
             ),
         };
         Ok(Some((arg, bytes, tag)))
@@ -1109,14 +1113,7 @@ fn load_object_arg(
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     input: T::ObjectInput,
-) -> Result<
-    (
-        /* original input index */ u16,
-        InputObjectMetadata,
-        Value,
-    ),
-    ExecutionError,
-> {
+) -> Result<(T::InputIndex, InputObjectMetadata, Value), ExecutionError> {
     let id = input.arg.id();
     let is_mutable_input = input.arg.is_mutable();
     let (metadata, value) =

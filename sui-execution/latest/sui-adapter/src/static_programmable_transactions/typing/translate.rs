@@ -23,7 +23,7 @@ use sui_types::{
 #[derive(Debug, Clone, Copy)]
 enum SplatLocation {
     GasCoin,
-    Input(u16),
+    Input(T::InputIndex),
     Result(u16, u16),
 }
 
@@ -40,11 +40,11 @@ struct Context {
     input_resolution: Vec<InputKind>,
     bytes: IndexSet<Vec<u8>>,
     // Mapping from original index to `bytes`
-    bytes_idx_remapping: IndexMap</* original input  index*/ u16, T::ByteIndex>,
-    receiving_refs: IndexMap</* original input  index*/ u16, ObjectRef>,
-    objects: IndexMap</* original input  index*/ u16, T::ObjectInput>,
-    pure: IndexMap<(/* original input  index*/ u16, Type), T::PureInput>,
-    receiving: IndexMap<(/* original input  index*/ u16, Type), T::ReceivingInput>,
+    bytes_idx_remapping: IndexMap<T::InputIndex, T::ByteIndex>,
+    receiving_refs: IndexMap<T::InputIndex, ObjectRef>,
+    objects: IndexMap<T::InputIndex, T::ObjectInput>,
+    pure: IndexMap<(T::InputIndex, Type), T::PureInput>,
+    receiving: IndexMap<(T::InputIndex, Type), T::ReceivingInput>,
     results: Vec<T::ResultType>,
 }
 
@@ -62,7 +62,7 @@ impl Context {
             results: vec![],
         };
         for (i, (arg, ty)) in linputs.into_iter().enumerate() {
-            let idx = i as u16;
+            let idx = T::InputIndex(i as u16);
             let kind = match (arg, ty) {
                 (L::InputArg::Pure(bytes), L::InputType::Bytes) => {
                     let (byte_index, _) = context.bytes.insert_full(bytes);
@@ -123,10 +123,10 @@ impl Context {
                 T::Location::Result(i, j),
                 self.results[i as usize][j as usize].clone(),
             ),
-            SplatLocation::Input(i) => match &self.input_resolution[i as usize] {
+            SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
                 InputKind::Object => {
                     let Some((object_index, _, object_input)) = self.objects.get_full(&i) else {
-                        invariant_violation!("Unbound object input {i}")
+                        invariant_violation!("Unbound object input {}", i.0)
                     };
                     (
                         T::Location::ObjectInput(object_index as u16),
@@ -149,7 +149,7 @@ impl Context {
             SplatLocation::GasCoin | SplatLocation::Result(_, _) => self
                 .fixed_type(env, location)?
                 .ok_or_else(|| make_invariant_violation!("Expected fixed type for {location:?}"))?,
-            SplatLocation::Input(i) => match &self.input_resolution[i as usize] {
+            SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
                 InputKind::Object => self.fixed_type(env, location)?.ok_or_else(|| {
                     make_invariant_violation!("Expected fixed type for {location:?}")
                 })?,
@@ -161,7 +161,7 @@ impl Context {
                     let k = (i, ty.clone());
                     if !self.pure.contains_key(&k) {
                         let Some(byte_index) = self.bytes_idx_remapping.get(&i).copied() else {
-                            invariant_violation!("Unbound pure input {i}");
+                            invariant_violation!("Unbound pure input {}", i.0);
                         };
                         let pure = T::PureInput {
                             original_input_index: i,
@@ -182,7 +182,7 @@ impl Context {
                     let k = (i, ty.clone());
                     if !self.receiving.contains_key(&k) {
                         let Some(object_ref) = self.receiving_refs.get(&i).copied() else {
-                            invariant_violation!("Unbound receiving input {i}");
+                            invariant_violation!("Unbound receiving input {}", i.0);
                         };
                         let receiving = T::ReceivingInput {
                             original_input_index: i,
@@ -446,7 +446,7 @@ where
                 if i as usize >= context.input_resolution.len() {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 }
-                res.push(SplatLocation::Input(i))
+                res.push(SplatLocation::Input(T::InputIndex(i)))
             }
             L::Argument::NestedResult(i, j) => {
                 let Some(command_result) = context.results.get(i as usize) else {
