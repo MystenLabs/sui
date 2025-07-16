@@ -418,7 +418,6 @@ fun take() {
 
 #[test, expected_failure]
 fun take_fail() {
-    // TODO: should it fail? Or should we return an empty vector?
     vector[0, 1, 2].take(4); // out of bounds (taking 4 elements)
 }
 
