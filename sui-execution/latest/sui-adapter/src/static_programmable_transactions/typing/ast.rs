@@ -4,9 +4,10 @@
 use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
+use indexmap::IndexSet;
 use move_vm_types::values::VectorSpecialization;
-use std::{cell::OnceCell, collections::BTreeMap, fmt};
-use sui_types::base_types::ObjectID;
+use std::cell::OnceCell;
+use sui_types::base_types::{ObjectID, ObjectRef};
 
 //**************************************************************************************************
 // AST Nodes
@@ -14,29 +15,56 @@ use sui_types::base_types::ObjectID;
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub inputs: Inputs,
+    /// Gathered BCS bytes from Pure inputs
+    pub bytes: IndexSet<Vec<u8>>,
+    // All input objects
+    pub objects: Vec<ObjectInput>,
+    /// All pure inputs
+    pub pure: Vec<PureInput>,
+    /// All receiving inputs
+    pub receiving: Vec<ReceivingInput>,
     pub commands: Commands,
 }
 
-pub type Inputs = Vec<(InputArg, InputType)>;
+/// The original index into the `input` vector of the transaction, before the inputs were split
+/// into their respective categories (objects, pure, or receiving).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InputIndex(pub u16);
+
+#[derive(Debug)]
+pub struct ObjectInput {
+    pub original_input_index: InputIndex,
+    pub arg: ObjectArg,
+    pub ty: Type,
+}
+
+pub type ByteIndex = usize;
+
+#[derive(Debug)]
+pub struct PureInput {
+    pub original_input_index: InputIndex,
+    // A index into `byte` table of BCS bytes
+    pub byte_index: ByteIndex,
+    // the type that the BCS bytes will be deserialized into
+    pub ty: Type,
+    // Information about where this constraint came from
+    pub constraint: BytesConstraint,
+}
+
+#[derive(Debug)]
+pub struct ReceivingInput {
+    pub original_input_index: InputIndex,
+    pub object_ref: ObjectRef,
+    pub ty: Type,
+    // Information about where this constraint came from
+    pub constraint: BytesConstraint,
+}
 
 pub type Commands = Vec<(Command, ResultType)>;
-
-pub type InputArg = L::InputArg;
 
 pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BytesUsage {
-    /// The bytes are copied
-    Copied,
-    /// The bytes are immutably borrowed, which means they are created once and then dropped
-    ByImmRef,
-    /// The bytes are mutably borrowed, which "fixes" the type
-    ByMutRef,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Information for a given constraint for input bytes
@@ -45,17 +73,8 @@ pub struct BytesConstraint {
     pub command: u16,
     /// The argument in that command
     pub argument: u16,
-    /// The type of usage for this bytes constraint
-    pub usage: BytesUsage,
 }
 
-#[derive(Debug)]
-pub enum InputType {
-    /// A series of BCS bytes, and all types that this must satisfy
-    Bytes(BTreeMap<Type, BytesConstraint>),
-    /// A fixed type--the type is known and "fixed" at input
-    Fixed(Type),
-}
 pub type ResultType = Vec<Type>;
 
 pub type Command = Spanned<Command_>;
@@ -91,7 +110,9 @@ pub struct MoveCall {
 pub enum Location {
     TxContext,
     GasCoin,
-    Input(u16),
+    ObjectInput(u16),
+    PureInput(u16),
+    ReceivingInput(u16),
     Result(u16, u16),
 }
 
@@ -184,18 +205,5 @@ impl TryFrom<Type> for VectorSpecialization {
             Type::Signer | Type::Vector(_) | Type::Datatype(_) => VectorSpecialization::Container,
             Type::Reference(_, _) => return Err("unexpected reference in vector specialization"),
         })
-    }
-}
-
-impl fmt::Display for Location {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Location::TxContext => write!(f, "TxContext"),
-            Location::GasCoin => write!(f, "GasCoin"),
-            Location::Input(idx) => write!(f, "Input({idx})"),
-            Location::Result(result_idx, nested_idx) => {
-                write!(f, "Result({result_idx}, {nested_idx})")
-            }
-        }
     }
 }

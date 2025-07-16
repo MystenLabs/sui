@@ -10,14 +10,12 @@ use crate::{
     programmable_transactions as legacy_ptb, sp,
     static_programmable_transactions::{
         env::Env,
-        execution::values::{
-            ByteValue, InitialInput, InputObjectMetadata, InputValue, Inputs, Local, Locals, Value,
-        },
+        execution::values::{Local, Locals, Value},
         linkage::resolved_linkage::{ResolvedLinkage, RootedLinkage},
         typing::ast::{self as T, Type},
     },
 };
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use move_binary_format::{
     CompiledModule,
     errors::{Location, PartialVMError, VMResult},
@@ -46,7 +44,7 @@ use sui_move_natives::object_runtime::{
 };
 use sui_types::{
     TypeTag,
-    base_types::{MoveObjectType, ObjectID, TxContext},
+    base_types::{MoveObjectType, ObjectID, SequenceNumber, TxContext},
     error::{ExecutionError, ExecutionErrorKind},
     execution::ExecutionResults,
     execution_config_utils::to_binary_config,
@@ -95,20 +93,54 @@ macro_rules! charge_gas {
 #[derive(Debug)]
 pub struct CtxValue(Value);
 
-enum LocationValue<'a> {
-    Loaded(Local<'a>),
-    InputBytes(&'a mut Inputs, u16, Type),
+#[derive(Clone, Debug)]
+pub struct InputObjectMetadata {
+    pub id: ObjectID,
+    pub is_mutable_input: bool,
+    pub owner: Owner,
+    pub version: SequenceNumber,
+    pub type_: Type,
 }
 
 #[derive(Copy, Clone)]
 enum UsageKind {
     Move,
     Copy,
-    Borrow(/* mut */ bool),
+    Borrow,
 }
 
-// Type alias used to document borrowing the `imm_ref_temps` field
-type TempLocals = Vec<Locals>;
+// Locals and metadata for all `Location`s. Separated from `Context` for lifetime reasons.
+struct Locations {
+    // A single local for holding the TxContext
+    tx_context_value: Locals,
+    /// The runtime value for the Gas coin, None if no gas coin is provided
+    gas: Option<(InputObjectMetadata, Locals)>,
+    /// The runtime value for the input objects args
+    input_object_metadata: Vec<(T::InputIndex, InputObjectMetadata)>,
+    object_inputs: Locals,
+    pure_input_bytes: IndexSet<Vec<u8>>,
+    pure_input_metadata: Vec<T::PureInput>,
+    pure_inputs: Locals,
+    receiving_input_metadata: Vec<T::ReceivingInput>,
+    receiving_inputs: Locals,
+    /// The results of a given command. For most commands, the inner vector will have length 1.
+    /// It will only not be 1 for Move calls with multiple return values.
+    /// Inner values are None if taken/moved by-value
+    results: Vec<Locals>,
+}
+
+enum ResolvedLocation<'a> {
+    Local(Local<'a>),
+    Pure {
+        bytes: &'a [u8],
+        metadata: &'a T::PureInput,
+        local: Local<'a>,
+    },
+    Receiving {
+        metadata: &'a T::ReceivingInput,
+        local: Local<'a>,
+    },
+}
 
 /// Maintains all runtime state specific to programmable transactions
 pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
@@ -124,19 +156,49 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     /// User events are claimed after each Move call
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
-    // A single local for holding the TxContext
-    tx_context_value: Locals,
-    /// The runtime value for the Gas coin, None if no gas coin is provided
-    gas: Option<Inputs>,
-    /// The runtime value for the inputs/call args
-    inputs: Inputs,
-    /// The results of a given command. For most commands, the inner vector will have length 1.
-    /// It will only not be 1 for Move calls with multiple return values.
-    /// Inner values are None if taken/moved by-value
-    results: Vec<Locals>,
-    // used by by-ref Pure inputs without fixed types. We must create one-off references to these
-    // values, which will be dropped at the end of the transaction.
-    imm_ref_temps: TempLocals,
+    locations: Locations,
+}
+
+impl Locations {
+    /// NOTE! This does not charge gas and should not be used directly. It is exposed for
+    /// dev-inspect
+    fn resolve(&mut self, location: T::Location) -> Result<ResolvedLocation, ExecutionError> {
+        Ok(match location {
+            T::Location::TxContext => ResolvedLocation::Local(self.tx_context_value.local(0)?),
+            T::Location::GasCoin => {
+                let (_, gas_locals) = unwrap!(self.gas.as_mut(), "Gas coin not provided");
+                ResolvedLocation::Local(gas_locals.local(0)?)
+            }
+            T::Location::ObjectInput(i) => ResolvedLocation::Local(self.object_inputs.local(i)?),
+            T::Location::Result(i, j) => {
+                let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
+                ResolvedLocation::Local(result.local(j)?)
+            }
+            T::Location::PureInput(i) => {
+                let local = self.pure_inputs.local(i)?;
+                let metadata = &self.pure_input_metadata[i as usize];
+                let bytes = self
+                    .pure_input_bytes
+                    .get_index(metadata.byte_index)
+                    .ok_or_else(|| {
+                        make_invariant_violation!(
+                            "Pure input {} bytes out of bounds at index {}",
+                            metadata.original_input_index.0,
+                            metadata.byte_index,
+                        )
+                    })?;
+                ResolvedLocation::Pure {
+                    bytes,
+                    metadata,
+                    local,
+                }
+            }
+            T::Location::ReceivingInput(i) => ResolvedLocation::Receiving {
+                metadata: &self.receiving_input_metadata[i as usize],
+                local: self.receiving_inputs.local(i)?,
+            },
+        })
+    }
 }
 
 impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
@@ -146,17 +208,25 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
-        inputs: T::Inputs,
+        pure_input_bytes: IndexSet<Vec<u8>>,
+        object_inputs: Vec<T::ObjectInput>,
+        pure_input_metadata: Vec<T::PureInput>,
+        receiving_input_metadata: Vec<T::ReceivingInput>,
     ) -> Result<Self, ExecutionError>
     where
         'pc: 'state,
     {
         let mut input_object_map = BTreeMap::new();
-        let inputs = inputs
-            .into_iter()
-            .map(|(arg, ty)| load_input_arg(gas_charger, env, &mut input_object_map, arg, ty))
-            .collect::<Result<Vec<_>, ExecutionError>>()?;
-        let inputs = Inputs::new(inputs)?;
+        let mut input_object_metadata = Vec::with_capacity(object_inputs.len());
+        let mut object_values = Vec::with_capacity(object_inputs.len());
+        for object_input in object_inputs {
+            let (i, m, v) = load_object_arg(gas_charger, env, &mut input_object_map, object_input)?;
+            input_object_metadata.push((i, m));
+            object_values.push(v);
+        }
+        let object_inputs = Locals::new(object_values)?;
+        let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
+        let receiving_inputs = Locals::new_invalid(receiving_input_metadata.len())?;
         let gas = match gas_charger.gas_coin() {
             Some(gas_coin) => {
                 let ty = env.gas_coin_type()?;
@@ -168,15 +238,13 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     true,
                     ty,
                 )?;
-                let mut gas_locals = Inputs::new([InitialInput::Object(gas_metadata, gas_value)])?;
-                let InputValue::Loaded(gas_local) = gas_locals.get(0)? else {
-                    invariant_violation!("Gas coin should be loaded, not bytes");
-                };
+                let mut gas_locals = Locals::new([gas_value])?;
+                let gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
                 let max_gas_in_balance = gas_charger.gas_budget();
                 gas_ref.coin_ref_subtract_balance(max_gas_in_balance)?;
-                Some(gas_locals)
+                Some((gas_metadata, gas_locals))
             }
             None => None,
         };
@@ -197,32 +265,46 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context,
             gas_charger,
             user_events: vec![],
-            tx_context_value,
-            gas,
-            inputs,
-            results: vec![],
-            imm_ref_temps: vec![],
+            locations: Locations {
+                tx_context_value,
+                gas,
+                input_object_metadata,
+                object_inputs,
+                pure_input_bytes,
+                pure_input_metadata,
+                pure_inputs,
+                receiving_input_metadata,
+                receiving_inputs,
+                results: vec![],
+            },
         })
     }
 
     pub fn finish<Mode: ExecutionMode>(mut self) -> Result<ExecutionResults, ExecutionError> {
         assert_invariant!(
-            !self.tx_context_value.local(0)?.is_invalid()?,
+            !self.locations.tx_context_value.local(0)?.is_invalid()?,
             "tx context value should be present"
         );
-        let gas = std::mem::take(&mut self.gas);
-        let inputs = std::mem::replace(&mut self.inputs, Inputs::new([])?);
+        let gas = std::mem::take(&mut self.locations.gas);
+        let object_input_metadata = std::mem::take(&mut self.locations.input_object_metadata);
+        let mut object_inputs =
+            std::mem::replace(&mut self.locations.object_inputs, Locals::new_invalid(0)?);
         let mut loaded_runtime_objects = BTreeMap::new();
         let mut by_value_shared_objects = BTreeSet::new();
         let mut consensus_owner_objects = BTreeMap::new();
-        let gas_object = gas
-            .map(|g| g.into_objects())
-            .transpose()?
-            .unwrap_or_default();
-        debug_assert!(gas_object.len() <= 1);
-        let gas_id_opt = gas_object.first().map(|(o, _)| o.id);
-        let input_objects = inputs.into_objects()?;
-        for (metadata, value) in input_objects.into_iter().chain(gas_object) {
+        let gas = gas
+            .map(|(m, mut g)| Result::<_, ExecutionError>::Ok((m, g.local(0)?.move_if_valid()?)))
+            .transpose()?;
+        let gas_id_opt = gas.as_ref().map(|(m, _)| m.id);
+        let object_inputs = object_input_metadata
+            .into_iter()
+            .enumerate()
+            .map(|(i, (_, m))| {
+                let v_opt = object_inputs.local(i as u16)?.move_if_valid()?;
+                Ok((m, v_opt))
+            })
+            .collect::<Result<Vec<_>, ExecutionError>>()?;
+        for (metadata, value_opt) in object_inputs.into_iter().chain(gas) {
             let InputObjectMetadata {
                 id,
                 is_mutable_input,
@@ -241,7 +323,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     is_modified: true,
                 },
             );
-            if let Some(object) = value {
+            if let Some(object) = value_opt {
                 self.transfer_object_(
                     owner,
                     type_,
@@ -297,7 +379,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
             let Some(bytes) = value.serialize() else {
-                invariant_violation!("Failed to deserialize already serialized Move value");
+                invariant_violation!("Failed to serialize already deserialized Move value");
             };
             // safe because has_public_transfer has been determined by the abilities
             let move_object = unsafe {
@@ -416,125 +498,62 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     // Arguments and Values
     //
 
-    /// NOTE! This does not charge gas and should not be used directly. It is exposed for
-    /// dev-inspect
-    fn location_value<'a>(
-        &'a mut self,
-        location: T::Location,
-        ty: Type,
-    ) -> Result<
-        (
-            &'a mut TempLocals,
-            &'a mut GasCharger,
-            &'env Env<'pc, 'vm, 'state, 'linkage>,
-            LocationValue<'a>,
-        ),
-        ExecutionError,
-    > {
-        let v = match location {
-            T::Location::TxContext => {
-                let tx_context_local = self.tx_context_value.local(0)?;
-                LocationValue::Loaded(tx_context_local)
-            }
-            T::Location::GasCoin => {
-                let gas_locals = unwrap!(self.gas.as_mut(), "Gas coin not provided");
-                let InputValue::Loaded(gas_local) = gas_locals.get(0)? else {
-                    // TODO maybe give a better error here
-                    invariant_violation!("Gas coin could not be loaded");
-                };
-                LocationValue::Loaded(gas_local)
-            }
-            T::Location::Result(i, j) => {
-                let result = unwrap!(self.results.get_mut(i as usize), "bounds already verified");
-                let v = result.local(j)?;
-                LocationValue::Loaded(v)
-            }
-            T::Location::Input(i) => {
-                let is_bytes = self.inputs.is_bytes(i);
-                if is_bytes {
-                    LocationValue::InputBytes(&mut self.inputs, i, ty)
-                } else {
-                    let InputValue::Loaded(v) = self.inputs.get(i)? else {
-                        invariant_violation!("Expected local");
-                    };
-                    LocationValue::Loaded(v)
-                }
-            }
-        };
-        Ok((&mut self.imm_ref_temps, self.gas_charger, self.env, v))
-    }
-
     fn location(
         &mut self,
         usage: UsageKind,
         location: T::Location,
-        ty: Type,
     ) -> Result<Value, ExecutionError> {
-        let (imm_ref_temps, gas_charger, env, lv) = self.location_value(location, ty)?;
-        let mut local = match lv {
-            LocationValue::Loaded(v) => v,
-            LocationValue::InputBytes(inputs, i, ty) => {
-                let bytes = match inputs.get(i)? {
-                    InputValue::Bytes(v) => v,
-                    InputValue::Loaded(_) => invariant_violation!("Expected bytes"),
-                };
-                let value = load_byte_value(gas_charger, env, bytes, ty)?;
-                match usage {
-                    UsageKind::Borrow(true) => {
-                        // "fix" the BCS bytes to a given value
-                        inputs.fix(i, value)?;
-                        match inputs.get(i)? {
-                            InputValue::Loaded(v) => v,
-                            InputValue::Bytes(_) => invariant_violation!("Expected fixed value"),
-                        }
-                    }
-                    UsageKind::Borrow(false) => {
-                        // in the case that we need a reference but it is not "fixed", we must
-                        // create a temporary local to borrow
-                        imm_ref_temps.push(Locals::new(vec![value])?);
-                        let local = imm_ref_temps.last_mut().unwrap();
-                        local.local(0)?
-                    }
-                    UsageKind::Move | UsageKind::Copy => {
-                        // return a fresh copy of the value
-                        // Move should only happen for dev-inspect or `Receiving`
-                        return Ok(value);
-                    }
+        let resolved = self.locations.resolve(location)?;
+        let mut local = match resolved {
+            ResolvedLocation::Local(l) => l,
+            ResolvedLocation::Pure {
+                bytes,
+                metadata,
+                mut local,
+            } => {
+                if local.is_invalid()? {
+                    let v = load_pure_value(self.gas_charger, self.env, bytes, metadata)?;
+                    local.store(v)?;
                 }
+                local
+            }
+            ResolvedLocation::Receiving {
+                metadata,
+                mut local,
+            } => {
+                if local.is_invalid()? {
+                    let v = load_receiving_value(self.gas_charger, self.env, metadata)?;
+                    local.store(v)?;
+                }
+                local
             }
         };
         Ok(match usage {
             UsageKind::Move => local.move_()?,
             UsageKind::Copy => {
                 let value = local.copy()?;
-                charge_gas_!(gas_charger, env, charge_copy_loc, &value)?;
+                charge_gas_!(self.gas_charger, self.env, charge_copy_loc, &value)?;
                 value
             }
-            UsageKind::Borrow(_) => local.borrow()?,
+            UsageKind::Borrow => local.borrow()?,
         })
     }
 
-    fn location_usage(&mut self, usage: T::Usage, ty: Type) -> Result<Value, ExecutionError> {
+    fn location_usage(&mut self, usage: T::Usage) -> Result<Value, ExecutionError> {
         match usage {
-            T::Usage::Move(location) => self.location(UsageKind::Move, location, ty),
-            T::Usage::Copy { location, .. } => self.location(UsageKind::Copy, location, ty),
+            T::Usage::Move(location) => self.location(UsageKind::Move, location),
+            T::Usage::Copy { location, .. } => self.location(UsageKind::Copy, location),
         }
     }
 
-    fn argument_value(&mut self, sp!(_, (arg_, ty)): T::Argument) -> Result<Value, ExecutionError> {
+    fn argument_value(&mut self, sp!(_, (arg_, _)): T::Argument) -> Result<Value, ExecutionError> {
         match arg_ {
-            T::Argument__::Use(usage) => self.location_usage(usage, ty),
+            T::Argument__::Use(usage) => self.location_usage(usage),
             // freeze is a no-op for references since the value does not track mutability
-            T::Argument__::Freeze(usage) => self.location_usage(usage, ty),
-            T::Argument__::Borrow(is_mut, location) => {
-                let ty = match ty {
-                    Type::Reference(_, inner) => (*inner).clone(),
-                    _ => invariant_violation!("Expected reference type"),
-                };
-                self.location(UsageKind::Borrow(is_mut), location, ty)
-            }
+            T::Argument__::Freeze(usage) => self.location_usage(usage),
+            T::Argument__::Borrow(_, location) => self.location(UsageKind::Borrow, location),
             T::Argument__::Read(usage) => {
-                let reference = self.location_usage(usage, ty)?;
+                let reference = self.location_usage(usage)?;
                 charge_gas!(self, charge_read_ref, &reference)?;
                 reference.read_ref()
             }
@@ -558,7 +577,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
     }
 
     pub fn result(&mut self, result: Vec<CtxValue>) -> Result<(), ExecutionError> {
-        self.results
+        self.locations
+            .results
             .push(Locals::new(result.into_iter().map(|v| v.0))?);
         Ok(())
     }
@@ -967,16 +987,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             invariant_violation!("unable to generate type tag from type")
         };
         let location = arg.location();
-        let (_, _, _, lv) = self.location_value(location, ty)?;
-        let local = match lv {
-            LocationValue::Loaded(v) => {
-                if v.is_invalid()? {
-                    return Ok(None);
-                }
-                v
-            }
-            LocationValue::InputBytes(_, _, _) => return Ok(None),
+        let resolved = self.locations.resolve(location)?;
+        let local = match resolved {
+            ResolvedLocation::Local(local)
+            | ResolvedLocation::Pure { local, .. }
+            | ResolvedLocation::Receiving { local, .. } => local,
         };
+        if local.is_invalid()? {
+            return Ok(None);
+        }
         // copy the value from the local
         let value = local.copy()?;
         let value = match arg {
@@ -1001,8 +1020,20 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let arg = match location {
             T::Location::TxContext => return Ok(None),
             T::Location::GasCoin => TxArgument::GasCoin,
-            T::Location::Input(i) => TxArgument::Input(i),
             T::Location::Result(i, j) => TxArgument::NestedResult(i, j),
+            T::Location::ObjectInput(i) => {
+                TxArgument::Input(self.locations.input_object_metadata[i as usize].0.0)
+            }
+            T::Location::PureInput(i) => TxArgument::Input(
+                self.locations.pure_input_metadata[i as usize]
+                    .original_input_index
+                    .0,
+            ),
+            T::Location::ReceivingInput(i) => TxArgument::Input(
+                self.locations.receiving_input_metadata[i as usize]
+                    .original_input_index
+                    .0,
+            ),
         };
         Ok(Some((arg, bytes, tag)))
     }
@@ -1077,38 +1108,17 @@ impl CtxValue {
     }
 }
 
-fn load_input_arg(
-    meter: &mut GasCharger,
-    env: &Env,
-    input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
-    arg: T::InputArg,
-    ty: T::InputType,
-) -> Result<InitialInput, ExecutionError> {
-    Ok(match arg {
-        T::InputArg::Pure(bytes) => InitialInput::Bytes(ByteValue::Pure(bytes)),
-        T::InputArg::Receiving((id, version, _)) => {
-            InitialInput::Bytes(ByteValue::Receiving { id, version })
-        }
-        T::InputArg::Object(arg) => {
-            let T::InputType::Fixed(ty) = ty else {
-                invariant_violation!("Expected fixed type for object arg");
-            };
-            let (object_metadata, value) = load_object_arg(meter, env, input_object_map, arg, ty)?;
-            InitialInput::Object(object_metadata, value)
-        }
-    })
-}
-
 fn load_object_arg(
     meter: &mut GasCharger,
     env: &Env,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
-    arg: T::ObjectArg,
-    ty: T::Type,
-) -> Result<(InputObjectMetadata, Value), ExecutionError> {
-    let id = arg.id();
-    let is_mutable_input = arg.is_mutable();
-    load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, ty)
+    input: T::ObjectInput,
+) -> Result<(T::InputIndex, InputObjectMetadata, Value), ExecutionError> {
+    let id = input.arg.id();
+    let is_mutable_input = input.arg.is_mutable();
+    let (metadata, value) =
+        load_object_arg_impl(meter, env, input_object_map, id, is_mutable_input, input.ty)?;
+    Ok((input.original_input_index, metadata, value))
 }
 
 fn load_object_arg_impl(
@@ -1156,16 +1166,25 @@ fn load_object_arg_impl(
     Ok((object_metadata, v))
 }
 
-fn load_byte_value(
+fn load_pure_value(
     meter: &mut GasCharger,
     env: &Env,
-    value: &ByteValue,
-    ty: Type,
+    bytes: &[u8],
+    metadata: &T::PureInput,
 ) -> Result<Value, ExecutionError> {
-    let loaded = match value {
-        ByteValue::Pure(bytes) => Value::deserialize(env, bytes, ty)?,
-        ByteValue::Receiving { id, version } => Value::receiving(*id, *version),
-    };
+    let loaded = Value::deserialize(env, bytes, metadata.ty.clone())?;
+    // ByteValue::Receiving { id, version } => Value::receiving(*id, *version),
+    charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
+    Ok(loaded)
+}
+
+fn load_receiving_value(
+    meter: &mut GasCharger,
+    env: &Env,
+    metadata: &T::ReceivingInput,
+) -> Result<Value, ExecutionError> {
+    let (id, version, _) = metadata.object_ref;
+    let loaded = Value::receiving(id, version);
     charge_gas_!(meter, env, charge_copy_loc, &loaded)?;
     Ok(loaded)
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
     execution_mode::ExecutionMode,
@@ -15,16 +15,18 @@ use crate::{
 use sui_types::{coin::RESOLVED_COIN_STRUCT, error::ExecutionError};
 
 struct Context<'txn> {
-    inputs: Vec<&'txn T::InputType>,
-    usable_inputs: Vec<bool>,
+    objects: Vec<&'txn T::Type>,
+    pure: Vec<&'txn T::Type>,
+    receiving: Vec<&'txn T::Type>,
     result_types: Vec<&'txn [T::Type]>,
 }
 
 impl<'txn> Context<'txn> {
     fn new(txn: &'txn T::Transaction) -> Self {
         Self {
-            inputs: txn.inputs.iter().map(|(_, ty)| ty).collect(),
-            usable_inputs: vec![false; txn.inputs.len()], // set later
+            objects: txn.objects.iter().map(|o| &o.ty).collect(),
+            pure: txn.pure.iter().map(|p| &p.ty).collect(),
+            receiving: txn.receiving.iter().map(|r| &r.ty).collect(),
             result_types: txn.commands.iter().map(|(_, ty)| ty.as_slice()).collect(),
         }
     }
@@ -35,10 +37,22 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
 }
 
 fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
-    let mut context = Context::new(txn);
-    let T::Transaction { inputs, commands } = txn;
-    for (idx, (i, ty)) in inputs.iter().enumerate() {
-        input::<Mode>(&mut context, idx, i, ty)?;
+    let context = Context::new(txn);
+    let T::Transaction {
+        bytes: _,
+        objects,
+        pure,
+        receiving,
+        commands,
+    } = txn;
+    for obj in objects {
+        object_input(obj)?;
+    }
+    for p in pure {
+        pure_input::<Mode>(p)?;
+    }
+    for r in receiving {
+        receiving_input(r)?;
     }
     for (c, result_tys) in commands {
         command::<Mode>(env, &context, c, result_tys)?;
@@ -46,47 +60,26 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     Ok(())
 }
 
-fn input<Mode: ExecutionMode>(
-    context: &mut Context,
-    idx: usize,
-    arg: &T::InputArg,
-    ty: &T::InputType,
-) -> anyhow::Result<()> {
-    match arg {
-        T::InputArg::Pure(_) => {
-            let T::InputType::Bytes(tys) = ty else {
-                anyhow::bail!("pure should not have a fixed type",);
-            };
-            if !Mode::allow_arbitrary_values() {
-                for ty in tys.keys() {
-                    anyhow::ensure!(
-                        input_arguments::is_valid_pure_type(ty)?,
-                        "pure type must be valid"
-                    );
-                }
-            }
-            context.usable_inputs[idx] = !tys.is_empty();
-        }
-        T::InputArg::Receiving(_) => {
-            let T::InputType::Bytes(tys) = ty else {
-                anyhow::bail!("receiving should not have a fixed type",);
-            };
-            for ty in tys.keys() {
-                anyhow::ensure!(
-                    input_arguments::is_valid_receiving(ty),
-                    "receiving type must be valid"
-                );
-            }
-            context.usable_inputs[idx] = !tys.is_empty();
-        }
-        T::InputArg::Object(_) => {
-            let T::InputType::Fixed(ty) = ty else {
-                anyhow::bail!("object should not have a bytes type",);
-            };
-            anyhow::ensure!(ty.abilities().has_key(), "object type must have key");
-            context.usable_inputs[idx] = true
-        }
+fn object_input(obj: &T::ObjectInput) -> anyhow::Result<()> {
+    anyhow::ensure!(obj.ty.abilities().has_key(), "object type must have key");
+    Ok(())
+}
+
+fn pure_input<Mode: ExecutionMode>(p: &T::PureInput) -> anyhow::Result<()> {
+    if !Mode::allow_arbitrary_values() {
+        anyhow::ensure!(
+            input_arguments::is_valid_pure_type(&p.ty)?,
+            "pure type must be valid"
+        );
     }
+    Ok(())
+}
+
+fn receiving_input(r: &T::ReceivingInput) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        input_arguments::is_valid_receiving(&r.ty),
+        "receiving type must be valid"
+    );
     Ok(())
 }
 
@@ -252,7 +245,6 @@ fn argument(
     sp!(_, (arg__, ty)): &T::Argument,
     param: &T::Type,
 ) -> anyhow::Result<()> {
-    let t;
     anyhow::ensure!(
         ty == param,
         "argument type mismatch. Expected {param:?}, got {ty:?}"
@@ -260,35 +252,25 @@ fn argument(
     let (actual, expected) = match arg__ {
         T::Argument__::Use(u) => (usage(env, context, u)?, param),
         T::Argument__::Read(u) => {
-            let actual = usage(env, context, u)?;
-            t = match actual {
-                LocationType::Fixed(T::Type::Reference(_, inner)) => (*inner).clone(),
-                LocationType::Bytes(_) => {
-                    anyhow::bail!("should never ReadRef a non-reference location")
-                }
-                LocationType::Fixed(ty) => {
+            let actual = match usage(env, context, u)? {
+                T::Type::Reference(_, inner) => (*inner).clone(),
+                _ => {
                     anyhow::bail!("should never ReadRef a non-reference type, got {ty:?}");
                 }
             };
-            (LocationType::Fixed(t), param)
+            (actual, param)
         }
         T::Argument__::Freeze(u) => {
-            let actual = usage(env, context, u)?;
-            t = match actual {
-                LocationType::Fixed(T::Type::Reference(true, inner)) => {
-                    T::Type::Reference(false, inner.clone())
-                }
-                LocationType::Bytes(_) => {
-                    anyhow::bail!("should never FreezeRef a non-reference location")
-                }
-                LocationType::Fixed(T::Type::Reference(false, _)) => {
+            let actual = match usage(env, context, u)? {
+                T::Type::Reference(true, inner) => T::Type::Reference(false, inner.clone()),
+                T::Type::Reference(false, _) => {
                     anyhow::bail!("should never FreezeRef an immutable reference")
                 }
-                LocationType::Fixed(ty) => {
+                ty => {
                     anyhow::bail!("should never Freeze a non-reference type, got {ty:?}");
                 }
             };
-            (LocationType::Fixed(t), param)
+            (actual, param)
         }
         T::Argument__::Borrow(is_mut, l) => {
             let T::Type::Reference(param_mut, expected) = param else {
@@ -303,20 +285,10 @@ fn argument(
         }
     };
     // check actual == expected
-    match actual {
-        LocationType::Bytes(constraints) => {
-            anyhow::ensure!(
-                constraints.contains_key(expected),
-                "Bytes are not constrained for expected type {expected:?}"
-            );
-        }
-        LocationType::Fixed(actual_ty) => {
-            anyhow::ensure!(
-                &actual_ty == expected,
-                "argument type mismatch. Expected {expected:?}, got {actual_ty:?}"
-            );
-        }
-    }
+    anyhow::ensure!(
+        &actual == expected,
+        "argument type mismatch. Expected {expected:?}, got {actual:?}"
+    );
     // check copy usage
     match arg__ {
         T::Argument__::Use(T::Usage::Copy { .. }) | T::Argument__::Read(_) => {
@@ -332,7 +304,7 @@ fn argument(
     Ok(())
 }
 
-fn usage<'a>(env: &Env, context: &Context<'a>, u: &T::Usage) -> anyhow::Result<LocationType<'a>> {
+fn usage(env: &Env, context: &Context, u: &T::Usage) -> anyhow::Result<T::Type> {
     match u {
         T::Usage::Move(l)
         | T::Usage::Copy {
@@ -342,46 +314,33 @@ fn usage<'a>(env: &Env, context: &Context<'a>, u: &T::Usage) -> anyhow::Result<L
     }
 }
 
-enum LocationType<'a> {
-    Bytes(&'a BTreeMap<T::Type, T::BytesConstraint>),
-    Fixed(T::Type),
-}
-
-fn location<'a>(
-    env: &Env,
-    context: &Context<'a>,
-    l: T::Location,
-) -> anyhow::Result<LocationType<'a>> {
-    Ok(LocationType::Fixed(match l {
+fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::Type> {
+    Ok(match l {
         T::Location::TxContext => env.tx_context_type()?,
         T::Location::GasCoin => env.gas_coin_type()?,
-        T::Location::Input(i) => {
-            let usable = context.usable_inputs.get(i as usize).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "input {i} out of bounds for inputs of length {}",
-                    context.inputs.len()
-                )
-            })?;
-            anyhow::ensure!(
-                *usable,
-                "input {i} is not usable as it does not have constrained Pure bytes"
-            );
-            let input_ty = context.inputs.get(i as usize).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "input {i} out of bounds for inputs of length {}",
-                    context.inputs.len()
-                )
-            })?;
-            match input_ty {
-                T::InputType::Bytes(constraints) => return Ok(LocationType::Bytes(constraints)),
-                T::InputType::Fixed(t) => t.clone(),
-            }
-        }
+        T::Location::ObjectInput(i) => context
+            .objects
+            .get(i as usize)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("object input {i} out of bounds"))?
+            .clone(),
+        T::Location::PureInput(i) => context
+            .pure
+            .get(i as usize)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("pure input {i} out of bounds"))?
+            .clone(),
+        T::Location::ReceivingInput(i) => context
+            .receiving
+            .get(i as usize)
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("receiving input {i} out of bounds"))?
+            .clone(),
         T::Location::Result(i, j) => context
             .result_types
             .get(i as usize)
             .and_then(|v| v.get(j as usize))
             .ok_or_else(|| anyhow::anyhow!("result ({i}, {j}) out of bounds",))?
             .clone(),
-    }))
+    })
 }

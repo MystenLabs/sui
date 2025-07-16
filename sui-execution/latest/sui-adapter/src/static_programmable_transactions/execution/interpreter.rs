@@ -66,8 +66,23 @@ pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
 where
     'pc: 'state,
 {
-    let T::Transaction { inputs, commands } = ast;
-    let mut context = Context::new(env, metrics, tx_context, gas_charger, inputs)?;
+    let T::Transaction {
+        bytes,
+        objects,
+        pure,
+        receiving,
+        commands,
+    } = ast;
+    let mut context = Context::new(
+        env,
+        metrics,
+        tx_context,
+        gas_charger,
+        bytes,
+        objects,
+        pure,
+        receiving,
+    )?;
     let mut mode_results = Mode::empty_results();
     for (sp!(idx, command), tys) in commands {
         let start = Instant::now();

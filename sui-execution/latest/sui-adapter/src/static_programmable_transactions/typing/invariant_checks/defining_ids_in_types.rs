@@ -13,12 +13,15 @@ pub fn verify(env: &env::Env, tt: &T::Transaction) -> Result<(), ExecutionError>
     let check_arg = |sp!(_, (_, ty)): &Spanned<_>| ensure_type_defining_id_based(env, ty);
 
     // Verify all types in inputs are defining-id based.
-    tt.inputs
+    tt.objects
         .iter()
-        .try_for_each(|(_, input_type)| match input_type {
-            T::InputType::Bytes(tys) => tys.keys().try_for_each(check_type),
-            T::InputType::Fixed(ty) => check_type(ty),
-        })?;
+        .try_for_each(|object_input| check_type(&object_input.ty))?;
+    tt.pure
+        .iter()
+        .try_for_each(|pure_input| check_type(&pure_input.ty))?;
+    tt.receiving
+        .iter()
+        .try_for_each(|receiving_input| check_type(&receiving_input.ty))?;
 
     // Verify all types in commands are defining-id based.
     tt.commands

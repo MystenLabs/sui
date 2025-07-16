@@ -8,9 +8,10 @@ use crate::{
     static_programmable_transactions::{
         env::Env,
         loading::ast::Type,
-        typing::ast::{self as T, BytesConstraint, BytesUsage, InputArg, ObjectArg},
+        typing::ast::{self as T, BytesConstraint, ObjectArg},
     },
 };
+use indexmap::IndexSet;
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
@@ -25,32 +26,30 @@ struct ObjectUsage {
 }
 
 struct Context {
-    inputs: Vec<Option<ObjectUsage>>,
+    objects: Vec<ObjectUsage>,
 }
 
 impl Context {
-    fn new(inputs: &T::Inputs) -> Self {
-        let inputs = inputs
+    fn new(txn: &T::Transaction) -> Self {
+        let objects = txn
+            .objects
             .iter()
-            .map(|(arg, _)| {
-                Some(match arg {
-                    InputArg::Pure(_) | InputArg::Receiving(_) => return None,
-                    InputArg::Object(ObjectArg::ImmObject(_)) => ObjectUsage {
-                        allow_by_value: false,
-                        allow_by_mut_ref: false,
-                    },
-                    InputArg::Object(ObjectArg::OwnedObject(_)) => ObjectUsage {
-                        allow_by_value: true,
-                        allow_by_mut_ref: true,
-                    },
-                    InputArg::Object(ObjectArg::SharedObject { mutable, .. }) => ObjectUsage {
-                        allow_by_value: *mutable,
-                        allow_by_mut_ref: *mutable,
-                    },
-                })
+            .map(|object_input| match &object_input.arg {
+                ObjectArg::ImmObject(_) => ObjectUsage {
+                    allow_by_value: false,
+                    allow_by_mut_ref: false,
+                },
+                ObjectArg::OwnedObject(_) => ObjectUsage {
+                    allow_by_value: true,
+                    allow_by_mut_ref: true,
+                },
+                ObjectArg::SharedObject { mutable, .. } => ObjectUsage {
+                    allow_by_value: *mutable,
+                    allow_by_mut_ref: *mutable,
+                },
             })
             .collect();
-        Self { inputs }
+        Self { objects }
     }
 }
 
@@ -61,24 +60,20 @@ impl Context {
 /// 2. That any `Object` arguments are used validly. This means mutable references are taken only
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects
 pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
-    let T::Transaction { inputs, commands } = txn;
-    for (arg, ty) in inputs {
-        match ty {
-            T::InputType::Bytes(constraints) => {
-                for (constraint, constraint_info) in constraints {
-                    let BytesConstraint {
-                        command,
-                        argument,
-                        usage,
-                    } = *constraint_info;
-                    check_constraint::<Mode>(argument, arg, constraint, usage)
-                        .map_err(|e| e.with_command_index(command as usize))?;
-                }
-            }
-            T::InputType::Fixed(_) => (),
-        }
+    let T::Transaction {
+        bytes,
+        objects: _,
+        pure,
+        receiving,
+        commands,
+    } = txn;
+    for pure in pure {
+        check_pure_input::<Mode>(bytes, pure)?;
     }
-    let context = &mut Context::new(inputs);
+    for receiving in receiving {
+        check_receving_input(receiving)?;
+    }
+    let context = &mut Context::new(txn);
     for (c, _t) in commands {
         command(context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
     }
@@ -89,30 +84,32 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
 // Pure bytes
 //**************************************************************************************************
 
-fn check_constraint<Mode: ExecutionMode>(
-    command_arg_idx: u16,
-    arg: &InputArg,
-    constraint: &Type,
-    usage: BytesUsage,
+fn check_pure_input<Mode: ExecutionMode>(
+    bytes: &IndexSet<Vec<u8>>,
+    pure: &T::PureInput,
 ) -> Result<(), ExecutionError> {
-    match arg {
-        InputArg::Pure(bytes) => {
-            check_pure_bytes::<Mode>(command_arg_idx, bytes, constraint, usage)
-        }
-        InputArg::Receiving(_) => check_receiving(command_arg_idx, constraint),
-        InputArg::Object(
-            ObjectArg::ImmObject(_) | ObjectArg::OwnedObject(_) | ObjectArg::SharedObject { .. },
-        ) => {
-            invariant_violation!("Object inputs should be Fixed")
-        }
-    }
+    let T::PureInput {
+        original_input_index,
+        byte_index,
+        ty,
+        constraint,
+    } = pure;
+    let Some(bcs_bytes) = bytes.get_index(*byte_index) else {
+        invariant_violation!(
+            "Unbound byte index {} for pure input at index {}",
+            byte_index,
+            original_input_index.0
+        );
+    };
+    let BytesConstraint { command, argument } = constraint;
+    check_pure_bytes::<Mode>(*argument, bcs_bytes, ty)
+        .map_err(|e| e.with_command_index(*command as usize))
 }
 
 fn check_pure_bytes<Mode: ExecutionMode>(
     command_arg_idx: u16,
     bytes: &[u8],
     constraint: &Type,
-    usage: BytesUsage,
 ) -> Result<(), ExecutionError> {
     assert_invariant!(
         !matches!(constraint, Type::Reference(_, _)),
@@ -133,18 +130,6 @@ fn check_pure_bytes<Mode: ExecutionMode>(
             msg,
         ));
     };
-    match usage {
-        BytesUsage::Copied => assert_invariant!(
-            constraint.abilities().has_copy(),
-            "non-fixed bytes used by-value should be copyable. For type {constraint:?}"
-        ),
-        BytesUsage::ByImmRef => assert_invariant!(
-            constraint.abilities().has_drop(),
-            "non-fixed bytes used by-immutable-ref should be droppable since they will be \
-            deserialized, borrowed, but ultimately dropped. For type {constraint:?}"
-        ),
-        BytesUsage::ByMutRef => (),
-    }
     bcs_argument_validate(bytes, command_arg_idx, layout)?;
     Ok(())
 }
@@ -191,6 +176,17 @@ fn primitive_serialization_layout(
             }
         }
     })
+}
+
+fn check_receving_input(receiving: &T::ReceivingInput) -> Result<(), ExecutionError> {
+    let T::ReceivingInput {
+        original_input_index: _,
+        object_ref: _,
+        ty,
+        constraint,
+    } = receiving;
+    let BytesConstraint { command, argument } = constraint;
+    check_receiving(*argument, ty).map_err(|e| e.with_command_index(*command as usize))
 }
 
 fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), ExecutionError> {
@@ -291,21 +287,21 @@ fn check_obj_by_mut_ref(
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
-        T::Location::GasCoin | T::Location::Result(_, _) | T::Location::TxContext => Ok(()),
-        T::Location::Input(idx) => match &context.inputs[*idx as usize] {
-            None
-            | Some(ObjectUsage {
-                allow_by_mut_ref: true,
-                ..
-            }) => Ok(()),
-            Some(ObjectUsage {
-                allow_by_mut_ref: false,
-                ..
-            }) => Err(command_argument_error(
-                CommandArgumentError::InvalidObjectByMutRef,
-                arg_idx as usize,
-            )),
-        },
+        T::Location::PureInput(_)
+        | T::Location::ReceivingInput(_)
+        | T::Location::TxContext
+        | T::Location::GasCoin
+        | T::Location::Result(_, _) => Ok(()),
+        T::Location::ObjectInput(idx) => {
+            if !context.objects[*idx as usize].allow_by_mut_ref {
+                Err(command_argument_error(
+                    CommandArgumentError::InvalidObjectByMutRef,
+                    arg_idx as usize,
+                ))
+            } else {
+                Ok(())
+            }
+        }
     }
 }
 
@@ -316,21 +312,21 @@ fn check_by_value(
     location: &T::Location,
 ) -> Result<(), ExecutionError> {
     match location {
-        T::Location::TxContext | T::Location::GasCoin | T::Location::Result(_, _) => Ok(()),
-        T::Location::Input(idx) => match &context.inputs[*idx as usize] {
-            None
-            | Some(ObjectUsage {
-                allow_by_value: true,
-                ..
-            }) => Ok(()),
-            Some(ObjectUsage {
-                allow_by_value: false,
-                ..
-            }) => Err(command_argument_error(
-                CommandArgumentError::InvalidObjectByValue,
-                arg_idx as usize,
-            )),
-        },
+        T::Location::GasCoin
+        | T::Location::Result(_, _)
+        | T::Location::TxContext
+        | T::Location::PureInput(_)
+        | T::Location::ReceivingInput(_) => Ok(()),
+        T::Location::ObjectInput(idx) => {
+            if !context.objects[*idx as usize].allow_by_value {
+                Err(command_argument_error(
+                    CommandArgumentError::InvalidObjectByValue,
+                    arg_idx as usize,
+                ))
+            } else {
+                Ok(())
+            }
+        }
     }
 }
 
@@ -359,6 +355,10 @@ fn check_gas_by_value_loc(idx: u16, location: &T::Location) -> Result<(), Execut
             CommandArgumentError::InvalidGasCoinUsage,
             idx as usize,
         )),
-        T::Location::TxContext | T::Location::Input(_) | T::Location::Result(_, _) => Ok(()),
+        T::Location::TxContext
+        | T::Location::ObjectInput(_)
+        | T::Location::PureInput(_)
+        | T::Location::ReceivingInput(_)
+        | T::Location::Result(_, _) => Ok(()),
     }
 }
