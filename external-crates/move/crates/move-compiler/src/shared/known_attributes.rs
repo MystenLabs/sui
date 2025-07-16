@@ -177,19 +177,19 @@ pub enum AttributePosition {
     Spec,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerificationAttribute {
     // Denotes a function is a spec
     Spec {
         focus: bool,
         prove: bool,
-        target: Option<ModuleIdent>,
+        target: Option<ModuleAccess>,
         no_opaque: bool,
         ignore_abort: bool,
     },
     // Denotes a function is only used by specs, only included in compilation in verify mode
     SpecOnly {
-        inv_target: bool,
+        inv_target: Option<ModuleAccess>,
     },
 }
 
@@ -962,11 +962,11 @@ impl AstDebug for VerificationAttribute {
                 w.write(")");
             }
             VerificationAttribute::SpecOnly { inv_target } => {
-                w.write("spec_only(");
-                if *inv_target {
-                    w.write("inv_target");
-                }
-                w.write(")");
+              if inv_target.is_some() {
+                    w.write(format!("spec_only(inv_target={})", inv_target.clone().unwrap()));
+                } else {
+                    w.write("spec_only()");
+                } 
             }
         }
     }

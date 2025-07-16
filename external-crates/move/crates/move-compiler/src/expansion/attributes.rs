@@ -313,9 +313,18 @@ fn attribute(
                 prove,
                 ignore_abort,
                 no_opaque,
-                target: target.map(|t| context.name_access_chain_to_module_ident(t))?,
+                target: target
+                    .map(|t| context.name_access_chain_to_module_access(crate::expansion::path_expander::Access::Term, t))
+                    .flatten()
+                    .map(|result| result.access),
             }),
-        PA::SpecOnly { inv_target}  => KA::Verification(A::VerificationAttribute::SpecOnly { inv_target } ),
+        PA::SpecOnly { inv_target } =>
+            KA::Verification(A::VerificationAttribute::SpecOnly {
+                inv_target: inv_target
+                    .map(|t: Spanned<P::NameAccessChain_>| context.name_access_chain_to_module_access(crate::expansion::path_expander::Access::Term, t))
+                    .flatten()
+                    .map(|result| result.access),
+             } ),
     };
     Some(sp(loc, attr_))
 }

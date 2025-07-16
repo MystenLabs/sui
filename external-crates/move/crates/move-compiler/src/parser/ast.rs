@@ -236,7 +236,7 @@ pub enum Attribute_ {
         ignore_abort: bool,
     },
     SpecOnly {
-        inv_target: bool,
+        inv_target: Option<NameAccessChain>,
     },
 }
 
@@ -1782,8 +1782,8 @@ impl AstDebug for Attribute_ {
                 w.write(")");
             },
             A::SpecOnly { inv_target } => {
-                if *inv_target {
-                    w.write("spec_only(inv_target)");
+                if inv_target.is_some() {
+                    w.write(format!("spec_only(inv_target={})", inv_target.clone().unwrap()));
                 } else {
                     w.write("spec_only()");
                 } 
