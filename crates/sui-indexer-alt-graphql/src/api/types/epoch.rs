@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::Context as _;
+use async_graphql::futures_util::try_join;
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
+use std::sync::Arc;
 use sui_indexer_alt_reader::{
     epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
     pg_reader::PgReader,
@@ -66,8 +66,15 @@ impl Epoch {
 
     #[graphql(flatten)]
     async fn end(&self, ctx: &Context<'_>) -> Result<EpochEnd, RpcError> {
-        let start = self.start.fetch(ctx, Some(self.epoch_id)).await?;
-        EpochEnd::fetch(ctx, &start, self.epoch_id).await
+        try_join!(
+            self.start.fetch(ctx, Some(self.epoch_id)),
+            EpochEnd::fetch(ctx, &self.start.scope, self.epoch_id),
+        )
+        .map(|(epoch_start, end)| EpochEnd {
+            scope: self.start.scope.clone(),
+            start: epoch_start.contents,
+            end,
+        })
     }
 
     /// The total number of checkpoints in this epoch.
@@ -260,11 +267,10 @@ impl EpochEnd {
     /// response if the epoch has not ended yet, as of the checkpoint being viewed.
     async fn fetch(
         ctx: &Context<'_>,
-        epoch_start: &EpochStart,
+        scope: &Scope,
         epoch_id: u64,
-    ) -> Result<Self, RpcError> {
+    ) -> Result<Option<Arc<StoredEpochEnd>>, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let scope = epoch_start.scope.clone();
         let stored = pg_loader
             .load_one(EpochEndKey(epoch_id))
             .await
@@ -276,10 +282,6 @@ impl EpochEnd {
             }
             _ => None,
         };
-        Ok(Self {
-            scope,
-            start: epoch_start.contents.clone(),
-            end,
-        })
+        Ok(end)
     }
 }
