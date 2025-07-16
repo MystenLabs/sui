@@ -889,7 +889,10 @@ impl WritebackCache {
 
     #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
-        trace!(digest = ?tx_outputs.transaction.digest(), "writing transaction outputs to cache");
+        let tx_digest = *tx_outputs.transaction.digest();
+        trace!(?tx_digest, "writing transaction outputs to cache");
+
+        self.dirty.fastpath_transaction_outputs.remove(&tx_digest);
 
         let TransactionOutputs {
             transaction,
@@ -2129,10 +2132,11 @@ impl TransactionCacheRead for WritebackCache {
         )
     }
 
-    fn is_tx_fastpath_executed(&self, tx_digest: &TransactionDigest) -> bool {
-        self.dirty
-            .fastpath_transaction_outputs
-            .contains_key(tx_digest)
+    fn get_mysticeti_fastpath_outputs(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<Arc<TransactionOutputs>> {
+        self.dirty.fastpath_transaction_outputs.get(tx_digest)
     }
 
     fn notify_read_fastpath_transaction_outputs<'a>(
@@ -2143,12 +2147,7 @@ impl TransactionCacheRead for WritebackCache {
             .read(tx_digests, |tx_digests| {
                 tx_digests
                     .iter()
-                    .map(|tx_digest| {
-                        self.dirty
-                            .fastpath_transaction_outputs
-                            .get(tx_digest)
-                            .clone()
-                    })
+                    .map(|tx_digest| self.get_mysticeti_fastpath_outputs(tx_digest))
                     .collect()
             })
             .boxed()
@@ -2187,17 +2186,6 @@ impl ExecutionCacheWrite for WritebackCache {
             .insert(tx_digest, tx_outputs.clone());
         self.fastpath_transaction_outputs_notify_read
             .notify(&tx_digest, &tx_outputs);
-    }
-
-    fn flush_fastpath_transaction_outputs(&self, tx_digest: TransactionDigest, epoch_id: EpochId) {
-        let outputs = self.dirty.fastpath_transaction_outputs.remove(&tx_digest);
-        if let Some(outputs) = outputs {
-            debug!(
-                ?tx_digest,
-                "Flushing mysticeti fastpath certified transaction outputs"
-            );
-            self.write_transaction_outputs(epoch_id, outputs);
-        }
     }
 
     #[cfg(test)]

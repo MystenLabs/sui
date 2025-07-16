@@ -216,6 +216,7 @@ jobs:
     runs-on: [ ubuntu-ghcloud ]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
+      TRANSACTION_DRIVER: 100
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:

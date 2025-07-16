@@ -543,10 +543,11 @@ pub trait TransactionCacheRead: Send + Sync {
         .boxed()
     }
 
-    /// Whether the given transaction was executed from mysticeti fastpath, but have not
-    /// yet been finalized. The outputs are still in the temporary buffer and have not
-    /// been flushed to the cache.
-    fn is_tx_fastpath_executed(&self, tx_digest: &TransactionDigest) -> bool;
+    /// Get the execution outputs of a mysticeti fastpath certified transaction, if it exists.
+    fn get_mysticeti_fastpath_outputs(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<Arc<TransactionOutputs>>;
 
     /// Wait until the outputs of the given transactions are available
     /// in the temporary buffer holding mysticeti fastpath outputs.
@@ -582,10 +583,6 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// that it is not visible to any subsequent transaction until we observe it
     /// from consensus or checkpoints.
     fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>);
-
-    /// Flush the output of a Mysticeti fastpath certified transaction to dirty cache.
-    /// This is used to make the output visible to subsequent transactions.
-    fn flush_fastpath_transaction_outputs(&self, tx_digest: TransactionDigest, epoch_id: EpochId);
 
     /// Attempt to acquire object locks for all of the owned input locks.
     fn acquire_transaction_locks(

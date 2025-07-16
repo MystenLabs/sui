@@ -1164,21 +1164,22 @@ impl AuthorityState {
         }
     }
 
-    /// When Ok, returns false if the transaction has not been executed, and returns
-    /// true if the transaction has been executed.
+    /// Vote for a transaction, either when validator receives a submit_transaction request,
+    /// or sees a transaction from consensus. Performs the same types of checks as
+    /// transaction signing, but does not explicitly sign the transaction.
+    /// Note that if the transaction has been executed, we still go through the
+    /// same checks. If the transaction has only been executed through mysticeti fastpath,
+    /// but not yet finalized, the signing will still work since the objects are still available.
+    /// But if the transaction has been finalized, the signing will fail.
+    /// TODO(mysticeti-fastpath): Assess whether we want to optimize the case when the transaction
+    /// has already been finalized executed.
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<()> {
-        let tx_digest = *transaction.digest();
         debug!("handle_vote_transaction");
-
-        // Check if the transaction has already been executed.
-        if self.has_transaction_output(&tx_digest)? {
-            return Ok(());
-        }
 
         let _metrics_guard = self
             .metrics
@@ -1196,19 +1197,13 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        match self.handle_transaction_impl(transaction, false, epoch_store) {
-            Ok(Some(_)) => {
-                panic!("handle_transaction_impl should not return a signed transaction")
-            }
-            Ok(None) => Ok(()),
-            // It happens frequently that while we are checking the validity of the transaction, it
-            // has just been executed.
-            // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(e) => self
-                .has_transaction_output(&tx_digest)?
-                .then_some(())
-                .ok_or(e),
-        }
+        let result =
+            self.handle_transaction_impl(transaction, false /* sign */, epoch_store)?;
+        assert!(
+            result.is_none(),
+            "handle_transaction_impl should not return a signed transaction when sign is false"
+        );
+        Ok(())
     }
 
     pub fn check_system_overload_at_signing(&self) -> bool {
@@ -1374,7 +1369,7 @@ impl AuthorityState {
     pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        mut execution_env: ExecutionEnv,
+        execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
@@ -1386,20 +1381,6 @@ impl AuthorityState {
         let tx_guard = epoch_store.acquire_tx_guard(certificate)?;
 
         let tx_cache_reader = self.get_transaction_cache_reader();
-        if epoch_store.protocol_config().mysticeti_fastpath()
-            && !certificate.is_consensus_tx()
-            && execution_env.scheduling_source == SchedulingSource::NonFastPath
-        {
-            // If this transaction is not scheduled from fastpath, it must be either
-            // from consensus or from checkpoint, i.e. it must be finalized.
-            // To avoid re-executing fastpath transactions, we always attempt to flush
-            // fastpath outputs if it is already there.
-            // If it does get flushed, the effects will appear in the cache, and we will
-            // skip the execution in the next check.
-            self.get_cache_writer()
-                .flush_fastpath_transaction_outputs(*tx_digest, epoch_store.epoch());
-        }
-
         if let Some(effects) = tx_cache_reader.get_executed_effects(tx_digest) {
             if let Some(expected_effects_digest) = execution_env.expected_effects_digest {
                 assert_eq!(
@@ -1415,42 +1396,142 @@ impl AuthorityState {
 
         let execution_start_time = Instant::now();
 
-        let input_objects = self.read_objects_for_execution(
-            tx_guard.as_lock_guard(),
-            certificate,
-            execution_env.assigned_versions,
-            epoch_store,
-        )?;
-
-        if execution_env.expected_effects_digest.is_none() {
-            // We could be re-executing a previously executed but uncommitted transaction, perhaps after
-            // restarting with a new binary. In this situation, if we have published an effects signature,
-            // we must be sure not to equivocate.
-            // TODO: read from cache instead of DB
-            execution_env.expected_effects_digest =
-                epoch_store.get_signed_effects_digest(tx_digest)?;
+        let execution_guard = self.execution_lock_for_executable_transaction(certificate);
+        // Any caller that verifies the signatures on the certificate will have already checked the
+        // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
+        // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
+        // epoch, then it's invalid.
+        let execution_guard = match execution_guard {
+            Ok(execution_guard) => execution_guard,
+            Err(err) => {
+                tx_guard.release();
+                return Err(err);
+            }
+        };
+        // Since we obtain a reference to the epoch store before taking the execution lock, it's
+        // possible that reconfiguration has happened and they no longer match.
+        if *execution_guard != epoch_store.epoch() {
+            tx_guard.release();
+            info!("The epoch of the execution_guard doesn't match the epoch store");
+            return Err(SuiError::WrongEpoch {
+                expected_epoch: epoch_store.epoch(),
+                actual_epoch: *execution_guard,
+            });
         }
 
-        let (effects, execution_error_opt) = self
-            .process_certificate(
-                execution_start_time,
-                tx_guard,
-                certificate,
-                input_objects,
-                execution_env.expected_effects_digest,
-                epoch_store,
-                execution_env.scheduling_source,
-            )
-            .tap_err(|e| info!("process_certificate failed: {e}"))
-            .tap_ok(|(fx, _)| {
-                debug!(
-                    ?tx_digest,
-                    fx_digest=?fx.digest(),
-                    "process_certificate succeeded in {:.3}ms",
-                    (execution_start_time.elapsed().as_micros() as f64) / 1000.0
-                )
-            })?;
+        let scheduling_source = execution_env.scheduling_source;
+        let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath()
+            && !certificate.is_consensus_tx()
+            && scheduling_source == SchedulingSource::NonFastPath
+        {
+            tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
+        } else {
+            None
+        };
 
+        let (transaction_outputs, timings, execution_error_opt) = if let Some(outputs) =
+            mysticeti_fp_outputs
+        {
+            // If this transaction is not scheduled from fastpath, it must be either
+            // from consensus or from checkpoint, i.e. it must be finalized.
+            // To avoid re-executing fastpath transactions, we check if the outputs are already
+            // in the mysticeti fastpath outputs cache. If so, we skip the execution and commit the transaction.
+            debug!(
+                ?tx_digest,
+                "Mysticeti fastpath certified transaction outputs found in cache, skipping execution and committing"
+            );
+            (outputs, None, None)
+        } else {
+            let (transaction_outputs, timings, execution_error_opt) = self
+                .process_certificate(
+                    &tx_guard,
+                    &execution_guard,
+                    certificate,
+                    execution_env,
+                    epoch_store,
+                )
+                .tap_err(|e| {
+                    info!(name = ?self.name, ?tx_digest, "Error executing transaction: {e}");
+                })?;
+            (
+                Arc::new(transaction_outputs),
+                Some(timings),
+                execution_error_opt,
+            )
+        };
+
+        fail_point!("crash");
+
+        let effects = transaction_outputs.effects.clone();
+        debug!(
+            ?tx_digest,
+            fx_digest=?effects.digest(),
+            "process_certificate succeeded in {:.3}ms",
+            (execution_start_time.elapsed().as_micros() as f64) / 1000.0
+        );
+
+        if scheduling_source == SchedulingSource::MysticetiFastPath {
+            self.get_cache_writer()
+                .write_fastpath_transaction_outputs(transaction_outputs);
+        } else {
+            let commit_result =
+                self.commit_certificate(certificate, transaction_outputs, epoch_store);
+            if let Err(err) = commit_result {
+                error!(?tx_digest, "Error committing transaction: {err}");
+                tx_guard.release();
+                return Err(err);
+            }
+        }
+
+        if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
+            certificate.data().transaction_data().kind()
+        {
+            if let Some(err) = &execution_error_opt {
+                debug_fatal!("Authenticator state update failed: {:?}", err);
+            }
+            epoch_store.update_authenticator_state(auth_state);
+
+            // double check that the signature verifier always matches the authenticator state
+            if cfg!(debug_assertions) {
+                let authenticator_state = get_authenticator_state(self.get_object_store())
+                    .expect("Read cannot fail")
+                    .expect("Authenticator state must exist");
+
+                let mut sys_jwks: Vec<_> = authenticator_state
+                    .active_jwks
+                    .into_iter()
+                    .map(|jwk| (jwk.jwk_id, jwk.jwk))
+                    .collect();
+                let mut active_jwks: Vec<_> = epoch_store
+                    .signature_verifier
+                    .get_jwks()
+                    .into_iter()
+                    .collect();
+                sys_jwks.sort();
+                active_jwks.sort();
+
+                assert_eq!(sys_jwks, active_jwks);
+            }
+        }
+
+        tx_guard.commit_tx();
+
+        let elapsed = execution_start_time.elapsed();
+        if let Some(timings) = timings {
+            epoch_store.record_local_execution_time(
+                certificate.data().transaction_data(),
+                &effects,
+                timings,
+                elapsed,
+            );
+        }
+
+        let elapsed_us = elapsed.as_micros() as f64;
+        if elapsed_us > 0.0 {
+            self.metrics
+                .execution_gas_latency_ratio
+                .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed_us);
+        };
         Ok((effects, execution_error_opt))
     }
 
@@ -1548,18 +1629,36 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn process_certificate(
         &self,
-        execution_start_time: Instant,
-        tx_guard: CertTxGuard,
+        tx_guard: &CertTxGuard,
+        execution_guard: &ExecutionLockReadGuard<'_>,
         certificate: &VerifiedExecutableTransaction,
-        input_objects: InputObjects,
-        expected_effects_digest: Option<TransactionEffectsDigest>,
+        execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        scheduling_source: SchedulingSource,
-    ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
-        let process_certificate_start_time = tokio::time::Instant::now();
+    ) -> SuiResult<(
+        TransactionOutputs,
+        Vec<ExecutionTiming>,
+        Option<ExecutionError>,
+    )> {
+        let _scope = monitored_scope("Execution::process_certificate");
         let tx_digest = *certificate.digest();
 
-        let _scope = monitored_scope("Execution::process_certificate");
+        let input_objects = self.read_objects_for_execution(
+            tx_guard.as_lock_guard(),
+            certificate,
+            execution_env.assigned_versions,
+            epoch_store,
+        )?;
+
+        let expected_effects_digest = match execution_env.expected_effects_digest {
+            Some(expected_effects_digest) => Some(expected_effects_digest),
+            None => {
+                // We could be re-executing a previously executed but uncommitted transaction, perhaps after
+                // restarting with a new binary. In this situation, if we have published an effects signature,
+                // we must be sure not to equivocate.
+                // TODO: read from cache instead of DB
+                epoch_store.get_signed_effects_digest(&tx_digest)?
+            }
+        };
 
         fail_point_if!("correlated-crash-process-certificate", || {
             if sui_simulator::random::deterministic_probability_once(&tx_digest, 0.01) {
@@ -1567,114 +1666,17 @@ impl AuthorityState {
             }
         });
 
-        let execution_guard = self.execution_lock_for_executable_transaction(certificate);
-        // Any caller that verifies the signatures on the certificate will have already checked the
-        // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
-        // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
-        // epoch, then it's invalid.
-        let execution_guard = match execution_guard {
-            Ok(execution_guard) => execution_guard,
-            Err(err) => {
-                tx_guard.release();
-                return Err(err);
-            }
-        };
-        // Since we obtain a reference to the epoch store before taking the execution lock, it's
-        // possible that reconfiguration has happened and they no longer match.
-        if *execution_guard != epoch_store.epoch() {
-            tx_guard.release();
-            info!("The epoch of the execution_guard doesn't match the epoch store");
-            return Err(SuiError::WrongEpoch {
-                expected_epoch: epoch_store.epoch(),
-                actual_epoch: *execution_guard,
-            });
-        }
-
         // Errors originating from prepare_certificate may be transient (failure to read locks) or
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (transaction_outputs, timings, execution_error_opt) = match self.execute_certificate(
-            &execution_guard,
+        self.execute_certificate(
+            execution_guard,
             certificate,
             input_objects,
             expected_effects_digest,
             epoch_store,
-        ) {
-            Err(e) => {
-                info!(name = ?self.name, ?tx_digest, "Error executing transaction: {e}");
-                tx_guard.release();
-                return Err(e);
-            }
-            Ok(res) => res,
-        };
-
-        fail_point!("crash");
-
-        let effects = transaction_outputs.effects.clone();
-        if scheduling_source == SchedulingSource::MysticetiFastPath {
-            self.get_cache_writer()
-                .write_fastpath_transaction_outputs(transaction_outputs.into());
-        } else {
-            let commit_result = self.commit_certificate(
-                certificate,
-                transaction_outputs,
-                execution_guard,
-                epoch_store,
-            );
-            if let Err(err) = commit_result {
-                error!(?tx_digest, "Error committing transaction: {err}");
-                tx_guard.release();
-                return Err(err);
-            }
-
-            if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
-                certificate.data().transaction_data().kind()
-            {
-                if let Some(err) = &execution_error_opt {
-                    debug_fatal!("Authenticator state update failed: {:?}", err);
-                }
-                epoch_store.update_authenticator_state(auth_state);
-
-                // double check that the signature verifier always matches the authenticator state
-                if cfg!(debug_assertions) {
-                    let authenticator_state = get_authenticator_state(self.get_object_store())
-                        .expect("Read cannot fail")
-                        .expect("Authenticator state must exist");
-
-                    let mut sys_jwks: Vec<_> = authenticator_state
-                        .active_jwks
-                        .into_iter()
-                        .map(|jwk| (jwk.jwk_id, jwk.jwk))
-                        .collect();
-                    let mut active_jwks: Vec<_> = epoch_store
-                        .signature_verifier
-                        .get_jwks()
-                        .into_iter()
-                        .collect();
-                    sys_jwks.sort();
-                    active_jwks.sort();
-
-                    assert_eq!(sys_jwks, active_jwks);
-                }
-            }
-        }
-        tx_guard.commit_tx();
-
-        epoch_store.record_local_execution_time(
-            certificate.data().transaction_data(),
-            &effects,
-            timings,
-            execution_start_time.elapsed(),
-        );
-
-        let elapsed = process_certificate_start_time.elapsed().as_micros() as f64;
-        if elapsed > 0.0 {
-            self.metrics
-                .execution_gas_latency_ratio
-                .observe(effects.gas_cost_summary().computation_cost as f64 / elapsed);
-        };
-        Ok((effects, execution_error_opt))
+        )
     }
 
     pub async fn reconfigure_traffic_control(
@@ -1694,8 +1696,7 @@ impl AuthorityState {
     fn commit_certificate(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        transaction_outputs: TransactionOutputs,
-        _execution_guard: ExecutionLockReadGuard<'_>,
+        transaction_outputs: Arc<TransactionOutputs>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
@@ -1717,7 +1718,7 @@ impl AuthorityState {
         fail_point!("crash");
 
         self.get_cache_writer()
-            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs.into());
+            .write_transaction_outputs(epoch_store.epoch(), transaction_outputs);
 
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
@@ -4395,17 +4396,6 @@ impl AuthorityState {
                 .map(|o| self.insert_genesis_object(o.clone())),
         )
         .await;
-    }
-
-    /// Checks the execution outputs of a transaction if they exist
-    #[instrument(level = "trace", skip_all)]
-    pub fn has_transaction_output(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        Ok(self
-            .get_transaction_cache_reader()
-            .is_tx_already_executed(transaction_digest))
     }
 
     /// Make a status response for a transaction
