@@ -1415,12 +1415,11 @@ impl AuthorityState {
 
         let execution_start_time = Instant::now();
 
-        let execution_guard = self.execution_lock_for_executable_transaction(certificate);
         // Any caller that verifies the signatures on the certificate will have already checked the
         // epoch. But paths that don't verify sigs (e.g. execution from checkpoint, reading from db)
         // present the possibility of an epoch mismatch. If this cert is not finalzied in previous
         // epoch, then it's invalid.
-        let execution_guard = match execution_guard {
+        let execution_guard = match self.execution_lock_for_executable_transaction(certificate) {
             Ok(execution_guard) => execution_guard,
             Err(err) => {
                 tx_guard.release();
@@ -1429,6 +1428,8 @@ impl AuthorityState {
         };
         // Since we obtain a reference to the epoch store before taking the execution lock, it's
         // possible that reconfiguration has happened and they no longer match.
+        // TODO: We may not need the following check anymore since the scheduler
+        // should have checked that the certificate is from the same epoch as epoch_store.
         if *execution_guard != epoch_store.epoch() {
             tx_guard.release();
             info!("The epoch of the execution_guard doesn't match the epoch store");
