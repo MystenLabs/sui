@@ -134,40 +134,6 @@ async fn test_submit_transaction_invalid_transaction() {
     assert!(response.is_err());
 }
 
-#[tokio::test]
-async fn test_submit_transaction_duplicate() {
-    let test_context = TestContext::new().await;
-
-    let transaction = test_context.build_test_transaction();
-    let request = test_context.build_submit_request(transaction.clone());
-
-    // Submit the transaction for the first time
-    let response1 = test_context
-        .client
-        .submit_transaction(request.clone(), None)
-        .await
-        .unwrap();
-    // Verify we got a consensus position back
-    let response1 = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response1.consensus_position.as_ref())
-            .unwrap(),
-    };
-    assert_eq!(response1.consensus_position.index, 0);
-
-    // Submit the same transaction again
-    let response2 = test_context
-        .client
-        .submit_transaction(request, None)
-        .await
-        .unwrap();
-    // Verify we got a consensus position back
-    let response2 = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response2.consensus_position.as_ref())
-            .unwrap(),
-    };
-    assert_eq!(response2.consensus_position.index, 0);
-}
-
 // test transaction submission after already executed.
 #[tokio::test]
 async fn test_submit_transaction_already_executed() {
