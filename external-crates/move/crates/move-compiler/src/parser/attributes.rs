@@ -522,7 +522,7 @@ fn parse_spec_parametized(context: &mut Context, loc: &Loc, inner_attrs: &Spanne
                     return vec![];
                 }
 
-                if prop == KA::VerificationAttribute::FOCUS_NAME {
+                if prop == KA::VerificationAttribute::TARGET_NAME {
                     let AttributeValue_::ModuleAccess(ref access) = val.value else {
                         let msg = format!(
                             "Expected module access for {} parameter '{}'",
