@@ -218,11 +218,10 @@ impl Context {
 pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(ast)?;
     let commands = &ast.commands;
-    for (c, t) in commands {
-        let result =
-            command(&mut context, c, t).map_err(|e| e.with_command_index(c.idx as usize))?;
+    for c in commands {
+        let result = command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(
-            result.len() == t.len(),
+            result.len() == c.value.result_type.len(),
             "result length mismatch for command. {c:?}"
         );
         context.results.push(result.into_iter().map(Some).collect());
@@ -265,13 +264,10 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     Ok(())
 }
 
-fn command(
-    context: &mut Context,
-    sp!(_, command): &T::Command,
-    result_tys: &[T::Type],
-) -> Result<Vec<Value>, ExecutionError> {
-    Ok(match command {
-        T::Command_::MoveCall(mc) => {
+fn command(context: &mut Context, sp!(_, c): &T::Command) -> Result<Vec<Value>, ExecutionError> {
+    let result_tys = &c.result_type;
+    Ok(match &c.command {
+        T::Command__::MoveCall(mc) => {
             let T::MoveCall {
                 function,
                 arguments: args,
@@ -279,34 +275,34 @@ fn command(
             let arg_values = arguments(context, args)?;
             call(context, arg_values, &function.signature)?
         }
-        T::Command_::TransferObjects(objects, recipient) => {
+        T::Command__::TransferObjects(objects, recipient) => {
             let object_values = arguments(context, objects)?;
             let recipient_value = argument(context, recipient)?;
             consume_values(context, object_values)?;
             consume_value(context, recipient_value)?;
             vec![]
         }
-        T::Command_::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(_, coin, amounts) => {
             let coin_value = argument(context, coin)?;
             let amount_values = arguments(context, amounts)?;
             consume_values(context, amount_values)?;
             write_ref(context, 0, coin_value)?;
             (0..amounts.len()).map(|_| Value::NonRef).collect()
         }
-        T::Command_::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(_, target, coins) => {
             let target_value = argument(context, target)?;
             let coin_values = arguments(context, coins)?;
             consume_values(context, coin_values)?;
             write_ref(context, 0, target_value)?;
             vec![]
         }
-        T::Command_::MakeMoveVec(_, xs) => {
+        T::Command__::MakeMoveVec(_, xs) => {
             let vs = arguments(context, xs)?;
             consume_values(context, vs)?;
             vec![Value::NonRef]
         }
-        T::Command_::Publish(_, _, _) => result_tys.iter().map(|_| Value::NonRef).collect(),
-        T::Command_::Upgrade(_, _, _, x, _) => {
+        T::Command__::Publish(_, _, _) => result_tys.iter().map(|_| Value::NonRef).collect(),
+        T::Command__::Upgrade(_, _, _, x, _) => {
             let v = argument(context, x)?;
             consume_value(context, v)?;
             vec![Value::NonRef]

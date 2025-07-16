@@ -517,21 +517,18 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
         receiving: _,
         commands,
     } = txn;
-    for (c, result_tys) in commands {
+    for c in commands {
         debug_assert!(context.arg_roots.is_empty());
-        command(&mut context, c, result_tys)?;
+        command(&mut context, c)?;
         context.arg_roots.clear();
     }
     Ok(())
 }
 
-fn command(
-    context: &mut Context,
-    sp!(_, command): &T::Command,
-    result_tys: &[T::Type],
-) -> anyhow::Result<()> {
-    match command {
-        T::Command_::MoveCall(move_call) => {
+fn command(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<()> {
+    let result_tys = &c.result_type;
+    match &c.command {
+        T::Command__::MoveCall(move_call) => {
             let T::MoveCall {
                 function,
                 arguments,
@@ -539,28 +536,28 @@ fn command(
             let arg_values = context.arguments(arguments)?;
             call(context, &function.signature, arg_values)?;
         }
-        T::Command_::TransferObjects(objs, recipient) => {
+        T::Command__::TransferObjects(objs, recipient) => {
             context.arguments(objs)?;
             context.argument(recipient)?;
             context.add_results(result_tys);
         }
-        T::Command_::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(_, coin, amounts) => {
             context.arguments(amounts)?;
             let coin_value = context.argument(coin)?;
             write_ref(context, coin_value)?;
             context.add_results(result_tys);
         }
-        T::Command_::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(_, target, coins) => {
             context.arguments(coins)?;
             let target_value = context.argument(target)?;
             write_ref(context, target_value)?;
         }
-        T::Command_::MakeMoveVec(_, arguments) => {
+        T::Command__::MakeMoveVec(_, arguments) => {
             context.arguments(arguments)?;
             context.add_results(result_tys);
         }
-        T::Command_::Publish(_, _, _) => context.add_results(result_tys),
-        T::Command_::Upgrade(_, _, _, ticket, _) => {
+        T::Command__::Publish(_, _, _) => context.add_results(result_tys),
+        T::Command__::Upgrade(_, _, _, ticket, _) => {
             context.argument(ticket)?;
             context.add_results(result_tys);
         }
