@@ -36,6 +36,12 @@ impl<'txn> Context<'txn> {
     }
 }
 
+/// Verifies the correctness of the typing on the AST
+/// - All object inputs have key
+/// - All pure inputs are valid types
+/// - All receiving inputs types have key
+/// - All commands are well formed with correct argument/result types
+/// - All dropped result values have the `drop` ability
 pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     verify_::<Mode>(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))
 }
@@ -239,6 +245,19 @@ fn command<Mode: ExecutionMode>(
                 "upgrade should return {receipt:?}, got {result_tys:?}"
             );
         }
+    }
+    assert_invariant!(
+        c.drop_values.len() == result_tys.len(),
+        "drop values should match result types, expected {} got {}",
+        c.drop_values.len(),
+        result_tys.len()
+    );
+    for (drop_value, result_ty) in c.drop_values.iter().copied().zip(result_tys) {
+        // drop value ==> `ty: drop`
+        assert_invariant!(
+            !drop_value || result_ty.abilities().has_drop(),
+            "result was marked for drop but does not have the `drop` ability"
+        );
     }
     Ok(())
 }

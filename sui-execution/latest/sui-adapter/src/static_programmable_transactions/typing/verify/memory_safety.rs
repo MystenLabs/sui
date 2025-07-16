@@ -224,7 +224,24 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
             result.len() == c.value.result_type.len(),
             "result length mismatch for command. {c:?}"
         );
-        context.results.push(result.into_iter().map(Some).collect());
+        // drop unused result values
+        assert_invariant!(
+            result.len() == c.value.drop_values.len(),
+            "drop values length mismatch for command. {c:?}"
+        );
+        let result_values = result
+            .into_iter()
+            .zip(c.value.drop_values.iter().copied())
+            .map(|(v, drop)| {
+                Ok(if !drop {
+                    Some(v)
+                } else {
+                    consume_value(&mut context, v)?;
+                    None
+                })
+            })
+            .collect::<Result<Vec<_>, ExecutionError>>()?;
+        context.results.push(result_values);
     }
 
     let Context {

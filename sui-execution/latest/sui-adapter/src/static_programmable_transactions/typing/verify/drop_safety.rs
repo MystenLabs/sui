@@ -158,7 +158,24 @@ mod verify {
                 result.len() == c.value.result_type.len(),
                 "result length mismatch"
             );
-            context.results.push(result.into_iter().map(Some).collect());
+            // drop unused result values
+            assert_invariant!(
+                result.len() == c.value.drop_values.len(),
+                "drop values length mismatch"
+            );
+            let result_values = result
+                .into_iter()
+                .zip(c.value.drop_values.iter().copied())
+                .map(|(v, drop)| {
+                    if !drop {
+                        Some(v)
+                    } else {
+                        consume_value(v);
+                        None
+                    }
+                })
+                .collect();
+            context.results.push(result_values);
         }
 
         let Context {

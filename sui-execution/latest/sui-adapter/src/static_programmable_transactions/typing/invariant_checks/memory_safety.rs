@@ -3,7 +3,7 @@
 
 use crate::{
     sp,
-    static_programmable_transactions::{env::Env, typing::ast as T},
+    static_programmable_transactions::{env::Env, spanned, typing::ast as T},
 };
 use indexmap::IndexSet;
 use std::rc::Rc;
@@ -518,14 +518,40 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
         commands,
     } = txn;
     for c in commands {
-        debug_assert!(context.arg_roots.is_empty());
         command(&mut context, c)?;
-        context.arg_roots.clear();
     }
     Ok(())
 }
 
-fn command(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<()> {
+fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
+    // process the command
+    debug_assert!(context.arg_roots.is_empty());
+    command_(context, c)?;
+    context.arg_roots.clear();
+    // drop unused result values
+    let i = context.current_command();
+    let dropped_locations = c
+        .value
+        .drop_values
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(_, drop)| *drop)
+        .map(|(j, _)| {
+            let loc = T::Location::Result(i, j as u16);
+            let ty = c.value.result_type[j].clone();
+            let arg__ = T::Argument__::new_move(loc);
+            spanned::sp(j as u16, (arg__, ty))
+        });
+    for arg in dropped_locations {
+        // drop the value
+        context.argument(&arg)?;
+    }
+    context.arg_roots.clear();
+    Ok(())
+}
+
+fn command_(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<()> {
     let result_tys = &c.result_type;
     match &c.command {
         T::Command__::MoveCall(move_call) => {
