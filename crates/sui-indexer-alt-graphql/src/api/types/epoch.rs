@@ -78,8 +78,8 @@ impl Epoch {
             None => return Ok(None),
         };
         let last = match end {
-            Some(last) => last.cp_hi as u64,          // exclusive
-            None => scope.checkpoint_viewed_at() + 1, // inclusive
+            Some(last) => last.cp_hi as u64,
+            None => scope.checkpoint_viewed_at_exclusive_bound(),
         };
         Ok(Some(UInt53::from(last - first)))
     }
@@ -271,7 +271,9 @@ impl EpochEnd {
             .context("Failed to fetch epoch end information")?;
 
         let end = match stored {
-            Some(end) if end.cp_hi as u64 <= scope.checkpoint_viewed_at() => Some(Arc::new(end)),
+            Some(end) if end.cp_hi as u64 <= scope.checkpoint_viewed_at_exclusive_bound() => {
+                Some(Arc::new(end))
+            }
             _ => None,
         };
         Ok(Self {

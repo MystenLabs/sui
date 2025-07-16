@@ -38,7 +38,13 @@ impl Scope {
         })
     }
 
+    // inclusive upper bound on data visible to request
     pub(crate) fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
+    }
+
+    // exclusive upper bound on data visible to request
+    pub(crate) fn checkpoint_viewed_at_exclusive_bound(&self) -> u64 {
+        self.checkpoint_viewed_at + 1
     }
 }
