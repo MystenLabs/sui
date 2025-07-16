@@ -14482,6 +14482,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-consistent-api"
+version = "1.54.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "protox",
+ "tonic 0.13.1",
+ "tonic-build 0.13.1",
+ "walkdir",
+]
+
+[[package]]
 name = "sui-indexer-alt-consistent-store"
 version = "1.54.0"
 dependencies = [
