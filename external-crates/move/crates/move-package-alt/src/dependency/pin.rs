@@ -49,7 +49,7 @@ impl PinnedDependencyInfo {
             dep_info: Pinned::Local(todo!()),
             use_environment,
             is_override: true,
-            published_at: None,
+            addresses: None,
             containing_file,
         })
     }
@@ -65,7 +65,7 @@ impl PinnedDependencyInfo {
             dep_info,
             use_environment: pin.use_environment.clone().unwrap_or(env.clone()),
             is_override: false, // TODO
-            published_at: None, // TODO
+            addresses: None,    // TODO
             containing_file,
         })
     }
@@ -93,6 +93,10 @@ impl PinnedDependencyInfo {
 
     pub fn use_environment(&self) -> &EnvironmentName {
         self.0.use_environment()
+    }
+
+    pub fn is_override(&self) -> bool {
+        self.0.is_override
     }
 }
 

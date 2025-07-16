@@ -2,21 +2,15 @@ use std::collections::BTreeMap;
 
 use crate::{
     compatibility::{LegacyAddressDeclarations, LegacyDevAddressDeclarations},
-    schema::{OriginalID, PublishedID},
+    package::EnvironmentName,
+    schema::PublishAddresses,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ManifestPublishInformation {
-    pub published_at: PublishedID,
-    pub original_id: OriginalID,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct LegacyEnvironment {
     pub chain_id: String,
-    pub published_at: PublishedID,
-    pub original_id: OriginalID,
+    pub addresses: PublishAddresses,
     pub version: String,
 }
 
@@ -38,30 +32,18 @@ pub struct LegacyData {
     /// where `published-at="<latest_id>"`, and `[addresses] <xx> = "<original_id>"`
     ///
     /// When we're doing `try_get_published_at()` or `try_get_original_id` on `Package`, we fallback to these.
-    pub manifest_address_info: Option<ManifestPublishInformation>,
+    pub manifest_address_info: Option<PublishAddresses>,
 
     /// The legacy environments that were part of the package (goes from env name -> )
     pub legacy_environments: BTreeMap<String, LegacyEnvironment>,
 }
 
 impl LegacyData {
-    pub fn published_at(&self, env: &str) -> Option<PublishedID> {
-        if let Some(env) = self.legacy_environments.get(env) {
-            return Some(env.published_at.clone());
-        }
-
-        self.manifest_address_info
-            .as_ref()
-            .map(|m| m.published_at.clone())
-    }
-
-    pub fn original_id(&self, env: &str) -> Option<OriginalID> {
-        if let Some(env) = self.legacy_environments.get(env) {
-            return Some(env.original_id.clone());
-        }
-
-        self.manifest_address_info
-            .as_ref()
-            .map(|m| m.original_id.clone())
+    /// Return the published addresses of this package in `env`, if there is one
+    pub fn publication(&self, env: &EnvironmentName) -> Option<&PublishAddresses> {
+        self.legacy_environments
+            .get(env)
+            .map(|env| &env.addresses)
+            .or(self.manifest_address_info.as_ref())
     }
 }
