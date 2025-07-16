@@ -61,6 +61,14 @@ impl Context {
             receiving: IndexMap::new(),
             results: vec![],
         };
+        // clone inputs for debug assertions
+        #[cfg(debug_assertions)]
+        let cloned_inputs = linputs
+            .iter()
+            .map(|(arg, _)| arg.clone())
+            .collect::<Vec<_>>();
+        // - intern the bytes
+        // - build maps for object, pure, and receiving inputs
         for (i, (arg, ty)) in linputs.into_iter().enumerate() {
             let idx = T::InputIndex(i as u16);
             let kind = match (arg, ty) {
@@ -87,6 +95,27 @@ impl Context {
                 ),
             };
             context.input_resolution.push(kind);
+        }
+        #[cfg(debug_assertions)]
+        {
+            // iterate to check the correctness of bytes interning
+            for (i, arg) in cloned_inputs.iter().enumerate() {
+                if let L::InputArg::Pure(bytes) = &arg {
+                    let idx = T::InputIndex(i as u16);
+                    let Some(byte_index) = context.bytes_idx_remapping.get(&idx) else {
+                        invariant_violation!("Unbound pure input {}", idx.0);
+                    };
+                    let Some(interned_bytes) = context.bytes.get_index(*byte_index) else {
+                        invariant_violation!("Interned bytes not found for index {}", byte_index);
+                    };
+                    if interned_bytes != bytes {
+                        assert_invariant!(
+                            interned_bytes == bytes,
+                            "Interned bytes mismatch for input {i}",
+                        );
+                    }
+                }
+            }
         }
         Ok(context)
     }

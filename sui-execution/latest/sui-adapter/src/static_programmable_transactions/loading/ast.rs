@@ -32,6 +32,7 @@ pub type Inputs = Vec<(InputArg, InputType)>;
 pub type Commands = Vec<Command>;
 
 #[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 pub enum InputArg {
     Pure(Vec<u8>),
     Receiving(ObjectRef),
@@ -39,6 +40,7 @@ pub enum InputArg {
 }
 
 #[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 pub enum ObjectArg {
     ImmObject(ObjectRef),
     OwnedObject(ObjectRef),
