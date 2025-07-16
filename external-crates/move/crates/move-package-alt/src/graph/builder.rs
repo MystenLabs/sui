@@ -90,32 +90,33 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         let mut inner = DiGraph::new();
 
-        let pins = lockfile.pins_for_env(&env.name());
-
         let mut package_nodes = BTreeMap::new();
-        if let Some(pins) = pins {
-            // First pass: create nodes for all packages
-            for (pkg_id, pin) in pins.iter() {
-                let dep = PinnedDependencyInfo::from_pin(lockfile.file(), &env.name(), pin);
-                let package = self.cache.fetch(&dep, &env).await?;
-                let package_manifest_digest = package.digest();
-                if check_digests && package_manifest_digest != &pin.manifest_digest {
-                    return Ok(None);
-                }
-                let index = inner.add_node(PackageNode {
-                    package,
-                    use_env: todo!(),
-                });
-                package_nodes.insert(pkg_id.clone(), index);
-            }
 
-            // Second pass: add edges based on dependencies
-            for (pkg_id, dep_info) in pins.iter() {
-                let from_index = package_nodes.get(pkg_id).unwrap();
-                for (dep_name, dep_id) in dep_info.deps.iter() {
-                    if let Some(to_index) = package_nodes.get(dep_id) {
-                        inner.add_edge(*from_index, *to_index, dep_name.clone());
-                    }
+        let Some(pins) = lockfile.pins_for_env(env.name()) else {
+            return Ok(None);
+        };
+
+        // First pass: create nodes for all packages
+        for (pkg_id, pin) in pins.iter() {
+            let dep = PinnedDependencyInfo::from_pin(lockfile.file(), env.name(), pin);
+            let package = self.cache.fetch(&dep, env).await?;
+            let package_manifest_digest = package.digest();
+            if check_digests && package_manifest_digest != &pin.manifest_digest {
+                return Ok(None);
+            }
+            let index = inner.add_node(PackageNode {
+                package,
+                use_env: pin.use_environment.clone().unwrap_or(env.name().clone()),
+            });
+            package_nodes.insert(pkg_id.clone(), index);
+        }
+
+        // Second pass: add edges based on dependencies
+        for (pkg_id, dep_info) in pins.iter() {
+            let from_index = package_nodes.get(pkg_id).unwrap();
+            for (dep_name, dep_id) in dep_info.deps.iter() {
+                if let Some(to_index) = package_nodes.get(dep_id) {
+                    inner.add_edge(*from_index, *to_index, dep_name.clone());
                 }
             }
         }

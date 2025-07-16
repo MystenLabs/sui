@@ -87,40 +87,40 @@ impl Test<'_> {
                 };
                 contents
             }
-            "graph_to_lockfile" => run_graph_to_lockfile_test_wrapper(self.toml_path).unwrap(),
+            "graph_to_lockfile" => match run_graph_to_lockfile_test_wrapper(self.toml_path) {
+                Ok(s) => s,
+                Err(e) => e.to_string(),
+            },
             "locked" => {
                 // TODO: this needs to deal with ephemeral environments
 
-                let path =
-                    PackagePath::new(self.toml_path.parent().unwrap().to_path_buf()).unwrap();
+                let dir = PackagePath::new(self.toml_path.parent().unwrap().to_path_buf()).unwrap();
 
-                let lockfile = Lockfiles::<Vanilla>::read_from_dir(&path);
+                let lockfile = Lockfiles::<Vanilla>::read_from_dir(&dir);
 
                 match lockfile {
                     Ok(l) => l.unwrap().render_main_lockfile().to_string(),
                     Err(e) => e.to_string(),
                 }
             }
-            "pinned" => run_pinning_wrapper(self.toml_path).unwrap(),
+            "pinned" => match run_pinning_wrapper(self.toml_path) {
+                Ok(s) => s,
+                Err(e) => e.to_string(),
+            },
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
     }
 }
 
+// TODO: it's not clear what this test is intended to be testing
 async fn run_graph_to_lockfile_test(
     input_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let env = vanilla::default_environment();
-    let path = input_path.parent().unwrap();
-    let _ = RootPackage::<Vanilla>::load(path, env).await?;
 
-    let lockfile_path = PackagePath::new(path.to_path_buf())
-        .unwrap()
-        .lockfile_path();
-    let lockfile_contents = std::fs::read(lockfile_path)?;
+    let root = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env).await?;
 
-    // TODO! fix this
-    Ok(String::from_utf8(lockfile_contents)?)
+    Ok(root.lockfile_for_testing().render_as_toml())
 }
 
 fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

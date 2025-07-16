@@ -86,10 +86,10 @@ impl<F: MoveFlavor> Package<F> {
             let manifest_deps = manifest
                 .dependencies()
                 .deps_for(env.name())
-                .expect("Environment not supported")
-                .clone();
+                .cloned()
+                .unwrap_or_default();
 
-            let deps = pin::<F>(manifest_deps.clone(), &env.id()).await?;
+            let deps = pin::<F>(manifest_deps.clone(), env.id()).await?;
 
             return Ok(Self {
                 env: env.name().clone(),
@@ -124,7 +124,7 @@ impl<F: MoveFlavor> Package<F> {
                     )
                 })
                 .collect(),
-            &env.id(),
+            env.id(),
         )
         .await?;
 
@@ -183,7 +183,10 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     pub fn is_root(&self) -> bool {
-        self.dep_for_self() == &LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() })
+        let result = (self.dep_for_self()
+            == &LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }));
+        debug!("is_root for {:?}: {result}", self.dep_for_self());
+        result
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`

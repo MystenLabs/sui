@@ -12,7 +12,7 @@ use crate::{
     flavor::MoveFlavor,
     graph::PackageGraph,
     package::EnvironmentName,
-    schema::{PackageID, ParsedLockfile, Pin},
+    schema::ParsedLockfile,
 };
 use tracing::debug;
 
@@ -32,6 +32,7 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// The dependency graph for this package.
     graph: PackageGraph<F>,
     /// The lockfile we're operating on
+    /// Invariant: lockfile.pinned matches graph, except that digests may differ
     lockfile: ParsedLockfile<F>,
 }
 
@@ -68,19 +69,22 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(environments)
     }
 
+    /// Load the root package from `env` using the "normal" path - we first try to load from the
+    /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
+    /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
         let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
-        root_pkg.write_pinned_deps()?;
+        root_pkg.update_lockfile_digests();
 
         Ok(root_pkg)
     }
 
     /// Loads the root package from path and builds a dependency graph from the manifests.
-    /// This forcefully re-pins all dependencies even if the manifest digests match. It writes to the
-    /// root lockfile, but not to the dependencies lockfiles.
+    /// This forcefully re-pins all dependencies even if the manifest digests match. Note that it
+    /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
     ///
     /// TODO: We should load from lockfiles instead of manifests for deps.
     pub async fn load_force_repin(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
@@ -88,13 +92,16 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
 
         let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
-        root_pkg.write_pinned_deps()?;
+        root_pkg.update_lockfile_digests();
 
         Ok(root_pkg)
     }
 
-    /// Loads the lockfiles only, ignoring manifests.
-    /// Since it does not do any repinning, it does not write the lockfile like `load` and `load_force_repin` do.
+    /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
+    /// doesn't exist of if it doesn't contain a dependency graph for `env`.
+    ///
+    /// Note that this still fetches all of the dependencies, it just doesn't look at their
+    /// manifests.
     pub async fn load_ignore_digests(
         path: impl AsRef<Path>,
         env: Environment,
@@ -111,12 +118,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         };
 
         Self::_validate_and_construct(package_path, env, graph)
+        // Note: we do not sync the lockfile here because we haven't repinned so we don't want to
+        // update the digests
     }
-
-    // named address maps for each pkg
-
-    // pub fn is_published() -> bool {
-    // }
 
     /// Central validation point for a RootPackage.
     ///
@@ -127,7 +131,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
-        let lockfile = Self::load_lockfile(&package_path)?;
+        let mut lockfile = Self::load_lockfile(&package_path)?;
         Ok(Self {
             package_path,
             environment: env,
@@ -136,8 +140,26 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         })
     }
 
+    /// Ensure that the in-memory lockfile digests are consistent with the package graph
+    fn update_lockfile_digests(&mut self) {
+        self.lockfile
+            .pinned
+            .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
+    }
+
     pub fn name(&self) -> &PackageName {
         self.graph.root_package().name()
+    }
+
+    /// Output an updated lockfile containg the dependency graph represented by `self`. Note that
+    /// if `self` was loaded with [Self::load_ignore_digests], then the digests will not be
+    /// changed (since no repinning was performed).
+    pub fn save_to_disk(&self) -> PackageResult<()> {
+        std::fs::write(
+            self.package_path().lockfile_path(),
+            self.lockfile.render_as_toml(),
+        )?;
+        Ok(())
     }
 
     /// Set the publish information, coming in from the compiler & result of `Publish` command.
@@ -146,17 +168,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.lockfile
             .published
             .insert(self.environment.name().clone(), publish_data);
-
-        self.save_to_disk()
-    }
-
-    /// Saves the result of a package graph pinning into the lockfile.
-    fn write_pinned_deps(&mut self) -> PackageResult<()> {
-        let pinned_deps: BTreeMap<PackageID, Pin> = (&self.graph).into();
-
-        self.lockfile
-            .pinned
-            .insert(self.environment.name().clone(), pinned_deps);
 
         self.save_to_disk()
     }
@@ -176,14 +187,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(toml_edit::de::from_str(file.source())?)
     }
 
-    fn save_to_disk(&self) -> PackageResult<()> {
-        std::fs::write(
-            self.package_path().lockfile_path(),
-            self.lockfile.render_as_toml(),
-        )?;
-        Ok(())
-    }
-
     /// Return the package graph for `env`
     // TODO: what's the right API here?
     #[cfg(test)]
@@ -191,7 +194,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.graph
     }
 
-    #[cfg(test)]
     pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
         &self.lockfile
     }
@@ -206,7 +208,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 // TODO(all of us!): We need to test everything.
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
     use std::{fs, path::PathBuf};
+    use test_log::test;
 
     use super::*;
     use crate::{
@@ -267,7 +271,7 @@ pkg_b = { local = "../pkg_b" }"#,
         (env, project.root())
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_load_root_package() {
         let (env, root_path) = setup_test_move_project().await;
         let names = &["pkg_a", "pkg_b", "nodeps", "graph"];
@@ -285,7 +289,7 @@ pkg_b = { local = "../pkg_b" }"#,
         }
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_root_package_operations() {
         let (env, root_path) = setup_test_move_project().await;
 
@@ -303,31 +307,20 @@ pkg_b = { local = "../pkg_b" }"#,
         assert_eq!(root.name(), &PackageName::new("graph").unwrap());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_lockfile_deps() {
-        // TODO: this should really be an insta test
         let (env, root_path) = setup_test_move_project().await;
-
         let pkg_path = root_path.join("packages").join("graph");
-        let lockfile_path = pkg_path.join("Move.lock");
-
-        let expected_lockfile: ParsedLockfile<Vanilla> =
-            toml_edit::de::from_str(&std::fs::read_to_string(&lockfile_path).unwrap()).unwrap();
 
         let mut root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
 
-        root.write_pinned_deps().unwrap();
+        let new_lockfile = root.lockfile_for_testing().clone();
 
-        let new_lockfile: ParsedLockfile<Vanilla> =
-            toml_edit::de::from_str(&std::fs::read_to_string(&lockfile_path).unwrap()).unwrap();
-
-        assert_eq!(
-            expected_lockfile.render_as_toml(),
-            new_lockfile.render_as_toml()
-        );
+        // TODO: put this snapshot in a more sensible place
+        assert_snapshot!("test_lockfile_deps", new_lockfile.render_as_toml());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_load_and_check_for_env() {
         let (env, root_path) = setup_test_move_project().await;
 
@@ -349,8 +342,9 @@ pkg_b = { local = "../pkg_b" }"#,
     /// - updating the git dependency to a different sha works as expected
     /// - updating the git dependency in the manifest and re-pinning works as expected, including
     /// writing back the deps to a lockfile
-    #[tokio::test]
+    #[test(tokio::test)]
     pub async fn test_all() {
+        debug!("running test_all");
         let env = crate::flavor::vanilla::default_environment();
         let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
             project.file(
@@ -408,7 +402,8 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
             .unwrap();
 
         let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
-        let git_dep = pinned_deps.first_key_value().unwrap().1;
+        debug!("pinned_deps: {pinned_deps:#?}");
+        let git_dep = pinned_deps.get("pkg_git").unwrap();
 
         match &git_dep.source {
             LockfileDependencyInfo::Git(p) => {
@@ -417,7 +412,7 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
             _ => panic!("Expected a git dependency"),
         }
 
-        // Change to second commit
+        // Change ts second commit
         root_pkg_manifest = root_pkg_manifest.replace(
             "rev = \"main\"",
             format!("rev = \"{}\"", commits[1]).as_str(),
@@ -429,7 +424,7 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
             .unwrap();
 
         let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
-        let git_dep = pinned_deps.first_key_value().unwrap().1;
+        let git_dep = pinned_deps.get("pkg_git").unwrap();
 
         match &git_dep.source {
             LockfileDependencyInfo::Git(p) => {
