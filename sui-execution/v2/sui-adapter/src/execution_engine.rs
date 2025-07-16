@@ -693,6 +693,9 @@ mod checked {
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v2");
                         }
+                        EndOfEpochTransactionKind::CoinRegistryCreate => {
+                            panic!("CoinRegistryCreate::CoinRegistryCreate should not exist in v2");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

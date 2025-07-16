@@ -1327,6 +1327,9 @@ sui_accumulator_root_address
 bridge
 	fun
 	0x2::object
+sui_coin_registry_object_id
+	public(package) fun
+	0x2::object
 uid_as_inner
 	public fun
 	0x2::object
@@ -2206,6 +2209,129 @@ create
 per_type_list
 	fun
 	0x2::deny_list
+CoinRegistry
+	public struct
+	0x2::coin_registry
+ExtraField
+	public struct
+	0x2::coin_registry
+CoinDataKey
+	public struct
+	0x2::coin_registry
+MetadataCap
+	public struct
+	0x2::coin_registry
+CoinData
+	public struct
+	0x2::coin_registry
+InitCoinData
+	public struct
+	0x2::coin_registry
+SupplyState
+	public enum
+	0x2::coin_registry
+RegulatedState
+	public enum
+	0x2::coin_registry
+coin_registry_id
+	public fun
+	0x2::coin_registry
+id
+	public fun
+	0x2::coin_registry
+transfer_to_registry
+	public fun
+	0x2::coin_registry
+migrate_receiving
+	public fun
+	0x2::coin_registry
+set_name
+	public fun
+	0x2::coin_registry
+set_symbol
+	public fun
+	0x2::coin_registry
+set_description
+	public fun
+	0x2::coin_registry
+set_icon_url
+	public fun
+	0x2::coin_registry
+data
+	public fun
+	0x2::coin_registry
+decimals
+	public fun
+	0x2::coin_registry
+name
+	public fun
+	0x2::coin_registry
+symbol
+	public fun
+	0x2::coin_registry
+description
+	public fun
+	0x2::coin_registry
+icon_url
+	public fun
+	0x2::coin_registry
+meta_data_cap_claimed
+	public fun
+	0x2::coin_registry
+treasury_cap
+	public fun
+	0x2::coin_registry
+deny_cap
+	public fun
+	0x2::coin_registry
+supply_registered
+	public fun
+	0x2::coin_registry
+exists
+	public fun
+	0x2::coin_registry
+inner
+	public fun
+	0x2::coin_registry
+register_supply
+	public(package) fun
+	0x2::coin_registry
+register_regulated
+	public(package) fun
+	0x2::coin_registry
+set_decimals
+	public(package) fun
+	0x2::coin_registry
+set_supply
+	public(package) fun
+	0x2::coin_registry
+set_regulated
+	public(package) fun
+	0x2::coin_registry
+data_mut
+	public(package) fun
+	0x2::coin_registry
+register_coin_data
+	public(package) fun
+	0x2::coin_registry
+inner_mut
+	public(package) fun
+	0x2::coin_registry
+create_coin_data_init
+	public(package) fun
+	0x2::coin_registry
+create_coin_data
+	public(package) fun
+	0x2::coin_registry
+empty
+	public(package) fun
+	0x2::coin_registry
+create_cap
+	public(package) fun
+	0x2::coin_registry
+create
+	fun
+	0x2::coin_registry
 Coin
 	public struct
 	0x2::coin
@@ -2275,6 +2401,33 @@ zero
 destroy_zero
 	public fun
 	0x2::coin
+migrate_metadata_to_registry
+	public fun
+	0x2::coin
+migrate_immutable_metadata_to_registry
+	public fun
+	0x2::coin
+migrate_regulated_metadata_to_registry
+	public fun
+	0x2::coin
+create_and_register_coin_data
+	public fun
+	0x2::coin
+create_currency_v2
+	public fun
+	0x2::coin
+create_regulated_currency_v3
+	public fun
+	0x2::coin
+register_supply
+	public fun
+	0x2::coin
+init_register_supply
+	public fun
+	0x2::coin
+metadata_to_coin_data
+	fun
+	0x2::coin
 create_currency
 	public fun
 	0x2::coin
@@ -2331,6 +2484,9 @@ update_description
 	0x2::coin
 update_icon_url
 	public entry fun
+	0x2::coin
+destroy_metadata
+	fun
 	0x2::coin
 get_decimals
 	public fun

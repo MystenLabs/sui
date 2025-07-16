@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 88;
+const MAX_PROTOCOL_VERSION: u64 = 89;
 
 // Record history of protocol version allocations here:
 //
@@ -248,6 +248,7 @@ const MAX_PROTOCOL_VERSION: u64 = 88;
 // Version 87: Enable better type resolution errors in the adapter.
 // Version 88: Update `sui-system` package to use `calculate_rewards` function.
 //             Define the cost for the native Move function `rgp`.
+//             Ignore execution time observations after validator stops accepting certs.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -720,6 +721,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // Enable coin registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_registry: bool,
+
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
     enable_ptb_execution_v2: bool,
@@ -731,6 +736,10 @@ struct FeatureFlags {
     // If true, record the time estimate processed in the consensus commit prologue.
     #[serde(skip_serializing_if = "is_false")]
     record_time_estimate_processed: bool,
+
+    // If true, ignore execution time observations after certs are closed.
+    #[serde(skip_serializing_if = "is_false")]
+    ignore_execution_time_observations_after_certs_closed: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1829,6 +1838,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_coin_registry(&self) -> bool {
+        self.feature_flags.enable_coin_registry
+    }
+
     pub fn enable_coin_deny_list_v2(&self) -> bool {
         self.feature_flags.enable_coin_deny_list_v2
     }
@@ -2090,6 +2103,11 @@ impl ProtocolConfig {
 
     pub fn record_time_estimate_processed(&self) -> bool {
         self.feature_flags.record_time_estimate_processed
+    }
+
+    pub fn ignore_execution_time_observations_after_certs_closed(&self) -> bool {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed
     }
 }
 
@@ -3796,6 +3814,8 @@ impl ProtocolConfig {
                 88 => {
                     cfg.feature_flags.record_time_estimate_processed = true;
                     cfg.tx_context_rgp_cost_base = Some(30);
+                    cfg.feature_flags
+                        .ignore_execution_time_observations_after_certs_closed = true;
 
                     // Disable backwards compatible behavior in exeuction time estimator for
                     // new protocol version.
@@ -3812,6 +3832,11 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                             },
                         );
+                }
+                89 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_coin_registry = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

@@ -4703,8 +4703,12 @@ impl AuthorityState {
             let modules = system_package.modules().to_vec();
             // In simtests, we could override the current built-in framework packages.
             #[cfg(msim)]
-            let modules = framework_injection::get_override_modules(&system_package.id, self.name)
-                .unwrap_or(modules);
+            let modules =
+                match framework_injection::get_override_modules(&system_package.id, self.name) {
+                    Some(overrides) if overrides.is_empty() => continue,
+                    Some(overrides) => overrides,
+                    None => modules,
+                };
 
             let Some(obj_ref) = sui_framework::compare_system_package(
                 &self.get_object_store(),
@@ -5098,6 +5102,25 @@ impl AuthorityState {
 
         let tx = EndOfEpochTransactionKind::new_accumulator_root_create();
         info!("Creating AccumulatorRootCreate tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    fn create_coin_registry_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_coin_registry() {
+            info!("coin registry not enabled");
+            return None;
+        }
+
+        if epoch_store.coin_registry_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_coin_registry_create();
+        info!("Creating CoinRegistry Create tx");
         Some(tx)
     }
 
@@ -5893,6 +5916,25 @@ pub mod framework_injection {
                 buf
             })
             .collect()
+    }
+
+    pub fn set_system_packages(packages: Vec<SystemPackage>) {
+        OVERRIDE.with(|bs| {
+            let mut new_packages_not_to_include = BuiltInFramework::all_package_ids()
+                .into_iter()
+                .collect::<BTreeSet<_>>();
+            for pkg in &packages {
+                new_packages_not_to_include.remove(&pkg.id);
+            }
+            for pkg in packages {
+                bs.borrow_mut()
+                    .insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
+            }
+            for empty_pkg in new_packages_not_to_include {
+                bs.borrow_mut()
+                    .insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
+            }
+        });
     }
 
     pub fn set_override(package_id: ObjectID, modules: Vec<CompiledModule>) {

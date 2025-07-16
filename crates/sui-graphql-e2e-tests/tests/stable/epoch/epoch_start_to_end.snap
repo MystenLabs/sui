@@ -12,7 +12,7 @@ Checkpoint created: 1
 
 task 2, line 8:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 3, lines 10-12:
 //# programmable --sender C --inputs 10000000000 @C
@@ -109,7 +109,7 @@ Checkpoint created: 4
 
 task 9, line 76:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 10, line 78:
 //# create-checkpoint

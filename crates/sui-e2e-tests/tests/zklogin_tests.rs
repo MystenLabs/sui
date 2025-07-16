@@ -14,6 +14,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::Signature;
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::signature::GenericSignature;
+use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::transaction::Transaction;
 use sui_types::utils::load_test_vectors;
 use sui_types::utils::{
@@ -214,10 +215,18 @@ async fn test_expired_zklogin_sig() {
 
 #[sim_test]
 async fn test_auth_state_creation() {
+    #[cfg(msim)]
+    {
+        use sui_core::authority::framework_injection;
+        let framework = sui_framework_snapshot::load_bytecode_snapshot(24).unwrap();
+        framework_injection::set_system_packages(framework);
+    }
+
     // Create test cluster without auth state object in genesis
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(23.into())
         .with_epoch_duration_ms(15000)
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(23, 24))
         .with_default_jwks()
         .build()
         .await;
@@ -230,9 +239,17 @@ async fn test_auth_state_creation() {
 
 #[sim_test]
 async fn test_create_authenticator_state_object() {
+    #[cfg(msim)]
+    {
+        use sui_core::authority::framework_injection;
+        let framework = sui_framework_snapshot::load_bytecode_snapshot(24).unwrap();
+        framework_injection::set_system_packages(framework);
+    }
+
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(23.into())
         .with_epoch_duration_ms(15000)
+        .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(23, 24))
         .build()
         .await;
 

@@ -28,7 +28,7 @@ Checkpoint created: 2
 
 task 5, line 43:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 6, lines 45-61:
 //# run-graphql
@@ -103,7 +103,7 @@ Checkpoint created: 6
 
 task 13, line 75:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 14, line 77:
 //# run Test::M1::create --args 0 @A --sender A
@@ -137,11 +137,11 @@ Checkpoint created: 10
 
 task 20, line 89:
 //# advance-epoch
-Epoch advanced: 2
+Epoch advanced: 3
 
 task 21, line 91:
 //# advance-epoch
-Epoch advanced: 3
+Epoch advanced: 4
 
 task 22, lines 93-157:
 //# run-graphql --cursors {"t":3,"i":false,"c":4} {"t":7,"i":false,"c":8} {"t":11,"i":false,"c":12}
