@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::Context as _;
+use async_graphql::futures_util::try_join;
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
+use std::sync::Arc;
 use sui_indexer_alt_reader::{
     epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
     pg_reader::PgReader,
@@ -12,17 +12,16 @@ use sui_indexer_alt_reader::{
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 
+use super::{
+    move_package::{self, CSysPackage, MovePackage},
+    object::{self, Object},
+    protocol_configs::ProtocolConfigs,
+};
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
-};
-
-use super::{
-    move_package::{self, CSysPackage, MovePackage},
-    object::{self, Object},
-    protocol_configs::ProtocolConfigs,
 };
 
 pub(crate) struct Epoch {
@@ -38,7 +37,9 @@ struct EpochStart {
 
 #[derive(Clone)]
 struct EpochEnd {
-    contents: Option<Arc<StoredEpochEnd>>,
+    scope: Scope,
+    start: Option<Arc<StoredEpochStart>>,
+    end: Option<Arc<StoredEpochEnd>>,
 }
 
 /// Activity on Sui is partitioned in time, into epochs.
@@ -65,7 +66,29 @@ impl Epoch {
 
     #[graphql(flatten)]
     async fn end(&self, ctx: &Context<'_>) -> Result<EpochEnd, RpcError> {
-        EpochEnd::fetch(ctx, &self.start.scope, self.epoch_id).await
+        try_join!(
+            self.start.fetch(ctx, Some(self.epoch_id)),
+            EpochEnd::fetch(ctx, &self.start.scope, self.epoch_id),
+        )
+        .map(|(epoch_start, end)| EpochEnd {
+            scope: self.start.scope.clone(),
+            start: epoch_start.contents,
+            end,
+        })
+    }
+
+    /// The total number of checkpoints in this epoch.
+    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        let EpochEnd { scope, start, end } = self.end(ctx).await?;
+        let first = match start {
+            Some(first) => first.cp_lo as u64,
+            None => return Ok(None),
+        };
+        let last = match end {
+            Some(last) => last.cp_hi as u64,
+            None => scope.checkpoint_viewed_at_exclusive_bound(),
+        };
+        Ok(Some(UInt53::from(last - first)))
     }
 }
 
@@ -153,7 +176,7 @@ impl EpochStart {
 impl EpochEnd {
     /// The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
     async fn end_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some(contents) = &self.contents else {
+        let Some(contents) = &self.end else {
             return Ok(None);
         };
 
@@ -240,28 +263,25 @@ impl EpochStart {
 }
 
 impl EpochEnd {
-    fn empty() -> Self {
-        Self { contents: None }
-    }
-
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty
     /// response if the epoch has not ended yet, as of the checkpoint being viewed.
-    async fn fetch(ctx: &Context<'_>, scope: &Scope, epoch_id: u64) -> Result<Self, RpcError> {
+    async fn fetch(
+        ctx: &Context<'_>,
+        scope: &Scope,
+        epoch_id: u64,
+    ) -> Result<Option<Arc<StoredEpochEnd>>, RpcError> {
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let Some(stored) = pg_loader
+        let stored = pg_loader
             .load_one(EpochEndKey(epoch_id))
             .await
-            .context("Failed to fetch epoch end information")?
-        else {
-            return Ok(Self::empty());
+            .context("Failed to fetch epoch end information")?;
+
+        let end = match stored {
+            Some(end) if end.cp_hi as u64 <= scope.checkpoint_viewed_at_exclusive_bound() => {
+                Some(Arc::new(end))
+            }
+            _ => None,
         };
-
-        if stored.cp_hi as u64 > scope.checkpoint_viewed_at() {
-            return Ok(Self::empty());
-        }
-
-        Ok(Self {
-            contents: Some(Arc::new(stored)),
-        })
+        Ok(end)
     }
 }

@@ -112,6 +112,10 @@ type Epoch {
 	The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
 	"""
 	endTimestamp: DateTime
+	"""
+	The total number of checkpoints in this epoch.
+	"""
+	totalCheckpoints: UInt53
 }
 
 """
