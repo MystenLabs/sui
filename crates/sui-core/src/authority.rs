@@ -1164,21 +1164,22 @@ impl AuthorityState {
         }
     }
 
-    /// When Ok, returns false if the transaction has not been executed, and returns
-    /// true if the transaction has been executed.
+    /// Vote for a transaction, either when validator receives a submit_transaction request,
+    /// or sees a transaction from consensus. Performs the same types of checks as
+    /// transaction signing, but does not explicitly sign the transaction.
+    /// Note that if the transaction has been executed, we still go through the
+    /// same checks. If the transaction has only been executed through mysticeti fastpath,
+    /// but not yet finalized, the signing will still work since the objects are still available.
+    /// But if the transaction has been finalized, the signing will fail.
+    /// TODO(mysticeti-fastpath): Assess whether we want to optimize the case when the transaction
+    /// has already been finalized executed.
     #[instrument(level = "trace", skip_all)]
     pub(crate) fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<()> {
-        let tx_digest = *transaction.digest();
         debug!("handle_vote_transaction");
-
-        // Check if the transaction has already been executed.
-        if self.has_transaction_output(&tx_digest)? {
-            return Ok(());
-        }
 
         let _metrics_guard = self
             .metrics
@@ -1196,19 +1197,13 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        match self.handle_transaction_impl(transaction, false, epoch_store) {
-            Ok(Some(_)) => {
-                panic!("handle_transaction_impl should not return a signed transaction")
-            }
-            Ok(None) => Ok(()),
-            // It happens frequently that while we are checking the validity of the transaction, it
-            // has just been executed.
-            // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(e) => self
-                .has_transaction_output(&tx_digest)?
-                .then_some(())
-                .ok_or(e),
-        }
+        let result =
+            self.handle_transaction_impl(transaction, false /* sign */, epoch_store)?;
+        assert!(
+            result.is_none(),
+            "handle_transaction_impl should not return a signed transaction when sign is false"
+        );
+        Ok(())
     }
 
     pub fn check_system_overload_at_signing(&self) -> bool {
@@ -4403,17 +4398,6 @@ impl AuthorityState {
                 .map(|o| self.insert_genesis_object(o.clone())),
         )
         .await;
-    }
-
-    /// Checks the execution outputs of a transaction if they exist
-    #[instrument(level = "trace", skip_all)]
-    pub fn has_transaction_output(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        Ok(self
-            .get_transaction_cache_reader()
-            .is_tx_already_executed(transaction_digest))
     }
 
     /// Make a status response for a transaction
