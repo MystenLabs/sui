@@ -312,6 +312,16 @@ fn execute_command<Mode: ExecutionMode>(
         let command_result = context.tracked_results(&result, &result_type)?;
         Mode::finish_command_v2(mode_results, argument_updates, command_result)?;
     }
+    assert_invariant!(
+        result.len() == drop_values.len(),
+        "result values and drop values mismatch"
+    );
+    let result = result
+        .into_iter()
+        .zip(drop_values)
+        .map(|(value, drop)| if !drop { Some(value) } else { None })
+        .collect::<Vec<_>>();
+
     context.result(result)?;
     Ok(())
 }
