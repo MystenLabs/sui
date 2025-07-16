@@ -55,9 +55,6 @@ pub struct BuildConfig {
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
 
-    #[clap(name = "verify-mode", long = "verify", global = true)]
-    pub verify_mode: bool,
-
     /// Generate documentation for packages
     #[clap(name = "generate-docs", long = "doc", global = true)]
     pub generate_docs: bool,
@@ -354,7 +351,6 @@ impl BuildConfig {
             Flags::empty()
         };
         flags
-            .set_verify(self.verify_mode)
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)

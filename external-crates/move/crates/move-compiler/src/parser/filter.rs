@@ -5,9 +5,6 @@
 use move_symbol_pool::Symbol;
 
 use crate::parser::ast as P;
-use move_ir_types::location::Spanned;
-
-use super::ast::ExpMap;
 
 // TODO we should really do this after expansion so that its done after attribute resolution. But
 // that can only really be done if we move most of expansion into naming.
@@ -19,7 +16,6 @@ pub trait FilterContext {
 
     /// Attribute-based node removal
     fn should_remove_by_attributes(&mut self, _attrs: &[P::Attributes]) -> bool;
-    fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool;
 
     fn filter_map_address(
         &mut self,
@@ -227,9 +223,7 @@ fn filter_module_member<T: FilterContext>(
     use P::ModuleMember as PM;
 
     match module_member {
-        PM::Function(func_def) => context
-            .filter_map_function(func_def)
-            .map(|f| PM::Function(filter_through_function_body(context, f))),
+        PM::Function(func_def) => context.filter_map_function(func_def).map(PM::Function),
         PM::Struct(struct_def) => context.filter_map_struct(struct_def).map(PM::Struct),
         PM::Enum(enum_def) => context.filter_map_enum(enum_def).map(PM::Enum),
         PM::Use(use_decl) => context.filter_map_use(use_decl).map(PM::Use),
@@ -237,63 +231,4 @@ fn filter_module_member<T: FilterContext>(
         PM::Constant(constant) => context.filter_map_constant(constant).map(PM::Constant),
         x @ PM::Spec(_) => Some(x),
     }
-}
-
-fn filter_through_function_body<T: FilterContext>(
-    context: &mut T,
-    function_def: P::Function,
-) -> P::Function {
-    let P::Function {
-        attributes,
-        loc,
-        visibility,
-        entry,
-        macro_,
-        signature,
-        name,
-        body,
-        doc
-    } = function_def;
-
-    // let new_body = filter_function_body(context, body);
-    let new_body = body.map(|b| match b {
-        P::FunctionBody_::Native => b,
-        P::FunctionBody_::Defined((uses, items, loc, exp)) => P::FunctionBody_::Defined((
-            uses,
-            filter_items(context, items).map_exp(&mut |e| remove_unwanted(context, e)),
-            loc,
-            exp.map_exp(&mut |e| remove_unwanted(context, e)),
-        )),
-    });
-
-    P::Function {
-        attributes,
-        loc,
-        visibility,
-        entry,
-        macro_,
-        signature,
-        name,
-        body: new_body,
-        doc
-    }
-}
-
-fn remove_unwanted<T: FilterContext>(context: &T, x: P::Exp_) -> P::Exp_ {
-    match x {
-        P::Exp_::Block((uses, items, loc, exp)) => {
-            P::Exp_::Block((uses, filter_items(context, items), loc, exp))
-        }
-        _ => x,
-    }
-}
-
-fn filter_items<T: FilterContext>(
-    context: &T,
-    items: Vec<Spanned<P::SequenceItem_>>,
-) -> Vec<Spanned<P::SequenceItem_>> {
-    items
-        .into_iter()
-        .filter(|item| !context.should_remove_sequence_item(item))
-        .collect()
 }

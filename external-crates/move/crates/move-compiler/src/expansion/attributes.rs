@@ -11,13 +11,10 @@ use crate::{
     ice, ice_assert,
     parser::ast as P,
     shared::{
-        Name,
         known_attributes::{
             self as A, AttributeKind, AttributeKind_, AttributePosition, KnownAttribute,
             ModeAttribute, TestingAttribute,
-        },
-        unique_map::UniqueMap,
-        unique_set::UniqueSet,
+        }, unique_map::UniqueMap, unique_set::UniqueSet, Name
     },
 };
 
@@ -180,8 +177,15 @@ fn no_conflicts(
         | KA::Error(..)
         | KA::External(..)
         | KA::Mode(..)
-        | KA::Verification(..)
         | KA::Syntax(..) => vec![],
+        KA::Verification(ver_attr) => match ver_attr {
+            crate::shared::known_attributes::VerificationAttribute::Spec { .. } => {
+                matching_kinds(attr_map, &[K::SpecOnly])
+            }
+            crate::shared::known_attributes::VerificationAttribute::SpecOnly { .. } => {
+                matching_kinds(attr_map, &[K::Spec])
+            }
+        },
         KA::Testing(test_attr) => match test_attr {
             crate::shared::known_attributes::TestingAttribute::ExpectedFailure(..) => vec![],
             crate::shared::known_attributes::TestingAttribute::Test => {

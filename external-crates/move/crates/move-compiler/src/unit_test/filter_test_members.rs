@@ -64,29 +64,6 @@ impl FilterContext for Context<'_> {
         Some(module_def)
     }
 
-    // A module member should be removed if:
-    // * It is annotated as a test function (#[test] and #[random_test]) and test mode is not set; or
-    // * It is annotated as a #[test_only] function and test mode is not set and verification mode is not set; or
-    // * If it is a library and is annotated as #[test]
-    // fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-    //     use known_attributes::TestingAttribute;
-    //     let flattened_attrs: Vec<_> = attrs.iter().flat_map(test_attributes).collect();
-    //     let is_test_only = flattened_attrs
-    //         .iter()
-    //         .any(|attr| matches!(attr.1, TestingAttribute::TestOnly));
-    //     let is_test_or_rand_test = flattened_attrs
-    //         .iter()
-    //         .any(|attr| matches!(attr.1, TestingAttribute::Test | TestingAttribute::RandTest));
-    //     is_test_or_rand_test && !self.env.flags().keep_testing_functions()
-    //         || (is_test_only
-    //             && !self.env.flags().keep_testing_functions()
-    //             && !self.env.flags().is_verifying())
-    //         || (!self.is_source_def && is_test_or_rand_test)
-    // }
-
-    fn should_remove_sequence_item(&self, _item: &P::SequenceItem) -> bool {
-        false
-    }
     // Mode filtering happens in the mode filter for `#[mode(test)]`. We further remove any
     // `#[test]` or `#[rand_test]` that is not in our source definition. This means we will filter
     // the following definitions:
@@ -97,7 +74,12 @@ impl FilterContext for Context<'_> {
         let has_test_attr = flattened_attrs
             .iter()
             .any(|attr| matches!(attr.1, AttributeKind_::Test | AttributeKind_::RandTest));
-        has_test_attr && (!self.is_source_def || !self.env.keep_testing_functions())
+
+        let has_verify_attr = flattened_attrs
+            .iter()
+            .any(|attr| matches!(attr.1, AttributeKind_::Spec | AttributeKind_::SpecOnly));
+        
+        has_verify_attr || (has_test_attr && (!self.is_source_def || !self.env.keep_testing_functions()))
     }
 }
 
@@ -264,10 +246,10 @@ fn test_attribute_kinds(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::At
             | P::Attribute_::External { .. }
             | P::Attribute_::Mode { .. }
             | P::Attribute_::Syntax { .. }
-            | P::Attribute_::Spec { .. }
-            | P::Attribute_::SpecOnly { .. }
             | P::Attribute_::Allow { .. }
             | P::Attribute_::LintAllow { .. } => None,
+            P::Attribute_::Spec { .. } => Some((attr.loc, known_attributes::AttributeKind_::Spec)),
+            P::Attribute_::SpecOnly { .. } => Some((attr.loc, known_attributes::AttributeKind_::SpecOnly)),
             // -- testing attributes
             P::Attribute_::Test => Some((attr.loc, known_attributes::AttributeKind_::Test)),
             P::Attribute_::RandomTest => {

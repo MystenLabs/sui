@@ -3,19 +3,18 @@
 
 use crate::{
     parser::{
-        ast as P,
+        ast::{self as P},
         filter::{filter_program, FilterContext},
     },
-    shared::{CompilationEnv},
+    shared::{known_attributes::VerificationAttribute, CompilationEnv},
 };
 
-use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
+use std::collections::BTreeSet;
 
 struct Context<'env> {
     env: &'env CompilationEnv,
     is_source_def: bool,
-    has_spec_code: bool,
     current_package: Option<Symbol>,
 }
 
@@ -24,7 +23,6 @@ impl<'env> Context<'env> {
         Self {
             env,
             is_source_def: false,
-            has_spec_code: false,
             current_package: None,
         }
     }
@@ -39,65 +37,32 @@ impl FilterContext for Context<'_> {
         self.is_source_def = is_source_def;
     }
 
-    // An AST element should be removed if:
-    // * It is annotated #[spec_only] and verify mode is not set
+    // An AST element should be removed if no compiler mode is set for it.
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
-        if self.env.verify_mode() {
+        let modes = attrs
+            .iter()
+            .flat_map(|attr| attr.value.modes())
+            .collect::<BTreeSet<_>>();
+
+        if modes.is_empty() {
             return false;
+        };
+
+        let modes = modes
+            .into_iter()
+            .map(|mode| mode.value)
+            .collect::<BTreeSet<_>>();
+
+        let mut allowed_modes = self.env.modes().clone();
+
+        // ADDON FOR SPECS. EXPERIMENTAL
+        if self.env.verify_mode() { // modes contains VERIFY_ONLY
+            allowed_modes.insert(VerificationAttribute::SPEC.into());
+            allowed_modes.insert(VerificationAttribute::SPEC_ONLY.into());
         }
-        let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-        //
-        let is_spec_only = flattened_attrs.iter().find(|(_, attr)| {
-            matches!(attr, P::Attribute_::SpecOnly { .. })
-                || matches!(attr, P::Attribute_::Spec { .. })
-        });
-        self.has_spec_code = self.has_spec_code || is_spec_only.is_some();
-        is_spec_only.is_some()
-    }
 
-    fn should_remove_sequence_item(&self, item: &P::SequenceItem) -> bool {
-        self.has_spec_code
-            && match &item.value {
-                P::SequenceItem_::Seq(exp) => should_remove_exp(exp),
-                P::SequenceItem_::Declare(_, _) => false,
-                P::SequenceItem_::Bind(bind_list, _, exp) => {
-                    let is_call_to_spec = should_remove_exp(exp);
-                    let is_spec_variable = bind_list.value.iter().any(|bind| match bind.value {
-                        P::Bind_::Var(_, var) => {
-                            // var ends in "_spec"
-                            let name = var.0.value.as_str();
-                            name.ends_with("_spec")
-                        }
-                        P::Bind_::Unpack(_, _) => false,
-                    });
-
-                    is_call_to_spec || is_spec_variable
-                }
-            }
-    }
-}
-
-const REMOVED_FUNCTIONS: [&str; 3] = ["invariant", "old", "ensures"];
-const REMOVED_METHODS: [&str; 2] = ["to_int", "to_real"];
-
-fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bool {
-    match &exp.value {
-        P::Exp_::Call(name_access_chain, _) => {
-            let name_access_chain_str = format!("{}", name_access_chain);
-            let should_remove = REMOVED_FUNCTIONS
-                .iter()
-                .any(|&keyword| name_access_chain_str.ends_with(keyword));
-            should_remove
-        }
-        P::Exp_::DotCall(_, _, name, _, _, _) => {
-            let name_str = format!("{}", name);
-            let should_remove = REMOVED_METHODS
-                .iter()
-                .any(|&keyword| name_str.ends_with(keyword));
-            should_remove
-        }
-        P::Exp_::Assign(lhs, rhs) => should_remove_exp(lhs) || should_remove_exp(rhs),
-        _ => false,
+        // If the compiler mode intersects with these modes, we should keep this
+        allowed_modes.intersection(&modes).next().is_none()
     }
 }
 
@@ -111,21 +76,4 @@ fn should_remove_exp(exp: &Box<move_ir_types::location::Spanned<P::Exp_>>) -> bo
 pub fn program(compilation_env: &CompilationEnv, prog: P::Program) -> P::Program {
     let mut context = Context::new(compilation_env);
     filter_program(&mut context, prog)
-}
-
-fn verification_attributes(
-    attrs: &P::Attributes,
-) -> Vec<(Loc, P::Attribute_)> {
-    attrs
-        .value
-        .0
-        .iter()
-        .filter_map(
-            |attr| match &attr.value {
-                P::Attribute_::Spec { .. } => Some((attr.loc, attr.value.clone())),
-                P::Attribute_::SpecOnly { .. } => Some((attr.loc, attr.value.clone())),
-                _ => None,
-            },
-        )
-        .collect()
 }
