@@ -760,15 +760,9 @@ Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_divide_into_n">divide_into_n</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;, n: u64, ctx: &<b>mut</b> TxContext): vector&lt;<a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;&gt; {
     <b>assert</b>!(n &gt; 0, <a href="../sui/coin.md#sui_coin_EInvalidArg">EInvalidArg</a>);
-    <b>assert</b>!(n &lt;= <a href="../sui/coin.md#sui_coin_value">value</a>(self), <a href="../sui/coin.md#sui_coin_ENotEnough">ENotEnough</a>);
-    <b>let</b> <b>mut</b> vec = vector[];
-    <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> split_amount = <a href="../sui/coin.md#sui_coin_value">value</a>(self) / n;
-    <b>while</b> (i &lt; n - 1) {
-        vec.push_back(self.<a href="../sui/coin.md#sui_coin_split">split</a>(split_amount, ctx));
-        i = i + 1;
-    };
-    vec
+    <b>assert</b>!(n &lt;= self.<a href="../sui/coin.md#sui_coin_value">value</a>(), <a href="../sui/coin.md#sui_coin_ENotEnough">ENotEnough</a>);
+    <b>let</b> split_amount = self.<a href="../sui/coin.md#sui_coin_value">value</a>() / n;
+    vector::tabulate!(n - 1, |_| self.<a href="../sui/coin.md#sui_coin_split">split</a>(split_amount, ctx))
 }
 </code></pre>
 
@@ -866,9 +860,9 @@ type, ensuring that there's only one <code><a href="../sui/coin.md#sui_coin_Trea
         <a href="../sui/coin.md#sui_coin_CoinMetadata">CoinMetadata</a> {
             id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
             decimals,
-            name: string::utf8(name),
-            symbol: ascii::string(symbol),
-            description: string::utf8(description),
+            name: name.to_string(),
+            symbol: symbol.to_ascii_string(),
+            description: description.to_string(),
             icon_url,
         },
     )
@@ -963,7 +957,7 @@ See <code><a href="../sui/coin.md#sui_coin_create_regulated_currency_v2">create_
     ctx: &<b>mut</b> TxContext,
 ): <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; {
     <b>let</b> <a href="../sui/coin.md#sui_coin_DenyCap">DenyCap</a> { id } = cap;
-    <a href="../sui/object.md#sui_object_delete">object::delete</a>(id);
+    id.delete();
     <b>let</b> ty = type_name::get_with_original_ids&lt;T&gt;().into_string().into_bytes();
     <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.migrate_v1_to_v2(<a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, ty, ctx);
     <a href="../sui/coin.md#sui_coin_DenyCapV2">DenyCapV2</a> {
@@ -1329,7 +1323,7 @@ Mint <code>amount</code> of <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a
     recipient: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <a href="../sui/transfer.md#sui_transfer_public_transfer">transfer::public_transfer</a>(<a href="../sui/coin.md#sui_coin_mint">mint</a>(c, amount, ctx), recipient)
+    <a href="../sui/transfer.md#sui_transfer_public_transfer">transfer::public_transfer</a>(c.<a href="../sui/coin.md#sui_coin_mint">mint</a>(amount, ctx), recipient)
 }
 </code></pre>
 
