@@ -1647,7 +1647,10 @@ impl SuiNode {
             std::time::Duration::from_secs(timeout),
             state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects_digests(&digests),
+                .notify_read_executed_effects_digests(
+                    "SuiNode::reexecute_pending_consensus_certs",
+                    &digests,
+                ),
         )
         .await
         .is_err()

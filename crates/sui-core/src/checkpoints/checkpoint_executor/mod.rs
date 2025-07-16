@@ -527,7 +527,10 @@ impl CheckpointExecutor {
                 "CheckpointExecutor::notify_read_executed_effects_digests",
             );
             self.transaction_cache_reader
-                .notify_read_executed_effects_digests(&unexecuted_tx_digests)
+                .notify_read_executed_effects_digests(
+                    "CheckpointExecutor::execute_transactions_from_synced_checkpoint",
+                    &unexecuted_tx_digests,
+                )
                 .await;
         }
 
@@ -869,7 +872,10 @@ impl CheckpointExecutor {
         );
 
         self.transaction_cache_reader
-            .notify_read_executed_effects_digests(&[*change_epoch_tx.digest()])
+            .notify_read_executed_effects_digests(
+                "CheckpointExecutor::execute_change_epoch_tx",
+                &[*change_epoch_tx.digest()],
+            )
             .await;
     }
 

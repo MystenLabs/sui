@@ -266,7 +266,7 @@ pub async fn do_cert_with_shared_objects(
     send_consensus(authority, cert).await;
     authority
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[*cert.digest()])
+        .notify_read_executed_effects("", &[*cert.digest()])
         .await
         .pop()
         .unwrap()
@@ -464,7 +464,7 @@ async fn test_execution_with_dependencies() {
         .collect();
     authorities[3]
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
@@ -536,7 +536,7 @@ async fn test_per_object_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[*create_counter_cert.digest()])
+            .notify_read_executed_effects("", &[*create_counter_cert.digest()])
             .await
             .pop()
             .unwrap();
@@ -550,7 +550,7 @@ async fn test_per_object_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[*create_counter_cert.digest()])
+        .notify_read_executed_effects("", &[*create_counter_cert.digest()])
         .await
         .pop()
         .unwrap();
@@ -674,7 +674,7 @@ async fn test_txn_age_overload() {
     for authority in authorities.iter().take(3) {
         authority
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[*create_counter_cert.digest()])
+            .notify_read_executed_effects("", &[*create_counter_cert.digest()])
             .await
             .pop()
             .unwrap();
@@ -688,7 +688,7 @@ async fn test_txn_age_overload() {
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[*create_counter_cert.digest()])
+        .notify_read_executed_effects("", &[*create_counter_cert.digest()])
         .await
         .pop()
         .unwrap();

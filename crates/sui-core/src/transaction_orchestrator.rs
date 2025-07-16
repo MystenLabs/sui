@@ -328,8 +328,10 @@ where
         let qd = self.clone_quorum_driver();
         Ok(async move {
             let digests = [tx_digest];
-            let effects_await =
-                epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(&digests));
+            let effects_await = epoch_store.within_alive_epoch(
+                cache_reader
+                    .notify_read_executed_effects("TransactionOrchestrator::submit", &digests),
+            );
             // let-and-return necessary to satisfy borrow checker.
             #[allow(clippy::let_and_return)]
             let res = match select(ticket, effects_await.boxed()).await {
@@ -374,7 +376,10 @@ where
             LOCAL_EXECUTION_TIMEOUT,
             validator_state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects_digests(&[tx_digest]),
+                .notify_read_executed_effects_digests(
+                    "TransactionOrchestrator::wait_for_finalized_tx_executed_locally_with_timeout",
+                    &[tx_digest],
+                ),
         )
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",

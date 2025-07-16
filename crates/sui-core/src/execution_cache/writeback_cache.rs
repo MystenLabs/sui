@@ -1845,12 +1845,16 @@ impl ObjectCacheRead for WritebackCache {
         epoch: &'a EpochId,
     ) -> BoxFuture<'a, ()> {
         self.object_notify_read
-            .read(input_and_receiving_keys, |keys| {
-                self.multi_input_objects_available(keys, receiving_keys, epoch)
-                    .into_iter()
-                    .map(|available| if available { Some(()) } else { None })
-                    .collect::<Vec<_>>()
-            })
+            .read(
+                "notify_read_executed_input_objects",
+                input_and_receiving_keys,
+                |keys| {
+                    self.multi_input_objects_available(keys, receiving_keys, epoch)
+                        .into_iter()
+                        .map(|available| if available { Some(()) } else { None })
+                        .collect::<Vec<_>>()
+                },
+            )
             .map(|_| ())
             .boxed()
     }
@@ -2049,10 +2053,11 @@ impl TransactionCacheRead for WritebackCache {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>> {
         self.executed_effects_digests_notify_read
-            .read(digests, |digests| {
+            .read(task_name, digests, |digests| {
                 self.multi_get_executed_effects_digests(digests)
             })
             .boxed()
@@ -2140,17 +2145,21 @@ impl TransactionCacheRead for WritebackCache {
         tx_digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<Arc<TransactionOutputs>>> {
         self.fastpath_transaction_outputs_notify_read
-            .read(tx_digests, |tx_digests| {
-                tx_digests
-                    .iter()
-                    .map(|tx_digest| {
-                        self.dirty
-                            .fastpath_transaction_outputs
-                            .get(tx_digest)
-                            .clone()
-                    })
-                    .collect()
-            })
+            .read(
+                "notify_read_fastpath_transaction_outputs",
+                tx_digests,
+                |tx_digests| {
+                    tx_digests
+                        .iter()
+                        .map(|tx_digest| {
+                            self.dirty
+                                .fastpath_transaction_outputs
+                                .get(tx_digest)
+                                .clone()
+                        })
+                        .collect()
+                },
+            )
             .boxed()
     }
 }

@@ -1218,7 +1218,10 @@ impl ValidatorService {
                 },
                 mut effects = self.state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&transactions) => {
+                    .notify_read_executed_effects(
+                        "AuthorityServer::wait_for_effects_response",
+                        &transactions,
+                    ) => {
                     debug!(
                         tx_digest = ?request.transaction_digest,
                         "Observed executed effects",

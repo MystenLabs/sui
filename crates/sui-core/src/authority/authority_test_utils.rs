@@ -397,7 +397,7 @@ pub async fn enqueue_all_and_execute_all(
     );
     let mut output = Vec::new();
     for (cert, _) in certificates {
-        let effects = authority.notify_read_effects(*cert.digest()).await?;
+        let effects = authority.notify_read_effects("", *cert.digest()).await?;
         output.push(effects);
     }
     Ok(output)

@@ -4972,7 +4972,7 @@ async fn test_shared_object_transaction_ok() {
 
     // Ensure transaction effects are available.
     authority
-        .notify_read_effects(*certificate.digest())
+        .notify_read_effects("", *certificate.digest())
         .await
         .unwrap();
 

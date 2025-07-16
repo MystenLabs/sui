@@ -122,7 +122,7 @@ async fn party_object_deletion_multiple_times() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
@@ -194,7 +194,7 @@ async fn party_object_deletion_multiple_times_cert_racing() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
@@ -316,7 +316,7 @@ async fn party_object_transfer_multiple_times() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
@@ -450,7 +450,7 @@ async fn party_object_transfer_multi_certs() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[repeat_tx_a_digest, repeat_tx_b_digest])
+        .notify_read_executed_effects("", &[repeat_tx_a_digest, repeat_tx_b_digest])
         .await;
 }
 
@@ -597,7 +597,7 @@ async fn party_object_read() {
     let effects = fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&all_digests)
+        .notify_read_executed_effects("", &all_digests)
         .await;
     assert_eq!(effects.len(), all_digests.len());
     for effect in effects {
@@ -692,7 +692,7 @@ async fn party_object_grpc() {
         .effects
         .unwrap();
 
-    // Once we've transfered the object to another address we need to make sure that its owner is
+    // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
     let resp = ledger_service_client
         .get_object(GetObjectRequest {
@@ -987,7 +987,7 @@ async fn party_object_jsonrpc() {
         .effects
         .unwrap();
 
-    // Once we've transfered the object to another address we need to make sure that its owner is
+    // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
     let object = client
         .read_api()

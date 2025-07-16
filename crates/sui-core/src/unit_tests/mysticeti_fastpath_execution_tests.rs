@@ -68,7 +68,7 @@ async fn test_notify_read_fastpath_transaction_outputs() {
     // Verify that the outputs are now available through regular transaction outputs
     let effects_digests = state
         .get_transaction_cache_reader()
-        .notify_read_executed_effects_digests(&[tx_digest])
+        .notify_read_executed_effects_digests("", &[tx_digest])
         .await;
     assert_eq!(effects_digests.len(), 1);
     assert_eq!(effects_digests[0], effects_digest);
@@ -119,7 +119,7 @@ async fn test_fast_path_execution() {
     let notify_read_task = tokio::spawn(async move {
         state_clone
             .get_transaction_cache_reader()
-            .notify_read_executed_effects_digests(&[tx_digest])
+            .notify_read_executed_effects_digests("", &[tx_digest])
             .await
     });
 
@@ -296,7 +296,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
         std::time::Duration::from_secs(5),
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects_digests(&[tx_digest]),
+            .notify_read_executed_effects_digests("", &[tx_digest]),
     )
     .await
     .unwrap()
@@ -345,7 +345,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
 
     state
         .get_transaction_cache_reader()
-        .notify_read_executed_effects_digests(&[tx_digest])
+        .notify_read_executed_effects_digests("", &[tx_digest])
         .await;
 
     assert!(!state
