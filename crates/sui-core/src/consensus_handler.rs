@@ -410,7 +410,7 @@ mod additional_consensus_state {
         ) -> AdditionalConsensusStateDigest {
             let hash = self.hash.finalize();
             let d2 = AdditionalConsensusStateDigest::new(hash.into());
-            debug!("fold_with: {:?}, {:?}", d1, d2);
+            info!("fold_with: {:?}, {:?}", d1, d2);
 
             let mut hasher = DefaultHash::new();
             bcs::serialize_into(&mut hasher, &d1).unwrap();

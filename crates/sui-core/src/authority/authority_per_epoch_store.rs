@@ -3494,7 +3494,7 @@ impl AuthorityPerEpochStore {
             consensus_commit_info,
             indirect_state_observer,
         );
-        debug!(
+        info!(
             "Created consensus commit prologue transaction: {:?}",
             transaction.digest()
         );
@@ -4299,7 +4299,7 @@ impl AuthorityPerEpochStore {
             &transaction,
             indirect_state_observer,
         );
-        debug!(?tx_cost, "tx_cost");
+        info!(?tx_cost, "tx_cost");
 
         let deferral_info = self.should_defer(
             tx_cost,
