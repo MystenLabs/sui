@@ -79,7 +79,8 @@ impl FilterContext for Context<'_> {
             .iter()
             .any(|attr| matches!(attr.1, AttributeKind_::Spec | AttributeKind_::SpecOnly));
         
-        has_verify_attr || (has_test_attr && (!self.is_source_def || !self.env.keep_testing_functions()))
+        (has_verify_attr && !self.env.verify_mode()) || 
+            (has_test_attr && (!self.is_source_def || !self.env.keep_testing_functions()))
     }
 }
 
