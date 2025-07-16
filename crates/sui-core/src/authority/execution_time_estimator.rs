@@ -499,13 +499,28 @@ impl ExecutionTimeObserver {
         thread_local! {
             static PER_TEST_SEED: u64 = random::<u64>();
         }
-        PER_TEST_SEED.with(|seed| {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            seed.hash(&mut hasher);
-            key.hash(&mut hasher);
-            let mut rng = rngs::StdRng::seed_from_u64(hasher.finish());
-            rng.gen_range(Duration::from_millis(100)..Duration::from_millis(600))
-        })
+
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+
+        let checkpoint_digest_used = self
+            .epoch_store
+            .upgrade()
+            .and_then(|store| {
+                store
+                    .get_lowest_non_genesis_checkpoint_summary()
+                    .ok()
+                    .flatten()
+            })
+            .map(|summary| summary.content_digest.hash(&mut hasher))
+            .is_some();
+
+        if !checkpoint_digest_used {
+            PER_TEST_SEED.with(|seed| seed.hash(&mut hasher));
+        }
+
+        key.hash(&mut hasher);
+        let mut rng = rngs::StdRng::seed_from_u64(hasher.finish());
+        rng.gen_range(Duration::from_millis(100)..Duration::from_millis(600))
     }
 
     fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
