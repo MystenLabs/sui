@@ -451,7 +451,7 @@ impl Context {
             .chain(object_inputs)
             .chain(pure_inputs)
             .chain(receiving_inputs)
-            .chain(results.iter().flat_map(|r| r))
+            .chain(results.iter().flatten())
             .filter_map(|v| -> Option<Rc<PathSet>> {
                 match v.value.as_ref() {
                     Some(Value::Ref { paths, .. }) => Some(paths.clone()),
@@ -464,7 +464,7 @@ impl Context {
     /// `paths`. Excludes `Aliases` if `allow_aliases` is true.
     fn any_conflicts(&self, paths: &PathSet, allow_aliases: bool) -> bool {
         self.all_references()
-            .any(|other| paths.conflicts(&*other, allow_aliases))
+            .any(|other| paths.conflicts(&other, allow_aliases))
     }
 }
 
@@ -599,15 +599,15 @@ fn call(
                     !mut_paths.conflicts(&paths, /* allow alias */ false),
                     "Double mutable borrow"
                 );
-                all_paths.union(&*paths);
-                mut_paths.union(&*paths);
+                all_paths.union(&paths);
+                mut_paths.union(&paths);
             }
             Value::Ref {
                 is_mut: false,
                 paths,
             } => {
-                all_paths.union(&*paths);
-                imm_paths.union(&*paths);
+                all_paths.union(&paths);
+                imm_paths.union(&paths);
             }
         }
     }
