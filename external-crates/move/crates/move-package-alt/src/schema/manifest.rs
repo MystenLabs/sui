@@ -13,7 +13,7 @@ use super::{
 /// names in the `[environments]` table of the manifest
 pub type EnvironmentID = String;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Environment {
     name: EnvironmentName,
     id: EnvironmentID,

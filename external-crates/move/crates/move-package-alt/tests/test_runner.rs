@@ -7,7 +7,7 @@ use move_command_line_common::testing::insta_assert;
 
 use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
-    dependency::{self, CombinedDependency, DependencySet},
+    dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
     errors::Files,
     flavor::{Vanilla, vanilla},
     package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
@@ -111,10 +111,16 @@ async fn run_graph_to_lockfile_test(
     input_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let env = vanilla::default_environment();
-    let root_pkg = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env).await?;
+    let path = input_path.parent().unwrap();
+    let _ = RootPackage::<Vanilla>::load(path, env).await?;
+
+    let lockfile_path = PackagePath::new(path.to_path_buf())
+        .unwrap()
+        .lockfile_path();
+    let lockfile_contents = std::fs::read(lockfile_path)?;
+
     // TODO! fix this
-    let lockfile = root_pkg.lockfile();
-    Ok(lockfile.render_as_toml().to_string())
+    Ok(String::from_utf8(lockfile_contents)?)
 }
 
 fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -131,17 +137,18 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     debug!("{deps:?}");
 
     add_bindir();
+
     for env in manifest.environments().keys() {
-        let pinned = dependency::pin::<Vanilla>(deps, &env).await.map_err(|e| e.to_string())?;
-        // TODO: Continue
+        let deps = deps.deps_for(env).unwrap();
+        let pinned = dependency::pin::<Vanilla>(deps.clone(), &env)
+            .await
+            .map_err(|e| e.to_string())?;
+        for (name, dep) in pinned {
+            output.insert(env.clone(), name, dep);
+        }
     }
 
-    let output = match pinned {
-        Ok(ref deps) => format!("{deps:#?}"),
-        Err(ref err) => err.to_string(),
-    };
-
-    Ok(output)
+    Ok(format!("{output:#?}"))
 }
 
 fn run_pinning_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

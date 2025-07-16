@@ -241,7 +241,7 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
         edition = "2025"
 
         [environments]
-        mainnet = "35834a8a",
+        mainnet = "35834a8a"
         testnet = "4c78adac"
     "#,
         name,

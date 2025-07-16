@@ -16,9 +16,6 @@ use crate::{
 };
 use tracing::debug;
 
-#[cfg(test)]
-use crate::dependency::PinnedDependencyInfo;
-
 /// A package that is defined as the root of a Move project.
 ///
 /// This is a special package that contains the project manifest and dependencies' graphs,
@@ -194,6 +191,10 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         &self.graph
     }
 
+    #[cfg(test)]
+    pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
+        &self.lockfile
+    }
     // *** PATHS RELATED FUNCTIONS ***
 
     /// Return the package path wrapper
@@ -205,17 +206,17 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 // TODO(all of us!): We need to test everything.
 #[cfg(test)]
 mod tests {
+    use std::{fs, path::PathBuf};
+
     use super::*;
     use crate::{
         flavor::{Vanilla, vanilla::DEFAULT_ENV_NAME},
         schema::LockfileDependencyInfo,
         test_utils::{
-            self, basic_manifest, basic_manifest_with_env,
+            self, basic_manifest_with_env,
             git::{self},
         },
     };
-    use move_core_types::identifier::Identifier;
-    use std::{fs, path::PathBuf};
 
     async fn setup_test_move_project() -> (Environment, PathBuf) {
         let env = crate::flavor::vanilla::default_environment();
@@ -273,7 +274,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         for name in names {
             let pkg_path = root_path.join("packages").join(name);
-            let package = RootPackage::<Vanilla>::load(&pkg_path, env)
+            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone())
                 .await
                 .unwrap();
             assert_eq!(
@@ -423,14 +424,14 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
         );
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env)
+        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
             .await
             .unwrap();
 
         let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
         let git_dep = pinned_deps.first_key_value().unwrap().1;
 
-        match git_dep.source {
+        match &git_dep.source {
             LockfileDependencyInfo::Git(p) => {
                 assert_eq!(p.rev.to_string(), commits[1])
             }

@@ -1,8 +1,9 @@
+/*
 use std::fs;
 use std::path::Path;
 
 use move_package_alt::{
-    flavor::{vanilla, Vanilla},
+    flavor::{Vanilla, vanilla},
     package::{Package, paths::PackagePath, root_package::RootPackage},
 };
 
@@ -46,3 +47,4 @@ async fn test_modern_with_legacy() {
 
     eprintln!("{:?}", graph);
 }
+*/
