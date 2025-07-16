@@ -7,9 +7,9 @@ use move_command_line_common::testing::insta_assert;
 
 use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
-    dependency::{self, CombinedDependency, DependencySet},
+    dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
     errors::Files,
-    flavor::Vanilla,
+    flavor::{Vanilla, vanilla},
     package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
 };
 use std::path::Path;
@@ -87,32 +87,40 @@ impl Test<'_> {
                 };
                 contents
             }
-            "graph_to_lockfile" => run_graph_to_lockfile_test_wrapper(self.toml_path).unwrap(),
+            "graph_to_lockfile" => match run_graph_to_lockfile_test_wrapper(self.toml_path) {
+                Ok(s) => s,
+                Err(e) => e.to_string(),
+            },
             "locked" => {
                 // TODO: this needs to deal with ephemeral environments
 
-                let path =
-                    PackagePath::new(self.toml_path.parent().unwrap().to_path_buf()).unwrap();
+                let dir = PackagePath::new(self.toml_path.parent().unwrap().to_path_buf()).unwrap();
 
-                let lockfile = Lockfiles::<Vanilla>::read_from_dir(&path);
+                let lockfile = Lockfiles::<Vanilla>::read_from_dir(&dir);
 
                 match lockfile {
                     Ok(l) => l.unwrap().render_main_lockfile().to_string(),
                     Err(e) => e.to_string(),
                 }
             }
-            "pinned" => run_pinning_wrapper(self.toml_path).unwrap(),
+            "pinned" => match run_pinning_wrapper(self.toml_path) {
+                Ok(s) => s,
+                Err(e) => e.to_string(),
+            },
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
     }
 }
 
+// TODO: it's not clear what this test is intended to be testing
 async fn run_graph_to_lockfile_test(
     input_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let root_pkg = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), None).await?;
-    let lockfile = root_pkg.dependencies_to_lockfile().await?;
-    Ok(lockfile.render_as_toml().to_string())
+    let env = vanilla::default_environment();
+
+    let root = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env).await?;
+
+    Ok(root.lockfile_for_testing().render_as_toml())
 }
 
 fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -125,17 +133,22 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let manifest = Manifest::<Vanilla>::read_from_file(input_path).unwrap();
 
     let deps: DependencySet<CombinedDependency> = manifest.dependencies();
+    let mut output = DependencySet::<PinnedDependencyInfo>::new();
     debug!("{deps:?}");
 
     add_bindir();
-    let pinned = dependency::pin::<Vanilla>(deps, &manifest.environments()).await;
 
-    let output = match pinned {
-        Ok(ref deps) => format!("{deps:#?}"),
-        Err(ref err) => err.to_string(),
-    };
+    for env in manifest.environments().keys() {
+        let deps = deps.deps_for(env).unwrap();
+        let pinned = dependency::pin::<Vanilla>(deps.clone(), env)
+            .await
+            .map_err(|e| e.to_string())?;
+        for (name, dep) in pinned {
+            output.insert(env.clone(), name, dep);
+        }
+    }
 
-    Ok(output)
+    Ok(format!("{output:#?}"))
 }
 
 fn run_pinning_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {

@@ -17,11 +17,11 @@ use crate::{
     git::{GitCache, GitTree},
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, OnChainDepInfo, Pin, ResolverDependencyInfo,
+        ManifestGitDependency, OnChainDepInfo, PackageName, Pin, ResolverDependencyInfo,
     },
 };
 
-use super::{CombinedDependency, Dependency, DependencySet};
+use super::{CombinedDependency, Dependency};
 
 /// [Dependency<Pinned>]s are guaranteed to always resolve to the same package source. For example,
 /// a git dependendency with a branch or tag revision may change over time (and is thus not
@@ -140,24 +140,24 @@ impl From<PinnedDependencyInfo> for LockfileDependencyInfo {
 
 /// Replace all dependencies with their pinned versions.
 pub async fn pin<F: MoveFlavor>(
-    deps: DependencySet<CombinedDependency>,
-    envs: &BTreeMap<EnvironmentName, EnvironmentID>,
-) -> PackageResult<DependencySet<PinnedDependencyInfo>> {
+    deps: BTreeMap<PackageName, CombinedDependency>,
+    environment_id: &EnvironmentID,
+) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
     use Pinned as P;
 
     // resolution
-    let deps = ResolvedDependency::resolve(deps, envs).await?;
+    let deps = ResolvedDependency::resolve(deps, environment_id).await?;
     debug!("done resolving");
 
     // pinning
-    let mut result: DependencySet<PinnedDependencyInfo> = DependencySet::new();
-    for (env, pkg, dep) in deps.into_iter() {
+    let mut result: BTreeMap<PackageName, PinnedDependencyInfo> = BTreeMap::new();
+    for (pkg, dep) in deps.into_iter() {
         let transformed = match &dep.0.dep_info {
             ResolverDependencyInfo::Local(loc) => P::Local(loc.clone()),
             ResolverDependencyInfo::Git(git) => P::Git(git.pin().await?),
             ResolverDependencyInfo::OnChain(_) => P::OnChain(todo!()),
         };
-        result.insert(env, pkg, PinnedDependencyInfo(dep.0.map(|_| transformed)));
+        result.insert(pkg, PinnedDependencyInfo(dep.0.map(|_| transformed)));
     }
 
     Ok(result)

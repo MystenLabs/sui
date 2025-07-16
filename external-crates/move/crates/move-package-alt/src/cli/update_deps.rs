@@ -2,11 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::{errors::PackageResult, flavor::Vanilla, package::RootPackage};
+use crate::{
+    errors::{PackageError, PackageResult},
+    flavor::Vanilla,
+    package::RootPackage,
+    schema::{Environment, EnvironmentName},
+};
 
 /// Re-pin the dependencies of this package.
 #[derive(Debug, Clone, Parser)]
@@ -17,40 +22,26 @@ pub struct UpdateDeps {
     /// The environment to update dependencies for. If none is provided, all environments'
     /// dependencies will be updated.
     #[arg(name = "environment", short = 'e', long = "environment")]
-    environment: Option<String>,
+    environment: EnvironmentName,
 }
 
 impl UpdateDeps {
     pub async fn execute(&self) -> PackageResult<()> {
-        let root_package = RootPackage::<Vanilla>::load_manifest(
-            self.path.as_ref().unwrap_or(&PathBuf::from(".")),
-            self.environment.clone(),
-        )
-        .await?;
+        let path = self.path.clone().unwrap_or(PathBuf::from("."));
 
-        let envs = if let Some(env) = &self.environment {
-            let envs = root_package
-                .environments()
-                .iter()
-                .filter(|(k, _)| k == &env)
-                .map(|x| (x.0.clone(), x.1.clone()))
-                .collect::<BTreeMap<_, _>>();
-            envs
-        } else {
-            root_package.environments().clone()
+        let envs = RootPackage::<Vanilla>::environments(&path)?;
+
+        let Some(chain_id) = envs.get(&self.environment) else {
+            return Err(PackageError::Generic(format!(
+                "Environment {} not found",
+                self.environment
+            )));
         };
 
-        let ending = if envs.len() == 1 {
-            "environment:"
-        } else {
-            "environments:"
-        };
-        let envs_str = envs.keys().cloned().collect::<Vec<_>>().join(", ");
-        println!("Updating dependencies for {ending} {envs_str}");
+        let environment = Environment::new(self.environment.clone(), chain_id.clone());
 
-        root_package
-            .update_deps_and_write_to_lockfile(&envs)
-            .await?;
+        let root_package = RootPackage::<Vanilla>::load_force_repin(&path, environment).await?;
+        root_package.save_to_disk()?;
 
         Ok(())
     }

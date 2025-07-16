@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, btree_map};
 
 use derive_where::derive_where;
 
-use crate::package::{EnvironmentName, PackageName};
+use crate::{package::EnvironmentName, schema::PackageName};
 
 // TODO: the API for this type is a bit of a historical artifact - it used to also have a notion of
 // default dependencies and do merging. We now do that much earlier in the process. So this type

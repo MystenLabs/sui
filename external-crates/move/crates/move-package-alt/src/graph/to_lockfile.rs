@@ -4,8 +4,7 @@
 
 use crate::{
     flavor::MoveFlavor,
-    package::PackageName,
-    schema::{PackageID, Pin},
+    schema::{PackageID, PackageName, Pin},
 };
 use petgraph::{graph::NodeIndex, visit::EdgeRef};
 use std::collections::BTreeMap;
@@ -23,11 +22,13 @@ impl<F: MoveFlavor> From<&PackageGraph<F>> for BTreeMap<PackageID, Pin> {
         // build index to id map
         for node in graph.node_indices() {
             let pkg_node = graph.node_weight(node).expect("node exists");
-            let suffix = name_to_suffix.entry(pkg_node.name().clone()).or_default();
+            let suffix = name_to_suffix
+                .entry(pkg_node.package.name().clone())
+                .or_default();
             let id = if *suffix == 0 {
-                pkg_node.name().clone().to_string()
+                pkg_node.package.name().to_string()
             } else {
-                format!("{}_{suffix}", pkg_node.name())
+                format!("{}_{suffix}", pkg_node.package.name())
             };
             node_to_id.insert(node, id);
             *suffix += 1;
@@ -49,7 +50,7 @@ impl<F: MoveFlavor> From<&PackageGraph<F>> for BTreeMap<PackageID, Pin> {
                 Pin {
                     source: pkg_node.package.dep_for_self().clone(),
                     use_environment: Some(pkg_node.use_env.clone()),
-                    manifest_digest: graph[node].package.manifest().digest().to_string(),
+                    manifest_digest: pkg_node.package.digest().to_string(),
                     deps,
                 },
             );

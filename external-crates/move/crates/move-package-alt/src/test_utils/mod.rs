@@ -245,6 +245,26 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
         testnet = "4c78adac"
     "#,
         name,
-        version
+        version,
+    )
+}
+
+/// Generate a basic manifest with specific environment info
+pub fn basic_manifest_with_env(name: &str, version: &str, env: &str, chain_id: &str) -> String {
+    formatdoc!(
+        r#"
+        [package]
+        name = "{}"
+        version = "{}"
+        authors = []
+        edition = "2025"
+
+        [environments]
+        {} = "{}"
+    "#,
+        name,
+        version,
+        env,
+        chain_id
     )
 }

@@ -3,9 +3,34 @@ use std::{fmt::Debug, fmt::Display, path::PathBuf};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
 
+use super::EnvironmentID;
+
 // TODO(Manos): Let's use a less free name...
 pub type EnvironmentName = String;
+
 pub type PackageName = Identifier;
+
+// TODO: this doesn't really belong in `schema` (or at least it should follow the format of other
+// schema data structures of being a plain old object)
+#[derive(Debug, Clone)]
+pub struct Environment {
+    name: EnvironmentName,
+    id: EnvironmentID,
+}
+
+impl Environment {
+    pub fn new(name: EnvironmentName, id: EnvironmentID) -> Self {
+        Self { name, id }
+    }
+
+    pub fn name(&self) -> &EnvironmentName {
+        &self.name
+    }
+
+    pub fn id(&self) -> &EnvironmentID {
+        &self.id
+    }
+}
 
 #[derive(Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PublishedID(pub AccountAddress);

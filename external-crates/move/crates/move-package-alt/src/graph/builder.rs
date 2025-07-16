@@ -7,7 +7,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
-    schema::PackageName,
+    schema::{Environment, PackageName},
 };
 
 use std::{
@@ -47,12 +47,12 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     pub async fn load(
         &self,
         path: &PackagePath,
-        env: &EnvironmentName,
+        env: &Environment,
     ) -> PackageResult<PackageGraph<F>> {
         let lockfile = self.load_from_lockfile(path, env).await?;
         match lockfile {
             Some(result) => Ok(result),
-            None => self.load_from_manifests_by_env(path, env).await,
+            None => self.load_from_manifests(path, env).await,
         }
     }
 
@@ -62,7 +62,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     pub async fn load_from_lockfile(
         &self,
         path: &PackagePath,
-        env: &EnvironmentName,
+        env: &Environment,
     ) -> PackageResult<Option<PackageGraph<F>>> {
         self.load_from_lockfile_impl(path, env, true).await
     }
@@ -71,7 +71,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     pub async fn load_from_lockfile_ignore_digests(
         &self,
         path: &PackagePath,
-        env: &EnvironmentName,
+        env: &Environment,
     ) -> PackageResult<Option<PackageGraph<F>>> {
         self.load_from_lockfile_impl(path, env, false).await
     }
@@ -81,66 +81,73 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     pub async fn load_from_lockfile_impl(
         &self,
         path: &PackagePath,
-        env: &EnvironmentName,
+        env: &Environment,
         check_digests: bool,
     ) -> PackageResult<Option<PackageGraph<F>>> {
         let Some(lockfile) = Lockfiles::<F>::read_from_dir(path)? else {
             return Ok(None);
         };
 
-        let mut graph = PackageGraph {
-            inner: DiGraph::new(),
-        };
-
-        let pins = lockfile.pins_for_env(env);
+        let mut inner = DiGraph::new();
 
         let mut package_nodes = BTreeMap::new();
-        if let Some(pins) = pins {
-            // First pass: create nodes for all packages
-            for (pkg_id, pin) in pins.iter() {
-                let dep = PinnedDependencyInfo::from_pin(lockfile.file(), env, pin);
-                let package = self.cache.fetch(&dep).await?;
-                let package_manifest_digest = package.manifest().digest();
-                if check_digests && package_manifest_digest != &pin.manifest_digest {
-                    return Ok(None);
-                }
-                let index = graph.inner.add_node(PackageNode {
-                    package,
-                    use_env: todo!(),
-                });
-                package_nodes.insert(pkg_id.clone(), index);
-            }
 
-            // Second pass: add edges based on dependencies
-            for (pkg_id, dep_info) in pins.iter() {
-                let from_index = package_nodes.get(pkg_id).unwrap();
-                for (dep_name, dep_id) in dep_info.deps.iter() {
-                    if let Some(to_index) = package_nodes.get(dep_id) {
-                        graph
-                            .inner
-                            .add_edge(*from_index, *to_index, dep_name.clone());
-                    }
+        let Some(pins) = lockfile.pins_for_env(env.name()) else {
+            return Ok(None);
+        };
+
+        // First pass: create nodes for all packages
+        for (pkg_id, pin) in pins.iter() {
+            let dep = PinnedDependencyInfo::from_pin(lockfile.file(), env.name(), pin);
+            let package = self.cache.fetch(&dep, env).await?;
+            let package_manifest_digest = package.digest();
+            if check_digests && package_manifest_digest != &pin.manifest_digest {
+                return Ok(None);
+            }
+            let index = inner.add_node(PackageNode {
+                package,
+                use_env: pin.use_environment.clone().unwrap_or(env.name().clone()),
+            });
+            package_nodes.insert(pkg_id.clone(), index);
+        }
+
+        // Second pass: add edges based on dependencies
+        for (pkg_id, dep_info) in pins.iter() {
+            let from_index = package_nodes.get(pkg_id).unwrap();
+            for (dep_name, dep_id) in dep_info.deps.iter() {
+                if let Some(to_index) = package_nodes.get(dep_id) {
+                    inner.add_edge(*from_index, *to_index, dep_name.clone());
                 }
             }
         }
 
-        Ok(Some(graph))
+        // TODO(manos): Add a proper error message here -- nothing to expect.
+        let root_idx = inner
+            .node_indices()
+            .find(|pkg| {
+                let node = &inner[*pkg];
+                node.package.is_root()
+            })
+            .expect("A lockfile needs to have a root package");
+
+        Ok(Some(PackageGraph { inner, root_idx }))
     }
 
     /// Construct a new package graph for `env` by recursively fetching and reading manifest files
     /// starting from the package at `path`.
     /// Lockfiles are ignored. See [PackageGraph::load]
-    pub async fn load_from_manifests_by_env(
+    pub async fn load_from_manifests(
         &self,
         path: &PackagePath,
-        env: &EnvironmentName,
+        env: &Environment,
     ) -> PackageResult<PackageGraph<F>> {
         // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
         let visited = Arc::new(Mutex::new(BTreeMap::new()));
-        let root = Arc::new(Package::<F>::load_root(path).await?);
+        let root = Arc::new(Package::<F>::load_root(path, env).await?);
 
-        self.add_transitive_manifest_deps(root, env, graph.clone(), visited)
+        let root_idx = self
+            .add_transitive_manifest_deps(root, env, graph.clone(), visited)
             .await?;
 
         let graph = graph.lock().expect("unpoisoned").map(
@@ -151,7 +158,10 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             |_, e| e.clone(),
         );
 
-        Ok(PackageGraph { inner: graph })
+        Ok(PackageGraph {
+            inner: graph,
+            root_idx,
+        })
     }
 
     /// Adds nodes and edges for the graph rooted at `package` to `graph` and returns the node ID for
@@ -163,7 +173,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     pub async fn add_transitive_manifest_deps(
         &self,
         package: Arc<Package<F>>,
-        env: &EnvironmentName,
+        env: &Environment,
         graph: Arc<Mutex<DiGraph<Option<PackageNode<F>>, PackageName>>>,
         visited: Arc<Mutex<BTreeMap<(EnvironmentName, PathBuf), NodeIndex>>>,
     ) -> PackageResult<NodeIndex> {
@@ -171,7 +181,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         let index = match visited
             .lock()
             .expect("unpoisoned")
-            .entry((env.clone(), package.path().as_ref().to_path_buf()))
+            .entry((env.name().clone(), package.path().as_ref().to_path_buf()))
         {
             Entry::Occupied(entry) => return Ok(*entry.get()),
             Entry::Vacant(entry) => *entry.insert(graph.lock().expect("unpoisoned").add_node(None)),
@@ -179,11 +189,15 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
-        for (name, dep) in package.direct_deps(env)?.iter() {
-            let fetched = self.cache.fetch(dep).await?;
+        for (name, dep) in package.direct_deps().iter() {
+            let fetched = self.cache.fetch(dep, env).await?;
+
+            // We retain the defined environment name, but we assign a consistent chain id (environmentID).
+            let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
+
             let future = self.add_transitive_manifest_deps(
                 fetched.clone(),
-                dep.use_environment(),
+                &new_env,
                 graph.clone(),
                 visited.clone(),
             );
@@ -195,7 +209,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             // If we're dealing with legacy packages, we are free to fix the naming in the outgoing edge, to match
             // our modern system names.
             let edge_name = if fetched.is_legacy() {
-                fetched.manifest().package_name()
+                fetched.name()
             } else {
                 name
             };
@@ -213,7 +227,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             .expect("node was added above")
             .replace(PackageNode {
                 package,
-                use_env: env.clone(),
+                use_env: env.name().clone(),
             });
 
         Ok(index)
@@ -229,7 +243,11 @@ impl<F: MoveFlavor> PackageCache<F> {
     }
 
     /// Return a reference to a cached [Package], loading it if necessary
-    pub async fn fetch(&self, dep: &PinnedDependencyInfo) -> PackageResult<Arc<Package<F>>> {
+    pub async fn fetch(
+        &self,
+        dep: &PinnedDependencyInfo,
+        env: &Environment,
+    ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache
             .lock()
@@ -246,7 +264,7 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
 
         // If not cached, load and cache
-        match Package::load(dep.clone()).await {
+        match Package::load(dep.clone(), env).await {
             Ok(package) => {
                 let node = Arc::new(package);
                 cell.get_or_init(async || Some(node.clone())).await;

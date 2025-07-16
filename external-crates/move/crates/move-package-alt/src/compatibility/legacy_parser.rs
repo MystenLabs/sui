@@ -9,10 +9,10 @@ use crate::{
         legacy::{LegacyData, LegacyEnvironment},
     },
     errors::FileHandle,
-    package::{EnvironmentName, PackageName, layout::SourcePackageLayout, paths::PackagePath},
+    package::{EnvironmentName, layout::SourcePackageLayout, paths::PackagePath},
     schema::{
         DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, ParsedManifest,
+        ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
         PublishAddresses, PublishedID,
     },
 };
@@ -49,7 +49,8 @@ const KNOWN_NAMES: &[&str] = &[
 const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 
 pub struct ParsedLegacyPackage {
-    pub parsed_manifest: ParsedManifest,
+    pub deps: BTreeMap<PackageName, DefaultDependency>,
+    pub metadata: PackageMetadata,
     pub legacy_data: LegacyData,
     pub file_handle: FileHandle,
 }
@@ -90,14 +91,13 @@ pub fn parse_legacy_manifest_from_file(path: &PackagePath) -> Result<ParsedLegac
 
     let file_handle = FileHandle::new(path.manifest_path())?;
 
-    let (parsed_manifest, legacy_data) =
-        parse_source_manifest(parse_move_manifest_string(file_contents)?, path)?;
-
-    Ok(ParsedLegacyPackage {
-        parsed_manifest,
-        legacy_data,
+    let parsed_legacy_package = parse_source_manifest(
+        parse_move_manifest_string(file_contents)?,
+        path,
         file_handle,
-    })
+    )?;
+
+    Ok(parsed_legacy_package)
 }
 
 fn parse_legacy_lockfile_addresses(
@@ -172,7 +172,11 @@ fn parse_move_manifest_string(manifest_string: String) -> Result<TV> {
     toml::from_str::<TV>(&manifest_string).context("Unable to parse Move package manifest")
 }
 
-fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedManifest, LegacyData)> {
+fn parse_source_manifest(
+    tval: TV,
+    path: &PackagePath,
+    file_handle: FileHandle,
+) -> Result<ParsedLegacyPackage> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, REQUIRED_FIELDS)
@@ -243,17 +247,13 @@ fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedManifest
                 None
             };
 
-            Ok((
-                ParsedManifest {
-                    package: PackageMetadata {
-                        name: new_name,
-                        edition,
-                    },
-                    environments: BTreeMap::new(),
-                    dependencies,
-                    dep_replacements: BTreeMap::new(),
+            Ok(ParsedLegacyPackage {
+                metadata: PackageMetadata {
+                    name: new_name,
+                    edition,
                 },
-                LegacyData {
+                deps: dependencies,
+                legacy_data: LegacyData {
                     incompatible_name: if legacy_name != modern_name.as_str() {
                         Some(legacy_name)
                     } else {
@@ -264,7 +264,8 @@ fn parse_source_manifest(tval: TV, path: &PackagePath) -> Result<(ParsedManifest
                     manifest_address_info,
                     legacy_environments: parse_legacy_lockfile_addresses(path).unwrap_or_default(),
                 },
-            ))
+                file_handle,
+            })
         }
         x => {
             bail!(
@@ -336,7 +337,7 @@ fn parse_package_info(tval: TV) -> Result<(String, String, Option<String>)> {
     }
 }
 
-fn parse_dependencies(tval: TV) -> Result<BTreeMap<Spanned<PackageName>, DefaultDependency>> {
+fn parse_dependencies(tval: TV) -> Result<BTreeMap<PackageName, DefaultDependency>> {
     match tval {
         TV::Table(table) => {
             let mut deps = BTreeMap::new();
@@ -347,7 +348,7 @@ fn parse_dependencies(tval: TV) -> Result<BTreeMap<Spanned<PackageName>, Default
                 let dep_name_ident = PackageName::new(dep_name)?;
 
                 let dep = parse_dependency(dep)?;
-                deps.insert(temporary_spanned(dep_name_ident), dep);
+                deps.insert(dep_name_ident, dep);
             }
 
             Ok(deps)

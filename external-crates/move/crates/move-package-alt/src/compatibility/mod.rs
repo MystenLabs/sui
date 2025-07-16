@@ -9,9 +9,9 @@ use anyhow::{Result, bail};
 use move_core_types::account_address::AccountAddress;
 use regex::Regex;
 
-use crate::package::PackageName;
 use crate::package::layout::SourcePackageLayout;
 use crate::package::paths::PackagePath;
+use crate::schema::PackageName;
 
 pub type LegacyAddressDeclarations = BTreeMap<String, Option<AccountAddress>>;
 pub type LegacyDevAddressDeclarations = BTreeMap<String, AccountAddress>;
