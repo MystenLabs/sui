@@ -1,4 +1,4 @@
-// Copyright (c) The Diem Core Contributors
+// Copyrightc) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -20,7 +20,6 @@ use crate::{
         PackageName, Publication, PublishAddresses, PublishedID,
     },
 };
-use tracing::debug;
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -40,11 +39,16 @@ pub struct Package<F: MoveFlavor> {
     path: PackagePath,
     /// (Optional) Publish information for the loaded environment (original-id, published-at and more).
     publish_data: Option<Publication<F>>,
-    /// The way this package should be serialized to the lockfile
+
+    /// The way this package should be serialized to the lockfile. Note that this is a dependency
+    /// relative to the root package (in particular, the root package is the only package with
+    /// `source = {local = "."}`
     source: LockfileDependencyInfo,
+
     /// Optional legacy information for a supplied package.
     /// TODO(manos): Make `LegacyData` single environment too, or use multiple types for this.
     pub legacy_data: Option<LegacyData>,
+
     /// The pinned direct dependencies for this package
     /// Note: for legacy packages, this information will be stored in `legacy_data`.
     deps: BTreeMap<PackageName, PinnedDependencyInfo>,
@@ -94,7 +98,7 @@ impl<F: MoveFlavor> Package<F> {
             return Ok(Self {
                 env: env.name().clone(),
                 digest: manifest.digest().to_string(),
-                metadata: manifest.inner.package,
+                metadata: manifest.metadata(),
                 path,
                 publish_data: publish_data.get(env.name()).cloned(),
                 source,
@@ -173,7 +177,9 @@ impl<F: MoveFlavor> Package<F> {
         &self.digest
     }
 
-    /// A dependency that points to this package.
+    /// The way this package should be serialized to the root package's lockfile. Note that this is
+    /// a dependency relative to the root package (in particular, the root package is the only
+    /// package where `dep_for_self()` returns `{local = "."}`
     pub fn dep_for_self(&self) -> &LockfileDependencyInfo {
         &self.source
     }
@@ -182,19 +188,19 @@ impl<F: MoveFlavor> Package<F> {
         self.legacy_data.is_some()
     }
 
+    /// This returns true if the `source` for the package is `{ local = "." }`. This is guaranteed
+    /// to hold for exactly one package for a valid package graph (see [Self::dep_for_self] for
+    /// more information)
     pub fn is_root(&self) -> bool {
         let result = (self.dep_for_self()
             == &LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }));
-        debug!("is_root for {:?}: {result}", self.dep_for_self());
         result
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`
     /// Returns an error if `env` is not declared in the manifest (TODO: remove this restriction?)
-    pub fn direct_deps(&self) -> BTreeMap<PackageName, PinnedDependencyInfo> {
-        debug!("requested deps for {}", self.name());
-
-        self.deps.clone()
+    pub fn direct_deps(&self) -> &BTreeMap<PackageName, PinnedDependencyInfo> {
+        &self.deps
     }
 
     fn publication(&self) -> Option<&PublishAddresses> {

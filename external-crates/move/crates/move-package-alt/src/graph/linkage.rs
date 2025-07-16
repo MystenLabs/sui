@@ -130,8 +130,14 @@ impl<F: MoveFlavor> PackageGraph<F> {
         let overrides: BTreeSet<PackageName> = node
             .package
             .direct_deps()
-            .into_iter()
-            .filter_map(|(name, dep)| if dep.is_override() { Some(name) } else { None })
+            .iter()
+            .filter_map(|(name, dep)| {
+                if dep.is_override() {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
             .collect();
 
         // now traverse the edges to find the original ids of those overridden packages

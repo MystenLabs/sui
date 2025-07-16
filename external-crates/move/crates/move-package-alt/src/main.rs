@@ -4,7 +4,7 @@
 
 use clap::{Parser, Subcommand};
 use move_package_alt::{
-    cli::{Build, New, Parse, UpdateDeps},
+    cli::{Build, New, UpdateDeps},
     errors::PackageResult,
 };
 
@@ -21,8 +21,7 @@ pub enum Commands {
     New(New),
     /// Run tests for the package
     Test,
-    /// Parse a manifest or lockfile, or both
-    Parse(Parse),
+    /// Repin the dependencies for an environment and update the lockfile
     UpdateDeps(UpdateDeps),
 }
 
@@ -32,7 +31,6 @@ impl Commands {
             Commands::Build(b) => b.execute().await,
             Commands::New(n) => n.execute(),
             Commands::Test => todo!(),
-            Commands::Parse(p) => p.execute(),
             Commands::UpdateDeps(u) => u.execute().await,
         }
     }

@@ -26,6 +26,8 @@ pub struct Build {
 
 impl Build {
     pub async fn execute(&self) -> PackageResult<()> {
+        // TODO: consider moving this to move-compilation crate (but I think it's better just to
+        // print out what would happen)
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         let envs = RootPackage::<Vanilla>::environments(&path)?;
@@ -45,6 +47,7 @@ impl Build {
 
         // TODO: Implement the actual build logic here.
 
+        root_pkg.save_to_disk();
         Ok(())
     }
 }
