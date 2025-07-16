@@ -13,6 +13,26 @@ use super::{
 /// names in the `[environments]` table of the manifest
 pub type EnvironmentID = String;
 
+#[derive(Debug)]
+pub struct Environment {
+    name: EnvironmentName,
+    id: EnvironmentID,
+}
+
+impl Environment {
+    pub fn new(name: EnvironmentName, id: EnvironmentID) -> Self {
+        Self { name, id }
+    }
+
+    pub fn name(&self) -> &EnvironmentName {
+        &self.name
+    }
+
+    pub fn id(&self) -> &EnvironmentID {
+        &self.id
+    }
+}
+
 // Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
 // user-editable files

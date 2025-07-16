@@ -7,7 +7,7 @@ use move_package_alt::{
     dependency::{self, DependencySet, PinnedDependencyInfo},
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::PackageName,
+    schema::{EnvironmentID, EnvironmentName, PackageName, ReplacementDependency},
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,20 +21,18 @@ impl MoveFlavor for SuiFlavor {
 
     type PublishedMetadata = (); // TODO
 
-    type EnvironmentID = String; // TODO
-
     type AddressInfo = (); // TODO
 
     type PackageMetadata = (); // TODO
 
-    fn default_environments() -> BTreeMap<String, Self::EnvironmentID> {
+    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID> {
         todo!()
     }
 
     fn implicit_deps(
         &self,
-        environments: impl Iterator<Item = Self::EnvironmentID>,
-    ) -> DependencySet<PinnedDependencyInfo> {
+        environment: EnvironmentID,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
         todo!()
     }
 }

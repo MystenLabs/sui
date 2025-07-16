@@ -17,7 +17,7 @@ use crate::{
     dependency::{CombinedDependency, DependencySet},
     errors::{FileHandle, Location},
     flavor::MoveFlavor,
-    schema::ParsedManifest,
+    schema::{PackageName, ParsedManifest},
 };
 
 use super::*;
@@ -29,7 +29,7 @@ const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 pub type Digest = String;
 
 pub struct Manifest<F: MoveFlavor> {
-    inner: ParsedManifest,
+    pub inner: ParsedManifest,
     digest: Digest,
     dependencies: DependencySet<CombinedDependency>,
     // TODO: remove <F>

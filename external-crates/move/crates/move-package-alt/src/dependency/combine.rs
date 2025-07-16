@@ -66,7 +66,7 @@ impl CombinedDependency {
 
     /// Specialize an entry in the `[dependencies]` section, for the environment named
     /// `source_env_name`
-    fn from_default(
+    pub fn from_default(
         file: FileHandle,
         source_env_name: EnvironmentName,
         default: DefaultDependency,

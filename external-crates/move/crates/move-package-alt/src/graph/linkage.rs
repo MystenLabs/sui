@@ -12,7 +12,10 @@ use petgraph::{
 };
 use thiserror::Error;
 
-use crate::{flavor::MoveFlavor, package::PackageName, schema::OriginalID};
+use crate::{
+    flavor::MoveFlavor,
+    schema::{OriginalID, PackageName},
+};
 
 use super::PackageGraph;
 
@@ -97,7 +100,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             }
 
             // if this node is published, add it to its linkage
-            if let Some(oid) = package_node.package.original_id(&package_node.use_env) {
+            if let Some(oid) = package_node.package.original_id() {
                 let old_entry = linkage.insert(oid, *node);
                 if old_entry.is_some() {
                     // this means a package depends on another package that has the same original
@@ -126,8 +129,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
         // get the set of package names that are overridden
         let overrides: BTreeSet<PackageName> = node
             .package
-            .direct_deps(env)
-            .unwrap() // TODO: move the override into the edge so that we don't have to check here
+            .direct_deps()
             .into_iter()
             .filter_map(|(name, dep)| if dep.is_override() { Some(name) } else { None })
             .collect();
@@ -142,7 +144,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
                 // Note: if the dep is unpublished, we omit it by returning `None` (which is
                 // dropped by `filter_map`)
-                let Some(original_id) = dep.original_id(env) else {
+                let Some(original_id) = dep.original_id() else {
                     return None;
                 };
 

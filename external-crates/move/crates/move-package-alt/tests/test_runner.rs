@@ -9,7 +9,7 @@ use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
     dependency::{self, CombinedDependency, DependencySet},
     errors::Files,
-    flavor::Vanilla,
+    flavor::{Vanilla, vanilla},
     package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
 };
 use std::path::Path;
@@ -110,8 +110,10 @@ impl Test<'_> {
 async fn run_graph_to_lockfile_test(
     input_path: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let root_pkg = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), None).await?;
-    let lockfile = root_pkg.dependencies_to_lockfile().await?;
+    let env = vanilla::default_environment();
+    let root_pkg = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env).await?;
+    // TODO! fix this
+    let lockfile = root_pkg.lockfile();
     Ok(lockfile.render_as_toml().to_string())
 }
 

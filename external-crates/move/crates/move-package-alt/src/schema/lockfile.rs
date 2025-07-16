@@ -75,7 +75,7 @@ pub struct Pin {
 }
 
 /// A serialized pinned dependency in a lockfile
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum LockfileDependencyInfo {
     Local(LocalDepInfo),

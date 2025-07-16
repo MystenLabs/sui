@@ -8,11 +8,12 @@ use std::{
     collections::BTreeMap,
     ffi::OsStr,
     fmt::Debug,
+    iter::zip,
     process::{ExitStatus, Stdio},
 };
 
 use futures::future::try_join_all;
-use itertools::{Itertools, izip};
+use itertools::Itertools;
 use jsonrpc::Endpoint;
 use thiserror::Error;
 use tokio::process::Command;
@@ -20,11 +21,13 @@ use tracing::{debug, info};
 
 use crate::{
     dependency::combine::Combined,
-    package::{EnvironmentID, EnvironmentName, PackageName},
-    schema::{EXTERNAL_RESOLVE_ARG, ResolveRequest, ResolveResponse, ResolverDependencyInfo},
+    package::{EnvironmentID, EnvironmentName},
+    schema::{
+        EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
+    },
 };
 
-use super::{CombinedDependency, Dependency, DependencySet};
+use super::{CombinedDependency, Dependency};
 
 /// A [Dependency<Resolved>] is like a [Dependency<Combined>] except that it no longer has
 /// externally resolved dependencies
@@ -74,23 +77,21 @@ pub enum ResolverError {
 
 impl ResolvedDependency {
     /// Replace all external dependencies in `deps` with internal dependencies by invoking their
-    /// resolvers. Requires all environments in `deps` to be contained in `envs`
+    /// resolvers.
     pub async fn resolve(
-        deps: DependencySet<CombinedDependency>,
-        envs: &BTreeMap<EnvironmentName, EnvironmentID>,
-    ) -> ResolverResult<DependencySet<ResolvedDependency>> {
+        deps: BTreeMap<PackageName, CombinedDependency>,
+        environment_id: &EnvironmentID,
+    ) -> ResolverResult<BTreeMap<PackageName, ResolvedDependency>> {
         // iterate over [deps] to collect queries for external resolvers
-        let mut requests: BTreeMap<ResolverName, DependencySet<ResolveRequest>> = BTreeMap::new();
+        let mut requests: BTreeMap<ResolverName, BTreeMap<PackageName, ResolveRequest>> =
+            BTreeMap::new();
 
-        for (env, pkg, dep) in deps.iter() {
+        for (pkg, dep) in deps.iter() {
             if let Combined::External(ext) = &dep.0.dep_info {
                 requests.entry(ext.resolver.clone()).or_default().insert(
-                    env.clone(),
                     pkg.clone(),
                     ResolveRequest {
-                        // TODO(Manos): We should be able to pass the env, not require ext resolvers to be
-                        // set per env.
-                        env: envs[dep.0.use_environment()].clone(),
+                        env: environment_id.clone(),
                         data: ext.data.clone(),
                     },
                 );
@@ -101,14 +102,18 @@ impl ResolvedDependency {
         let responses = requests
             .into_iter()
             .map(async |(resolver, reqs)| resolve_single(resolver, reqs).await);
-        let mut responses = DependencySet::merge(try_join_all(responses).await?);
+
+        let mut responses: BTreeMap<_, _> = try_join_all(responses)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect();
 
         // build the output
-        let mut result = DependencySet::new();
-        for (env, pkg, dep) in deps.into_iter() {
-            let ext = responses.remove(&env, &pkg);
+        let mut result = BTreeMap::new();
+        for (pkg, dep) in deps.into_iter() {
+            let ext = responses.remove(&pkg);
             result.insert(
-                env,
                 pkg,
                 ResolvedDependency(dep.0.map(|info| match info {
                     Combined::Local(loc) => Resolved::Local(loc),
@@ -169,17 +174,17 @@ impl ResolverError {
 /// Resolve the dependencies in `requests` with the external resolver `resolver`
 async fn resolve_single(
     resolver: ResolverName,
-    requests: DependencySet<ResolveRequest>,
-) -> ResolverResult<DependencySet<Resolved>> {
-    let (envs, pkgs, reqs): (Vec<_>, Vec<_>, Vec<_>) = requests.into_iter().multiunzip();
+    requests: BTreeMap<PackageName, ResolveRequest>,
+) -> ResolverResult<BTreeMap<PackageName, Resolved>> {
+    let (pkgs, reqs): (Vec<_>, Vec<_>) = requests.into_iter().unzip();
 
     let resps = call_resolver(resolver, reqs);
 
-    let result: DependencySet<ResolveResponse> = izip!(envs, pkgs, resps.await?).collect();
+    let result: BTreeMap<PackageName, ResolveResponse> = zip(pkgs, resps.await?).collect();
 
     Ok(result
         .into_iter()
-        .map(|(env, pkg, resp)| (env, pkg, resp.0))
+        .map(|(pkg, resp)| (pkg, resp.0))
         .collect())
 }
 

@@ -47,16 +47,16 @@ use petgraph::{
 use tracing::debug;
 
 use crate::{
-    flavor::Vanilla,
-    package::{EnvironmentID, EnvironmentName, PackageName, RootPackage},
-    schema::{OriginalID, PublishAddresses, PublishedID},
+    flavor::{
+        Vanilla,
+        vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
+    },
+    package::{EnvironmentID, EnvironmentName, RootPackage},
+    schema::{OriginalID, PackageName, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
 
 use crate::graph::PackageGraph;
-
-pub const DEFAULT_ENV_NAME: &str = "_test_env";
-pub const DEFAULT_ENV_ID: &str = "_test_env_id";
 
 pub struct TestPackageGraph {
     // invariant: for all `node` and `id`, `inner[node].id = id` if and only if `nodes[id] = node`
@@ -373,15 +373,12 @@ impl Scenario {
     pub async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
         let path = self.project.root().join(package.as_ref());
         let root_package: RootPackage<Vanilla> =
-            RootPackage::load(path, Some(DEFAULT_ENV_NAME.to_string()))
+            RootPackage::load(path, vanilla::default_environment())
                 .await
                 .map_err(|e| e.emit())
                 .expect("could load package");
 
-        root_package
-            .package_graph(&DEFAULT_ENV_NAME.to_string())
-            .expect("test environment exists")
-            .clone()
+        root_package.package_graph().clone()
     }
 
     pub fn read_file(&self, file: impl AsRef<Path>) -> String {
