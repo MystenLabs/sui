@@ -402,6 +402,26 @@ fun swap_remove_out_of_range() {
 }
 
 #[test]
+fun skip() {
+    assert_eq!(vector[0, 1, 2].skip(2), vector[2]);
+    assert_eq!(vector[0, 1, 2].skip(0), vector[0, 1, 2]);
+    assert_eq!(vector[0, 1, 2].skip(3), vector[]);
+}
+
+#[test]
+fun take() {
+    assert_eq!(vector[0, 1, 2].take(0), vector[]);
+    assert_eq!(vector[0, 1, 2].take(1), vector[0]);
+    assert_eq!(vector[0, 1, 2].take(2), vector[0, 1]);
+    assert_eq!(vector[0, 1, 2].take(3), vector[0, 1, 2]);
+}
+
+#[test, expected_failure]
+fun take_fail() {
+    vector[0, 1, 2].take(4); // out of bounds (taking 4 elements)
+}
+
+#[test]
 fun push_back_and_borrow() {
     let mut v = vector[];
     v.push_back(7);
@@ -1015,4 +1035,25 @@ fun test_is_sorted_by() {
     assert!(!UNSORTED_40.is_sorted_by!(|a, b| *a <= *b));
     assert!(!UNSORTED_50.is_sorted_by!(|a, b| *a <= *b));
     assert!(!UNSORTED_100.is_sorted_by!(|a, b| *a <= *b));
+}
+
+#[test]
+fun take_while() {
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e > 0), vector[]);
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 2), vector[0, 1]);
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e == 0), vector[0]);
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 3), vector[0, 1, 2]);
+}
+
+#[test]
+fun skip_while() {
+    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e > 0), vector[0, 1, 2]);
+    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e < 2), vector[2]);
+    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e == 0), vector[1, 2]);
+
+    let v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+    assert_eq!(v.skip_while!(|_| false), v);
+    assert_eq!(v.skip_while!(|e| *e == 1), vector[2, 2, 2, 3, 3, 3]);
+    assert_eq!(v.skip_while!(|e| *e <= 2), vector[3, 3, 3]);
+    assert_eq!(v.skip_while!(|_| true), vector[]);
 }

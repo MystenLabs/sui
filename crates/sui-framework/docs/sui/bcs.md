@@ -529,14 +529,7 @@ functionality of peeling each value.
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec">peel_vec</a>&lt;$T&gt;($<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>, $peel: |&<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">BCS</a>| -&gt; $T): vector&lt;$T&gt; {
     <b>let</b> <a href="../sui/bcs.md#sui_bcs">bcs</a> = $<a href="../sui/bcs.md#sui_bcs">bcs</a>;
-    <b>let</b> len = <a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec_length">peel_vec_length</a>();
-    <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> <b>mut</b> res = vector[];
-    <b>while</b> (i &lt; len) {
-        res.push_back($peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>));
-        i = i + 1;
-    };
-    res
+    vector::tabulate!(<a href="../sui/bcs.md#sui_bcs">bcs</a>.<a href="../sui/bcs.md#sui_bcs_peel_vec_length">peel_vec_length</a>(), |_| $peel(<a href="../sui/bcs.md#sui_bcs">bcs</a>))
 }
 </code></pre>
 
