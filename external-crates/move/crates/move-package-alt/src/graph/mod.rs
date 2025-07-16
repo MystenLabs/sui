@@ -6,6 +6,8 @@ mod builder;
 mod linkage;
 mod to_lockfile;
 
+pub use linkage::LinkageError;
+
 use std::sync::Arc;
 
 use crate::{

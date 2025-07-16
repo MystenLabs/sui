@@ -21,6 +21,7 @@ use thiserror::Error;
 
 use crate::dependency::ResolverError;
 use crate::git::GitError;
+use crate::graph::LinkageError;
 use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
 
@@ -59,6 +60,9 @@ pub enum PackageError {
 
     #[error(transparent)]
     PackagePath(#[from] PackagePathError),
+
+    #[error(transparent)]
+    Linkage(#[from] LinkageError),
 }
 
 impl PackageError {

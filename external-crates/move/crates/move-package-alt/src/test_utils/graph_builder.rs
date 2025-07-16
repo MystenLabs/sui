@@ -51,7 +51,7 @@ use crate::{
         Vanilla,
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
     },
-    package::{EnvironmentID, EnvironmentName, RootPackage},
+    package::{EnvironmentID, EnvironmentName, paths::PackagePath},
     schema::{OriginalID, PackageName, PublishAddresses, PublishedID},
     test_utils::{Project, project},
 };
@@ -371,14 +371,12 @@ impl DepSpec {
 
 impl Scenario {
     pub async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
-        let path = self.project.root().join(package.as_ref());
-        let root_package: RootPackage<Vanilla> =
-            RootPackage::load(path, vanilla::default_environment())
-                .await
-                .map_err(|e| e.emit())
-                .expect("could load package");
+        let path = PackagePath::new(self.project.root().join(package.as_ref())).unwrap();
 
-        root_package.package_graph().clone()
+        PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment())
+            .await
+            .map_err(|e| e.emit())
+            .expect("could load package")
     }
 
     pub fn read_file(&self, file: impl AsRef<Path>) -> String {

@@ -117,6 +117,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
+        // check that there is a consistent linkage
+
+        let _linkage = graph.linkage()?;
         Ok(Self {
             package_path,
             environment: env,
