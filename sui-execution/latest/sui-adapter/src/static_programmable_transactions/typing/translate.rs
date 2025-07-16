@@ -863,8 +863,7 @@ mod unused_results {
                 .iter()
                 .enumerate()
                 .map(|(j, ty)| (j as u16, ty))
-                .filter(|(j, ty)| ty.abilities().has_drop() && !used.contains(&(i, *j)))
-                .map(|(j, _)| j)
+                .map(|(j, ty)| ty.abilities().has_drop() && !used.contains(&(i, j)))
                 .collect();
         }
     }

@@ -88,7 +88,8 @@ pub struct Command_ {
     /// Markers to drop unused results from the command. These are inferred based on any usage
     /// of the given result `Result(i,j)` after this command. This is leveraged by the borrow
     /// checker to remove unused references to allow potentially reuse of parent references.
-    pub drop_values: Vec<u16>,
+    /// The value at result `j` is unused and can be dropped if `drop_value[j]` is true.
+    pub drop_values: Vec</* drop value */ bool>,
 }
 
 #[derive(Debug)]
