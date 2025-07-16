@@ -748,7 +748,7 @@ export class MoveDebugSession extends LoggingDebugSession {
     ): void {
         let terminate = false;
         try {
-            const executionResult = this.runtime.stepOutInternal(/* next */ false);
+            const executionResult = this.runtime.stepOut(/* next */ false);
             terminate = executionResult === ExecutionResult.TraceEnd;
         } catch (err) {
             response.success = false;
