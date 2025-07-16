@@ -30,32 +30,6 @@ Running Move unit tests
 [ PASS    ] 0x1::references::test_vector_mut_borrow_pop
 Test result: OK. Total tests: 26; passed: 26; failed: 0
 External Command `diff -qr traces saved_traces`:
-Files traces/0x1__calls__test_call_order.json.zst and saved_traces/0x1__calls__test_call_order.json.zst differ
-Files traces/0x1__calls__test_call_return_order.json.zst and saved_traces/0x1__calls__test_call_return_order.json.zst differ
-Files traces/0x1__calls__test_complex_nested_calls.json.zst and saved_traces/0x1__calls__test_complex_nested_calls.json.zst differ
-Files traces/0x1__calls__test_return_order.json.zst and saved_traces/0x1__calls__test_return_order.json.zst differ
-Files traces/0x1__differential_test__f1.json.zst and saved_traces/0x1__differential_test__f1.json.zst differ
-Files traces/0x1__differential_test__f21.json.zst and saved_traces/0x1__differential_test__f21.json.zst differ
-Files traces/0x1__errors__aborter.json.zst and saved_traces/0x1__errors__aborter.json.zst differ
-Files traces/0x1__errors__bad_cast.json.zst and saved_traces/0x1__errors__bad_cast.json.zst differ
-Files traces/0x1__errors__div_0.json.zst and saved_traces/0x1__errors__div_0.json.zst differ
-Files traces/0x1__errors__fail_during_abort.json.zst and saved_traces/0x1__errors__fail_during_abort.json.zst differ
-Files traces/0x1__errors__fail_in_native.json.zst and saved_traces/0x1__errors__fail_in_native.json.zst differ
-Files traces/0x1__errors__overshift_l.json.zst and saved_traces/0x1__errors__overshift_l.json.zst differ
-Files traces/0x1__errors__overshift_r.json.zst and saved_traces/0x1__errors__overshift_r.json.zst differ
-Files traces/0x1__errors__underflow.json.zst and saved_traces/0x1__errors__underflow.json.zst differ
-Files traces/0x1__natives__get_orig_type_name_test.json.zst and saved_traces/0x1__natives__get_orig_type_name_test.json.zst differ
-Files traces/0x1__natives__get_type_name_test.json.zst and saved_traces/0x1__natives__get_type_name_test.json.zst differ
-Files traces/0x1__packs__test_enums_structs.json.zst and saved_traces/0x1__packs__test_enums_structs.json.zst differ
-Files traces/0x1__packs__test_gen_pack_order.json.zst and saved_traces/0x1__packs__test_gen_pack_order.json.zst differ
-Files traces/0x1__packs__test_gen_unpack_order.json.zst and saved_traces/0x1__packs__test_gen_unpack_order.json.zst differ
-Files traces/0x1__packs__test_pack_order.json.zst and saved_traces/0x1__packs__test_pack_order.json.zst differ
-Files traces/0x1__packs__test_unpack_order.json.zst and saved_traces/0x1__packs__test_unpack_order.json.zst differ
-Files traces/0x1__references__nested_struct_reference_mutation.json.zst and saved_traces/0x1__references__nested_struct_reference_mutation.json.zst differ
-Files traces/0x1__references__pass_mut_assign_in_other_fn.json.zst and saved_traces/0x1__references__pass_mut_assign_in_other_fn.json.zst differ
-Files traces/0x1__references__test_struct_borrow.json.zst and saved_traces/0x1__references__test_struct_borrow.json.zst differ
-Files traces/0x1__references__test_vector_mut_borrow.json.zst and saved_traces/0x1__references__test_vector_mut_borrow.json.zst differ
-Files traces/0x1__references__test_vector_mut_borrow_pop.json.zst and saved_traces/0x1__references__test_vector_mut_borrow_pop.json.zst differ
 Command `coverage lcov`:
 External Command `wc -l lcov.info`:
 6012 lcov.info
