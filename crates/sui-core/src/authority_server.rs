@@ -71,10 +71,10 @@ use crate::{
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
-    transaction_outputs::TransactionOutputs,
-    wait_for_effects_request::{
+    transaction_driver::{
         ExecutedData, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
     },
+    transaction_outputs::TransactionOutputs,
 };
 use crate::{
     authority::{consensus_tx_status_cache::ConsensusTxStatus, AuthorityState},

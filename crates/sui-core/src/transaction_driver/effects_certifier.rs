@@ -25,7 +25,7 @@ use crate::{
         error::TransactionDriverError, metrics::TransactionDriverMetrics,
         QuorumTransactionResponse, SubmitTransactionOptions,
     },
-    wait_for_effects_request::{ExecutedData, WaitForEffectsRequest, WaitForEffectsResponse},
+    transaction_driver::{ExecutedData, WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(2);
