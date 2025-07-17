@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use sui_types::{
@@ -11,6 +10,7 @@ use sui_types::{
 
 use crate::proof::{
     base::{Proof, ProofBuilder, ProofContents, ProofTarget},
+    error::{ProofError, ProofResult},
     transaction_proof::TransactionProof,
 };
 
@@ -20,14 +20,14 @@ pub struct EventsTarget {
 }
 
 impl ProofBuilder for EventsTarget {
-    fn construct(self, checkpoint: &CheckpointData) -> anyhow::Result<Proof> {
+    fn construct(self, checkpoint: &CheckpointData) -> ProofResult<Proof> {
         let mut event_txs = self.events.iter().map(|(eid, _)| eid.tx_digest);
 
-        let target_tx = event_txs.next().ok_or(anyhow!("No transaction found"))?;
+        let target_tx = event_txs.next().ok_or(ProofError::NoTargetsFound)?;
 
         // Check that all targets refer to the same transaction
         if !event_txs.all(|tx| tx == target_tx) {
-            return Err(anyhow!("All targets must refer to the same transaction"));
+            return Err(ProofError::MultipleTransactionsNotSupported);
         }
 
         let transaction_proof = TransactionProof::new(target_tx, checkpoint, true)?;

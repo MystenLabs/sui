@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-
 use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::ObjectRef,
@@ -15,21 +13,22 @@ use sui_types::{
 
 use crate::proof::{
     committee::{CommitteeProof, CommitteeTarget},
+    error::{ProofError, ProofResult},
     events::EventsTarget,
     objects::ObjectsTarget,
     transaction_proof::TransactionProof,
 };
 
 pub trait ProofBuilder {
-    fn construct(self, checkpoint: &CheckpointData) -> anyhow::Result<Proof>;
+    fn construct(self, checkpoint: &CheckpointData) -> ProofResult<Proof>;
 }
 
 pub trait ProofVerifier {
-    fn verify(self, committee: &Committee) -> anyhow::Result<()>;
+    fn verify(self, committee: &Committee) -> ProofResult<()>;
 }
 
 pub trait ProofContentsVerifier {
-    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> anyhow::Result<()>;
+    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> ProofResult<()>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -54,7 +53,7 @@ impl ProofTarget {
 }
 
 impl ProofBuilder for ProofTarget {
-    fn construct(self, checkpoint: &CheckpointData) -> anyhow::Result<Proof> {
+    fn construct(self, checkpoint: &CheckpointData) -> ProofResult<Proof> {
         match self {
             ProofTarget::Objects(target) => target.construct(checkpoint),
             ProofTarget::Events(target) => target.construct(checkpoint),
@@ -88,22 +87,23 @@ pub enum ProofContents {
 }
 
 impl ProofVerifier for Proof {
-    fn verify(self, committee: &Committee) -> anyhow::Result<()> {
+    fn verify(self, committee: &Committee) -> ProofResult<()> {
         // Verify the checkpoint summary, which is common to all proof types.
-        let verified_summary = self.checkpoint_summary.try_into_verified(committee)?;
+        let verified_summary = self
+            .checkpoint_summary
+            .try_into_verified(committee)
+            .map_err(|e| ProofError::SummaryVerificationFailed(e.to_string()))?;
 
         // Sanity check that targets & proof types match
         match &self.targets {
             ProofTarget::Objects(_) | ProofTarget::Events(_) => {
                 if !matches!(self.proof_contents, ProofContents::TransactionProof(_)) {
-                    return Err(anyhow!("Targets are objects or events, but proof contents is not a transaction proof"));
+                    return Err(ProofError::MismatchedTargetAndProofType);
                 }
             }
             ProofTarget::Committee(_) => {
                 if !matches!(self.proof_contents, ProofContents::CommitteeProof(_)) {
-                    return Err(anyhow!(
-                        "Targets are a committee, but proof contents is not a committee proof"
-                    ));
+                    return Err(ProofError::MismatchedTargetAndProofType);
                 }
             }
         }
@@ -113,7 +113,7 @@ impl ProofVerifier for Proof {
 }
 
 impl ProofContentsVerifier for ProofContents {
-    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> anyhow::Result<()> {
+    fn verify(self, targets: &ProofTarget, summary: &VerifiedCheckpoint) -> ProofResult<()> {
         match self {
             ProofContents::TransactionProof(proof) => proof.verify(targets, summary),
             ProofContents::CommitteeProof(proof) => proof.verify(targets, summary),

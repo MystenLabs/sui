@@ -10,3 +10,6 @@ pub mod objects;
 
 // Proofs
 pub mod transaction_proof;
+
+// Error types
+pub mod error;

@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-
 use serde::{Deserialize, Serialize};
 use sui_types::{base_types::ObjectRef, full_checkpoint_content::CheckpointData, object::Object};
 
 use crate::proof::{
     base::{Proof, ProofBuilder, ProofContents, ProofTarget},
+    error::{ProofError, ProofResult},
     transaction_proof::TransactionProof,
 };
 
@@ -17,14 +16,14 @@ pub struct ObjectsTarget {
 }
 
 impl ProofBuilder for ObjectsTarget {
-    fn construct(self, checkpoint: &CheckpointData) -> anyhow::Result<Proof> {
+    fn construct(self, checkpoint: &CheckpointData) -> ProofResult<Proof> {
         let mut object_txs = self.objects.iter().map(|(_, o)| o.previous_transaction);
 
-        let target_tx = object_txs.next().ok_or(anyhow!("No transaction found"))?;
+        let target_tx = object_txs.next().ok_or(ProofError::NoTargetsFound)?;
 
         // Check that all targets refer to the same transaction
         if !object_txs.all(|tx| tx == target_tx) {
-            return Err(anyhow!("All targets must refer to the same transaction"));
+            return Err(ProofError::MultipleTransactionsNotSupported);
         }
 
         let transaction_proof = TransactionProof::new(target_tx, checkpoint, false)?;
