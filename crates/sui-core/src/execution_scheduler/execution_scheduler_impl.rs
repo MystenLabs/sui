@@ -333,6 +333,34 @@ impl ExecutionScheduler {
             scheduler.enqueue_transactions(transactions, &epoch_store);
         }));
     }
+
+    /// When we schedule a certificate, it should be impossible for it to have been executed in a
+    /// previous epoch.
+    #[cfg(debug_assertions)]
+    fn assert_cert_not_executed_previous_epochs(&self, cert: &VerifiedExecutableTransaction) {
+        let epoch = cert.epoch();
+        let digest = *cert.digest();
+        let digests = [digest];
+        let executed = self
+            .transaction_cache_read
+            .multi_get_executed_effects(&digests)
+            .pop()
+            .unwrap();
+        // Due to pruning, we may not always have an executed effects for the certificate
+        // even if it was executed. So this is a best-effort check.
+        if let Some(executed) = executed {
+            use sui_types::effects::TransactionEffectsAPI;
+
+            assert_eq!(
+                executed.executed_epoch(),
+                epoch,
+                "Transaction {} was executed in epoch {}, but scheduled again in epoch {}",
+                digest,
+                executed.executed_epoch(),
+                epoch
+            );
+        }
+    }
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
@@ -375,6 +403,9 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .into_iter()
             .filter_map(|cert| {
                 if cert.0.epoch() == epoch_store.epoch() {
+                    #[cfg(debug_assertions)]
+                    self.assert_cert_not_executed_previous_epochs(&cert.0);
+
                     Some(cert)
                 } else {
                     debug_fatal!(
