@@ -8,6 +8,7 @@ mod rename_from;
 mod to_lockfile;
 
 pub use linkage::LinkageError;
+pub use rename_from::RenameError;
 
 use std::sync::Arc;
 

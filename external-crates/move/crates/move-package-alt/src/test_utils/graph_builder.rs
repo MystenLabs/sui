@@ -392,8 +392,12 @@ impl DepSpec {
 }
 
 impl Scenario {
+    pub fn path_for(&self, package: impl AsRef<str>) -> PackagePath {
+        PackagePath::new(self.project.root().join(package.as_ref())).unwrap()
+    }
+
     pub async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
-        let path = PackagePath::new(self.project.root().join(package.as_ref())).unwrap();
+        let path = self.path_for(package);
 
         PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment())
             .await
