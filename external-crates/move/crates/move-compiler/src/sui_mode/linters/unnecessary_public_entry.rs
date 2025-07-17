@@ -20,7 +20,7 @@ const PUBLIC_ENTRY_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
-    LinterDiagnosticCode::ShareOwned as u8,
+    LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
     "unnecessary public entry",
 );
 
