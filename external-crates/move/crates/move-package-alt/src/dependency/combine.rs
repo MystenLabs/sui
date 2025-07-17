@@ -77,14 +77,16 @@ impl CombinedDependency {
             is_override: default.is_override,
             addresses: None,
             containing_file: file,
+            rename_from: default.rename_from,
         })
     }
 
     /// Load from an entry in the `[dep-replacements]` section that has no corresponding entry in
-    /// the `[dependencies]` section of the manifest. `source_env_name` refers
-    /// to the environment name and ID in the original manifest; it is used as the default
-    /// environment for the dependency, but will be overridden if `replacement` specifies
-    /// `use-environment` field.
+    /// the `[dependencies]` section of the manifest.
+    ///
+    /// `source_env_name` refers to the environment name and ID in the original manifest; it is
+    /// used as the default environment for the dependency, but will be overridden if `replacement`
+    /// specifies `use-environment` field.
     // TODO: replace ManifestResult here
     fn from_replacement(
         file: FileHandle,
@@ -101,6 +103,7 @@ impl CombinedDependency {
             is_override: dep.is_override,
             addresses: replacement.addresses,
             containing_file: file,
+            rename_from: dep.rename_from,
         }))
     }
 
@@ -120,6 +123,7 @@ impl CombinedDependency {
             is_override: dep.is_override,
             addresses: replacement.addresses,
             containing_file: file,
+            rename_from: dep.rename_from,
         }))
     }
 }

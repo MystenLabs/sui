@@ -19,7 +19,7 @@ pub use dependency_set::DependencySet;
 
 use crate::{
     errors::FileHandle,
-    schema::{EnvironmentName, PublishAddresses},
+    schema::{EnvironmentName, PackageName, PublishAddresses},
 };
 
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
@@ -40,6 +40,9 @@ struct Dependency<DepInfo> {
     /// `use_environment` variable would be `testnet`
     use_environment: EnvironmentName,
 
+    /// The `rename-from` field for the dependency
+    rename_from: Option<PackageName>,
+
     /// Was this dependency written with `override = true` in its original manifest?
     is_override: bool,
 
@@ -59,10 +62,15 @@ impl<T> Dependency<T> {
             is_override: self.is_override,
             addresses: self.addresses,
             containing_file: self.containing_file,
+            rename_from: self.rename_from,
         }
     }
 
     pub fn use_environment(&self) -> &EnvironmentName {
         &self.use_environment
+    }
+
+    pub fn rename_from(&self) -> &Option<PackageName> {
+        &self.rename_from
     }
 }
