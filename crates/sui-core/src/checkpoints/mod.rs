@@ -2938,20 +2938,20 @@ mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::transaction_outputs::TransactionOutputs;
+    use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
     use futures::future::BoxFuture;
     use futures::FutureExt as _;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::HashMap;
     use std::ops::Deref;
     use sui_macros::sim_test;
     use sui_protocol_config::{Chain, ProtocolConfig};
     use sui_types::accumulator_event::AccumulatorEvent;
-    use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
+    use sui_types::authenticator_state::ActiveJwk;
+    use sui_types::base_types::{SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
-    use sui_types::move_package::MovePackage;
-    use sui_types::object;
-    use sui_types::transaction::{GenesisObject, VerifiedTransaction};
+    use sui_types::transaction::VerifiedTransaction;
     use tokio::sync::mpsc;
 
     #[sim_test]
@@ -2966,24 +2966,36 @@ mod tests {
             .build()
             .await;
 
-        let dummy_tx = VerifiedTransaction::new_genesis_transaction(vec![]);
+        let dummy_tx = VerifiedTransaction::new_authenticator_state_update(
+            0,
+            0,
+            vec![],
+            SequenceNumber::new(),
+        );
+
+        let jwks = {
+            let mut jwks = Vec::new();
+            while bcs::to_bytes(&jwks).unwrap().len() < 40_000 {
+                jwks.push(ActiveJwk {
+                    jwk_id: JwkId::new(
+                        "https://accounts.google.com".to_string(),
+                        "1234567890".to_string(),
+                    ),
+                    jwk: JWK {
+                        kty: "RSA".to_string(),
+                        e: "AQAB".to_string(),
+                        n: "1234567890".to_string(),
+                        alg: "RS256".to_string(),
+                    },
+                    epoch: 0,
+                });
+            }
+            jwks
+        };
+
         let dummy_tx_with_data =
-            VerifiedTransaction::new_genesis_transaction(vec![GenesisObject::RawObject {
-                data: object::Data::Package(
-                    MovePackage::new(
-                        ObjectID::random(),
-                        SequenceNumber::new(),
-                        BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
-                        100_000,
-                        // no modules so empty type_origin_table as no types are defined in this package
-                        Vec::new(),
-                        // no modules so empty linkage_table as no dependencies of this package exist
-                        BTreeMap::new(),
-                    )
-                    .unwrap(),
-                ),
-                owner: object::Owner::Immutable,
-            }]);
+            VerifiedTransaction::new_authenticator_state_update(0, 1, jwks, SequenceNumber::new());
+
         for i in 0..15 {
             state
                 .database_for_testing()
