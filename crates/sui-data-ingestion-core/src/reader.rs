@@ -153,9 +153,14 @@ impl CheckpointReader {
         backoff.current_interval = backoff.initial_interval;
         backoff.multiplier = 1.0;
         loop {
-            match Self::remote_fetch_checkpoint_internal(store, checkpoint_number).await {
-                Ok(data) => return Ok(data),
-                Err(err) => match backoff.next_backoff() {
+            match tokio::time::timeout(
+                backoff.max_elapsed_time.unwrap(),
+                Self::remote_fetch_checkpoint_internal(store, checkpoint_number),
+            )
+            .await
+            {
+                Ok(Ok(data)) => return Ok(data),
+                Ok(Err(err)) => match backoff.next_backoff() {
                     Some(duration) => {
                         if !err.to_string().contains("404") {
                             debug!(
@@ -167,6 +172,10 @@ impl CheckpointReader {
                         tokio::time::sleep(duration).await
                     }
                     None => return Err(err),
+                },
+                Err(err) => match backoff.next_backoff() {
+                    Some(duration) => tokio::time::sleep(duration).await,
+                    None => return Err(err.into()),
                 },
             }
         }
