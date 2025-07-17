@@ -13,6 +13,10 @@ use thiserror::Error;
 
 use crate::{
     errors::{FileHandle, Location},
+<<<<<<< HEAD
+=======
+    flavor::MoveFlavor,
+>>>>>>> cc0fa6e859 (Refactor code)
     schema::{
         DefaultDependency, PackageMetadata, PackageName, ParsedManifest, ReplacementDependency,
     },
@@ -30,6 +34,11 @@ pub type Digest = String;
 pub struct Manifest {
     inner: ParsedManifest,
     digest: Digest,
+<<<<<<< HEAD
+=======
+    // TODO: remove <F>
+    phantom: PhantomData<F>,
+>>>>>>> cc0fa6e859 (Refactor code)
 }
 
 #[derive(Error, Debug)]
@@ -90,14 +99,12 @@ impl Manifest {
         self.inner.package.clone()
     }
 
-    // TODO: probably we need to change this API
     pub fn dep_replacements(
         &self,
     ) -> &BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>> {
         &self.inner.dep_replacements
     }
 
-    // TODO: probably we need to change this API
     pub fn dependencies(&self) -> &BTreeMap<Spanned<PackageName>, DefaultDependency> {
         &self.inner.dependencies
     }
