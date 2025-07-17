@@ -42,7 +42,7 @@ public entry fun split_and_transfer<T>(
 /// Divide coin `self` into `n - 1` coins with equal balances. If the balance is
 /// not evenly divisible by `n`, the remainder is left in `self`.
 public entry fun divide_and_keep<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
-    self.divide_into_n(n, ctx).do!(|coin| transfer::public_transfer(coin, ctx.sender()));
+    self.divide_into_n(n, ctx).destroy!(|coin| transfer::public_transfer(coin, ctx.sender()));
 }
 
 /// Join `coin` into `self`. Re-exports `coin::join` function.
@@ -53,7 +53,7 @@ public entry fun join<T>(self: &mut Coin<T>, coin: Coin<T>) {
 
 /// Join everything in `coins` with `self`
 public entry fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
-    coins.do!(|coin| self.join(coin));
+    coins.destroy!(|coin| self.join(coin));
 }
 
 /// Join a vector of `Coin` into a single object and transfer it to `receiver`.
