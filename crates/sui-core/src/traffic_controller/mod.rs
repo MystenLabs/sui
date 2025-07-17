@@ -417,9 +417,8 @@ impl TrafficController {
                 _ => (true, false),
             }
         };
-        if should_remove {
+        if should_remove && blocklist.remove(client).is_some() {
             blocklist_len_gauge.dec();
-            blocklist.remove(client);
         }
         !should_block
     }
