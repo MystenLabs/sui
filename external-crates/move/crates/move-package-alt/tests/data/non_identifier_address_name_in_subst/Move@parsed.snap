@@ -1,42 +1,10 @@
 ---
 source: crates/move-package-alt/tests/test_runner.rs
 ---
-ParsedManifest {
-    package: PackageMetadata {
-        name: Spanned {
-            span: 17..23,
-            value: Identifier(
-                "name",
-            ),
-        },
-        edition: "2025",
-    },
-    environments: {
-        Spanned {
-            span: 57..64,
-            value: "default",
-        }: Spanned {
-            span: 67..76,
-            value: "default",
-        },
-    },
-    dependencies: {
-        Spanned {
-            span: 93..94,
-            value: Identifier(
-                "A",
-            ),
-        }: DefaultDependency {
-            dependency_info: Local(
-                LocalDepInfo {
-                    local: "a",
-                },
-            ),
-            is_override: false,
-            rename_from: Some(
-                "©",
-            ),
-        },
-    },
-    dep_replacements: {},
-}
+error: Error while loading `"tests/data/non_identifier_address_name_in_subst/Move.toml"`
+  ┌─ "tests/data/non_identifier_address_name_in_subst/Move.toml":9:34
+  │
+9 │ A = { local = "a", rename-from = "©" }
+  │                                  ^^^
+  │
+  = Invalid identifier '©'

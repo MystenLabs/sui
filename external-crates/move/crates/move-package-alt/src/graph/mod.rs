@@ -4,6 +4,7 @@
 
 mod builder;
 mod linkage;
+mod rename_from;
 mod to_lockfile;
 
 pub use linkage::LinkageError;

@@ -51,7 +51,7 @@ pub struct DefaultDependency {
     pub is_override: bool,
 
     #[serde(default)]
-    pub rename_from: Option<String>,
+    pub rename_from: Option<PackageName>,
 }
 
 /// An entry in the `[dep-replacements]` section of a manifest
