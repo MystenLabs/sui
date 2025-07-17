@@ -242,19 +242,18 @@ pub enum RawValidatorSubmitStatus {
     // Transaction has already been executed (finalized).
     #[prost(message, tag = "2")]
     Executed(RawExecutedStatus),
-
-    // Transaction is rejected without consensus submission.
-    #[prost(message, tag = "3")]
-    Rejected(RawRejectedStatus),
 }
 
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsRequest {
     #[prost(bytes = "bytes", tag = "1")]
-    pub consensus_position: Bytes,
-
-    #[prost(bytes = "bytes", tag = "2")]
     pub transaction_digest: Bytes,
+
+    /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
+    /// in addition to waiting for finalized effects.
+    /// If not provided, only wait for finalized effects.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub consensus_position: Option<Bytes>,
 
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.

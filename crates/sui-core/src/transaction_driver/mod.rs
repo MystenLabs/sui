@@ -127,14 +127,9 @@ where
             .submit_transaction(&auth_agg, tx_digest, raw_request, options)
             .await?;
 
-        let consensus_position = match submit_txn_resp {
-            SubmitTxResponse::Submitted { consensus_position } => consensus_position,
-            _ => todo!(),
-        };
-
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .get_certified_finalized_effects(&auth_agg, tx_digest, consensus_position, options)
+            .get_certified_finalized_effects(&auth_agg, tx_digest, submit_txn_resp, options)
             .await
     }
 

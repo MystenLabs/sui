@@ -108,7 +108,7 @@ async fn test_wait_for_effects_position_mismatch() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position1,
+        consensus_position: Some(tx_position1),
         include_details: true,
     })
     .unwrap();
@@ -148,7 +148,7 @@ async fn test_wait_for_effects_post_commit_rejected() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -194,7 +194,7 @@ async fn test_wait_for_effects_epoch_mismatch() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -219,7 +219,7 @@ async fn test_wait_for_effects_timeout() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -244,7 +244,7 @@ async fn test_wait_for_effects_quorum_rejected() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -288,7 +288,7 @@ async fn test_wait_for_effects_fastpath_certified() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position,
+        consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
     })
@@ -349,7 +349,7 @@ async fn test_wait_for_effects_finalized() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position,
+        consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
     })
@@ -409,7 +409,7 @@ async fn test_wait_for_effects_expired() {
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
         transaction_digest: tx_digest,
-        consensus_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();

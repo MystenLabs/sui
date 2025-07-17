@@ -43,10 +43,6 @@ pub enum SubmitTxResponse {
         effects_digest: TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
     },
-    Rejected {
-        // The rejection reason when processing the transaction before submitting to consensus.
-        reason: RejectReason,
-    },
 }
 
 impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
@@ -63,10 +59,6 @@ impl TryFrom<RawSubmitTxResponse> for SubmitTxResponse {
                     effects_digest,
                     details,
                 })
-            }
-            Some(RawValidatorSubmitStatus::Rejected(rejected)) => {
-                let reason = try_from_raw_rejected_status(rejected)?;
-                Ok(Self::Rejected { reason })
             }
             None => Err(SuiError::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxResponse.inner".to_string(),
@@ -92,10 +84,6 @@ impl TryFrom<SubmitTxResponse> for RawSubmitTxResponse {
                 let raw_executed = try_from_response_executed(effects_digest, details)?;
                 RawValidatorSubmitStatus::Executed(raw_executed)
             }
-            SubmitTxResponse::Rejected { reason } => {
-                let raw_rejected = try_from_response_rejected(reason)?;
-                RawValidatorSubmitStatus::Rejected(raw_rejected)
-            }
         };
         Ok(RawSubmitTxResponse { inner: Some(inner) })
     }
@@ -115,8 +103,11 @@ pub struct QuorumTransactionResponse {
 }
 
 pub(crate) struct WaitForEffectsRequest {
-    pub consensus_position: ConsensusPosition,
     pub transaction_digest: TransactionDigest,
+    /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
+    /// in addition to waiting for finalized effects.
+    /// If not provided, only wait for finalized effects.
+    pub consensus_position: Option<ConsensusPosition>,
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
     pub include_details: bool,
@@ -185,12 +176,10 @@ impl TryFrom<RawWaitForEffectsRequest> for WaitForEffectsRequest {
                 error: err.to_string(),
             }
         })?;
-        let consensus_position = bcs::from_bytes(&value.consensus_position).map_err(|err| {
-            SuiError::GrpcMessageDeserializeError {
-                type_info: "RawWaitForEffectsRequest.consensus_position".to_string(),
-                error: err.to_string(),
-            }
-        })?;
+        let consensus_position = match value.consensus_position {
+            Some(cp) => Some(cp.as_ref().try_into()?),
+            None => None,
+        };
         Ok(Self {
             consensus_position,
             transaction_digest,
@@ -314,7 +303,10 @@ impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
                 error: err.to_string(),
             })?
             .into();
-        let consensus_position = value.consensus_position.into_raw()?;
+        let consensus_position = match value.consensus_position {
+            Some(cp) => Some(cp.into_raw()?),
+            None => None,
+        };
         Ok(Self {
             consensus_position,
             transaction_digest,
