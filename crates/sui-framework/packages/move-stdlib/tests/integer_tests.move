@@ -109,10 +109,10 @@ public(package) macro fun test_divide_and_round_up($max: _, $cases: vector<_>) {
 public(package) macro fun test_mul_div($max: _, $cases: vector<_>) {
     let max = $max;
     let cases = $cases;
-    assert_eq!(max.mul_div(max, max.max(1)), max);
-    cases!(max, cases, |_case_pred, case, _case_succ| {
+    assert_eq!(max.mul_div(max, max), max);
+    cases!(max, cases, |_case_pred, case, case_succ| {
         assert_eq!(case.mul_div(case, case.max(1)), case); // avoid division by 0
-        // TODO: more test cases?
+        assert_eq!(case_succ.mul_div(1, case_succ), 1);
     })
 }
 
