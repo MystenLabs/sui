@@ -42,8 +42,7 @@ public entry fun split_and_transfer<T>(
 /// Divide coin `self` into `n - 1` coins with equal balances. If the balance is
 /// not evenly divisible by `n`, the remainder is left in `self`.
 public entry fun divide_and_keep<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
-    let vec: vector<Coin<T>> = self.divide_into_n(n, ctx);
-    vec.do!(|coin| transfer::public_transfer(coin, ctx.sender()));
+    self.divide_into_n(n, ctx).do!(|coin| transfer::public_transfer(coin, ctx.sender()));
 }
 
 /// Join `coin` into `self`. Re-exports `coin::join` function.
