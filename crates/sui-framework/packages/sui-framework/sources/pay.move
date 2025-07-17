@@ -16,7 +16,7 @@ public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
 }
 
 /// Split coin `self` to two coins, one with balance `split_amount`,
-/// and the remaining balance is left is `self`.
+/// and the remaining balance is left in `self`.
 public entry fun split<T>(coin: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
     keep(coin.split(split_amount, ctx), ctx)
 }
@@ -24,15 +24,11 @@ public entry fun split<T>(coin: &mut Coin<T>, split_amount: u64, ctx: &mut TxCon
 /// Split coin `self` into multiple coins, each with balance specified
 /// in `split_amounts`. Remaining balance is left in `self`.
 public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
-    let (mut i, len) = (0, split_amounts.length());
-    while (i < len) {
-        split(self, split_amounts[i], ctx);
-        i = i + 1;
-    };
+    split_amounts.length().do!(|i| split(self, split_amounts[i], ctx));
 }
 
 /// Send `amount` units of `c` to `recipient`
-/// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
+/// Aborts with `sui::balance::ENotEnough` if `amount` is greater than the balance in `c`
 public entry fun split_and_transfer<T>(
     c: &mut Coin<T>,
     amount: u64,
@@ -47,11 +43,7 @@ public entry fun split_and_transfer<T>(
 /// not evenly divisible by `n`, the remainder is left in `self`.
 public entry fun divide_and_keep<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
     let mut vec: vector<Coin<T>> = self.divide_into_n(n, ctx);
-    let (mut i, len) = (0, vec.length());
-    while (i < len) {
-        transfer::public_transfer(vec.pop_back(), ctx.sender());
-        i = i + 1;
-    };
+    vec.length().do!(|_| transfer::public_transfer(vec.pop_back(), ctx.sender()));
     vec.destroy_empty();
 }
 
@@ -63,12 +55,7 @@ public entry fun join<T>(self: &mut Coin<T>, coin: Coin<T>) {
 
 /// Join everything in `coins` with `self`
 public entry fun join_vec<T>(self: &mut Coin<T>, mut coins: vector<Coin<T>>) {
-    let (mut i, len) = (0, coins.length());
-    while (i < len) {
-        let coin = coins.pop_back();
-        self.join(coin);
-        i = i + 1
-    };
+    coins.length().do!(|_| self.join(coins.pop_back()));
     // safe because we've drained the vector
     coins.destroy_empty()
 }
