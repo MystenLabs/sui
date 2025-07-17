@@ -55,6 +55,13 @@ pub struct ParsedLegacyPackage {
     pub file_handle: FileHandle,
 }
 
+pub struct LegacyPackageMetadata {
+    pub legacy_name: String,
+    pub edition: String,
+    pub published_at: Option<String>,
+    pub unrecognized_fields: BTreeMap<String, toml::Value>,
+}
+
 /// We try to see if a package is `legacy`-like. That means that we can parse it,
 /// and it has `addresses`, `dev-addresses`, or `dev-dependencies` in it.
 ///
@@ -195,7 +202,7 @@ fn parse_source_manifest(
                 .transpose()
                 .context("Error parsing '[dev-addresses]' section of manifest")?;
 
-            let (legacy_name, edition, published_at) = table
+            let metadata = table
                 .remove(PACKAGE_NAME)
                 .map(parse_package_info)
                 .transpose()
@@ -226,7 +233,7 @@ fn parse_source_manifest(
             let new_name = temporary_spanned(modern_name.clone());
 
             // Gather the original publish information from the manifest, if it's defined on the Toml file.
-            let manifest_address_info = if let Some(published_at) = published_at {
+            let manifest_address_info = if let Some(published_at) = metadata.published_at {
                 let latest_id = parse_address_literal(&published_at);
                 let original_id = addresses
                     .as_ref()
@@ -250,13 +257,14 @@ fn parse_source_manifest(
             Ok(ParsedLegacyPackage {
                 metadata: PackageMetadata {
                     name: new_name,
-                    edition,
+                    edition: metadata.edition,
                     implicit_deps: ImplicitDepMode::Legacy,
+                    unrecognized_fields: metadata.unrecognized_fields,
                 },
                 deps: dependencies,
                 legacy_data: LegacyData {
-                    incompatible_name: if legacy_name != modern_name.as_str() {
-                        Some(legacy_name)
+                    incompatible_name: if metadata.legacy_name != modern_name.as_str() {
+                        Some(metadata.legacy_name)
                     } else {
                         None
                     },
@@ -278,7 +286,7 @@ fn parse_source_manifest(
     }
 }
 
-fn parse_package_info(tval: TV) -> Result<(String, String, Option<String>)> {
+fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;
@@ -328,7 +336,12 @@ fn parse_package_info(tval: TV) -> Result<(String, String, Option<String>)> {
                 .map(|v| v.as_str().unwrap_or_default().to_string())
                 .unwrap_or_default();
 
-            Ok((name, edition, published_at))
+            Ok(LegacyPackageMetadata {
+                legacy_name: name,
+                edition,
+                published_at,
+                unrecognized_fields: table.into_iter().collect(),
+            })
         }
         x => bail!(
             "Malformed section in manifest {}. Expected a table, but encountered a {}",
