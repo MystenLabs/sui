@@ -21,7 +21,7 @@ const PUBLIC_ENTRY_DIAG: DiagnosticInfo = custom(
     Severity::Warning,
     LinterDiagnosticCategory::Sui as u8,
     LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
-    "unnecessary public entry",
+    "unnecessary `entry` on a `public` function",
 );
 
 simple_visitor!(

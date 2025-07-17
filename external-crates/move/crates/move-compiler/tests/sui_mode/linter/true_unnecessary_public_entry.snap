@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: true
 ---
-warning[Lint W99010]: unnecessary public entry
+warning[Lint W99010]: unnecessary `entry` on a `public` function
   ┌─ tests/sui_mode/linter/true_unnecessary_public_entry.move:2:12
   │
 2 │     public entry fun true_unnecessary_public_entry() {}
@@ -14,7 +14,7 @@ warning[Lint W99010]: unnecessary public entry
   = `public` functions can be called from PTBs. As such, `entry` on `public` functions should be used only if you are concerned with the value flow limitations around `entry` functions. If you do not have an intricate set of private `entry` functions alongside it, an `entry` modifier on a `public` function is superfluous.
   = This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[Lint W99010]: unnecessary public entry
+warning[Lint W99010]: unnecessary `entry` on a `public` function
   ┌─ tests/sui_mode/linter/true_unnecessary_public_entry.move:3:5
   │
 3 │     entry public fun true_unnecessary_public_entry_2() {}
