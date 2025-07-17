@@ -28,16 +28,40 @@ pub struct External {
     /// alias to address mapping
     pub aliases: BTreeMap<SuiAddress, Alias>,
     // address to (pubkey, signer, key_id)
-    pub keys: BTreeMap<SuiAddress, Key>,
+    pub keys: BTreeMap<SuiAddress, StoredKey>,
     command_runner: Box<dyn CommandRunner>,
     path: Option<PathBuf>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Key {
+pub struct StoredKey {
     pub public_key: PublicKey,
     pub signer: String,
     pub key_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ExternalKey {
+    pub public_key: String,
+    pub key_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KeysResponse {
+    pub keys: Vec<ExternalKey>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SignRequest {
+    pub key_id: String,
+    pub msg: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub intent: Option<Intent>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SignResponse {
+    pub signature: String,
 }
 
 #[automock]
@@ -109,7 +133,7 @@ impl External {
             Default::default()
         };
 
-        let keys: BTreeMap<SuiAddress, Key> = if path.exists() {
+        let keys: BTreeMap<SuiAddress, StoredKey> = if path.exists() {
             let keys_store: String = std::fs::read_to_string(path)
                 .map_err(|e| anyhow!("Failed to read keys file: {}", e))?;
             serde_json::from_str(&keys_store)
@@ -151,10 +175,10 @@ impl External {
     }
 
     /// Add a Key ID from the given signer to the Sui CLI index
-    pub fn add_existing(&mut self, signer: String, key_id: String) -> Result<Key, Error> {
-        let keys = self.signer_available_keys(signer.clone()).unwrap();
+    pub fn add_existing(&mut self, signer: String, key_id: String) -> Result<StoredKey, Error> {
+        let keys = self.signer_available_keys(signer.clone())?;
 
-        let key: Key = keys
+        let key: StoredKey = keys
             .into_iter()
             .find(|k| k.key_id == key_id)
             .ok_or_else(|| anyhow!("Key with id {} not found for signer {}", key_id, signer))?;
@@ -164,32 +188,25 @@ impl External {
     }
 
     /// Return all Key IDs associated with a signer, indexed or not
-    pub fn signer_available_keys(&self, signer: String) -> Result<Vec<Key>, Error> {
-        let result = self.exec(&signer, "keys", json![null]).unwrap();
+    pub fn signer_available_keys(&self, signer: String) -> Result<Vec<StoredKey>, Error> {
+        let result = self.exec(&signer, "keys", json![null])?;
 
-        // array of strings
-        let keys_json = result["keys"]
-            .as_array()
-            .ok_or_else(|| anyhow!("Failed to parse keys"))
-            .unwrap();
+        let keys_response: KeysResponse = serde_json::from_value(result)
+            .map_err(|e| anyhow!("Failed to parse keys response: {}", e))?;
 
         let mut keys = Vec::new();
-        for key_json in keys_json {
-            let key_id = key_json["key_id"]
-                .as_str()
-                .ok_or_else(|| anyhow!("Failed to parse key id"))
-                .unwrap();
-            keys.push(Key {
-                public_key: PublicKey::decode_base64(key_json["public_key"].as_str().unwrap())
+        for external_key in keys_response.keys.into_iter() {
+            keys.push(StoredKey {
+                key_id: external_key.key_id,
+                public_key: PublicKey::decode_base64(&external_key.public_key)
                     .map_err(|e| anyhow!("Failed to decode public key: {}", e))?,
                 signer: signer.clone(),
-                key_id: key_id.to_string(),
             });
         }
         Ok(keys)
     }
 
-    pub fn is_indexed(&self, key: &Key) -> bool {
+    pub fn is_indexed(&self, key: &StoredKey) -> bool {
         self.keys.contains_key(&SuiAddress::from(&key.public_key))
     }
 
@@ -255,10 +272,9 @@ impl<'de> Deserialize<'de> for External {
 }
 
 impl AccountKeystore for External {
-    // TODO create with alias
     fn generate(
         &mut self,
-        _alias: Option<String>,
+        alias: Option<String>,
         opts: GenerateOptions,
     ) -> Result<(SuiAddress, PublicKey, SignatureScheme), Error> {
         let GenerateOptions::ExternalSigner(signer) = opts else {
@@ -266,24 +282,25 @@ impl AccountKeystore for External {
         };
 
         let res = self.exec(&signer, "create_key", json![null])?;
-
-        // key_id is the unique identifier for the key for the given signer
-        let key_id = res["key_id"]
-            .as_str()
-            .ok_or_else(|| anyhow!("Failed to parse address"))?;
-        let public_key = res["public_key"]
-            .as_str()
-            .ok_or_else(|| anyhow!("Failed to parse public key"))?;
-        let public_key = PublicKey::decode_base64(public_key)
-            .map_err(|e| anyhow!("Failed to decode public key: {}", e))?;
+        let ExternalKey { key_id, public_key } = serde_json::from_value(res)
+            .map_err(|e| anyhow!("Failed to parse key response: {}", e))?;
+        let public_key = PublicKey::decode_base64(&public_key)?;
         let address: SuiAddress = (&public_key).into();
 
         self.keys.insert(
             address,
-            Key {
+            StoredKey {
                 public_key: public_key.clone(),
                 signer: signer.clone(),
                 key_id: key_id.to_string(),
+            },
+        );
+
+        self.aliases.insert(
+            address,
+            Alias {
+                alias: self.create_alias(alias)?,
+                public_key_base64: public_key.encode_base64(),
             },
         );
 
@@ -300,7 +317,7 @@ impl AccountKeystore for External {
 
     fn entries(&self) -> Vec<PublicKey> {
         let mut keys = Vec::new();
-        for Key { public_key, .. } in self.keys.values() {
+        for StoredKey { public_key, .. } in self.keys.values() {
             keys.push(public_key.clone());
         }
         keys
@@ -318,17 +335,29 @@ impl AccountKeystore for External {
     }
 
     fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        // TODO this should verify that the key id matches the address
-
-        let Key { key_id, signer, .. } = self
+        let StoredKey { key_id, signer, .. } = self
             .keys
             .get(address)
             .ok_or_else(|| signature::Error::from_source(anyhow!("Key not found")))?
             .clone();
 
         let msg = general_purpose::STANDARD.encode(msg);
+        let sign_request: SignRequest = SignRequest {
+            key_id: key_id.clone(),
+            msg,
+            intent: None,
+        };
         let result = self
-            .exec(&signer, "sign_hashed", json![{"keyId": key_id, "msg": msg}])
+            .exec(
+                &signer,
+                "sign_hashed",
+                serde_json::to_value(sign_request).map_err(|e| {
+                    signature::Error::from_source(anyhow!(
+                        "Failed to serialize sign request: {}",
+                        e
+                    ))
+                })?,
+            )
             .map_err(signature::Error::from_source)?;
 
         let signature = result["signature"]
@@ -350,9 +379,7 @@ impl AccountKeystore for External {
     where
         T: Serialize,
     {
-        // TODO this should verify that the key id matches the address
-
-        let Key { key_id, signer, .. } = self
+        let StoredKey { key_id, signer, .. } = self
             .keys
             .get(address)
             .ok_or_else(|| signature::Error::from_source(anyhow!("Key not found")))?
@@ -363,27 +390,30 @@ impl AccountKeystore for External {
         })?;
         let msg = general_purpose::STANDARD.encode(&msg);
 
+        let sign_request = SignRequest {
+            key_id: key_id.clone(),
+            msg,
+            intent: Some(intent),
+        };
+
         let result = self
             .exec(
                 &signer,
                 "sign",
-                json![{
-                    "key_id": key_id,
-                    "msg": msg,
-                    "intent": serde_json::to_value(&intent).unwrap()
-                }],
+                serde_json::to_value(sign_request).map_err(|e| {
+                    signature::Error::from_source(anyhow!(
+                        "Failed to serialize sign request: {}",
+                        e
+                    ))
+                })?,
             )
             .map_err(|e| signature::Error::from_source(anyhow!("Failed to sign message: {}", e)))?;
 
-        let result = result
-            .as_object()
-            .ok_or_else(|| signature::Error::from_source(anyhow!("Failed to parse result")))?;
+        let result: SignResponse = serde_json::from_value(result).map_err(|e| {
+            signature::Error::from_source(anyhow!("Failed to parse sign response: {}", e))
+        })?;
 
-        let signature = result["signature"]
-            .as_str()
-            .ok_or_else(|| signature::Error::from_source(anyhow!("Failed to parse signature")))?;
-
-        let signature = Signature::decode_base64(signature).unwrap();
+        let signature = Signature::decode_base64(&result.signature).unwrap();
         Ok(signature)
     }
 
@@ -447,7 +477,7 @@ impl AccountKeystore for External {
 
 #[cfg(test)]
 mod tests {
-    use super::{External, Key, MockCommandRunner, StdCommandRunner};
+    use super::{External, MockCommandRunner, StdCommandRunner, StoredKey};
     use crate::key_identity::KeyIdentity;
     use crate::keystore::{AccountKeystore, GenerateOptions};
     use anyhow::anyhow;
@@ -520,7 +550,7 @@ mod tests {
         // Add key
         external.keys.insert(
             SuiAddress::from_str(ADDRESS).unwrap(),
-            Key {
+            StoredKey {
                 public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
                 signer: "signer".to_string(),
                 key_id: "key-123".to_string(),
@@ -690,7 +720,7 @@ mod tests {
         let address = SuiAddress::from_str(ADDRESS).unwrap();
         external.keys.insert(
             address,
-            Key {
+            StoredKey {
                 public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
                 signer: "signer".to_string(),
                 key_id: "key-123".to_string(),
@@ -735,7 +765,7 @@ mod tests {
 
         external.keys.insert(
             address,
-            Key {
+            StoredKey {
                 public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
                 signer: "signer".to_string(),
                 key_id: "id".to_string(),
@@ -766,7 +796,7 @@ mod tests {
 
         external.keys.insert(
             address,
-            Key {
+            StoredKey {
                 public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
                 signer: "signer".to_string(),
                 key_id: "id".to_string(),
