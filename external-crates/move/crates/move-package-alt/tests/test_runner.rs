@@ -73,7 +73,7 @@ impl Test<'_> {
         Ok(match self.kind {
             "parsed" => {
                 let file_handle = FileHandle::new(&self.toml_path).unwrap();
-                let manifest = Manifest::<Vanilla>::read_from_file(file_handle);
+                let manifest = Manifest::read_from_file(file_handle);
                 let contents = match manifest.as_ref() {
                     Ok(m) => format!("{:#?}", m),
                     Err(_) => {
@@ -135,7 +135,7 @@ fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std
 
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
     let file_handle = FileHandle::new(&input_path).unwrap();
-    let manifest = Manifest::<Vanilla>::read_from_file(file_handle).unwrap();
+    let manifest = Manifest::read_from_file(file_handle).unwrap();
     let env = default_environment();
 
     let deps = CombinedDependency::combine_deps(

@@ -48,7 +48,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .map_err(ManifestError::with_file(&path))?;
         let mut environments = F::default_environments();
 
-        if let Ok(modern_manifest) = Manifest::<F>::read_from_file(file_handle) {
+        if let Ok(modern_manifest) = Manifest::read_from_file(file_handle) {
             // TODO(manos): Decide on validation (e.g. if modern manifest declares environments differently,
             // we should error?!)
             environments.extend(modern_manifest.environments());

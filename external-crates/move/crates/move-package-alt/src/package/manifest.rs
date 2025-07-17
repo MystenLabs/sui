@@ -4,7 +4,6 @@
 
 use std::{
     collections::BTreeMap,
-    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
@@ -14,7 +13,6 @@ use thiserror::Error;
 
 use crate::{
     errors::{FileHandle, Location},
-    flavor::MoveFlavor,
     schema::{
         DefaultDependency, PackageMetadata, PackageName, ParsedManifest, ReplacementDependency,
     },
@@ -29,11 +27,9 @@ const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 // TODO: replace this with something more strongly typed
 pub type Digest = String;
 
-pub struct Manifest<F: MoveFlavor> {
+pub struct Manifest {
     inner: ParsedManifest,
     digest: Digest,
-    // TODO: remove <F>
-    phantom: PhantomData<F>,
 }
 
 #[derive(Error, Debug)]
@@ -74,7 +70,7 @@ pub enum ManifestErrorKind {
 
 pub type ManifestResult<T> = Result<T, ManifestError>;
 
-impl<F: MoveFlavor> Manifest<F> {
+impl Manifest {
     /// Read the manifest file from the file handle, returning a [`Manifest`].
     pub fn read_from_file(file_handle: FileHandle) -> ManifestResult<Self> {
         let parsed: ParsedManifest = toml_edit::de::from_str(file_handle.source())
@@ -83,7 +79,6 @@ impl<F: MoveFlavor> Manifest<F> {
         let result = Self {
             inner: parsed,
             digest: format!("{:X}", Sha256::digest(file_handle.source().as_ref())),
-            phantom: PhantomData,
         };
 
         result.validate_manifest(file_handle)?;
@@ -200,7 +195,7 @@ impl ManifestError {
     }
 }
 
-impl<F: MoveFlavor> std::fmt::Debug for Manifest<F> {
+impl std::fmt::Debug for Manifest {
     // TODO: not sure we want this
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)

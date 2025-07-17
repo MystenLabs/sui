@@ -82,7 +82,7 @@ impl<F: MoveFlavor> Package<F> {
     ) -> PackageResult<Self> {
         let file_handle =
             FileHandle::new(&path.manifest_path()).map_err(ManifestError::with_file(&path))?;
-        let manifest = Manifest::<F>::read_from_file(file_handle);
+        let manifest = Manifest::read_from_file(file_handle);
 
         // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
