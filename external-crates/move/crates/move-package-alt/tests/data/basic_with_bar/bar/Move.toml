@@ -3,7 +3,6 @@ name = "bar"
 edition = "2025"
 authors = ["Move Team"]
 license = "Apache-2.0"
-implicit-deps = true
 
 [environments]
 mainnet = "35834a8a"

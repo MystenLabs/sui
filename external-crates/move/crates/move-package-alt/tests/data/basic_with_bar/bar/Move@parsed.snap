@@ -10,19 +10,20 @@ ParsedManifest {
             ),
         },
         edition: "2025",
+        implicit_deps: Enabled,
     },
     environments: {
         Spanned {
-            span: 124..131,
+            span: 103..110,
             value: "mainnet",
         }: Spanned {
-            span: 134..144,
+            span: 113..123,
             value: "35834a8a",
         },
     },
     dependencies: {
         Spanned {
-            span: 161..164,
+            span: 140..143,
             value: Identifier(
                 "Sui",
             ),

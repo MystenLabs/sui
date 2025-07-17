@@ -10,6 +10,7 @@ ParsedManifest {
             ),
         },
         edition: "2025",
+        implicit_deps: Enabled,
     },
     environments: {
         Spanned {
