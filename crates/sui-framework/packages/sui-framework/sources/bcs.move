@@ -75,12 +75,7 @@ public fun into_remainder_bytes(bcs: BCS): vector<u8> {
 /// Read address from the bcs-serialized bytes.
 public fun peel_address(bcs: &mut BCS): address {
     assert!(bcs.bytes.length() >= address::length(), EOutOfRange);
-    let (mut addr_bytes, mut i) = (vector[], 0);
-    while (i < address::length()) {
-        addr_bytes.push_back(bcs.bytes.pop_back());
-        i = i + 1;
-    };
-    address::from_bytes(addr_bytes)
+    address::from_bytes(vector::tabulate!(address::length(), |_| bcs.bytes.pop_back()))
 }
 
 /// Read a `bool` value from bcs-serialized bytes.

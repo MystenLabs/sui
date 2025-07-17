@@ -1999,12 +1999,6 @@ from_keys
 keys
 	public fun
 	0x2::vec_set
-get_idx_opt
-	fun
-	0x2::vec_set
-get_idx
-	fun
-	0x2::vec_set
 Table
 	public struct
 	0x2::table
