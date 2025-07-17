@@ -11,6 +11,7 @@ pub use linkage::LinkageError;
 use std::sync::Arc;
 
 use crate::{
+    dependency::PinnedDependencyInfo,
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, paths::PackagePath},
@@ -19,7 +20,7 @@ use crate::{
 use builder::PackageGraphBuilder;
 
 use derive_where::derive_where;
-use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
 
 #[derive(Debug)]
 #[derive_where(Clone)]
@@ -76,5 +77,19 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// Returns the root package of the graph.
     pub fn root_package(&self) -> &Package<F> {
         self.inner[self.root_idx].package.as_ref()
+    }
+
+    /// Return the dependency corresponding to `edge`
+    pub fn dep_for_edge(&self, edge: EdgeIndex) -> &PinnedDependencyInfo {
+        let (source_index, _) = self
+            .inner
+            .edge_endpoints(edge)
+            .expect("edge is a valid index into the graph");
+
+        self.inner[source_index]
+            .package
+            .direct_deps()
+            .get(&self.inner[edge])
+            .expect("edges in graph come from dependencies, so the dependency must exist")
     }
 }
