@@ -237,18 +237,13 @@ fn read_prefunded_account(path: &Path) -> Result<Vec<PrefundedAccount>, anyhow::
 
 #[test]
 fn test_read_keystore() {
-    use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+    use sui_keys::key_derive;
     use sui_types::crypto::SignatureScheme;
 
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
-    let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
-    let key1 = ks
-        .generate(SignatureScheme::ED25519, None, None, None)
-        .unwrap();
-    let key2 = ks
-        .generate(SignatureScheme::Secp256k1, None, None, None)
-        .unwrap();
+    let key1 = key_derive::generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
+    let key2 = key_derive::generate_new_key(SignatureScheme::Secp256k1, None, None).unwrap();
 
     let accounts = read_prefunded_account(&path).unwrap();
     let acc_map = accounts

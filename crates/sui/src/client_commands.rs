@@ -100,6 +100,7 @@ use tabled::{
 };
 
 use move_symbol_pool::Symbol;
+use sui_keys::key_derive;
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
 
@@ -1578,12 +1579,10 @@ impl SuiClientCommands {
                 derivation_path,
                 word_length,
             } => {
-                let (address, phrase, scheme) = context.config.keystore.generate(
-                    key_scheme,
-                    alias.clone(),
-                    derivation_path,
-                    word_length,
-                )?;
+                let (address, keypair, scheme, phrase) =
+                    key_derive::generate_new_key(key_scheme, derivation_path, word_length)
+                        .map_err(|e| anyhow!("Failed to generate new key: {}", e))?;
+                context.config.keystore.import(alias.clone(), keypair)?;
 
                 let alias = match alias {
                     Some(x) => x,

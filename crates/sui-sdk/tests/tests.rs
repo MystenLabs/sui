@@ -4,6 +4,7 @@ use tempfile::TempDir;
 
 use fastcrypto::ed25519::Ed25519KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use sui_keys::key_derive::generate_new_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_sdk::verify_personal_message_signature::verify_personal_message_signature;
@@ -20,11 +21,8 @@ use sui_types::{
 #[test]
 fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
-    let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let (address, phrase, scheme) = keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
-        .unwrap();
+    let (address, _key_pair, scheme, phrase) =
+        generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
     let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());

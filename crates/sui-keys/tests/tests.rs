@@ -22,12 +22,7 @@ fn alias_exists_test() {
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     keystore
-        .generate(
-            SignatureScheme::ED25519,
-            Some("my_alias_test".to_string()),
-            None,
-            None,
-        )
+        .generate(Some("my_alias_test".to_string()), Default::default())
         .unwrap();
     let aliases = alias_names(keystore.aliases());
     assert_eq!(1, aliases.len());
@@ -40,17 +35,15 @@ fn create_alias_keystore_file_test() {
     let temp_dir = TempDir::new().unwrap();
     let mut keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
-        .unwrap();
+    keystore.generate(None, Default::default()).unwrap();
+
     keystore_path.set_extension("aliases");
     assert!(keystore_path.exists());
 
     keystore_path = temp_dir.path().join("myfile.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
-        .unwrap();
+    keystore.generate(None, Default::default()).unwrap();
+
     keystore_path.set_extension("aliases");
     assert!(keystore_path.exists());
 }
@@ -64,15 +57,13 @@ fn check_reading_aliases_file_correctly() {
     let mut keystore_path = temp_dir.path().join("sui.keystore");
     let keystore_path_keep = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let kp = keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
-        .unwrap();
+    let (address, _, _) = keystore.generate(None, Default::default()).unwrap();
     keystore_path.set_extension("aliases");
     assert!(keystore_path.exists());
 
     let new_keystore = Keystore::from(FileBasedKeystore::new(&keystore_path_keep).unwrap());
     let addresses = new_keystore.addresses_with_alias();
-    assert_eq!(kp.0, *addresses.first().unwrap().0)
+    assert_eq!(address, *addresses.first().unwrap().0)
 }
 
 #[test]
@@ -83,9 +74,8 @@ fn create_alias_if_not_exists_test() {
 
     let alias = Some("my_alias_test".to_string());
     keystore
-        .generate(SignatureScheme::ED25519, alias.clone(), None, None)
+        .generate(alias.clone(), Default::default())
         .unwrap();
-
     // test error first
     let create_alias_result = keystore.create_alias(alias);
     assert!(create_alias_result.is_err());
@@ -125,14 +115,11 @@ fn update_alias_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+
     keystore
-        .generate(
-            SignatureScheme::ED25519,
-            Some("my_alias_test".to_string()),
-            None,
-            None,
-        )
+        .generate(Some("my_alias_test".to_string()), Default::default())
         .unwrap();
+
     let aliases = alias_names(keystore.aliases());
     assert_eq!(1, aliases.len());
     assert_eq!(vec!["my_alias_test"], aliases);
@@ -166,13 +153,9 @@ fn update_alias_test() {
 
     // check that updating alias does not allow duplicates
     keystore
-        .generate(
-            SignatureScheme::ED25519,
-            Some("my_alias_test".to_string()),
-            None,
-            None,
-        )
+        .generate(Some("my_alias_test".to_string()), Default::default())
         .unwrap();
+
     assert!(keystore
         .update_alias("my_alias_test", Some(&update))
         .is_err());
@@ -182,12 +165,7 @@ fn update_alias_test() {
 fn update_alias_in_memory_test() {
     let mut keystore = Keystore::InMem(InMemKeystore::new_insecure_for_tests(0));
     keystore
-        .generate(
-            SignatureScheme::ED25519,
-            Some("my_alias_test".to_string()),
-            None,
-            None,
-        )
+        .generate(Some("my_alias_test".to_string()), Default::default())
         .unwrap();
     let aliases = alias_names(keystore.aliases());
     assert_eq!(1, aliases.len());
@@ -208,11 +186,8 @@ fn update_alias_in_memory_test() {
 #[test]
 fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
-    let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let (address, phrase, scheme) = keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
-        .unwrap();
+    let (address, _keypair, scheme, phrase) =
+        generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
     let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());
@@ -271,7 +246,7 @@ fn get_alias_by_address_test() {
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let alias = "my_alias_test".to_string();
     let keypair = keystore
-        .generate(SignatureScheme::ED25519, Some(alias.clone()), None, None)
+        .generate(Some(alias.clone()), Default::default())
         .unwrap();
     assert_eq!(alias, keystore.get_alias(&keypair.0).unwrap());
 
@@ -287,12 +262,7 @@ fn remove_key_test() {
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
 
     let (addr, _, _) = keystore
-        .generate(
-            SignatureScheme::ED25519,
-            Some("test_key".to_string()),
-            None,
-            None,
-        )
+        .generate(Some("test_key".to_string()), Default::default())
         .unwrap();
 
     let mut aliases_path = keystore_path.clone();
