@@ -300,7 +300,7 @@ impl AccountKeystore for External {
 
     fn entries(&self) -> Vec<PublicKey> {
         let mut keys = Vec::new();
-        for (_, Key { public_key, .. }) in &self.keys {
+        for Key { public_key, .. } in self.keys.values() {
             keys.push(public_key.clone());
         }
         keys
@@ -329,7 +329,7 @@ impl AccountKeystore for External {
         let msg = general_purpose::STANDARD.encode(msg);
         let result = self
             .exec(&signer, "sign_hashed", json![{"keyId": key_id, "msg": msg}])
-            .map_err(|e| signature::Error::from_source(e))?;
+            .map_err(signature::Error::from_source)?;
 
         let signature = result["signature"]
             .as_str()
@@ -734,7 +734,7 @@ mod tests {
         let address = SuiAddress::from_str(ADDRESS).unwrap();
 
         external.keys.insert(
-            address.clone(),
+            address,
             Key {
                 public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
                 signer: "signer".to_string(),
@@ -765,7 +765,7 @@ mod tests {
         let address = SuiAddress::from_str(ADDRESS).unwrap();
 
         external.keys.insert(
-            address.clone(),
+            address,
             Key {
                 public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
                 signer: "signer".to_string(),
@@ -813,7 +813,7 @@ mod tests {
     fn test_get_by_identity() {
         let external = load_external_keystore();
         let address = SuiAddress::from_str(ADDRESS).unwrap();
-        let identity = KeyIdentity::Address(address.clone());
+        let identity = KeyIdentity::Address(address);
         let address = external.get_by_identity(identity).unwrap();
         assert_eq!(address.to_string(), ADDRESS);
     }
