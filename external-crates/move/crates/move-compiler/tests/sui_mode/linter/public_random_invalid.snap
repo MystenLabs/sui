@@ -45,6 +45,15 @@ warning[Lint W99006]: Risky use of 'sui::random'
   = Non-public functions are preferred
   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[Lint W99000]: unnecessary public entry
+   ┌─ tests/sui_mode/linter/public_random_invalid.move:10:12
+   │
+10 │     public entry fun not_allowed4(_x: u64, _r: &Random, _y: u64) {}
+   │            ^^^^^ `entry` on `public` functions is meaningless except in niche use cases.
+   │
+   = `public` functions can be called from PTBs. As such, `entry` on `public` functions should be used only if you are concerned with the value flow limitations around `entry` functions. If you do not have an intricate set of private `entry` functions alongside it, an `entry` modifier on a `public` function is superfluous.
+   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[Lint W99006]: Risky use of 'sui::random'
    ┌─ tests/sui_mode/linter/public_random_invalid.move:10:48
    │

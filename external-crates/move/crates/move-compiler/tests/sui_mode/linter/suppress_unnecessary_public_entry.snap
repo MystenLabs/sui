@@ -9,7 +9,7 @@ warning[Lint W99000]: unnecessary public entry
   ┌─ tests/sui_mode/linter/suppress_unnecessary_public_entry.move:4:12
   │
 4 │     public entry fun suppress_unnecessary_public_entry() {}
-  │            ^^^^^ `entry` on `public` functions is meaningless and limiting composability except in niche use cases.
+  │            ^^^^^ `entry` on `public` functions is meaningless except in niche use cases.
   │
   = `public` functions can be called from PTBs. As such, `entry` on `public` functions should be used only if you are concerned with the value flow limitations around `entry` functions. If you do not have an intricate set of private `entry` functions alongside it, an `entry` modifier on a `public` function is superfluous.
   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -18,7 +18,7 @@ warning[Lint W99000]: unnecessary public entry
   ┌─ tests/sui_mode/linter/suppress_unnecessary_public_entry.move:7:5
   │
 7 │     entry public fun suppress_unnecessary_public_entry_2() {}
-  │     ^^^^^ `entry` on `public` functions is meaningless and limiting composability except in niche use cases.
+  │     ^^^^^ `entry` on `public` functions is meaningless except in niche use cases.
   │
   = `public` functions can be called from PTBs. As such, `entry` on `public` functions should be used only if you are concerned with the value flow limitations around `entry` functions. If you do not have an intricate set of private `entry` functions alongside it, an `entry` modifier on a `public` function is superfluous.
   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
