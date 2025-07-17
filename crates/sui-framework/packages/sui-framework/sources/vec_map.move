@@ -97,6 +97,8 @@ public fun contains<K: copy, V>(self: &VecMap<K, V>, key: &K): bool {
     get_idx_opt(self, key).is_some()
 }
 
+public use fun size as VecMap.length;
+
 /// Return the number of entries in `self`
 public fun size<K: copy, V>(self: &VecMap<K, V>): u64 {
     self.contents.length()

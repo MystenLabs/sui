@@ -49,6 +49,8 @@ public fun contains<K: copy + drop>(self: &VecSet<K>, key: &K): bool {
     }
 }
 
+public use fun size as VecSet.length;
+
 /// Return the number of entries in `self`
 public fun size<K: copy + drop>(self: &VecSet<K>): u64 {
     self.contents.length()
