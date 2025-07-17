@@ -24,7 +24,7 @@ public entry fun split<T>(coin: &mut Coin<T>, split_amount: u64, ctx: &mut TxCon
 /// Split coin `self` into multiple coins, each with balance specified
 /// in `split_amounts`. Remaining balance is left in `self`.
 public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
-    split_amounts.length().do!(|i| split(self, split_amounts[i], ctx));
+    split_amounts.do!(|amount| split(self, amount, ctx));
 }
 
 /// Send `amount` units of `c` to `recipient`
@@ -42,9 +42,8 @@ public entry fun split_and_transfer<T>(
 /// Divide coin `self` into `n - 1` coins with equal balances. If the balance is
 /// not evenly divisible by `n`, the remainder is left in `self`.
 public entry fun divide_and_keep<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
-    let mut vec: vector<Coin<T>> = self.divide_into_n(n, ctx);
-    vec.length().do!(|_| transfer::public_transfer(vec.pop_back(), ctx.sender()));
-    vec.destroy_empty();
+    let vec: vector<Coin<T>> = self.divide_into_n(n, ctx);
+    vec.do!(|coin| transfer::public_transfer(coin, ctx.sender()));
 }
 
 /// Join `coin` into `self`. Re-exports `coin::join` function.
@@ -55,9 +54,7 @@ public entry fun join<T>(self: &mut Coin<T>, coin: Coin<T>) {
 
 /// Join everything in `coins` with `self`
 public entry fun join_vec<T>(self: &mut Coin<T>, mut coins: vector<Coin<T>>) {
-    coins.length().do!(|_| self.join(coins.pop_back()));
-    // safe because we've drained the vector
-    coins.destroy_empty()
+    coins.do!(|coin| self.join(coin));
 }
 
 /// Join a vector of `Coin` into a single object and transfer it to `receiver`.
