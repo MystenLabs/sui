@@ -4,6 +4,7 @@ use tempfile::TempDir;
 
 use fastcrypto::ed25519::Ed25519KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
+use sui_keys::key_derive::generate_new_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_macros::sim_test;
 use sui_sdk::verify_personal_message_signature::verify_personal_message_signature;
@@ -17,19 +18,18 @@ use sui_types::{
     utils::sign_zklogin_personal_msg,
 };
 
-#[test]
-fn mnemonic_test() {
+#[tokio::test]
+async fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
-    let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let (address, phrase, scheme) = keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
-        .unwrap();
+    let (address, _key_pair, scheme, phrase) =
+        generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
-    let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());
+    let mut keystore2 =
+        Keystore::from(FileBasedKeystore::load_or_create(&keystore_path_2).unwrap());
     let imported_address = keystore2
         .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None, None)
+        .await
         .unwrap();
     assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
     assert_eq!(address, imported_address);
@@ -39,7 +39,7 @@ fn mnemonic_test() {
 fn keystore_display_test() -> Result<(), anyhow::Error> {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
     assert!(keystore.to_string().contains("sui.keystore"));
     assert!(!keystore.to_string().contains("keys:"));
     Ok(())

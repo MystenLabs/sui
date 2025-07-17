@@ -717,6 +717,7 @@ async fn test_transaction(
 
     let signature = keystore
         .sign_secure(&data.sender(), &data, Intent::sui_transaction())
+        .await
         .unwrap();
 
     // Balance before execution

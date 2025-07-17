@@ -6738,6 +6738,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -14987,8 +14988,13 @@ name = "sui-keys"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "base64 0.21.7",
+ "bcs",
  "bip32",
  "fastcrypto",
+ "jsonrpc",
+ "mockall",
  "rand 0.8.5",
  "regex",
  "serde",
@@ -14999,6 +15005,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tiny-bip39",
+ "tokio",
 ]
 
 [[package]]

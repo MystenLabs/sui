@@ -69,6 +69,7 @@ async fn test_cache() {
 
     let signature = keystore
         .sign_secure(&data.sender(), &data, Intent::sui_transaction())
+        .await
         .unwrap();
     let response = client
         .quorum_driver_api()

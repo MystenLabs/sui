@@ -419,7 +419,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+            .await?;
     }
 
     // Print all addresses

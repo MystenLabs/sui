@@ -355,16 +355,17 @@ impl WalletContext {
     }
 
     /// Add an account
-    pub fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
-        self.config.keystore.import(alias, keypair).unwrap();
+    pub async fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
+        self.config.keystore.import(alias, keypair).await.unwrap();
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext
-    pub fn sign_transaction(&self, data: &TransactionData) -> Transaction {
+    pub async fn sign_transaction(&self, data: &TransactionData) -> Transaction {
         let sig = self
             .config
             .keystore
             .sign_secure(&data.sender(), data, Intent::sui_transaction())
+            .await
             .unwrap();
         // TODO: To support sponsored transaction, we should also look at the gas owner.
         Transaction::from_data(data.clone(), vec![sig])

@@ -208,6 +208,7 @@ members = [
   "crates/typed-store-error",
   "crates/typed-store-workspace-hack",
   "crates/x",
+  "external-crates/move/crates/jsonrpc",
   "sui-execution",
   "sui-execution/cut",
   "sui-execution/latest/sui-adapter",
@@ -613,6 +614,7 @@ move-core-types = { path = "external-crates/move/crates/move-core-types" }
 move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
 move-package = { path = "external-crates/move/crates/move-package" }
 move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
+jsonrpc = { path = "external-crates/move/crates/jsonrpc" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
 move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
 move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
@@ -655,8 +657,8 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c794
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = ["hash", "serde"] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = ["ed25519", "secp256r1", "secp256k1", "passkey", "zklogin"] }
 sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
 sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
 sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
