@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod lockfile;
-pub mod manifest;
 mod package_impl;
 pub mod paths;
 pub mod root_package;

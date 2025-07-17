@@ -4,14 +4,14 @@
 
 use crate::{
     errors::FileHandle,
-    package::manifest::ManifestResult,
     schema::{
-        DefaultDependency, EnvironmentName, ManifestDependencyInfo, ParsedManifest,
-        ReplacementDependency,
+        DefaultDependency, Environment, EnvironmentName, ManifestDependencyInfo, ManifestResult,
+        PackageName, ParsedManifest, ReplacementDependency,
     },
 };
 
-use super::{Dependency, DependencySet};
+use super::Dependency;
+use std::collections::BTreeMap;
 
 pub(super) type Combined = ManifestDependencyInfo;
 
@@ -24,41 +24,37 @@ pub struct CombinedDependency(pub(super) Dependency<Combined>);
 impl CombinedDependency {
     /// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
     /// from `file`).
-    // TODO: add implicit dependencies here too
     pub fn combine_deps(
         file: FileHandle,
+        env: &Environment,
         manifest: &ParsedManifest,
-    ) -> ManifestResult<DependencySet<Self>> {
-        let mut result = DependencySet::new();
+    ) -> ManifestResult<BTreeMap<PackageName, Self>> {
+        let mut result = BTreeMap::new();
+        let mut replacements = manifest
+            .dep_replacements
+            .get(env.name())
+            .cloned()
+            .unwrap_or_default();
 
-        for env in manifest.environments.keys() {
-            let mut replacements = manifest
-                .dep_replacements
-                .get(env.as_ref())
-                .cloned()
-                .unwrap_or_default();
+        for (pkg, default) in &manifest.dependencies {
+            let combined = if let Some(replacement) = replacements.remove(pkg.as_ref()) {
+                Self::from_default_with_replacement(
+                    file,
+                    env.name().to_string(),
+                    default.clone(),
+                    replacement.into_inner(),
+                )?
+            } else {
+                Self::from_default(file, env.name().to_string(), default.clone())
+            };
+            result.insert(pkg.as_ref().clone(), combined);
+        }
 
-            for (pkg, default) in manifest.dependencies.iter() {
-                let combined = if let Some(replacement) = replacements.remove(pkg.as_ref()) {
-                    Self::from_default_with_replacement(
-                        file,
-                        env.as_ref().clone(),
-                        default.clone(),
-                        replacement.into_inner(),
-                    )?
-                } else {
-                    Self::from_default(file, env.as_ref().clone(), default.clone())
-                };
-                result.insert(env.as_ref().clone(), pkg.as_ref().clone(), combined);
-            }
-
-            for (pkg, dep) in replacements {
-                result.insert(
-                    env.as_ref().clone(),
-                    pkg.clone(),
-                    Self::from_replacement(file, env.as_ref().clone(), dep.as_ref().clone())?,
-                );
-            }
+        for (pkg, dep) in replacements {
+            result.insert(
+                pkg.clone(),
+                Self::from_replacement(file, env.name().to_string(), dep.into_inner())?,
+            );
         }
 
         Ok(result)

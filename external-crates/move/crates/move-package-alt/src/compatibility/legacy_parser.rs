@@ -19,6 +19,7 @@ use crate::{
 use anyhow::{Context, Result, anyhow, bail, format_err};
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 use serde_spanned::Spanned;
+use sha2::{Digest as ShaDigest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -251,6 +252,7 @@ fn parse_source_manifest(
                 metadata: PackageMetadata {
                     name: new_name,
                     edition,
+                    digest: format!("{:X}", Sha256::digest(file_handle.source().as_ref())),
                 },
                 deps: dependencies,
                 legacy_data: LegacyData {

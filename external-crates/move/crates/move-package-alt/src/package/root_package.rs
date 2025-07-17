@@ -4,9 +4,9 @@
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
+use super::EnvironmentID;
 use super::paths::PackagePath;
-use super::{EnvironmentID, manifest::Manifest};
-use crate::schema::{Environment, PackageName, Publication};
+use crate::schema::{Environment, ManifestError, PackageName, ParsedManifest, Publication};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
@@ -45,7 +45,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let mut environments = F::default_environments();
 
-        if let Ok(modern_manifest) = Manifest::<F>::read_from_file(package_path.path()) {
+        let file_id = FileHandle::new(&path).map_err(ManifestError::with_file(&path))?;
+        if let Ok(modern_manifest) = ParsedManifest::read_from_file(file_id) {
             // TODO(manos): Decide on validation (e.g. if modern manifest declares environments differently,
             // we should error?!)
             environments.extend(modern_manifest.environments());

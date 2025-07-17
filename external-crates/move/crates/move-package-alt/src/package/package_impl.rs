@@ -4,7 +4,6 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use super::manifest::Manifest;
 use super::paths::PackagePath;
 use crate::{
     compatibility::{
@@ -12,12 +11,12 @@ use crate::{
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
     dependency::{CombinedDependency, PinnedDependencyInfo, pin},
-    errors::{PackageError, PackageResult},
+    errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{lockfile::Lockfiles, manifest::Digest},
+    package::lockfile::Lockfiles,
     schema::{
-        Environment, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageMetadata,
-        PackageName, Publication, PublishAddresses, PublishedID,
+        Digest, Environment, LocalDepInfo, LockfileDependencyInfo, ManifestError, OriginalID,
+        PackageMetadata, PackageName, ParsedManifest, Publication, PublishAddresses, PublishedID,
     },
 };
 
@@ -80,20 +79,19 @@ impl<F: MoveFlavor> Package<F> {
         source: LockfileDependencyInfo,
         env: &Environment,
     ) -> PackageResult<Self> {
-        let manifest = Manifest::<F>::read_from_file(path.manifest_path());
+        let file_id = FileHandle::new(&path).map_err(ManifestError::with_file(&path))?;
+        let manifest =
+            ParsedManifest::read_from_file(file_id.clone()).map_err(PackageError::Manifest);
 
         // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
 
             // TODO: We should error if there environment is not supported!
-            let manifest_deps = manifest
-                .dependencies()
-                .deps_for(env.name())
-                .cloned()
-                .unwrap_or_default();
 
-            let deps = pin::<F>(manifest_deps.clone(), env.id()).await?;
+            let combined_deps = CombinedDependency::combine_deps(file_id, env, &manifest)?;
+
+            let deps = pin::<F>(combined_deps.clone(), env.id()).await?;
 
             return Ok(Self {
                 env: env.name().clone(),
@@ -109,7 +107,7 @@ impl<F: MoveFlavor> Package<F> {
 
         // If the manifest does not look like a legacy one, we again return early by erroring on the modern errors.
         if !is_legacy_like(&path) {
-            return Err(PackageError::Manifest(manifest.unwrap_err()));
+            return Err(manifest.unwrap_err());
         }
 
         // Here, that means that we're working on legacy package, so we can throw its errors.
