@@ -16,8 +16,6 @@ title: Module `sui::vec_set`
 -  [Function `into_keys`](#sui_vec_set_into_keys)
 -  [Function `from_keys`](#sui_vec_set_from_keys)
 -  [Function `keys`](#sui_vec_set_keys)
--  [Function `get_idx_opt`](#sui_vec_set_get_idx_opt)
--  [Function `get_idx`](#sui_vec_set_get_idx)
 
 
 <pre><code><b>use</b> <a href="../std/option.md#std_option">std::option</a>;
@@ -176,7 +174,7 @@ Remove the entry <code>key</code> from self. Aborts if <code>key</code> is not p
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_remove">remove</a>&lt;K: <b>copy</b> + drop&gt;(self: &<b>mut</b> <a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K) {
-    <b>let</b> idx = <a href="../sui/vec_set.md#sui_vec_set_get_idx">get_idx</a>(self, key);
+    <b>let</b> idx = self.contents.find_index!(|k| k == key).destroy_or!(<b>abort</b> <a href="../sui/vec_set.md#sui_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>);
     self.contents.<a href="../sui/vec_set.md#sui_vec_set_remove">remove</a>(idx);
 }
 </code></pre>
@@ -202,7 +200,10 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_contains">contains</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): bool {
-    <a href="../sui/vec_set.md#sui_vec_set_get_idx_opt">get_idx_opt</a>(self, key).is_some()
+    'search: {
+        self.contents.do_ref!(|k| <b>if</b> (k == key) <b>return</b> 'search <b>true</b>);
+        <b>false</b>
+    }
 }
 </code></pre>
 
@@ -337,68 +338,6 @@ without unpacking. The contents are stored in insertion order,
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;): &vector&lt;K&gt; {
     &self.contents
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_vec_set_get_idx_opt"></a>
-
-## Function `get_idx_opt`
-
-Find the index of <code>key</code> in <code>self</code>. Return <code>None</code> if <code>key</code> is not in <code>self</code>.
-Note that keys are stored in insertion order, *not* sorted.
-
-
-<pre><code><b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): Option&lt;u64&gt; {
-    <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> n = <a href="../sui/vec_set.md#sui_vec_set_size">size</a>(self);
-    <b>while</b> (i &lt; n) {
-        <b>if</b> (&self.contents[i] == key) {
-            <b>return</b> option::some(i)
-        };
-        i = i + 1;
-    };
-    option::none()
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_vec_set_get_idx"></a>
-
-## Function `get_idx`
-
-Find the index of <code>key</code> in <code>self</code>. Aborts if <code>key</code> is not in <code>self</code>.
-Note that map entries are stored in insertion order, *not* sorted.
-
-
-<pre><code><b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;K&gt;, key: &K): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): u64 {
-    <b>let</b> idx_opt = <a href="../sui/vec_set.md#sui_vec_set_get_idx_opt">get_idx_opt</a>(self, key);
-    <b>assert</b>!(idx_opt.is_some(), <a href="../sui/vec_set.md#sui_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>);
-    idx_opt.destroy_some()
 }
 </code></pre>
 

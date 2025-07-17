@@ -90,13 +90,8 @@ public fun new_with_fields<T: key>(
     let len = fields.length();
     assert!(len == values.length(), EVecLengthMismatch);
 
-    let mut i = 0;
     let mut display = new<T>(pub, ctx);
-    while (i < len) {
-        display.add_internal(fields[i], values[i]);
-        i = i + 1;
-    };
-
+    fields.zip_do!(values, |field, value| display.add_internal(field, value));
     display
 }
 
@@ -133,12 +128,7 @@ public entry fun add_multiple<T: key>(
 ) {
     let len = fields.length();
     assert!(len == values.length(), EVecLengthMismatch);
-
-    let mut i = 0;
-    while (i < len) {
-        self.add_internal(fields[i], values[i]);
-        i = i + 1;
-    };
+    fields.zip_do!(values, |field, value| self.add_internal(field, value));
 }
 
 /// Change the value of the field.
