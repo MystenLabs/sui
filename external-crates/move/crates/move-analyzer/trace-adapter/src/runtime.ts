@@ -552,15 +552,25 @@ export class Runtime extends EventEmitter {
         return this.eventsStack;
     }
 
+    /**
+     * Processes the result of an action returnd from an internal
+     * function responsible for handling a given event.
+     *
+     * @param result the result of the action.
+     * @returns processed (potentially different) result of the action.
+     */
     private handleActionResult(result: ExecutionResult): ExecutionResult {
-        if (result === ExecutionResult.Ok ||
-            result === ExecutionResult.TraceEnd) {
-            this.sendEvent(RuntimeEvents.stopOnStep);
-        } else if (result === ExecutionResult.Exception) {
-            this.sendEvent(RuntimeEvents.stopOnException);
-        } else if (result === ExecutionResult.Breakpoint) {
-            this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
-            return ExecutionResult.Ok;
+        switch (result) {
+            case ExecutionResult.Ok:
+            case ExecutionResult.TraceEnd:
+                this.sendEvent(RuntimeEvents.stopOnStep);
+                break;
+            case ExecutionResult.Exception:
+                this.sendEvent(RuntimeEvents.stopOnException);
+                break;
+            case ExecutionResult.Breakpoint:
+                this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
+                return ExecutionResult.Ok;
         }
         return result;
     }
@@ -931,7 +941,7 @@ export class Runtime extends EventEmitter {
      * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
      * @throws Error with a descriptive error message if the step out event cannot be handled.
      */
-    public stepOutInternal(next: boolean): ExecutionResult {
+    private stepOutInternal(next: boolean): ExecutionResult {
         const summaryFrame = this.eventsStack.summaryFrame;
         const eventFrame = this.eventsStack.eventFrame;
         if (summaryFrame && !eventFrame) {
