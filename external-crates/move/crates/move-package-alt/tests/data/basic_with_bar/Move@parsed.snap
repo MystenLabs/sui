@@ -59,7 +59,9 @@ ParsedManifest {
             ),
             is_override: true,
             rename_from: Some(
-                "Foo",
+                Identifier(
+                    "Foo",
+                ),
             ),
         },
         Spanned {

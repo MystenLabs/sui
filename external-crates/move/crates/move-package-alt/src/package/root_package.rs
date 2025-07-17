@@ -120,6 +120,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         // check that there is a consistent linkage
 
         let _linkage = graph.linkage()?;
+        graph.check_rename_from()?;
+
         Ok(Self {
             package_path,
             environment: env,
@@ -202,11 +204,15 @@ mod tests {
 
     use super::*;
     use crate::{
-        flavor::{Vanilla, vanilla::DEFAULT_ENV_NAME},
+        flavor::{
+            Vanilla,
+            vanilla::{DEFAULT_ENV_NAME, default_environment},
+        },
         schema::LockfileDependencyInfo,
         test_utils::{
             self, basic_manifest_with_env,
             git::{self},
+            graph_builder::TestPackageGraph,
         },
     };
 
@@ -322,6 +328,23 @@ pkg_b = { local = "../pkg_b" }"#,
             .await
             .is_err()
         );
+    }
+
+    /// This just ensures that `RootPackage` does the `rename-from` validation; see
+    /// [crate::graph::rename_from::tests] for more detailed tests that operate directly on the
+    /// package graph
+    #[test(tokio::test)]
+    async fn test_rename_from() {
+        // `a` depends on `b` which has name `b_name`, but there is no rename-from
+        // building the root package should fail because of rename-from validation
+        let scenario = TestPackageGraph::new(["a"])
+            .add_package("b", |b| b.package_name("b_name"))
+            .add_deps([("a", "b")])
+            .build();
+
+        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment())
+            .await
+            .unwrap_err();
     }
 
     /// This test creates a git repository with a Move package, and another package that depends on

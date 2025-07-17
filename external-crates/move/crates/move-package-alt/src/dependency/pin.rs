@@ -51,6 +51,7 @@ impl PinnedDependencyInfo {
             is_override: true,
             addresses: None,
             containing_file,
+            rename_from: None,
         })
     }
 
@@ -66,6 +67,7 @@ impl PinnedDependencyInfo {
             use_environment: pin.use_environment.clone().unwrap_or(env.clone()),
             is_override: false, // TODO
             addresses: None,    // TODO
+            rename_from: None,  // TODO
             containing_file,
         })
     }
@@ -97,6 +99,10 @@ impl PinnedDependencyInfo {
 
     pub fn is_override(&self) -> bool {
         self.0.is_override
+    }
+
+    pub fn rename_from(&self) -> &Option<PackageName> {
+        self.0.rename_from()
     }
 }
 

@@ -12,10 +12,7 @@ use petgraph::{
 };
 use thiserror::Error;
 
-use crate::{
-    flavor::MoveFlavor,
-    schema::{OriginalID, PackageName},
-};
+use crate::{flavor::MoveFlavor, schema::OriginalID};
 
 use super::PackageGraph;
 
@@ -24,8 +21,9 @@ pub enum LinkageError {
     #[error("{0}")]
     InconsistentLinkage(String),
 
+    // Note: see [super::rename_from] for how I think this error message should be constructed
     #[error("
-        Package <TODO: root> has depends on different source packages for version <TODO> of <TODO> (published at <TODO: abbrev published-at>):
+        Package <TODO: root> depends on different source packages for version <TODO> of <TODO> (published at <TODO: abbrev published-at>):
 
           <TODO: p1> -> <TODO: p1'> -> <TODO: p2'> is <TODO: dep 1 as manifest dep>
           <TODO: p2> -> <TODO: p2'> is <TODO: dep 2 as manifest dep>
@@ -45,6 +43,11 @@ pub enum LinkageError {
         node2: NodeIndex,
     },
 
+    #[error("
+        Package <TODO> has override dependencies on both <TODO> and <TODO>, but these are different versions of the same package.
+        ")]
+    ConflictingOverrides,
+
     #[error(
         "Package <TODO: p1> depends on itself (<TODO: p1> -> <TODO: p2> -> <TODO: p3> -> <TODO: p1>)"
     )]
@@ -62,7 +65,8 @@ pub type LinkageResult<T> = Result<T, LinkageError>;
 type LinkageTable = BTreeMap<OriginalID, NodeIndex>;
 
 impl<F: MoveFlavor> PackageGraph<F> {
-    /// Construct and return a linkage table for the root package of `self`.
+    /// Construct and return a linkage table for the root package of `self`. Only published
+    /// packages are included in the linkage table.
     ///
     /// The linkage table for a given package indicates which package nodes it should use for its
     /// transitive dependencies. The linkage must be consistent - if any node depends
@@ -91,7 +95,13 @@ impl<F: MoveFlavor> PackageGraph<F> {
             // compute the linkage for `node` by iterating all transitive deps and looking for
             // duplicates
             let mut linkage = LinkageTable::new();
-            let overrides = self.override_nodes(*node);
+            let overrides = self.override_nodes(*node)?;
+
+            // TODO: `select_dep(node, ...)` produces an error if there's a missing override in `node`,
+            // which means we will produce an error if any package in the package graph is missing
+            // an override. However, that means if a package doesn't have its override set
+            // properly, you can't depend on it. Should we relax this check to only produce an error
+            // for the root node?
             for (original_id, nodes) in transitive_deps.into_iter() {
                 linkage.insert(
                     original_id.clone(),
@@ -119,45 +129,29 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Returns the the packages that are overridden in `node`, keyed by their original IDs (only
-    /// published packages are returned)
-    fn override_nodes(&self, node_id: NodeIndex) -> BTreeMap<OriginalID, NodeIndex> {
-        // TODO: if the overrides are in the package graph itself instead of in the node, this
-        // would be easier
-        let node = &self.inner[node_id];
-        let env = &node.use_env;
+    /// published packages are returned).
+    fn override_nodes(&self, node_id: NodeIndex) -> LinkageResult<BTreeMap<OriginalID, NodeIndex>> {
+        let mut result: BTreeMap<OriginalID, NodeIndex> = BTreeMap::new();
 
-        // get the set of package names that are overridden
-        let overrides: BTreeSet<PackageName> = node
-            .package
-            .direct_deps()
-            .iter()
-            .filter_map(|(name, dep)| {
-                if dep.is_override() {
-                    Some(name.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
+        for edge in self.inner.edges(node_id) {
+            let dep = self.dep_for_edge(edge.id());
 
-        // now traverse the edges to find the original ids of those overridden packages
-        self.inner
-            .edges(node_id)
-            .filter(|edge| overrides.contains(edge.weight()))
-            .filter_map(|edge| {
-                let dep_node = edge.target();
-                let dep = &self.inner[dep_node].package;
+            if !dep.is_override() {
+                continue;
+            }
 
-                // Note: if the dep is unpublished, we omit it by returning `None` (which is
-                // dropped by `filter_map`)
-                let Some(original_id) = dep.original_id() else {
-                    return None;
-                };
+            let target = &self.inner[edge.target()];
+            let Some(oid) = target.package.original_id() else {
+                continue;
+            };
 
-                // otherwise we add the package to the output
-                Some((original_id, dep_node))
-            })
-            .collect()
+            let old = result.insert(oid, edge.target());
+            if old.is_some() {
+                return Err(LinkageError::ConflictingOverrides);
+            }
+        }
+
+        Ok(result)
     }
 
     /// Given a (nonempty) set of transitive dependencies all having `original_id`, choose the correct one or
@@ -207,6 +201,8 @@ mod tests {
         test_utils::graph_builder::TestPackageGraph,
     };
     use test_log::test;
+
+    // TODO: add error message snapshots for the tests that produce errors
 
     /// `root` depends on `a` depends on `b` and `c`, both of which depend on `d`
     /// Computing linkage for both `root` and `a` should succeed
@@ -317,11 +313,65 @@ mod tests {
     /// `root` depends on `a` which depends on `b` and `d1`, `b` depends on `d2`
     /// Computing linkage for both `a` and `root` should fail because of linkage to `d1` and `d2`
     #[test(tokio::test)]
-    async fn test_direct_nooverride() {
+    async fn test_direct_and_transitive_nooverride() {
         let scenario = TestPackageGraph::new(["root", "a", "b"])
             .add_published("d1", OriginalID::from(1), PublishedID::from(1))
             .add_published("d2", OriginalID::from(1), PublishedID::from(2))
             .add_deps([("root", "a"), ("a", "b"), ("a", "d1"), ("b", "d2")])
+            .build();
+
+        assert!(scenario.graph_for("root").await.linkage().is_err());
+        assert!(scenario.graph_for("a").await.linkage().is_err());
+    }
+
+    /// `root` depends on `a` which depends on `b1` and `b2`.
+    /// Computing linkage for both `root` and `a` should fail because of conflicting
+    /// implementations of `b`
+    #[test(tokio::test)]
+    async fn test_direct_no_override() {
+        let scenario = TestPackageGraph::new(["root", "a"])
+            .add_published("b1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("b2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a"), ("a", "b1"), ("a", "b2")])
+            .build();
+
+        assert!(scenario.graph_for("root").await.linkage().is_err());
+        assert!(scenario.graph_for("a").await.linkage().is_err());
+    }
+
+    /// Same as [test_direct_no_override] except one of the deps is an override:
+    /// `root` depends on `a` which depends on `b1` and `b2`; the dependency on `b2` is an
+    /// override.
+    ///
+    /// It's unclear what we should do in this case. On the one hand, the user has probably made a
+    /// mistake to end up in such a weird situation. On the other hand, the semantics are clear:
+    /// for compilation `b1` refers to `b1` and `b2` refers to `b2`, while at runtime `b2` is used
+    /// for both. In a sense, `a` is overriding its own dependencies.
+    ///
+    /// Currently we allow this since it is simpler and doesn't break anything. It should really be
+    /// a lint (ha!)
+    #[test(tokio::test)]
+    async fn test_direct_one_override() {
+        let scenario = TestPackageGraph::new(["root", "a"])
+            .add_published("b1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("b2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a"), ("a", "b1")])
+            .add_dep("a", "b2", |dep| dep.set_override())
+            .build();
+
+        scenario.graph_for("root").await.linkage().unwrap();
+        scenario.graph_for("a").await.linkage().unwrap();
+    }
+
+    /// Same as [test_direct_no_override] except both of the deps are overrides
+    #[test(tokio::test)]
+    async fn test_direct_both_override() {
+        let scenario = TestPackageGraph::new(["root", "a"])
+            .add_published("b1", OriginalID::from(1), PublishedID::from(1))
+            .add_published("b2", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a")])
+            .add_dep("a", "b1", |dep| dep.set_override())
+            .add_dep("a", "b2", |dep| dep.set_override())
             .build();
 
         assert!(scenario.graph_for("root").await.linkage().is_err());
@@ -363,6 +413,19 @@ mod tests {
         let scenario = TestPackageGraph::new(["root", "a", "b"])
             .add_deps([("root", "a"), ("a", "b")])
             .add_dep("a", "b", |dep| dep.name("b2"))
+            .build();
+
+        scenario.graph_for("root").await.linkage().unwrap();
+        scenario.graph_for("a").await.linkage().unwrap();
+    }
+
+    /// Same as [test_double_dep] except that the dependencies are overrides
+    #[test(tokio::test)]
+    async fn test_double_dep_override() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_deps([("root", "a")])
+            .add_dep("a", "b", |dep| dep.set_override())
+            .add_dep("a", "b", |dep| dep.set_override().name("b2"))
             .build();
 
         scenario.graph_for("root").await.linkage().unwrap();

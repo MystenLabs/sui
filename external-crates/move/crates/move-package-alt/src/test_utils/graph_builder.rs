@@ -145,6 +145,10 @@ impl TestPackageGraph {
         self
     }
 
+    /// `builder.add_published("a", original, published_at)` is shorthand for
+    /// ```ignore
+    /// builder.add_package("a", |a| a.publish(original, published_at))
+    /// ```
     pub fn add_published(
         mut self,
         node: impl AsRef<str>,
@@ -154,6 +158,7 @@ impl TestPackageGraph {
         self.add_package(node, |package| package.publish(original_id, published_at))
     }
 
+    /// Add a dependency from package `source` to package `target` and customize it using `build`
     pub fn add_dep(
         mut self,
         source: impl AsRef<str>,
@@ -162,8 +167,9 @@ impl TestPackageGraph {
     ) -> Self {
         let source_idx = self.nodes[source.as_ref()];
         let target_idx = self.nodes[target.as_ref()];
-        self.inner
-            .add_edge(source_idx, target_idx, build(DepSpec::new(target)));
+        let dep_spec = build(DepSpec::new(target));
+
+        self.inner.add_edge(source_idx, target_idx, dep_spec);
         self
     }
 
@@ -177,14 +183,18 @@ impl TestPackageGraph {
     /// we can more easily test different aspects of repinning
     pub fn build(self) -> Scenario {
         let mut project = project();
-        let mut addr = 0x1000;
         for (package_id, node) in self.nodes.iter() {
             let dir = PathBuf::from(package_id.as_str());
-            addr += 1;
+
+            let manifest = &self.format_manifest(*node);
+            let lockfile = &self.format_lockfile(*node);
+
+            debug!("Generated test manifest for {package_id}:\n\n{manifest}");
+            debug!("Generated test lockfile for {package_id}:\n\n{lockfile}");
 
             project = project
-                .file(dir.join("Move.toml"), &self.format_manifest(*node))
-                .file(dir.join("Move.lock"), &self.format_lockfile(*node, addr));
+                .file(dir.join("Move.toml"), manifest)
+                .file(dir.join("Move.lock"), lockfile);
         }
 
         Scenario {
@@ -231,7 +241,7 @@ impl TestPackageGraph {
     ///
     /// For publications with no published-at and original-id fields, we generate them sequentially
     /// starting from 1000 (and set them to the same value)
-    fn format_lockfile(&self, node: NodeIndex, default_addr: u16) -> String {
+    fn format_lockfile(&self, node: NodeIndex) -> String {
         let mut move_lock = String::new();
 
         for (env, publication) in self.inner[node].pubs.iter() {
@@ -325,6 +335,12 @@ impl PackageSpec {
         self.name = PackageName::new(name.as_ref()).expect("valid package name");
         self
     }
+
+    /// Change this to a git dependency (in its own temporary directory)
+    pub fn make_git(mut self) -> Self {
+        todo!();
+        self
+    }
 }
 
 impl DepSpec {
@@ -367,11 +383,21 @@ impl DepSpec {
         self.use_env = Some(env.as_ref().to_string());
         self
     }
+
+    /// Change this to an external dependency using the mock resolver
+    pub fn make_external(mut self) -> Self {
+        todo!();
+        self
+    }
 }
 
 impl Scenario {
+    pub fn path_for(&self, package: impl AsRef<str>) -> PackagePath {
+        PackagePath::new(self.project.root().join(package.as_ref())).unwrap()
+    }
+
     pub async fn graph_for(&self, package: impl AsRef<str>) -> PackageGraph<Vanilla> {
-        let path = PackagePath::new(self.project.root().join(package.as_ref())).unwrap();
+        let path = self.path_for(package);
 
         PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment())
             .await
@@ -424,6 +450,7 @@ mod tests {
     /// lockfiles
     #[test]
     fn complex() {
+        // TODO: break this into separate tests
         let graph = TestPackageGraph::new(["a", "b"])
             .add_package("c", |c| {
                 c.package_name("c_name")
