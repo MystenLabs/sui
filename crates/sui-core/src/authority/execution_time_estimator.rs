@@ -9,6 +9,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use serde::{Deserialize, Serialize};
+
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use super::weighted_moving_average::WeightedMovingAverage;
 use crate::consensus_adapter::SubmitToConsensus;
@@ -607,7 +609,7 @@ pub struct ExecutionTimeEstimator {
     consensus_observations: HashMap<ExecutionTimeObservationKey, ConsensusObservations>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsensusObservations {
     observations: Vec<(u64 /* generation */, Option<Duration>)>, // keyed by authority index
     stake_weighted_median: Option<Duration>,                     // cached value
@@ -852,6 +854,11 @@ mod tests {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::transaction::{Argument, CallArg, ObjectArg, ProgrammableMoveCall};
+    use {
+        rand::{Rng, SeedableRng},
+        sui_protocol_config::ProtocolVersion,
+        sui_types::supported_protocol_versions::Chain,
+    };
 
     #[tokio::test]
     async fn test_record_local_observations() {
@@ -1806,5 +1813,361 @@ mod tests {
             estimator.get_estimate(&multi_command_tx),
             Duration::from_millis(510)
         );
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct ExecutionTimeObserverSnapshot {
+        protocol_version: u64,
+        consensus_observations: Vec<(ExecutionTimeObservationKey, ConsensusObservations)>,
+        transaction_estimates: Vec<(String, Duration)>, // (transaction_description, estimated_duration)
+    }
+
+    fn generate_test_inputs(
+        seed: u64,
+        num_validators: usize,
+        generation_override: Option<u64>,
+    ) -> Vec<(
+        AuthorityIndex,
+        Option<u64>,
+        ExecutionTimeObservationKey,
+        Duration,
+    )> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        let observation_keys = vec![
+            ExecutionTimeObservationKey::MoveEntryPoint {
+                package: ObjectID::from_hex_literal("0x1").unwrap(),
+                module: "coin".to_string(),
+                function: "transfer".to_string(),
+                type_arguments: vec![],
+            },
+            ExecutionTimeObservationKey::MoveEntryPoint {
+                package: ObjectID::from_hex_literal("0x2").unwrap(),
+                module: "nft".to_string(),
+                function: "mint".to_string(),
+                type_arguments: vec![],
+            },
+            ExecutionTimeObservationKey::TransferObjects,
+            ExecutionTimeObservationKey::SplitCoins,
+            ExecutionTimeObservationKey::MergeCoins,
+            ExecutionTimeObservationKey::MakeMoveVec,
+            ExecutionTimeObservationKey::Upgrade,
+        ];
+
+        let mut inputs = Vec::new();
+        let target_samples = 25;
+
+        for _ in 0..target_samples {
+            let key = observation_keys[rng.gen_range(0..observation_keys.len())].clone();
+            let authority_index =
+                AuthorityIndex::try_from(rng.gen_range(0..num_validators)).unwrap();
+
+            // Use realistic range where newer generations might replace older ones
+            let generation = generation_override.unwrap_or_else(|| rng.gen_range(1..=10));
+
+            // Generate duration based on key type with realistic variance
+            // Sometimes generate zero values to test corner cases with byzantine validators
+            let base_duration = if rng.gen_ratio(1, 20) {
+                // 5% chance of zero duration to test corner cases
+                0
+            } else {
+                match &key {
+                    ExecutionTimeObservationKey::MoveEntryPoint { .. } => rng.gen_range(50..=500),
+                    ExecutionTimeObservationKey::TransferObjects => rng.gen_range(10..=100),
+                    ExecutionTimeObservationKey::SplitCoins => rng.gen_range(20..=80),
+                    ExecutionTimeObservationKey::MergeCoins => rng.gen_range(15..=70),
+                    ExecutionTimeObservationKey::MakeMoveVec => rng.gen_range(5..=30),
+                    ExecutionTimeObservationKey::Upgrade => rng.gen_range(100..=1000),
+                    ExecutionTimeObservationKey::Publish => rng.gen_range(200..=2000),
+                }
+            };
+
+            let duration = Duration::from_millis(base_duration);
+
+            inputs.push((authority_index, Some(generation), key, duration));
+        }
+
+        inputs
+    }
+
+    fn generate_test_transactions(seed: u64) -> Vec<(String, TransactionData)> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let mut transactions = Vec::new();
+
+        let package3 = ObjectID::from_hex_literal("0x3").unwrap();
+        transactions.push((
+            "coin_transfer_call".to_string(),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                        package: ObjectID::from_hex_literal("0x1").unwrap(),
+                        module: "coin".to_string(),
+                        function: "transfer".to_string(),
+                        type_arguments: vec![],
+                        arguments: vec![],
+                    }))],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        transactions.push((
+            "mixed_move_calls".to_string(),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![
+                        Command::MoveCall(Box::new(ProgrammableMoveCall {
+                            package: ObjectID::from_hex_literal("0x1").unwrap(),
+                            module: "coin".to_string(),
+                            function: "transfer".to_string(),
+                            type_arguments: vec![],
+                            arguments: vec![],
+                        })),
+                        Command::MoveCall(Box::new(ProgrammableMoveCall {
+                            package: ObjectID::from_hex_literal("0x2").unwrap(),
+                            module: "nft".to_string(),
+                            function: "mint".to_string(),
+                            type_arguments: vec![],
+                            arguments: vec![],
+                        })),
+                    ],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        transactions.push((
+            "native_commands_with_observations".to_string(),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![
+                        Command::TransferObjects(vec![Argument::Input(0)], Argument::Input(1)),
+                        Command::SplitCoins(Argument::Input(2), vec![Argument::Input(3)]),
+                        Command::MergeCoins(Argument::Input(4), vec![Argument::Input(5)]),
+                        Command::MakeMoveVec(None, vec![Argument::Input(6)]),
+                    ],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        let num_objects = rng.gen_range(1..=5);
+        transactions.push((
+            format!("transfer_objects_{}_items", num_objects),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![Command::TransferObjects(
+                        (0..num_objects).map(Argument::Input).collect(),
+                        Argument::Input(num_objects),
+                    )],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        let num_amounts = rng.gen_range(1..=4);
+        transactions.push((
+            format!("split_coins_{}_amounts", num_amounts),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![Command::SplitCoins(
+                        Argument::Input(0),
+                        (1..=num_amounts).map(Argument::Input).collect(),
+                    )],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        let num_sources = rng.gen_range(1..=3);
+        transactions.push((
+            format!("merge_coins_{}_sources", num_sources),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![Command::MergeCoins(
+                        Argument::Input(0),
+                        (1..=num_sources).map(Argument::Input).collect(),
+                    )],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        let num_elements = rng.gen_range(0..=6);
+        transactions.push((
+            format!("make_move_vec_{}_elements", num_elements),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![Command::MakeMoveVec(
+                        None,
+                        (0..num_elements).map(Argument::Input).collect(),
+                    )],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        transactions.push((
+            "mixed_commands".to_string(),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![
+                        Command::MoveCall(Box::new(ProgrammableMoveCall {
+                            package: package3,
+                            module: "game".to_string(),
+                            function: "play".to_string(),
+                            type_arguments: vec![],
+                            arguments: vec![],
+                        })),
+                        Command::TransferObjects(
+                            vec![Argument::Input(1), Argument::Input(2)],
+                            Argument::Input(0),
+                        ),
+                        Command::SplitCoins(Argument::Input(3), vec![Argument::Input(4)]),
+                    ],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        transactions.push((
+            "upgrade_package".to_string(),
+            TransactionData::new_programmable(
+                SuiAddress::ZERO,
+                vec![],
+                ProgrammableTransaction {
+                    inputs: vec![],
+                    commands: vec![Command::Upgrade(
+                        vec![],
+                        vec![],
+                        package3,
+                        Argument::Input(0),
+                    )],
+                },
+                rng.gen_range(100..1000),
+                rng.gen_range(100..1000),
+            ),
+        ));
+
+        transactions
+    }
+
+    // Safeguard against forking because of changes to the execution time estimator.
+    //
+    // Within an epoch, each estimator must reach the same conclusion about the observations and
+    // stake_weighted_median from the observations shared by other validators, as this is used
+    // for transaction ordering.
+    //
+    // Therefore; any change in the calculation of the observations or stake_weighted_median
+    // not accompanied by a protocol version change may fork.
+    //
+    // This test uses snapshots of computed stake weighted median at particular protocol versions
+    // to attempt to discover regressions that might fork.
+    #[test]
+    fn snapshot_tests() {
+        println!("\n============================================================================");
+        println!("!                                                                          !");
+        println!("! IMPORTANT: never update snapshots from this test. only add new versions! !");
+        println!("!                                                                          !");
+        println!("============================================================================\n");
+
+        let max_version = ProtocolVersion::MAX.as_u64();
+
+        let test_versions: Vec<u64> = (max_version.saturating_sub(9)..=max_version).collect();
+
+        for version in test_versions {
+            let protocol_version = ProtocolVersion::new(version);
+            let protocol_config = ProtocolConfig::get_for_version(protocol_version, Chain::Unknown);
+            let (committee, _) = Committee::new_simple_test_committee_of_size(4);
+            let committee = Arc::new(committee);
+
+            let initial_generation =
+                if let PerObjectCongestionControlMode::ExecutionTimeEstimate(params) =
+                    protocol_config.per_object_congestion_control_mode()
+                {
+                    if params.default_none_duration_for_new_keys {
+                        None
+                    } else {
+                        Some(0)
+                    }
+                } else {
+                    Some(0) // fallback for versions without execution time estimate mode
+                };
+
+            let initial_observations =
+                generate_test_inputs(0, committee.num_members(), initial_generation);
+            let mut estimator = ExecutionTimeEstimator::new(
+                committee.clone(),
+                ExecutionTimeEstimateParams {
+                    max_estimate_us: u64::MAX, // Allow unlimited estimates for testing
+                    ..ExecutionTimeEstimateParams::default()
+                },
+                initial_observations.into_iter(),
+            );
+
+            let test_inputs = generate_test_inputs(version, committee.num_members(), None);
+
+            for (source, generation, observation_key, duration) in test_inputs {
+                estimator.process_observation_from_consensus(
+                    source,
+                    generation,
+                    observation_key,
+                    duration,
+                    false,
+                );
+            }
+
+            let mut final_observations = estimator.get_observations();
+            final_observations.sort_by(|a, b| a.0.to_string().cmp(&b.0.to_string()));
+
+            let test_transactions = generate_test_transactions(version);
+            let mut transaction_estimates = Vec::new();
+            for (description, tx_data) in test_transactions {
+                let estimate = estimator.get_estimate(&tx_data);
+                transaction_estimates.push((description, estimate));
+            }
+
+            let snapshot_data = ExecutionTimeObserverSnapshot {
+                protocol_version: version,
+                consensus_observations: final_observations.clone(),
+                transaction_estimates,
+            };
+            insta::assert_yaml_snapshot!(
+                format!("execution_time_observer_v{}", version),
+                snapshot_data
+            );
+        }
     }
 }
