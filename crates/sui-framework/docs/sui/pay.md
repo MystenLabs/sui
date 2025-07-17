@@ -90,8 +90,8 @@ Transfer <code>c</code> to the sender of the current transaction
 
 ## Function `split`
 
-Split coin <code>self</code> to two coins, one with balance <code>split_amount</code>,
-and the remaining balance is left in <code>self</code>.
+Split <code><a href="../sui/coin.md#sui_coin">coin</a></code> to two coins, one with balance <code>split_amount</code>,
+and the remaining balance is left in <code><a href="../sui/coin.md#sui_coin">coin</a></code>.
 
 
 <pre><code><b>public</b> <b>entry</b> <b>fun</b> <a href="../sui/pay.md#sui_pay_split">split</a>&lt;T&gt;(<a href="../sui/coin.md#sui_coin">coin</a>: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)

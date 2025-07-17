@@ -15,8 +15,8 @@ public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
     transfer::public_transfer(c, ctx.sender())
 }
 
-/// Split coin `self` to two coins, one with balance `split_amount`,
-/// and the remaining balance is left in `self`.
+/// Split `coin` to two coins, one with balance `split_amount`,
+/// and the remaining balance is left in `coin`.
 public entry fun split<T>(coin: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
     keep(coin.split(split_amount, ctx), ctx)
 }
