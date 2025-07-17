@@ -7,15 +7,17 @@ module std::integer_tests;
 
 use std::unit_test::assert_eq;
 
+/// Iterate over the cases and apply the function to the case and its predecessor
+/// and successor. Predecessor is the value - 1, with min being 0, and successor
+/// is the value + 1, with max being the max value.
 public(package) macro fun cases($max: _, $cases: vector<_>, $f: |_, _, _|) {
-    let mut cases = $cases;
+    let cases = $cases;
     let max_pred = $max - 1;
-    while (!cases.is_empty()) {
-        let case = cases.pop_back();
+    cases.destroy!(|case| {
         let case_pred = case.max(1) - 1;
         let case_succ = case.min(max_pred) + 1;
         $f(case_pred, case, case_succ);
-    }
+    });
 }
 
 public(package) macro fun test_bitwise_not($max: _, $cases: vector<_>) {
@@ -101,6 +103,16 @@ public(package) macro fun test_divide_and_round_up($max: _, $cases: vector<_>) {
         check_div_round!(case, case_pred);
         check_div_round!(case_succ, case);
         check_div_round!(case, case_succ);
+    })
+}
+
+public(package) macro fun test_mul_div($max: _, $cases: vector<_>) {
+    let max = $max;
+    let cases = $cases;
+    assert_eq!(max.mul_div(max, max), max);
+    cases!(max, cases, |_case_pred, case, case_succ| {
+        assert_eq!(case.mul_div(case, case.max(1)), case); // avoid division by 0
+        assert_eq!(case_succ.mul_div(1, case_succ), 1);
     })
 }
 
