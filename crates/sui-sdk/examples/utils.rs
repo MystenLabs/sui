@@ -21,7 +21,6 @@ use serde_json::json;
 use shared_crypto::intent::Intent;
 use sui_sdk::types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::SignatureScheme::ED25519,
     digests::TransactionDigest,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     quorum_driver_types::ExecuteTransactionRequestType,
@@ -299,11 +298,11 @@ pub fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let default_active_address = if let Some(address) = keystore.addresses().first() {
         *address
     } else {
-        keystore.generate(ED25519, None, None, None)?.0
+        keystore.generate(None, Default::default())?.0
     };
 
     if keystore.addresses().len() < 2 {
-        keystore.generate(ED25519, None, None, None)?;
+        keystore.generate(None, Default::default())?;
     }
 
     client_config.active_address = Some(default_active_address);

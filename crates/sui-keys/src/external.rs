@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::keystore::{validate_alias, AccountKeystore, Alias, GenerateOptions};
 use crate::random_names::random_name;
 use anyhow::Error;
@@ -107,7 +110,7 @@ impl External {
         };
 
         let keys: BTreeMap<SuiAddress, Key> = if path.exists() {
-            let keys_store: String = std::fs::read_to_string(&path)
+            let keys_store: String = std::fs::read_to_string(path)
                 .map_err(|e| anyhow!("Failed to read keys file: {}", e))?;
             serde_json::from_str(&keys_store)
                 .map_err(|e| anyhow!("Failed to parse keys file: {}", e))?
