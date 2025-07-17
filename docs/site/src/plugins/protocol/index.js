@@ -9,7 +9,7 @@ import fs from "fs";
 
 const PROTOCOL_PATH = path.join(
   __dirname,
-  "../../../../../crates/sui-rpc-api/proto/documentation.json",
+  "../../../../content/documentation.json",
 );
 const MDX_FILENAME = "fullnode-protocol";
 const MDX_TEST = new RegExp(`${MDX_FILENAME}\\.mdx$`);

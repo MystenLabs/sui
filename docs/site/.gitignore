@@ -11,6 +11,7 @@ open-spec
 # Generated files
 .docusaurus
 .cache-loader
+../content/documentation.json
 
 # Misc
 .DS_Store
