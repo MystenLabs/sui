@@ -26,9 +26,7 @@ use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::execution_scheduler::SchedulingSource;
-use crate::wait_for_effects_request::{
-    RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
-};
+use crate::transaction_driver::{RejectReason, WaitForEffectsRequest, WaitForEffectsResponse};
 
 use super::AuthorityServerHandle;
 

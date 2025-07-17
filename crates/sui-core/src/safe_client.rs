@@ -4,7 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::wait_for_effects_request::{ExecutedData, WaitForEffectsResponse};
+use crate::transaction_driver::{ExecutedData, WaitForEffectsResponse};
 use prometheus::core::GenericCounter;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
