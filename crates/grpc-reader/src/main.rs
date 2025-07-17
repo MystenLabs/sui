@@ -8,7 +8,7 @@ use sui_rpc_api::Client as RpcClient;
 use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{
-    CheckpointArtifacts, CheckpointArtifactsDigest, CheckpointCommitment, ModifiedObjectState,
+    CheckpointArtifacts, CheckpointArtifactsDigest, CheckpointCommitment, ObjectCheckpointState,
 };
 
 pub async fn get_checkpoint_via_grpc(checkpoint_number: u64) -> Result<CheckpointData> {
@@ -34,14 +34,14 @@ pub fn load_checkpoint(file_path: &str) -> CheckpointData {
 
 // The tree of all objects updated in the checkpoint along with their latest state.
 pub struct ModifiedObjectTree {
-    pub contents: Vec<ModifiedObjectState>,
+    pub contents: Vec<ObjectCheckpointState>,
     pub tree: MerkleTree<Blake2b256>,
     pub object_map: HashMap<ObjectID, usize>,
 }
 
 #[derive(Debug)]
 pub struct ObjectInclusionProof {
-    pub object_state: ModifiedObjectState,
+    pub object_state: ObjectCheckpointState,
     pub merkle_proof: MerkleProof<Blake2b256>,
     pub leaf_index: usize,
 }
@@ -105,7 +105,7 @@ impl ModifiedObjectTree {
         if self.is_object_in_checkpoint(id) {
             return Err(anyhow::anyhow!("Object ID {} is in checkpoint", id));
         }
-        let target_object_state = ModifiedObjectState::new(id, None, None);
+        let target_object_state = ObjectCheckpointState::new(id, None);
         let non_inclusion_proof = self
             .tree
             .compute_non_inclusion_proof(&self.contents, &target_object_state)?;
@@ -119,14 +119,14 @@ impl ModifiedObjectTree {
 #[derive(Debug)]
 pub struct ObjectNonInclusionProof {
     pub id: ObjectID,
-    pub non_inclusion_proof: MerkleNonInclusionProof<ModifiedObjectState, Blake2b256>,
+    pub non_inclusion_proof: MerkleNonInclusionProof<ObjectCheckpointState, Blake2b256>,
 }
 
 impl ObjectNonInclusionProof {
     pub fn verify(&self, root: &CheckpointArtifactsDigest) -> bool {
         self.non_inclusion_proof.verify_proof(
             &Node::from(root.digest.into_inner()),
-            &ModifiedObjectState::new(self.id, None, None),
+            &ObjectCheckpointState::new(self.id, None),
         )
     }
 }

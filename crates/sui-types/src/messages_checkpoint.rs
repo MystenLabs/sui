@@ -51,8 +51,6 @@ pub use crate::digests::CheckpointDigest;
 pub type CheckpointSequenceNumber = u64;
 pub type CheckpointTimestamp = u64;
 
-
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointRequest {
     /// if a sequence number is specified, return the checkpoint with that sequence number;
@@ -129,76 +127,73 @@ impl Default for ECMHLiveObjectSetDigest {
     }
 }
 
+// TODO: Does this need versioning?
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModifiedObjectState {
+pub struct ObjectCheckpointState {
     pub id: ObjectID,
-    // TODO: Not sure if we adding version here makes sense.
-    pub version: Option<SequenceNumber>,
     pub digest: Option<ObjectDigest>,
+    // TODO: Should we add object type here?
 }
 
-impl ModifiedObjectState {
+impl ObjectCheckpointState {
     pub fn new(
         id: ObjectID,
-        version: Option<SequenceNumber>,
         digest: Option<ObjectDigest>,
     ) -> Self {
         Self {
             id,
-            version,
             digest,
         }
     }
 }
 
-impl From<ObjectChange> for ModifiedObjectState {
+impl From<ObjectChange> for ObjectCheckpointState {
     fn from(object_change: ObjectChange) -> Self {
         Self {
             id: object_change.id,
-            version: object_change.output_version,
             digest: object_change.output_digest,
         }
     }
 }
 
-impl PartialEq for ModifiedObjectState {
+impl PartialEq for ObjectCheckpointState {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl Eq for ModifiedObjectState {}
+impl Eq for ObjectCheckpointState {}
 
-impl PartialOrd for ModifiedObjectState {
+impl PartialOrd for ObjectCheckpointState {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for ModifiedObjectState {
+impl Ord for ObjectCheckpointState {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.id.cmp(&other.id)
     }
 }
 
 #[derive(Debug)]
-pub struct ModifiedObjectStates {
-    pub contents: Vec<ModifiedObjectState>,
+pub struct ObjectCheckpointStates {
+    pub contents: Vec<ObjectCheckpointState>,
 }
 
-impl ModifiedObjectStates {
-    pub fn digest(&self) -> Result<ModifiedObjectStatesDigest, anyhow::Error> {
+impl ObjectCheckpointStates {
+    pub fn digest(&self) -> Result<ObjectCheckpointStatesDigest, anyhow::Error> {
         let root = merkle_root::<Blake2b256, _>(self.contents.iter())?;
-        Ok(ModifiedObjectStatesDigest::from(root))
+        Ok(ObjectCheckpointStatesDigest::from(root))
     }
 }
 
 #[derive(Debug)]
-pub struct ModifiedObjectStatesDigest {
+pub struct ObjectCheckpointStatesDigest {
     pub digest: Digest,
 }
 
-impl From<[u8; 32]> for ModifiedObjectStatesDigest {
+impl From<[u8; 32]> for ObjectCheckpointStatesDigest {
     fn from(digest: [u8; 32]) -> Self {
         Self {
             digest: Digest::new(digest),
@@ -208,7 +203,7 @@ impl From<[u8; 32]> for ModifiedObjectStatesDigest {
 
 #[derive(Debug)]
 pub struct CheckpointArtifacts {
-    pub latest_object_states: ModifiedObjectStates,
+    pub latest_object_states: ObjectCheckpointStates,
     // Add more.. e.g., execution digests, events, etc.
 }
 
@@ -228,7 +223,7 @@ impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
             .map(|e| e.object_changes())
             .collect::<Vec<_>>();
 
-        let mut latest_object_states: BTreeMap<ObjectID, ModifiedObjectState> = BTreeMap::new();
+        let mut latest_object_states: BTreeMap<ObjectID, ObjectCheckpointState> = BTreeMap::new();
         for object_changes in all_object_changes {
             for object_change in object_changes {
                 match latest_object_states.entry(object_change.id) {
@@ -243,7 +238,7 @@ impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
             }
         }
 
-        let latest_object_states = ModifiedObjectStates {
+        let latest_object_states = ObjectCheckpointStates {
             contents: latest_object_states.into_values().collect::<Vec<_>>(),
         };
 
@@ -459,6 +454,17 @@ impl CheckpointSummary {
             Some(1) => Ok(Some(bcs::from_bytes(&self.version_specific_data)?)),
             _ => unimplemented!("unrecognized version_specific_data version in CheckpointSummary"),
         }
+    }
+
+    pub fn checkpoint_artifacts_digest(&self) -> Result<&CheckpointArtifactsDigest> {
+        let digest = self.checkpoint_commitments.iter().find_map(|c| match c {
+            CheckpointCommitment::CheckpointArtifactsDigest(digest) => Some(digest),
+            _ => None,
+        });
+        if digest.is_none() {
+            return Err(anyhow!("Checkpoint artifacts digest not found in checkpoint commitments"));
+        }
+        Ok(digest.unwrap())
     }
 }
 
