@@ -11,9 +11,9 @@ use crate::{
     errors::FileHandle,
     package::{EnvironmentName, layout::SourcePackageLayout, paths::PackagePath},
     schema::{
-        DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
-        ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
-        PublishAddresses, PublishedID,
+        DefaultDependency, ExternalDependency, ImplicitDepMode, LocalDepInfo,
+        ManifestDependencyInfo, ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata,
+        PackageName, PublishAddresses, PublishedID,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -251,6 +251,7 @@ fn parse_source_manifest(
                 metadata: PackageMetadata {
                     name: new_name,
                     edition,
+                    implicit_deps: ImplicitDepMode::Legacy,
                 },
                 deps: dependencies,
                 legacy_data: LegacyData {
