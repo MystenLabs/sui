@@ -14899,6 +14899,7 @@ name = "sui-keys"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64 0.21.7",
  "bcs",
  "bip32",

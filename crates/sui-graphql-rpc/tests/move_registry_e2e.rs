@@ -473,7 +473,8 @@ async fn publish_move_registry_package(
     let sig = cluster
         .validator_fullnode_handle
         .wallet
-        .sign_transaction(&tx);
+        .sign_transaction(&tx)
+        .await;
 
     let executed = cluster
         .validator_fullnode_handle

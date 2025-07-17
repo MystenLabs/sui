@@ -3,8 +3,10 @@
 
 use crate::keystore::{validate_alias, AccountKeystore, Alias, GenerateOptions};
 use crate::random_names::random_name;
-use anyhow::Error;
+
 use anyhow::{anyhow, bail};
+use anyhow::{Context, Error};
+use async_trait::async_trait;
 use base64;
 use base64::{engine::general_purpose, Engine as _};
 use bcs;
@@ -65,14 +67,16 @@ pub struct SignResponse {
 }
 
 #[automock]
+#[async_trait]
 pub trait CommandRunner: Send + Sync + Debug {
-    fn run(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error>;
+    async fn run(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error>;
 }
 
 #[derive(Debug)]
 struct StdCommandRunner;
+#[async_trait]
 impl CommandRunner for StdCommandRunner {
-    fn run(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error> {
+    async fn run(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error> {
         // get tokio command
 
         // spawn tokio
@@ -88,28 +92,22 @@ impl CommandRunner for StdCommandRunner {
             cmd.stdin.take().expect("No stdin"),
         );
 
-        let res = tokio::task::block_in_place(move || {
-            tokio::runtime::Handle::current().block_on(async {
-                let res: JsonValue = endpoint.call(method, args).await?;
-                if res.is_null() {
-                    return Err(anyhow!("Command returned null result"));
-                }
+        let res: JsonValue = endpoint.call(method, args).await?;
+        if res.is_null() {
+            return Err(anyhow!("Command returned null result"));
+        }
 
-                let output = cmd
-                    .wait_with_output()
-                    .await
-                    .map_err(|e| anyhow!("Failed to wait for command to finish: {}", e))?;
+        let output = cmd
+            .wait_with_output()
+            .await
+            .map_err(|e| anyhow!("Failed to wait for command to finish: {}", e))?;
 
-                if !output.status.success() {
-                    return Err(Error::msg(format!(
-                        "Command failed with status: {}",
-                        output.status
-                    )));
-                }
-
-                Ok(res)
-            })
-        })?;
+        if !output.status.success() {
+            return Err(Error::msg(format!(
+                "Command failed with status: {}",
+                output.status
+            )));
+        }
 
         if !res["error"].is_null() {
             return Err(anyhow!("Command failed with error: {:?}", res["error"]));
@@ -170,13 +168,22 @@ impl External {
     }
 
     /// Execute a command against the command runner
-    pub fn exec(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error> {
-        self.command_runner.run(command, method, args)
+    pub async fn exec(
+        &self,
+        command: &str,
+        method: &str,
+        args: JsonValue,
+    ) -> Result<JsonValue, Error> {
+        self.command_runner.run(command, method, args).await
     }
 
     /// Add a Key ID from the given signer to the Sui CLI index
-    pub fn add_existing(&mut self, signer: String, key_id: String) -> Result<StoredKey, Error> {
-        let keys = self.signer_available_keys(signer.clone())?;
+    pub async fn add_existing(
+        &mut self,
+        signer: String,
+        key_id: String,
+    ) -> Result<StoredKey, Error> {
+        let keys = self.signer_available_keys(signer.clone()).await?;
 
         let key: StoredKey = keys
             .into_iter()
@@ -188,8 +195,8 @@ impl External {
     }
 
     /// Return all Key IDs associated with a signer, indexed or not
-    pub fn signer_available_keys(&self, signer: String) -> Result<Vec<StoredKey>, Error> {
-        let result = self.exec(&signer, "keys", json![null])?;
+    pub async fn signer_available_keys(&self, signer: String) -> Result<Vec<StoredKey>, Error> {
+        let result = self.exec(&signer, "keys", json![null]).await?;
 
         let keys_response: KeysResponse = serde_json::from_value(result)
             .map_err(|e| anyhow!("Failed to parse keys response: {}", e))?;
@@ -210,38 +217,45 @@ impl External {
         self.keys.contains_key(&SuiAddress::from(&key.public_key))
     }
 
-    pub fn save_aliases(&self) -> Result<(), Error> {
+    pub async fn save_aliases(&self) -> Result<(), Error> {
         if let Some(path) = &self.path {
             let aliases_store: String = serde_json::to_string_pretty(&self.aliases)
                 .map_err(|e| anyhow!("Serialization error: {}", e))?;
 
-            let mut path = path.clone();
-            path.set_extension("aliases");
-            std::fs::write(path, aliases_store)
-                .map_err(|e| anyhow!("Failed to write to file: {}", e))?;
+            let mut aliases_path = path.clone();
+            aliases_path.set_extension("aliases");
+            tokio::task::spawn_blocking(move || std::fs::write(aliases_path, aliases_store))
+                .await?
+                .with_context(|| {
+                    format!(
+                        "Cannot write aliases to file: {}",
+                        path.with_extension("aliases").display()
+                    )
+                })?;
             Ok(())
         } else {
             Err(anyhow!("Path is not set for External keystore"))
         }
     }
 
-    pub fn save_keys(&self) -> Result<(), Error> {
+    pub async fn save_keystore(&self) -> Result<(), Error> {
         if let Some(path) = &self.path {
-            let keys_store: String = serde_json::to_string_pretty(&self.keys)
+            let store: String = serde_json::to_string_pretty(&self.keys)
                 .map_err(|e| anyhow!("Serialization error: {}", e))?;
 
-            let path = path.clone();
-            std::fs::write(path, keys_store)
-                .map_err(|e| anyhow!("Failed to write to file: {}", e))?;
+            let keystore_path = path.clone();
+            tokio::task::spawn_blocking(move || std::fs::write(keystore_path, store))
+                .await?
+                .with_context(|| format!("Cannot write keystore to file: {}", path.display()))?;
             Ok(())
         } else {
             Err(anyhow!("Path is not set for External keystore"))
         }
     }
 
-    pub fn save(&self) -> Result<(), Error> {
-        self.save_aliases()?;
-        self.save_keys()?;
+    pub async fn save(&self) -> Result<(), Error> {
+        self.save_aliases().await?;
+        self.save_keystore().await?;
         Ok(())
     }
 }
@@ -271,8 +285,9 @@ impl<'de> Deserialize<'de> for External {
     }
 }
 
+#[async_trait]
 impl AccountKeystore for External {
-    fn generate(
+    async fn generate(
         &mut self,
         alias: Option<String>,
         opts: GenerateOptions,
@@ -281,7 +296,7 @@ impl AccountKeystore for External {
             return Err(anyhow!("Signer must be provided for external keys."));
         };
 
-        let res = self.exec(&signer, "create_key", json![null])?;
+        let res = self.exec(&signer, "create_key", json![null]).await?;
         let ExternalKey { key_id, public_key } = serde_json::from_value(res)
             .map_err(|e| anyhow!("Failed to parse key response: {}", e))?;
         let public_key = PublicKey::decode_base64(&public_key)?;
@@ -307,11 +322,11 @@ impl AccountKeystore for External {
         Ok((address, public_key, ED25519))
     }
 
-    fn import(&mut self, _alias: Option<String>, _keypair: SuiKeyPair) -> Result<(), Error> {
+    async fn import(&mut self, _alias: Option<String>, _keypair: SuiKeyPair) -> Result<(), Error> {
         Err(anyhow!("Import not supported for external keys."))
     }
 
-    fn remove(&mut self, _address: SuiAddress) -> Result<(), Error> {
+    async fn remove(&mut self, _address: SuiAddress) -> Result<(), Error> {
         Err(anyhow!("Not supported for external keys."))
     }
 
@@ -334,7 +349,11 @@ impl AccountKeystore for External {
         Err(anyhow!("Export not supported for external keys."))
     }
 
-    fn sign_hashed(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+    async fn sign_hashed(
+        &self,
+        address: &SuiAddress,
+        msg: &[u8],
+    ) -> Result<Signature, signature::Error> {
         let StoredKey { key_id, signer, .. } = self
             .keys
             .get(address)
@@ -358,6 +377,7 @@ impl AccountKeystore for External {
                     ))
                 })?,
             )
+            .await
             .map_err(signature::Error::from_source)?;
 
         let signature = result["signature"]
@@ -370,14 +390,14 @@ impl AccountKeystore for External {
         Ok(signature)
     }
 
-    fn sign_secure<T>(
+    async fn sign_secure<T>(
         &self,
         address: &SuiAddress,
         msg: &T,
         intent: Intent,
     ) -> Result<Signature, signature::Error>
     where
-        T: Serialize,
+        T: Serialize + Sync,
     {
         let StoredKey { key_id, signer, .. } = self
             .keys
@@ -407,6 +427,7 @@ impl AccountKeystore for External {
                     ))
                 })?,
             )
+            .await
             .map_err(|e| signature::Error::from_source(anyhow!("Failed to sign message: {}", e)))?;
 
         let result: SignResponse = serde_json::from_value(result).map_err(|e| {
@@ -457,7 +478,11 @@ impl AccountKeystore for External {
         }
     }
 
-    fn update_alias(&mut self, old_alias: &str, new_alias: Option<&str>) -> Result<String, Error> {
+    async fn update_alias(
+        &mut self,
+        old_alias: &str,
+        new_alias: Option<&str>,
+    ) -> Result<String, Error> {
         if !self.alias_exists(old_alias) {
             bail!("The provided alias {old_alias} does not exist");
         }
@@ -523,8 +548,8 @@ mod tests {
         assert!(external.path.is_some());
     }
 
-    #[test]
-    fn test_serialize() {
+    #[tokio::test]
+    async fn test_serialize() {
         let tmp = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("src")
             .join("unit_tests")
@@ -565,7 +590,7 @@ mod tests {
             },
         );
 
-        external.save().unwrap();
+        external.save().await.unwrap();
 
         // custom serializer
         let serialized = serde_json::to_string(&external).expect("Failed to serialize external");
@@ -606,8 +631,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_exec() {
+    #[tokio::test]
+    async fn test_exec() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run()
             .with(
@@ -620,11 +645,14 @@ mod tests {
 
         let external = External::new_for_test(Box::new(mock));
         let args = json!(["arg1", "arg2"]);
-        assert!(external.exec("sui-key-tool", "test_method", args).is_ok());
+        assert!(external
+            .exec("sui-key-tool", "test_method", args)
+            .await
+            .is_ok());
     }
 
-    #[test]
-    fn test_create_key_success() {
+    #[tokio::test]
+    async fn test_create_key_success() {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
         mock.expect_run()
@@ -636,14 +664,16 @@ mod tests {
                 }))
             });
         let mut external = External::new_for_test(Box::new(mock));
-        let result = external.generate(None, GenerateOptions::ExternalSigner("signer".to_string()));
+        let result = external
+            .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
+            .await;
         assert!(result.is_ok());
         let address = result.unwrap().0;
         assert!(external.keys.contains_key(&address));
     }
 
-    #[test]
-    fn test_add_existing_key() {
+    #[tokio::test]
+    async fn test_add_existing_key() {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
         mock.expect_run().returning(move |_, _, _| {
@@ -656,43 +686,48 @@ mod tests {
         let mut external = External::new_for_test(Box::new(mock));
         external
             .add_existing("signer".to_string(), key_id.to_string())
+            .await
             .unwrap();
         let keys = external.keys;
         let key = keys.get(&SuiAddress::from_str(ADDRESS).expect("Invalid address format"));
         assert!(key.is_some());
     }
 
-    #[test]
-    fn test_add_keypair_not_supported() {
+    #[tokio::test]
+    async fn test_add_keypair_not_supported() {
         let mock = MockCommandRunner::new();
         let mut external = External::new_for_test(Box::new(mock));
         let mut crypto_rng = thread_rng();
         let ed25519_keypair = Ed25519KeyPair::generate(&mut crypto_rng);
-        let result = external.import(None, SuiKeyPair::Ed25519(ed25519_keypair));
+        let result = external
+            .import(None, SuiKeyPair::Ed25519(ed25519_keypair))
+            .await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_add_existing_key_not_found() {
+    #[tokio::test]
+    async fn test_add_existing_key_not_found() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run()
             .returning(|_, _, _| Ok(json!({"keys": []})));
         let mut external = External::new_for_test(Box::new(mock));
-        let result = external.add_existing("signer".to_string(), "missing-key-id".to_string());
+        let result = external
+            .add_existing("signer".to_string(), "missing-key-id".to_string())
+            .await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_exec_error_propagation() {
+    #[tokio::test]
+    async fn test_exec_error_propagation() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run().returning(|_, _, _| Err(anyhow!("fail")));
         let external = External::new_for_test(Box::new(mock));
-        let result = external.exec("cmd", "method", json!([1, 2, 3]));
+        let result = external.exec("cmd", "method", json!([1, 2, 3])).await;
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_keys_parsing() {
+    #[tokio::test]
+    async fn test_keys_parsing() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run().returning(move |_, _, _| {
             Ok(json!({
@@ -705,6 +740,7 @@ mod tests {
         let external = External::new_for_test(Box::new(mock));
         let keys = external
             .signer_available_keys("signer".to_string())
+            .await
             .unwrap();
         assert_eq!(keys.len(), 2);
         assert_eq!(keys[0].key_id, "key-1");
@@ -750,8 +786,8 @@ mod tests {
         assert!(result.is_err())
     }
 
-    #[test]
-    fn test_sign_hashed() {
+    #[tokio::test]
+    async fn test_sign_hashed() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run().returning(|_, _, _| {
             let bytes = vec![0; 97];
@@ -773,15 +809,15 @@ mod tests {
         );
 
         let message = b"message";
-        let result = external.sign_hashed(&address, message).unwrap();
+        let result = external.sign_hashed(&address, message).await.unwrap();
         assert_eq!(
             result,
             Signature::Ed25519SuiSignature(Ed25519SuiSignature::default())
         )
     }
 
-    #[test]
-    fn test_sign_secure() {
+    #[tokio::test]
+    async fn test_sign_secure() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run().returning(|_, _, _| {
             let bytes = vec![0; 97];
@@ -805,7 +841,7 @@ mod tests {
 
         let message = b"message";
         let intent = Intent::sui_transaction();
-        let result = external.sign_secure(&address, message, intent);
+        let result = external.sign_secure(&address, message, intent).await;
 
         assert!(result.is_ok());
     }
@@ -866,8 +902,8 @@ mod tests {
         assert!(external.aliases().iter().all(|a| a.alias == alias));
     }
 
-    #[test]
-    fn test_update_alias() {
+    #[tokio::test]
+    async fn test_update_alias() {
         let mut external = load_external_keystore();
         let old_alias = "test_alias".to_string();
         let new_alias = "updated_alias".to_string();
@@ -876,7 +912,10 @@ mod tests {
         assert!(external.alias_exists(&old_alias));
 
         // Update the alias
-        let updated_alias = external.update_alias(&old_alias, Some(&new_alias)).unwrap();
+        let updated_alias = external
+            .update_alias(&old_alias, Some(&new_alias))
+            .await
+            .unwrap();
         assert_eq!(updated_alias, new_alias);
 
         // Verify the alias was updated

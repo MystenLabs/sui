@@ -283,7 +283,7 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
         let tx = TestTransactionBuilder::new(sender, gas, rgp)
             .publish(token_package_dir.to_path_buf())
             .build();
-        let tx = wallet_context.sign_transaction(&tx);
+        let tx = wallet_context.sign_transaction(&tx).await;
         let api_clone = quorum_driver_api.clone();
         publish_tokens_tasks.push(tokio::spawn(async move {
             api_clone.execute_transaction_block(
@@ -358,7 +358,7 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
             .unwrap()
             .unwrap();
         let tx = TransactionData::new_programmable(sender, vec![gas], pt, 1_000_000_000, rgp);
-        let signed_tx = wallet_context.sign_transaction(&tx);
+        let signed_tx = wallet_context.sign_transaction(&tx).await;
         let api_clone = quorum_driver_api.clone();
         register_tasks.push(async move {
             api_clone

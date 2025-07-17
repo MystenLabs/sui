@@ -142,11 +142,15 @@ impl StressTestRunner {
             .await
             .unwrap()
             .unwrap();
-        let transaction = self.test_cluster.wallet.sign_transaction(
-            &TestTransactionBuilder::new(sender, gas_object, rgp)
-                .programmable(pt)
-                .build(),
-        );
+        let transaction = self
+            .test_cluster
+            .wallet
+            .sign_transaction(
+                &TestTransactionBuilder::new(sender, gas_object, rgp)
+                    .programmable(pt)
+                    .build(),
+            )
+            .await;
         let (effects, _) = self
             .test_cluster
             .execute_transaction_return_raw_effects(transaction)

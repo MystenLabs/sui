@@ -16,13 +16,14 @@ use sui_types::{
     crypto::Ed25519SuiSignature,
 };
 
-#[test]
-fn alias_exists_test() {
+#[tokio::test]
+async fn alias_exists_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     keystore
         .generate(Some("my_alias_test".to_string()), Default::default())
+        .await
         .unwrap();
     let aliases = alias_names(keystore.aliases());
     assert_eq!(1, aliases.len());
@@ -30,26 +31,26 @@ fn alias_exists_test() {
     assert!(!aliases.contains(&"alias_does_not_exist"));
 }
 
-#[test]
-fn create_alias_keystore_file_test() {
+#[tokio::test]
+async fn create_alias_keystore_file_test() {
     let temp_dir = TempDir::new().unwrap();
     let mut keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    keystore.generate(None, Default::default()).unwrap();
+    keystore.generate(None, Default::default()).await.unwrap();
 
     keystore_path.set_extension("aliases");
     assert!(keystore_path.exists());
 
     keystore_path = temp_dir.path().join("myfile.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    keystore.generate(None, Default::default()).unwrap();
+    keystore.generate(None, Default::default()).await.unwrap();
 
     keystore_path.set_extension("aliases");
     assert!(keystore_path.exists());
 }
 
-#[test]
-fn check_reading_aliases_file_correctly() {
+#[tokio::test]
+async fn check_reading_aliases_file_correctly() {
     // when reading the alias file containing alias + public key base 64,
     // make sure the addresses are correctly converted back from pk
 
@@ -57,7 +58,7 @@ fn check_reading_aliases_file_correctly() {
     let mut keystore_path = temp_dir.path().join("sui.keystore");
     let keystore_path_keep = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let (address, _, _) = keystore.generate(None, Default::default()).unwrap();
+    let (address, _, _) = keystore.generate(None, Default::default()).await.unwrap();
     keystore_path.set_extension("aliases");
     assert!(keystore_path.exists());
 
@@ -66,8 +67,8 @@ fn check_reading_aliases_file_correctly() {
     assert_eq!(address, *addresses.first().unwrap().0)
 }
 
-#[test]
-fn create_alias_if_not_exists_test() {
+#[tokio::test]
+async fn create_alias_if_not_exists_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
@@ -75,6 +76,7 @@ fn create_alias_if_not_exists_test() {
     let alias = Some("my_alias_test".to_string());
     keystore
         .generate(alias.clone(), Default::default())
+        .await
         .unwrap();
     // test error first
     let create_alias_result = keystore.create_alias(alias);
@@ -110,14 +112,15 @@ fn keystore_no_aliases() {
     assert_eq!(1, keystore.aliases().len());
 }
 
-#[test]
-fn update_alias_test() {
+#[tokio::test]
+async fn update_alias_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
 
     keystore
         .generate(Some("my_alias_test".to_string()), Default::default())
+        .await
         .unwrap();
 
     let aliases = alias_names(keystore.aliases());
@@ -129,62 +132,75 @@ fn update_alias_test() {
     let aliases1 = alias_names(keystore1.aliases());
     assert_eq!(vec!["my_alias_test"], aliases1);
 
-    let update = keystore.update_alias("alias_does_not_exist", None);
+    let update = keystore.update_alias("alias_does_not_exist", None).await;
     assert!(update.is_err());
 
-    let _ = keystore.update_alias("my_alias_test", Some("new_alias"));
+    let _ = keystore
+        .update_alias("my_alias_test", Some("new_alias"))
+        .await;
     let aliases = alias_names(keystore.aliases());
     assert_eq!(vec!["new_alias"], aliases);
 
     // check that it errors on empty alias
-    assert!(keystore.update_alias("new_alias", Some(" ")).is_err());
-    assert!(keystore.update_alias("new_alias", Some("   ")).is_err());
+    assert!(keystore.update_alias("new_alias", Some(" ")).await.is_err());
+    assert!(keystore
+        .update_alias("new_alias", Some("   "))
+        .await
+        .is_err());
     // check that alias is trimmed
-    assert!(keystore.update_alias("new_alias", Some("  o ")).is_ok());
+    assert!(keystore
+        .update_alias("new_alias", Some("  o "))
+        .await
+        .is_ok());
     assert_eq!(vec!["o"], alias_names(keystore.aliases()));
     // check the regex works and new alias can be only [A-Za-z][A-Za-z0-9-_]*
-    assert!(keystore.update_alias("o", Some("_alias")).is_err());
-    assert!(keystore.update_alias("o", Some("-alias")).is_err());
-    assert!(keystore.update_alias("o", Some("123")).is_err());
+    assert!(keystore.update_alias("o", Some("_alias")).await.is_err());
+    assert!(keystore.update_alias("o", Some("-alias")).await.is_err());
+    assert!(keystore.update_alias("o", Some("123")).await.is_err());
 
-    let update = keystore.update_alias("o", None).unwrap();
+    let update = keystore.update_alias("o", None).await.unwrap();
     let aliases = alias_names(keystore.aliases());
     assert_eq!(vec![&update], aliases);
 
     // check that updating alias does not allow duplicates
     keystore
         .generate(Some("my_alias_test".to_string()), Default::default())
+        .await
         .unwrap();
 
     assert!(keystore
         .update_alias("my_alias_test", Some(&update))
+        .await
         .is_err());
 }
 
-#[test]
-fn update_alias_in_memory_test() {
+#[tokio::test]
+async fn update_alias_in_memory_test() {
     let mut keystore = Keystore::InMem(InMemKeystore::new_insecure_for_tests(0));
     keystore
         .generate(Some("my_alias_test".to_string()), Default::default())
+        .await
         .unwrap();
     let aliases = alias_names(keystore.aliases());
     assert_eq!(1, aliases.len());
     assert_eq!(vec!["my_alias_test"], aliases);
 
-    let update = keystore.update_alias("alias_does_not_exist", None);
+    let update = keystore.update_alias("alias_does_not_exist", None).await;
     assert!(update.is_err());
 
-    let _ = keystore.update_alias("my_alias_test", Some("new_alias"));
+    let _ = keystore
+        .update_alias("my_alias_test", Some("new_alias"))
+        .await;
     let aliases = alias_names(keystore.aliases());
     assert_eq!(vec!["new_alias"], aliases);
 
-    let update = keystore.update_alias("new_alias", None).unwrap();
+    let update = keystore.update_alias("new_alias", None).await.unwrap();
     let aliases = alias_names(keystore.aliases());
     assert_eq!(vec![&update], aliases);
 }
 
-#[test]
-fn mnemonic_test() {
+#[tokio::test]
+async fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
     let (address, _keypair, scheme, phrase) =
         generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
@@ -193,14 +209,15 @@ fn mnemonic_test() {
     let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());
     let imported_address = keystore2
         .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None, None)
+        .await
         .unwrap();
     assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
     assert_eq!(address, imported_address);
 }
 
 /// This test confirms rust's implementation of mnemonic is the same with the Sui Wallet
-#[test]
-fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
+#[tokio::test]
+async fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
     let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
     let expected_address =
         SuiAddress::from_str("0x936accb491f0facaac668baaedcf4d0cfc6da1120b66f77fa6a43af718669973")?;
@@ -211,6 +228,7 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
 
     keystore
         .import_from_mnemonic(phrase, SignatureScheme::ED25519, None, None)
+        .await
         .unwrap();
 
     let pubkey = keystore.entries()[0].clone();
@@ -239,14 +257,15 @@ fn keystore_display_test() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[test]
-fn get_alias_by_address_test() {
+#[tokio::test]
+async fn get_alias_by_address_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let alias = "my_alias_test".to_string();
     let keypair = keystore
         .generate(Some(alias.clone()), Default::default())
+        .await
         .unwrap();
     assert_eq!(alias, keystore.get_alias(&keypair.0).unwrap());
 
@@ -255,14 +274,15 @@ fn get_alias_by_address_test() {
     assert!(keystore.get_alias(&address.0).is_err())
 }
 
-#[test]
-fn remove_key_test() {
+#[tokio::test]
+async fn remove_key_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
 
     let (addr, _, _) = keystore
         .generate(Some("test_key".to_string()), Default::default())
+        .await
         .unwrap();
 
     let mut aliases_path = keystore_path.clone();
@@ -271,7 +291,7 @@ fn remove_key_test() {
     let aliases_content = fs::read_to_string(&aliases_path).unwrap();
     assert!(aliases_content.contains("test_key"));
 
-    keystore.remove(addr).unwrap();
+    keystore.remove(addr).await.unwrap();
 
     // Verify alias is removed from file
     let aliases_content = fs::read_to_string(&aliases_path).unwrap();

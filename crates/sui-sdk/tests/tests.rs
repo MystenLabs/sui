@@ -18,8 +18,8 @@ use sui_types::{
     utils::sign_zklogin_personal_msg,
 };
 
-#[test]
-fn mnemonic_test() {
+#[tokio::test]
+async fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
     let (address, _key_pair, scheme, phrase) =
         generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
@@ -28,6 +28,7 @@ fn mnemonic_test() {
     let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());
     let imported_address = keystore2
         .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None, None)
+        .await
         .unwrap();
     assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
     assert_eq!(address, imported_address);
