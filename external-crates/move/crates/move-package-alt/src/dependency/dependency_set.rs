@@ -35,7 +35,7 @@ impl<T> DependencySet<T> {
     ///
     /// ```
     /// use move_package_alt::dependency::DependencySet;
-    /// use move_package_alt::package::{EnvironmentName, PackageName};
+    /// use move_package_alt::schema::{EnvironmentName, PackageName};
     /// let mut example = DependencySet::new();
     /// assert!(example.is_empty());
     ///
