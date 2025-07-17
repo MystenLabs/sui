@@ -23,6 +23,7 @@ HEX (Base16) encoding utility.
 
 <a name="sui_hex_EInvalidHexLength"></a>
 
+Trying to decode the hex string which does not have even number of characters into bytes.
 
 
 <pre><code><b>const</b> <a href="../sui/hex.md#sui_hex_EInvalidHexLength">EInvalidHexLength</a>: u64 = 0;
@@ -32,6 +33,7 @@ HEX (Base16) encoding utility.
 
 <a name="sui_hex_ENotValidHexCharacter"></a>
 
+Trying to decode the hex string which contains non-valid hex characters into bytes.
 
 
 <pre><code><b>const</b> <a href="../sui/hex.md#sui_hex_ENotValidHexCharacter">ENotValidHexCharacter</a>: u64 = 1;
@@ -66,12 +68,9 @@ Encode <code>bytes</code> in lowercase hex
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_encode">encode</a>(bytes: vector&lt;u8&gt;): vector&lt;u8&gt; {
-    <b>let</b> (<b>mut</b> i, <b>mut</b> r, l) = (0, vector[], bytes.length());
+    <b>let</b> (<b>mut</b> r, l) = (vector[], bytes.length());
     <b>let</b> hex_vector = <a href="../sui/hex.md#sui_hex_HEX">HEX</a>;
-    <b>while</b> (i &lt; l) {
-        r.append(hex_vector[bytes[i] <b>as</b> u64]);
-        i = i + 1;
-    };
+    l.do!(|i| r.append(hex_vector[bytes[i] <b>as</b> u64]));
     r
 }
 </code></pre>
@@ -102,13 +101,12 @@ Aborts if the hex string contains non-valid hex characters (valid characters are
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_decode">decode</a>(<a href="../sui/hex.md#sui_hex">hex</a>: vector&lt;u8&gt;): vector&lt;u8&gt; {
-    <b>let</b> (<b>mut</b> i, <b>mut</b> r, l) = (0, vector[], <a href="../sui/hex.md#sui_hex">hex</a>.length());
+    <b>let</b> (<b>mut</b> r, l) = (vector[], <a href="../sui/hex.md#sui_hex">hex</a>.length());
     <b>assert</b>!(l % 2 == 0, <a href="../sui/hex.md#sui_hex_EInvalidHexLength">EInvalidHexLength</a>);
-    <b>while</b> (i &lt; l) {
-        <b>let</b> decimal = <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[i]) * 16 + <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[i + 1]);
+    (l / 2).do!(|i| {
+        <b>let</b> decimal = <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[2 * i]) * 16 + <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[2 * i + 1]);
         r.push_back(decimal);
-        i = i + 2;
-    };
+    });
     r
 }
 </code></pre>
