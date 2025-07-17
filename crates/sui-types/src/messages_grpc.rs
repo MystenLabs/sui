@@ -6,7 +6,6 @@ use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use crate::messages_consensus::ConsensusPosition;
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use bytes::Bytes;
@@ -230,13 +229,23 @@ pub struct RawSubmitTxRequest {
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxResponse {
     // Serialized Consensus Position
-    #[prost(bytes = "bytes", tag = "1")]
-    pub consensus_position: Bytes,
+    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2, 3")]
+    pub inner: Option<RawValidatorSubmitStatus>,
 }
 
-#[derive(Clone, Debug)]
-pub struct SubmitTxResponse {
-    pub consensus_position: ConsensusPosition,
+#[derive(Clone, prost::Oneof)]
+pub enum RawValidatorSubmitStatus {
+    // Serialized Consensus Position.
+    #[prost(bytes = "bytes", tag = "1")]
+    Submitted(Bytes),
+
+    // Transaction has already been executed (finalized).
+    #[prost(message, tag = "2")]
+    Executed(RawExecutedStatus),
+
+    // Transaction is rejected without consensus submission.
+    #[prost(message, tag = "3")]
+    Rejected(RawRejectedStatus),
 }
 
 #[derive(Clone, prost::Message)]

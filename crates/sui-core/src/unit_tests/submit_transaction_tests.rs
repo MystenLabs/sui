@@ -11,8 +11,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages_consensus::ConsensusPosition;
-use sui_types::messages_grpc::{RawSubmitTxRequest, SubmitTxResponse};
+use sui_types::messages_grpc::RawSubmitTxRequest;
 use sui_types::object::Object;
 use sui_types::transaction::{
     Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
@@ -26,6 +25,7 @@ use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
+use crate::transaction_driver::SubmitTxResponse;
 
 use super::AuthorityServerHandle;
 
@@ -113,11 +113,13 @@ async fn test_submit_transaction_success() {
         .unwrap();
 
     // Verify we got a consensus position back
-    let response = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response.consensus_position.as_ref())
-            .unwrap(),
+    let response: SubmitTxResponse = response.try_into().unwrap();
+    match response {
+        SubmitTxResponse::Submitted { consensus_position } => {
+            assert_eq!(consensus_position.index, 0);
+        }
+        _ => panic!("Expected Submitted response"),
     };
-    assert_eq!(response.consensus_position.index, 0);
 }
 
 #[tokio::test]
@@ -169,11 +171,13 @@ async fn test_submit_transaction_already_executed() {
 
     // Verify we still got a consensus position back, because the transaction has not been committed yet,
     // so we can still sign the same transaction.
-    let response1 = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response1.consensus_position.as_ref())
-            .unwrap(),
+    let response1: SubmitTxResponse = response1.try_into().unwrap();
+    match response1 {
+        SubmitTxResponse::Submitted { consensus_position } => {
+            assert_eq!(consensus_position.index, 0);
+        }
+        _ => panic!("Expected Submitted response"),
     };
-    assert_eq!(response1.consensus_position.index, 0);
 
     // Execute it again through non-fastpath, which will commit the object changes.
     test_context

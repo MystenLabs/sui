@@ -122,10 +122,15 @@ where
         let auth_agg = self.authority_aggregator.load();
 
         // Get consensus position using TransactionSubmitter
-        let consensus_position = self
+        let submit_txn_resp = self
             .submitter
             .submit_transaction(&auth_agg, tx_digest, raw_request, options)
             .await?;
+
+        let consensus_position = match submit_txn_resp {
+            SubmitTxResponse::Submitted { consensus_position } => consensus_position,
+            _ => todo!(),
+        };
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier

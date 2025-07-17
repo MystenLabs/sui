@@ -72,7 +72,7 @@ use crate::{
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_driver::{
-        ExecutedData, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
+        ExecutedData, RejectReason, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     transaction_outputs::TransactionOutputs,
 };
@@ -604,9 +604,8 @@ impl ValidatorService {
             // Only submitting a single tx so we should get back a single consensus position
             let consensus_position = resp.remove(0);
 
-            let submit_transaction_response = RawSubmitTxResponse {
-                consensus_position: consensus_position.into_raw()?,
-            };
+            let submit_transaction_response =
+                SubmitTxResponse::Submitted { consensus_position }.try_into()?;
 
             Ok((
                 tonic::Response::new(submit_transaction_response),
