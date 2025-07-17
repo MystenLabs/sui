@@ -578,7 +578,26 @@ impl ValidatorService {
         };
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = error_span!("ValidatorService::handle_submit_transaction", tx_digest = ?transaction.digest());
+        let tx_digest = transaction.digest();
+        let span =
+            error_span!("ValidatorService::handle_submit_transaction", tx_digest = ?tx_digest);
+
+        // Return the executed data if the transaction has already been executed.
+        if let Some(effects) = self
+            .state
+            .get_transaction_cache_reader()
+            .get_executed_effects(tx_digest)
+        {
+            let effects_digest = effects.digest();
+            if let Ok(executed_data) = self.complete_executed_data(effects, None).await {
+                let executed_resp = SubmitTxResponse::Executed {
+                    effects_digest,
+                    details: Some(executed_data),
+                };
+                let executed_resp = executed_resp.try_into()?;
+                return Ok((tonic::Response::new(executed_resp), Weight::zero()));
+            }
+        }
 
         state
             .handle_vote_transaction(&epoch_store, transaction.clone())
@@ -1238,21 +1257,10 @@ impl ValidatorService {
         };
         let effects_digest = effects.digest();
         let details = if request.include_details {
-            let (events, input_objects, output_objects) = self
-                .collect_effects_data(
-                    &effects,
-                    request.include_details,
-                    request.include_details,
-                    request.include_details,
-                    fastpath_outputs,
-                )
+            let executed_data = self
+                .complete_executed_data(effects, fastpath_outputs)
                 .await?;
-            Some(Box::new(ExecutedData {
-                effects,
-                events,
-                input_objects,
-                output_objects,
-            }))
+            Some(executed_data)
         } else {
             None
         };
@@ -1261,6 +1269,28 @@ impl ValidatorService {
             details,
         };
         Ok(response)
+    }
+
+    async fn complete_executed_data(
+        &self,
+        effects: TransactionEffects,
+        fastpath_outputs: Option<Arc<TransactionOutputs>>,
+    ) -> SuiResult<Box<ExecutedData>> {
+        let (events, input_objects, output_objects) = self
+            .collect_effects_data(
+                &effects,
+                /* include_events */ true,
+                /* include_input_objects */ true,
+                /* include_output_objects */ true,
+                fastpath_outputs,
+            )
+            .await?;
+        Ok(Box::new(ExecutedData {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+        }))
     }
 
     async fn soft_bundle_validity_check(
