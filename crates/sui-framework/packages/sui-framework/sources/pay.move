@@ -53,7 +53,7 @@ public entry fun join<T>(self: &mut Coin<T>, coin: Coin<T>) {
 }
 
 /// Join everything in `coins` with `self`
-public entry fun join_vec<T>(self: &mut Coin<T>, mut coins: vector<Coin<T>>) {
+public entry fun join_vec<T>(self: &mut Coin<T>, coins: vector<Coin<T>>) {
     coins.do!(|coin| self.join(coin));
 }
 
