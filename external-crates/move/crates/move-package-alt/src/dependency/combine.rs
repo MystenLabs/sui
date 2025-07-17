@@ -40,7 +40,7 @@ impl CombinedDependency {
         let mut replacements = dep_replacements.clone();
 
         for (pkg, default) in dependencies.iter() {
-            let combined = if let Some(replacement) = replacements.remove(pkg.get_ref()) {
+            let combined = if let Some(replacement) = replacements.remove(pkg) {
                 Self::from_default_with_replacement(
                     file,
                     env.name().to_string(),
@@ -50,7 +50,7 @@ impl CombinedDependency {
             } else {
                 Self::from_default(file, env.name().to_string(), default.clone())
             };
-            result.insert(pkg.get_ref().clone(), combined);
+            result.insert(pkg.clone(), combined);
         }
 
         for (pkg, dep) in replacements {

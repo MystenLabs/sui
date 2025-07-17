@@ -6,6 +6,8 @@ use std::{collections::BTreeMap, path::Path};
 
 use super::manifest::{Manifest, ManifestError};
 use super::paths::PackagePath;
+use crate::compatibility::legacy_parser::ParsedLegacyPackage;
+use crate::schema::{ImplicitDepMode, ReplacementDependency};
 use crate::{
     compatibility::{
         legacy::LegacyData,
@@ -20,6 +22,8 @@ use crate::{
         PackageName, Publication, PublishAddresses, PublishedID,
     },
 };
+
+const SYSTEM_DEPS_NAMES: [&str; 5] = ["Sui", "MoveStdlib", "Bridge", "DeepBook", "SuiSystem"];
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -92,7 +96,9 @@ impl<F: MoveFlavor> Package<F> {
             // - if there is no value with the same environment ID, we error
 
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
-            let implicit_deps = F::implicit_deps(env.id().to_string());
+
+            let implicit_deps =
+                implicit_deps::<F>(env, manifest.parsed().package.implicit_deps, None);
 
             // TODO: We should error if there environment is not supported!
             let combined_deps = CombinedDependency::combine_deps(
@@ -130,20 +136,18 @@ impl<F: MoveFlavor> Package<F> {
 
         let handle = legacy_manifest.file_handle;
 
-        let deps = pin::<F>(
-            legacy_manifest
-                .deps
-                .into_iter()
-                .map(|(name, dep)| {
-                    (
-                        name,
-                        CombinedDependency::from_default(handle, env.name().clone(), dep),
-                    )
-                })
-                .collect(),
-            env.id(),
-        )
-        .await?;
+        let implicit_deps =
+            implicit_deps::<F>(env, ImplicitDepMode::Legacy, Some(&legacy_manifest));
+
+        let combined_deps = CombinedDependency::combine_deps(
+            handle,
+            env,
+            &BTreeMap::new(),
+            &legacy_manifest.deps,
+            &implicit_deps,
+        )?;
+
+        let deps = pin::<F>(combined_deps, env.id()).await?;
 
         Ok(Self {
             env: env.name().clone(),
@@ -230,5 +234,36 @@ impl<F: MoveFlavor> Package<F> {
     /// including support for backwards compatibility (legacy packages)
     pub fn original_id(&self) -> Option<OriginalID> {
         self.publication().map(|data| data.original_id.clone())
+    }
+}
+
+/// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
+/// is ImplicitDepMode::Legacy, a `legacy_manifest` is required otherwise it will panic.
+fn implicit_deps<F: MoveFlavor>(
+    env: &Environment,
+    implicit_dep_mode: ImplicitDepMode,
+    legacy_manifest: Option<&ParsedLegacyPackage>,
+) -> BTreeMap<PackageName, ReplacementDependency> {
+    // TODO: is this correct? Do we need to include the git repo? What if somebody names it
+    // differently and specifies a different git repository (e.g., a fork) - is that possible?
+    // e.g., SuiFork = { git = "https://github.com/suifork/sui.git", branch = "main" }
+
+    match implicit_dep_mode {
+        ImplicitDepMode::Enabled => F::implicit_deps(env.id().to_string()),
+        ImplicitDepMode::Disabled => BTreeMap::new(),
+        ImplicitDepMode::Legacy => {
+            let system_deps_in_legacy_manifest = legacy_manifest
+                .expect("Legacy manifest should be present")
+                .deps
+                .iter()
+                .any(|(name, _)| SYSTEM_DEPS_NAMES.contains(&name.as_str()));
+            // if the legacy manifest has system dependencies, we return an empty map
+            if system_deps_in_legacy_manifest {
+                BTreeMap::new()
+            } else {
+                F::implicit_deps(env.id().to_string())
+            }
+        }
+        ImplicitDepMode::Testing => todo!(),
     }
 }

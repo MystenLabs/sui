@@ -96,8 +96,13 @@ impl Manifest {
         &self.inner.dep_replacements
     }
 
-    pub fn dependencies(&self) -> &BTreeMap<Spanned<PackageName>, DefaultDependency> {
-        &self.inner.dependencies
+    pub fn dependencies(&self) -> BTreeMap<PackageName, DefaultDependency> {
+        self.inner
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k.as_ref().clone(), v.clone()))
+            .collect()
     }
 
     /// The entries from the `[environments]` section
