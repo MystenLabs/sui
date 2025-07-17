@@ -250,6 +250,7 @@ const MAX_PROTOCOL_VERSION: u64 = 89;
 //             Define the cost for the native Move function `rgp`.
 //             Ignore execution time observations after validator stops accepting certs.
 // Version 89: Standard library improvements.
+//             Enable `debug_fatal` on Move invariant violations.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -737,6 +738,12 @@ struct FeatureFlags {
     // If true, ignore execution time observations after certs are closed.
     #[serde(skip_serializing_if = "is_false")]
     ignore_execution_time_observations_after_certs_closed: bool,
+
+    // If true use `debug_fatal` to report invariant violations.
+    // `debug_fatal` panics in debug builds and breaks tests/behavior based on older
+    // protocol versions (see make_vec_non_existent_type_v71.move)
+    #[serde(skip_serializing_if = "is_false")]
+    debug_fatal_on_move_invariant_violation: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2101,6 +2108,10 @@ impl ProtocolConfig {
     pub fn ignore_execution_time_observations_after_certs_closed(&self) -> bool {
         self.feature_flags
             .ignore_execution_time_observations_after_certs_closed
+    }
+
+    pub fn debug_fatal_on_move_invariant_violation(&self) -> bool {
+        self.feature_flags.debug_fatal_on_move_invariant_violation
     }
 }
 
@@ -3826,7 +3837,9 @@ impl ProtocolConfig {
                             },
                         );
                 }
-                89 => {}
+                89 => {
+                    cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

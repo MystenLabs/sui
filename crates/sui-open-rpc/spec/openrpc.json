@@ -1318,6 +1318,7 @@
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "debug_fatal_on_move_invariant_violation": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,

@@ -100,6 +100,7 @@ feature_flags:
   better_adapter_type_resolution_errors: true
   record_time_estimate_processed: true
   ignore_execution_time_observations_after_certs_closed: true
+  debug_fatal_on_move_invariant_violation: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
