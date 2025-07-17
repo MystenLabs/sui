@@ -6,8 +6,8 @@ use crate::{
     dependency::PinnedDependencyInfo,
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
-    schema::{Environment, PackageName},
+    package::{Package, lockfile::Lockfiles, paths::PackagePath},
+    schema::{Environment, EnvironmentName, PackageName},
 };
 
 use std::{

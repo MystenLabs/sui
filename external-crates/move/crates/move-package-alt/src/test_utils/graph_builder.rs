@@ -51,8 +51,10 @@ use crate::{
         Vanilla,
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
     },
-    package::{EnvironmentID, EnvironmentName, paths::PackagePath},
-    schema::{OriginalID, PackageName, PublishAddresses, PublishedID},
+    package::paths::PackagePath,
+    schema::{
+        EnvironmentID, EnvironmentName, OriginalID, PackageName, PublishAddresses, PublishedID,
+    },
     test_utils::{Project, project},
 };
 

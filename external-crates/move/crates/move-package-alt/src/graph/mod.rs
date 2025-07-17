@@ -13,8 +13,8 @@ use std::sync::Arc;
 use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, paths::PackagePath},
-    schema::{Environment, PackageName},
+    package::{Package, paths::PackagePath},
+    schema::{Environment, EnvironmentName, PackageName},
 };
 use builder::PackageGraphBuilder;
 

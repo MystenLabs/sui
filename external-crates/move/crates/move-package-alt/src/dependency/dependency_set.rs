@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, btree_map};
 
 use derive_where::derive_where;
 
-use crate::{package::EnvironmentName, schema::PackageName};
+use crate::schema::{EnvironmentName, PackageName};
 
 // TODO: the API for this type is a bit of a historical artifact - it used to also have a notion of
 // default dependencies and do merging. We now do that much earlier in the process. So this type
@@ -35,7 +35,7 @@ impl<T> DependencySet<T> {
     ///
     /// ```
     /// use move_package_alt::dependency::DependencySet;
-    /// use move_package_alt::package::{EnvironmentName, PackageName};
+    /// use move_package_alt::schema::{EnvironmentName, PackageName};
     /// let mut example = DependencySet::new();
     /// assert!(example.is_empty());
     ///

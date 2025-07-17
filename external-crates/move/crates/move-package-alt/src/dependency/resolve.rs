@@ -21,9 +21,9 @@ use tracing::{debug, info};
 
 use crate::{
     dependency::combine::Combined,
-    package::{EnvironmentID, EnvironmentName},
     schema::{
-        EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
+        EXTERNAL_RESOLVE_ARG, EnvironmentID, EnvironmentName, PackageName, ResolveRequest,
+        ResolveResponse, ResolverDependencyInfo,
     },
 };
 

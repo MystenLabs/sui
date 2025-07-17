@@ -17,6 +17,9 @@ use super::{
 /// `[pinned.<environment>]` table
 pub type PackageID = String;
 
+/// A map of publication information per environment.
+pub type PublishedEnvironments<F> = BTreeMap<EnvironmentName, Publication<F>>;
+
 /// The serialized lockfile format
 // TODO: remove Debug and Clone
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,7 +30,7 @@ pub struct ParsedLockfile<F: MoveFlavor> {
     pub pinned: BTreeMap<EnvironmentName, BTreeMap<PackageID, Pin>>,
 
     #[serde(default)]
-    pub published: BTreeMap<EnvironmentName, Publication<F>>,
+    pub published: PublishedEnvironments<F>,
 }
 
 pub type BuildConfig = toml::Value;
