@@ -3,7 +3,7 @@ source: crates/move-package-alt/tests/test_runner.rs
 ---
 DependencySet {
     inner: {
-        "default": {
+        "_test_env": {
             Identifier(
                 "mock1",
             ): PinnedDependencyInfo(
@@ -13,7 +13,7 @@ DependencySet {
                             local: "for-res-1",
                         },
                     ),
-                    use_environment: "default",
+                    use_environment: "_test_env",
                     rename_from: None,
                     is_override: false,
                     addresses: None,
@@ -29,7 +29,7 @@ DependencySet {
                             local: "for-res-2",
                         },
                     ),
-                    use_environment: "default",
+                    use_environment: "_test_env",
                     rename_from: None,
                     is_override: false,
                     addresses: None,
