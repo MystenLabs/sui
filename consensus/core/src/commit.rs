@@ -56,7 +56,7 @@ pub(crate) type WaveNumber = u32;
 /// sequence of Commits.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[enum_dispatch(CommitAPI)]
-pub(crate) enum Commit {
+pub enum Commit {
     V1(CommitV1),
 }
 
@@ -86,7 +86,7 @@ impl Commit {
 
 /// Accessors to Commit info.
 #[enum_dispatch]
-pub(crate) trait CommitAPI {
+pub trait CommitAPI {
     fn round(&self) -> Round;
     fn index(&self) -> CommitIndex;
     fn previous_digest(&self) -> CommitDigest;
@@ -98,7 +98,7 @@ pub(crate) trait CommitAPI {
 /// Specifies one consensus commit.
 /// It is stored on disk, so it does not contain blocks which are stored individually.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub(crate) struct CommitV1 {
+pub struct CommitV1 {
     /// Index of the commit.
     /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
     index: CommitIndex,
@@ -146,7 +146,7 @@ impl CommitAPI for CommitV1 {
 ///
 /// Note: clone() is relatively cheap with the underlying data refcounted.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TrustedCommit {
+pub struct TrustedCommit {
     inner: Arc<Commit>,
 
     // Cached digest and serialized value, to avoid re-computing these values.
@@ -576,43 +576,43 @@ impl Display for DecidedLeader {
 /// and potentially restoring from an earlier state.
 // TODO: version this struct.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct CommitInfo {
+pub struct CommitInfo {
     pub(crate) committed_rounds: Vec<Round>,
     pub(crate) reputation_scores: ReputationScores,
 }
 
-/// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
+/// `CommitRange` stores a range of `CommitIndex`. The range contains the start (inclusive)
 /// and end (inclusive) commit indices and can be ordered for use as the key of a table.
 ///
-/// NOTE: using Range<CommitIndex> for internal representation for backward compatibility.
-/// The external semantics of CommitRange is closer to RangeInclusive<CommitIndex>.
+/// NOTE: using `Range<CommitIndex>` for internal representation for backward compatibility.
+/// The external semantics of `CommitRange` is closer to `RangeInclusive<CommitIndex>`.
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CommitRange(Range<CommitIndex>);
+pub struct CommitRange(Range<CommitIndex>);
 
 impl CommitRange {
-    pub(crate) fn new(range: RangeInclusive<CommitIndex>) -> Self {
+    pub fn new(range: RangeInclusive<CommitIndex>) -> Self {
         // When end is CommitIndex::MAX, the range can be considered as unbounded
         // so it is ok to saturate at the end.
         Self(*range.start()..(*range.end()).saturating_add(1))
     }
 
     // Inclusive
-    pub(crate) fn start(&self) -> CommitIndex {
+    pub fn start(&self) -> CommitIndex {
         self.0.start
     }
 
     // Inclusive
-    pub(crate) fn end(&self) -> CommitIndex {
+    pub fn end(&self) -> CommitIndex {
         self.0.end.saturating_sub(1)
     }
 
-    pub(crate) fn extend_to(&mut self, other: CommitIndex) {
+    pub fn extend_to(&mut self, other: CommitIndex) {
         let new_end = other.saturating_add(1);
         assert!(self.0.end <= new_end);
         self.0 = self.0.start..new_end;
     }
 
-    pub(crate) fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.0
             .end
             .checked_sub(self.0.start)
@@ -620,12 +620,12 @@ impl CommitRange {
     }
 
     /// Check whether the two ranges have the same size.
-    pub(crate) fn is_equal_size(&self, other: &Self) -> bool {
+    pub fn is_equal_size(&self, other: &Self) -> bool {
         self.size() == other.size()
     }
 
     /// Check if the provided range is sequentially after this range.
-    pub(crate) fn is_next_range(&self, other: &Self) -> bool {
+    pub fn is_next_range(&self, other: &Self) -> bool {
         self.0.end == other.0.start
     }
 }
