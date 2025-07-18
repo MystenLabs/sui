@@ -209,5 +209,20 @@ const guides = [
 			'guides/operator/validator-tasks',
 		],
 	},
+	{
+		type: 'category',
+		label: 'SuiPlay0X1',
+		collapsed: false,
+		link: {
+			type: 'doc',
+			id: 'guides/suiplay0x1',
+		},
+		items: [
+			'guides/suiplay0x1/integration',
+			'guides/suiplay0x1/migration-strategies',
+			'guides/suiplay0x1/wallet-integration',
+			'guides/suiplay0x1/best-practices',
+		],
+	}
 ];
 module.exports = guides;
