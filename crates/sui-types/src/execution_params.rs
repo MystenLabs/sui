@@ -12,6 +12,14 @@ use crate::{
 
 pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BalanceWithdrawStatus {
+    NoWithdraw,
+    SufficientBalance,
+    // TODO(address-balances): Add information on the address and type?
+    InsufficientBalance,
+}
+
 /// Determine if a transaction is predetermined to fail execution.
 /// If so, return the error kind, otherwise return `None`.
 /// When we pass this to the execution engine, we will not execute the transaction
@@ -20,7 +28,7 @@ pub fn get_early_execution_error(
     transaction_digest: &TransactionDigest,
     input_objects: &CheckedInputObjects,
     config_certificate_deny_set: &HashSet<TransactionDigest>,
-    insufficient_balance_for_withdraw: bool,
+    balance_withdraw_status: &BalanceWithdrawStatus,
 ) -> Option<ExecutionErrorKind> {
     if is_certificate_denied(transaction_digest, config_certificate_deny_set) {
         return Some(ExecutionErrorKind::CertificateDenied);
@@ -50,7 +58,10 @@ pub fn get_early_execution_error(
         }
     }
 
-    if insufficient_balance_for_withdraw {
+    if matches!(
+        balance_withdraw_status,
+        BalanceWithdrawStatus::InsufficientBalance
+    ) {
         return Some(ExecutionErrorKind::InsufficientBalanceForWithdraw);
     }
 
@@ -118,15 +129,25 @@ mod tests {
         let input_objects = create_test_input_objects();
         let deny_set = HashSet::new();
 
-        // Test with insufficient balance = true
-        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, true);
+        // Test with insufficient balance
+        let result = get_early_execution_error(
+            &tx_digest,
+            &input_objects,
+            &deny_set,
+            &BalanceWithdrawStatus::InsufficientBalance,
+        );
         assert_eq!(
             result,
             Some(ExecutionErrorKind::InsufficientBalanceForWithdraw)
         );
 
-        // Test with insufficient balance = false
-        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, false);
+        // Test with sufficient balance
+        let result = get_early_execution_error(
+            &tx_digest,
+            &input_objects,
+            &deny_set,
+            &BalanceWithdrawStatus::SufficientBalance,
+        );
         assert_eq!(result, None);
     }
 
@@ -138,7 +159,12 @@ mod tests {
         // Test that certificate denial takes precedence over insufficient balance
         let mut deny_set = HashSet::new();
         deny_set.insert(tx_digest);
-        let result = get_early_execution_error(&tx_digest, &input_objects, &deny_set, true);
+        let result = get_early_execution_error(
+            &tx_digest,
+            &input_objects,
+            &deny_set,
+            &BalanceWithdrawStatus::InsufficientBalance,
+        );
         assert_eq!(result, Some(ExecutionErrorKind::CertificateDenied));
 
         // Test that deleted input objects take precedence over insufficient balance
@@ -161,7 +187,7 @@ mod tests {
             &tx_digest,
             &CheckedInputObjects::new_for_replay(input_objects),
             &deny_set,
-            true,
+            &BalanceWithdrawStatus::InsufficientBalance,
         );
         assert_eq!(result, Some(ExecutionErrorKind::InputObjectDeleted));
 
@@ -183,7 +209,7 @@ mod tests {
             &tx_digest,
             &CheckedInputObjects::new_for_replay(input_objects),
             &deny_set,
-            true,
+            &BalanceWithdrawStatus::InsufficientBalance,
         );
         assert!(matches!(
             result,
