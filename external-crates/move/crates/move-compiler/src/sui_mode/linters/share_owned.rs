@@ -323,32 +323,40 @@ impl ShareOwnedVerifierAI<'_> {
         context.add_diag(d)
     }
 
-    fn holds_uid(&self, mident: &ModuleIdent, tn: &DatatypeName) -> bool {
+    /// Checks if the package's ProgramInfo or ProgramInfo from precompiled lib
+    /// contain a module (with a given `mident`) whose datatype (with a given
+    /// `datatype_name`) holds a UID.
+    fn holds_uid(&self, mident: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
         self.info
             .modules
             .get(mident)
-            .into_iter()
-            .chain(
+            .or_else(|| {
                 self.pre_compiled_program
                     .as_ref()
-                    .and_then(|program_info| program_info.module_info(mident)),
-            )
-            .filter_map(|minfo| minfo.sui_info.as_ref())
-            .any(|sui_info| sui_info.uid_holders.contains_key(tn))
+                    .and_then(|program_info| program_info.module_info(mident))
+            })
+            .and_then(|minfo| minfo.sui_info.as_ref())
+            .is_some_and(|sui_info| sui_info.uid_holders.contains_key(datatype_name))
     }
 
-    fn transfer_kind(&self, mident: &ModuleIdent, tn: &DatatypeName) -> Option<&TransferKind> {
+    /// Checks if the package's ProgramInfo or ProgramInfo from precompiled lib
+    /// contain a module (with a given `mident`) whose datatype (with a given
+    /// `datatype_name`) is transferred and, if so, returns the transfer kind.
+    fn transfer_kind(
+        &self,
+        mident: &ModuleIdent,
+        datatype_name: &DatatypeName,
+    ) -> Option<&TransferKind> {
         self.info
             .modules
             .get(mident)
-            .into_iter()
-            .chain(
+            .or_else(|| {
                 self.pre_compiled_program
                     .as_ref()
-                    .and_then(|program_info| program_info.module_info(mident)),
-            )
-            .filter_map(|minfo| minfo.sui_info.as_ref())
-            .find_map(|sui_info| sui_info.transferred.get(tn))
+                    .and_then(|program_info| program_info.module_info(mident))
+            })
+            .and_then(|minfo| minfo.sui_info.as_ref())
+            .and_then(|sui_info| sui_info.transferred.get(datatype_name))
     }
 }
 

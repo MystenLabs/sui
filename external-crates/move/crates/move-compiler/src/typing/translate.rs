@@ -130,6 +130,7 @@ fn extract_macros(
     let pre_compiled_macro_definitions = || {
         pre_compiled_lib.iter().flat_map(|module_info| {
             module_info.iter().filter_map(|(mident, module_info)| {
+                // TOOD rewrite to if ... && let Some(...) once this feature is stable
                 if !modules.contains_key(mident) {
                     if let Some(macro_definitions) = &module_info.macro_definitions {
                         return Some((*mident, &macro_definitions.0, &macro_definitions.1));
@@ -149,18 +150,11 @@ fn extract_macros(
         BTreeMap::new();
     let extracted_macros = UniqueMap::maybe_from_iter(all_macro_definitions.map(
         |(mident, mod_use_funs, functions)| {
-            let macro_functions = functions.ref_filter_map(|name, f| {
-                // even if there are no macro functions, create an entry to be saved
-                // in the precompiled modules
-                macro_definitions
-                    .entry(mident)
-                    .or_insert_with(|| (mod_use_funs.clone(), UniqueMap::new()));
+            let mut macro_functions = UniqueMap::new();
+            let macro_bodies = functions.ref_filter_map(|name, f| {
                 let _macro_loc = f.macro_?;
-                let _ = macro_definitions
-                    .get_mut(&mident)
-                    .unwrap()
-                    .1
-                    .add(name, f.clone());
+                // unwrap should never fail as we are iternating over another UniqueMap
+                macro_functions.add(name, f.clone()).unwrap();
                 if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
                     let use_funs = merge_use_funs(mod_use_funs, use_funs.clone());
                     Some((use_funs, body.clone()))
@@ -168,7 +162,12 @@ fn extract_macros(
                     None
                 }
             });
-            (mident, macro_functions)
+            // even if there are no macro functions, create an entry to be saved
+            // in the precompiled modules
+            macro_definitions
+                .entry(mident)
+                .or_insert_with(|| (mod_use_funs.clone(), macro_functions));
+            (mident, macro_bodies)
         },
     ))
     .unwrap();

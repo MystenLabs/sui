@@ -8,8 +8,9 @@ use crate::{
     PreCompiledProgramInfo,
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
-        self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
-        StructDefinition, StructFields, SyntaxMethods, Type, Type_, TypeName_,
+        self as N, BuiltinTypeName_, DatatypeTypeParameter, EnumDefinition, FunctionSignature,
+        ResolvedUseFuns, StructDefinition, StructFields, SyntaxMethods, Type, Type_, TypeName_,
+        VariantFields,
     },
     parser::ast::{
         ConstantName, DatatypeName, DocComment, Field, FunctionName, TargetKind, VariantName,
@@ -86,94 +87,6 @@ pub enum NamedMemberKind {
     Constant,
 }
 
-/// Identity function for cloning typing module info to be used in program_info macro
-/// to create typing program info from pre-compiled module info.
-fn typing_module_info_clone(minfo: &ModuleInfo) -> ModuleInfo {
-    minfo.clone()
-}
-
-/// Re-create naming module info from typing module info to be used in program_info macro
-/// to create naming program info from pre-compiled module info.
-fn typing_module_info_to_naming(minfo: &ModuleInfo) -> ModuleInfo {
-    use crate::naming::ast::{BuiltinTypeName_, VariantFields};
-
-    // Typing ProgramInfo contains abilities that would not yet be inferred at naming
-    // (for user-defined data types and vector element types). We need to strip these
-    // down so that ProgramInfo does not trip subsequent typing analysis.
-    fn strip_type_abilities(ty: &mut Type) {
-        match &mut ty.value {
-            Type_::Apply(abilities, type_name, type_args) => {
-                let should_strip = matches!(
-                    &type_name.value,
-                    TypeName_::Builtin(sp!(_, BuiltinTypeName_::Vector))
-                        | TypeName_::ModuleType(_, _)
-                        | TypeName_::Multiple(_)
-                );
-                if should_strip {
-                    *abilities = None;
-                }
-                // Recursively strip abilities from type arguments
-                for ty_arg in type_args {
-                    strip_type_abilities(ty_arg);
-                }
-            }
-            Type_::Ref(_, ty) => strip_type_abilities(ty),
-            Type_::Fun(args, result) => {
-                for arg in args {
-                    strip_type_abilities(arg);
-                }
-                strip_type_abilities(result);
-            }
-            _ => {}
-        }
-    }
-
-    let mut minfo = minfo.clone();
-
-    // update structs
-    for (_, _, sdef) in minfo.structs.iter_mut() {
-        if let StructFields::Defined(_, fields) = &mut sdef.fields {
-            for (_, _, (_, (_, ty))) in fields.iter_mut() {
-                strip_type_abilities(ty);
-            }
-        }
-    }
-
-    // update enums
-    for (_, _, edef) in minfo.enums.iter_mut() {
-        for (_, _, vdef) in edef.variants.iter_mut() {
-            if let VariantFields::Defined(_, fields) = &mut vdef.fields {
-                for (_, _, (_, (_, ty))) in fields.iter_mut() {
-                    strip_type_abilities(ty);
-                }
-            }
-        }
-    }
-
-    // update constants
-    for (_, _, cdef) in minfo.constants.iter_mut() {
-        strip_type_abilities(&mut cdef.signature);
-    }
-
-    // update functions
-    for (_, _, fdef) in minfo.functions.iter_mut() {
-        for (_, _, ty) in fdef.signature.parameters.iter_mut() {
-            strip_type_abilities(ty);
-        }
-        strip_type_abilities(&mut fdef.signature.return_type);
-    }
-
-    minfo
-}
-
-fn naming_dependency_order(_mdef: &N::ModuleDefinition) -> Option<usize> {
-    None
-}
-
-fn typing_dependency_order(mdef: &T::ModuleDefinition) -> Option<usize> {
-    Some(mdef.dependency_order)
-}
-
 macro_rules! program_info {
     ($pre_compiled_lib:ident, $converter:expr, $prog:ident, $module_use_funs:ident, $dependency_order:expr) => {{
         let all_modules = $prog.modules.key_cloned_iter();
@@ -246,6 +159,10 @@ impl TypingProgramInfo {
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
+        /// Used to populate `dependency_order` field in `ModuleInfo`
+        fn typing_dependency_order(mdef: &T::ModuleDefinition) -> Option<usize> {
+            Some(mdef.dependency_order)
+        }
         struct Prog<'a> {
             modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
         }
@@ -287,8 +204,89 @@ impl TypingProgramInfo {
     }
 }
 
+/// Re-create naming module info from typing module info to be used in program_info macro
+/// to create naming program info from pre-compiled module info.
+fn typing_module_info_to_naming(minfo: &ModuleInfo) -> ModuleInfo {
+    // Typing ProgramInfo contains abilities that would not yet be inferred at naming
+    // (for user-defined data types and vector element types). We need to strip these
+    // down so that ProgramInfo does not trip subsequent typing analysis.
+    fn strip_type_abilities(ty: &mut Type) {
+        match &mut ty.value {
+            Type_::Apply(abilities, type_name, type_args) => {
+                let should_strip = matches!(
+                    &type_name.value,
+                    TypeName_::Builtin(sp!(_, BuiltinTypeName_::Vector))
+                        | TypeName_::ModuleType(_, _)
+                        | TypeName_::Multiple(_)
+                );
+                if should_strip {
+                    *abilities = None;
+                }
+                // Recursively strip abilities from type arguments
+                for ty_arg in type_args {
+                    strip_type_abilities(ty_arg);
+                }
+            }
+            Type_::Ref(_, ty) => strip_type_abilities(ty),
+            Type_::Fun(args, result) => {
+                for arg in args {
+                    strip_type_abilities(arg);
+                }
+                strip_type_abilities(result);
+            }
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => (),
+        }
+    }
+
+    let mut minfo = minfo.clone();
+
+    // update structs
+    for (_, _, sdef) in minfo.structs.iter_mut() {
+        if let StructFields::Defined(_, fields) = &mut sdef.fields {
+            for (_, _, (_, (_, ty))) in fields.iter_mut() {
+                strip_type_abilities(ty);
+            }
+        }
+    }
+
+    // update enums
+    for (_, _, edef) in minfo.enums.iter_mut() {
+        for (_, _, vdef) in edef.variants.iter_mut() {
+            if let VariantFields::Defined(_, fields) = &mut vdef.fields {
+                for (_, _, (_, (_, ty))) in fields.iter_mut() {
+                    strip_type_abilities(ty);
+                }
+            }
+        }
+    }
+
+    // update constants
+    for (_, _, cdef) in minfo.constants.iter_mut() {
+        strip_type_abilities(&mut cdef.signature);
+    }
+
+    // update functions
+    for (_, _, fdef) in minfo.functions.iter_mut() {
+        for (_, _, ty) in fdef.signature.parameters.iter_mut() {
+            strip_type_abilities(ty);
+        }
+        strip_type_abilities(&mut fdef.signature.return_type);
+    }
+
+    minfo
+}
+
 impl NamingProgramInfo {
     pub fn new(pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>, prog: &N::Program_) -> Self {
+        /// Used to populate `dependency_order` field in `ModuleInfo`
+        fn dependency_order(_mdef: &N::ModuleDefinition) -> Option<usize> {
+            // No dependency order available in the naming pass
+            None
+        }
         // use_funs will be populated later
         let mut module_use_funs: Option<&mut BTreeMap<ModuleIdent, ResolvedUseFuns>> = None;
         program_info!(
@@ -296,7 +294,7 @@ impl NamingProgramInfo {
             typing_module_info_to_naming,
             prog,
             module_use_funs,
-            naming_dependency_order
+            dependency_order
         )
     }
 
@@ -323,6 +321,12 @@ impl NamingProgramInfo {
         let syntax_methods_ref = &mut self.modules.get_mut(&mident).unwrap().syntax_methods;
         *syntax_methods_ref = syntax_methods;
     }
+}
+
+/// Identity function for cloning typing module info to be used in program_info macro
+/// to create typing program info from pre-compiled module info.
+fn typing_module_info_clone(minfo: &ModuleInfo) -> ModuleInfo {
+    minfo.clone()
 }
 
 impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {

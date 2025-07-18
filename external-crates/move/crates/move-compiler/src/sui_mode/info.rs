@@ -246,7 +246,6 @@ fn all_transferred(
 ) -> BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>> {
     let mut transferred: BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>> =
         BTreeMap::new();
-    let mut transferred_old: BTreeMap<(ModuleIdent, DatatypeName), TransferKind> = BTreeMap::new();
     for (mident, minfo) in info.modules.key_cloned_iter() {
         for (s, sdef) in minfo.structs.key_cloned_iter() {
             if !sdef.abilities.has_ability_(Ability_::Key) {
@@ -255,7 +254,6 @@ fn all_transferred(
             let Some(store_loc) = sdef.abilities.ability_loc_(Ability_::Store) else {
                 continue;
             };
-            transferred_old.insert((mident, s), TransferKind::PublicTransfer(store_loc));
             transferred
                 .entry(mident)
                 .or_default()
@@ -264,7 +262,7 @@ fn all_transferred(
 
         if let Some(mdef) = modules.get(&mident) {
             for (_, _, fdef) in &mdef.functions {
-                add_private_transfers(&mut transferred, &mut transferred_old, fdef);
+                add_private_transfers(&mut transferred, fdef);
             }
         }
     }
@@ -273,12 +271,10 @@ fn all_transferred(
 
 fn add_private_transfers(
     transferred: &mut BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>>,
-    transferred_old: &mut BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
     fdef: &T::Function,
 ) {
     struct TransferVisitor<'a> {
         transferred: &'a mut BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>>,
-        transferred_old: &'a mut BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
     }
     impl TypingVisitorContext for TransferVisitor<'_> {
         fn push_warning_filter_scope(&mut self, _: WarningFilters) {
@@ -307,9 +303,6 @@ fn add_private_transfers(
             let Some((mident, n)) = ty.type_name().and_then(|t| t.value.datatype_name()) else {
                 return false;
             };
-            self.transferred_old
-                .entry((mident, n))
-                .or_insert_with(|| TransferKind::PrivateTransfer(e.exp.loc));
             self.transferred
                 .entry(mident)
                 .or_default()
@@ -318,10 +311,7 @@ fn add_private_transfers(
         }
     }
 
-    let mut visitor = TransferVisitor {
-        transferred,
-        transferred_old,
-    };
+    let mut visitor = TransferVisitor { transferred };
     match &fdef.body.value {
         T::FunctionBody_::Native | &T::FunctionBody_::Macro => (),
         T::FunctionBody_::Defined(seq) => visitor.visit_seq(fdef.body.loc, seq),

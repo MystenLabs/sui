@@ -105,7 +105,7 @@ pub fn program(
     filter_program(&mut context, prog)
 }
 
-fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
+fn stdlib_unit_test_module_in_program(prog: &P::Program) -> bool {
     prog.lib_definitions
         .iter()
         .chain(prog.source_definitions.iter())
@@ -126,25 +126,32 @@ fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
         })
 }
 
+fn stdlib_unit_test_module_in_pre_compiled_lib(
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
+) -> bool {
+    pre_compiled_lib.is_some_and(|module_info| {
+        module_info.iter().any(|(sp!(_, mident), _)| {
+            mident.module.0.value == UNIT_TEST_MODULE_NAME
+                && match mident.address {
+                    Address::Numerical {
+                        value: sp!(_, addr),
+                        ..
+                    } => addr == STD_ADDR_VALUE,
+                    Address::NamedUnassigned(_) => false,
+                }
+        })
+    })
+}
+
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
     reporter: &DiagnosticReporter,
     pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &P::Program,
 ) -> bool {
-    let has_unit_test_module = has_stdlib_unit_test_module(prog)
-        || pre_compiled_lib.is_some_and(|module_info| {
-            module_info.iter().any(|(sp!(_, mident), _)| {
-                mident.module.0.value == UNIT_TEST_MODULE_NAME
-                    && match mident.address {
-                        Address::Numerical {
-                            value: sp!(_, addr),
-                            ..
-                        } => addr == STD_ADDR_VALUE,
-                        Address::NamedUnassigned(_) => false,
-                    }
-            })
-        });
+    let has_unit_test_module = stdlib_unit_test_module_in_program(prog)
+        || stdlib_unit_test_module_in_pre_compiled_lib(pre_compiled_lib);
+
     if !has_unit_test_module && compilation_env.test_mode() {
         if let Some(P::PackageDefinition { def, .. }) = prog
             .source_definitions

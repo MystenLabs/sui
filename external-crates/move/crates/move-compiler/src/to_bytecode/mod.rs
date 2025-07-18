@@ -4,6 +4,6 @@
 
 mod canonicalize_handles;
 #[macro_use]
-pub mod context;
+mod context;
 mod optimize;
 pub mod translate;
