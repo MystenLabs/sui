@@ -126,7 +126,8 @@ fn all_uid_holders(info: &TypingProgramInfo) -> BTreeMap<(ModuleIdent, DatatypeN
             | N::Type_::Var(_)
             | N::Type_::Fun(_, _)
             | N::Type_::Anything
-            | N::Type_::UnresolvedError => None,
+            | N::Type_::UnresolvedError
+            | N::Type_::Void => None,
 
             N::Type_::Ref(_, inner) => visit_ty(info, visited, uid_holders, inner),
 
