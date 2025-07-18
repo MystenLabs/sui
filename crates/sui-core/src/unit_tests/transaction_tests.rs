@@ -637,6 +637,10 @@ async fn test_zklogin_transfer_with_large_address_seed() {
 
 #[sim_test]
 async fn zklogin_test_caching_scenarios() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let (
         object_ids,
@@ -656,7 +660,7 @@ async fn zklogin_test_caching_scenarios() {
     let res = client
         .handle_transaction(transfer_transaction, Some(socket_addr))
         .await;
-    assert!(res.is_ok());
+    assert!(res.is_ok(), "{}", res.unwrap_err());
 
     assert_eq!(
         epoch_store

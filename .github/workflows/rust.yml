@@ -235,6 +235,33 @@ jobs:
         run: |
           scripts/simtest/stress-new-tests.sh
 
+  simtest-mainnet:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
+    timeout-minutes: 45
+    runs-on: [ ubuntu-ghcloud ]
+    env:
+      MSIM_WATCHDOG_TIMEOUT_MS: 300000
+      SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@protoc
+      - name: Add postgres to PATH
+        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+      - name: cargo simtest
+        run: |
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+      - name: check new tests for flakiness
+        run: |
+          scripts/simtest/stress-new-tests.sh
+
   # This job ensures that Move unit tests are run if there are changes
   # to Move code but not Rust code (If there are Rust changes, they
   # will be run as part of a larger test suite).
