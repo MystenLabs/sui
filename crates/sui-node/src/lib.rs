@@ -1763,17 +1763,27 @@ impl SuiNode {
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
                 let config = cur_epoch_store.protocol_config();
-                let binary_config = to_binary_config(config);
+                let chain_id = cur_epoch_store.get_chain();
+                let supported_greater_versions = self
+                    .config
+                    .supported_protocol_versions
+                    .expect("Supported versions should be populated")
+                    // no need to send digests of versions less than the current version
+                    .truncate_below(config.version);
+
+                // Pick the latest binary config and use that to determine the available system packages.
+                let binary_config = {
+                    let latest_protocol_config =
+                        ProtocolConfig::get_for_version(supported_greater_versions.max, chain_id);
+                    to_binary_config(&latest_protocol_config)
+                };
+
                 let transaction = if config.authority_capabilities_v2() {
                     ConsensusTransaction::new_capability_notification_v2(
                         AuthorityCapabilitiesV2::new(
                             self.state.name,
-                            cur_epoch_store.get_chain_identifier().chain(),
-                            self.config
-                                .supported_protocol_versions
-                                .expect("Supported versions should be populated")
-                                // no need to send digests of versions less than the current version
-                                .truncate_below(config.version),
+                            chain_id,
+                            supported_greater_versions,
                             self.state
                                 .get_available_system_packages(&binary_config)
                                 .await,

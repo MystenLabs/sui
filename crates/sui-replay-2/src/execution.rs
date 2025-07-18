@@ -25,6 +25,7 @@ use std::{
     sync::Arc,
 };
 use sui_execution::Executor;
+use sui_protocol_config::Chain;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
@@ -148,10 +149,11 @@ pub fn execute_transaction_to_effects(
 impl ReplayExecutor {
     pub fn new(
         protocol_config: ProtocolConfig,
+        chain: Chain,
         enable_profiler: Option<PathBuf>,
     ) -> Result<Self, anyhow::Error> {
         let silent = true; // disable Move debug API
-        let executor = sui_execution::executor(&protocol_config, silent, enable_profiler)
+        let executor = sui_execution::executor(&protocol_config, silent, chain, enable_profiler)
             .context("Filed to create executor. ProtocolConfig inconsistency?")?;
 
         let registry = prometheus::Registry::new();

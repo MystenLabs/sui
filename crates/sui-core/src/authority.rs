@@ -2074,8 +2074,9 @@ impl AuthorityState {
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
-        let executor = sui_execution::executor(protocol_config, silent, None)
-            .expect("Creating an executor should not fail here");
+        let executor =
+            sui_execution::executor(protocol_config, silent, epoch_store.get_chain(), None)
+                .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
         let (inner_temp_store, _, effects, _timings, execution_error) = executor
@@ -2269,6 +2270,7 @@ impl AuthorityState {
         let executor = sui_execution::executor(
             protocol_config,
             true, // silent
+            epoch_store.get_chain(),
             None,
         )
         .expect("Creating an executor should not fail here");
@@ -2450,8 +2452,13 @@ impl AuthorityState {
             }
         };
 
-        let executor = sui_execution::executor(protocol_config, /* silent */ true, None)
-            .expect("Creating an executor should not fail here");
+        let executor = sui_execution::executor(
+            protocol_config,
+            /* silent */ true,
+            epoch_store.get_chain(),
+            None,
+        )
+        .expect("Creating an executor should not fail here");
         let gas_data = transaction.gas_data().clone();
         let intent_msg = IntentMessage::new(
             Intent {
@@ -5341,10 +5348,12 @@ impl AuthorityState {
                 )
             };
 
-        // since system packages are created during the current epoch, they should abide by the
-        // rules of the current epoch, including the current epoch's max Move binary format version
-        let config = epoch_store.protocol_config();
-        let binary_config = to_binary_config(config);
+        // Even though the system packages are committed to in the current epoch, they will run and
+        // be deserialized in the next, so they should abide by (and support) the binary config of
+        // the incoming epoch and not the current one.
+        let incoming_config =
+            ProtocolConfig::get_for_version(next_epoch_protocol_version, epoch_store.get_chain());
+        let binary_config = to_binary_config(&incoming_config);
         let Some(next_epoch_system_package_bytes) = self
             .get_system_package_bytes(next_epoch_system_packages.clone(), &binary_config)
             .await

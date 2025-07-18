@@ -10,7 +10,7 @@ mod compatibility_tests {
     use sui_framework::{compare_system_package, BuiltInFramework};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
     use sui_move_build::published_at_property;
-    use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
     use sui_types::execution_config_utils::to_binary_config;
 
     #[tokio::test]
@@ -18,8 +18,7 @@ mod compatibility_tests {
         // This test checks that the current framework is compatible with all previous framework
         // bytecode snapshots.
         for (version, _snapshots) in load_bytecode_snapshot_manifest() {
-            let config =
-                ProtocolConfig::get_for_version(ProtocolVersion::new(version), Chain::Unknown);
+            let config = ProtocolConfig::get_for_max_version_UNSAFE();
             let binary_config = to_binary_config(&config);
             let framework = load_bytecode_snapshot(version).unwrap();
             let old_framework_store: BTreeMap<_, _> = framework

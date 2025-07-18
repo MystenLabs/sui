@@ -756,6 +756,7 @@ impl LocalExec {
         let executor = get_executor(
             ov,
             protocol_config,
+            tx_info.chain,
             expensive_safety_check_config,
             self.enable_profiler.clone(),
         );
@@ -950,7 +951,13 @@ impl LocalExec {
         )
         .unwrap();
         let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
-        let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
+        let executor = sui_execution::executor(
+            &protocol_config,
+            true,
+            pre_run_sandbox.transaction_info.chain,
+            None,
+        )
+        .unwrap();
         let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
             &store,
             &protocol_config,
@@ -2127,6 +2134,7 @@ impl GetModule for LocalExec {
 pub fn get_executor(
     executor_version_override: Option<i64>,
     protocol_config: &ProtocolConfig,
+    chain: Chain,
     _expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     enable_profiler: Option<PathBuf>,
 ) -> Arc<dyn Executor + Send + Sync> {
@@ -2145,7 +2153,7 @@ pub fn get_executor(
         .unwrap_or(protocol_config.clone());
 
     let silent = true;
-    sui_execution::executor(&protocol_config, silent, enable_profiler)
+    sui_execution::executor(&protocol_config, silent, chain, enable_profiler)
         .expect("Creating an executor should not fail here")
 }
 

@@ -701,14 +701,18 @@ fn create_genesis_digest(
     TransactionDigest::new(hash.into())
 }
 
-fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
+fn get_genesis_chain_id() -> Chain {
     // We have a circular dependency here. Protocol config depends on chain ID, which
     // depends on genesis checkpoint (digest), which depends on genesis transaction, which
     // depends on protocol config.
     //
     // ChainIdentifier::default().chain() which can be overridden by the
     // SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE if necessary
-    ProtocolConfig::get_for_version(version, ChainIdentifier::default().chain())
+    ChainIdentifier::default().chain()
+}
+
+fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
+    ProtocolConfig::get_for_version(version, get_genesis_chain_id())
 }
 
 fn build_unsigned_genesis_data(
@@ -908,8 +912,9 @@ fn create_genesis_transaction(
     let (effects, events, objects) = {
         let silent = true;
 
-        let executor = sui_execution::executor(protocol_config, silent, None)
-            .expect("Creating an executor should not fail here");
+        let executor =
+            sui_execution::executor(protocol_config, silent, get_genesis_chain_id(), None)
+                .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
         let certificate_deny_set = HashSet::new();
@@ -965,11 +970,11 @@ fn create_genesis_objects(
     // we use Chain::Unknown here.
     let protocol_config = ProtocolConfig::get_for_version(
         ProtocolVersion::new(parameters.protocol_version),
-        Chain::Unknown,
+        get_genesis_chain_id(),
     );
 
     let silent = true;
-    let executor = sui_execution::executor(&protocol_config, silent, None)
+    let executor = sui_execution::executor(&protocol_config, silent, get_genesis_chain_id(), None)
         .expect("Creating an executor should not fail here");
 
     for system_package in system_packages.into_iter() {
@@ -1091,7 +1096,7 @@ pub fn generate_genesis_system_object(
 ) -> anyhow::Result<()> {
     let protocol_config = ProtocolConfig::get_for_version(
         ProtocolVersion::new(genesis_chain_parameters.protocol_version),
-        ChainIdentifier::default().chain(),
+        get_genesis_chain_id(),
     );
 
     let pt = {

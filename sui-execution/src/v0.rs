@@ -7,7 +7,7 @@ use std::{collections::HashSet, sync::Arc};
 use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::execution::ExecutionTiming;
 use sui_types::transaction::GasData;
 use sui_types::{
@@ -50,6 +50,7 @@ impl Executor {
     pub(crate) fn new(
         protocol_config: &ProtocolConfig,
         silent: bool,
+        _chain: Chain,
         enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
