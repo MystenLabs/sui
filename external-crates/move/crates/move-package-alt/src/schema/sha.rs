@@ -31,7 +31,8 @@ impl TryFrom<String> for GitSha {
     /// Check if the given string is a valid commit SHA, i.e., 40 character long with only
     /// lowercase letters and digits
     fn try_from(input: String) -> ShaResult<Self> {
-        if input.len() != 40 {
+        // implicit deps sha for SuiFlavor is 12 characters long
+        if input.len() != 40 && input.len() != 12 {
             return Err(ShaError::WrongLength { input });
         }
 

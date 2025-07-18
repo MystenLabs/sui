@@ -239,6 +239,7 @@ impl<F: MoveFlavor> Package<F> {
 
 /// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
 /// is ImplicitDepMode::Legacy, a `legacy_manifest` is required otherwise it will panic.
+// TODO this needs to be moved into a ImplicitDeps trait
 fn implicit_deps<F: MoveFlavor>(
     env: &Environment,
     implicit_dep_mode: ImplicitDepMode,

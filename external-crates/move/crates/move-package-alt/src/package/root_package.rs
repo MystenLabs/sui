@@ -182,7 +182,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return the package graph for `env`
     // TODO: what's the right API here?
-    #[cfg(test)]
     pub fn package_graph(&self) -> &PackageGraph<F> {
         &self.graph
     }
