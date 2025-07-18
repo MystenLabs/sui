@@ -12,6 +12,7 @@ use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use itertools::Itertools;
 use mysten_common::fatal;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
@@ -515,6 +516,8 @@ pub trait TransactionCacheRead: Send + Sync {
             .pop()
             .expect("multi-get must return correct number of items")
     }
+
+    fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>>;
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,

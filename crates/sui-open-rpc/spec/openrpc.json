@@ -1301,6 +1301,7 @@
                 "accept_zklogin_in_multisig": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
+                "allow_private_accumulator_entrypoints": false,
                 "allow_receiving_object_id": false,
                 "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,

@@ -118,6 +118,7 @@ impl ExecutionSchedulerWrapper {
         // In prod, we use ExecutionScheduler in devnet, and in testnet fullnodes.
         // In other networks, we use TransactionManager by default.
         let enable_execution_scheduler = if epoch_store.protocol_config().mysticeti_fastpath()
+            || epoch_store.protocol_config().enable_accumulators()
             || std::env::var("ENABLE_EXECUTION_SCHEDULER").is_ok()
         {
             true
