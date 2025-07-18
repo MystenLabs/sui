@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
+use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
@@ -73,7 +74,7 @@ impl executor::Executor for Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
@@ -106,7 +107,7 @@ impl executor::Executor for Executor {
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
-                certificate_deny_set,
+                execution_params,
             );
         // note: old versions do not report timings.
         (inner_temp_store, gas_status, effects, vec![], result)
@@ -118,7 +119,7 @@ impl executor::Executor for Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
@@ -150,7 +151,7 @@ impl executor::Executor for Executor {
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
-                certificate_deny_set,
+                execution_params,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
@@ -167,7 +168,7 @@ impl executor::Executor for Executor {
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
-                certificate_deny_set,
+                execution_params,
             )
         }
     }
