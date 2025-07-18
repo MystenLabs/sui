@@ -317,6 +317,7 @@ export enum ExecutionResult {
     Ok,
     TraceEnd,
     Exception,
+    Breakpoint,
 }
 
 /**
@@ -538,7 +539,7 @@ export class Runtime extends EventEmitter {
                 globals: new Map<number, RuntimeValueType>()
             };
             this.eventsStack.eventFrame = frameStack;
-            this.step(/* next */ false, /* stopAtCloseFrame */ false);
+            this.stepInternal(/* next */ false, /* stopAtCloseFrame */ false);
         }
     }
 
@@ -552,6 +553,29 @@ export class Runtime extends EventEmitter {
     }
 
     /**
+     * Processes the result of an action returnd from an internal
+     * function responsible for handling a given event.
+     *
+     * @param result the result of the action.
+     * @returns processed (potentially different) result of the action.
+     */
+    private handleActionResult(result: ExecutionResult): ExecutionResult {
+        switch (result) {
+            case ExecutionResult.Ok:
+            case ExecutionResult.TraceEnd:
+                this.sendEvent(RuntimeEvents.stopOnStep);
+                break;
+            case ExecutionResult.Exception:
+                this.sendEvent(RuntimeEvents.stopOnException);
+                break;
+            case ExecutionResult.Breakpoint:
+                this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
+                return ExecutionResult.Ok;
+        }
+        return result;
+    }
+
+    /**
      * Handles step/next adapter action.
      *
      * @param next determines if it's `next` (or otherwise `step`) action.
@@ -562,9 +586,23 @@ export class Runtime extends EventEmitter {
      * @throws Error with a descriptive error message if the step event cannot be handled.
      */
     public step(next: boolean, stopAtCloseFrame: boolean): ExecutionResult {
+        const result = this.stepInternal(next, stopAtCloseFrame);
+        return this.handleActionResult(result);
+    }
+
+    /**
+     * Implements step/next action.
+     *
+     * @param next determines if it's `next` (or otherwise `step`) action.
+     * @param stopAtCloseFrame determines if the action should stop at `CloseFrame` event
+     * (rather then proceed to the following instruction).
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
+     * @throws Error with a descriptive error message if the step event cannot be handled.
+     */
+    private stepInternal(next: boolean, stopAtCloseFrame: boolean): ExecutionResult {
         this.eventIndex++;
         if (this.eventIndex >= this.trace.events.length) {
-            this.sendEvent(RuntimeEvents.stopOnStep);
             return ExecutionResult.TraceEnd;
         }
         let currentEvent = this.trace.events[this.eventIndex];
@@ -669,13 +707,11 @@ export class Runtime extends EventEmitter {
                         // the last call instruction in a give frame happened, and
                         // also we need to make `stepOut` aware of whether it is executed
                         // as part of `next` (which is how `next` is implemented) or not.
-                        this.sendEvent(RuntimeEvents.stopOnStep);
                         return ExecutionResult.Ok;
                     } else {
-                        return this.step(next, stopAtCloseFrame);
+                        return this.stepInternal(next, stopAtCloseFrame);
                     }
                 }
-                this.sendEvent(RuntimeEvents.stopOnStep);
                 return ExecutionResult.Ok;
             } else if (currentEvent.type === TraceEventKind.ReplaceInlinedFrame) {
                 let currentFrame = moveCallStack.frames.pop();
@@ -692,7 +728,7 @@ export class Runtime extends EventEmitter {
                 }
                 currentFrame.srcFilePath = currentFile.path;
                 moveCallStack.frames.push(currentFrame);
-                return this.step(next, stopAtCloseFrame);
+                return this.stepInternal(next, stopAtCloseFrame);
             } else if (currentEvent.type === TraceEventKind.OpenFrame) {
                 // if function is native then the next event will be CloseFrame
                 if (currentEvent.isNative) {
@@ -701,13 +737,12 @@ export class Runtime extends EventEmitter {
                         const nextEvent = this.trace.events[this.eventIndex + 1];
                         if (nextEvent.type === TraceEventKind.Effect &&
                             nextEvent.effect.type === TraceEffectKind.ExecutionError) {
-                            this.sendEvent(RuntimeEvents.stopOnException, nextEvent.effect.msg);
                             return ExecutionResult.Exception;
                         }
                     }
                     // process optional effects until reaching CloseFrame for the native function
                     while (true) {
-                        const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+                        const executionResult = this.stepInternal(/* next */ false, /* stopAtCloseFrame */ true);
                         if (executionResult === ExecutionResult.Exception) {
                             return executionResult;
                         }
@@ -721,7 +756,7 @@ export class Runtime extends EventEmitter {
                     }
                     // skip over CloseFrame as there is no frame to pop
                     this.eventIndex++;
-                    return this.step(next, stopAtCloseFrame);
+                    return this.stepInternal(next, stopAtCloseFrame);
                 }
 
                 // create a new frame and push it onto the stack
@@ -767,9 +802,9 @@ export class Runtime extends EventEmitter {
                     // step out of the frame right away unless this frame is inlined
                     // and it's showing disassembly (otherwise we will see instructions
                     // skipped in the disassembly view for apparently no reason)
-                    return this.stepOut(next);
+                    return this.stepOutInternal(next);
                 } else {
-                    return this.step(next, stopAtCloseFrame);
+                    return this.stepInternal(next, stopAtCloseFrame);
                 }
             } else if (currentEvent.type === TraceEventKind.CloseFrame) {
                 if (stopAtCloseFrame) {
@@ -792,12 +827,11 @@ export class Runtime extends EventEmitter {
                             + ')');
                     }
                     moveCallStack.frames.pop();
-                    return this.step(next, stopAtCloseFrame);
+                    return this.stepInternal(next, stopAtCloseFrame);
                 }
             } else if (currentEvent.type === TraceEventKind.Effect) {
                 const effect = currentEvent.effect;
                 if (effect.type === TraceEffectKind.ExecutionError) {
-                    this.sendEvent(RuntimeEvents.stopOnException, effect.msg);
                     return ExecutionResult.Exception;
                 }
                 if (effect.type === TraceEffectKind.Write) {
@@ -825,7 +859,7 @@ export class Runtime extends EventEmitter {
                         localWrite(frame, frameIdx, traceLocation.localIndex, traceValue);
                     }
                 }
-                return this.step(next, stopAtCloseFrame);
+                return this.stepInternal(next, stopAtCloseFrame);
             }
             throw new Error('Unknown Move call event: ' + currentEvent);
         } else {
@@ -837,13 +871,13 @@ export class Runtime extends EventEmitter {
                             globals: new Map<number, RuntimeValueType>()
                         };
                         this.eventsStack.eventFrame = frameStack;
-                        return this.step(next, stopAtCloseFrame);
+                        return this.stepInternal(next, stopAtCloseFrame);
                     case ExtEventKind.ExtEventStart:
                         if (next) {
                             // simply skip over external event as its
                             // "execution" has no bearing on execution
                             // of subsequent events
-                            return this.step(next, stopAtCloseFrame);
+                            return this.stepInternal(next, stopAtCloseFrame);
                         }
                         const frameIdx = currentEvent.event.id;
                         const names = currentEvent.event.localsNames;
@@ -870,7 +904,6 @@ export class Runtime extends EventEmitter {
                             locals,
                         };
                         this.eventsStack.eventFrame = eventFrame;
-                        this.sendEvent(RuntimeEvents.stopOnStep);
                         return ExecutionResult.Ok;
                     case ExtEventKind.MoveCallEnd:
                     case ExtEventKind.ExtEventEnd:
@@ -879,13 +912,13 @@ export class Runtime extends EventEmitter {
                         if (this.eventsStack.summaryFrame) {
                             this.eventsStack.summaryFrame.line += 1;
                         }
-                        this.sendEvent(RuntimeEvents.stopOnStep);
                         return ExecutionResult.Ok;
                 }
             }
             throw new Error('Unknown external event: ' + currentEvent);
         }
     }
+
 
     /**
      * Handles "step out" adapter action.
@@ -896,6 +929,19 @@ export class Runtime extends EventEmitter {
      * @throws Error with a descriptive error message if the step out event cannot be handled.
      */
     public stepOut(next: boolean): ExecutionResult {
+        const result = this.stepOutInternal(next);
+        return this.handleActionResult(result);
+    }
+
+    /**
+     * Implements "step out" action.
+     *
+     * @param next determines if it's  part of `next` (or otherwise `step`) action.
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
+     * @throws Error with a descriptive error message if the step out event cannot be handled.
+     */
+    private stepOutInternal(next: boolean): ExecutionResult {
         const summaryFrame = this.eventsStack.summaryFrame;
         const eventFrame = this.eventsStack.eventFrame;
         if (summaryFrame && !eventFrame) {
@@ -917,7 +963,6 @@ export class Runtime extends EventEmitter {
             const stackHeight = moveCallStack.frames.length;
             if (stackHeight === 0 || (stackHeight === 1 && !summaryFrame)) {
                 // do nothing as there is no frame to step out to
-                this.sendEvent(RuntimeEvents.stopOnStep);
                 return ExecutionResult.Ok;
             }
             // newest frame is at the top of the stack
@@ -930,7 +975,7 @@ export class Runtime extends EventEmitter {
                 // skipping over calls next-style otherwise we can miss seeing
                 // the actual close frame event that we are looking for
                 // and have the loop execute too far
-                const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ true);
+                const executionResult = this.stepInternal(/* next */ false, /* stopAtCloseFrame */ true);
                 if (executionResult === ExecutionResult.Exception) {
                     return executionResult;
                 }
@@ -940,8 +985,7 @@ export class Runtime extends EventEmitter {
                 }
                 currentEvent = this.trace.events[this.eventIndex];
                 if (this.is_event_at_breakpoint(currentEvent)) {
-                    this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
-                    return ExecutionResult.Ok;
+                    return ExecutionResult.Breakpoint;
                 }
                 if (currentEvent.type === TraceEventKind.CloseFrame) {
                     const currentFrameID = currentFrame.id;
@@ -953,10 +997,10 @@ export class Runtime extends EventEmitter {
                     }
                 }
             }
-            return this.step(next, /* stopAtCloseFrame */ false);
+            return this.stepInternal(next, /* stopAtCloseFrame */ false);
         } else {
             // external event frame
-            return this.step(next, /* stopAtCloseFrame */ false);
+            return this.stepInternal(next, /* stopAtCloseFrame */ false);
         }
     }
 
@@ -967,16 +1011,26 @@ export class Runtime extends EventEmitter {
      * @throws Error with a descriptive error message if the continue event cannot be handled.
      */
     public continue(): ExecutionResult {
+        const result = this.continueInternal();
+        return this.handleActionResult(result);
+    }
+
+    /**
+     * Implements "continue" action.
+     * @returns ExecutionResult.Ok if the step action was successful, ExecutionResult.TraceEnd if we
+     * reached the end of the trace, and ExecutionResult.Exception if an exception was encountered.
+     * @throws Error with a descriptive error message if the continue event cannot be handled.
+     */
+    private continueInternal(): ExecutionResult {
         while (true) {
-            const executionResult = this.step(/* next */ false, /* stopAtCloseFrame */ false);
+            const executionResult = this.stepInternal(/* next */ false, /* stopAtCloseFrame */ false);
             if (executionResult === ExecutionResult.TraceEnd ||
                 executionResult === ExecutionResult.Exception) {
                 return executionResult;
             }
             const currentEvent = this.trace.events[this.eventIndex];
             if (this.is_event_at_breakpoint(currentEvent)) {
-                this.sendEvent(RuntimeEvents.stopOnLineBreakpoint);
-                return ExecutionResult.Ok;
+                return ExecutionResult.Breakpoint;
             }
         }
     }
