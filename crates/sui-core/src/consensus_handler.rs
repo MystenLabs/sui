@@ -138,6 +138,7 @@ mod additional_consensus_state {
     use std::marker::PhantomData;
 
     use fastcrypto::hash::HashFunction as _;
+    use sui_types::crypto::DefaultHash;
 
     use super::*;
     /// AdditionalConsensusState tracks any in-memory state that is retained by ConsensusHandler
@@ -207,7 +208,7 @@ mod additional_consensus_state {
 
         /// Get the digest of the current state.
         fn digest(&self) -> AdditionalConsensusStateDigest {
-            let mut hash = sui_types::crypto::DefaultHash::new();
+            let mut hash = DefaultHash::new();
             bcs::serialize_into(&mut hash, self).unwrap();
             AdditionalConsensusStateDigest::new(hash.finalize().into())
         }
@@ -336,6 +337,7 @@ mod additional_consensus_state {
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
             )>,
             commit_info: &ConsensusCommitInfo,
+            indirect_state_observer: IndirectStateObserver,
         ) -> VerifiedExecutableTransaction {
             let version_assignments = if protocol_config
                 .record_consensus_determined_version_assignments_in_prologue_v2()
@@ -365,10 +367,18 @@ mod additional_consensus_state {
             };
 
             if protocol_config.record_additional_state_digest_in_prologue() {
+                let additional_state_digest =
+                    if protocol_config.additional_consensus_digest_indirect_state() {
+                        let d1 = commit_info.additional_state_digest();
+                        indirect_state_observer.fold_with(d1)
+                    } else {
+                        commit_info.additional_state_digest()
+                    };
+
                 self.consensus_commit_prologue_v4_transaction(
                     epoch,
                     version_assignments.unwrap(),
-                    commit_info.additional_state_digest(),
+                    additional_state_digest,
                 )
             } else if let Some(version_assignments) = version_assignments {
                 self.consensus_commit_prologue_v3_transaction(epoch, version_assignments)
@@ -377,6 +387,34 @@ mod additional_consensus_state {
             } else {
                 self.consensus_commit_prologue_transaction(epoch)
             }
+        }
+    }
+
+    #[derive(Default)]
+    pub struct IndirectStateObserver {
+        hash: DefaultHash,
+    }
+
+    impl IndirectStateObserver {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        pub fn observe_indirect_state<T: Serialize>(&mut self, state: &T) {
+            bcs::serialize_into(&mut self.hash, state).unwrap();
+        }
+
+        pub fn fold_with(
+            self,
+            d1: AdditionalConsensusStateDigest,
+        ) -> AdditionalConsensusStateDigest {
+            let hash = self.hash.finalize();
+            let d2 = AdditionalConsensusStateDigest::new(hash.into());
+
+            let mut hasher = DefaultHash::new();
+            bcs::serialize_into(&mut hasher, &d1).unwrap();
+            bcs::serialize_into(&mut hasher, &d2).unwrap();
+            AdditionalConsensusStateDigest::new(hasher.finalize().into())
         }
     }
 
@@ -461,7 +499,7 @@ mod additional_consensus_state {
     }
 }
 use additional_consensus_state::AdditionalConsensusState;
-pub(crate) use additional_consensus_state::ConsensusCommitInfo;
+pub(crate) use additional_consensus_state::{ConsensusCommitInfo, IndirectStateObserver};
 
 pub struct ConsensusHandler<C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -836,6 +874,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
+        let indirect_state_observer = IndirectStateObserver::new();
+
         let (executable_transactions, assigned_versions) = self
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
@@ -844,6 +884,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
                 &commit_info,
+                indirect_state_observer,
                 &self.metrics,
             )
             .await
