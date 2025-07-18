@@ -4,23 +4,22 @@
 
 use std::{
     collections::BTreeMap,
-    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use thiserror::Error;
-use tracing::debug;
 
 use crate::{
-    dependency::{CombinedDependency, DependencySet},
     errors::{FileHandle, Location},
-    flavor::MoveFlavor,
-    schema::{PackageMetadata, PackageName, ParsedManifest},
+    schema::{
+        DefaultDependency, PackageMetadata, PackageName, ParsedManifest, ReplacementDependency,
+    },
 };
 
 use super::*;
+use serde_spanned::Spanned;
 use sha2::{Digest as ShaDigest, Sha256};
 
 const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
@@ -28,12 +27,9 @@ const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 // TODO: replace this with something more strongly typed
 pub type Digest = String;
 
-pub struct Manifest<F: MoveFlavor> {
+pub struct Manifest {
     inner: ParsedManifest,
     digest: Digest,
-    dependencies: DependencySet<CombinedDependency>,
-    // TODO: remove <F>
-    phantom: PhantomData<F>,
 }
 
 #[derive(Error, Debug)]
@@ -74,38 +70,36 @@ pub enum ManifestErrorKind {
 
 pub type ManifestResult<T> = Result<T, ManifestError>;
 
-impl<F: MoveFlavor> Manifest<F> {
-    /// Read the manifest file at the given path, returning a [`Manifest`].
-    pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
-        debug!("Reading manifest from {:?}", path.as_ref());
-
-        let file_id = FileHandle::new(&path).map_err(ManifestError::with_file(&path))?;
-
-        let parsed: ParsedManifest =
-            toml_edit::de::from_str(file_id.source()).map_err(ManifestError::from_toml(file_id))?;
-
-        let dependencies = CombinedDependency::combine_deps(file_id, &parsed)?;
+impl Manifest {
+    /// Read the manifest file from the file handle, returning a [`Manifest`].
+    pub fn read_from_file(file_handle: FileHandle) -> ManifestResult<Self> {
+        let parsed: ParsedManifest = toml_edit::de::from_str(file_handle.source())
+            .map_err(ManifestError::from_toml(file_handle))?;
 
         let result = Self {
             inner: parsed,
-            digest: format!("{:X}", Sha256::digest(file_id.source().as_ref())),
-            dependencies,
-            phantom: PhantomData,
+            digest: format!("{:X}", Sha256::digest(file_handle.source().as_ref())),
         };
 
-        result.validate_manifest(file_id)?;
+        result.validate_manifest(file_handle)?;
 
         Ok(result)
     }
 
-    /// The combined entries of the `[dependencies]` and `[dep-replacements]` sections for this
-    /// manifest
-    pub fn dependencies(&self) -> DependencySet<CombinedDependency> {
-        self.dependencies.clone()
-    }
-
     pub fn metadata(&self) -> PackageMetadata {
         self.inner.package.clone()
+    }
+
+    // TODO: probably we need to change this API
+    pub fn dep_replacements(
+        &self,
+    ) -> &BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>> {
+        &self.inner.dep_replacements
+    }
+
+    // TODO: probably we need to change this API
+    pub fn dependencies(&self) -> &BTreeMap<Spanned<PackageName>, DefaultDependency> {
+        &self.inner.dependencies
     }
 
     /// The entries from the `[environments]` section
@@ -160,7 +154,9 @@ impl<F: MoveFlavor> Manifest<F> {
 }
 
 impl ManifestError {
-    fn with_file<T: Into<ManifestErrorKind>>(path: impl AsRef<Path>) -> impl Fn(T) -> Self {
+    pub(crate) fn with_file<T: Into<ManifestErrorKind>>(
+        path: impl AsRef<Path>,
+    ) -> impl Fn(T) -> Self {
         move |e| ManifestError {
             kind: Box::new(e.into()),
             location: ErrorLocation::WholeFile(path.as_ref().to_path_buf()),
@@ -201,7 +197,7 @@ impl ManifestError {
     }
 }
 
-impl<F: MoveFlavor> std::fmt::Debug for Manifest<F> {
+impl std::fmt::Debug for Manifest {
     // TODO: not sure we want this
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)

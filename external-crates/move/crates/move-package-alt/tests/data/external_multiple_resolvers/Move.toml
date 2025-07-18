@@ -5,10 +5,10 @@ license = "Apache-2.0"
 authors = ["Move Team"]
 
 [environments]
-default = "default"
+_test_env = "_test_env_id"
 
 [dependencies.mock1.r.mock-resolver]
-output.default.result = { local = "for-res-1" }
+output._test_env_id.result = { local = "for-res-1" }
 
 [dependencies.mock2.r.mock-resolver]
-output.default.result = { local = "for-res-2" }
+output._test_env_id.result = { local = "for-res-2" }

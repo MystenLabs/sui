@@ -8,11 +8,14 @@ use move_command_line_common::testing::insta_assert;
 use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
     dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
-    errors::Files,
-    flavor::{Vanilla, vanilla},
+    errors::{FileHandle, Files},
+    flavor::{
+        Vanilla,
+        vanilla::{self, default_environment},
+    },
     package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
 };
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
@@ -69,7 +72,8 @@ impl Test<'_> {
     fn output(&self) -> anyhow::Result<String> {
         Ok(match self.kind {
             "parsed" => {
-                let manifest = Manifest::<Vanilla>::read_from_file(self.toml_path);
+                let file_handle = FileHandle::new(&self.toml_path).unwrap();
+                let manifest = Manifest::read_from_file(file_handle);
                 let contents = match manifest.as_ref() {
                     Ok(m) => format!("{:#?}", m),
                     Err(_) => {
@@ -130,22 +134,29 @@ fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std
 }
 
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
-    let manifest = Manifest::<Vanilla>::read_from_file(input_path).unwrap();
+    let file_handle = FileHandle::new(&input_path).unwrap();
+    let manifest = Manifest::read_from_file(file_handle).unwrap();
+    let env = default_environment();
 
-    let deps: DependencySet<CombinedDependency> = manifest.dependencies();
+    let deps = CombinedDependency::combine_deps(
+        file_handle,
+        &env,
+        manifest
+            .dep_replacements()
+            .get(env.name())
+            .unwrap_or(&BTreeMap::new()),
+        manifest.dependencies(),
+    )?;
     let mut output = DependencySet::<PinnedDependencyInfo>::new();
     debug!("{deps:?}");
 
     add_bindir();
 
-    for env in manifest.environments().keys() {
-        let deps = deps.deps_for(env).unwrap();
-        let pinned = dependency::pin::<Vanilla>(deps.clone(), env)
-            .await
-            .map_err(|e| e.to_string())?;
-        for (name, dep) in pinned {
-            output.insert(env.clone(), name, dep);
-        }
+    let pinned = dependency::pin::<Vanilla>(deps.clone(), env.id())
+        .await
+        .map_err(|e| e.to_string())?;
+    for (name, dep) in pinned {
+        output.insert(env.name().to_string(), name, dep);
     }
 
     Ok(format!("{output:#?}"))
