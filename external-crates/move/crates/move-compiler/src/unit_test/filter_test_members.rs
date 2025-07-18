@@ -6,7 +6,7 @@ use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 
 use crate::{
-    PreCompiledModuleInfoMap, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::DiagnosticReporter,
     expansion::ast::Address,
     parser::{
@@ -92,11 +92,11 @@ pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 // a test plan is created for use by the testing framework.
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: P::Program,
 ) -> P::Program {
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
-    if !check_has_unit_test_module(compilation_env, &reporter, pre_compiled_module_info, &prog) {
+    if !check_has_unit_test_module(compilation_env, &reporter, pre_compiled_lib, &prog) {
         return prog;
     }
 
@@ -129,11 +129,11 @@ fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
     reporter: &DiagnosticReporter,
-    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &P::Program,
 ) -> bool {
     let has_unit_test_module = has_stdlib_unit_test_module(prog)
-        || pre_compiled_module_info.is_some_and(|module_info| {
+        || pre_compiled_lib.is_some_and(|module_info| {
             module_info.iter().any(|(sp!(_, mident), _)| {
                 mident.module.0.value == UNIT_TEST_MODULE_NAME
                     && match mident.address {

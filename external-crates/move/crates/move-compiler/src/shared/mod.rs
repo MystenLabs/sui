@@ -573,12 +573,12 @@ impl CompilationEnv {
         }
     }
 
-    pub fn save_macro_infos(
+    pub fn save_macro_definitions(
         &self,
-        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+        macro_definitions: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
     ) {
         for hook in &self.save_hooks {
-            hook.save_macro_infos(macro_infos)
+            hook.save_macro_definitions(macro_definitions)
         }
     }
 
@@ -961,7 +961,7 @@ pub(crate) struct SavedInfo {
     hlir: Option<H::Program>,
     cfgir: Option<G::Program>,
     module_named_addresses: Option<BTreeMap<ModuleIdent, NamedAddressMap>>,
-    macro_infos: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
+    macro_definitions: Option<BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>>,
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
@@ -975,7 +975,7 @@ pub enum SaveFlag {
     CFGIR,
     ModuleNameAddresses,
     ModuleResolvedMembers,
-    MacroInfos,
+    MacroDefinitions,
     ModuleInfo,
 }
 
@@ -992,7 +992,7 @@ impl SaveHook {
             hlir: None,
             cfgir: None,
             module_named_addresses: None,
-            macro_infos: None,
+            macro_definitions: None,
         })))
     }
 
@@ -1055,13 +1055,13 @@ impl SaveHook {
         }
     }
 
-    pub(crate) fn save_macro_infos(
+    pub(crate) fn save_macro_definitions(
         &self,
-        macro_infos: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
+        macro_definitions: &BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)>,
     ) {
         let mut r = self.0.lock().unwrap();
-        if r.macro_infos.is_none() && r.flags.contains(&SaveFlag::MacroInfos) {
-            r.macro_infos = Some(macro_infos.clone());
+        if r.macro_definitions.is_none() && r.flags.contains(&SaveFlag::MacroDefinitions) {
+            r.macro_definitions = Some(macro_definitions.clone());
         }
     }
 
@@ -1137,15 +1137,15 @@ impl SaveHook {
         r.module_named_addresses.take().unwrap()
     }
 
-    pub fn take_macro_infos(
+    pub fn take_macro_definitions(
         &self,
     ) -> BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> {
         let mut r = self.0.lock().unwrap();
         assert!(
-            r.flags.contains(&SaveFlag::MacroInfos),
-            "Macro infos not saved. Please set the flag when creating the SaveHook"
+            r.flags.contains(&SaveFlag::MacroDefinitions),
+            "Macro definitions not saved. Please set the flag when creating the SaveHook"
         );
-        r.macro_infos.take().unwrap()
+        r.macro_definitions.take().unwrap()
     }
 }
 

@@ -32,8 +32,8 @@ pub use command_line::{
     MOVE_COMPILED_INTERFACES_DIR,
     compiler::{
         Compiler, PASS_CFGIR, PASS_COMPILATION, PASS_EXPANSION, PASS_HLIR, PASS_NAMING,
-        PASS_PARSER, PASS_TYPING, PreCompiledModuleInfo, PreCompiledModuleInfoMap, SteppedCompiler,
-        construct_precompiled_module_info, generate_interface_files, output_compiled_units,
+        PASS_PARSER, PASS_TYPING, PreCompiledModuleInfo, PreCompiledProgramInfo, SteppedCompiler,
+        construct_pre_compiled_lib, generate_interface_files, output_compiled_units,
     },
 };
 pub use shared::Flags;

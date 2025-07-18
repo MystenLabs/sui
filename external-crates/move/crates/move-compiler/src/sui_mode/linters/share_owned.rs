@@ -6,7 +6,7 @@
 //! fresh object and share it within the same function
 
 use crate::{
-    PreCompiledModuleInfoMap,
+    PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
         absint::JoinResult,
@@ -67,7 +67,7 @@ pub struct ShareOwnedVerifier;
 
 pub struct ShareOwnedVerifierAI<'a> {
     info: &'a TypingProgramInfo,
-    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -115,7 +115,7 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
         }
         Some(ShareOwnedVerifierAI {
             info: context.info,
-            pre_compiled_module_info: context.pre_compiled_module_info.clone(),
+            pre_compiled_program: context.pre_compiled_program.clone(),
         })
     }
 }
@@ -329,7 +329,7 @@ impl ShareOwnedVerifierAI<'_> {
             .get(mident)
             .into_iter()
             .chain(
-                self.pre_compiled_module_info
+                self.pre_compiled_program
                     .as_ref()
                     .and_then(|infos| infos.get(mident))
                     .map(|minfo| &minfo.info),
@@ -344,7 +344,7 @@ impl ShareOwnedVerifierAI<'_> {
             .get(mident)
             .into_iter()
             .chain(
-                self.pre_compiled_module_info
+                self.pre_compiled_program
                     .as_ref()
                     .and_then(|infos| infos.get(mident))
                     .map(|minfo| &minfo.info),

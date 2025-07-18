@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt::Display, sync::Arc, sync::OnceLock};
 
 use self::known_attributes::AttributePosition;
 use crate::{
-    PreCompiledModuleInfoMap,
+    PreCompiledProgramInfo,
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
         self as N, DatatypeTypeParameter, EnumDefinition, FunctionSignature, ResolvedUseFuns,
@@ -175,7 +175,7 @@ fn typing_dependency_order(mdef: &T::ModuleDefinition) -> Option<usize> {
 }
 
 macro_rules! program_info {
-    ($pre_compiled_module_info:ident, $converter:expr, $prog:ident, $module_use_funs:ident, $dependency_order:expr) => {{
+    ($pre_compiled_lib:ident, $converter:expr, $prog:ident, $module_use_funs:ident, $dependency_order:expr) => {{
         let all_modules = $prog.modules.key_cloned_iter();
         let mut modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
             let structs = mdef.structs.clone();
@@ -223,8 +223,8 @@ macro_rules! program_info {
         }))
         .unwrap();
 
-        if let Some(pre_compiled_module_info) = $pre_compiled_module_info {
-            for (mident, minfo) in pre_compiled_module_info.iter() {
+        if let Some(pre_compiled_lib) = $pre_compiled_lib {
+            for (mident, minfo) in pre_compiled_lib.iter() {
                 if !modules.contains_key(&mident) {
                     modules
                         .add(mident.clone(), $converter(&minfo.info))
@@ -242,7 +242,7 @@ macro_rules! program_info {
 impl TypingProgramInfo {
     pub fn new(
         env: &CompilationEnv,
-        pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+        pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
@@ -251,7 +251,7 @@ impl TypingProgramInfo {
         }
         let mut module_use_funs = Some(&mut module_use_funs);
         let prog = Prog { modules };
-        let pcmi = pre_compiled_module_info.clone();
+        let pcmi = pre_compiled_lib.clone();
         let mut info = program_info!(
             pcmi,
             typing_module_info_clone,
@@ -288,14 +288,11 @@ impl TypingProgramInfo {
 }
 
 impl NamingProgramInfo {
-    pub fn new(
-        pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
-        prog: &N::Program_,
-    ) -> Self {
+    pub fn new(pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>, prog: &N::Program_) -> Self {
         // use_funs will be populated later
         let mut module_use_funs: Option<&mut BTreeMap<ModuleIdent, ResolvedUseFuns>> = None;
         program_info!(
-            pre_compiled_module_info,
+            pre_compiled_lib,
             typing_module_info_to_naming,
             prog,
             module_use_funs,

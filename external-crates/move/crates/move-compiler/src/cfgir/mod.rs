@@ -15,7 +15,7 @@ pub mod visitor;
 mod optimize;
 
 use crate::{
-    PreCompiledModuleInfoMap,
+    PreCompiledProgramInfo,
     diagnostics::DiagnosticReporter,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
@@ -29,7 +29,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 pub struct CFGContext<'a> {
     pub env: &'a CompilationEnv,
-    pub pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pub pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
     pub reporter: &'a DiagnosticReporter<'a>,
     pub info: &'a TypingProgramInfo,
     pub package: Option<Symbol>,

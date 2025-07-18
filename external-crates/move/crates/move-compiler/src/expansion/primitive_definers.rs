@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    PreCompiledModuleInfoMap, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::DiagnosticReporter,
     expansion::ast::{Attributes, ModuleDefinition, ModuleIdent},
     ice,
@@ -19,7 +19,7 @@ use std::{collections::BTreeMap, sync::Arc};
 /// type or for unknown base types.
 pub fn modules(
     env: &CompilationEnv,
-    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_lib_opt: Option<Arc<PreCompiledProgramInfo>>,
     modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) {
     let reporter = env.diagnostic_reporter_at_top_level();
@@ -34,8 +34,8 @@ pub fn modules(
         )
     }
 
-    if let Some(pre_compiled_module_info) = pre_compiled_module_info {
-        for (mident, module_info) in pre_compiled_module_info.iter() {
+    if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
+        for (mident, module_info) in pre_compiled_lib.iter() {
             check_prim_definer(
                 &reporter,
                 /* allow shadowing */ true,

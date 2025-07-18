@@ -4,7 +4,7 @@
 
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
-    PreCompiledModuleInfoMap,
+    PreCompiledProgramInfo,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
@@ -43,7 +43,7 @@ type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
@@ -53,7 +53,7 @@ fn extract_decls(
     // pre-compiled modules contain ProgramInfo computed at typing which does contains
     // dependency order so unwrap below is safe
     let pre_compiled_dependency_orders = || {
-        pre_compiled_module_info.iter().flat_map(|module_info| {
+        pre_compiled_lib.iter().flat_map(|module_info| {
             module_info
                 .iter()
                 .filter(|(mident, _)| !prog.modules.contains_key(mident))
@@ -131,10 +131,10 @@ fn extract_decls(
         .collect();
 
     // add pre-compiled declaratinos if any
-    if let Some(pre_compiled_module_info) = pre_compiled_module_info {
-        for (mident, minfo) in pre_compiled_module_info.iter() {
+    if let Some(pre_compiled_lib) = pre_compiled_lib {
+        for (mident, minfo) in pre_compiled_lib.iter() {
             let (pre_compiled_datatype_decls, pre_compiled_fun_decls) =
-                extract_decls_from_program_info(compilation_env, mident, &minfo.info);
+                pre_compiled_decls(compilation_env, mident, &minfo.info);
             ddecls.extend(pre_compiled_datatype_decls);
             fdecls.extend(pre_compiled_fun_decls);
         }
@@ -143,7 +143,7 @@ fn extract_decls(
     (orderings, ddecls, fdecls)
 }
 
-fn extract_decls_from_program_info(
+fn pre_compiled_decls(
     compilation_env: &CompilationEnv,
     mident: &ModuleIdent,
     minfo: &ModuleInfo,
@@ -232,13 +232,12 @@ fn extract_decls_from_program_info(
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = Vec::new();
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
-    let (orderings, ddecls, fdecls) =
-        extract_decls(compilation_env, pre_compiled_module_info, &prog);
+    let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
         warning_filters_table,

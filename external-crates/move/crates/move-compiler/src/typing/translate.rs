@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    PreCompiledModuleInfoMap, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::{Diagnostic, codes::*},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
@@ -57,7 +57,7 @@ use std::{
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_module_info: Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: N::Program,
 ) -> T::Program {
     let N::Program {
@@ -66,8 +66,7 @@ pub fn program(
         inner: N::Program_ { modules: nmodules },
     } = prog;
 
-    let all_macro_definitions =
-        extract_macros(compilation_env, &nmodules, &pre_compiled_module_info);
+    let all_macro_definitions = extract_macros(compilation_env, &nmodules, &pre_compiled_lib);
     let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
     dependency_ordering::program(compilation_env, &mut modules);
@@ -79,12 +78,8 @@ pub fn program(
         .into_iter()
         .map(|(mident, minfo)| (mident, minfo.use_funs))
         .collect();
-    let program_info = TypingProgramInfo::new(
-        compilation_env,
-        pre_compiled_module_info,
-        &modules,
-        module_use_funs,
-    );
+    let program_info =
+        TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
     let prog = T::Program {
         modules,
         warning_filters_table,
@@ -101,7 +96,7 @@ pub fn program(
 fn extract_macros(
     compilation_env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
-    pre_compiled_module_info: &Option<Arc<PreCompiledModuleInfoMap>>,
+    pre_compiled_lib: &Option<Arc<PreCompiledProgramInfo>>,
 ) -> UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
@@ -132,12 +127,12 @@ fn extract_macros(
     // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
     // should have already produced that error. To avoid unnecessary error handling, we simply
     // prefer the non-precompiled definitions.
-    let pre_compiled_macro_infos = || {
-        pre_compiled_module_info.iter().flat_map(|module_info| {
+    let pre_compiled_macro_definitions = || {
+        pre_compiled_lib.iter().flat_map(|module_info| {
             module_info.iter().filter_map(|(mident, module_info)| {
                 if !modules.contains_key(mident) {
-                    if let Some(macro_infos) = &module_info.macro_infos {
-                        return Some((*mident, &macro_infos.0, &macro_infos.1));
+                    if let Some(macro_definitions) = &module_info.macro_definitions {
+                        return Some((*mident, &macro_definitions.0, &macro_definitions.1));
                     }
                 }
                 None
@@ -145,23 +140,27 @@ fn extract_macros(
         })
     };
 
-    let all_macro_infos = modules
+    let all_macro_definitions = modules
         .iter()
         .map(|(loc, mident, mdef)| (sp(loc, *mident), &mdef.use_funs, &mdef.functions))
-        .chain(pre_compiled_macro_infos());
+        .chain(pre_compiled_macro_definitions());
 
-    let mut macro_infos: BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> =
+    let mut macro_definitions: BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> =
         BTreeMap::new();
-    let extracted_macros =
-        UniqueMap::maybe_from_iter(all_macro_infos.map(|(mident, mod_use_funs, functions)| {
+    let extracted_macros = UniqueMap::maybe_from_iter(all_macro_definitions.map(
+        |(mident, mod_use_funs, functions)| {
             let macro_functions = functions.ref_filter_map(|name, f| {
                 // even if there are no macro functions, create an entry to be saved
                 // in the precompiled modules
-                macro_infos
+                macro_definitions
                     .entry(mident)
                     .or_insert_with(|| (mod_use_funs.clone(), UniqueMap::new()));
                 let _macro_loc = f.macro_?;
-                let _ = macro_infos.get_mut(&mident).unwrap().1.add(name, f.clone());
+                let _ = macro_definitions
+                    .get_mut(&mident)
+                    .unwrap()
+                    .1
+                    .add(name, f.clone());
                 if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
                     let use_funs = merge_use_funs(mod_use_funs, use_funs.clone());
                     Some((use_funs, body.clone()))
@@ -170,10 +169,11 @@ fn extract_macros(
                 }
             });
             (mident, macro_functions)
-        }))
-        .unwrap();
+        },
+    ))
+    .unwrap();
 
-    compilation_env.save_macro_infos(&macro_infos);
+    compilation_env.save_macro_definitions(&macro_definitions);
     extracted_macros
 }
 
