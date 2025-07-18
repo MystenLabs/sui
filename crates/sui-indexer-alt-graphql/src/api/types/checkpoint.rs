@@ -89,6 +89,12 @@ impl CheckpointContents {
         Some(Epoch::with_id(self.scope.clone(), summary.epoch))
     }
 
+    /// The total number of transactions in the network by the end of this checkpoint.
+    async fn network_total_transactions(&self) -> Option<UInt53> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(summary.network_total_transactions.into())
+    }
+
     /// The digest of the previous checkpoint's summary.
     async fn previous_checkpoint_digest(&self) -> Result<Option<String>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
