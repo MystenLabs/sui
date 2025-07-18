@@ -15,7 +15,7 @@ use move_package_alt::{
     },
     package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
 };
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
@@ -141,7 +141,10 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let deps = CombinedDependency::combine_deps(
         file_handle,
         &env,
-        manifest.dep_replacements(),
+        manifest
+            .dep_replacements()
+            .get(env.name())
+            .unwrap_or(&BTreeMap::new()),
         manifest.dependencies(),
     )?;
     let mut output = DependencySet::<PinnedDependencyInfo>::new();

@@ -32,18 +32,12 @@ impl CombinedDependency {
     pub fn combine_deps(
         file: FileHandle,
         env: &Environment,
-        dep_replacements: &BTreeMap<
-            EnvironmentName,
-            BTreeMap<PackageName, Spanned<ReplacementDependency>>,
-        >,
+        dep_replacements: &BTreeMap<PackageName, Spanned<ReplacementDependency>>,
         dependencies: &BTreeMap<Spanned<PackageName>, DefaultDependency>,
     ) -> ManifestResult<BTreeMap<PackageName, Self>> {
         let mut result = BTreeMap::new();
 
-        let mut replacements = dep_replacements
-            .get(env.name())
-            .cloned()
-            .unwrap_or_default();
+        let mut replacements = dep_replacements.clone();
 
         for (pkg, default) in dependencies.iter() {
             let combined = if let Some(replacement) = replacements.remove(pkg.get_ref()) {

@@ -92,7 +92,10 @@ impl<F: MoveFlavor> Package<F> {
             let combined_deps = CombinedDependency::combine_deps(
                 file_handle,
                 env,
-                manifest.dep_replacements(),
+                manifest
+                    .dep_replacements()
+                    .get(env.name())
+                    .unwrap_or(&BTreeMap::new()),
                 manifest.dependencies(),
             )?;
 
