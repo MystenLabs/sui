@@ -744,6 +744,11 @@ struct FeatureFlags {
     // protocol versions (see make_vec_non_existent_type_v71.move)
     #[serde(skip_serializing_if = "is_false")]
     debug_fatal_on_move_invariant_violation: bool,
+
+    // DO NOT ENABLE THIS FOR PRODUCTION NETWORKS. used for testing only.
+    // Allow private accumulator entrypoints
+    #[serde(skip_serializing_if = "is_false")]
+    allow_private_accumulator_entrypoints: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2112,6 +2117,10 @@ impl ProtocolConfig {
 
     pub fn debug_fatal_on_move_invariant_violation(&self) -> bool {
         self.feature_flags.debug_fatal_on_move_invariant_violation
+    }
+
+    pub fn allow_private_accumulator_entrypoints(&self) -> bool {
+        self.feature_flags.allow_private_accumulator_entrypoints
     }
 }
 
@@ -4052,8 +4061,9 @@ impl ProtocolConfig {
         });
     }
 
-    pub fn set_enable_accumulators_for_testing(&mut self, val: bool) {
-        self.feature_flags.enable_accumulators = val;
+    pub fn enable_accumulators_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = true;
+        self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 }
 
