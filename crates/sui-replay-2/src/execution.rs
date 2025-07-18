@@ -7,7 +7,7 @@
 //! `execute_transaction_to_effects` requires info from the `EpochStore`
 //! (epoch, protocol config, epoch start timestamp, rgp), from the `TransactionStore`
 //! as in transaction data and effects, and from the `ObjectStore` for dynamic loads
-//! (e.g. synamic fields).
+//! (e.g. dynamic fields).
 //! This module also contains the traits used by execution to talk to
 //! the store (BackingPackageStore, ObjectStore, ChildObjectResolver)
 
@@ -31,6 +31,7 @@ use sui_types::{
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiError, SuiResult},
+    execution_params::{get_early_execution_error, ExecutionOrEarlyError},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
@@ -77,7 +78,7 @@ pub fn execute_transaction_to_effects(
 > {
     debug!("Start execution");
     // TODO: Hook up...
-    let certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
+    let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
     let ReplayTransaction {
         digest,
@@ -109,16 +110,23 @@ pub fn execute_transaction_to_effects(
         store: object_store,
         object_cache: RefCell::new(object_cache),
     };
+    let input_objects = CheckedInputObjects::new_for_replay(input_objects);
+    let early_execution_error =
+        get_early_execution_error(&digest, &input_objects, &config_certificate_deny_set);
+    let execution_params = match early_execution_error {
+        Some(error) => ExecutionOrEarlyError::Err(error),
+        None => ExecutionOrEarlyError::Ok(()),
+    };
     let (inner_store, gas_status, effects, _execution_timing, result) =
         executor.executor.execute_transaction_to_effects(
             &store,
             protocol_config,
             executor.metrics.clone(),
             false, // expensive checks
-            &certificate_deny_set,
+            execution_params,
             &epoch,
             epoch_start_timestamp,
-            CheckedInputObjects::new_for_replay(input_objects),
+            input_objects,
             txn_data.gas_data().clone(),
             gas_status,
             txn_data.kind().clone(),
@@ -235,7 +243,7 @@ impl BackingPackageStore for ReplayStore<'_> {
         let object_key = ObjectKey {
             object_id: *package_id,
             // we could have used `VersionQuery::ImmutableOrLatest`
-            // but we would have to track system packages separetly
+            // but we would have to track system packages separately
             // which we may want to consider
             version_query: VersionQuery::AtCheckpoint(self.checkpoint),
         };

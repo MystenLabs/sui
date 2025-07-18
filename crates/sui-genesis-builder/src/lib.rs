@@ -30,6 +30,7 @@ use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
 use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
+use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
@@ -912,7 +913,6 @@ fn create_genesis_transaction(
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let certificate_deny_set = HashSet::new();
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, mut gas_data) = transaction_data.execution_parts();
         gas_data.payment = vec![];
@@ -923,7 +923,7 @@ fn create_genesis_transaction(
                 protocol_config,
                 metrics,
                 expensive_checks,
-                &certificate_deny_set,
+                ExecutionOrEarlyError::Ok(()),
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
