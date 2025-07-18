@@ -518,6 +518,7 @@ mod tests {
     use std::str::FromStr;
     use sui_types::base_types::SuiAddress;
     use sui_types::crypto::{Ed25519SuiSignature, PublicKey, Signature, SuiKeyPair};
+    use tempfile::TempDir;
 
     const PUBLIC_KEY: &str = "ALJ0GaLcBTTwTTh5dvyc6xaxwrjkG1spQzlL+W4CGLqG";
     const ADDRESS: &str = "0x9219616732544c54259b3f5aeef5ec078535e322ee63f7de2ca8a197fd2a4f6f";
@@ -550,26 +551,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_serialize() {
-        let tmp = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-            .join("src")
-            .join("unit_tests")
-            .join("tmp")
-            .join("external.keystore");
-
-        // cleanup external.keystore and external.aliases
-        if tmp.exists() {
-            std::fs::remove_file(&tmp).expect("Failed to remove existing file");
-        }
-        if tmp.with_extension("aliases").exists() {
-            std::fs::remove_file(tmp.with_extension("aliases"))
-                .expect("Failed to remove existing aliases file");
-        }
+        let tmp_dir = TempDir::new().unwrap();
+        let path = tmp_dir.path().join("external.keystore");
 
         let mut external = External {
             aliases: Default::default(),
             keys: Default::default(),
             command_runner: Box::new(StdCommandRunner),
-            path: Some(tmp.clone()),
+            path: Some(path.clone()),
         };
 
         // Add key
@@ -596,7 +585,7 @@ mod tests {
         let serialized = serde_json::to_string(&external).expect("Failed to serialize external");
 
         assert!(!serialized.is_empty());
-        assert!(serialized.contains("tmp/external.keystore"));
+        assert!(serialized.contains("/external.keystore"));
         // deserialize back to External via custom deserializer
         let deserialized: External = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized.keys.len(), 1);
