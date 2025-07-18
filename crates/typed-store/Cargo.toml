@@ -8,6 +8,9 @@ repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2021"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 backoff.workspace = true
 bcs.workspace = true

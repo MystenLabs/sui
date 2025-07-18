@@ -28,7 +28,6 @@ use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
-use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::execution::ExecutionTimeObservationKey;
@@ -1179,7 +1178,15 @@ impl CheckpointBuilder {
                     });
                 }
                 Err(e) => {
-                    debug_fatal!("Error while making checkpoint, will retry in 1s: {:?}", e);
+                    let msg = format!("{:?}", e);
+                    // This particular error is expected to happen from time to time. Any other error during checkpoint
+                    // building is most likely a bug.
+                    if msg.contains("change epoch tx has already been executed via state sync") {
+                        info!("change epoch tx has already been executed via state sync. Checkpoint builder will be shut down briefly");
+                    } else {
+                        debug_fatal!("Error while making checkpoint, will retry in 1s: {}", msg);
+                    }
+
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     self.metrics.checkpoint_errors.inc();
                     return;
@@ -2473,8 +2480,6 @@ async fn diagnose_split_brain(
     let mut file = File::create(path).unwrap();
     write!(file, "{}", fork_logs_text).unwrap();
     debug!("{}", fork_logs_text);
-
-    fail_point!("split_brain_reached");
 }
 
 pub trait CheckpointServiceNotify {

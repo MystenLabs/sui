@@ -59,8 +59,12 @@ mod sim_only_tests {
     use fastcrypto::encoding::Base64;
     use move_binary_format::{file_format_common::VERSION_MAX, CompiledModule};
     use move_core_types::ident_str;
+    use mysten_common::register_debug_fatal_handler;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
     use sui_json_rpc_api::WriteApiClient;
@@ -720,6 +724,14 @@ mod sim_only_tests {
             .build()
             .await;
 
+        let framework_mismatch_counter = Arc::new(AtomicUsize::new(0));
+        register_debug_fatal_handler!("Framework mismatch -- ", {
+            let counter = framework_mismatch_counter.clone();
+            move || {
+                counter.fetch_add(1, Ordering::Relaxed);
+            }
+        });
+
         // We must stop the validators before overriding the system modules, otherwise the validators
         // may start running before the override and hence send capabilities indicating that they
         // only support the genesis system modules.
@@ -752,6 +764,9 @@ mod sim_only_tests {
             );
             assert_eq!(committee.epoch, 2);
         });
+
+        // The debug_fatal was hit
+        assert_eq!(framework_mismatch_counter.load(Ordering::Relaxed), 1);
     }
 
     // Test that protocol version upgrade does not complete when there is no quorum on the

@@ -23,18 +23,74 @@ pub fn crash_on_debug() -> bool {
     *CRASH_ON_DEBUG
 }
 
+#[cfg(msim)]
+pub mod intercept_debug_fatal {
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    pub struct DebugFatalCallback {
+        pub pattern: String,
+        pub callback: Arc<dyn Fn() + Send + Sync>,
+    }
+
+    thread_local! {
+        static INTERCEPT_DEBUG_FATAL: Mutex<Option<DebugFatalCallback>> = Mutex::new(None);
+    }
+
+    pub fn register_callback(message: &str, f: impl Fn() + Send + Sync + 'static) {
+        INTERCEPT_DEBUG_FATAL.with(|m| {
+            *m.lock().unwrap() = Some(DebugFatalCallback {
+                pattern: message.to_string(),
+                callback: Arc::new(f),
+            });
+        });
+    }
+
+    pub fn get_callback() -> Option<DebugFatalCallback> {
+        INTERCEPT_DEBUG_FATAL.with(|m| m.lock().unwrap().clone())
+    }
+}
+
+#[macro_export]
+macro_rules! register_debug_fatal_handler {
+    ($message:literal, $f:expr) => {
+        #[cfg(msim)]
+        $crate::logging::intercept_debug_fatal::register_callback($message, $f);
+
+        #[cfg(not(msim))]
+        {
+            // silence unused variable warnings from the body of the callback
+            let _ = $f;
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! debug_fatal {
     ($($arg:tt)*) => {{
-        if $crate::logging::crash_on_debug() {
-            $crate::fatal!($($arg)*);
-        } else {
-            let stacktrace = std::backtrace::Backtrace::capture();
-            tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $($arg)*);
-            let location = concat!(file!(), ':', line!());
-            if let Some(metrics) = mysten_metrics::get_metrics() {
-                metrics.system_invariant_violations.with_label_values(&[location]).inc();
+        loop {
+            #[cfg(msim)]
+            {
+                if let Some(cb) = $crate::logging::intercept_debug_fatal::get_callback() {
+                    let msg = format!($($arg)*);
+                    if msg.contains(&cb.pattern) {
+                        (cb.callback)();
+                    }
+                    break;
+                }
             }
+
+            if $crate::logging::crash_on_debug() {
+                $crate::fatal!($($arg)*);
+            } else {
+                let stacktrace = std::backtrace::Backtrace::capture();
+                tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $($arg)*);
+                let location = concat!(file!(), ':', line!());
+                if let Some(metrics) = mysten_metrics::get_metrics() {
+                    metrics.system_invariant_violations.with_label_values(&[location]).inc();
+                }
+            }
+            break;
         }
     }};
 }
