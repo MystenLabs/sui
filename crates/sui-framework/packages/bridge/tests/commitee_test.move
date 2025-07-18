@@ -38,6 +38,7 @@ use sui_system::sui_system::{Self, SuiSystemState};
 const TEST_MSG: vector<u8> =
     b"00010a0000000000000000200000000000000000000000000000000000000000000000000000000000000064012000000000000000000000000000000000000000000000000000000000000000c8033930000000000000";
 
+// Move this to validator builder as presets.
 const VALIDATOR1_PUBKEY: vector<u8> =
     b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964";
 const VALIDATOR2_PUBKEY: vector<u8> =
@@ -46,6 +47,8 @@ const VALIDATOR3_PUBKEY: vector<u8> =
     b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a63";
 
 #[test]
+// setup_test is a magic function, should not be used.
+// why is it not using bridge env?
 fun test_verify_signatures_good_path() {
     let committee = setup_test();
     let msg = message::deserialize_message_test_only(hex::decode(TEST_MSG));
@@ -53,6 +56,8 @@ fun test_verify_signatures_good_path() {
     committee.verify_signatures(
         msg,
         vector[
+            // this can be replaced with x"...."
+            // weird hex::decode over byte string
             hex::decode(
                 b"8ba030a450cb1e36f61e572645fc9da1dea5f79b6db663a21ab63286d7fc29af447433abdd0c0b35ab751154ac5b612ae64d3be810f0d9e10ff68e764514ced300",
             ),

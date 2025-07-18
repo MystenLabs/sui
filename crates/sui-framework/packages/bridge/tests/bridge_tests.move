@@ -61,11 +61,15 @@ const TEST_DONE: u64 = 74839201;
 
 #[test]
 fun test_bridge_create() {
+    // what is the difference between create_bridge and create_bridge_default?
+    // maybe worth putting it into a builder pattern?
     let mut env = create_env(chain_ids::sui_testnet());
     env.create_bridge(@0x0);
 
     let bridge = env.bridge(@0x0);
     let inner = bridge.bridge_ref().test_load_inner();
+
+    // not a fan of this function. passing abort code too? why?
     inner.assert_not_paused(UNEXPECTED_ERROR);
     assert!(inner.inner_token_transfer_records().length() == 0);
     bridge.return_bridge();
@@ -92,6 +96,9 @@ fun test_create_bridge_default() {
 fun test_init_committee_twice() {
     let mut env = create_env(chain_ids::sui_testnet());
     env.create_bridge_default();
+
+    // ?? not sure what to do here, but maybe could be better to have it inlined
+    // if it's a runner / env function, sender should not be passed in manually
     env.init_committee(@0x0); // second time is a no-op
 
     env.destroy_env();
@@ -102,12 +109,14 @@ fun test_init_committee_non_system_addr() {
     let mut env = create_env(chain_ids::sui_mainnet());
     env.setup_validators(vector[create_validator(@0xA, 100, &b"12345678901234567890123456789012")]);
     env.create_bridge(@0x0);
+    // should not be a magic `env` function, more inline calls would be better
     env.register_committee();
     env.init_committee(@0xA);
 
     abort TEST_DONE
 }
 
+// no need to pass a code into `abort` here
 #[test, expected_failure(abort_code = bridge::committee::ECommitteeAlreadyInitiated)]
 fun test_register_committee_after_init() {
     let mut env = create_env(chain_ids::sui_custom());
@@ -120,9 +129,16 @@ fun test_register_committee_after_init() {
 #[test]
 fun test_register_foreign_token() {
     let addr = @0x0;
+    // use builder pattern for env
+    // no need to do separate calls
     let mut env = create_env(chain_ids::sui_testnet());
+
+    // what does it mean to create a bridge with default settings?
     env.create_bridge_default();
     let (upgrade_cap, treasury_cap, metadata) = create_test_token(env.scenario().ctx());
+
+    // should not be an `env` function, but a bridge call via
+    // `env.bridge_tx!(|bridge, ctx| { ... })`
     env.register_foreign_token<TEST_TOKEN>(
         treasury_cap,
         upgrade_cap,
@@ -541,6 +557,9 @@ fun test_execute_emergency_op_abort_when_already_frozen() {
 }
 
 #[test]
+// No need to use test_scenario when there's no inventory, and no sender control
+// (though, even for sender control, there's a way to pass it into dummy)
+// tx_context::dummy solves this case, makes things simpler.
 fun test_get_token_transfer_action_data() {
     let mut scenario = test_scenario::begin(@0x0);
     let ctx = scenario.ctx();
