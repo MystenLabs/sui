@@ -10,7 +10,9 @@ use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::message_envelope::Message as _;
 use sui_types::messages_grpc::RawSubmitTxRequest;
 use sui_types::object::Object;
 use sui_types::transaction::{
@@ -191,9 +193,27 @@ async fn test_submit_transaction_already_executed() {
         .unwrap();
 
     // Submit the same transaction again.
-    let response2 = test_context.client.submit_transaction(request, None).await;
-    // We should get rejection because the objects in the transaction are already consumed.
-    assert!(response2.is_err());
+    let response2 = test_context
+        .client
+        .submit_transaction(request, None)
+        .await
+        .unwrap();
+    // Verify we got the full effects back.
+    let response2: SubmitTxResponse = response2.try_into().unwrap();
+    match response2 {
+        SubmitTxResponse::Executed {
+            effects_digest,
+            details,
+        } => {
+            let details = details.unwrap();
+            assert_eq!(effects_digest, details.effects.digest());
+            assert_eq!(
+                verified_transaction.digest(),
+                details.effects.transaction_digest()
+            );
+        }
+        _ => panic!("Expected Executed response"),
+    };
 }
 
 #[tokio::test]

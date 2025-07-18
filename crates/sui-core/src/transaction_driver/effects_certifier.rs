@@ -60,6 +60,8 @@ impl EffectsCertifier {
                 details,
             } => match details {
                 Some(details) => (None, Some((effects_digest, details))),
+                // Details should always be set in correct responses.
+                // But if it is not set, continuing to get full effects and certify the digest are still correct.
                 None => (None, None),
             },
         };

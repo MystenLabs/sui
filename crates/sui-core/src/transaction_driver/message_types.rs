@@ -41,6 +41,8 @@ pub enum SubmitTxResponse {
     },
     Executed {
         effects_digest: TransactionEffectsDigest,
+        // Response should always include details for executed transactions.
+        // TODO(fastpath): validate this field is always present and return an error during deserialization.
         details: Option<Box<ExecutedData>>,
     },
 }
@@ -104,9 +106,10 @@ pub struct QuorumTransactionResponse {
 
 pub(crate) struct WaitForEffectsRequest {
     pub transaction_digest: TransactionDigest,
-    /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
-    /// in addition to waiting for finalized effects.
-    /// If not provided, only wait for finalized effects.
+    /// If consensus position is provided, waits in the server handler for the transaction in it to execute,
+    /// either in fastpath outputs or finalized.
+    /// If it is not provided, only waits for finalized effects of the transaction in the server handler,
+    /// but not for fastpath outputs.
     pub consensus_position: Option<ConsensusPosition>,
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
