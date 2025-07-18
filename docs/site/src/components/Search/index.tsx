@@ -34,7 +34,7 @@ export default function Search() {
     { label: "Sui", indexName: "sui_docs" },
     { label: "SuiNS", indexName: "suins_docs" },
     { label: "The Move Book and Reference", indexName: "move_book" },
-    { label: "SDKs", indexName: "dapp_kit" },
+    { label: "SDKs", indexName: "sui_sdks" },
   ];
 
   const handleVisibility = React.useCallback(
@@ -47,13 +47,13 @@ export default function Search() {
   return (
     <InstantSearch
       searchClient={searchClient}
-      indexName="Sui Docs"
+      indexName="sui_docs"
       future={{ preserveSharedStateOnUnmount: true }}
       initialUiState={{
         sui_docs: { query: queryParam },
         suins_docs: { query: queryParam },
         move_book: { query: queryParam },
-        dapp_kit: { query: queryParam },
+        sui_sdks: { query: queryParam },
       }}
     >
       {/* Preload tab visibility */}

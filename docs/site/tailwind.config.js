@@ -20,7 +20,7 @@ module.exports = {
         "sui-blue-primary": "rgb(var(--sui-blue-primary)/<alpha-value>)",
         "sui-blue": "var(--sui-blue)",
         "sui-blue-bright": "var(--sui-blue-bright)",
-        "sui-blue-light": "var(--sui-blue-light)",
+        "sui-blue-light": "rgb(var(--sui-blue-light)/<alpha-value>)",
         "sui-blue-lighter": "var(--sui-blue-lighter)",
         "sui-blue-dark": "rgb(var(--sui-blue-dark)/<alpha-value>)",
         "sui-blue-darker": "var(--sui-blue-darker)",

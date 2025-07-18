@@ -18,7 +18,7 @@ export default function CustomHitsContent({ name }) {
     siteToVisit = `${siteToVisit} or visit the official <a href="https://docs.suins.io" target="_blank">SuiNS doc</a> site.`;
   } else if (name === "move_book") {
     siteToVisit = `${siteToVisit} or visit <a href="https://move-book.com/" target="_blank">The Move Book</a> dedicated site.`;
-  } else if (name === "dapp_kit") {
+  } else if (name === "sui_sdks") {
     siteToVisit = `${siteToVisit} or visit the official <a href="https://sdk.mystenlabs.com/dapp-kit" target="_blank">dApp Kit</a> site.`;
   } else {
     siteToVisit = `${siteToVisit}.`;
@@ -51,7 +51,10 @@ export default function CustomHitsContent({ name }) {
     <>
       {Object.entries(grouped).map(([key, group], index) => {
         return (
-          <div className="p-6 pb-[40px] mb-6 bg-sui-gray-35 rounded-[20px]" key={index}>
+          <div
+            className="p-6 pb-[40px] mb-6 bg-sui-gray-35 rounded-[20px]"
+            key={index}
+          >
             <div className="text-xl text-sui-gray-3s font-semibold mb-4">
               {group[0].hierarchy?.lvl1 ||
                 group[0].hierarchy?.lvl0 ||
@@ -89,7 +92,9 @@ export default function CustomHitsContent({ name }) {
                         {sectionTitle}
                       </a>
                     )}
-                    <p className="font-normal text-base">{hit.content ? truncateAtWord(hit.content) : ""}</p>
+                    <p className="font-normal text-base text-sui-gray-5s">
+                      {hit.content ? truncateAtWord(hit.content) : ""}
+                    </p>
                   </div>
                 );
               })}
