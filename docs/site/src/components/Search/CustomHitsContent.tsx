@@ -51,11 +51,8 @@ export default function CustomHitsContent({ name }) {
     <>
       {Object.entries(grouped).map(([key, group], index) => {
         return (
-          <div
-            className="mb-8 pb-8 border-2 border-solid border-transparent border-b-sui-gray-50 dark:border-b-sui-gray-80"
-            key={index}
-          >
-            <div className="text-2xl text-sui-gray-80 text-bold mb-2">
+          <div className="p-6 pb-[40px] mb-6 bg-sui-gray-35 rounded-[20px]" key={index}>
+            <div className="text-xl text-sui-gray-3s font-semibold mb-4">
               {group[0].hierarchy?.lvl1 ||
                 group[0].hierarchy?.lvl0 ||
                 "[no title]"}
@@ -78,7 +75,7 @@ export default function CustomHitsContent({ name }) {
                     {isInternal ? (
                       <button
                         onClick={() => history.push(new URL(hit.url).pathname)}
-                        className="text-lg text-blue-600 underline text-left"
+                        className="text-base text-blue-600 underline text-left pb-2"
                       >
                         {sectionTitle}
                       </button>
@@ -87,12 +84,12 @@ export default function CustomHitsContent({ name }) {
                         href={hit.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-lg text-blue-600 underline"
+                        className="text-base text-blue-600 underline pb-2"
                       >
                         {sectionTitle}
                       </a>
                     )}
-                    <p>{hit.content ? truncateAtWord(hit.content) : ""}</p>
+                    <p className="font-normal text-base">{hit.content ? truncateAtWord(hit.content) : ""}</p>
                   </div>
                 );
               })}

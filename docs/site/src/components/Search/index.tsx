@@ -34,7 +34,7 @@ export default function Search() {
     { label: "Sui", indexName: "sui_docs" },
     { label: "SuiNS", indexName: "suins_docs" },
     { label: "The Move Book and Reference", indexName: "move_book" },
-    { label: "dApp Kit", indexName: "dapp_kit" },
+    { label: "SDKs", indexName: "dapp_kit" },
   ];
 
   const handleVisibility = React.useCallback(
@@ -69,7 +69,7 @@ export default function Search() {
       <div className="grid grid-cols-12 gap-4 sui-search">
         <div className="col-span-12">
           <ControlledSearchBox
-            placeholder="Start typing to begin your search..."
+            placeholder={`Search`}
             query={query}
             onChange={setQuery}
           />

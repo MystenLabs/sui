@@ -71,11 +71,13 @@
   --sui-warning-dark: #8D6E15;
   --sui-warning-light: #FFF8E2;
   --sui-code: #845ED6;
-  --sui-gray-35: #FEFEFE;
-  --sui-gray-40: #F7F8F8;
-  --sui-gray-45: #EBECED;
+  --sui-gray-3s: 51 51 51;
+  --sui-gray-5s: 85 85 85;
+  --sui-gray-35: 247 248 250;
+  --sui-gray-40: 240 241 245;
+  --sui-gray-45: 235 235 237;
   --sui-gray-50: #E9EAEB;
-  --sui-gray-55: #D7D8DA;
+  --sui-gray-55: 222 222 224;
   --sui-gray-60: #C3C5C8;
   --sui-gray-65: #9C9FA4;
   --sui-gray-70: #898D93;
@@ -85,6 +87,7 @@
   --sui-gray-90: #383F47;
   --sui-gray-95: #2A3645;
   --sui-gray-100: #182435;
+  --sui-disabled: 41 41 51;
   --sui-link-color: #1068a6;
   --sui-link-color-dark: #057fd1;
   --sui-link-color-light: #1f98e9;
@@ -394,7 +397,7 @@ div[role="tabpanel"] {
 }
 
 .ais-RefinementList-labelText {
-  @apply col-span-3 text-sm;
+  @apply col-span-3 text-[15px];
 }
 
 .ais-RefinementList-count {
