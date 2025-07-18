@@ -4,7 +4,7 @@
 
 use crate::authority_client::AuthorityAPI;
 use crate::epoch::committee_store::CommitteeStore;
-use crate::transaction_driver::{ExecutedData, WaitForEffectsResponse};
+use crate::transaction_driver::{ExecutedData, SubmitTxResponse, WaitForEffectsResponse};
 use prometheus::core::GenericCounter;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, Histogram,
@@ -19,7 +19,6 @@ use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI, Transa
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::messages_consensus::ConsensusPosition;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, RawWaitForEffectsRequest,
@@ -319,20 +318,13 @@ where
         &self,
         request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<ConsensusPosition, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
             .submit_transaction(request, client_addr)
             .await?;
-
-        let consensus_position = bcs::from_bytes(&response.consensus_position).map_err(|e| {
-            SuiError::GrpcMessageSerializeError {
-                type_info: "RawSubmitTxResponse.consensus_position".to_string(),
-                error: e.to_string(),
-            }
-        })?;
-        Ok(consensus_position)
+        response.try_into()
     }
 
     /// Wait for effects of a transaction that has been submitted to the network

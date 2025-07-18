@@ -8,8 +8,8 @@ use mysten_common::debug_fatal;
 use rand::{seq::SliceRandom as _, Rng as _};
 use sui_types::{
     base_types::ConciseableName,
-    committee::EpochId,
     digests::{TransactionDigest, TransactionEffectsDigest},
+    effects::TransactionEffectsAPI as _,
     messages_consensus::ConsensusPosition,
     messages_grpc::RawWaitForEffectsRequest,
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
@@ -22,10 +22,10 @@ use crate::{
     authority_client::AuthorityAPI,
     stake_aggregator::{InsertResult, StakeAggregator},
     transaction_driver::{
-        error::TransactionDriverError, metrics::TransactionDriverMetrics,
-        QuorumTransactionResponse, SubmitTransactionOptions,
+        error::TransactionDriverError, metrics::TransactionDriverMetrics, ExecutedData,
+        QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
+        WaitForEffectsRequest, WaitForEffectsResponse,
     },
-    transaction_driver::{ExecutedData, WaitForEffectsRequest, WaitForEffectsResponse},
 };
 
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(2);
@@ -44,12 +44,27 @@ impl EffectsCertifier {
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
-        consensus_position: ConsensusPosition,
+        submit_txn_resp: SubmitTxResponse,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        // When consensus position is provided, wait for finalized and fastpath outputs at the validators' side.
+        // Otherwise, only wait for finalized effects.
+        // Skip the first attempt to get full effects if it is already provided.
+        let (consensus_position, full_effects) = match submit_txn_resp {
+            SubmitTxResponse::Submitted { consensus_position } => (Some(consensus_position), None),
+            SubmitTxResponse::Executed {
+                effects_digest,
+                details,
+            } => match details {
+                Some(details) => (None, Some((effects_digest, details))),
+                // Details should always be set in correct responses.
+                // But if it is not set, continuing to get full effects and certify the digest are still correct.
+                None => (None, None),
+            },
+        };
         let (acknowledgments_result, mut full_effects_result) = join!(
             self.wait_for_acknowledgments_with_retry(
                 authority_aggregator,
@@ -57,13 +72,20 @@ impl EffectsCertifier {
                 consensus_position,
                 options,
             ),
-            self.get_full_effects_with_retry(
-                authority_aggregator,
-                tx_digest,
-                consensus_position,
-                options,
-            ),
+            async move {
+                if let Some(full_effects) = full_effects {
+                    return Ok(full_effects);
+                }
+                self.get_full_effects_with_retry(
+                    authority_aggregator,
+                    tx_digest,
+                    consensus_position,
+                    options,
+                )
+                .await
+            },
         );
+
         let certified_digest = acknowledgments_result?;
 
         // Retry until full effects digest matches the certified digest.
@@ -81,7 +103,6 @@ impl EffectsCertifier {
                         return Ok(self.get_effects_response(
                             effects_digest,
                             executed_data,
-                            consensus_position.epoch,
                             tx_digest,
                         ));
                     }
@@ -105,9 +126,9 @@ impl EffectsCertifier {
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
-        consensus_position: ConsensusPosition,
+        consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
-    ) -> Result<(TransactionEffectsDigest, ExecutedData), TransactionDriverError>
+    ) -> Result<(TransactionEffectsDigest, Box<ExecutedData>), TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
@@ -146,7 +167,7 @@ impl EffectsCertifier {
                         // All error cases are retryable until max attempt due to the chance
                         // of the status being returned from a byzantine validator.
                         if let Some(details) = details {
-                            return Ok((effects_digest, *details));
+                            return Ok((effects_digest, details));
                         } else {
                             if attempts >= MAX_ATTEMPTS {
                                 return Err(TransactionDriverError::ExecutionDataNotFound(
@@ -202,7 +223,7 @@ impl EffectsCertifier {
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
-        consensus_position: ConsensusPosition,
+        consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
@@ -381,14 +402,14 @@ impl EffectsCertifier {
     fn get_effects_response(
         &self,
         effects_digest: TransactionEffectsDigest,
-        executed_data: ExecutedData,
-        epoch: EpochId,
+        executed_data: Box<ExecutedData>,
         tx_digest: &TransactionDigest,
     ) -> QuorumTransactionResponse {
         self.metrics.executed_transactions.inc();
 
         tracing::debug!("Transaction {tx_digest} executed with effects digest: {effects_digest}",);
 
+        let epoch = executed_data.effects.executed_epoch();
         let details = FinalizedEffects {
             effects: executed_data.effects,
             finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
