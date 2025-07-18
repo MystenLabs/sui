@@ -148,13 +148,14 @@ impl CheckpointReader {
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<(Arc<CheckpointData>, usize)> {
         let mut backoff = backoff::ExponentialBackoff::default();
-        backoff.max_elapsed_time = Some(Duration::from_secs(60));
+        let max_elapsed_time = Duration::from_secs(60);
+        backoff.max_elapsed_time = Some(max_elapsed_time);
         backoff.initial_interval = Duration::from_millis(100);
         backoff.current_interval = backoff.initial_interval;
         backoff.multiplier = 1.0;
         loop {
             match tokio::time::timeout(
-                backoff.max_elapsed_time.unwrap(),
+                max_elapsed_time,
                 Self::remote_fetch_checkpoint_internal(store, checkpoint_number),
             )
             .await
