@@ -4,7 +4,7 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use super::manifest::{Manifest, ManifestError};
+use super::manifest::Manifest;
 use super::paths::PackagePath;
 use crate::compatibility::legacy_parser::ParsedLegacyPackage;
 use crate::schema::{ImplicitDepMode, ReplacementDependency};
@@ -14,7 +14,7 @@ use crate::{
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
     dependency::{CombinedDependency, PinnedDependencyInfo, pin},
-    errors::{FileHandle, PackageError, PackageResult},
+    errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{lockfile::Lockfiles, manifest::Digest},
     schema::{
@@ -84,9 +84,7 @@ impl<F: MoveFlavor> Package<F> {
         source: LockfileDependencyInfo,
         env: &Environment,
     ) -> PackageResult<Self> {
-        let file_handle =
-            FileHandle::new(&path.manifest_path()).map_err(ManifestError::with_file(&path))?;
-        let manifest = Manifest::read_from_file(file_handle);
+        let manifest = Manifest::read_from_file(path.manifest_path());
 
         // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
@@ -102,7 +100,7 @@ impl<F: MoveFlavor> Package<F> {
 
             // TODO: We should error if there environment is not supported!
             let combined_deps = CombinedDependency::combine_deps(
-                file_handle,
+                manifest.file_handle(),
                 env,
                 manifest
                     .dep_replacements()
@@ -133,14 +131,11 @@ impl<F: MoveFlavor> Package<F> {
 
         // Here, that means that we're working on legacy package, so we can throw its errors.
         let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
-
-        let handle = legacy_manifest.file_handle;
-
         let implicit_deps =
             implicit_deps::<F>(env, ImplicitDepMode::Legacy, Some(&legacy_manifest));
 
         let combined_deps = CombinedDependency::combine_deps(
-            handle,
+            &legacy_manifest.file_handle,
             env,
             &BTreeMap::new(),
             &legacy_manifest.deps,

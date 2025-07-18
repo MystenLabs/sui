@@ -29,7 +29,7 @@ impl CombinedDependency {
     /// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
     /// from `file`).
     pub fn combine_deps(
-        file: FileHandle,
+        file: &FileHandle,
         env: &Environment,
         dep_replacements: &BTreeMap<PackageName, Spanned<ReplacementDependency>>,
         dependencies: &BTreeMap<PackageName, DefaultDependency>,
@@ -42,13 +42,13 @@ impl CombinedDependency {
         for (pkg, default) in dependencies.iter() {
             let combined = if let Some(replacement) = replacements.remove(pkg) {
                 Self::from_default_with_replacement(
-                    file,
+                    *file,
                     env.name().to_string(),
                     default.clone(),
                     replacement.into_inner(),
                 )?
             } else {
-                Self::from_default(file, env.name().to_string(), default.clone())
+                Self::from_default(*file, env.name().to_string(), default.clone())
             };
             result.insert(pkg.clone(), combined);
         }
@@ -56,14 +56,14 @@ impl CombinedDependency {
         for (pkg, dep) in replacements {
             result.insert(
                 pkg.clone(),
-                Self::from_replacement(file, env.name().to_string(), dep.into_inner())?,
+                Self::from_replacement(*file, env.name().to_string(), dep.into_inner())?,
             );
         }
 
         for (pkg_name, dep) in implicit_deps {
             result.insert(
                 pkg_name.clone(),
-                Self::from_replacement(file, env.name().to_string(), dep.clone())?,
+                Self::from_replacement(*file, env.name().to_string(), dep.clone())?,
             );
         }
 
