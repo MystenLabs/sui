@@ -1,0 +1,39 @@
+---
+title: Party Objects
+description: Party objects are owned by a specified party given at the time of transfer, and versioned by consensus. Learn how to create and access these objects.
+---
+
+A party object is an object that is transferred using the `sui::transfer::party_transfer` or `sui::transfer::public_party_transfer` function. It is accessible to the `Party` to which it is transferred.
+
+Why the name "party object"? Think "party" as in a dining party at a restaurant, or a party of intrepid adventurers.
+
+Party objects combine some of the properties of address-owned objects and shared objects. Like address-owned objects, they can be owned by a single address. Like shared objects, they are versioned by consensus. However, unlike shared objects, they can be transferred to and from other ownership types, and wrapped.
+
+:::info
+
+Currently, single ownership is the only supported mode for party objects. This document will be updated if support for multiple owners or more granular permissions is added.
+
+:::
+
+## Creating party objects
+
+You can use one of the following functions (defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move)) to create party objects.
+
+```move
+public fun party_transfer<T: key>(obj: T, party: sui::party::Party)
+public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Party)
+```
+
+Use the `sui::transfer::party_transfer` function if you are defining a [custom transfer policy](../transfers/custom-rules.mdx) for the object. Use the `sui::transfer::public_party_transfer` function to create a party object if the object has the `store` capability.
+
+A party object's ownership can change over the life of that object - either by adding it as a dynamic object field, transferring it to a different address or owner type, or making it immutable. One exception: after you create an object and set its ownership, it cannot later be shared.
+
+## Accessing party objects
+
+Party objects can be specified as input to a transaction in the same way as shared objects. Sui validators ensure that the sender of the transaction is allowed to access the object, and might abort a transaction at execution time if the owner of an input party object has been changed by an earlier, conflicting transaction.
+
+Note that party objects whose owning address corresponds to an object ID are **not** supported for access via the [Transfer to Object](../transfers/transfer-to-object.mdx) mechanism.
+
+## When to use party objects
+
+Use party objects in cases where you want an object to be versioned by consensus, perhaps for operational convenience. Especially if an object is only ever used in conjunction with other party or shared objects, there is no additional performance cost for converting it to a party object.
