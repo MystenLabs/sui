@@ -4,7 +4,7 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use super::manifest::Manifest;
+use super::manifest::{Manifest, ManifestError};
 use super::paths::PackagePath;
 use crate::{
     compatibility::{
@@ -12,7 +12,7 @@ use crate::{
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
     dependency::{CombinedDependency, PinnedDependencyInfo, pin},
-    errors::{PackageError, PackageResult},
+    errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{lockfile::Lockfiles, manifest::Digest},
     schema::{
@@ -80,20 +80,26 @@ impl<F: MoveFlavor> Package<F> {
         source: LockfileDependencyInfo,
         env: &Environment,
     ) -> PackageResult<Self> {
-        let manifest = Manifest::<F>::read_from_file(path.manifest_path());
+        let file_handle =
+            FileHandle::new(&path.manifest_path()).map_err(ManifestError::with_file(&path))?;
+        let manifest = Manifest::read_from_file(file_handle);
 
         // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
 
             // TODO: We should error if there environment is not supported!
-            let manifest_deps = manifest
-                .dependencies()
-                .deps_for(env.name())
-                .cloned()
-                .unwrap_or_default();
+            let combined_deps = CombinedDependency::combine_deps(
+                file_handle,
+                env,
+                manifest
+                    .dep_replacements()
+                    .get(env.name())
+                    .unwrap_or(&BTreeMap::new()),
+                manifest.dependencies(),
+            )?;
 
-            let deps = pin::<F>(manifest_deps.clone(), env.id()).await?;
+            let deps = pin::<F>(combined_deps, env.id()).await?;
 
             return Ok(Self {
                 env: env.name().clone(),

@@ -2,16 +2,20 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
+use serde_spanned::Spanned;
+
 use crate::{
     errors::FileHandle,
     package::manifest::ManifestResult,
     schema::{
-        DefaultDependency, EnvironmentName, ManifestDependencyInfo, ParsedManifest,
+        DefaultDependency, Environment, EnvironmentName, ManifestDependencyInfo, PackageName,
         ReplacementDependency,
     },
 };
 
-use super::{Dependency, DependencySet};
+use super::Dependency;
 
 pub(super) type Combined = ManifestDependencyInfo;
 
@@ -27,38 +31,33 @@ impl CombinedDependency {
     // TODO: add implicit dependencies here too
     pub fn combine_deps(
         file: FileHandle,
-        manifest: &ParsedManifest,
-    ) -> ManifestResult<DependencySet<Self>> {
-        let mut result = DependencySet::new();
+        env: &Environment,
+        dep_replacements: &BTreeMap<PackageName, Spanned<ReplacementDependency>>,
+        dependencies: &BTreeMap<Spanned<PackageName>, DefaultDependency>,
+    ) -> ManifestResult<BTreeMap<PackageName, Self>> {
+        let mut result = BTreeMap::new();
 
-        for env in manifest.environments.keys() {
-            let mut replacements = manifest
-                .dep_replacements
-                .get(env.as_ref())
-                .cloned()
-                .unwrap_or_default();
+        let mut replacements = dep_replacements.clone();
 
-            for (pkg, default) in manifest.dependencies.iter() {
-                let combined = if let Some(replacement) = replacements.remove(pkg.as_ref()) {
-                    Self::from_default_with_replacement(
-                        file,
-                        env.as_ref().clone(),
-                        default.clone(),
-                        replacement.into_inner(),
-                    )?
-                } else {
-                    Self::from_default(file, env.as_ref().clone(), default.clone())
-                };
-                result.insert(env.as_ref().clone(), pkg.as_ref().clone(), combined);
-            }
+        for (pkg, default) in dependencies.iter() {
+            let combined = if let Some(replacement) = replacements.remove(pkg.get_ref()) {
+                Self::from_default_with_replacement(
+                    file,
+                    env.name().to_string(),
+                    default.clone(),
+                    replacement.into_inner(),
+                )?
+            } else {
+                Self::from_default(file, env.name().to_string(), default.clone())
+            };
+            result.insert(pkg.get_ref().clone(), combined);
+        }
 
-            for (pkg, dep) in replacements {
-                result.insert(
-                    env.as_ref().clone(),
-                    pkg.clone(),
-                    Self::from_replacement(file, env.as_ref().clone(), dep.as_ref().clone())?,
-                );
-            }
+        for (pkg, dep) in replacements {
+            result.insert(
+                pkg.clone(),
+                Self::from_replacement(file, env.name().to_string(), dep.into_inner())?,
+            );
         }
 
         Ok(result)
