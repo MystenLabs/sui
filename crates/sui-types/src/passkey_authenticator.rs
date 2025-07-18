@@ -196,6 +196,7 @@ impl PasskeyAuthenticator {
         bytes.extend_from_slice(self.signature.as_ref());
         bytes.extend_from_slice(self.pk.as_ref());
 
+        // Safe to unwrap because signature and pk are serialized from valid struct.
         Signature::Secp256r1SuiSignature(Secp256r1SuiSignature::from_bytes(&bytes).unwrap())
     }
 }
