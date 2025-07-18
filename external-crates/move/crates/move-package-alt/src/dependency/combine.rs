@@ -28,35 +28,42 @@ pub struct CombinedDependency(pub(super) Dependency<Combined>);
 impl CombinedDependency {
     /// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
     /// from `file`).
-    // TODO: add implicit dependencies here too
     pub fn combine_deps(
-        file: FileHandle,
+        file: &FileHandle,
         env: &Environment,
         dep_replacements: &BTreeMap<PackageName, Spanned<ReplacementDependency>>,
-        dependencies: &BTreeMap<Spanned<PackageName>, DefaultDependency>,
+        dependencies: &BTreeMap<PackageName, DefaultDependency>,
+        implicit_deps: &BTreeMap<PackageName, ReplacementDependency>,
     ) -> ManifestResult<BTreeMap<PackageName, Self>> {
         let mut result = BTreeMap::new();
 
         let mut replacements = dep_replacements.clone();
 
         for (pkg, default) in dependencies.iter() {
-            let combined = if let Some(replacement) = replacements.remove(pkg.get_ref()) {
+            let combined = if let Some(replacement) = replacements.remove(pkg) {
                 Self::from_default_with_replacement(
-                    file,
+                    *file,
                     env.name().to_string(),
                     default.clone(),
                     replacement.into_inner(),
                 )?
             } else {
-                Self::from_default(file, env.name().to_string(), default.clone())
+                Self::from_default(*file, env.name().to_string(), default.clone())
             };
-            result.insert(pkg.get_ref().clone(), combined);
+            result.insert(pkg.clone(), combined);
         }
 
         for (pkg, dep) in replacements {
             result.insert(
                 pkg.clone(),
-                Self::from_replacement(file, env.name().to_string(), dep.into_inner())?,
+                Self::from_replacement(*file, env.name().to_string(), dep.into_inner())?,
+            );
+        }
+
+        for (pkg_name, dep) in implicit_deps {
+            result.insert(
+                pkg_name.clone(),
+                Self::from_replacement(*file, env.name().to_string(), dep.clone())?,
             );
         }
 

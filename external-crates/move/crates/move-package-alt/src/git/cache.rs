@@ -151,6 +151,7 @@ impl GitTree {
     /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
     async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
         let tree_path = self.path_to_tree();
+
         let mut fresh = false;
 
         // create repo if necessary

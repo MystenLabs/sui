@@ -6,7 +6,10 @@ pub mod vanilla;
 
 pub use vanilla::Vanilla;
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -38,8 +41,12 @@ pub trait MoveFlavor: Debug {
     fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID>;
 
     /// Return the implicit dependencies for the environments listed in [environments]
-    fn implicit_deps(
-        &self,
-        environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency>;
+    fn implicit_deps(environment: EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency>;
+
+    /// Return the names of the system dependencies for this flavor.
+    fn system_deps_names() -> BTreeSet<PackageName> {
+        // Default implementation returns an empty map.
+        // Specific flavors can override this to provide system dependencies.
+        BTreeSet::new()
+    }
 }

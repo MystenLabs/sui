@@ -15382,8 +15382,11 @@ dependencies = [
 name = "sui-package-alt"
 version = "1.53.0"
 dependencies = [
+ "move-core-types",
  "move-package-alt",
  "serde",
+ "sui-package-management",
+ "tempfile",
 ]
 
 [[package]]

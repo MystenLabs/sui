@@ -8,7 +8,7 @@ use move_command_line_common::testing::insta_assert;
 use codespan_reporting::term::{self, Config, termcolor::Buffer};
 use move_package_alt::{
     dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
-    errors::{FileHandle, Files},
+    errors::Files,
     flavor::{
         Vanilla,
         vanilla::{self, default_environment},
@@ -72,8 +72,7 @@ impl Test<'_> {
     fn output(&self) -> anyhow::Result<String> {
         Ok(match self.kind {
             "parsed" => {
-                let file_handle = FileHandle::new(&self.toml_path).unwrap();
-                let manifest = Manifest::read_from_file(file_handle);
+                let manifest = Manifest::read_from_file(self.toml_path);
                 let contents = match manifest.as_ref() {
                     Ok(m) => format!("{:#?}", m),
                     Err(_) => {
@@ -134,18 +133,18 @@ fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std
 }
 
 async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
-    let file_handle = FileHandle::new(&input_path).unwrap();
-    let manifest = Manifest::read_from_file(file_handle).unwrap();
+    let manifest = Manifest::read_from_file(input_path).unwrap();
     let env = default_environment();
 
     let deps = CombinedDependency::combine_deps(
-        file_handle,
+        manifest.file_handle(),
         &env,
         manifest
             .dep_replacements()
             .get(env.name())
             .unwrap_or(&BTreeMap::new()),
-        manifest.dependencies(),
+        &manifest.dependencies(),
+        &BTreeMap::new(),
     )?;
     let mut output = DependencySet::<PinnedDependencyInfo>::new();
     debug!("{deps:?}");
