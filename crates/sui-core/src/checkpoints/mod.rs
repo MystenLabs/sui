@@ -29,7 +29,6 @@ use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
-use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -1183,7 +1182,15 @@ impl CheckpointBuilder {
                     });
                 }
                 Err(e) => {
-                    error!("Error while making checkpoint, will retry in 1s: {:?}", e);
+                    let msg = format!("{:?}", e);
+                    // This particular error is expected to happen from time to time. Any other error during checkpoint
+                    // building is most likely a bug.
+                    if msg.contains("change epoch tx has already been executed via state sync") {
+                        info!("change epoch tx has already been executed via state sync. Checkpoint builder will be shut down briefly");
+                    } else {
+                        debug_fatal!("Error while making checkpoint, will retry in 1s: {}", msg);
+                    }
+
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     self.metrics.checkpoint_errors.inc();
                     return;
@@ -2173,7 +2180,7 @@ impl CheckpointAggregator {
         info!("Starting CheckpointAggregator");
         loop {
             if let Err(e) = self.run_and_notify().await {
-                error!(
+                debug_fatal!(
                     "Error while aggregating checkpoint, will retry in 1s: {:?}",
                     e
                 );
@@ -2390,9 +2397,9 @@ impl CheckpointSignatureAggregator {
                     format!("{:?} (total stake: {})", digest, total_stake)
                 })
                 .collect::<Vec<String>>();
-            error!(
-                checkpoint_seq = self.summary.sequence_number,
-                "Split brain detected in checkpoint signature aggregation! Remaining stake: {:?}, Digests by stake: {:?}",
+            debug_fatal!(
+                "Split brain detected in checkpoint signature aggregation for checkpoint {:?}. Remaining stake: {:?}, Digests by stake: {:?}",
+                self.summary.sequence_number,
                 self.signatures_by_digest.uncommitted_stake(),
                 digests_by_stake_messages,
             );
@@ -2588,8 +2595,6 @@ async fn diagnose_split_brain(
     let mut file = File::create(path).unwrap();
     write!(file, "{}", fork_logs_text).unwrap();
     debug!("{}", fork_logs_text);
-
-    fail_point!("split_brain_reached");
 }
 
 pub trait CheckpointServiceNotify {
