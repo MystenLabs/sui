@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::checkpoint::{read_checkpoint, read_checkpoint_list, CheckpointsList};
+use crate::committee::extract_new_committee_info;
 use crate::config::Config;
 use crate::object_store::SuiObjectStore;
 use anyhow::{anyhow, Result};
@@ -139,19 +140,7 @@ pub async fn get_verified_effects_and_events(
         );
 
         // Get the committee from the previous checkpoint
-        let current_committee = prev_ckp
-            .end_of_epoch_data
-            .as_ref()
-            .ok_or(anyhow!(
-                "Expected all checkpoints to be end-of-epoch checkpoints"
-            ))?
-            .next_epoch_committee
-            .iter()
-            .cloned()
-            .collect();
-
-        // Make a committee object using this
-        Committee::new(prev_ckp.epoch().checked_add(1).unwrap(), current_committee)
+        extract_new_committee_info(&prev_ckp)?
     } else {
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
@@ -242,19 +231,7 @@ pub async fn get_verified_checkpoint(
         );
 
         // Get the committee from the previous checkpoint
-        let current_committee = prev_ckp
-            .end_of_epoch_data
-            .as_ref()
-            .ok_or(anyhow!(
-                "Expected all checkpoints to be end-of-epoch checkpoints"
-            ))?
-            .next_epoch_committee
-            .iter()
-            .cloned()
-            .collect();
-
-        // Make a committee object using this
-        Committee::new(prev_ckp.epoch().checked_add(1).unwrap(), current_committee)
+        extract_new_committee_info(&prev_ckp)?
     } else {
         // Since we did not find a small committee checkpoint we use the genesis
         let mut genesis_path = config.checkpoint_summary_dir.clone();
@@ -327,20 +304,7 @@ mod tests {
                 .map_err(|_| anyhow!("Unable to parse checkpoint file"))
                 .unwrap();
 
-        let prev_committee = checkpoint
-            .end_of_epoch_data
-            .as_ref()
-            .ok_or(anyhow!(
-                "Expected all checkpoints to be end-of-epoch checkpoints"
-            ))
-            .unwrap()
-            .next_epoch_committee
-            .iter()
-            .cloned()
-            .collect();
-
-        // Make a committee object using this
-        let committee = Committee::new(checkpoint.epoch().checked_add(1).unwrap(), prev_committee);
+        let committee = extract_new_committee_info(&checkpoint).unwrap();
 
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("test_files/20958462.bcs");
