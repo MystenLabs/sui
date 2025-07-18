@@ -993,6 +993,10 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_zklogin_verify() -> Result<(), anyhow::Error> {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return Ok(());
+    }
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(15000)
         .with_default_jwks()

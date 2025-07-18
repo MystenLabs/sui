@@ -108,6 +108,9 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_testnet_config() {
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
+        }
         chain_config_smoke_test(Chain::Testnet).await;
     }
 
@@ -709,6 +712,10 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_mysticeti_fastpath() {
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
+        }
+
         unsafe {
             std::env::set_var("TRANSACTION_DRIVER", "100");
         }
