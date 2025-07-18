@@ -45,10 +45,7 @@ impl MoveFlavor for Vanilla {
         envs
     }
 
-    fn implicit_deps(
-        &self,
-        environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
+    fn implicit_deps(environment: EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency> {
         empty().collect()
     }
 }

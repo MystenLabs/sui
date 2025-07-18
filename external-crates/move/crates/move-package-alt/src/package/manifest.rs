@@ -30,6 +30,7 @@ pub type Digest = String;
 pub struct Manifest {
     inner: ParsedManifest,
     digest: Digest,
+    file_handle: FileHandle,
 }
 
 #[derive(Error, Debug)]
@@ -72,13 +73,15 @@ pub type ManifestResult<T> = Result<T, ManifestError>;
 
 impl Manifest {
     /// Read the manifest file from the file handle, returning a [`Manifest`].
-    pub fn read_from_file(file_handle: FileHandle) -> ManifestResult<Self> {
+    pub fn read_from_file(path: impl AsRef<Path>) -> ManifestResult<Self> {
+        let file_handle = FileHandle::new(&path).map_err(ManifestError::with_file(&path))?;
         let parsed: ParsedManifest = toml_edit::de::from_str(file_handle.source())
             .map_err(ManifestError::from_toml(file_handle))?;
 
         let result = Self {
             inner: parsed,
             digest: format!("{:X}", Sha256::digest(file_handle.source().as_ref())),
+            file_handle,
         };
 
         result.validate_manifest(file_handle)?;
@@ -90,16 +93,19 @@ impl Manifest {
         self.inner.package.clone()
     }
 
-    // TODO: probably we need to change this API
     pub fn dep_replacements(
         &self,
     ) -> &BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>> {
         &self.inner.dep_replacements
     }
 
-    // TODO: probably we need to change this API
-    pub fn dependencies(&self) -> &BTreeMap<Spanned<PackageName>, DefaultDependency> {
-        &self.inner.dependencies
+    pub fn dependencies(&self) -> BTreeMap<PackageName, DefaultDependency> {
+        self.inner
+            .dependencies
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k.as_ref().clone(), v.clone()))
+            .collect()
     }
 
     /// The entries from the `[environments]` section
@@ -119,6 +125,10 @@ impl Manifest {
     /// A digest of the file, suitable for detecting changes
     pub fn digest(&self) -> &Digest {
         &self.digest
+    }
+
+    pub fn file_handle(&self) -> &FileHandle {
+        &self.file_handle
     }
 
     /// Validate the manifest contents, after deserialization.
@@ -150,6 +160,10 @@ impl Manifest {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn parsed(&self) -> &ParsedManifest {
+        &self.inner
     }
 }
 

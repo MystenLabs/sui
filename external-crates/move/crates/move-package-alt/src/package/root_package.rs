@@ -4,7 +4,6 @@
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
-use super::manifest::ManifestError;
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
 use crate::schema::{Environment, PackageName, Publication};
@@ -44,11 +43,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         path: impl AsRef<Path>,
     ) -> PackageResult<BTreeMap<EnvironmentName, EnvironmentID>> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let file_handle = FileHandle::new(&package_path.manifest_path())
-            .map_err(ManifestError::with_file(&path))?;
         let mut environments = F::default_environments();
 
-        if let Ok(modern_manifest) = Manifest::read_from_file(file_handle) {
+        if let Ok(modern_manifest) = Manifest::read_from_file(package_path.manifest_path()) {
             // TODO(manos): Decide on validation (e.g. if modern manifest declares environments differently,
             // we should error?!)
             environments.extend(modern_manifest.environments());
@@ -182,7 +179,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return the package graph for `env`
     // TODO: what's the right API here?
-    #[cfg(test)]
     pub fn package_graph(&self) -> &PackageGraph<F> {
         &self.graph
     }
