@@ -2284,7 +2284,7 @@ pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
         buf.extend(["packages", "bridge", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let pre_compiled_program = move_compiler::construct_pre_compiled_program(
+    let pre_compiled_program = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
             paths: vec![
