@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::futures_util::try_join;
-use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Object};
+use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Error, Object};
+use futures::try_join;
 use std::sync::Arc;
 use sui_indexer_alt_reader::{
     epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
@@ -11,6 +11,7 @@ use sui_indexer_alt_reader::{
 };
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
+use tokio::sync::OnceCell;
 
 use super::{
     move_package::{self, CSysPackage, MovePackage},
@@ -26,20 +27,9 @@ use crate::{
 
 pub(crate) struct Epoch {
     pub(crate) epoch_id: u64,
-    start: EpochStart,
-}
-
-#[derive(Clone)]
-struct EpochStart {
     scope: Scope,
-    contents: Option<Arc<StoredEpochStart>>,
-}
-
-#[derive(Clone)]
-struct EpochEnd {
-    scope: Scope,
-    start: Option<Arc<StoredEpochStart>>,
-    end: Option<Arc<StoredEpochEnd>>,
+    start: OnceCell<Option<StoredEpochStart>>,
+    end: OnceCell<Option<StoredEpochEnd>>,
 }
 
 /// Activity on Sui is partitioned in time, into epochs.
@@ -59,41 +49,6 @@ impl Epoch {
         self.epoch_id.into()
     }
 
-    #[graphql(flatten)]
-    async fn start(&self, ctx: &Context<'_>) -> Result<EpochStart, RpcError> {
-        self.start.fetch(ctx, Some(self.epoch_id)).await
-    }
-
-    #[graphql(flatten)]
-    async fn end(&self, ctx: &Context<'_>) -> Result<EpochEnd, RpcError> {
-        try_join!(
-            self.start.fetch(ctx, Some(self.epoch_id)),
-            EpochEnd::fetch(ctx, &self.start.scope, self.epoch_id),
-        )
-        .map(|(epoch_start, end)| EpochEnd {
-            scope: self.start.scope.clone(),
-            start: epoch_start.contents,
-            end,
-        })
-    }
-
-    /// The total number of checkpoints in this epoch.
-    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
-        let EpochEnd { scope, start, end } = self.end(ctx).await?;
-        let first = match start {
-            Some(first) => first.cp_lo as u64,
-            None => return Ok(None),
-        };
-        let last = match end {
-            Some(last) => last.cp_hi as u64,
-            None => scope.checkpoint_viewed_at_exclusive_bound(),
-        };
-        Ok(Some(UInt53::from(last - first)))
-    }
-}
-
-#[Object]
-impl EpochStart {
     /// State of the Coin DenyList object (0x403) at the start of this epoch.
     ///
     /// The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
@@ -101,7 +56,7 @@ impl EpochStart {
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Object>, RpcError<object::Error>> {
-        let Some(contents) = &self.contents else {
+        let Some(start) = self.start(ctx).await? else {
             return Ok(None);
         };
 
@@ -109,34 +64,37 @@ impl EpochStart {
             ctx,
             self.scope.clone(),
             SUI_DENY_LIST_OBJECT_ID.into(),
-            (contents.cp_lo as u64).saturating_sub(1).into(),
+            (start.cp_lo as u64).saturating_sub(1).into(),
         )
         .await
     }
 
     /// The epoch's corresponding protocol configuration, including the feature flags and the configuration options.
-    async fn protocol_configs(&self) -> Option<ProtocolConfigs> {
-        let Some(contents) = &self.contents else {
-            return None;
+    async fn protocol_configs(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<ProtocolConfigs>, RpcError> {
+        let Some(start) = self.start(ctx).await? else {
+            return Ok(None);
         };
 
-        Some(ProtocolConfigs::with_protocol_version(
-            contents.protocol_version as u64,
-        ))
+        Ok(Some(ProtocolConfigs::with_protocol_version(
+            start.protocol_version as u64,
+        )))
     }
 
     /// The minimum gas price that a quorum of validators are guaranteed to sign a transaction for in this epoch.
-    async fn reference_gas_price(&self) -> Option<BigInt> {
-        let Some(contents) = &self.contents else {
-            return None;
+    async fn reference_gas_price(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(start) = self.start(ctx).await? else {
+            return Ok(None);
         };
 
-        Some(BigInt::from(contents.reference_gas_price))
+        Ok(Some(BigInt::from(start.reference_gas_price)))
     }
 
     /// The timestamp associated with the first checkpoint in the epoch.
-    async fn start_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some(contents) = &self.contents else {
+    async fn start_timestamp(&self, ctx: &Context<'_>) -> Result<Option<DateTime>, RpcError> {
+        let Some(contents) = self.start(ctx).await? else {
             return Ok(None);
         };
 
@@ -156,7 +114,7 @@ impl EpochStart {
         let limits = pagination.limits("Epoch", "systemPackages");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = &self.contents else {
+        let Some(contents) = self.start(ctx).await? else {
             return Ok(None);
         };
 
@@ -170,17 +128,29 @@ impl EpochStart {
             .await?,
         ))
     }
-}
 
-#[Object]
-impl EpochEnd {
     /// The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
-    async fn end_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some(contents) = &self.end else {
+    async fn end_timestamp(&self, ctx: &Context<'_>) -> Result<Option<DateTime>, RpcError> {
+        let Some(end) = self.end(ctx).await? else {
             return Ok(None);
         };
 
-        Ok(Some(DateTime::from_ms(contents.end_timestamp_ms)?))
+        Ok(Some(DateTime::from_ms(end.end_timestamp_ms)?))
+    }
+
+    /// The total number of checkpoints in this epoch.
+    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
+            return Ok(None);
+        };
+
+        let lo = start.cp_lo as u64;
+        let hi = end.as_ref().map_or_else(
+            || self.scope.checkpoint_viewed_at_exclusive_bound(),
+            |end| end.cp_hi as u64,
+        );
+
+        Ok(Some(UInt53::from(hi - lo)))
     }
 }
 
@@ -191,7 +161,9 @@ impl Epoch {
     pub(crate) fn with_id(scope: Scope, epoch_id: u64) -> Self {
         Self {
             epoch_id,
-            start: EpochStart::empty(scope),
+            scope,
+            start: OnceCell::new(),
+            end: OnceCell::new(),
         }
     }
 
@@ -205,83 +177,63 @@ impl Epoch {
         scope: Scope,
         epoch_id: Option<UInt53>,
     ) -> Result<Option<Self>, RpcError> {
-        let start = EpochStart::empty(scope)
-            .fetch(ctx, epoch_id.map(|id| id.into()))
-            .await?;
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
-        let Some(contents) = &start.contents else {
-            return Ok(None);
-        };
+        let stored = match epoch_id {
+            Some(id) => pg_loader
+                .load_one(EpochStartKey(id.into()))
+                .await
+                .context("Failed to fetch epoch start information by start key")?,
+            None => pg_loader
+                .load_one(CheckpointBoundedEpochStartKey(scope.checkpoint_viewed_at()))
+                .await
+                .context(
+                    "Failed to fetch epoch start information by checkpoint bounded start key",
+                )?,
+        }
+        .filter(|start| start.cp_lo as u64 <= scope.checkpoint_viewed_at());
 
-        Ok(Some(Self {
-            epoch_id: contents.epoch as u64,
-            start,
+        Ok(stored.map(|start| Self {
+            epoch_id: start.epoch as u64,
+            scope: scope.clone(),
+            start: OnceCell::from(Some(start)),
+            end: OnceCell::new(),
         }))
     }
-}
 
-impl EpochStart {
-    fn empty(scope: Scope) -> Self {
-        Self {
-            scope,
-            contents: None,
-        }
+    async fn start(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochStart>, Error> {
+        self.start
+            .get_or_try_init(async || {
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+                let stored = pg_loader
+                    .load_one(EpochStartKey(self.epoch_id))
+                    .await
+                    .context("Failed to fetch epoch start information")?
+                    .filter(|start| start.cp_lo as u64 <= self.scope.checkpoint_viewed_at());
+
+                Ok(stored)
+            })
+            .await
     }
 
-    /// Attempt to fill the contents. If the contents are already filled, returns a clone,
-    /// otherwise attempts to fetch from the store. The resulting value may still have an empty
-    /// contents field, because it could not be found in the store, or the epoch started after the
-    /// checkpoint being viewed.
-    async fn fetch(&self, ctx: &Context<'_>, epoch_id: Option<u64>) -> Result<Self, RpcError> {
-        if self.contents.is_some() {
-            return Ok(self.clone());
-        }
-
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-
-        let load = if let Some(id) = epoch_id {
-            pg_loader.load_one(EpochStartKey(id)).await
-        } else {
-            let cp = self.scope.checkpoint_viewed_at();
-            pg_loader.load_one(CheckpointBoundedEpochStartKey(cp)).await
-        }
-        .context("Failed to fetch epoch start information")?;
-
-        let Some(stored) = load else {
-            return Ok(self.clone());
-        };
-
-        if stored.cp_lo as u64 > self.scope.checkpoint_viewed_at() {
-            return Ok(self.clone());
-        }
-
-        Ok(Self {
-            scope: self.scope.clone(),
-            contents: Some(Arc::new(stored)),
-        })
-    }
-}
-
-impl EpochEnd {
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty
     /// response if the epoch has not ended yet, as of the checkpoint being viewed.
-    async fn fetch(
-        ctx: &Context<'_>,
-        scope: &Scope,
-        epoch_id: u64,
-    ) -> Result<Option<Arc<StoredEpochEnd>>, RpcError> {
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let stored = pg_loader
-            .load_one(EpochEndKey(epoch_id))
-            .await
-            .context("Failed to fetch epoch end information")?;
+    async fn end(&self, ctx: &Context<'_>) -> Result<&Option<StoredEpochEnd>, Error> {
+        self.end
+            .get_or_try_init(async || {
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
-        let end = match stored {
-            Some(end) if end.cp_hi as u64 <= scope.checkpoint_viewed_at_exclusive_bound() => {
-                Some(Arc::new(end))
-            }
-            _ => None,
-        };
-        Ok(end)
+                let stored = pg_loader
+                    .load_one(EpochEndKey(self.epoch_id))
+                    .await
+                    .context("Failed to fetch epoch end information")?
+                    .filter(|end| {
+                        end.cp_hi as u64 <= self.scope.checkpoint_viewed_at_exclusive_bound()
+                    });
+
+                Ok(stored)
+            })
+            .await
     }
 }
