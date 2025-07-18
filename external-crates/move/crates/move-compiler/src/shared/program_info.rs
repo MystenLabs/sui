@@ -238,6 +238,7 @@ fn typing_module_info_to_naming(minfo: &ModuleInfo) -> ModuleInfo {
             | Type_::Param(_)
             | Type_::Var(_)
             | Type_::Anything
+            | Type_::Void
             | Type_::UnresolvedError => (),
         }
     }
