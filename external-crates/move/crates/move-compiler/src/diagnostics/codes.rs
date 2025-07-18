@@ -164,6 +164,7 @@ codes!(
         InvalidName: { msg: "invalid name", severity: BlockingError },
         InvalidMacro: { msg: "invalid macro invocation", severity: BlockingError },
         InvalidMatch: { msg: "invalid 'match'", severity: BlockingError },
+        InvalidString: { msg: "invalid string literal", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [

@@ -67,7 +67,7 @@ pub static MIGRATION_PARAM_START_SET: Lazy<TokenSet> = Lazy::new(|| {
 const EXP_STARTS: &[Tok] = &[
     Tok::NumValue,
     Tok::NumTypedValue,
-    Tok::ByteStringValue,
+    Tok::StringValue,
     Tok::Identifier,
     Tok::SyntaxIdentifier,
     Tok::RestrictedIdentifier,
@@ -167,7 +167,7 @@ const VALUE_STARTS: &[Tok] = &[
     Tok::False,
     Tok::NumValue,
     Tok::NumTypedValue,
-    Tok::ByteStringValue,
+    Tok::StringValue,
 ];
 
 pub static VALUE_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(VALUE_STARTS));

@@ -203,6 +203,13 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
                 e.exp.value = E::UnresolvedError
             }
         }
+        E::Value(sp!(vloc, Value_::InferredString(v))) => {
+            if let Some(value) = inferred_string_value(context, e.exp.loc, v.clone(), &e.ty) {
+                e.exp.value = E::Value(sp(*vloc, value));
+            } else {
+                e.exp.value = E::UnresolvedError
+            }
+        }
 
         E::Unit { .. }
         | E::Value(_)
@@ -365,6 +372,24 @@ fn inferred_numerical_value(
             BT::Address | BT::Signer | BT::Vector | BT::Bool => unreachable!(),
         };
         Some(value_)
+    }
+}
+
+fn inferred_string_value(
+    _context: &mut Context,
+    _eloc: Loc,
+    value: Vec<u8>,
+    ty: &Type,
+) -> Option<Value_> {
+    match &ty.value {
+        Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args)
+            if bt.is_vector() && args.len() == 1 && core::is_u8_type(&args[0]) =>
+        {
+            Some(Value_::Bytearray(value))
+        }
+        // TODO: look at other types we accept, possibly building the appropriate construction call.
+        // If the type requires such a call, validate it is defined, etc., too.
+        _ => panic!("ICE inferred string failed {:?}", &ty.value),
     }
 }
 

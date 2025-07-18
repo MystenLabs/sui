@@ -20,7 +20,7 @@ pub enum Tok {
     EOF,
     NumValue,
     NumTypedValue,
-    ByteStringValue,
+    StringValue,
     Identifier,
     SyntaxIdentifier,
     Exclaim,
@@ -103,7 +103,7 @@ impl fmt::Display for Tok {
             EOF => "<End-Of-File>",
             NumValue => "<Number>",
             NumTypedValue => "<TypedNumber>",
-            ByteStringValue => "<ByteString>",
+            StringValue => "<String>",
             Identifier => "<Identifier>",
             SyntaxIdentifier => "$<Identifier>",
             Exclaim => "!",
@@ -731,26 +731,35 @@ fn find_token(
             }
         }
 
-        'A'..='Z' | 'a'..='z' | '_' => {
+        'A'..='Z' | 'a'..='z' | '_' | '"' => {
             let is_hex = text.starts_with("x\"");
-            if is_hex || text.starts_with("b\"") {
-                let line = &text.lines().next().unwrap()[2..];
+            let is_byte = text.starts_with("b\"");
+            if is_hex || is_byte || text.starts_with("\"") {
+                let line = if is_hex || is_byte {
+                    &text.lines().next().unwrap()[2..]
+                } else {
+                    &text.lines().next().unwrap()[1..]
+                };
+                let offset = if is_byte || is_hex { 2 } else { 1 };
                 match get_string_len(line) {
-                    Some(last_quote) => (Ok(Tok::ByteStringValue), 2 + last_quote + 1),
+                    Some(last_quote) => (Ok(Tok::StringValue), offset + last_quote + 1),
                     None => {
                         let diag = maybe_diag! {
+                            let kind = if is_hex { "hex " } else if is_byte { "byte "} else { "" };
                             let loc =
-                                make_loc(file_hash, start_offset, start_offset + line.len() + 2);
+                                make_loc(file_hash, start_offset, start_offset + line.len() + offset);
                             Box::new(diag!(
                                 if is_hex {
                                     Syntax::InvalidHexString
-                                } else {
+                                } else if is_byte {
                                     Syntax::InvalidByteString
+                                } else {
+                                    Syntax::InvalidString
                                 },
-                                (loc, "Missing closing quote (\") after byte string")
+                                (loc, format!("Missing closing quote (\") after {}string", kind))
                             ))
                         };
-                        (Err(diag), line.len() + 2)
+                        (Err(diag), line.len() + offset)
                     }
                 }
             } else {
