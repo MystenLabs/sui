@@ -9,8 +9,8 @@ error[E04007]: incompatible types
   ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:8:15
   │
 8 │         call!<u64>(|| return &0);
-  │               ^^^     --------- Given: '&{integer}'
-  │               │        
+  │               ^^^            -- Given: '&{integer}'
+  │               │               
   │               Invalid type annotation
   │               Expected: 'u64'
 
@@ -27,7 +27,7 @@ error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_return_invalid_simple.move:10:15
    │
 10 │         call!<(&u64, u8)>(|| return (&0, 1, 3));
-   │               ^^^^^^^^^^     ----------------- Given expression list of length 3: '(&{integer}, {integer}, {integer})'
-   │               │               
+   │               ^^^^^^^^^^            ---------- Given expression list of length 3: '(&{integer}, {integer}, {integer})'
+   │               │                      
    │               Invalid type annotation
    │               Expected expression list of length 2: '(&u64, u8)'
