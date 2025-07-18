@@ -749,6 +749,10 @@ struct FeatureFlags {
     // Allow private accumulator entrypoints
     #[serde(skip_serializing_if = "is_false")]
     allow_private_accumulator_entrypoints: bool,
+
+    // If true, include indirect state in the additional consensus digest.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_consensus_digest_indirect_state: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2121,6 +2125,11 @@ impl ProtocolConfig {
 
     pub fn allow_private_accumulator_entrypoints(&self) -> bool {
         self.feature_flags.allow_private_accumulator_entrypoints
+    }
+
+    pub fn additional_consensus_digest_indirect_state(&self) -> bool {
+        self.feature_flags
+            .additional_consensus_digest_indirect_state
     }
 }
 
@@ -3848,6 +3857,7 @@ impl ProtocolConfig {
                 }
                 89 => {
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
+                    cfg.feature_flags.additional_consensus_digest_indirect_state = true;
                 }
                 // Use this template when making changes:
                 //
