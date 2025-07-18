@@ -72,7 +72,7 @@ use crate::{
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_driver::{
-        ExecutedData, RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
+        ExecutedData, RejectReason, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     transaction_outputs::TransactionOutputs,
 };
@@ -578,7 +578,26 @@ impl ValidatorService {
         };
 
         // Enable Trace Propagation across spans/processes using tx_digest
-        let span = error_span!("ValidatorService::handle_submit_transaction", tx_digest = ?transaction.digest());
+        let tx_digest = transaction.digest();
+        let span =
+            error_span!("ValidatorService::handle_submit_transaction", tx_digest = ?tx_digest);
+
+        // Return the executed data if the transaction has already been executed.
+        if let Some(effects) = self
+            .state
+            .get_transaction_cache_reader()
+            .get_executed_effects(tx_digest)
+        {
+            let effects_digest = effects.digest();
+            if let Ok(executed_data) = self.complete_executed_data(effects, None).await {
+                let executed_resp = SubmitTxResponse::Executed {
+                    effects_digest,
+                    details: Some(executed_data),
+                };
+                let executed_resp = executed_resp.try_into()?;
+                return Ok((tonic::Response::new(executed_resp), Weight::zero()));
+            }
+        }
 
         state
             .handle_vote_transaction(&epoch_store, transaction.clone())
@@ -604,9 +623,8 @@ impl ValidatorService {
             // Only submitting a single tx so we should get back a single consensus position
             let consensus_position = resp.remove(0);
 
-            let submit_transaction_response = RawSubmitTxResponse {
-                consensus_position: consensus_position.into_raw()?,
-            };
+            let submit_transaction_response =
+                SubmitTxResponse::Submitted { consensus_position }.try_into()?;
 
             Ok((
                 tonic::Response::new(submit_transaction_response),
@@ -1128,8 +1146,32 @@ impl ValidatorService {
             });
         };
 
+        let tx_digest = request.transaction_digest;
+        let tx_digests = [tx_digest];
+        let Some(consensus_position) = request.consensus_position else {
+            // When the consensus position is not provided, only wait for finalized executed effects.
+            let mut effects = self
+                .state
+                .get_transaction_cache_reader()
+                .notify_read_executed_effects(&tx_digests)
+                .await;
+            let effects = effects.pop().unwrap();
+            let effects_digest = effects.digest();
+            debug!(?tx_digest, ?effects_digest, "Observed executed effects",);
+            let details = if request.include_details {
+                let executed_data = self.complete_executed_data(effects, None).await?;
+                Some(executed_data)
+            } else {
+                None
+            };
+            return Ok(WaitForEffectsResponse::Executed {
+                effects_digest,
+                details,
+            });
+        };
+
         let local_epoch = epoch_store.epoch();
-        match request.consensus_position.epoch.cmp(&local_epoch) {
+        match consensus_position.epoch.cmp(&local_epoch) {
             Ordering::Less => {
                 // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
                 // if response from this validator is desired.
@@ -1143,7 +1185,7 @@ impl ValidatorService {
                 // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
                 return Err(SuiError::WrongEpoch {
                     expected_epoch: local_epoch,
-                    actual_epoch: request.consensus_position.epoch,
+                    actual_epoch: consensus_position.epoch,
                 });
             }
             Ordering::Equal => {
@@ -1152,13 +1194,13 @@ impl ValidatorService {
             }
         };
 
-        consensus_tx_status_cache.check_position_too_ahead(&request.consensus_position)?;
+        consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
 
         // Because we need to associate effects with a specific transaction position,
         // we need to first make sure that this specific position is accepted by consensus,
         // either with fastpath certified or post-commit finalized.
         let first_status = consensus_tx_status_cache
-            .notify_read_transaction_status_change(request.consensus_position, None)
+            .notify_read_transaction_status_change(consensus_position, None)
             .await;
         debug!(
             tx_digest = ?request.transaction_digest,
@@ -1189,11 +1231,10 @@ impl ValidatorService {
         // it is still possible that the transaction is rejected post commit.
         // So we need to keep checking the status until it is finalized.
         let (effects, fastpath_outputs) = loop {
-            let transactions = [request.transaction_digest];
             tokio::select! {
-                second_status = consensus_tx_status_cache.notify_read_transaction_status_change(request.consensus_position, Some(cur_status)) => {
+                second_status = consensus_tx_status_cache.notify_read_transaction_status_change(consensus_position, Some(cur_status)) => {
                     debug!(
-                        tx_digest = ?request.transaction_digest,
+                        ?tx_digest,
                         "Observed consensus transaction status: {:?}",
                         second_status
                     );
@@ -1218,42 +1259,37 @@ impl ValidatorService {
                 },
                 mut effects = self.state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&transactions) => {
+                    .notify_read_executed_effects(&tx_digests) => {
+                    let effects = effects.pop().unwrap();
+                    let effects_digest = effects.digest();
                     debug!(
-                        tx_digest = ?request.transaction_digest,
+                        ?tx_digest,
+                        ?effects_digest,
                         "Observed executed effects",
                     );
                     // unwrap is safe because notify_read_executed_effects is expected
                     // to return the same amount of effects as the provided transactions.
-                    break (effects.pop().unwrap(), None);
+                    break (effects, None);
                 },
-                mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(&transactions) => {
+                mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(&tx_digests) => {
+                    let outputs = outputs.pop().unwrap();
+                    let effects = outputs.effects.clone();
+                    let effects_digest = effects.digest();
                     debug!(
-                        tx_digest = ?request.transaction_digest,
+                        ?tx_digest,
+                        ?effects_digest,
                         "Observed fastpath transaction outputs",
                     );
-                    let outputs = outputs.pop().unwrap();
-                    break (outputs.effects.clone(), Some(outputs));
+                    break (effects, Some(outputs));
                 }
             }
         };
         let effects_digest = effects.digest();
         let details = if request.include_details {
-            let (events, input_objects, output_objects) = self
-                .collect_effects_data(
-                    &effects,
-                    request.include_details,
-                    request.include_details,
-                    request.include_details,
-                    fastpath_outputs,
-                )
+            let executed_data = self
+                .complete_executed_data(effects, fastpath_outputs)
                 .await?;
-            Some(Box::new(ExecutedData {
-                effects,
-                events,
-                input_objects,
-                output_objects,
-            }))
+            Some(executed_data)
         } else {
             None
         };
@@ -1262,6 +1298,28 @@ impl ValidatorService {
             details,
         };
         Ok(response)
+    }
+
+    async fn complete_executed_data(
+        &self,
+        effects: TransactionEffects,
+        fastpath_outputs: Option<Arc<TransactionOutputs>>,
+    ) -> SuiResult<Box<ExecutedData>> {
+        let (events, input_objects, output_objects) = self
+            .collect_effects_data(
+                &effects,
+                /* include_events */ true,
+                /* include_input_objects */ true,
+                /* include_output_objects */ true,
+                fastpath_outputs,
+            )
+            .await?;
+        Ok(Box::new(ExecutedData {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+        }))
     }
 
     async fn soft_bundle_validity_check(

@@ -6,17 +6,18 @@ use std::{sync::Arc, time::Duration};
 use rand::{seq::SliceRandom as _, Rng as _};
 use sui_types::{
     base_types::ConciseableName, crypto::AuthorityPublicKeyBytes, digests::TransactionDigest,
-    messages_consensus::ConsensusPosition, messages_grpc::RawSubmitTxRequest,
+    messages_grpc::RawSubmitTxRequest,
 };
 use tokio::time::{sleep, timeout};
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
     transaction_driver::{
-        error::TransactionDriverError, SubmitTransactionOptions, TransactionDriverMetrics,
+        error::TransactionDriverError, SubmitTransactionOptions, SubmitTxResponse,
+        TransactionDriverMetrics,
     },
 };
 
@@ -38,7 +39,7 @@ impl TransactionSubmitter {
         tx_digest: &TransactionDigest,
         raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-    ) -> Result<ConsensusPosition, TransactionDriverError>
+    ) -> Result<SubmitTxResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
@@ -57,12 +58,9 @@ impl TransactionSubmitter {
                     .submit_transaction_once(name, client, &raw_request, options)
                     .await
                 {
-                    Ok(consensus_position) => {
-                        debug!(
-                            "Transaction {tx_digest} submitted to consensus at position: {consensus_position:?}",
-                        );
+                    Ok(resp) => {
                         self.metrics.submit_transaction_success.inc();
-                        return Ok(consensus_position);
+                        return Ok(resp);
                     }
                     Err(e) => {
                         self.metrics.submit_transaction_error.inc();
@@ -71,7 +69,7 @@ impl TransactionSubmitter {
                             "Failed to submit transaction {tx_digest} (attempt {attempts}): {e}",
                         );
                     }
-                }
+                };
                 tokio::task::yield_now().await;
             }
 
@@ -87,11 +85,11 @@ impl TransactionSubmitter {
         client: &Arc<SafeClient<A>>,
         raw_request: &RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-    ) -> Result<ConsensusPosition, TransactionDriverError>
+    ) -> Result<SubmitTxResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let consensus_position = timeout(
+        let resp = timeout(
             SUBMIT_TRANSACTION_TIMEOUT,
             client.submit_transaction(raw_request.clone(), options.forwarded_client_addr),
         )
@@ -100,6 +98,6 @@ impl TransactionSubmitter {
         .map_err(|e| {
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
-        Ok(consensus_position)
+        Ok(resp)
     }
 }
