@@ -679,6 +679,14 @@ impl BuiltinTypeName_ {
         &BUILTIN_TYPE_ORDERED
     }
 
+    pub fn is_vector(&self) -> bool {
+        matches!(self, BuiltinTypeName_::Vector)
+    }
+
+    pub fn is_u8(&self) -> bool {
+        matches!(self, BuiltinTypeName_::U8)
+    }
+
     pub fn is_numeric(&self) -> bool {
         Self::numeric().contains(self)
     }
@@ -997,6 +1005,7 @@ impl Value_ {
         Some(match self {
             Address(_) => Type_::address(loc),
             InferredNum(_) => return None,
+            InferredString(_) => return None,
             U8(_) => Type_::u8(loc),
             U16(_) => Type_::u16(loc),
             U32(_) => Type_::u32(loc),

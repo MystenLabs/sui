@@ -3413,7 +3413,6 @@ pub(super) fn value(context: &mut DefnContext, sp!(loc, pvalue_): P::Value) -> O
                 return None;
             }
         },
-
         PV::Num(s) => match parse_u256(&s) {
             Ok((u, _format)) => EV::InferredNum(u),
             Err(_) => {
@@ -3434,6 +3433,13 @@ pub(super) fn value(context: &mut DefnContext, sp!(loc, pvalue_): P::Value) -> O
         },
         PV::ByteString(s) => match byte_string::decode(loc, &s) {
             Ok(v) => EV::Bytearray(v),
+            Err(e) => {
+                context.add_diags(e);
+                return None;
+            }
+        },
+        PV::String(s) => match byte_string::decode(loc, &s) {
+            Ok(v) => EV::InferredString(v),
             Err(e) => {
                 context.add_diags(e);
                 return None;

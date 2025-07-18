@@ -1278,6 +1278,7 @@ pub struct Subst {
 // This will eventually hold constraints like `Void` and `String` as well
 pub enum VarConstraint {
     Num(Loc),
+    String(Loc),
     Divergent(Loc),
 }
 
@@ -1311,6 +1312,16 @@ impl Subst {
         tvar
     }
 
+    pub fn new_string_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
+        let tvar = counter.next();
+        assert!(
+            self.tvar_constraints
+                .insert(tvar, VarConstraint::String(loc))
+                .is_none()
+        );
+        tvar
+    }
+
     pub fn new_divergent_var(&mut self, counter: &mut TVarCounter, loc: Loc) -> TVar {
         let tvar = counter.next();
         assert!(
@@ -1327,10 +1338,24 @@ impl Subst {
         }
     }
 
+    pub fn is_value_constrainted_var(&self, tvar: &TVar) -> bool {
+        self.tvar_constraints
+            .get(tvar)
+            .map(|constraint| constraint.is_num_var() || constraint.is_string_var())
+            .unwrap_or(false)
+    }
+
     pub fn is_num_var(&self, tvar: &TVar) -> bool {
         self.tvar_constraints
             .get(tvar)
             .map(|constraint| constraint.is_num_var())
+            .unwrap_or(false)
+    }
+
+    pub fn is_string_var(&self, tvar: &TVar) -> bool {
+        self.tvar_constraints
+            .get(tvar)
+            .map(|constraint| constraint.is_string_var())
             .unwrap_or(false)
     }
 }
@@ -1340,10 +1365,23 @@ impl VarConstraint {
         matches!(self, VarConstraint::Num(_))
     }
 
+    pub fn is_string_var(&self) -> bool {
+        matches!(self, VarConstraint::String(_))
+    }
+
     pub fn loc(&self) -> Loc {
         match self {
             VarConstraint::Num(loc) => *loc,
+            VarConstraint::String(loc) => *loc,
             VarConstraint::Divergent(loc) => *loc,
+        }
+    }
+
+    pub fn kind(&self) -> String {
+        match self {
+            VarConstraint::Num(_) => "num".to_owned(),
+            VarConstraint::String(_) => "string".to_owned(),
+            VarConstraint::Divergent(_) => "divergent".to_owned(),
         }
     }
 }
@@ -1408,6 +1446,8 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
                 Some(t) => error_format_nested(t, subst),
                 None if nested && subst.is_num_var(&last_id) => "{integer}".to_string(),
                 None if subst.is_num_var(&last_id) => return "integer".to_string(),
+                None if nested && subst.is_string_var(&last_id) => "{string}".to_string(),
+                None if subst.is_string_var(&last_id) => return "string".to_string(),
                 None => "_".to_string(),
             }
         }
@@ -1562,8 +1602,20 @@ pub fn make_num_tvar(context: &mut Context, loc: Loc) -> Type {
     sp(loc, Type_::Var(tvar))
 }
 
+pub fn make_string_tvar(context: &mut Context, loc: Loc) -> Type {
+    let tvar = context.subst.new_string_var(&mut context.tvar_counter, loc);
+    sp(loc, Type_::Var(tvar))
+}
+
 pub fn make_tvar(context: &mut Context, loc: Loc) -> Type {
     sp(loc, Type_::Var(context.tvar_counter.next()))
+}
+
+pub fn is_u8_type(ty: &Type) -> bool {
+    match &ty.value {
+        Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), _) => bt.is_u8(),
+        _ => false,
+    }
 }
 
 //**************************************************************************************************
@@ -2228,35 +2280,7 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
 pub fn solve_constraints(context: &mut Context) {
     use BuiltinTypeName_ as BT;
 
-    let var_constraints = context.subst.tvar_constraints.clone();
-    let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
-
-    for (var, constraint) in var_constraints.into_iter() {
-        match constraint {
-            VarConstraint::Num(loc) => {
-                let tvar = sp(loc, Type_::Var(var));
-                match unfold_type(&subst, tvar.clone()).value {
-                    Type_::UnresolvedError | Type_::Anything => {
-                        let next_subst =
-                            join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
-                                .unwrap()
-                                .0;
-                        subst = next_subst;
-                    }
-                    _ => (),
-                }
-            }
-            VarConstraint::Divergent(loc) => {
-                let last_tvar = forward_tvar(&subst, var);
-                if subst.get(last_tvar).is_none() {
-                    join_bind_tvar(&mut subst, loc, last_tvar, sp(loc, Type_::Void))
-                        .expect("ICE failed handling unbound divergent type");
-                }
-            }
-        }
-    }
-
-    context.subst = subst;
+    // Solve these constraints first to minimize error reporting.
 
     let constraints = std::mem::take(&mut context.constraints);
     for constraint in constraints {
@@ -2284,6 +2308,49 @@ pub fn solve_constraints(context: &mut Context) {
             }
         }
     }
+
+    let var_constraints = context.subst.tvar_constraints.clone();
+    let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
+
+    for (var, constraint) in var_constraints.into_iter() {
+        match constraint {
+            VarConstraint::Num(loc) => {
+                let tvar = sp(loc, Type_::Var(var));
+                match unfold_type(&subst, tvar.clone()).value {
+                    Type_::UnresolvedError | Type_::Anything => {
+                        let next_subst =
+                            join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
+                                .unwrap()
+                                .0;
+                        subst = next_subst;
+                    }
+                    _ => (),
+                }
+            }
+            VarConstraint::String(loc) => {
+                let tvar = sp(loc, Type_::Var(var));
+                match unfold_type(&subst, tvar.clone()).value {
+                    Type_::UnresolvedError | Type_::Anything => {
+                        let ty = Type_::vector(loc, Type_::u8(loc));
+                        let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
+                            .unwrap()
+                            .0;
+                        subst = next_subst;
+                    }
+                    _ => (),
+                }
+            }
+            VarConstraint::Divergent(loc) => {
+                let last_tvar = forward_tvar(&subst, var);
+                if subst.get(last_tvar).is_none() {
+                    join_bind_tvar(&mut subst, loc, last_tvar, sp(loc, Type_::Void))
+                        .expect("ICE failed handling unbound divergent type");
+                }
+            }
+        }
+    }
+
+    context.subst = subst;
 }
 
 fn solve_ability_constraint(
@@ -2394,7 +2461,7 @@ fn solve_builtin_type_constraint(
 ) {
     use Type_::*;
     use TypeName_::*;
-    let t = unfold_type(&context.subst, ty);
+    let t = unfold_type(&context.subst, ty.clone());
     let tloc = t.loc;
     let mk_tmsg = || {
         let set_msg = if builtin_set.is_empty() {
@@ -2904,6 +2971,7 @@ pub enum TypingError {
     ArityMismatch(usize, Box<Type>, usize, Box<Type>),
     FunArityMismatch(usize, Box<Type>, usize, Box<Type>),
     RecursiveType(Loc),
+    IncompatibleConstraints((Loc, Box<String>), (Loc, Box<String>)),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -3116,6 +3184,18 @@ pub fn join_var_constraints(
         (Some(C::Num(_)), None) => Ok(lhs),
         (None, Some(C::Num(_))) => Ok(rhs),
 
+        // string constraints propagates if either arms is strings
+        (Some(C::String(_)), Some(C::String(_))) => Ok(rhs),
+        (Some(C::String(_)), None) => Ok(lhs),
+        (None, Some(C::String(_))) => Ok(rhs),
+
+        (Some(lhs @ C::String(_)), Some(rhs @ C::Num(_)))
+        | (Some(lhs @ C::Num(_)), Some(rhs @ C::String(_))) => {
+            let err_lhs = (lhs.loc(), Box::new(lhs.kind()));
+            let err_rhs = (rhs.loc(), Box::new(rhs.kind()));
+            Err(TypingError::IncompatibleConstraints(err_lhs, err_rhs))
+        }
+
         // none case
         (None, None) => Ok(None),
     }
@@ -3205,7 +3285,7 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
     }
 
     // check not necessary for soundness but improves error message structure
-    if !check_num_tvar(subst, loc, &tvar, &ty) {
+    if !check_tvar_constraints(subst, loc, &tvar, &ty) {
         return Ok(false);
     }
 
@@ -3220,8 +3300,9 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
     Ok(true)
 }
 
-fn check_num_tvar(subst: &Subst, _loc: Loc, tvar: &TVar, ty: &Type) -> bool {
-    !subst.is_num_var(tvar) || check_num_tvar_(subst, ty)
+fn check_tvar_constraints(subst: &Subst, _loc: Loc, tvar: &TVar, ty: &Type) -> bool {
+    (!subst.is_num_var(tvar) || check_num_tvar_(subst, ty))
+        && (!subst.is_string_var(tvar) || check_string_tvar_(subst, ty))
 }
 
 fn check_num_tvar_(subst: &Subst, ty: &Type) -> bool {
@@ -3238,6 +3319,26 @@ fn check_num_tvar_(subst: &Subst, ty: &Type) -> bool {
                 Some(t) => check_num_tvar_(subst, t),
             }
         }
+        _ => false,
+    }
+}
+
+fn check_string_tvar_(subst: &Subst, ty: &Type) -> bool {
+    use Type_::*;
+    match &ty.value {
+        UnresolvedError | Anything => true,
+        Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args) => {
+            bt.is_vector() && args.len() == 1 && is_u8_type(&args[0])
+        }
+        Var(v) => {
+            let last_tvar = forward_tvar(subst, *v);
+            match subst.get(last_tvar) {
+                Some(sp!(_, Var(_))) => unreachable!(),
+                None => subst.is_string_var(&last_tvar),
+                Some(t) => check_string_tvar_(subst, t),
+            }
+        }
+        // TODO: what else is permitted here?
         _ => false,
     }
 }

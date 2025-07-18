@@ -348,7 +348,10 @@ pub enum Value_ {
     // true
     // false
     Bool(bool),
+    // hex strings and byte strings
     Bytearray(Vec<u8>),
+    // string literals
+    InferredString(Vec<u8>),
 }
 pub type Value = Spanned<Value_>;
 
@@ -894,6 +897,11 @@ impl std::fmt::Display for Value_ {
                 }
                 write!(f, "]")
             }
+            V::InferredString(v) => {
+                let string = String::from_utf8(v.to_vec())
+                    .expect("How did we parse a string we cannot reconstruct?");
+                write!(f, "\"{}\"", string)
+            }
         }
     }
 }
@@ -1397,6 +1405,7 @@ impl AstDebug for Value_ {
             V::U256(u) => w.write(format!("{}u256", u)),
             V::Bool(b) => w.write(format!("{}", b)),
             V::Bytearray(v) => w.write(format!("{:?}", v)),
+            V::InferredString(v) => w.write(format!("string<{:?}>", v)),
         }
     }
 }
