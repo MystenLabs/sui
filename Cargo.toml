@@ -700,6 +700,8 @@ sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
+sui-indexer-alt-consistent-api = { path = "crates/sui-indexer-alt-consistent-api" }
+sui-indexer-alt-consistent-store = { path = "crates/sui-indexer-alt-consistent-store" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework", default-features = false }
 sui-indexer-alt-framework-store-traits = { path = "crates/sui-indexer-alt-framework-store-traits" }
 sui-indexer-alt-graphql = { path = "crates/sui-indexer-alt-graphql" }

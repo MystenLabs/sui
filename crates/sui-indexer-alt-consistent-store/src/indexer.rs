@@ -88,6 +88,10 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
         Ok(Self { indexer, sync })
     }
 
+    pub(crate) fn store(&self) -> &Store<S> {
+        self.indexer.store()
+    }
+
     /// Adds a new sequential pipeline to the indexer and starts it up. See
     /// [`framework::Indexer::sequential_pipeline`] for details.
     pub(crate) async fn sequential_pipeline<H>(
