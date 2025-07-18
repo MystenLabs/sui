@@ -37,7 +37,7 @@ impl RpcError {
         }
     }
 
-    pub(crate) fn into_status_proto(self) -> crate::proto::google::rpc::Status {
+    pub fn into_status_proto(self) -> crate::proto::google::rpc::Status {
         crate::proto::google::rpc::Status {
             code: self.code.into(),
             message: self.message.unwrap_or_default(),
