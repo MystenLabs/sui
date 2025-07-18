@@ -331,8 +331,7 @@ impl ShareOwnedVerifierAI<'_> {
             .chain(
                 self.pre_compiled_program
                     .as_ref()
-                    .and_then(|infos| infos.get(mident))
-                    .map(|minfo| &minfo.info),
+                    .and_then(|program_info| program_info.module_info(mident)),
             )
             .filter_map(|minfo| minfo.sui_info.as_ref())
             .any(|sui_info| sui_info.uid_holders.contains_key(tn))
@@ -346,8 +345,7 @@ impl ShareOwnedVerifierAI<'_> {
             .chain(
                 self.pre_compiled_program
                     .as_ref()
-                    .and_then(|infos| infos.get(mident))
-                    .map(|minfo| &minfo.info),
+                    .and_then(|program_info| program_info.module_info(mident)),
             )
             .filter_map(|minfo| minfo.sui_info.as_ref())
             .find_map(|sui_info| sui_info.transferred.get(tn))

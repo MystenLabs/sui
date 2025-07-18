@@ -104,7 +104,8 @@ enum PassResult {
     Compilation(Vec<AnnotatedCompiledUnit>, /* warnings */ Diagnostics),
 }
 
-pub type PreCompiledProgramInfo = BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>>;
+#[derive(Clone)]
+pub struct PreCompiledProgramInfo(BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>>);
 
 #[derive(Clone)]
 pub struct PreCompiledModuleInfo {
@@ -638,6 +639,50 @@ impl SteppedCompiler<PASS_COMPILATION> {
     }
 }
 
+impl PreCompiledProgramInfo {
+    pub fn new(modules: BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>>) -> Self {
+        Self(modules)
+    }
+
+    pub fn iter(
+        &self,
+    ) -> std::collections::btree_map::Iter<'_, E::ModuleIdent, Arc<PreCompiledModuleInfo>> {
+        self.0.iter()
+    }
+
+    pub fn iter_mut(
+        &mut self,
+    ) -> std::collections::btree_map::IterMut<'_, E::ModuleIdent, Arc<PreCompiledModuleInfo>> {
+        self.0.iter_mut()
+    }
+
+    pub fn module_info(&self, mident: &E::ModuleIdent) -> Option<&ModuleInfo> {
+        self.0.get(mident).map(|info| &info.info)
+    }
+}
+
+// Implement IntoIterator for references to PreCompiledProgramInfo
+impl<'a> IntoIterator for &'a PreCompiledProgramInfo {
+    type Item = (&'a E::ModuleIdent, &'a Arc<PreCompiledModuleInfo>);
+    type IntoIter =
+        std::collections::btree_map::Iter<'a, E::ModuleIdent, Arc<PreCompiledModuleInfo>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+// Implement IntoIterator for owned PreCompiledProgramInfo
+impl IntoIterator for PreCompiledProgramInfo {
+    type Item = (E::ModuleIdent, Arc<PreCompiledModuleInfo>);
+    type IntoIter =
+        std::collections::btree_map::IntoIter<E::ModuleIdent, Arc<PreCompiledModuleInfo>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 /// Given a set of dependencies, precompile them and save all data needed to compile
 /// against these dependencies without having to recompile them again.
 pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
@@ -681,7 +726,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                 .map(|unit| (unit.module_ident(), unit))
                 .collect::<BTreeMap<_, _>>();
 
-            let precompiled_modules: PreCompiledProgramInfo = program_info
+            let precompiled_modules: BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>> = program_info
                  .modules
                  .iter()
                  .map(|(loc, mod_ident_key, typing_module_info)| -> anyhow::Result<(E::ModuleIdent, Arc<PreCompiledModuleInfo>)> {
@@ -713,7 +758,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                  })
                  .collect::<anyhow::Result<_>>()?;
 
-            Ok(Ok(precompiled_modules))
+            Ok(Ok(PreCompiledProgramInfo::new(precompiled_modules)))
         }
         Ok(_) => unreachable!(),
     }
