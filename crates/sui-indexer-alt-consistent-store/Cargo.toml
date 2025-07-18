@@ -9,23 +9,35 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+axum.workspace = true
 bcs.workspace = true
 bincode = { version = "2.0.1", features = ["serde"] }
+clap.workspace = true
+const-str.workspace = true
 futures.workspace = true
 ouroboros.workspace = true
 prometheus.workspace = true
 rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 scoped-futures.workspace = true
 serde.workspace = true
+telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+toml.workspace = true
+tonic.workspace = true
+tonic-health.workspace = true
+tonic-reflection.workspace = true
+tower.workspace = true
 tracing.workspace = true
 
 move-core-types.workspace = true
 
+bin-version.workspace = true
 sui-default-config.workspace = true
+sui-indexer-alt-consistent-api.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
+sui-indexer-alt-metrics.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
