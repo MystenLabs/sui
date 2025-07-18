@@ -77,16 +77,12 @@ struct StdCommandRunner;
 #[async_trait]
 impl CommandRunner for StdCommandRunner {
     async fn run(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error> {
-        // get tokio command
-
-        // spawn tokio
         let mut cmd = Command::new(command)
             .arg("call")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()?;
 
-        // spawn tokio process
         let mut endpoint = Endpoint::new(
             cmd.stdout.take().expect("No stdout"),
             cmd.stdin.take().expect("No stdin"),
@@ -543,7 +539,6 @@ mod tests {
 
         let external = External::new(&cargo_dir).unwrap();
 
-        // TODO add more to files
         assert!(external.aliases.is_empty());
         assert!(external.keys.is_empty());
         assert!(external.path.is_some());
@@ -752,8 +747,8 @@ mod tests {
             },
         );
         let _result = external.remove(address);
-        // assert!(result.is_ok());
-        // assert!(!external.keys.contains_key(&address));
+        assert!(result.is_ok());
+        assert!(!external.keys.contains_key(&address));
     }
 
     #[test]
