@@ -154,12 +154,12 @@ impl External {
     }
 
     /// Test function for mocked command runner
-    pub fn new_for_test(command_runner: Box<dyn CommandRunner>) -> Self {
+    pub fn new_for_test(command_runner: Box<dyn CommandRunner>, path: Option<PathBuf>) -> Self {
         Self {
             aliases: Default::default(),
             keys: Default::default(),
             command_runner,
-            path: None,
+            path,
         }
     }
 
@@ -322,8 +322,11 @@ impl AccountKeystore for External {
         Err(anyhow!("Import not supported for external keys."))
     }
 
-    async fn remove(&mut self, _address: SuiAddress) -> Result<(), Error> {
-        Err(anyhow!("Not supported for external keys."))
+    async fn remove(&mut self, address: SuiAddress) -> Result<(), Error> {
+        self.aliases.remove(&address);
+        self.keys.remove(&address);
+        self.save().await?;
+        Ok(())
     }
 
     fn entries(&self) -> Vec<PublicKey> {
@@ -627,7 +630,7 @@ mod tests {
             .times(1)
             .returning(|_, _, _| Ok(JsonValue::Null));
 
-        let external = External::new_for_test(Box::new(mock));
+        let external = External::new_for_test(Box::new(mock), None);
         let args = json!(["arg1", "arg2"]);
         assert!(external
             .exec("sui-key-tool", "test_method", args)
@@ -647,7 +650,7 @@ mod tests {
                     "public_key": PUBLIC_KEY,
                 }))
             });
-        let mut external = External::new_for_test(Box::new(mock));
+        let mut external = External::new_for_test(Box::new(mock), None);
         let result = external
             .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
             .await;
@@ -667,7 +670,7 @@ mod tests {
                 ]
             }))
         });
-        let mut external = External::new_for_test(Box::new(mock));
+        let mut external = External::new_for_test(Box::new(mock), None);
         external
             .add_existing("signer".to_string(), key_id.to_string())
             .await
@@ -680,7 +683,7 @@ mod tests {
     #[tokio::test]
     async fn test_add_keypair_not_supported() {
         let mock = MockCommandRunner::new();
-        let mut external = External::new_for_test(Box::new(mock));
+        let mut external = External::new_for_test(Box::new(mock), None);
         let mut crypto_rng = thread_rng();
         let ed25519_keypair = Ed25519KeyPair::generate(&mut crypto_rng);
         let result = external
@@ -694,7 +697,7 @@ mod tests {
         let mut mock = MockCommandRunner::new();
         mock.expect_run()
             .returning(|_, _, _| Ok(json!({"keys": []})));
-        let mut external = External::new_for_test(Box::new(mock));
+        let mut external = External::new_for_test(Box::new(mock), None);
         let result = external
             .add_existing("signer".to_string(), "missing-key-id".to_string())
             .await;
@@ -705,7 +708,7 @@ mod tests {
     async fn test_exec_error_propagation() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run().returning(|_, _, _| Err(anyhow!("fail")));
-        let external = External::new_for_test(Box::new(mock));
+        let external = External::new_for_test(Box::new(mock), None);
         let result = external.exec("cmd", "method", json!([1, 2, 3])).await;
         assert!(result.is_err());
     }
@@ -721,7 +724,7 @@ mod tests {
                 ]
             }))
         });
-        let external = External::new_for_test(Box::new(mock));
+        let external = External::new_for_test(Box::new(mock), None);
         let keys = external
             .signer_available_keys("signer".to_string())
             .await
@@ -731,12 +734,15 @@ mod tests {
         assert_eq!(keys[1].key_id, "key-2");
     }
 
-    #[test]
-    fn test_remove_key() {
+    #[tokio::test]
+    async fn test_remove_key() {
+        let tmp_dir = TempDir::new().unwrap();
+        let path = tmp_dir.path().join("external.keystore");
+
         let mut mock = MockCommandRunner::new();
         mock.expect_run()
             .returning(|_, _, _| Ok(json!({"success": true})));
-        let mut external = External::new_for_test(Box::new(mock));
+        let mut external = External::new_for_test(Box::new(mock), Some(path));
         let address = SuiAddress::from_str(ADDRESS).unwrap();
         external.keys.insert(
             address,
@@ -746,7 +752,8 @@ mod tests {
                 key_id: "key-123".to_string(),
             },
         );
-        let _result = external.remove(address);
+        let result = external.remove(address).await;
+        println!("[test_remove_key] result: {:?}", result);
         assert!(result.is_ok());
         assert!(!external.keys.contains_key(&address));
     }
@@ -764,7 +771,7 @@ mod tests {
         let mut mock = MockCommandRunner::new();
         mock.expect_run()
             .returning(|_, _, _| Ok(json!({"success":true})));
-        let external = External::new_for_test(Box::new(mock));
+        let external = External::new_for_test(Box::new(mock), None);
 
         let result = external.export(&SuiAddress::from_str(ADDRESS).unwrap());
         assert!(result.is_err())
@@ -780,7 +787,7 @@ mod tests {
                 "signature": signature,
             }))
         });
-        let mut external = External::new_for_test(Box::new(mock));
+        let mut external = External::new_for_test(Box::new(mock), None);
         let address = SuiAddress::from_str(ADDRESS).unwrap();
 
         external.keys.insert(
@@ -811,7 +818,7 @@ mod tests {
             }))
         });
 
-        let mut external = External::new_for_test(Box::new(mock));
+        let mut external = External::new_for_test(Box::new(mock), None);
         let address = SuiAddress::from_str(ADDRESS).unwrap();
 
         external.keys.insert(
