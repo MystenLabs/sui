@@ -108,7 +108,7 @@ impl<F: MoveFlavor> Package<F> {
                     .dep_replacements()
                     .get(env.name())
                     .unwrap_or(&BTreeMap::new()),
-                manifest.dependencies(),
+                &manifest.dependencies(),
                 &implicit_deps,
             )?;
 

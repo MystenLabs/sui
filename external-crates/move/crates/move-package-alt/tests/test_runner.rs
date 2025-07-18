@@ -145,7 +145,7 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
             .dep_replacements()
             .get(env.name())
             .unwrap_or(&BTreeMap::new()),
-        manifest.dependencies(),
+        &manifest.dependencies(),
         &BTreeMap::new(),
     )?;
     let mut output = DependencySet::<PinnedDependencyInfo>::new();

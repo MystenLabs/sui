@@ -32,7 +32,7 @@ impl CombinedDependency {
         file: FileHandle,
         env: &Environment,
         dep_replacements: &BTreeMap<PackageName, Spanned<ReplacementDependency>>,
-        dependencies: &BTreeMap<Spanned<PackageName>, DefaultDependency>,
+        dependencies: &BTreeMap<PackageName, DefaultDependency>,
         implicit_deps: &BTreeMap<PackageName, ReplacementDependency>,
     ) -> ManifestResult<BTreeMap<PackageName, Self>> {
         let mut result = BTreeMap::new();
