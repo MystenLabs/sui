@@ -1220,10 +1220,14 @@ impl AuthorityPerEpochStore {
             .set(tokio::sync::Mutex::new(randomness_manager))
             .is_err()
         {
-            error!("BUG: `set_randomness_manager` called more than once; this should never happen");
+            debug_fatal!(
+                "BUG: `set_randomness_manager` called more than once; this should never happen"
+            );
         }
         if self.randomness_reporter.set(reporter).is_err() {
-            error!("BUG: `set_randomness_manager` called more than once; this should never happen");
+            debug_fatal!(
+                "BUG: `set_randomness_manager` called more than once; this should never happen"
+            );
         }
         result
     }
