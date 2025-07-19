@@ -308,7 +308,7 @@ impl TypingAnalysisContext<'_> {
             // but just in case - it's better to report it than to crash the analyzer due to
             // unchecked unwrap
             eprintln!(
-                "WARNING: could not locate module {:?} when processing a call to {}{}",
+                "WARNING: could not locate module {:?} when processing a call to {}::{}",
                 module_ident.value, module_ident.value, fun_def_name
             );
             return None;

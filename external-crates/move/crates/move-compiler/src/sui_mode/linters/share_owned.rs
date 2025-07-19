@@ -6,6 +6,7 @@
 //! fresh object and share it within the same function
 
 use crate::{
+    PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
         absint::JoinResult,
@@ -33,7 +34,7 @@ use crate::{
     },
     sui_mode::{
         SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME,
-        info::{SuiInfo, TransferKind},
+        info::TransferKind,
         linters::{
             LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode, PUBLIC_SHARE_FUN,
             SHARE_FUN, TRANSFER_MOD_NAME, type_abilities,
@@ -43,7 +44,7 @@ use crate::{
 use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 const SHARE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, PUBLIC_SHARE_FUN),
@@ -66,6 +67,7 @@ pub struct ShareOwnedVerifier;
 
 pub struct ShareOwnedVerifierAI<'a> {
     info: &'a TypingProgramInfo,
+    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -111,7 +113,10 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
         if !calls_special_function(SHARE_FUNCTIONS, cfg) {
             return None;
         }
-        Some(ShareOwnedVerifierAI { info: context.info })
+        Some(ShareOwnedVerifierAI {
+            info: context.info,
+            pre_compiled_program: context.pre_compiled_program.clone(),
+        })
     }
 }
 
@@ -217,7 +222,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI<'_> {
     }
 }
 
-impl<'a> ShareOwnedVerifierAI<'a> {
+impl ShareOwnedVerifierAI<'_> {
     fn can_hold_obj(&self, sp!(_, ty_): &Type) -> bool {
         match ty_ {
             Type_::Unit => false,
@@ -255,12 +260,11 @@ impl<'a> ShareOwnedVerifierAI<'a> {
             BaseType_::Apply(_, sp!(_, TypeName_::Builtin(_)), _) => false,
 
             BaseType_::Apply(_, sp!(_, TypeName_::ModuleType(m, n)), targs) => {
-                let m = *m;
-                let n = *n;
-                if self.sui_info().uid_holders.contains_key(&(m, n)) {
+                if self.holds_uid(m, n) {
                     return true;
                 }
-                let phantom_positions = phantom_positions(self.info, &m, &n);
+
+                let phantom_positions = phantom_positions(self.info, m, n);
                 phantom_positions
                     .into_iter()
                     .zip(targs)
@@ -283,7 +287,7 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         let Value::NotFreshObj(not_fresh_loc) = &args[0] else {
             return;
         };
-        let Some(tn) = f
+        let Some((m, n)) = f
             .type_arguments
             .first()
             .and_then(|t| t.value.type_name())
@@ -291,7 +295,8 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         else {
             return;
         };
-        let Some(transferred_kind) = self.sui_info().transferred.get(&tn) else {
+
+        let Some(transferred_kind) = self.transfer_kind(&m, &n) else {
             return;
         };
 
@@ -318,8 +323,40 @@ impl<'a> ShareOwnedVerifierAI<'a> {
         context.add_diag(d)
     }
 
-    fn sui_info(&self) -> &'a SuiInfo {
-        self.info.sui_flavor_info.as_ref().unwrap()
+    /// Checks if the package's ProgramInfo or ProgramInfo from precompiled lib
+    /// contain a module (with a given `mident`) whose datatype (with a given
+    /// `datatype_name`) holds a UID.
+    fn holds_uid(&self, mident: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+        self.info
+            .modules
+            .get(mident)
+            .or_else(|| {
+                self.pre_compiled_program
+                    .as_ref()
+                    .and_then(|program_info| program_info.module_info(mident))
+            })
+            .and_then(|minfo| minfo.sui_info.as_ref())
+            .is_some_and(|sui_info| sui_info.uid_holders.contains_key(datatype_name))
+    }
+
+    /// Checks if the package's ProgramInfo or ProgramInfo from precompiled lib
+    /// contain a module (with a given `mident`) whose datatype (with a given
+    /// `datatype_name`) is transferred and, if so, returns the transfer kind.
+    fn transfer_kind(
+        &self,
+        mident: &ModuleIdent,
+        datatype_name: &DatatypeName,
+    ) -> Option<&TransferKind> {
+        self.info
+            .modules
+            .get(mident)
+            .or_else(|| {
+                self.pre_compiled_program
+                    .as_ref()
+                    .and_then(|program_info| program_info.module_info(mident))
+            })
+            .and_then(|minfo| minfo.sui_info.as_ref())
+            .and_then(|sui_info| sui_info.transferred.get(datatype_name))
     }
 }
 
