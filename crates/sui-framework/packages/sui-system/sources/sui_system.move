@@ -516,6 +516,16 @@ public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<addr
     wrapper.load_system_state_mut().active_validator_addresses()
 }
 
+/// Getter returns the voting power of the active validators, values are voting power in the scale of 10000.
+public fun validator_voting_powers(wrapper: &mut SuiSystemState): VecMap<address, u64> {
+    wrapper.load_system_state().active_validator_voting_powers()
+}
+
+/// Getter returns the voting power of a specific validator.
+public fun validator_voting_power(wrapper: &mut SuiSystemState, validator_address: address): u64 {
+    wrapper.load_system_state().active_validator_by_address(validator_address).voting_power()
+}
+
 /// Calculate the rewards for a given staked SUI object.
 /// Used in the package, and can be dev-inspected.
 public(package) fun calculate_rewards(
@@ -596,12 +606,6 @@ fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInne
     );
     assert!(inner.system_state_version() == self.version, EWrongInnerVersion);
     inner
-}
-
-#[allow(unused_function)]
-/// Returns the voting power of the active validators, values are voting power in the scale of 10000.
-fun validator_voting_powers(wrapper: &mut SuiSystemState): VecMap<address, u64> {
-    wrapper.load_system_state().active_validator_voting_powers()
 }
 
 #[allow(unused_function)]
