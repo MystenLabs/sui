@@ -599,6 +599,28 @@ impl ValidatorService {
             }
         }
 
+        // Use shorter wait timeout in tests to exercise server-side error paths and
+        // client-side retry logic.
+        let wait_for_fastpath_input_objects_timeout = if cfg!(debug_assertions) {
+            Duration::from_millis(1)
+        } else {
+            Duration::from_secs(10)
+        };
+        if !state
+            .wait_for_fastpath_input_objects(
+                &transaction,
+                epoch_store.epoch(),
+                wait_for_fastpath_input_objects_timeout,
+            )
+            .await?
+        {
+            debug!(
+                ?tx_digest,
+                "Fastpath input objects are still unavailable after waiting"
+            );
+            // Proceed with input checks to generate a proper error.
+        }
+
         state
             .handle_vote_transaction(&epoch_store, transaction.clone())
             .tap_err(|e| {
