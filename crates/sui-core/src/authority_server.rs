@@ -599,6 +599,21 @@ impl ValidatorService {
             }
         }
 
+        if !state
+            .wait_for_fastpath_input_objects(
+                &transaction,
+                epoch_store.epoch(),
+                Duration::from_secs(10),
+            )
+            .await?
+        {
+            debug!(
+                ?tx_digest,
+                "Fastpath input objects are still unavailable after waiting"
+            );
+            // Proceed with input checks to generate a proper error.
+        }
+
         state
             .handle_vote_transaction(&epoch_store, transaction.clone())
             .tap_err(|e| {
