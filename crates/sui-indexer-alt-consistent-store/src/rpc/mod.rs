@@ -117,8 +117,16 @@ impl<'d> RpcService<'d> {
             cancel,
         } = self;
 
-        let reflection_v1 = reflection_v1.build_v1().unwrap();
-        let reflection_v1alpha = reflection_v1alpha.build_v1alpha().unwrap();
+        let reflection_v1 = reflection_v1
+            .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
+            .build_v1()
+            .unwrap();
+
+        let reflection_v1alpha = reflection_v1alpha
+            .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
+            .build_v1alpha()
+            .unwrap();
+
         let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
         service_names.extend([
