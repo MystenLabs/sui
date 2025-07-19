@@ -99,7 +99,7 @@ pub async fn start_service(
     )
     .await?;
 
-    let rpc = RpcService::new(rpc_args, version, cancel.child_token())
+    let rpc = RpcService::new(rpc_args, version, registry, cancel.child_token())
         .register_encoded_file_descriptor_set(proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET)
         .add_service(ConsistentServiceServer::new(indexer.store().clone()));
 
