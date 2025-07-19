@@ -25,6 +25,9 @@ pub struct IndexerConfig {
     pub eth_sui_bridge_contract_address: String,
 
     pub metric_port: u16,
+
+    #[serde(default)]
+    pub eth_only: bool,
 }
 
 impl sui_config::Config for IndexerConfig {}
