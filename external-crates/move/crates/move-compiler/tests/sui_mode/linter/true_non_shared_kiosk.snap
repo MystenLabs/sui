@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:10:16
+   │
+10 │         kiosk: Kiosk,
+   │                ^^^^^ Kiosk should not be used as a field, use it as a top-level shared object with `public_share_object`
+   │
+   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:25:34
+   │
+25 │         transfer::public_transfer(kiosk, @0);
+   │                                  ^^^^^^^^^^^ Kiosk should be shared with `public_share_object`
+   │
+   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:31:34
+   │
+31 │         transfer::public_transfer(kiosk, @0);
+   │                                  ^^^^^^^^^^^ Kiosk should be shared with `public_share_object`
+   │
+   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:36:40
+   │
+36 │         transfer::public_freeze_object(kiosk1);
+   │                                        ^^^^^^ Kiosk should be shared with `public_share_object`
+   │
+   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99010]: Kiosk should be shared with `public_share_object`
+   ┌─ tests/sui_mode/linter/true_non_shared_kiosk.move:37:40
+   │
+37 │         transfer::public_freeze_object(kiosk2);
+   │                                        ^^^^^^ Kiosk should be shared with `public_share_object`
+   │
+   = This warning can be suppressed with '#[allow(lint(non_shared_kiosk))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
