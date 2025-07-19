@@ -1,0 +1,47 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-11:
+//# run-graphql
+Response: {
+  "data": {
+    "e0": {
+      "totalGasFees": null
+    }
+  }
+}
+
+task 2, lines 13-14:
+//# programmable --sender A --inputs 42 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
+
+task 3, lines 16-21:
+//# run-graphql
+Response: {
+  "data": {
+    "e0": {
+      "totalGasFees": null
+    }
+  }
+}
+
+task 4, line 23:
+//# advance-epoch
+Epoch advanced: 1
+
+task 5, lines 25-30:
+//# run-graphql
+Response: {
+  "data": {
+    "e0": {
+      "totalGasFees": "1000000"
+    }
+  }
+}

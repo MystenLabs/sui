@@ -152,6 +152,17 @@ impl Epoch {
 
         Ok(Some(UInt53::from(hi - lo)))
     }
+
+    /// The total amount of gas fees (in MIST) that were paid in this epoch.
+    async fn total_gas_fees(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let result = self
+            .end(ctx)
+            .await?
+            .as_ref()
+            .and_then(|last| last.total_gas_fees)
+            .map(|fees| BigInt::from(fees));
+        Ok(result)
+    }
 }
 
 impl Epoch {
