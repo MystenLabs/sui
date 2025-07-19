@@ -32,8 +32,21 @@ pub(crate) struct VMTracer<'a> {
     pc: Option<u16>,
     active_frames: BTreeMap<TraceIndex, FrameInfo>,
     type_stack: Vec<RootedType>,
-    loaded_data: BTreeMap<TraceIndex, TraceValue>,
+    loaded_data: BTreeMap<TraceIndex, GlobalValue>,
     effects: Vec<EF>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum GlobalValue {
+    // Currently loaded into a local
+    InLocal(TraceIndex, usize),
+    // Value loaded from a native function, or a value that was passed in externally (and may be
+    // passed back out).
+    Value(TraceValue),
+    // (ephemeral) Currently on the stack, but we don't have a snapshot of the value but the value is at offset
+    // `usize`. This is used when moving from a local to a stack value. We should always reify back
+    // to a value or or in local state.
+    AtStackOffset(usize),
 }
 
 /// Information about a frame that we keep during trace building
@@ -236,20 +249,54 @@ impl VMTracer<'_> {
 
     /// Invalidate a local in the current frame. This is used to mark a local as uninitialized and
     /// remove its reference information.
-    fn invalidate_local(&mut self, local_index: usize) -> Option<()> {
+    fn invalidate_local(
+        &mut self,
+        frame: &Frame,
+        interpreter: &Interpreter,
+        local_index: usize,
+    ) -> Option<()> {
         let local = self
             .current_frame_mut()?
             .locals_types
             .get_mut(local_index)?;
         match &local.ref_type {
-            ReferenceType::Filled { ref_type, .. } => {
+            ReferenceType::Filled { ref_type, location } => {
+                let location = location.clone();
                 local.ref_type = ReferenceType::Empty {
                     ref_type: ref_type.clone(),
-                }
+                };
+                self.record_global_push(frame, interpreter, &location)?;
             }
             ReferenceType::Empty { .. } => (),
             ReferenceType::Value => (),
         };
+        Some(())
+    }
+
+    /// Record a global going from local -> stack.
+    fn record_global_push(
+        &mut self,
+        frame: &Frame,
+        interpreter: &Interpreter,
+        location: &RuntimeLocation,
+    ) -> Option<()> {
+        let RuntimeLocation::Global(idx) = location else {
+            return Some(());
+        };
+        let new_state = GlobalValue::AtStackOffset(interpreter.operand_stack.value.len() - 1);
+        let global = self.loaded_data.get_mut(idx)?;
+        let GlobalValue::InLocal(..) = std::mem::replace(global, new_state) else {
+            // We are pushing a global that was not in a local, this is not fine.
+            return None;
+        };
+        let v = self.resolve_stack_value(Some(frame), interpreter, 0)?;
+        let new_state = GlobalValue::Value(v);
+        let global = self.loaded_data.get_mut(idx)?;
+        let GlobalValue::AtStackOffset(..) = std::mem::replace(global, new_state) else {
+            // Better be what we just set it to earlier...
+            return None;
+        };
+
         Some(())
     }
 
@@ -310,6 +357,39 @@ impl VMTracer<'_> {
         })
     }
 
+    // Record a global going from stack -> local
+    fn record_global_store(
+        &mut self,
+        frame_identifier: TraceIndex,
+        local_index: usize,
+        global_index: TraceIndex,
+    ) -> Option<()> {
+        let location = GlobalValue::InLocal(frame_identifier, local_index);
+        let global = self.loaded_data.get_mut(&global_index)?;
+
+        match std::mem::replace(global, location) {
+            GlobalValue::InLocal(_, _) => {
+                // We are moving a global that was already in a local to a local, this is not fine.
+                // signal an issue.
+                None
+            }
+            GlobalValue::Value(_) | GlobalValue::AtStackOffset(_) => {
+                // We are moving a global that was on the stack to a local, this is fine.
+                Some(())
+            }
+        }
+    }
+
+    fn store_global(&mut self, stack_idx: usize, local_index: usize) -> Option<()> {
+        match self.type_stack.get(stack_idx)? {
+            RootedType {
+                layout: _,
+                ref_type: Some((_, RuntimeLocation::Global(idx))),
+            } => self.record_global_store(self.current_frame_identifier()?, local_index, *idx),
+            _ => Some(()),
+        }
+    }
+
     /// Given a location, resolve it to the value it points to or the value itself in the case
     /// where it's not a reference.
     fn resolve_location(
@@ -349,7 +429,17 @@ impl VMTracer<'_> {
             RuntimeLocation::Indexed(location, _) => {
                 self.resolve_location(location, frame, interpreter)?
             }
-            RuntimeLocation::Global(id) => self.loaded_data.get(id)?.clone(),
+            RuntimeLocation::Global(id) => match &self.loaded_data.get(id)? {
+                GlobalValue::InLocal(fidx, lidx) => self.resolve_location(
+                    &RuntimeLocation::Local(*fidx, *lidx),
+                    frame,
+                    interpreter,
+                )?,
+                GlobalValue::Value(trace_value) => Some(trace_value.clone())?,
+                GlobalValue::AtStackOffset(idx) => {
+                    self.resolve_location(&RuntimeLocation::Stack(*idx), frame, interpreter)?
+                }
+            },
         })
     }
 
@@ -371,7 +461,11 @@ impl VMTracer<'_> {
                     .clone();
                 let call_stack_index = self.trace_index_to_frame_index(*fidx)?;
                 match local_ty.ref_type {
-                    ReferenceType::Value => {
+                    ReferenceType::Value
+                    | ReferenceType::Filled {
+                        location: RuntimeLocation::Global(_),
+                        ..
+                    } => {
                         let frame = if call_stack_index >= interpreter.call_stack.0.len() {
                             frame?
                         } else {
@@ -395,21 +489,31 @@ impl VMTracer<'_> {
             RuntimeLocation::Stack(stack_idx) => {
                 let ty = self.type_stack.get(*stack_idx)?;
                 match &ty.ref_type {
-                    Some((_, location)) => {
-                        self.root_location_snapshot(location, frame, interpreter)?
-                    }
-                    None => {
+                    None | Some((_, RuntimeLocation::Global(_))) => {
                         let value = interpreter.operand_stack.value.get(*stack_idx)?;
                         value
                             .as_annotated_move_value_for_tracing_only(&ty.layout)?
                             .into()
+                    }
+                    Some((_, location)) => {
+                        self.root_location_snapshot(location, frame, interpreter)?
                     }
                 }
             }
             RuntimeLocation::Indexed(loc, _) => {
                 self.root_location_snapshot(loc, frame, interpreter)?
             }
-            RuntimeLocation::Global(id) => self.loaded_data.get(id)?.snapshot().clone(),
+            RuntimeLocation::Global(id) => match &self.loaded_data.get(id)? {
+                GlobalValue::InLocal(fidx, lidx) => self.root_location_snapshot(
+                    &RuntimeLocation::Local(*fidx, *lidx),
+                    frame,
+                    interpreter,
+                )?,
+                GlobalValue::Value(trace_value) => Some(trace_value.snapshot().clone())?,
+                GlobalValue::AtStackOffset(idx) => {
+                    self.root_location_snapshot(&RuntimeLocation::Stack(*idx), frame, interpreter)?
+                }
+            },
         })
     }
 
@@ -465,7 +569,8 @@ impl VMTracer<'_> {
         };
         let (trace_index, trace_value) = self.emit_data_load(value.into(), ref_type);
 
-        self.loaded_data.insert(trace_index, trace_value);
+        self.loaded_data
+            .insert(trace_index, GlobalValue::Value(trace_value));
         Some((ref_type.clone(), RuntimeLocation::Global(trace_index)))
     }
 
@@ -518,11 +623,13 @@ impl VMTracer<'_> {
             .zip(function_type_info.local_types.iter().cloned())
             .map(|(value, tag_with_layout_info_opt)| {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
-                let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
+                let layout = layout?;
+                let move_value = value.as_annotated_move_value_for_tracing_only(&layout)?;
                 match ref_type {
                     Some(ref_type) => {
                         let (id, trace_value) = self.emit_data_load(move_value.into(), &ref_type);
-                        self.loaded_data.insert(id, trace_value.clone());
+                        self.loaded_data
+                            .insert(id, GlobalValue::Value(trace_value.clone()));
                         Some((trace_value, Some(id)))
                     }
                     None => Some((
@@ -535,6 +642,7 @@ impl VMTracer<'_> {
             })
             .collect::<Option<_>>()?;
 
+        let current_trace_offset = self.trace.current_trace_offset();
         let locals_types = function_type_info
             .local_types
             .iter()
@@ -542,26 +650,22 @@ impl VMTracer<'_> {
             .enumerate()
             .map(|(i, tag_with_layout_info_opt)| {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
-                LocalType {
-                    layout,
-                    ref_type: ref_type
-                        .map(|r_type| {
-                            if let Some(location) = call_args.get(i).and_then(|(_, id)| *id) {
-                                let location = RuntimeLocation::Global(location);
-                                ReferenceType::Filled {
-                                    ref_type: r_type,
-                                    location,
-                                }
-                            } else {
-                                ReferenceType::Empty { ref_type: r_type }
-                            }
-                        })
-                        .unwrap_or(ReferenceType::Value),
-                }
+                let ref_type = match ref_type {
+                    None => ReferenceType::Value,
+                    Some(ref_type) => {
+                        if let Some(location) = call_args.get(i).and_then(|(_, id)| *id) {
+                            self.record_global_store(current_trace_offset, i, location)?;
+                            let location = RuntimeLocation::Global(location);
+                            ReferenceType::Filled { ref_type, location }
+                        } else {
+                            ReferenceType::Empty { ref_type }
+                        }
+                    }
+                };
+                Some(LocalType { layout, ref_type })
             })
-            .collect();
+            .collect::<Option<_>>()?;
 
-        let current_trace_offset = self.trace.current_trace_offset();
         self.active_frames.insert(
             current_trace_offset,
             FrameInfo {
@@ -611,11 +715,13 @@ impl VMTracer<'_> {
             .zip(current_frame_return_tys.into_iter())
             .map(|(value, tag_with_layout_info_opt)| {
                 let (layout, ref_type) = tag_with_layout_info_opt.layout;
-                let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
+                let layout = layout?;
+                let move_value = value.as_annotated_move_value_for_tracing_only(&layout)?;
                 match ref_type {
                     Some(ref_type) => {
                         let (id, trace_value) = self.emit_data_load(move_value.into(), &ref_type);
-                        self.loaded_data.insert(id, trace_value.clone());
+                        self.loaded_data
+                            .insert(id, GlobalValue::Value(trace_value.clone()));
                         Some(trace_value)
                     }
                     None => Some(TraceValue::RuntimeValue {
@@ -649,7 +755,11 @@ impl VMTracer<'_> {
 
         let call_args = (0..function.arg_count())
             .rev()
-            .map(|i| self.resolve_stack_value(Some(calling_frame), interpreter, i))
+            .enumerate()
+            .map(|(local_idx, stack_idx)| {
+                self.store_global(stack_idx, local_idx)?;
+                self.resolve_stack_value(Some(calling_frame), interpreter, stack_idx)
+            })
             .collect::<Option<Vec<_>>>()?;
 
         let call_args_types = self
@@ -865,6 +975,7 @@ impl VMTracer<'_> {
                 self.register_pre_effects(effects);
             }
             B::StLoc(lidx) => {
+                self.store_global(0, *lidx as usize)?;
                 let ty = self.type_stack.last()?;
                 let v = self.resolve_stack_value(Some(frame), interpreter, 0)?;
                 self.insert_local(*lidx as usize, ty.clone())?;
@@ -1010,7 +1121,7 @@ impl VMTracer<'_> {
                     .into_rooted_type()?;
                 self.type_stack.push(local_annot_type);
                 if matches!(i, B::MoveLoc(_)) {
-                    self.invalidate_local(*l as usize)?;
+                    self.invalidate_local(frame, interpreter, *l as usize)?;
                 }
                 // This was pushed on the stack during execution so read it off from there.
                 let v = self.resolve_stack_value(Some(frame), interpreter, 0)?;
