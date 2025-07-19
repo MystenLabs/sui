@@ -22,7 +22,10 @@ use crate::{
 use builder::PackageGraphBuilder;
 
 use derive_where::derive_where;
-use petgraph::graph::{DiGraph, EdgeIndex, NodeIndex};
+use petgraph::{
+    algo::toposort,
+    graph::{DiGraph, EdgeIndex, NodeIndex},
+};
 
 #[derive(Debug)]
 #[derive_where(Clone)]
@@ -93,5 +96,34 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .direct_deps()
             .get(&self.inner[edge])
             .expect("edges in graph come from dependencies, so the dependency must exist")
+    }
+
+    /// Return a list of package names that are topologically sorted
+    pub fn sorted_deps(&self) -> Vec<PackageName> {
+        let sorted = toposort(&self.inner, None).expect("non cyclic directed graph");
+
+        sorted
+            .into_iter()
+            .flat_map(|idx| {
+                self.inner
+                    .node_weight(idx)
+                    .map(|f| f.package.name().clone())
+            })
+            .collect()
+    }
+
+    /// Return the list of dependencies in this package graph
+    pub(crate) fn dependencies(&self) -> Vec<Arc<Package<F>>> {
+        let mut output = vec![];
+
+        for (idx, n) in self.inner.node_weights().enumerate() {
+            if NodeIndex::new(idx) == self.root_idx {
+                continue;
+            }
+
+            output.push(n.package.clone())
+        }
+
+        output
     }
 }

@@ -2,10 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use std::{collections::BTreeMap, fmt, path::Path};
+
+use tracing::debug;
 
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
+use crate::package::Package;
 use crate::schema::{Environment, PackageName, Publication};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
@@ -14,7 +18,6 @@ use crate::{
     package::EnvironmentName,
     schema::ParsedLockfile,
 };
-use tracing::debug;
 
 /// A package that is defined as the root of a Move project.
 ///
@@ -191,6 +194,16 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Return the package path wrapper
     pub fn package_path(&self) -> &PackagePath {
         &self.package_path
+    }
+
+    /// Return a list of sorted package names
+    pub fn sorted_deps(&self) -> Vec<PackageName> {
+        self.package_graph().sorted_deps()
+    }
+
+    /// Return the list of this root package's dependencies
+    pub fn dependencies(&self) -> Vec<Arc<Package<F>>> {
+        self.package_graph().dependencies()
     }
 }
 
