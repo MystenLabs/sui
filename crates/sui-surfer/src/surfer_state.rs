@@ -173,7 +173,7 @@ impl SurferState {
             rgp,
         )
         .unwrap();
-        let tx = self.cluster.wallet.sign_transaction(&tx_data);
+        let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
         let response = loop {
             match self
                 .cluster
@@ -342,7 +342,7 @@ impl SurferState {
             TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
             rgp,
         );
-        let tx = self.cluster.wallet.sign_transaction(&tx_data);
+        let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
         let response = loop {
             match self
                 .cluster

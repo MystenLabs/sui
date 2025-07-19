@@ -161,7 +161,9 @@ pub async fn init_package(
         sender,
     );
 
-    let sig = keystore.sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
+        .await?;
 
     let res = client
         .quorum_driver_api()
@@ -237,7 +239,9 @@ pub async fn mint(
         gas_data.price,
     );
 
-    let sig = keystore.sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())?;
+    let sig = keystore
+        .sign_secure(&tx_data.sender(), &tx_data, Intent::sui_transaction())
+        .await?;
 
     let res = client
         .quorum_driver_api()
