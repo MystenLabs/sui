@@ -1770,6 +1770,7 @@
                 "max_gas_price": {
                   "u64": "100000"
                 },
+                "max_gas_price_rgp_factor_for_aborted_transactions": null,
                 "max_generic_instantiation_length": {
                   "u64": "32"
                 },
