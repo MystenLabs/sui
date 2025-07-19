@@ -102,6 +102,8 @@ mod checked {
         pub execution_cost_table: CostTable,
         /// Computation buckets to cost transaction in price groups
         computation_bucket: Vec<ComputationBucket>,
+        /// Max gas price for aborted transactions.
+        max_gas_price_rgp_factor_for_aborted_transactions: Option<u64>,
     }
 
     impl std::fmt::Debug for SuiCostTable {
@@ -128,6 +130,8 @@ mod checked {
                 storage_per_byte_cost: c.obj_data_cost_refundable(),
                 execution_cost_table: cost_table_for_version(c.gas_model_version()),
                 computation_bucket: computation_bucket(c.max_gas_computation_bucket()),
+                max_gas_price_rgp_factor_for_aborted_transactions: c
+                    .max_gas_price_rgp_factor_for_aborted_transactions_as_option(),
             }
         }
 
@@ -141,6 +145,7 @@ mod checked {
                 execution_cost_table: ZERO_COST_SCHEDULE.clone(),
                 // should not matter
                 computation_bucket: computation_bucket(5_000_000),
+                max_gas_price_rgp_factor_for_aborted_transactions: None,
             }
         }
     }
@@ -365,19 +370,37 @@ mod checked {
             &mut self.gas_status
         }
 
-        fn bucketize_computation(&mut self) -> Result<(), ExecutionError> {
+        fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
             let gas_used = self.gas_status.gas_used_pre_gas_price();
+            let effective_gas_price = if self
+                .cost_table
+                .max_gas_price_rgp_factor_for_aborted_transactions
+                .is_some()
+                && aborted.unwrap_or(false)
+            {
+                // For aborts, cap at max but don't exceed user's price
+                // This minimizes the risk of competing for priority execution in the case that the txn may be aborted.
+                let max_gas_price_for_aborted_txns = self
+                    .cost_table
+                    .max_gas_price_rgp_factor_for_aborted_transactions
+                    .unwrap()
+                    * self.reference_gas_price;
+                self.gas_price.min(max_gas_price_for_aborted_txns)
+            } else {
+                // For all other cases, use the user's gas price
+                self.gas_price
+            };
             let gas_used = if let Some(gas_rounding) = self.gas_rounding_step {
                 if gas_used > 0 && gas_used % gas_rounding == 0 {
-                    gas_used * self.gas_price
+                    gas_used * effective_gas_price
                 } else {
-                    ((gas_used / gas_rounding) + 1) * gas_rounding * self.gas_price
+                    ((gas_used / gas_rounding) + 1) * gas_rounding * effective_gas_price
                 }
             } else {
                 let bucket_cost = get_bucket_cost(&self.cost_table.computation_bucket, gas_used);
                 // charge extra on top of `computation_cost` to make the total computation
                 // cost a bucket value
-                bucket_cost * self.gas_price
+                bucket_cost * effective_gas_price
             };
             if self.gas_budget <= gas_used {
                 self.computation_cost = self.gas_budget;

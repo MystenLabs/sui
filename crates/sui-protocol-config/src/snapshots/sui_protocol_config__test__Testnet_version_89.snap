@@ -140,6 +140,7 @@ max_move_package_size: 102400
 max_publish_or_upgrade_per_ptb: 5
 max_tx_gas: 50000000000000
 max_gas_price: 50000000000
+max_gas_price_rgp_factor_for_aborted_transactions: 100
 max_gas_computation_bucket: 5000000
 gas_rounding_step: 1000
 max_loop_depth: 5
