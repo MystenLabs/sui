@@ -2761,6 +2761,7 @@ impl CheckpointService {
         // crash would occur because we may be missing transactions that are below the
         // highest_synced_checkpoint watermark, which can cause a crash in
         // `CheckpointExecutor::extract_randomness_rounds`.
+        /*
         if tokio::time::timeout(
             Duration::from_secs(120),
             self.wait_for_rebuilt_checkpoints(),
@@ -2770,6 +2771,7 @@ impl CheckpointService {
         {
             debug_fatal!("Timed out waiting for checkpoints to be rebuilt");
         }
+        */
 
         tasks
     }
