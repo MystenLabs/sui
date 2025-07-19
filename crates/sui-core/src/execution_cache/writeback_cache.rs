@@ -1846,10 +1846,10 @@ impl ObjectCacheRead for WritebackCache {
         &'a self,
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
-        epoch: &'a EpochId,
+        epoch: EpochId,
     ) -> BoxFuture<'a, ()> {
         self.object_notify_read
-            .read(input_and_receiving_keys, |keys| {
+            .read(input_and_receiving_keys, move |keys| {
                 self.multi_input_objects_available(keys, receiving_keys, epoch)
                     .into_iter()
                     .map(|available| if available { Some(()) } else { None })
