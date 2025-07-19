@@ -1,0 +1,165 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# advance-epoch
+Epoch advanced: 1
+
+task 3, line 12:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 4, lines 14-16:
+//# programmable --sender A --inputs object(1,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 5, lines 18-20:
+//# programmable --sender A --inputs object(1,0) 2
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 1956240, non_refundable_storage_fee: 19760
+
+task 7, line 24:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 26-41:
+//# run-graphql
+Response: {
+  "data": {
+    "c0": {
+      "sequenceNumber": 0,
+      "validatorSignatures": {
+        "epoch": {
+          "epochId": 0
+        },
+        "signature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ",
+        "signersMap": [
+          0
+        ]
+      }
+    },
+    "c1": {
+      "sequenceNumber": 1,
+      "validatorSignatures": {
+        "epoch": {
+          "epochId": 0
+        },
+        "signature": "mZ3gH6ld4/ek2dSX7tWFFrLZIDqhxZTP0mkW+IYNmQ/D1S/FuZG8wxGV2fPBzS4K",
+        "signersMap": [
+          0
+        ]
+      }
+    },
+    "c2": {
+      "sequenceNumber": 2,
+      "validatorSignatures": {
+        "epoch": {
+          "epochId": 1
+        },
+        "signature": "isAJamTkmi0wLAgXFq3KrflcFnmFgrQR0KMu8JNewbX4tqcnGDNATFTiyuBw3i4f",
+        "signersMap": [
+          0
+        ]
+      }
+    },
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 0,
+        "validatorSignatures": {
+          "epoch": {
+            "epochId": 0
+          },
+          "signature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ",
+          "signersMap": [
+            0
+          ]
+        }
+      },
+      {
+        "sequenceNumber": 1,
+        "validatorSignatures": {
+          "epoch": {
+            "epochId": 0
+          },
+          "signature": "mZ3gH6ld4/ek2dSX7tWFFrLZIDqhxZTP0mkW+IYNmQ/D1S/FuZG8wxGV2fPBzS4K",
+          "signersMap": [
+            0
+          ]
+        }
+      },
+      {
+        "sequenceNumber": 2,
+        "validatorSignatures": {
+          "epoch": {
+            "epochId": 1
+          },
+          "signature": "isAJamTkmi0wLAgXFq3KrflcFnmFgrQR0KMu8JNewbX4tqcnGDNATFTiyuBw3i4f",
+          "signersMap": [
+            0
+          ]
+        }
+      }
+    ]
+  }
+}
+
+task 9, lines 43-53:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": null
+  }
+}
+
+task 10, lines 55-65:
+//# run-graphql
+Response: {
+  "data": {
+    "multiGetCheckpoints": [
+      {
+        "sequenceNumber": 2,
+        "validatorSignatures": {
+          "epoch": {
+            "epochId": 1
+          },
+          "signature": "isAJamTkmi0wLAgXFq3KrflcFnmFgrQR0KMu8JNewbX4tqcnGDNATFTiyuBw3i4f",
+          "signersMap": [
+            0
+          ]
+        }
+      },
+      null,
+      {
+        "sequenceNumber": 0,
+        "validatorSignatures": {
+          "epoch": {
+            "epochId": 0
+          },
+          "signature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ",
+          "signersMap": [
+            0
+          ]
+        }
+      },
+      null
+    ]
+  }
+}
