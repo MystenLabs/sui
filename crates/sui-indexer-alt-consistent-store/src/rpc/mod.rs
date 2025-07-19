@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::{convert::Infallible, sync::Arc};
 
 use anyhow::Context;
 use axum::extract::Request;
 use axum::response::IntoResponse;
 use axum::Router;
+use metrics::RpcMetrics;
+use middleware::metrics::MakeMetricsHandler;
 use middleware::version::Version;
+use mysten_network::callback::CallbackLayer;
+use prometheus::Registry;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -18,6 +22,7 @@ use tower::Service;
 use tracing::{error, info};
 
 pub(crate) mod consistent_service;
+mod metrics;
 mod middleware;
 
 #[derive(clap::Args, Clone, Debug)]
@@ -47,6 +52,9 @@ pub(crate) struct RpcService<'d> {
     /// The axum router that wil handle incoming requests.
     router: Router,
 
+    /// Metrics for the RPC service.
+    metrics: Arc<RpcMetrics>,
+
     /// Cancellation token controls lifecycle for all RPC-related services.
     cancel: CancellationToken,
 }
@@ -54,7 +62,12 @@ pub(crate) struct RpcService<'d> {
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 impl<'d> RpcService<'d> {
-    pub(crate) fn new(args: RpcArgs, version: &'static str, cancel: CancellationToken) -> Self {
+    pub(crate) fn new(
+        args: RpcArgs,
+        version: &'static str,
+        registry: &Registry,
+        cancel: CancellationToken,
+    ) -> Self {
         let RpcArgs { rpc_listen_address } = args;
         Self {
             rpc_listen_address,
@@ -63,6 +76,7 @@ impl<'d> RpcService<'d> {
             reflection_v1alpha: tonic_reflection::server::Builder::configure(),
             service_names: vec![],
             router: Router::new(),
+            metrics: Arc::new(RpcMetrics::new(registry)),
             cancel,
         }
     }
@@ -99,6 +113,7 @@ impl<'d> RpcService<'d> {
             reflection_v1alpha,
             mut service_names,
             mut router,
+            metrics,
             cancel,
         } = self;
 
@@ -115,10 +130,12 @@ impl<'d> RpcService<'d> {
         router = add_service(router, reflection_v1);
         router = add_service(router, reflection_v1alpha);
         router = add_service(router, health_service);
-        router = router.layer(axum::middleware::from_fn_with_state(
-            Version(version),
-            middleware::version::set_version,
-        ));
+        router = router
+            .layer(CallbackLayer::new(MakeMetricsHandler::new(metrics)))
+            .layer(axum::middleware::from_fn_with_state(
+                Version(version),
+                middleware::version::set_version,
+            ));
 
         for service_name in service_names {
             health_reporter
