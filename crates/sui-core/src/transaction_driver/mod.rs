@@ -5,13 +5,19 @@ mod effects_certifier;
 mod error;
 mod message_types;
 mod metrics;
+mod transaction_retrier;
 mod transaction_submitter;
 
 /// Exports
 pub use message_types::*;
 pub use metrics::*;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
-use std::{net::SocketAddr, sync::Arc, time::Instant};
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
@@ -21,7 +27,7 @@ use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
 };
-use tokio::task::JoinSet;
+use tokio::{task::JoinSet, time::sleep};
 use tracing::instrument;
 use transaction_submitter::*;
 
@@ -75,14 +81,16 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
-        let raw_request = request
-            .into_raw()
-            .map_err(TransactionDriverError::SerializationError)?;
+        let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
-        let mut attempts = 0;
-        loop {
-            attempts += 1;
+        // TODO(fastpath): do not limit the number of attempts after correctly categorizing
+        // permanent errors.
+        let backoff = ExponentialBackoff::from_millis(100)
+            .max_delay(Duration::from_secs(10))
+            .map(jitter)
+            .take(10);
+        for (attempts, delay) in backoff.enumerate() {
             // TODO(fastpath): Check local state before submitting transaction
             match self
                 .drive_transaction_once(tx_digest, raw_request.clone(), &options)
@@ -101,7 +109,7 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
-                    // TODO(fastpath): Break when the error is unretriable.
+                    // TODO(fastpath): Break when the error is non‑retriable.
                     tracing::warn!(
                         "Failed to finalize transaction {tx_digest} (attempt {}): {}",
                         attempts,
@@ -109,7 +117,11 @@ where
                     );
                 }
             }
+
+            sleep(delay).await;
         }
+
+        Err(TransactionDriverError::TransactionDriverFailure)
     }
 
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
@@ -122,14 +134,14 @@ where
         let auth_agg = self.authority_aggregator.load();
 
         // Get consensus position using TransactionSubmitter
-        let submit_txn_resp = self
+        let (name, submit_txn_resp) = self
             .submitter
             .submit_transaction(&auth_agg, tx_digest, raw_request, options)
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .get_certified_finalized_effects(&auth_agg, tx_digest, submit_txn_resp, options)
+            .get_certified_finalized_effects(&auth_agg, tx_digest, name, submit_txn_resp, options)
             .await
     }
 
