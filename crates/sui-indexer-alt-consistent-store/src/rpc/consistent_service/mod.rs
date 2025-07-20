@@ -17,6 +17,8 @@ impl ConsistentService for Store<Schema> {
         &self,
         request: tonic::Request<ListOwnedObjectsRequest>,
     ) -> Result<tonic::Response<ListOwnedObjectsResponse>, tonic::Status> {
-        list_owned_objects::list_owned_objects(self, request.into_inner()).map(tonic::Response::new)
+        list_owned_objects::list_owned_objects(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 }
