@@ -9,12 +9,14 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
 use crate::schema::Schema;
 use crate::store::Store;
 
+mod list_owned_objects;
+
 #[async_trait::async_trait]
 impl ConsistentService for Store<Schema> {
     async fn list_owned_objects(
         &self,
-        _request: tonic::Request<ListOwnedObjectsRequest>,
+        request: tonic::Request<ListOwnedObjectsRequest>,
     ) -> Result<tonic::Response<ListOwnedObjectsResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented("Not implemented yet"))
+        list_owned_objects::list_owned_objects(self, request.into_inner()).map(tonic::Response::new)
     }
 }
