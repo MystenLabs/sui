@@ -37,6 +37,16 @@ impl<'d, K, V> FwdIter<'d, K, V> {
             inner.seek(probe);
         }
     }
+
+    /// Returns the raw bytes for the next key the iterator will yield, if any.
+    pub(crate) fn raw_key(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.key())
+    }
+
+    /// Returns the raw bytes for the next value the iterator will yield, if any.
+    pub(crate) fn raw_value(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.value())
+    }
 }
 
 impl<'d, K, V> RevIter<'d, K, V> {
@@ -54,6 +64,16 @@ impl<'d, K, V> RevIter<'d, K, V> {
         if let Some(inner) = &mut self.inner {
             inner.seek_for_prev(probe);
         }
+    }
+
+    /// Returns the raw bytes for the next key the iterator will yield, if any.
+    pub(crate) fn raw_key(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.key())
+    }
+
+    /// Returns the raw bytes for the next value the iterator will yield, if any.
+    pub(crate) fn raw_value(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.value())
     }
 }
 
