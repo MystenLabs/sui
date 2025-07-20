@@ -76,26 +76,32 @@ where
         self.db.iter_rev(checkpoint, &self.cf()?, range)
     }
 
-    /// Like `iter` but the bound does not have to be given in the key type `K`. This is useful for
-    /// phrasing queries on a prefix of the key, if it is not possible to provide an "all-zeroes"
-    /// or "all-ones" representation of corresponding suffix in `K`.
-    pub(crate) fn range<J: Encode>(
+    /// Create a forward iterator over the values in the map at the given `checkpoint`, where all
+    /// the keys start with the given `prefix`. A forward iterator yields keys in ascending
+    /// bincoded lexicographic order, and the predicate is applied on the bincoded key and the
+    /// bincoded prefix.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn prefix(
         &self,
         checkpoint: u64,
-        range: impl RangeBounds<J>,
+        prefix: &impl Encode,
     ) -> Result<iter::FwdIter<'_, K, V>, Error> {
-        self.db.iter(checkpoint, &self.cf()?, range)
+        self.db.prefix(checkpoint, &self.cf()?, prefix)
     }
 
-    /// Like `iter_rev` but the bound does not have to be given in the key type `K`. This is useful
-    /// for phrasing queries on a prefix of the key, if it is not possible to provide an
-    /// "all-zeroes" or "all-ones" representation of corresponding suffix in `K`.
-    pub(crate) fn range_rev<J: Encode>(
+    /// Create a reverse iterator over the values in the map at the given `checkpoint`, where all
+    /// the keys start with the gven `prefix`. A reverse iterator yields keys in descending
+    /// bincoded lexicographic order, and the predicate is applied on the bincoded key and the
+    /// bincoded prefix.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn prefix_rev(
         &self,
         checkpoint: u64,
-        range: impl RangeBounds<J>,
+        prefix: &impl Encode,
     ) -> Result<iter::RevIter<'_, K, V>, Error> {
-        self.db.iter_rev(checkpoint, &self.cf()?, range)
+        self.db.prefix_rev(checkpoint, &self.cf()?, prefix)
     }
 
     /// Record the insertion of `k -> v` for the map's column family in the given `batch`. The
@@ -368,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn test_range_iter() {
+    fn test_prefix_iter() {
         let d = tempfile::tempdir().unwrap();
 
         let mut opts = rocksdb::Options::default();
@@ -388,10 +394,8 @@ mod tests {
         db.write("batch", wm(0), batch).unwrap();
         db.snapshot(0);
 
-        // Range iteration can be used to bound key prefixes, without having to supply bytes for
-        // the whole key.
         assert_eq!(
-            map.range(0, ..0x1111u16)
+            map.prefix(0, &0x0000u16)
                 .unwrap()
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
@@ -399,7 +403,7 @@ mod tests {
         );
 
         assert_eq!(
-            map.range_rev(0, 0x9999u16..)
+            map.prefix_rev(0, &0xffffu16)
                 .unwrap()
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
