@@ -274,7 +274,19 @@ impl Db {
     where
         J: Encode,
     {
-        let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
+        let lo = match range.start_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(start) => Bound::Included(key::encode(start)),
+            Bound::Excluded(start) => Bound::Excluded(key::encode(start)),
+        };
+
+        let hi = match range.end_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(end) => Bound::Included(key::encode(end)),
+            Bound::Excluded(end) => Bound::Excluded(key::encode(end)),
+        };
+
+        let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
             return Ok(iter::FwdIter::new(None));
         };
 
@@ -301,7 +313,19 @@ impl Db {
     where
         J: Encode,
     {
-        let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
+        let lo = match range.start_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(start) => Bound::Included(key::encode(start)),
+            Bound::Excluded(start) => Bound::Excluded(key::encode(start)),
+        };
+
+        let hi = match range.end_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(end) => Bound::Included(key::encode(end)),
+            Bound::Excluded(end) => Bound::Excluded(key::encode(end)),
+        };
+
+        let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
             return Ok(iter::RevIter::new(None));
         };
 
@@ -332,22 +356,19 @@ impl Db {
         })
     }
 
-    fn iter_raw<J>(
+    fn iter_raw(
         &self,
         checkpoint: u64,
         cf: &impl AsColumnFamilyRef,
-        range: impl RangeBounds<J>,
-    ) -> Result<IterBounds<'_>, Error>
-    where
-        J: Encode,
-    {
+        lo: Bound<Vec<u8>>,
+        hi: Bound<Vec<u8>>,
+    ) -> Result<IterBounds<'_>, Error> {
         let s = self.at_snapshot(checkpoint)?;
 
-        let lo = match range.start_bound() {
+        let lo = match lo {
             Bound::Unbounded => None,
-            Bound::Included(start) => Some(key::encode(start)),
-            Bound::Excluded(start) => {
-                let mut start = key::encode(start);
+            Bound::Included(start) => Some(start),
+            Bound::Excluded(mut start) => {
                 if !key::next(&mut start) {
                     return Ok(IterBounds::default());
                 }
@@ -355,14 +376,10 @@ impl Db {
             }
         };
 
-        let hi = match range.end_bound() {
+        let hi = match hi {
             Bound::Unbounded => None,
-            Bound::Included(end) => {
-                let mut end = key::encode(end);
-                key::next(&mut end).then_some(end)
-            }
+            Bound::Included(mut end) => key::next(&mut end).then_some(end),
             Bound::Excluded(end) => {
-                let end = key::encode(end);
                 if end.iter().all(|&b| b == 0) {
                     return Ok(IterBounds::default());
                 }
