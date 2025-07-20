@@ -920,6 +920,17 @@ pub(crate) mod tests {
             vec![(0, 1), (2, 3)],
             "bounded above and below"
         );
+
+        // Raw values
+        let mut iter = db.iter(0, &cf, (U::<u64>, U)).unwrap();
+        for i in (0u64..=8).step_by(2) {
+            let k = key::encode(&i);
+            let v = bcs::to_bytes(&(i + 1)).unwrap();
+
+            assert_eq!(iter.raw_key(), Some(k.as_ref()), "key {i}");
+            assert_eq!(iter.raw_value(), Some(v.as_ref()), "value {}", i + 1);
+            assert_eq!(iter.next().unwrap().unwrap(), (i, i + 1));
+        }
     }
 
     #[test]
@@ -1210,6 +1221,17 @@ pub(crate) mod tests {
             vec![(3, 2), (1, 0)],
             "bounded above and below"
         );
+
+        // Raw values
+        let mut iter = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
+        for i in (1u64..=9).rev().step_by(2) {
+            let k = key::encode(&i);
+            let v = bcs::to_bytes(&(i - 1)).unwrap();
+
+            assert_eq!(iter.raw_key(), Some(k.as_ref()), "key {i}");
+            assert_eq!(iter.raw_value(), Some(v.as_ref()), "value {}", i - 1);
+            assert_eq!(iter.next().unwrap().unwrap(), (i, i - 1));
+        }
     }
 
     #[test]
