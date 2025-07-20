@@ -66,7 +66,7 @@ use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
-        shared_object_version_manager::Schedulable, ExecutionEnv,
+        shared_object_version_manager::Schedulable, ExecutionEnv, WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
     },
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
@@ -599,12 +599,12 @@ impl ValidatorService {
             }
         }
 
-        // Use shorter wait timeout in tests to exercise server-side error paths and
+        // Use shorter wait timeout in simtests to exercise server-side error paths and
         // client-side retry logic.
-        let wait_for_fastpath_input_objects_timeout = if cfg!(debug_assertions) {
-            Duration::from_millis(1)
+        let wait_for_fastpath_input_objects_timeout = if cfg!(msim) {
+            Duration::from_millis(100)
         } else {
-            Duration::from_secs(10)
+            WAIT_FOR_FASTPATH_INPUT_TIMEOUT
         };
         if !state
             .wait_for_fastpath_input_objects(

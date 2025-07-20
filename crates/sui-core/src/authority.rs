@@ -388,6 +388,11 @@ const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
 
 pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000;
 
+// Transaction author should have observed the input objects as finalized output,
+// so usually the wait does not need to be long.
+// When submitted by TransactionDriver, it will retry quickly if there is no return from this validator too.
+pub const WAIT_FOR_FASTPATH_INPUT_TIMEOUT: Duration = Duration::from_secs(2);
+
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
         let execute_certificate_latency = register_histogram_vec_with_registry!(
@@ -1137,13 +1142,14 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        // timeout in tests can be reduced to exercise error paths, if QD retry gets fixed.
+        // timeout in tests can be reduced to exercise error paths, if QD properly retries
+        // failures to lock on objects waiting for future versions.
         if epoch_store.protocol_config().mysticeti_fastpath()
             && !self
                 .wait_for_fastpath_input_objects(
                     &transaction,
                     epoch_store.epoch(),
-                    Duration::from_secs(10),
+                    WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
                 )
                 .await?
         {
