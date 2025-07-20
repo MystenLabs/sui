@@ -4,8 +4,9 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::execution_scheduler::balance_withdraw_scheduler::{
-    balance_read::AccountBalanceRead, naive_scheduler::NaiveBalanceWithdrawScheduler,
-    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
+    balance_read::AccountBalanceRead, eager_scheduler::EagerBalanceWithdrawScheduler,
+    naive_scheduler::NaiveBalanceWithdrawScheduler, BalanceSettlement, ScheduleResult,
+    TxBalanceWithdraw,
 };
 use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -79,12 +80,32 @@ impl BalanceWithdrawScheduler {
         scheduler
     }
 
-    /// This function will be called either by ConsensusHandler or the CheckpointExecutor.
+    pub fn new_eager(
+        balance_read: Arc<dyn AccountBalanceRead>,
+        starting_accumulator_version: SequenceNumber,
+    ) -> Arc<Self> {
+        let inner = EagerBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version);
+        let (withdraw_sender, withdraw_receiver) =
+            unbounded_channel("withdraw_scheduler_withdraws");
+        let (settlement_sender, settlement_receiver) =
+            unbounded_channel("withdraw_scheduler_settlements");
+        let scheduler = Arc::new(Self {
+            inner: inner as Arc<dyn BalanceWithdrawSchedulerTrait>,
+            withdraw_sender,
+            settlement_sender,
+        });
+        tokio::spawn(scheduler.clone().process_withdraw_task(withdraw_receiver));
+        tokio::spawn(
+            scheduler
+                .clone()
+                .process_settlement_task(settlement_receiver, starting_accumulator_version),
+        );
+        scheduler
+    }
+
     /// It will be called at most once per consensus commit batch that all reads the same root accumulator version.
     /// If a consensus commit batch does not contain any withdraw reservations, it can skip calling this function.
     /// It must be called sequentially in order to correctly schedule withdraws.
-    /// It is OK to call this function multiple times for the same accumulator version (which will happen between
-    /// the calls to the function by ConsensusHandler and the CheckpointExecutor).
     pub fn schedule_withdraws(
         &self,
         accumulator_version: SequenceNumber,
@@ -115,23 +136,7 @@ impl BalanceWithdrawScheduler {
         self: Arc<Self>,
         mut withdraw_receiver: UnboundedReceiver<WithdrawReservations>,
     ) {
-        let mut last_scheduled_version = None;
         while let Some(event) = withdraw_receiver.recv().await {
-            if let Some(last_scheduled_version) = last_scheduled_version {
-                if event.accumulator_version <= last_scheduled_version {
-                    // It is possible to receive withdraw reservations for the same accumulator version
-                    // multiple times due to the race between consensus and checkpoint execution.
-                    // Hence we may receive a version from the past after the version is updated.
-                    for (withdraw, sender) in event.withdraws.into_iter().zip(event.senders) {
-                        let _ = sender.send(ScheduleResult {
-                            tx_digest: withdraw.tx_digest,
-                            status: ScheduleStatus::AlreadyScheduled,
-                        });
-                    }
-                    continue;
-                }
-            }
-            last_scheduled_version = Some(event.accumulator_version);
             self.inner.schedule_withdraws(event).await;
         }
     }
