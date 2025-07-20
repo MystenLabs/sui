@@ -338,6 +338,78 @@ impl Db {
         Ok(iter::RevIter::new(Some(inner)))
     }
 
+    /// Create a forward iterator over the values in column family `cf` at the given `checkpoint`,
+    /// where all the keys start with the given `prefix`. A forward iterator yields keys in
+    /// ascending bincoded lexicographic order, and the predicate is applied on the bincoded key
+    /// and the bincoded prefix.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn prefix<J, K, V>(
+        &self,
+        checkpoint: u64,
+        cf: &impl AsColumnFamilyRef,
+        prefix: &J,
+    ) -> Result<iter::FwdIter<'_, K, V>, Error>
+    where
+        J: Encode,
+    {
+        let mut key = key::encode(prefix);
+        let lo = Bound::Included(key.clone());
+        let hi = if !key::next(&mut key) {
+            Bound::Unbounded
+        } else {
+            Bound::Excluded(key)
+        };
+
+        let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
+            return Ok(iter::FwdIter::new(None));
+        };
+
+        if let Some(lo) = &lo {
+            inner.seek(lo);
+        } else {
+            inner.seek_to_first();
+        }
+
+        Ok(iter::FwdIter::new(Some(inner)))
+    }
+
+    /// Create a reverse iterator over the values in column family `cf` at the given `checkpoint`,
+    /// where all the keys start with the gven `prefix`. A reverse iterator yields keys in
+    /// descending bincoded lexicographic order, and the predicate is applied on the bincoded key
+    /// and the bincoded prefix.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn prefix_rev<J, K, V>(
+        &self,
+        checkpoint: u64,
+        cf: &impl AsColumnFamilyRef,
+        prefix: &J,
+    ) -> Result<iter::RevIter<'_, K, V>, Error>
+    where
+        J: Encode,
+    {
+        let mut key = key::encode(prefix);
+        let lo = Bound::Included(key.clone());
+        let hi = if !key::next(&mut key) {
+            Bound::Unbounded
+        } else {
+            Bound::Excluded(key)
+        };
+
+        let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
+            return Ok(iter::RevIter::new(None));
+        };
+
+        if let Some(hi) = &hi {
+            inner.seek_for_prev(hi);
+        } else {
+            inner.seek_to_last();
+        }
+
+        Ok(iter::RevIter::new(Some(inner)))
+    }
+
     fn at_snapshot(&self, checkpoint: u64) -> Result<Arc<rocksdb::Snapshot<'_>>, Error> {
         self.0.read().expect("poisoned").with(|f| {
             let Some(snapshot) = f.snapshots.get(&checkpoint).cloned() else {
