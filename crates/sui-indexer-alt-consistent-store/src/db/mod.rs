@@ -850,31 +850,31 @@ pub(crate) mod tests {
         db.snapshot(0);
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&4u64);
+        iter.seek(key::encode(&4u64));
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "exact seek");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&3u64);
+        iter.seek(key::encode(&3u64));
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "inexact seek");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
-        iter.seek(&2u64);
+        iter.seek(key::encode(&2u64));
         assert_eq!(iter.next().unwrap().unwrap(), (2, 3), "rewind");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
-        iter.seek(&7u64);
+        iter.seek(key::encode(&7u64));
         assert_eq!(iter.next().unwrap().unwrap(), (8, 9), "fast forward");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4u64..8).unwrap();
-        iter.seek(&1u64);
+        iter.seek(key::encode(&1u64));
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "underflow");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4u64..8).unwrap();
-        iter.seek(&8u64);
+        iter.seek(key::encode(&8u64));
         assert!(iter.next().is_none(), "overflow");
     }
 
@@ -1140,31 +1140,31 @@ pub(crate) mod tests {
         db.snapshot(0);
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&5u64);
+        iter.seek(key::encode(&5u64));
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "exact seek");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&6u64);
+        iter.seek(key::encode(&6u64));
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "inexact seek");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
-        iter.seek(&7u64);
+        iter.seek(key::encode(&7u64));
         assert_eq!(iter.next().unwrap().unwrap(), (7, 6), "rewind");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
-        iter.seek(&1u64);
+        iter.seek(key::encode(&1u64));
         assert_eq!(iter.next().unwrap().unwrap(), (1, 0), "fast forward");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3u64..7).unwrap();
-        iter.seek(&9u64);
+        iter.seek(key::encode(&9u64));
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "underflow");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3u64..7).unwrap();
-        iter.seek(&1u64);
+        iter.seek(key::encode(&1u64));
         assert!(iter.next().is_none(), "overflow");
     }
 }
