@@ -288,6 +288,21 @@ async fn proxy_request(
         .with_label_values(&[method_str])
         .observe(response_bytes.len() as f64);
 
+    // Debug: Print request method/params and response bytes in readable format
+    let request_info = if let Ok(request_json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+        let method = request_json.get("method").and_then(|m| m.as_str()).unwrap_or("unknown");
+        let params = request_json.get("params").unwrap_or(&serde_json::Value::Null);
+        format!("Method: {}, Params: {}", method, serde_json::to_string(params).unwrap_or_else(|_| "null".to_string()))
+    } else {
+        "Could not parse request".to_string()
+    };
+
+    if let Ok(response_str) = std::str::from_utf8(&response_bytes) {
+        info!("Request: {} | Response body (UTF-8): {}", request_info, response_str);
+    } else {
+        info!("Request: {} | Response body is not valid UTF-8, {} bytes", request_info, response_bytes.len());
+    }
+
     let mut resp = Response::new(response_bytes.clone().into());
     for (name, value) in response_headers {
         if let Some(name) = name {
