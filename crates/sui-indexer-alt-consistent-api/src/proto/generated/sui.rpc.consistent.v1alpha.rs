@@ -18,7 +18,8 @@ pub struct ListOwnedObjectsRequest {
     /// The maximum number of entries to return. The service may return fewer than
     /// this value.
     ///
-    /// Defaults to `50` if not set, and is clamped above at `1000`.
+    /// Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+    /// page sizes.
     #[prost(uint32, optional, tag = "3")]
     pub page_size: ::core::option::Option<u32>,
     /// A page token, received from a previous `ListOwnedObjects` call.
@@ -29,7 +30,8 @@ pub struct ListOwnedObjectsRequest {
     /// Provide this to retrieve the previous page.
     #[prost(bytes = "bytes", optional, tag = "5")]
     pub before_token: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Whether to fetch the next page from the start or end of the filtered range.
+    /// Whether to fetch the next page from the front or back of the filtered
+    /// range.
     #[prost(enumeration = "End", optional, tag = "6")]
     pub end: ::core::option::Option<i32>,
 }
@@ -44,6 +46,19 @@ pub struct ListOwnedObjectsResponse {
     /// Page of objects owned by the specified owner.
     #[prost(message, repeated, tag = "3")]
     pub objects: ::prost::alloc::vec::Vec<Object>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct ServiceConfigRequest {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct ServiceConfigResponse {
+    /// The size of a page if one is not specified in the request.
+    #[prost(uint32, optional, tag = "1")]
+    pub default_page_size: ::core::option::Option<u32>,
+    /// The maximum size of a page. Responses to requests that specify a size
+    /// larger than this will be capped to return at most this many elements per
+    /// page.
+    #[prost(uint32, optional, tag = "2")]
+    pub max_page_size: ::core::option::Option<u32>,
 }
 /// Enum of different types of ownership for an object.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -118,8 +133,8 @@ pub struct Object {
 #[repr(i32)]
 pub enum End {
     Unknown = 0,
-    Start = 1,
-    End = 2,
+    Front = 1,
+    Back = 2,
 }
 impl End {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -129,16 +144,16 @@ impl End {
     pub fn as_str_name(&self) -> &'static str {
         match self {
             Self::Unknown => "END_UNKNOWN",
-            Self::Start => "START",
-            Self::End => "END",
+            Self::Front => "FRONT",
+            Self::Back => "BACK",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
             "END_UNKNOWN" => Some(Self::Unknown),
-            "START" => Some(Self::Start),
-            "END" => Some(Self::End),
+            "FRONT" => Some(Self::Front),
+            "BACK" => Some(Self::Back),
             _ => None,
         }
     }
@@ -263,6 +278,35 @@ pub mod consistent_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn service_config(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ServiceConfigRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ServiceConfigResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ServiceConfig",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.consistent.v1alpha.ConsistentService",
+                        "ServiceConfig",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -283,6 +327,13 @@ pub mod consistent_service_server {
             request: tonic::Request<super::ListOwnedObjectsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ListOwnedObjectsResponse>,
+            tonic::Status,
+        >;
+        async fn service_config(
+            &self,
+            request: tonic::Request<super::ServiceConfigRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ServiceConfigResponse>,
             tonic::Status,
         >;
     }
@@ -396,6 +447,52 @@ pub mod consistent_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListOwnedObjectsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ServiceConfig" => {
+                    #[allow(non_camel_case_types)]
+                    struct ServiceConfigSvc<T: ConsistentService>(pub Arc<T>);
+                    impl<
+                        T: ConsistentService,
+                    > tonic::server::UnaryService<super::ServiceConfigRequest>
+                    for ServiceConfigSvc<T> {
+                        type Response = super::ServiceConfigResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ServiceConfigRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ConsistentService>::service_config(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ServiceConfigSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
