@@ -26,8 +26,6 @@ pub struct Build {
 
 impl Build {
     pub async fn execute(&self) -> PackageResult<()> {
-        // TODO: consider moving this to move-compilation crate (but I think it's better just to
-        // print out what would happen)
         let path = self.path.clone().unwrap_or_else(|| PathBuf::from("."));
 
         let envs = RootPackage::<Vanilla>::environments(&path)?;
@@ -43,9 +41,19 @@ impl Build {
 
         let root_pkg = RootPackage::<Vanilla>::load(&path, environment).await?;
 
-        // TODO: continue
-
-        // TODO: Implement the actual build logic here.
+        for pkg in root_pkg.packages() {
+            println!("Package {}", pkg.name());
+            if pkg.is_root() {
+                println!("  (root package)");
+            }
+            println!("  path: {:?}", pkg.path());
+            println!("  named addresses:");
+            for (name, dep) in pkg.named_addresses() {
+                let addr = dep.published().map(|addrs| &addrs.original_id);
+                println!("    {name}: {addr:?}");
+            }
+            println!();
+        }
 
         root_pkg.save_to_disk();
         Ok(())

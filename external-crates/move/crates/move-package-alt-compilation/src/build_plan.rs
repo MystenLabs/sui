@@ -68,15 +68,12 @@ impl<F: MoveFlavor> BuildPlan<F> {
         )
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> PackageResult<CompiledPackage> {
-        let project_root = self.root_pkg.package_path().clone();
-        let project_root = project_root.path();
         let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
         let compiled = build_all::<W, F>(
             writer,
             self.compiler_vfs_root.clone(),
-            project_root,
             self.root_pkg,
-            &self.build_config.clone(),
+            &self.build_config,
             |compiler| {
                 let compiler = compiler.add_save_hook(&program_info_hook);
                 compiler_driver(compiler)

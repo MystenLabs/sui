@@ -144,6 +144,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         self.graph.root_package().name()
     }
 
+    /// The path to the root of the package
+    pub fn path(&self) -> &PackagePath {
+        &self.package_path
+    }
+
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies).
     pub fn packages(&self) -> Vec<PackageInfo<F>> {

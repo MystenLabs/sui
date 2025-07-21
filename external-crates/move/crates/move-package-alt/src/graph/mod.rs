@@ -57,13 +57,13 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
     /// The compiler edition for the package
     pub fn edition(&self) -> Option<&str> {
-        // TODO
+        // TODO: pull this from manifest
         Some("2024")
     }
 
     /// The flavor for the package
     pub fn flavor(&self) -> Option<&str> {
-        // TODO
+        // TODO: pull this from manifest
         Some("sui")
     }
 

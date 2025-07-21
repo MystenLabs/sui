@@ -65,6 +65,9 @@ impl RenameError {
         // in example: dep_location is `local = "b_path"`
         let dep_location = "<TODO>";
 
+        // in example: dep_path is `~/.move/...`
+        let dep_path = target.path().path();
+
         // in example: rendered_dep is `dep = { local = "b_path", rename-from = "b_name" }`
         // TODO: use spans / diagnostics here instead; without that, `mvr` diagnostics will show
         //       the resolved dep rather than the original dep
@@ -76,7 +79,7 @@ impl RenameError {
 
         Self::RenameFromError(formatdoc!(
             "Package `{source_name}` (included from {path}) has a dependency `{rendered_dep}`, but the package at \
-            `{dep_location}` has `name = \"{target_name}\"`. If you intend to rename `{target_name}` to `{dep_name}` in `{source_name}`, add \
+            `{dep_path:?}` has `name = \"{target_name}\"`. If you intend to rename `{target_name}` to `{dep_name}` in `{source_name}`, add \
             `rename-from = \"{target_name}\"` to the dependency in the `Move.toml` for `a`:
 
                 {dep_name} = {{ {dep_location}, rename-from = \"{target_name}\", ... }}\n"

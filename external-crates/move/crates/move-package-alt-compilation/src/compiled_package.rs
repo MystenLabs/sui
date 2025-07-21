@@ -33,7 +33,7 @@ use move_compiler::{
     },
     sui_mode,
 };
-use move_core_types::parsing::address::NumericalAddress;
+use move_core_types::{account_address::AccountAddress, parsing::address::NumericalAddress};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_symbol_pool::Symbol;
@@ -436,11 +436,11 @@ fn compiler_flags(build_config: &BuildConfig) -> Flags {
 pub fn build_all<W: Write, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
-    project_root: &Path,
     root_pkg: RootPackage<F>,
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
+    let project_root = root_pkg.path().as_ref().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let package_name = Symbol::from(root_pkg.name().as_str());
     let (file_map, all_compiled_units) =
@@ -506,7 +506,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
             DocgenFlags::default(), // TODO this should be configurable
             root_package_name,
             &model,
-            project_root,
+            &project_root,
             //TODO Fix this, it needs immediate dependencies for this pkg
             &[],
             // &immediate_dependencies,
@@ -569,20 +569,26 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
         let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
         for (name, dep) in pkg.named_addresses() {
             let name = name.as_str().into();
-            let addr = dep
-                .published()
-                .ok_or_else(|| anyhow!("Expected package {name} to be published"))?
-                .original_id
-                .0;
+
+            let addr = if dep.is_root() {
+                AccountAddress::ZERO
+            } else {
+                dep.published()
+                    .ok_or_else(|| anyhow!("Expected package {name} to be published"))?
+                    .original_id
+                    .0
+            };
+
             let addr: NumericalAddress =
                 NumericalAddress::new(addr.into_bytes(), move_compiler::shared::NumberFormat::Hex);
             addresses.insert(name, addr);
         }
 
+        // TODO: better default handling for edition and flavor
         let config = PackageConfig {
             is_dependency: !pkg.is_root(),
-            edition: Edition::from_str(pkg.edition())?,
-            flavor: Flavor::from_str(pkg.flavor())?,
+            edition: Edition::from_str(pkg.edition().unwrap_or("2024"))?,
+            flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
             warning_filter: WarningFiltersBuilder::new_for_source(),
         };
 
