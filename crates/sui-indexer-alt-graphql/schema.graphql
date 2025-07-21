@@ -938,6 +938,10 @@ type TransactionEffects {
 	"""
 	lamportVersion: UInt53
 	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	"""
+	moveAbortCode: BigInt
+	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
