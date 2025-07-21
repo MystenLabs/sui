@@ -18,7 +18,7 @@ use sui_types::{
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
+    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, uint53::UInt53},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -98,6 +98,16 @@ impl EffectsContents {
         };
 
         Ok(Some(status))
+    }
+
+    /// The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+    async fn lamport_version(&self) -> Result<Option<UInt53>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(UInt53::from(effects.lamport_version().value())))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
