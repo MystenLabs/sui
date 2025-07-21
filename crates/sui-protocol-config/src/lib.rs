@@ -753,6 +753,10 @@ struct FeatureFlags {
     // If true, include indirect state in the additional consensus digest.
     #[serde(skip_serializing_if = "is_false")]
     additional_consensus_digest_indirect_state: bool,
+
+    // Check for `init` for new modules to a package on upgrade.
+    #[serde(skip_serializing_if = "is_false")]
+    check_for_init_during_upgrade: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2134,6 +2138,10 @@ impl ProtocolConfig {
     pub fn additional_consensus_digest_indirect_state(&self) -> bool {
         self.feature_flags
             .additional_consensus_digest_indirect_state
+    }
+
+    pub fn check_for_init_during_upgrade(&self) -> bool {
+        self.feature_flags.check_for_init_during_upgrade
     }
 }
 
@@ -3865,6 +3873,7 @@ impl ProtocolConfig {
                     cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
+                    cfg.feature_flags.check_for_init_during_upgrade = true;
                 }
                 // Use this template when making changes:
                 //

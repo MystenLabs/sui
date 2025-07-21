@@ -485,10 +485,12 @@ mod checked {
                 let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     context,
+                    &mut argument_updates,
                     modules,
                     dep_ids,
                     current_package_id,
                     upgrade_ticket,
+                    trace_builder_opt,
                 )?
             }
         };
@@ -701,10 +703,12 @@ mod checked {
     /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
     fn execute_move_upgrade<Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
+        _argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
         current_package_id: ObjectID,
         upgrade_ticket_arg: Arg,
+        _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
@@ -794,8 +798,48 @@ mod checked {
             &modules,
             upgrade_ticket.policy,
         )?;
-
+        if context.protocol_config.check_for_init_during_upgrade() {
+            // find newly added modules to the package,
+            // and run their init functions (if applicable)
+            let current_module_names: BTreeSet<&str> = current_package
+                .move_package()
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let upgrade_module_names: BTreeSet<&str> = package
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let new_module_names = upgrade_module_names
+                .difference(&current_module_names)
+                .copied()
+                .collect::<BTreeSet<&str>>();
+            let new_modules = modules
+                .iter()
+                .filter(|m| {
+                    let name = m.identifier_at(m.self_handle().name).as_str();
+                    new_module_names.contains(name)
+                })
+                .collect::<Vec<&CompiledModule>>();
+            let new_module_has_init = new_modules.iter().any(|module| {
+                module.function_defs.iter().any(|fdef| {
+                    let fhandle = module.function_handle_at(fdef.function);
+                    let fname = module.identifier_at(fhandle.name);
+                    fname == INIT_FN_NAME
+                })
+            });
+            if new_module_has_init {
+                // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::FeatureNotYetSupported,
+                    "`init` in new modules on upgrade is not yet supported",
+                ));
+            }
+        }
         context.write_package(package);
+
         Ok(vec![Value::Raw(
             RawValueType::Loaded {
                 ty: upgrade_receipt_type,
@@ -1030,13 +1074,13 @@ mod checked {
         Ok(())
     }
 
-    fn init_modules<Mode: ExecutionMode>(
+    fn init_modules<'a, Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
-        modules: &[CompiledModule],
+        modules: impl IntoIterator<Item = &'a CompiledModule>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
-        let modules_to_init = modules.iter().filter_map(|module| {
+        let modules_to_init = modules.into_iter().filter_map(|module| {
             for fdef in &module.function_defs {
                 let fhandle = module.function_handle_at(fdef.function);
                 let fname = module.identifier_at(fhandle.name);
