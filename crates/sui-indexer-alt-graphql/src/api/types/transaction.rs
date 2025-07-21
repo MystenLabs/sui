@@ -318,10 +318,9 @@ impl Transaction {
         });
 
         for (cursor, stored) in results {
-            let object = Self::with_id(
-                scope.clone(),
-                TransactionDigest::try_from(stored.tx_digest).unwrap(),
-            );
+            let transaction_digest = TransactionDigest::try_from(stored.tx_digest.clone())
+                .context("Failed to deserialize transaction digest")?;
+            let object = Self::with_id(scope.clone(), transaction_digest);
             conn.edges.push(Edge::new(cursor.encode_cursor(), object));
         }
 
