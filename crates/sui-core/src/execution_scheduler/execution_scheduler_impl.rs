@@ -303,6 +303,38 @@ impl ExecutionScheduler {
         }));
     }
 
+    fn schedule_settlement_transactions(
+        &self,
+        settlement_txns: Vec<(TransactionKey, ExecutionEnv)>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) {
+        if !settlement_txns.is_empty() {
+            let scheduler = self.clone();
+            let epoch_store = epoch_store.clone();
+
+            spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+                let mut futures: FuturesUnordered<_> =
+                        settlement_txns
+                            .into_iter()
+                            .map(|(key, env)| {
+                                let epoch_store = epoch_store.clone();
+                                async move {
+                                    (epoch_store.wait_for_settlement_transactions(key).await, env)
+                                }
+                            })
+                            .collect();
+
+                while let Some((txns, env)) = futures.next().await {
+                    let txns = txns
+                        .into_iter()
+                        .map(|tx| (tx, env.clone()))
+                        .collect::<Vec<_>>();
+                    scheduler.enqueue_transactions(txns, &epoch_store);
+                }
+            }));
+        }
+    }
+
     fn schedule_tx_keys(
         &self,
         tx_with_keys: Vec<(TransactionKey, ExecutionEnv)>,
@@ -333,6 +365,34 @@ impl ExecutionScheduler {
             scheduler.enqueue_transactions(transactions, &epoch_store);
         }));
     }
+
+    /// When we schedule a certificate, it should be impossible for it to have been executed in a
+    /// previous epoch.
+    #[cfg(debug_assertions)]
+    fn assert_cert_not_executed_previous_epochs(&self, cert: &VerifiedExecutableTransaction) {
+        let epoch = cert.epoch();
+        let digest = *cert.digest();
+        let digests = [digest];
+        let executed = self
+            .transaction_cache_read
+            .multi_get_executed_effects(&digests)
+            .pop()
+            .unwrap();
+        // Due to pruning, we may not always have an executed effects for the certificate
+        // even if it was executed. So this is a best-effort check.
+        if let Some(executed) = executed {
+            use sui_types::effects::TransactionEffectsAPI;
+
+            assert_eq!(
+                executed.executed_epoch(),
+                epoch,
+                "Transaction {} was executed in epoch {}, but scheduled again in epoch {}",
+                digest,
+                executed.executed_epoch(),
+                epoch
+            );
+        }
+    }
 }
 
 impl ExecutionSchedulerAPI for ExecutionScheduler {
@@ -345,6 +405,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         let mut ordinary_txns = Vec::with_capacity(certs.len());
         let mut tx_with_keys = Vec::new();
         let mut tx_with_withdraws = Vec::new();
+        let mut settlement_txns = Vec::new();
 
         for (schedulable, env) in certs {
             match schedulable {
@@ -357,12 +418,16 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                 Schedulable::Withdraw(tx, version) => {
                     tx_with_withdraws.push((tx, version, env));
                 }
+                Schedulable::AccumulatorSettlement(_, _) => {
+                    settlement_txns.push((schedulable.key(), env));
+                }
             }
         }
 
         self.enqueue_transactions(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
         self.schedule_balance_withdraws(tx_with_withdraws, epoch_store);
+        self.schedule_settlement_transactions(settlement_txns, epoch_store);
     }
 
     fn enqueue_transactions(
@@ -375,6 +440,9 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
             .into_iter()
             .filter_map(|cert| {
                 if cert.0.epoch() == epoch_store.epoch() {
+                    #[cfg(debug_assertions)]
+                    self.assert_cert_not_executed_previous_epochs(&cert.0);
+
                     Some(cert)
                 } else {
                     debug_fatal!(

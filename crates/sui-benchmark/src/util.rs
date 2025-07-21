@@ -25,7 +25,7 @@ pub fn get_ed25519_keypair_from_keystore(
     requested_address: &SuiAddress,
 ) -> Result<AccountKeyPair> {
     let keystore = FileBasedKeystore::new(&keystore_path)?;
-    match keystore.get_key(requested_address) {
+    match keystore.export(requested_address) {
         Ok(SuiKeyPair::Ed25519(kp)) => Ok(kp.copy()),
         other => Err(anyhow::anyhow!("Invalid key type: {:?}", other)),
     }
@@ -62,7 +62,8 @@ pub async fn publish_basics_package(
     let transaction = TestTransactionBuilder::new(sender, gas, gas_price)
         .publish_examples("basics")
         .build_and_sign(keypair);
-    let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+    let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+    let effects = execution_result.unwrap();
     effects
         .created()
         .iter()

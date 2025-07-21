@@ -4,6 +4,7 @@
 use std::{
     cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
+    fmt,
 };
 
 use crate::{
@@ -19,8 +20,11 @@ use sui_types::{
     execution_status::CommandArgumentError,
 };
 
-type Graph = move_regex_borrow_graph::collections::Graph<(), T::Location>;
-type Paths = move_regex_borrow_graph::collections::Paths<(), T::Location>;
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+struct Location(T::Location);
+
+type Graph = move_regex_borrow_graph::collections::Graph<(), Location>;
+type Paths = move_regex_borrow_graph::collections::Paths<(), Location>;
 
 #[must_use]
 enum Value {
@@ -31,8 +35,11 @@ enum Value {
 struct Context {
     graph: Graph,
     local_root: Ref,
+    tx_context: Option<Value>,
     gas_coin: Option<Value>,
-    inputs: Vec<Option<Value>>,
+    objects: Vec<Option<Value>>,
+    pure: Vec<Option<Value>>,
+    receiving: Vec<Option<Value>>,
     results: Vec<Vec<Option<Value>>>,
 }
 
@@ -61,19 +68,17 @@ impl Value {
 
 impl Context {
     fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
-        let inputs = ast
-            .inputs
+        let objects = ast.objects.iter().map(|_| Some(Value::NonRef)).collect();
+        let pure = ast
+            .pure
             .iter()
-            .map(|(_, ty)| {
-                Some(match ty {
-                    T::InputType::Bytes(_) => Value::NonRef,
-                    T::InputType::Fixed(ty) => {
-                        debug_assert!(!matches!(ty, Type::Reference(_, _)));
-                        Value::NonRef
-                    }
-                })
-            })
-            .collect();
+            .map(|_| Some(Value::NonRef))
+            .collect::<Vec<_>>();
+        let receiving = ast
+            .receiving
+            .iter()
+            .map(|_| Some(Value::NonRef))
+            .collect::<Vec<_>>();
         let (mut graph, _locals) = Graph::new::<()>([]).map_err(graph_err)?;
         let local_root = graph
             .extend_by_epsilon((), std::iter::empty(), /* is_mut */ true)
@@ -81,16 +86,22 @@ impl Context {
         Ok(Self {
             graph,
             local_root,
+            tx_context: Some(Value::NonRef),
             gas_coin: Some(Value::NonRef),
-            inputs,
+            objects,
+            pure,
+            receiving,
             results: Vec::with_capacity(ast.commands.len()),
         })
     }
 
     fn location(&mut self, l: T::Location) -> &mut Option<Value> {
         match l {
+            T::Location::TxContext => &mut self.tx_context,
             T::Location::GasCoin => &mut self.gas_coin,
-            T::Location::Input(i) => &mut self.inputs[i as usize],
+            T::Location::ObjectInput(i) => &mut self.objects[i as usize],
+            T::Location::PureInput(i) => &mut self.pure[i as usize],
+            T::Location::ReceivingInput(i) => &mut self.receiving[i as usize],
             T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
         }
     }
@@ -109,7 +120,7 @@ impl Context {
         let borrowed_by = self.borrowed_by(self.local_root)?;
         Ok(borrowed_by
             .iter()
-            .any(|(_, paths)| paths.iter().any(|path| path.starts_with(&l))))
+            .any(|(_, paths)| paths.iter().any(|path| path.starts_with(&Location(l)))))
     }
 
     fn release(&mut self, r: Ref) -> Result<(), ExecutionError> {
@@ -132,7 +143,7 @@ impl Context {
     ) -> Result<Ref, ExecutionError> {
         let new_r = self
             .graph
-            .extend_by_label((), std::iter::once(r), is_mut, extension)
+            .extend_by_label((), std::iter::once(r), is_mut, Location(extension))
             .map_err(graph_err)?;
         Ok(new_r)
     }
@@ -184,7 +195,7 @@ impl Context {
                         // If the ref is imm, but is borrowed by a mut ref in the set
                         // the mut ref is not transferrable
                         // In other words, the mut ref is an extension of the imm ref
-                        return Ok(Some(r));
+                        return Ok(Some(borrower));
                     }
                 } else {
                     for path in paths {
@@ -219,15 +230,19 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
 
     let Context {
         gas_coin,
-        inputs,
+        objects,
+        pure,
+        receiving,
         results,
         ..
     } = &mut context;
     let gas_coin = gas_coin.take();
-    let inputs = std::mem::take(inputs);
+    let objects = std::mem::take(objects);
+    let pure = std::mem::take(pure);
+    let receiving = std::mem::take(receiving);
     let results = std::mem::take(results);
     consume_value_opt(&mut context, gas_coin)?;
-    for vopt in inputs {
+    for vopt in objects.into_iter().chain(pure).chain(receiving) {
         consume_value_opt(&mut context, vopt)?;
     }
     for result in results {
@@ -242,6 +257,10 @@ pub fn verify(_env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
     );
     context.release(context.local_root)?;
     assert_invariant!(context.graph.abstract_size() == 0, "reference not released");
+    assert_invariant!(
+        context.tx_context.is_some(),
+        "tx_context should never be moved"
+    );
 
     Ok(())
 }
@@ -257,9 +276,8 @@ fn command(
                 function,
                 arguments: args,
             } = &**mc;
-            let return_ = &function.signature.return_;
             let arg_values = arguments(context, args)?;
-            call(context, arg_values, return_)?
+            call(context, arg_values, &function.signature)?
         }
         T::Command_::TransferObjects(objects, recipient) => {
             let object_values = arguments(context, objects)?;
@@ -338,6 +356,7 @@ fn argument(context: &mut Context, x: &T::Argument) -> Result<Value, ExecutionEr
             borrow_location(context, x.idx, *is_mut, *location)
         }
         T::Argument__::Read(usage) => read_ref(context, x.idx, usage),
+        T::Argument__::Freeze(usage) => freeze_ref(context, x.idx, usage),
     }
 }
 
@@ -413,6 +432,20 @@ fn borrow_location(
     Ok(Value::Ref(new_r))
 }
 
+/// Creates an alias to the reference, but one that is immutable
+fn freeze_ref(context: &mut Context, arg_idx: u16, u: &T::Usage) -> Result<Value, ExecutionError> {
+    let value = match u {
+        T::Usage::Move(l) => move_value(context, arg_idx, *l)?,
+        T::Usage::Copy { location, borrowed } => copy_value(context, arg_idx, *location, borrowed)?,
+    };
+    let Some(r) = value.to_ref() else {
+        invariant_violation!("type checking should guarantee FreezeRef is used on only references")
+    };
+    let new_r = context.extend_by_epsilon(r, /* is_mut */ false)?;
+    consume_value(context, value)?;
+    Ok(Value::Ref(new_r))
+}
+
 fn read_ref(context: &mut Context, arg_idx: u16, u: &T::Usage) -> Result<Value, ExecutionError> {
     let value = match u {
         T::Usage::Move(l) => move_value(context, arg_idx, *l)?,
@@ -445,27 +478,29 @@ fn write_ref(context: &mut Context, arg_idx: usize, value: Value) -> Result<(), 
 fn call(
     context: &mut Context,
     arg_values: Vec<Value>,
-    return_: &[Type],
+    signature: &T::LoadedFunctionInstantiation,
 ) -> Result<Vec<Value>, ExecutionError> {
     let sources = arg_values
         .iter()
         .filter_map(|v| v.to_ref())
         .collect::<BTreeSet<_>>();
     if let Some(v) = context.find_non_transferrable(&sources)? {
-        let idx = arg_values
+        let mut_idx = arg_values
             .iter()
-            .position(|x| x.to_ref() == Some(v))
-            .unwrap_or(arg_values.len());
-        assert_invariant!(
-            idx < arg_values.len(),
-            "non transferrable value was not found in arguments"
-        );
+            .zip(&signature.parameters)
+            .enumerate()
+            .find(|(_, (x, ty))| x.to_ref() == Some(v) && matches!(ty, Type::Reference(true, _)));
+
+        let Some((idx, _)) = mut_idx else {
+            invariant_violation!("non transferrable value was not found in arguments");
+        };
         return Err(command_argument_error(
             CommandArgumentError::InvalidValueUsage,
             idx,
         ));
     }
-    let mutabilities = return_
+    let mutabilities = signature
+        .return_
         .iter()
         .filter_map(|ty| match ty {
             Type::Reference(is_mut, _) => Some(*is_mut),
@@ -479,7 +514,8 @@ fn call(
         "return_references should have the same length as mutabilities"
     );
 
-    let mut return_values: Vec<_> = return_
+    let mut return_values: Vec<_> = signature
+        .return_
         .iter()
         .rev()
         .map(|ty| {
@@ -506,4 +542,17 @@ fn call(
 
 fn graph_err(e: move_regex_borrow_graph::InvariantViolation) -> ExecutionError {
     ExecutionError::invariant_violation(format!("Borrow graph invariant violation: {}", e.0))
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            T::Location::TxContext => write!(f, "TxContext"),
+            T::Location::GasCoin => write!(f, "GasCoin"),
+            T::Location::ObjectInput(idx) => write!(f, "ObjectInput({idx})"),
+            T::Location::PureInput(idx) => write!(f, "PureInput({idx})"),
+            T::Location::ReceivingInput(idx) => write!(f, "ReceivingInput({idx})"),
+            T::Location::Result(i, j) => write!(f, "Result({i}, {j})"),
+        }
+    }
 }

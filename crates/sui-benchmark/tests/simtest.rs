@@ -108,6 +108,9 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_testnet_config() {
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
+        }
         chain_config_smoke_test(Chain::Testnet).await;
     }
 
@@ -125,6 +128,8 @@ mod test {
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
+            // Disable TransactionDriver in chain configide override tests.
+            .transaction_driver_percentage(0)
             .build()
             .await
             .into();
@@ -162,8 +167,8 @@ mod test {
         // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
-        let test_cluster = build_test_cluster(4, 10000, 1).await;
-        test_simulated_load(test_cluster, 60).await;
+        let test_cluster = build_test_cluster(4, 15000, 1).await;
+        test_simulated_load(test_cluster, 90).await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -521,6 +526,7 @@ mod test {
                         stored_observations_num_included_checkpoints: 10,
                         stored_observations_limit: rng.gen_range(1..=20),
                         stake_weighted_median_threshold: 0,
+                        default_none_duration_for_new_keys: true,
                     },
                 ),
             ]
@@ -706,6 +712,10 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_mysticeti_fastpath() {
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
+        }
+
         unsafe {
             std::env::set_var("TRANSACTION_DRIVER", "100");
         }
@@ -823,6 +833,15 @@ mod test {
     }
 
     async fn test_protocol_upgrade_compatibility_impl() {
+        // Override record_time_estimate_processed for protocol versions before 88 in tests
+        // to correct for known issue that appeared on mainnet.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut config| {
+            if version.as_u64() <= 87 {
+                config.set_record_time_estimate_processed_for_testing(true);
+            }
+            config
+        });
+
         let max_ver = ProtocolVersion::MAX.as_u64();
         let manifest = sui_framework_snapshot::load_bytecode_snapshot_manifest();
 
@@ -844,6 +863,8 @@ mod test {
                 )
                 .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
                 .with_stake_subsidy_start_epoch(10)
+                // Disable TransactionDriver in upgrade compatibility tests.
+                .transaction_driver_percentage(0)
                 .build()
                 .await,
         );
@@ -857,7 +878,7 @@ mod test {
                 info!("Targeting protocol version: {version}");
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
                 info!("All nodes are at protocol version: {version}");
-                // Let all nodes run for a few epochs at this version.
+                // Let all nodes run for a few epochs at this version
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 if version == max_ver {
                     break;
@@ -1129,8 +1150,15 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
-            Arc::new(LocalValidatorAggregatorProxy::from_genesis(&genesis, &registry, None).await);
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_genesis(
+                &genesis,
+                &registry,
+                None,
+                test_cluster.transaction_driver_percentage(),
+            )
+            .await,
+        );
 
         let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
         let system_state_observer = {

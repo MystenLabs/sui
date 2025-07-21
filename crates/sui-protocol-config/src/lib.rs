@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 88;
+const MAX_PROTOCOL_VERSION: u64 = 89;
 
 // Record history of protocol version allocations here:
 //
@@ -248,6 +248,9 @@ const MAX_PROTOCOL_VERSION: u64 = 88;
 // Version 87: Enable better type resolution errors in the adapter.
 // Version 88: Update `sui-system` package to use `calculate_rewards` function.
 //             Define the cost for the native Move function `rgp`.
+//             Ignore execution time observations after validator stops accepting certs.
+// Version 89: Standard library improvements.
+//             Enable `debug_fatal` on Move invariant violations.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -727,6 +730,29 @@ struct FeatureFlags {
     // Provide better type resolution errors in the adapter.
     #[serde(skip_serializing_if = "is_false")]
     better_adapter_type_resolution_errors: bool,
+
+    // If true, record the time estimate processed in the consensus commit prologue.
+    #[serde(skip_serializing_if = "is_false")]
+    record_time_estimate_processed: bool,
+
+    // If true, ignore execution time observations after certs are closed.
+    #[serde(skip_serializing_if = "is_false")]
+    ignore_execution_time_observations_after_certs_closed: bool,
+
+    // If true use `debug_fatal` to report invariant violations.
+    // `debug_fatal` panics in debug builds and breaks tests/behavior based on older
+    // protocol versions (see make_vec_non_existent_type_v71.move)
+    #[serde(skip_serializing_if = "is_false")]
+    debug_fatal_on_move_invariant_violation: bool,
+
+    // DO NOT ENABLE THIS FOR PRODUCTION NETWORKS. used for testing only.
+    // Allow private accumulator entrypoints
+    #[serde(skip_serializing_if = "is_false")]
+    allow_private_accumulator_entrypoints: bool,
+
+    // If true, include indirect state in the additional consensus digest.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_consensus_digest_indirect_state: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -784,6 +810,12 @@ pub struct ExecutionTimeEstimateParams {
     // observation-based execution time estimates instead of the default.
     #[serde(skip_serializing_if = "is_zero")]
     pub stake_weighted_median_threshold: u64,
+
+    // For backwards compatibility with old behavior we use a zero default duration when adding
+    // new execution time observation keys and a zero generation when loading stored observations.
+    // This can be removed once set to "true" on mainnet.
+    #[serde(skip_serializing_if = "is_false")]
+    pub default_none_duration_for_new_keys: bool,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -956,6 +988,10 @@ pub struct ProtocolConfig {
 
     /// Maximum amount of the proposed gas price in MIST (defined in the transaction).
     max_gas_price: Option<u64>,
+
+    /// For aborted txns, we cap the gas price at a factor of RGP. This lowers risk of setting higher priority gas price
+    /// if there's a chance the txn will abort.
+    max_gas_price_rgp_factor_for_aborted_transactions: Option<u64>,
 
     /// The max computation bucket for gas. This is the max that can be charged for computation.
     max_gas_computation_bucket: Option<u64>,
@@ -2077,6 +2113,28 @@ impl ProtocolConfig {
     pub fn better_adapter_type_resolution_errors(&self) -> bool {
         self.feature_flags.better_adapter_type_resolution_errors
     }
+
+    pub fn record_time_estimate_processed(&self) -> bool {
+        self.feature_flags.record_time_estimate_processed
+    }
+
+    pub fn ignore_execution_time_observations_after_certs_closed(&self) -> bool {
+        self.feature_flags
+            .ignore_execution_time_observations_after_certs_closed
+    }
+
+    pub fn debug_fatal_on_move_invariant_violation(&self) -> bool {
+        self.feature_flags.debug_fatal_on_move_invariant_violation
+    }
+
+    pub fn allow_private_accumulator_entrypoints(&self) -> bool {
+        self.feature_flags.allow_private_accumulator_entrypoints
+    }
+
+    pub fn additional_consensus_digest_indirect_state(&self) -> bool {
+        self.feature_flags
+            .additional_consensus_digest_indirect_state
+    }
 }
 
 #[cfg(not(msim))]
@@ -2247,6 +2305,7 @@ impl ProtocolConfig {
             max_publish_or_upgrade_per_ptb: None,
             max_tx_gas: Some(10_000_000_000),
             max_gas_price: Some(100_000),
+            max_gas_price_rgp_factor_for_aborted_transactions: None,
             max_gas_computation_bucket: Some(5_000_000),
             max_loop_depth: Some(5),
             max_generic_instantiation_length: Some(32),
@@ -3587,6 +3646,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
                     }
@@ -3667,6 +3727,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
 
@@ -3697,6 +3758,7 @@ impl ProtocolConfig {
                                     stored_observations_num_included_checkpoints: 10,
                                     stored_observations_limit: u64::MAX,
                                     stake_weighted_median_threshold: 0,
+                                    default_none_duration_for_new_keys: false,
                                 },
                             );
 
@@ -3720,6 +3782,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                     cfg.feature_flags.allow_unbounded_system_objects = true;
@@ -3742,6 +3805,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 0,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                 }
@@ -3760,6 +3824,7 @@ impl ProtocolConfig {
                                 stored_observations_num_included_checkpoints: 10,
                                 stored_observations_limit: 20,
                                 stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: false,
                             },
                         );
                     // Enable party transfer for testnet.
@@ -3768,10 +3833,38 @@ impl ProtocolConfig {
                     }
                 }
                 87 => {
+                    if chain == Chain::Mainnet {
+                        cfg.feature_flags.record_time_estimate_processed = true;
+                    }
                     cfg.feature_flags.better_adapter_type_resolution_errors = true;
                 }
                 88 => {
+                    cfg.feature_flags.record_time_estimate_processed = true;
                     cfg.tx_context_rgp_cost_base = Some(30);
+                    cfg.feature_flags
+                        .ignore_execution_time_observations_after_certs_closed = true;
+
+                    // Disable backwards compatible behavior in exeuction time estimator for
+                    // new protocol version.
+                    cfg.feature_flags.per_object_congestion_control_mode =
+                        PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                            ExecutionTimeEstimateParams {
+                                target_utilization: 50,
+                                allowed_txn_cost_overage_burst_limit_us: 500_000, // 500 ms
+                                randomness_scalar: 20,
+                                max_estimate_us: 1_500_000, // 1.5s
+                                stored_observations_num_included_checkpoints: 10,
+                                stored_observations_limit: 20,
+                                stake_weighted_median_threshold: 3334,
+                                default_none_duration_for_new_keys: true,
+                            },
+                        );
+                }
+                89 => {
+                    // 100x RGP
+                    cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
+                    cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
+                    cfg.feature_flags.additional_consensus_digest_indirect_state = true;
                 }
                 // Use this template when making changes:
                 //
@@ -3968,6 +4061,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_ptb_execution_v2 = val;
     }
 
+    pub fn set_record_time_estimate_processed_for_testing(&mut self, val: bool) {
+        self.feature_flags.record_time_estimate_processed = val;
+    }
+
     pub fn push_aliased_addresses_for_testing(
         &mut self,
         original: [u8; 32],
@@ -3981,8 +4078,9 @@ impl ProtocolConfig {
         });
     }
 
-    pub fn set_enable_accumulators_for_testing(&mut self, val: bool) {
-        self.feature_flags.enable_accumulators = val;
+    pub fn enable_accumulators_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = true;
+        self.feature_flags.allow_private_accumulator_entrypoints = true;
     }
 }
 

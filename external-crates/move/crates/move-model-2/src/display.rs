@@ -55,7 +55,9 @@ impl fmt::Display for Type<'_> {
                 }
                 write!(f, "| -> {}", type_(tret))
             }
-            N::Type_::Var(_) | N::Type_::Anything | N::Type_::UnresolvedError => write!(f, "_"),
+            N::Type_::Var(_) | N::Type_::Anything | N::Type_::Void | N::Type_::UnresolvedError => {
+                write!(f, "_")
+            }
         }
     }
 }

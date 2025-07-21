@@ -214,7 +214,8 @@ impl Workload<dyn Payload> for SlowWorkload {
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish(path)
             .build_and_sign(gas.2.as_ref());
-        let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let effects = execution_result.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, shared obj.
         assert_eq!(created.len() as u64, 3);
@@ -259,5 +260,9 @@ impl Workload<dyn Payload> for SlowWorkload {
             .into_iter()
             .map(|b| Box::<dyn Payload>::from(Box::new(b)))
             .collect()
+    }
+
+    fn name(&self) -> &str {
+        "Slow"
     }
 }

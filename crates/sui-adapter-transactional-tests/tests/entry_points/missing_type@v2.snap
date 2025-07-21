@@ -14,8 +14,8 @@ gas summary: computation_cost: 1000000, storage_cost: 3876000,  storage_rebate: 
 
 task 2, line 17:
 //# run test::m::foo --type-args test::x::x
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: LINKER_ERROR, sub_status: None, message: Some("Cannot find ModuleId { address: test, name: Identifier(\"x\") } in data cache"), exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+Error: Transaction Effects Status: Error for type argument at index 0: A type was not found in the module specified.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: TypeArgumentError { argument_idx: 0, kind: TypeNotFound }, source: None, command: Some(0) } }
 
 task 3, line 19:
 //# run test::m::foo --type-args test::m::SUI

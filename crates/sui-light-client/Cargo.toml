@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+thiserror.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 clap.workspace = true

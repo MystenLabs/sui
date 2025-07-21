@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
 use sui_config::{
@@ -12,10 +12,10 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     committee::{Committee, EpochId},
     effects::TransactionEffects,
+    execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    metrics::BytecodeVerifierMetrics,
-    metrics::LimitsMetrics,
+    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
     sui_system_state::{
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
         SuiSystemState, SuiSystemStateTrait,
@@ -140,8 +140,9 @@ impl EpochState {
                 store.backing_store(),
                 &self.protocol_config,
                 self.limits_metrics.clone(),
-                false,           // enable_expensive_checks
-                &HashSet::new(), // certificate_deny_set
+                false, // enable_expensive_checks
+                // TODO: Integrate with early execution error
+                ExecutionOrEarlyError::Ok(()),
                 &self.epoch_start_state.epoch(),
                 self.epoch_start_state.epoch_start_timestamp_ms(),
                 checked_input_objects,

@@ -128,6 +128,8 @@ pub struct ProgrammableTransactionCommand {
     pub dev_inspect: bool,
     #[clap(long = "dry-run")]
     pub dry_run: bool,
+    #[clap(long = "expiration")]
+    pub expiration: Option<u64>,
     #[clap(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,

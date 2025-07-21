@@ -113,6 +113,16 @@ pub(crate) struct TransactionBCSEntry {
     pub(crate) bcs: String,
 }
 
+// Raw Package bytes (BCS encoded package data).
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct PackageBCSEntry {
+    pub(crate) package_id: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    pub(crate) bcs: String,
+}
+
 // Event information.
 // Events identity is via `transaction_digest` and `event_index`.
 #[derive(Serialize, Clone, SerializeParquet)]

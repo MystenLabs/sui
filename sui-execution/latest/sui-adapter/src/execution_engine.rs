@@ -11,12 +11,14 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
+    use mysten_common::debug_fatal;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
@@ -57,9 +59,9 @@ mod checked {
     };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
-    use sui_types::execution::{ExecutionTiming, ResultWithTimings, is_certificate_denied};
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
-    use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
+    use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::id::UID;
@@ -77,7 +79,7 @@ mod checked {
     use sui_types::{
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
-        base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
+        base_types::{SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
@@ -97,7 +99,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
@@ -115,8 +117,6 @@ mod checked {
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-        let contains_stream_ended_input = input_objects.contains_consensus_stream_ended_objects();
-        let cancelled_objects = input_objects.get_cancelled_objects();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -159,7 +159,6 @@ mod checked {
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
-        let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
         let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
             store,
             &mut temporary_store,
@@ -170,9 +169,7 @@ mod checked {
             protocol_config,
             metrics,
             enable_expensive_checks,
-            deny_cert,
-            contains_stream_ended_input,
-            cancelled_objects,
+            execution_params,
             trace_builder_opt,
         );
 
@@ -181,13 +178,21 @@ mod checked {
             use ExecutionErrorKind as K;
             match error.kind() {
                 K::InvariantViolation | K::VMInvariantViolation => {
-                    #[skip_checked_arithmetic]
-                    tracing::error!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "INVARIANT VIOLATION! Source: {:?}",
-                        error.source(),
-                    );
+                    if protocol_config.debug_fatal_on_move_invariant_violation() {
+                        debug_fatal!(
+                            "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
+                            transaction_digest,
+                            error.source(),
+                        );
+                    } else {
+                        #[skip_checked_arithmetic]
+                        tracing::error!(
+                            kind = ?error.kind(),
+                            tx_digest = ?transaction_digest,
+                            "INVARIANT VIOLATION! Source: {:?}",
+                            error.source(),
+                        );
+                    }
                 }
 
                 K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
@@ -310,9 +315,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        deny_cert: bool,
-        contains_stream_ended_input: bool,
-        cancelled_objects: Option<(Vec<ObjectID>, SequenceNumber)>,
+        execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         GasCostSummary,
@@ -341,32 +344,11 @@ mod checked {
                     let mut execution_result: ResultWithTimings<
                         Mode::ExecutionResults,
                         ExecutionError,
-                    > = if deny_cert {
-                        Err((
-                            ExecutionError::new(ExecutionErrorKind::CertificateDenied, None),
-                            vec![],
-                        ))
-                    } else if contains_stream_ended_input {
-                        Err((
-                            ExecutionError::new(ExecutionErrorKind::InputObjectDeleted, None),
-                            vec![],
-                        ))
-                    } else if let Some((cancelled_objects, reason)) = cancelled_objects {
-                        match reason {
-                            SequenceNumber::CONGESTED => Err((ExecutionError::new(
-                                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
-                                    congested_objects: CongestedObjects(cancelled_objects),
-                                },
-                                None,
-                            ), vec![])),
-                            SequenceNumber::RANDOMNESS_UNAVAILABLE => Err((ExecutionError::new(
-                                ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable,
-                                None,
-                            ), vec![])),
-                            _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
+                    > = match execution_params {
+                        ExecutionOrEarlyError::Err(early_execution_error) => {
+                            Err((ExecutionError::new(early_execution_error, None), vec![]))
                         }
-                    } else {
-                        execution_loop::<Mode>(
+                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                             store,
                             temporary_store,
                             transaction_kind,
@@ -376,7 +358,7 @@ mod checked {
                             protocol_config,
                             metrics.clone(),
                             trace_builder_opt,
-                        )
+                        ),
                     };
 
                     let meter_check = check_meter_limit(
@@ -703,8 +685,7 @@ mod checked {
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
             }
-            TransactionKind::ProgrammableTransaction(pt)
-            | TransactionKind::ProgrammableSystemTransaction(pt) => {
+            TransactionKind::ProgrammableTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
                     metrics,
@@ -716,6 +697,20 @@ mod checked {
                     pt,
                     trace_builder_opt,
                 )
+            }
+            TransactionKind::ProgrammableSystemTransaction(pt) => {
+                programmable_transactions::execution::execute::<execution_mode::System>(
+                    protocol_config,
+                    metrics,
+                    move_vm,
+                    temporary_store,
+                    store.as_backing_package_store(),
+                    tx_ctx,
+                    gas_charger,
+                    pt,
+                    trace_builder_opt,
+                )?;
+                Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 let mut builder = ProgrammableTransactionBuilder::new();

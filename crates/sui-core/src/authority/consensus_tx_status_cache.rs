@@ -114,16 +114,16 @@ impl ConsensusTxStatusCache {
     /// status once the transaction status has changed, or if the consensus position has expired.
     pub async fn notify_read_transaction_status_change(
         &self,
-        transaction_position: ConsensusPosition,
+        consensus_position: ConsensusPosition,
         old_status: Option<ConsensusTxStatus>,
     ) -> NotifyReadConsensusTxStatusResult {
         // TODO(fastpath): We should track the typical distance between the last committed round
         // and the requested round notified as metrics.
-        let registration = self.status_notify_read.register_one(&transaction_position);
+        let registration = self.status_notify_read.register_one(&consensus_position);
         let mut round_rx = self.last_committed_leader_round_rx.clone();
         {
             let inner = self.inner.read();
-            if let Some(status) = inner.transaction_status.get(&transaction_position) {
+            if let Some(status) = inner.transaction_status.get(&consensus_position) {
                 if Some(status) != old_status.as_ref() {
                     if let Some(old_status) = old_status {
                         // The only scenario where the status may change, is when the transaction
@@ -139,7 +139,7 @@ impl ConsensusTxStatusCache {
         let expiration_check = async {
             loop {
                 if let Some(last_committed_leader_round) = *round_rx.borrow() {
-                    if transaction_position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
+                    if consensus_position.block.round + CONSENSUS_STATUS_RETENTION_ROUNDS
                         < last_committed_leader_round
                     {
                         return last_committed_leader_round;
@@ -206,6 +206,7 @@ mod tests {
 
     fn create_test_tx_position(round: u64, index: u64) -> ConsensusPosition {
         ConsensusPosition {
+            epoch: Default::default(),
             block: BlockRef {
                 round: round as u32,
                 author: Default::default(),

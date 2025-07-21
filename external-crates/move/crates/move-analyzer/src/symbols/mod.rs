@@ -198,6 +198,7 @@ pub fn compute_symbols(
     let deps_hash = compiled_pkg_info.deps_hash.clone();
     let edition = compiled_pkg_info.edition;
     let compiler_info = compiled_pkg_info.compiler_info.clone();
+    let lsp_diags = compiled_pkg_info.lsp_diags.clone();
     let file_hashes = compiled_pkg_info
         .mapped_files
         .file_name_mapping()
@@ -246,6 +247,7 @@ pub fn compute_symbols(
                     file_hashes: Arc::new(file_hashes),
                     edition,
                     compiler_info,
+                    lsp_diags,
                 },
             );
         }

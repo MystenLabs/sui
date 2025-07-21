@@ -4,6 +4,7 @@
 
 extern crate core;
 
+pub mod accumulators;
 pub mod authority;
 pub mod authority_aggregator;
 pub mod authority_client;
@@ -47,7 +48,6 @@ pub mod transaction_orchestrator;
 mod transaction_outputs;
 pub mod validator_tx_finalizer;
 pub mod verify_indexes;
-mod wait_for_effects_request;
 
 #[cfg(test)]
 #[path = "unit_tests/congestion_control_tests.rs"]

@@ -36,7 +36,7 @@ use crate::{
 };
 
 use super::{
-    addressable::{Addressable, AddressableImpl},
+    address::{Address, AddressableImpl},
     move_package::MovePackage,
     transaction::Transaction,
 };
@@ -101,7 +101,7 @@ pub(crate) enum IObject {
 }
 
 pub(crate) struct Object {
-    pub(crate) super_: Addressable,
+    pub(crate) super_: Address,
     pub(crate) version: SequenceNumber,
     pub(crate) digest: ObjectDigest,
     pub(crate) contents: Option<Arc<NativeObject>>,
@@ -249,7 +249,7 @@ impl Object {
     /// does not check whether the object exists, so should not be used to "fetch" an object based
     /// on an address and/or version provided as user input.
     pub(crate) fn with_ref(
-        addressable: Addressable,
+        addressable: Address,
         version: SequenceNumber,
         digest: ObjectDigest,
     ) -> Self {
@@ -371,10 +371,10 @@ impl Object {
 
     /// Construct a GraphQL representation of an `Object` from its native representation.
     pub(crate) fn from_contents(scope: Scope, contents: Arc<NativeObject>) -> Self {
-        let addressable = Addressable::with_address(scope, contents.id().into());
+        let address = Address::with_address(scope, contents.id().into());
 
         Self {
-            super_: addressable,
+            super_: address,
             version: contents.version(),
             digest: contents.digest(),
             contents: Some(contents),
@@ -399,7 +399,7 @@ impl Object {
             return Ok(None);
         }
 
-        let addressable = Addressable::with_address(
+        let addressable = Address::with_address(
             scope,
             NativeSuiAddress::from_bytes(stored.object_id)
                 .context("Failed to deserialize SuiAddress")?,

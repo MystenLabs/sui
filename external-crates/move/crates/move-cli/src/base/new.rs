@@ -55,7 +55,7 @@ impl New {
 
     /// add `build/*` to `{path}/.gitignore` if it doesn't already have it
     fn write_gitignore(&self, path: &Path) -> anyhow::Result<()> {
-        let gitignore_entry = "build/*";
+        let gitignore_entry = "build/*\n.trace\n.coverage*";
 
         let mut file = std::fs::OpenOptions::new()
             .create(true)

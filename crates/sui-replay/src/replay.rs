@@ -34,6 +34,7 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::execution_params::{get_early_execution_error, ExecutionOrEarlyError};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
 use sui_types::storage::{get_module, PackageObject};
@@ -763,7 +764,6 @@ impl LocalExec {
         // All prep done
         let expensive_checks = true;
         let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
-        let certificate_deny_set = HashSet::new();
         let gas_status = if tx_info.kind.is_system_tx() {
             SuiGasStatus::new_unmetered()
         } else {
@@ -781,16 +781,23 @@ impl LocalExec {
             price: tx_info.gas_price,
             budget: tx_info.gas_budget,
         };
+        let checked_input_objects = CheckedInputObjects::new_for_replay(input_objects.clone());
+        let early_execution_error =
+            get_early_execution_error(tx_digest, &checked_input_objects, &HashSet::new());
+        let execution_params = match early_execution_error {
+            Some(error) => ExecutionOrEarlyError::Err(error),
+            None => ExecutionOrEarlyError::Ok(()),
+        };
         let (inner_store, gas_status, effects, _timings, result) = executor
             .execute_transaction_to_effects(
                 &self,
                 protocol_config,
                 metrics.clone(),
                 expensive_checks,
-                &certificate_deny_set,
+                execution_params,
                 &tx_info.executed_epoch,
                 tx_info.epoch_start_timestamp,
-                CheckedInputObjects::new_for_replay(input_objects.clone()),
+                checked_input_objects,
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
@@ -846,6 +853,13 @@ impl LocalExec {
             price: tx_info.gas_price,
             budget: tx_info.gas_budget,
         };
+        let checked_input_objects = CheckedInputObjects::new_for_replay(input_objects.clone());
+        let early_execution_error =
+            get_early_execution_error(&tx_info.tx_digest, &checked_input_objects, &HashSet::new());
+        let execution_params = match early_execution_error {
+            Some(error) => ExecutionOrEarlyError::Err(error),
+            None => ExecutionOrEarlyError::Ok(()),
+        };
         if let ProgrammableTransaction(pt) = transaction_kind {
             trace!(
                 target: "replay_ptb_info",
@@ -860,7 +874,7 @@ impl LocalExec {
                             protocol_config,
                             metrics,
                             expensive_checks,
-                            &HashSet::new(),
+                            execution_params,
                             &tx_info.executed_epoch,
                             tx_info.epoch_start_timestamp,
                             CheckedInputObjects::new_for_replay(input_objects),
@@ -951,12 +965,18 @@ impl LocalExec {
         .unwrap();
         let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
         let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
+        let early_execution_error =
+            get_early_execution_error(executable.digest(), &input_objects, &HashSet::new());
+        let execution_params = match early_execution_error {
+            Some(error) => ExecutionOrEarlyError::Err(error),
+            None => ExecutionOrEarlyError::Ok(()),
+        };
         let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
             &store,
             &protocol_config,
             Arc::new(LimitsMetrics::new(&Registry::new())),
             true,
-            &HashSet::new(),
+            execution_params,
             &executed_epoch,
             epoch_start_timestamp,
             input_objects,

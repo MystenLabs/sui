@@ -6,7 +6,6 @@ use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use crate::messages_consensus::{ConsensusPosition, Round};
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use bytes::Bytes;
@@ -230,29 +229,35 @@ pub struct RawSubmitTxRequest {
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxResponse {
     // Serialized Consensus Position
-    #[prost(bytes = "bytes", tag = "1")]
-    pub consensus_position: Bytes,
+    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2, 3")]
+    pub inner: Option<RawValidatorSubmitStatus>,
 }
 
-#[derive(Clone, Debug)]
-pub struct SubmitTxResponse {
-    pub consensus_position: ConsensusPosition,
+#[derive(Clone, prost::Oneof)]
+pub enum RawValidatorSubmitStatus {
+    // Serialized Consensus Position.
+    #[prost(bytes = "bytes", tag = "1")]
+    Submitted(Bytes),
+
+    // Transaction has already been executed (finalized).
+    #[prost(message, tag = "2")]
+    Executed(RawExecutedStatus),
 }
 
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsRequest {
-    #[prost(uint64, tag = "1")]
-    pub epoch: u64,
-
-    #[prost(bytes = "bytes", tag = "2")]
+    #[prost(bytes = "bytes", tag = "1")]
     pub transaction_digest: Bytes,
 
-    #[prost(bytes = "bytes", tag = "3")]
-    pub transaction_position: Bytes,
+    /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
+    /// in addition to waiting for finalized effects.
+    /// If not provided, only wait for finalized effects.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub consensus_position: Option<Bytes>,
 
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
-    #[prost(bool, tag = "4")]
+    #[prost(bool, tag = "3")]
     pub include_details: bool,
 }
 
@@ -272,8 +277,8 @@ pub enum RawValidatorTransactionStatus {
     Executed(RawExecutedStatus),
     #[prost(message, tag = "2")]
     Rejected(RawRejectedStatus),
-    #[prost(uint64, tag = "3")]
-    Expired(Round),
+    #[prost(message, tag = "3")]
+    Expired(RawExpiredStatus),
 }
 
 #[derive(Clone, prost::Message)]
@@ -317,6 +322,16 @@ pub enum RawRejectReason {
     Overload = 3,
     // Rejected due to coin deny list.
     CoinDenyList = 4,
+}
+
+#[derive(Clone, prost::Message)]
+pub struct RawExpiredStatus {
+    // Validator's current epoch.
+    #[prost(uint64, tag = "1")]
+    pub epoch: u64,
+    // Validator's current round. 0 if it is not yet checked.
+    #[prost(uint32, optional, tag = "2")]
+    pub round: Option<u32>,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

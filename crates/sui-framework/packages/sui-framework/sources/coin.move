@@ -178,16 +178,10 @@ public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext):
 /// `self`. Return newly created coins.
 public fun divide_into_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): vector<Coin<T>> {
     assert!(n > 0, EInvalidArg);
-    assert!(n <= value(self), ENotEnough);
+    assert!(n <= self.value(), ENotEnough);
 
-    let mut vec = vector[];
-    let mut i = 0;
-    let split_amount = value(self) / n;
-    while (i < n - 1) {
-        vec.push_back(self.split(split_amount, ctx));
-        i = i + 1;
-    };
-    vec
+    let split_amount = self.value() / n;
+    vector::tabulate!(n - 1, |_| self.split(split_amount, ctx))
 }
 
 /// Make any Coin with a zero value. Useful for placeholding
@@ -228,9 +222,9 @@ public fun create_currency<T: drop>(
         CoinMetadata {
             id: object::new(ctx),
             decimals,
-            name: string::utf8(name),
-            symbol: ascii::string(symbol),
-            description: string::utf8(description),
+            name: name.to_string(),
+            symbol: symbol.to_ascii_string(),
+            description: description.to_string(),
             icon_url,
         },
     )
@@ -285,7 +279,7 @@ public fun migrate_regulated_currency_to_v2<T>(
     ctx: &mut TxContext,
 ): DenyCapV2<T> {
     let DenyCap { id } = cap;
-    object::delete(id);
+    id.delete();
     let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
     deny_list.migrate_v1_to_v2(DENY_LIST_COIN_INDEX, ty, ctx);
     DenyCapV2 {
@@ -415,7 +409,7 @@ public entry fun mint_and_transfer<T>(
     recipient: address,
     ctx: &mut TxContext,
 ) {
-    transfer::public_transfer(mint(c, amount, ctx), recipient)
+    transfer::public_transfer(c.mint(amount, ctx), recipient)
 }
 
 // === Update coin metadata ===

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Not;
 use std::sync::Arc;
 use std::{iter, mem, thread};
 
@@ -23,7 +22,6 @@ use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -272,14 +270,6 @@ impl AuthorityStore {
                     .insert(transaction.digest(), genesis.events())
                     .unwrap();
             }
-            let event_digests = genesis.events().digest();
-            let events = genesis
-                .events()
-                .data
-                .iter()
-                .enumerate()
-                .map(|(i, e)| ((event_digests, i), e));
-            store.perpetual_tables.events.multi_insert(events).unwrap();
         }
 
         Ok(store)
@@ -329,30 +319,7 @@ impl AuthorityStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionEvents>, TypedStoreError> {
-        // For now, during this transition period, if we don't find events for a particular
-        // Transaction we need to fallback to try and read from the older table. Once the migration
-        // has finished and we've removed the older events table we can stop doing the fallback
-        if let Some(events) = self.perpetual_tables.events_2.get(digest)? {
-            return Ok(Some(events));
-        }
-
-        self.get_executed_effects(digest)?
-            .and_then(|effects| effects.events_digest().copied())
-            .and_then(|events_digest| self.get_events_by_events_digest(&events_digest).transpose())
-            .transpose()
-    }
-
-    pub fn get_events_by_events_digest(
-        &self,
-        event_digest: &TransactionEventsDigest,
-    ) -> Result<Option<TransactionEvents>, TypedStoreError> {
-        let data = self
-            .perpetual_tables
-            .events
-            .safe_range_iter((*event_digest, 0)..=(*event_digest, usize::MAX))
-            .map_ok(|(_, event)| event)
-            .collect::<Result<Vec<_>, TypedStoreError>>()?;
-        Ok(data.is_empty().not().then_some(TransactionEvents { data }))
+        self.perpetual_tables.events_2.get(digest)
     }
 
     pub fn multi_get_events(
@@ -834,16 +801,6 @@ impl AuthorityStore {
             )?;
         }
 
-        // Continue writing events into the old table for now keyed off of events digest
-        let event_digest = events.digest();
-        let events = events
-            .data
-            .iter()
-            .enumerate()
-            .map(|(i, e)| ((event_digest, i), e));
-
-        write_batch.insert_batch(&self.perpetual_tables.events, events)?;
-
         self.initialize_live_object_markers_impl(write_batch, new_locks_to_init, false)?;
 
         // Note: deletes locks for received objects as well (but not for objects that were in
@@ -1173,13 +1130,8 @@ impl AuthorityStore {
             &self.perpetual_tables.executed_effects,
             iter::once(tx_digest),
         )?;
-        if let Some(events_digest) = effects.events_digest() {
+        if effects.events_digest().is_some() {
             write_batch.delete_batch(&self.perpetual_tables.events_2, [tx_digest])?;
-            write_batch.schedule_delete_range(
-                &self.perpetual_tables.events,
-                &(*events_digest, usize::MIN),
-                &(*events_digest, usize::MAX),
-            )?;
         }
 
         let tombstones = effects

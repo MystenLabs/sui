@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) mod addressable;
+pub(crate) mod address;
 pub(crate) mod checkpoint;
 pub(crate) mod epoch;
+pub(crate) mod gas_input;
 pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;

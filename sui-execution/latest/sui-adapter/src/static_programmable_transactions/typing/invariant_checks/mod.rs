@@ -8,12 +8,14 @@ use crate::{
 use sui_types::error::ExecutionError;
 
 pub mod defining_ids_in_types;
+pub mod type_check;
 
 pub fn transaction<Mode: ExecutionMode>(
     env: &env::Env,
     tt: &T::Transaction,
 ) -> Result<(), ExecutionError> {
     defining_ids_in_types::verify(env, tt)?;
+    type_check::verify::<Mode>(env, tt)?;
     // Add in other invariants checks here as needed/desired.
     Ok(())
 }

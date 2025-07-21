@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::register_debug_fatal_handler;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use sui_macros::register_fail_point;
 use sui_macros::register_fail_point_if;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
@@ -56,14 +56,19 @@ async fn test_checkpoint_split_brain() {
             panic_timeout: None,
         });
     }
+
     let committee_size = 9;
     // count number of nodes that have reached split brain condition
     let count_split_brain_nodes: Arc<Mutex<AtomicUsize>> = Default::default();
     let count_clone = count_split_brain_nodes.clone();
-    register_fail_point("split_brain_reached", move || {
-        let counter = count_clone.lock().unwrap();
-        counter.fetch_add(1, Ordering::Relaxed);
-    });
+
+    register_debug_fatal_handler!(
+        "Split brain detected in checkpoint signature aggregation",
+        move || {
+            let counter = count_clone.lock().unwrap();
+            counter.fetch_add(1, Ordering::Relaxed);
+        }
+    );
 
     register_fail_point_if("cp_execution_nondeterminism", || true);
 

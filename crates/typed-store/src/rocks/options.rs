@@ -265,6 +265,8 @@ impl DBOptions {
     pub fn disable_write_throttling(mut self) -> DBOptions {
         self.options.set_soft_pending_compaction_bytes_limit(0);
         self.options.set_hard_pending_compaction_bytes_limit(0);
+        self.options.set_level_zero_slowdown_writes_trigger(512);
+        self.options.set_level_zero_stop_writes_trigger(1024);
         self
     }
 

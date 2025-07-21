@@ -1487,34 +1487,6 @@ dependencies = [
 
 [[package]]
 name = "axum"
-version = "0.6.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b829e4e32b91e643de6eafe82b1d90675f5874230191a4ffbc1b336dec4d6bf"
-dependencies = [
- "async-trait",
- "axum-core 0.3.4",
- "bitflags 1.3.2",
- "bytes",
- "futures-util",
- "http 0.2.9",
- "http-body 0.4.5",
- "hyper 0.14.26",
- "itoa",
- "matchit 0.7.0",
- "memchr",
- "mime",
- "percent-encoding",
- "pin-project-lite",
- "rustversion",
- "serde",
- "sync_wrapper 0.1.2",
- "tower 0.4.13",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
-name = "axum"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a6c9af12842a67734c9a2e355436e5d03b22383ed60cf13cd0c18fbfe3dcbcf"
@@ -1587,23 +1559,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "axum-core"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "759fa577a247914fd3f7f76d62972792636412fbfd634cd452f6a385a74d2d2c"
-dependencies = [
- "async-trait",
- "bytes",
- "futures-util",
- "http 0.2.9",
- "http-body 0.4.5",
- "mime",
- "rustversion",
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]
@@ -1981,7 +1936,7 @@ checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
 name = "bin-version"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "const-str",
  "git-version",
@@ -2925,7 +2880,7 @@ dependencies = [
  "nom",
  "parking_lot 0.12.3",
  "prometheus",
- "prost 0.13.5",
+ "prost",
  "quinn-proto",
  "rand 0.8.5",
  "rstest",
@@ -3005,22 +2960,22 @@ dependencies = [
 
 [[package]]
 name = "console-api"
-version = "0.6.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd326812b3fd01da5bb1af7d340d0d555fd3d4b641e7f1dfcf5962a902952787"
+checksum = "8030735ecb0d128428b64cd379809817e620a40e5001c54465b99ec5feec2857"
 dependencies = [
  "futures-core",
- "prost 0.12.3",
- "prost-types 0.12.3",
- "tonic 0.10.0",
+ "prost",
+ "prost-types",
+ "tonic 0.12.3",
  "tracing-core",
 ]
 
 [[package]]
 name = "console-subscriber"
-version = "0.2.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7481d4c57092cd1c19dd541b92bdce883de840df30aa5d03fd48a3935c01842e"
+checksum = "6539aa9c6a4cd31f4b1c040f860a1eac9aa80e7df6b05d506a6e7179936d6a01"
 dependencies = [
  "console-api",
  "crossbeam-channel",
@@ -3028,13 +2983,15 @@ dependencies = [
  "futures-task",
  "hdrhistogram",
  "humantime",
- "prost-types 0.12.3",
+ "hyper-util",
+ "prost",
+ "prost-types",
  "serde",
  "serde_json",
  "thread_local",
  "tokio",
  "tokio-stream",
- "tonic 0.10.0",
+ "tonic 0.12.3",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -5396,8 +5353,8 @@ dependencies = [
  "hyper 1.5.2",
  "hyper-util",
  "log",
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "reqwest 0.12.9",
  "serde",
  "serde_json",
@@ -6099,18 +6056,6 @@ dependencies = [
 
 [[package]]
 name = "hyper-timeout"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbb958482e8c7be4bc3cf272a766a2b0bf1a6755e7a6ae777f017a31d11b13b1"
-dependencies = [
- "hyper 0.14.26",
- "pin-project-lite",
- "tokio",
- "tokio-io-timeout",
-]
-
-[[package]]
-name = "hyper-timeout"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3203a961e5c83b6f5498933e78b6b263e208c197b63e9c6c53cc82ffd3f63793"
@@ -6448,9 +6393,9 @@ dependencies = [
 
 [[package]]
 name = "indoc"
-version = "2.0.5"
+version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
+checksum = "f4c7245a08504955605670dbf141fceab975f15ca21570696aebe9d2e71576bd"
 
 [[package]]
 name = "infer"
@@ -6584,6 +6529,17 @@ checksum = "46112a93252b123d31a119a8d1a1ac19deac4fac6e0e8b0df58f0d4e5870e63c"
 dependencies = [
  "libc",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "io-uring"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b86e202f00093dcba4275d4636b93ef9dd75d025ae560d2521b45ea28ab49013"
+dependencies = [
+ "bitflags 2.6.0",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -8214,11 +8170,11 @@ dependencies = [
  "codespan-reporting",
  "derive-where",
  "futures",
+ "indoc",
  "itertools 0.10.5",
  "jsonrpc",
  "move-command-line-common",
  "move-core-types",
- "move-package",
  "once_cell",
  "path-clean",
  "petgraph 0.8.1",
@@ -8567,7 +8523,7 @@ dependencies = [
 [[package]]
 name = "msim"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=cad62679fd180a48c665f842cb80045f8fcfdee9#cad62679fd180a48c665f842cb80045f8fcfdee9"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=192bd9590f8552d5a1c5debf66c4ff2672af037e#192bd9590f8552d5a1c5debf66c4ff2672af037e"
 dependencies = [
  "ahash 0.7.8",
  "async-task",
@@ -8596,7 +8552,7 @@ dependencies = [
 [[package]]
 name = "msim-macros"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=cad62679fd180a48c665f842cb80045f8fcfdee9#cad62679fd180a48c665f842cb80045f8fcfdee9"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=192bd9590f8552d5a1c5debf66c4ff2672af037e#192bd9590f8552d5a1c5debf66c4ff2672af037e"
 dependencies = [
  "darling 0.14.2",
  "proc-macro2",
@@ -9370,7 +9326,7 @@ dependencies = [
  "opentelemetry 0.27.1",
  "opentelemetry-proto",
  "opentelemetry_sdk",
- "prost 0.13.5",
+ "prost",
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.12.3",
@@ -9386,7 +9342,7 @@ dependencies = [
  "hex",
  "opentelemetry 0.27.1",
  "opentelemetry_sdk",
- "prost 0.13.5",
+ "prost",
  "serde",
  "tonic 0.12.3",
 ]
@@ -10487,22 +10443,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "146c289cda302b98a28d40c8b3b90498d6e526dd24ac2ecea73e4e491685b94a"
-dependencies = [
- "bytes",
- "prost-derive 0.12.3",
-]
-
-[[package]]
-name = "prost"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2796faa41db3ec313a31f7624d9286acf277b52de526150b7e69f3debf891ee5"
 dependencies = [
  "bytes",
- "prost-derive 0.13.5",
+ "prost-derive",
 ]
 
 [[package]]
@@ -10519,26 +10465,13 @@ dependencies = [
  "once_cell",
  "petgraph 0.6.5",
  "prettyplease",
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "pulldown-cmark 0.12.2",
  "pulldown-cmark-to-cmark",
  "regex",
  "syn 2.0.99",
  "tempfile",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efb6c9a1dd1def8e2124d17e83a20af56f1570d6c2d2bd9e266ccb768df3840e"
-dependencies = [
- "anyhow",
- "itertools 0.11.0",
- "proc-macro2",
- "quote",
- "syn 2.0.99",
 ]
 
 [[package]]
@@ -10563,17 +10496,8 @@ dependencies = [
  "logos 0.14.1",
  "miette",
  "once_cell",
- "prost 0.13.5",
- "prost-types 0.13.3",
-]
-
-[[package]]
-name = "prost-types"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193898f59edcf43c26227dcd4c8427f00d99d61e95dcde58dabd49fa291d470e"
-dependencies = [
- "prost 0.12.3",
+ "prost",
+ "prost-types",
 ]
 
 [[package]]
@@ -10582,7 +10506,7 @@ version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4759aa0d3a6232fb8dbdb97b61de2c20047c68aca932c7ed76da9d788508d670"
 dependencies = [
- "prost 0.13.5",
+ "prost",
 ]
 
 [[package]]
@@ -10602,9 +10526,9 @@ checksum = "873f359bdecdfe6e353752f97cb9ee69368df55b16363ed2216da85e03232a58"
 dependencies = [
  "bytes",
  "miette",
- "prost 0.13.5",
+ "prost",
  "prost-reflect",
- "prost-types 0.13.3",
+ "prost-types",
  "protox-parse",
  "thiserror 1.0.69",
 ]
@@ -10617,7 +10541,7 @@ checksum = "a3a462d115462c080ae000c29a47f0b3985737e5d3a995fcdbcaa5c782068dde"
 dependencies = [
  "logos 0.14.1",
  "miette",
- "prost-types 0.13.3",
+ "prost-types",
  "thiserror 1.0.69",
 ]
 
@@ -12620,12 +12544,9 @@ dependencies = [
 
 [[package]]
 name = "slab"
-version = "0.4.7"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4614a76b2a8be0058caa9dbbaf66d988527d86d003c11a94fbd335d7661edcef"
-dependencies = [
- "autocfg",
-]
+checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
 
 [[package]]
 name = "slip10_ed25519"
@@ -13103,7 +13024,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -13178,7 +13099,7 @@ dependencies = [
  "sui-move-build",
  "sui-package-management",
  "sui-protocol-config",
- "sui-replay",
+ "sui-replay-2",
  "sui-sdk",
  "sui-simulator",
  "sui-source-validation",
@@ -13326,7 +13247,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -13381,7 +13302,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -13482,7 +13403,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -13534,7 +13455,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-cli"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -13640,7 +13561,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cluster-test"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13865,7 +13786,7 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13960,7 +13881,7 @@ dependencies = [
 
 [[package]]
 name = "sui-default-config"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -13968,7 +13889,7 @@ dependencies = [
 
 [[package]]
 name = "sui-display"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "move-core-types",
@@ -13979,7 +13900,7 @@ dependencies = [
 
 [[package]]
 name = "sui-e2e-tests"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13995,14 +13916,15 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-package",
+ "mysten-common",
  "mysten-metrics",
  "p256",
  "passkey-authenticator",
  "passkey-client",
  "passkey-types",
  "prometheus",
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "rand 0.8.5",
  "reqwest 0.12.9",
  "serde",
@@ -14127,7 +14049,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14156,14 +14078,14 @@ dependencies = [
 
 [[package]]
 name = "sui-field-count"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "sui-field-count-derive",
 ]
 
 [[package]]
 name = "sui-field-count-derive"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -14191,7 +14113,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-snapshot"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14271,7 +14193,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -14394,7 +14316,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14469,7 +14391,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14546,7 +14468,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-framework"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14589,7 +14511,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-framework-store-traits"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14599,7 +14521,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-graphql"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -14645,7 +14567,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-jsonrpc"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -14700,7 +14622,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-metrics"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",
@@ -14715,7 +14637,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-reader"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -14772,7 +14694,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-schema"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14994,7 +14916,7 @@ dependencies = [
 
 [[package]]
 name = "sui-kv-rpc"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",
@@ -15017,7 +14939,7 @@ dependencies = [
 
 [[package]]
 name = "sui-kvstore"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15027,8 +14949,8 @@ dependencies = [
  "gcp_auth",
  "http 1.3.1",
  "prometheus",
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "serde",
  "sui-data-ingestion-core",
  "sui-types",
@@ -15041,7 +14963,7 @@ dependencies = [
 
 [[package]]
 name = "sui-light-client"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15067,6 +14989,7 @@ dependencies = [
  "sui-storage",
  "sui-types",
  "tempfile",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
  "url",
@@ -15084,7 +15007,7 @@ dependencies = [
 
 [[package]]
 name = "sui-metric-checker"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -15122,7 +15045,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "better_any",
@@ -15165,7 +15088,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
@@ -15189,7 +15112,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-lsp"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "bin-version",
  "clap",
@@ -15282,7 +15205,7 @@ dependencies = [
 
 [[package]]
 name = "sui-name-service"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "bcs",
  "move-core-types",
@@ -15335,7 +15258,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -15392,7 +15315,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -15428,7 +15351,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -15458,15 +15381,18 @@ dependencies = [
 
 [[package]]
 name = "sui-package-alt"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
+ "move-core-types",
  "move-package-alt",
  "serde",
+ "sui-package-management",
+ "tempfile",
 ]
 
 [[package]]
 name = "sui-package-dump"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -15483,7 +15409,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "move-core-types",
@@ -15523,7 +15449,7 @@ dependencies = [
 
 [[package]]
 name = "sui-pg-db"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15604,7 +15530,7 @@ dependencies = [
  "mysten-metrics",
  "once_cell",
  "prometheus",
- "prost 0.13.5",
+ "prost",
  "prost-build",
  "protobuf",
  "rand 0.8.5",
@@ -15717,7 +15643,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rosetta"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15769,8 +15695,8 @@ dependencies = [
  "bcs",
  "bytes",
  "http 1.3.1",
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "roaring",
  "serde",
  "serde_json",
@@ -15800,8 +15726,8 @@ dependencies = [
  "paste",
  "prometheus",
  "proptest",
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "protox",
  "rand 0.8.5",
  "roaring",
@@ -15833,7 +15759,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-benchmark"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "bb8",
@@ -15858,7 +15784,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15885,7 +15811,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15947,7 +15873,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -15994,7 +15920,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -16057,7 +15983,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -16127,7 +16053,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sql-macro"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -16190,7 +16116,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -16313,7 +16239,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-validator"
-version = "1.52.0"
+version = "1.53.0"
 
 [[package]]
 name = "sui-tls"
@@ -16339,7 +16265,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -16349,6 +16275,7 @@ dependencies = [
  "clap",
  "colored",
  "comfy-table",
+ "consensus-core",
  "eyre",
  "fastcrypto",
  "futures",
@@ -16516,8 +16443,8 @@ dependencies = [
  "prometheus",
  "proptest",
  "proptest-derive",
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "rand 0.8.5",
  "roaring",
  "rustls-pemfile 2.1.2",
@@ -16630,7 +16557,7 @@ dependencies = [
 
 [[package]]
 name = "suins-indexer"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -16899,7 +16826,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "prometheus",
- "prost 0.13.5",
+ "prost",
  "tokio",
  "tonic 0.12.3",
  "tracing",
@@ -17302,17 +17229,19 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.44.2"
+version = "1.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
+checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
 dependencies = [
  "backtrace",
  "bytes",
+ "io-uring",
  "libc",
  "mio 1.0.3",
  "parking_lot 0.12.3",
  "pin-project-lite",
  "signal-hook-registry",
+ "slab",
  "socket2 0.5.6",
  "tokio-macros 2.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
@@ -17332,16 +17261,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.2.2",
-]
-
-[[package]]
-name = "tokio-io-timeout"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30b74022ada614a1b4834de765f9bb43877f910cc8ce4be40e89042c9223a8bf"
-dependencies = [
- "pin-project-lite",
- "tokio",
 ]
 
 [[package]]
@@ -17598,33 +17517,6 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5469afaf78a11265c343a88969045c1568aa8ecc6c787dbf756e92e70f199861"
-dependencies = [
- "async-stream",
- "async-trait",
- "axum 0.6.20",
- "base64 0.21.7",
- "bytes",
- "h2 0.3.26",
- "http 0.2.9",
- "http-body 0.4.5",
- "hyper 0.14.26",
- "hyper-timeout 0.4.1",
- "percent-encoding",
- "pin-project",
- "prost 0.12.3",
- "tokio",
- "tokio-stream",
- "tower 0.4.13",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tonic"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877c5b330756d856ffcc4553ab34a5684481ade925ecc54bcd1bf02b1d0d4d52"
@@ -17639,11 +17531,11 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.5.2",
- "hyper-timeout 0.5.1",
+ "hyper-timeout",
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "prost 0.13.5",
+ "prost",
  "rustls-native-certs 0.8.1",
  "rustls-pemfile 2.1.2",
  "socket2 0.5.6",
@@ -17671,11 +17563,11 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.5.2",
- "hyper-timeout 0.5.1",
+ "hyper-timeout",
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "prost 0.13.5",
+ "prost",
  "socket2 0.5.6",
  "tokio",
  "tokio-rustls 0.26.2",
@@ -17697,7 +17589,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "prost-build",
- "prost-types 0.13.3",
+ "prost-types",
  "quote",
  "syn 2.0.99",
 ]
@@ -17711,7 +17603,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "prost-build",
- "prost-types 0.13.3",
+ "prost-types",
  "quote",
  "syn 2.0.99",
 ]
@@ -17722,7 +17614,7 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb87334d340313fefa513b6e60794d44a86d5f039b523229c99c323e4e19ca4b"
 dependencies = [
- "prost 0.13.5",
+ "prost",
  "tokio",
  "tokio-stream",
  "tonic 0.13.1",
@@ -17734,8 +17626,8 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9687bd5bfeafebdded2356950f278bba8226f0b32109537c4253406e09aafe1"
 dependencies = [
- "prost 0.13.5",
- "prost-types 0.13.3",
+ "prost",
+ "prost-types",
  "tokio",
  "tokio-stream",
  "tonic 0.13.1",
@@ -17754,7 +17646,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.5.2",
- "hyper-timeout 0.5.1",
+ "hyper-timeout",
  "hyper-util",
  "pin-project",
  "socket2 0.5.6",
@@ -19269,7 +19161,7 @@ dependencies = [
 
 [[package]]
 name = "x"
-version = "1.52.0"
+version = "1.53.0"
 dependencies = [
  "anyhow",
  "camino",

@@ -6,13 +6,16 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, Edge},
-    Context, Object,
+    Context, Enum, Object,
 };
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::kv_loader::{
     KvLoader, TransactionContents as NativeTransactionContents,
 };
-use sui_types::{digests::TransactionDigest, effects::TransactionEffectsAPI};
+use sui_types::{
+    digests::TransactionDigest, effects::TransactionEffectsAPI,
+    execution_status::ExecutionStatus as NativeExecutionStatus,
+};
 
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
@@ -26,6 +29,15 @@ use super::{
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
+
+/// The execution status of this transaction: success or failure.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum ExecutionStatus {
+    /// The transaction was successfully executed.
+    Success,
+    /// The transaction could not be executed.
+    Failure,
+}
 
 #[derive(Clone)]
 pub(crate) struct TransactionEffects {
@@ -71,6 +83,21 @@ impl EffectsContents {
         };
 
         Checkpoint::with_sequence_number(self.scope.clone(), content.cp_sequence_number())
+    }
+
+    /// Whether the transaction executed successfully or not.
+    async fn status(&self) -> Result<Option<ExecutionStatus>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        let status = match effects.status() {
+            NativeExecutionStatus::Success => ExecutionStatus::Success,
+            NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
+        };
+
+        Ok(Some(status))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.

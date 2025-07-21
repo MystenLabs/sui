@@ -183,7 +183,7 @@ impl SurferState {
             {
                 Ok(effects) => break effects,
                 Err(e) => {
-                    error!("Error executing transaction: {:?}", e);
+                    error!("Error executing transaction {:?}: {e:?}", tx.digest());
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
