@@ -1048,6 +1048,7 @@ mod test {
             })
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
+            .disable_fullnode_pruning()
             .build()
             .await
             .into()

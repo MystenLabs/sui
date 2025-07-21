@@ -121,9 +121,13 @@ type Epoch {
 	"""
 	totalCheckpoints: UInt53
 	"""
-	The total amount of gas fees (in MIST) that were paid in this epoch.
+	The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
 	"""
 	totalGasFees: BigInt
+	"""
+	The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
+	"""
+	totalStakeRewards: BigInt
 }
 
 """
@@ -834,6 +838,10 @@ type TransactionEffects {
 	Whether the transaction executed successfully or not.
 	"""
 	status: ExecutionStatus
+	"""
+	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+	"""
+	lamportVersion: UInt53
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
