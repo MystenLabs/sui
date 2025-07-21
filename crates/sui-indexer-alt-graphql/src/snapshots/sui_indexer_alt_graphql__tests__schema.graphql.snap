@@ -120,6 +120,10 @@ type Epoch {
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: UInt53
+	"""
+	The total amount of gas fees (in MIST) that were paid in this epoch.
+	"""
+	totalGasFees: BigInt
 }
 
 """
