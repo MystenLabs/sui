@@ -214,7 +214,7 @@ where
                 trace!(?tx_digest, "Waking up to finalize transaction");
             }
             _ = cache_read.notify_read_executed_effects_digests(
-                "ValidatorTxFinalizer::delay_and_finalize_tx",
+                "ValidatorTxFinalizer::notify_read_executed_effects_digests",
                 &digests,
             ) => {
                 trace!(?tx_digest, "Transaction already finalized");

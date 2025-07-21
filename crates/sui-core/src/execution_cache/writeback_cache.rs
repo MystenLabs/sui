@@ -1854,7 +1854,7 @@ impl ObjectCacheRead for WritebackCache {
     ) -> BoxFuture<'a, ()> {
         self.object_notify_read
             .read(
-                "notify_read_executed_input_objects",
+                "notify_read_input_objects",
                 input_and_receiving_keys,
                 move |keys| {
                     self.multi_input_objects_available(keys, receiving_keys, epoch)

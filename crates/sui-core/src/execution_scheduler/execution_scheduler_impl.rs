@@ -197,7 +197,7 @@ impl ExecutionScheduler {
                     );
                 }
             _ = self.transaction_cache_read.notify_read_executed_effects_digests(
-                "ExecutionScheduler::schedule_transaction",
+                "ExecutionScheduler::notify_read_executed_effects_digests",
                 &digests,
             ) => {
                 debug!(?tx_digest, "Transaction already executed");

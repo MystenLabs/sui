@@ -5791,7 +5791,7 @@ impl RandomnessRoundReceiver {
                 authority_state
                     .get_transaction_cache_reader()
                     .notify_read_executed_effects(
-                        "RandomnessRoundReceiver::handle_new_randomness first",
+                        "RandomnessRoundReceiver::notify_read_executed_effects_first",
                         &[digest],
                     ),
             )
@@ -5808,7 +5808,7 @@ impl RandomnessRoundReceiver {
                     authority_state
                         .get_transaction_cache_reader()
                         .notify_read_executed_effects(
-                            "RandomnessRoundReceiver::handle_new_randomness second",
+                            "RandomnessRoundReceiver::notify_read_executed_effects_second",
                             &[digest],
                         )
                         .await

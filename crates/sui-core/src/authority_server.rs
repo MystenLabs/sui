@@ -1176,7 +1176,7 @@ impl ValidatorService {
                 .state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects(
-                    "AuthorityServer::wait_for_effects_response (no consensus position)",
+                    "AuthorityServer::notify_read_executed_effects_finalized",
                     &tx_digests,
                 )
                 .await;
@@ -1287,7 +1287,7 @@ impl ValidatorService {
                 },
                 mut effects = self.state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects("AuthorityServer::wait_for_effects_response", &tx_digests) => {
+                    .notify_read_executed_effects("AuthorityServer::notify_read_executed_effects", &tx_digests) => {
 
                     // unwrap is safe because notify_read_executed_effects is expected
                     // to return the same amount of effects as the provided transactions.

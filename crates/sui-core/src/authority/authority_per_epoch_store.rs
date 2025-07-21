@@ -1899,7 +1899,7 @@ impl AuthorityPerEpochStore {
         Ok(self
             .checkpoint_state_notify_read
             .read(
-                "get_state_hash_for_checkpoint",
+                "notify_read_checkpoint_state_hasher",
                 checkpoints,
                 |checkpoints| {
                     tables

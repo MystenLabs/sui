@@ -1647,7 +1647,7 @@ impl SuiNode {
             state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(
-                    "SuiNode::reexecute_pending_consensus_certs",
+                    "SuiNode::notify_read_executed_effects_digests",
                     &digests,
                 ),
         )

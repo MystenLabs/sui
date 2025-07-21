@@ -1303,7 +1303,10 @@ impl CheckpointBuilder {
         let settlement_effects = loop {
             match tokio::time::timeout(Duration::from_secs(5), async {
                 self.effects_store
-                    .notify_read_executed_effects(&settlement_digests)
+                    .notify_read_executed_effects(
+                        "CheckpointBuilder::notify_read_settlement_effects",
+                        &settlement_digests,
+                    )
                     .await
             })
             .await
@@ -1388,7 +1391,7 @@ impl CheckpointBuilder {
             let root_effects = self
                 .effects_store
                 .notify_read_executed_effects(
-                    "CheckpointBuilder::resolve_checkpoint_transactions",
+                    "CheckpointBuilder::notify_read_executed_effects",
                     &root_digests,
                 )
                 .in_monitored_scope("CheckpointNotifyRead")
