@@ -1188,7 +1188,7 @@ impl CheckpointBuilder {
                     if msg.contains("change epoch tx has already been executed via state sync") {
                         info!("change epoch tx has already been executed via state sync. Checkpoint builder will be shut down briefly");
                     } else {
-                        error!("Error while making checkpoint, will retry in 1s: {}", msg);
+                        debug_fatal!("Error while making checkpoint, will retry in 1s: {}", msg);
                     }
 
                     tokio::time::sleep(Duration::from_secs(1)).await;
