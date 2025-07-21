@@ -120,6 +120,10 @@ type Epoch {
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
 	totalGasFees: BigInt
+	"""
+	The total MIST rewarded as stake.
+	"""
+	totalStakeRewards: BigInt
 }
 
 """

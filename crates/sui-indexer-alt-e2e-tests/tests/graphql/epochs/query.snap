@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-35:
+task 6, lines 16-36:
 //# run-graphql
 Response: {
   "data": {
@@ -28,7 +28,8 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
       "totalCheckpoints": 1,
-      "totalGasFees": "0"
+      "totalGasFees": "0",
+      "totalStakeRewards": "0"
     },
     "e0": {
       "epochId": 0,
@@ -36,7 +37,8 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00Z",
       "endTimestamp": "1970-01-01T00:00:00.123Z",
       "totalCheckpoints": 2,
-      "totalGasFees": "0"
+      "totalGasFees": "0",
+      "totalStakeRewards": "0"
     },
     "e1": {
       "epochId": 1,
@@ -44,7 +46,8 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00.123Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
       "totalCheckpoints": 1,
-      "totalGasFees": "0"
+      "totalGasFees": "0",
+      "totalStakeRewards": "0"
     },
     "e2": {
       "epochId": 2,
@@ -52,13 +55,14 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
       "totalCheckpoints": 1,
-      "totalGasFees": "0"
+      "totalGasFees": "0",
+      "totalStakeRewards": "0"
     },
     "e3": null
   }
 }
 
-task 7, lines 37-57:
+task 7, lines 38-59:
 //# run-graphql
 Response: {
   "data": {
@@ -70,7 +74,8 @@ Response: {
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
           "totalCheckpoints": 1,
-          "totalGasFees": "0"
+          "totalGasFees": "0",
+          "totalStakeRewards": "0"
         },
         "e0": {
           "epochId": 0,
@@ -78,7 +83,8 @@ Response: {
           "startTimestamp": "1970-01-01T00:00:00Z",
           "endTimestamp": "1970-01-01T00:00:00.123Z",
           "totalCheckpoints": 2,
-          "totalGasFees": "0"
+          "totalGasFees": "0",
+          "totalStakeRewards": "0"
         },
         "e1": {
           "epochId": 1,
@@ -86,7 +92,8 @@ Response: {
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
           "totalCheckpoints": 1,
-          "totalGasFees": "0"
+          "totalGasFees": "0",
+          "totalStakeRewards": "0"
         },
         "e2": null
       }

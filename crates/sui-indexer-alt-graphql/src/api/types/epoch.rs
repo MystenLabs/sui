@@ -161,6 +161,19 @@ impl Epoch {
 
         Ok(total_gas_fees.map(BigInt::from))
     }
+
+    /// The total MIST rewarded as stake.
+    async fn total_stake_rewards(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd {
+            total_stake_rewards_distributed,
+            ..
+        }) = self.end(ctx).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(total_stake_rewards_distributed.map(BigInt::from))
+    }
 }
 
 impl Epoch {
