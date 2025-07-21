@@ -15,7 +15,7 @@ use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
 
 // Register the schema which was loaded in the build.rs call.
 #[cynic::schema("rpc")]
-mod schema {
+pub mod schema {
     use chrono::{DateTime as ChronoDateTime, Utc};
     cynic::impl_scalar!(u64, UInt53);
     cynic::impl_scalar!(ChronoDateTime<Utc>, DateTime);
