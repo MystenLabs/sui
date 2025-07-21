@@ -1,8 +1,0 @@
-[package]
-name = "example"
-edition = "2025"
-license = "Apache-2.0"
-authors = ["Move Team"]
-
-[environments]
-~124512 = "35834a8a"
