@@ -35,7 +35,7 @@ pub mod epoch_query {
     #[cynic(variables = "EpochDataArgs")]
     pub struct Query {
         #[arguments(epochId: $epoch)]
-        epoch: Option<Epoch>,
+        pub epoch: Option<Epoch>,
     }
 
     #[derive(cynic::Scalar, Clone)]
@@ -44,15 +44,15 @@ pub mod epoch_query {
 
     #[derive(cynic::QueryFragment)]
     pub struct Epoch {
-        epoch_id: u64,
-        protocol_configs: Option<ProtocolConfigs>,
-        reference_gas_price: Option<BigInt>,
-        start_timestamp: Option<ChronoDateTime<Utc>>,
+        pub epoch_id: u64,
+        pub protocol_configs: Option<ProtocolConfigs>,
+        pub reference_gas_price: Option<BigInt>,
+        pub start_timestamp: Option<ChronoDateTime<Utc>>,
     }
 
     #[derive(cynic::QueryFragment)]
     pub struct ProtocolConfigs {
-        protocol_version: u64,
+        pub protocol_version: u64,
     }
 
     pub async fn query(epoch_id: u64, data_store: &DataStore) -> Result<EpochData, anyhow::Error> {
@@ -115,24 +115,24 @@ pub mod txn_query {
     #[cynic(variables = "TransactionDataArgs")]
     pub struct Query {
         #[arguments(digest: $digest)]
-        transaction: Option<Transaction>,
+        pub transaction: Option<Transaction>,
     }
 
     #[derive(cynic::QueryFragment)]
     pub struct Transaction {
-        transaction_bcs: Option<Base64>,
-        effects: Option<TransactionEffects>,
+        pub transaction_bcs: Option<Base64>,
+        pub effects: Option<TransactionEffects>,
     }
 
     #[derive(cynic::QueryFragment)]
     pub struct TransactionEffects {
-        checkpoint: Option<Checkpoint>,
-        effects_bcs: Option<Base64>,
+        pub checkpoint: Option<Checkpoint>,
+        pub effects_bcs: Option<Base64>,
     }
 
     #[derive(cynic::QueryFragment)]
     pub struct Checkpoint {
-        sequence_number: u64,
+        pub sequence_number: u64,
     }
 
     pub async fn query(
