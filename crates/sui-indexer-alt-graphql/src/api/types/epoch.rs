@@ -160,7 +160,7 @@ impl Epoch {
             .await?
             .as_ref()
             .and_then(|last| last.total_gas_fees)
-            .map(|fees| BigInt::from(fees));
+            .map(BigInt::from);
         Ok(result)
     }
 }
