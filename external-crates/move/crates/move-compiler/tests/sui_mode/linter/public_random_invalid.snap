@@ -6,9 +6,9 @@ info:
   lint: true
 ---
 warning[Lint W99006]: Risky use of 'sui::random'
-  ┌─ tests/sui_mode/linter/public_random_invalid.move:7:42
+  ┌─ tests/sui_mode/linter/public_random_invalid.move:8:42
   │
-7 │     public fun not_allowed1(_x: u64, _r: &Random) {}
+8 │     public fun not_allowed1(_x: u64, _r: &Random) {}
   │                                          ^^^^^^^ 'public' function 'not_allowed1' accepts 'Random' as a parameter
   │
   = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
@@ -16,9 +16,9 @@ warning[Lint W99006]: Risky use of 'sui::random'
   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99006]: Risky use of 'sui::random'
-  ┌─ tests/sui_mode/linter/public_random_invalid.move:8:34
+  ┌─ tests/sui_mode/linter/public_random_invalid.move:9:34
   │
-8 │     public fun not_allowed2(_rg: &RandomGenerator, _x: u64) {}
+9 │     public fun not_allowed2(_rg: &RandomGenerator, _x: u64) {}
   │                                  ^^^^^^^^^^^^^^^^ 'public' function 'not_allowed2' accepts 'RandomGenerator' as a parameter
   │
   = Functions that accept 'sui::random::RandomGenerator' as a parameter might be abused by attackers by inspecting the results of randomness
@@ -26,38 +26,29 @@ warning[Lint W99006]: Risky use of 'sui::random'
   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99006]: Risky use of 'sui::random'
-  ┌─ tests/sui_mode/linter/public_random_invalid.move:9:33
-  │
-9 │     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
-  │                                 ^^^^^^^ 'public' function 'not_allowed3' accepts 'Random' as a parameter
-  │
-  = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
-  = Non-public functions are preferred
-  = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   ┌─ tests/sui_mode/linter/public_random_invalid.move:10:33
+   │
+10 │     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
+   │                                 ^^^^^^^ 'public' function 'not_allowed3' accepts 'Random' as a parameter
+   │
+   = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
+   = Non-public functions are preferred
+   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99006]: Risky use of 'sui::random'
-  ┌─ tests/sui_mode/linter/public_random_invalid.move:9:47
-  │
-9 │     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
-  │                                               ^^^^^^^^^^^^^^^^ 'public' function 'not_allowed3' accepts 'RandomGenerator' as a parameter
-  │
-  = Functions that accept 'sui::random::RandomGenerator' as a parameter might be abused by attackers by inspecting the results of randomness
-  = Non-public functions are preferred
-  = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[Lint W99000]: unnecessary public entry
-   ┌─ tests/sui_mode/linter/public_random_invalid.move:10:12
+   ┌─ tests/sui_mode/linter/public_random_invalid.move:10:47
    │
-10 │     public entry fun not_allowed4(_x: u64, _r: &Random, _y: u64) {}
-   │            ^^^^^ `entry` on `public` functions is meaningless except in niche use cases.
+10 │     public fun not_allowed3(_r: &Random, _rg: &RandomGenerator, _x: u64) {}
+   │                                               ^^^^^^^^^^^^^^^^ 'public' function 'not_allowed3' accepts 'RandomGenerator' as a parameter
    │
-   = `public` functions can be called from PTBs. As such, `entry` on `public` functions should be used only if you are concerned with the value flow limitations around `entry` functions. If you do not have an intricate set of private `entry` functions alongside it, an `entry` modifier on a `public` function is superfluous.
-   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = Functions that accept 'sui::random::RandomGenerator' as a parameter might be abused by attackers by inspecting the results of randomness
+   = Non-public functions are preferred
+   = This warning can be suppressed with '#[allow(lint(public_random))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W99006]: Risky use of 'sui::random'
-   ┌─ tests/sui_mode/linter/public_random_invalid.move:10:48
+   ┌─ tests/sui_mode/linter/public_random_invalid.move:11:48
    │
-10 │     public entry fun not_allowed4(_x: u64, _r: &Random, _y: u64) {}
+11 │     public entry fun not_allowed4(_x: u64, _r: &Random, _y: u64) {}
    │                                                ^^^^^^^ 'public' function 'not_allowed4' accepts 'Random' as a parameter
    │
    = Functions that accept 'sui::random::Random' as a parameter might be abused by attackers by inspecting the results of randomness
