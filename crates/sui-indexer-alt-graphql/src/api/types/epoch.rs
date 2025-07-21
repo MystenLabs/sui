@@ -153,7 +153,7 @@ impl Epoch {
         Ok(Some(UInt53::from(hi - lo)))
     }
 
-    /// The total amount of gas fees (in MIST) that were paid in this epoch.
+    /// The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
     async fn total_gas_fees(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
         let Some(StoredEpochEnd { total_gas_fees, .. }) = self.end(ctx).await? else {
             return Ok(None);
@@ -162,7 +162,7 @@ impl Epoch {
         Ok(total_gas_fees.map(BigInt::from))
     }
 
-    /// The total MIST rewarded as stake.
+    /// The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
     async fn total_stake_rewards(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
         let Some(StoredEpochEnd {
             total_stake_rewards_distributed,
