@@ -24,6 +24,7 @@ This document is focused on running the Sui Node software as a Validator.
 ## Requirements
 
 To run a Sui Validator a machine with the following is required:
+
 - CPU: 24 physical cores (or 48 virtual cores)
 - Memory: 128 GB
 - Storage: 4 TB NVME
@@ -203,6 +204,11 @@ Public dashboard for network wide visibility:
 
 - [Sui Testnet Validators](https://metrics.sui.io/public-dashboards/9b841d63c9bf43fe8acec4f0fa991f5e)
 
+For viewing total stake of validators, current active set and candidates:
+
+- [Validators on Suiscan](https://suiscan.xyz/mainnet/validators)
+- [Validators on SuiVision](https://suivision.xyz/validators)
+
 ## Software Updates
 
 When an update is required to the Sui Node software the following process can be used. Follow the relevant Systemd or Docker Compose runbook depending on your deployment type. It is highly unlikely that you will want to restart with a clean database.
@@ -246,6 +252,14 @@ chmod +x sui
 ```
 
 It is recommended and often required that the `sui` binary release/version matches that of the deployed network.
+
+### Querying On-chain Metadata
+
+Validator metadata can be queried by validator address, using `validator` subcommand of Sui CLI:
+
+```
+sui validator display-metadata {validator_address}
+```
 
 ### Updating On-chain Metadata
 
@@ -298,6 +312,20 @@ To update the Gas Price Survey Quote of a validator, which is used to calculate 
 
 ```
 sui client call --package 0x3 --module sui_system --function request_set_gas_price --args 0x5 {cap_object_id} {new_gas_price} --gas-budget 10000
+```
+
+### Updating Validator Commission
+
+To update the commission of a validator, call `sui_system::request_set_commission_rate`, the update will effectuate in the next epoch. The sender of the transaction must be the validator, no additional objects / capabilities are required. Commission rate is expressed in basis points with 0 being 0.00%, and 10000 being 100%.
+
+```sh
+sui client call --package 0x3 --module sui_system --function request_set_commission_rate ---args 0x5 {commission_rate}
+```
+
+If a validator is not yet in active set (candidate state), commission is updated using the `set_candidate_validator_commission_rate` function with the same arguments, like this:
+
+```sh
+sui client call --package 0x3 --module sui_system --function set_candidate_validator_commission_rate ---args 0x5 {commission_rate}
 ```
 
 ### Reporting/Un-reporting Validators
