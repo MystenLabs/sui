@@ -40,7 +40,7 @@ pub mod epoch_query {
 
     #[derive(cynic::Scalar, Clone)]
     #[cynic(graphql_type = "BigInt")]
-    pub struct BigInt(String);
+    pub struct BigInt(pub String);
 
     #[derive(cynic::QueryFragment)]
     pub struct Epoch {
