@@ -716,9 +716,7 @@ mod test {
             return;
         }
 
-        unsafe {
-            std::env::set_var("TRANSACTION_DRIVER", "100");
-        }
+        std::env::set_var("TRANSACTION_DRIVER", "100");
 
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;
