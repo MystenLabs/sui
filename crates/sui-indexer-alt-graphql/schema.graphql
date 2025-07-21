@@ -857,6 +857,7 @@ type ServiceConfig {
 }
 
 """
+<<<<<<< HEAD
 SUI set aside to account for objects stored on-chain.
 """
 type StorageFund {
@@ -869,6 +870,43 @@ type StorageFund {
 	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
+=======
+Flag used to disambiguate the signature schemes supported by Sui.
+
+The enum values match their BCS serialized values when serialized as a u8.
+See https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/enum.SignatureScheme.html
+for more information about signature schemes.
+"""
+enum SignatureScheme {
+	"""
+	Ed25519 signature scheme.
+	"""
+	ED_25519
+	"""
+	Secp256k1 signature scheme.
+	"""
+	SECP_25_6K_1
+	"""
+	Secp256r1 signature scheme.
+	"""
+	SECP_25_6R_1
+	"""
+	BLS12-381 signature scheme.
+	"""
+	BLS_12381
+	"""
+	Multi-signature scheme.
+	"""
+	MULTI_SIG
+	"""
+	ZkLogin authenticator scheme.
+	"""
+	ZK_LOGIN
+	"""
+	Passkey authenticator scheme.
+	"""
+	PASSKEY
+>>>>>>> 9572b1ff7d ([graphql-alt] Support expirations for Transactions)
 }
 
 
@@ -905,6 +943,10 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	User signatures for this transaction.
+	"""
+	signatures: [UserSignature!]!
 }
 
 """
@@ -952,6 +994,7 @@ An unsigned integer that can hold values up to 2^53 - 1. This can be treated sim
 """
 scalar UInt53
 
+<<<<<<< HEAD
 type ValidatorAggregatedSignature {
 	"""
 	The epoch when this aggregate signature was produced.
@@ -1014,6 +1057,19 @@ type ValidatorSet {
 	Size of the validator candidates `Table`.
 	"""
 	validatorCandidatesSize: Int
+=======
+type UserSignature {
+	"""
+	The signature scheme used for this signature.
+	"""
+	scheme: SignatureScheme
+	"""
+	The signature bytes, Base64-encoded.
+	For simple signatures: flag || signature || pubkey
+	For complex signatures: flag || bcs_serialized_struct
+	"""
+	signatureBytes: Base64
+>>>>>>> 9572b1ff7d ([graphql-alt] Support expirations for Transactions)
 }
 
 """

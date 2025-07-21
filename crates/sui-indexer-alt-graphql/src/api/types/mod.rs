@@ -15,5 +15,6 @@ pub(crate) mod service_config;
 pub(crate) mod storage_fund;
 pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
+pub(crate) mod user_signature;
 pub(crate) mod validator_aggregated_signature;
 pub(crate) mod validator_set;
