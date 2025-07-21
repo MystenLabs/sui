@@ -18,7 +18,9 @@ use sui_types::{
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, uint53::UInt53},
+    api::scalars::{
+        base64::Base64, big_int::BigInt, cursor::JsonCursor, digest::Digest, uint53::UInt53,
+    },
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -108,6 +110,18 @@ impl EffectsContents {
 
         let effects = content.effects()?;
         Ok(Some(UInt53::from(effects.lamport_version().value())))
+    }
+
+    /// The error code of the Move abort, populated if this transaction failed with a Move abort.
+    async fn move_abort_code(&self) -> Result<Option<BigInt>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(effects
+            .move_abort()
+            .map(|(_location, code)| BigInt::from(code)))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
