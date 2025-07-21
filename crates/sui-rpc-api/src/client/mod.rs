@@ -241,6 +241,7 @@ pub struct TransactionExecutionResponse {
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
+#[allow(clippy::result_large_err)]
 fn certified_checkpoint_summary_try_from_proto(
     checkpoint: &proto::Checkpoint,
 ) -> Result<CertifiedCheckpointSummary, TryFromProtoError> {
@@ -268,6 +269,7 @@ fn certified_checkpoint_summary_try_from_proto(
 }
 
 /// Attempts to parse `CheckpointData` from a proto::Checkpoint
+#[allow(clippy::result_large_err)]
 fn checkpoint_data_try_from_proto(
     checkpoint: &proto::Checkpoint,
 ) -> Result<CheckpointData, TryFromProtoError> {
@@ -352,6 +354,7 @@ fn checkpoint_data_try_from_proto(
 }
 
 /// Attempts to parse `Object` from the bcs fields in `GetObjectResponse`
+#[allow(clippy::result_large_err)]
 fn object_try_from_proto(object: &proto::Object) -> Result<Object, TryFromProtoError> {
     object
         .bcs
@@ -362,6 +365,7 @@ fn object_try_from_proto(object: &proto::Object) -> Result<Object, TryFromProtoE
 }
 
 /// Attempts to parse `TransactionExecutionResponse` from the fields in `TransactionExecutionResponse`
+#[allow(clippy::result_large_err)]
 fn execute_transaction_response_try_from_proto(
     response: &proto::ExecuteTransactionResponse,
 ) -> Result<TransactionExecutionResponse, TryFromProtoError> {
