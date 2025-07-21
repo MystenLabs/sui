@@ -4,7 +4,7 @@
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::{self as framework, pipeline::CommitterConfig};
 
-use crate::DbConfig;
+use crate::{rpc::pagination::PaginationConfig, DbConfig};
 
 #[DefaultConfig]
 #[derive(Default)]
@@ -25,6 +25,9 @@ pub struct ServiceConfig {
 
     /// Per-pipeline configuration.
     pub pipeline: PipelineLayer,
+
+    /// Configuration for the read side of the service.
+    pub rpc: RpcConfig,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
@@ -63,6 +66,14 @@ pub struct CommitterLayer {
     pub write_concurrency: Option<usize>,
     pub collect_interval_ms: Option<u64>,
     pub watermark_interval_ms: Option<u64>,
+}
+
+#[DefaultConfig]
+#[derive(Default)]
+#[serde(deny_unknown_fields)]
+pub struct RpcConfig {
+    /// Configuration for paginated endpoints in the RPC service.
+    pub pagination: PaginationConfig,
 }
 
 impl ServiceConfig {

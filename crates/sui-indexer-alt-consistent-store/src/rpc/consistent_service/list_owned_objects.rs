@@ -8,8 +8,9 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
 use sui_indexer_alt_framework::types::base_types::SuiAddress;
 
 use crate::rpc::error::{RpcError, StatusCode};
-use crate::schema::{self, Schema};
-use crate::store::Store;
+use crate::schema;
+
+use super::State;
 
 #[derive(thiserror::Error, Debug)]
 pub(super) enum Error {
@@ -38,7 +39,7 @@ impl StatusCode for Error {
 }
 
 pub(super) fn list_owned_objects(
-    _store: &Store<Schema>,
+    _state: &State,
     request: grpc::ListOwnedObjectsRequest,
 ) -> Result<grpc::ListOwnedObjectsResponse, RpcError<Error>> {
     let owner = request.owner.as_ref().ok_or(Error::MissingOwner)?;

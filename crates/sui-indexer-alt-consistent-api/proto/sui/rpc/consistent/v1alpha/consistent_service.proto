@@ -8,6 +8,8 @@ package sui.rpc.consistent.v1alpha;
 service ConsistentService {
   rpc ListOwnedObjects(ListOwnedObjectsRequest)
       returns (ListOwnedObjectsResponse);
+
+  rpc ServiceConfig(ServiceConfigRequest) returns (ServiceConfigResponse);
 }
 
 message ListOwnedObjectsRequest {
@@ -28,7 +30,8 @@ message ListOwnedObjectsRequest {
   // The maximum number of entries to return. The service may return fewer than
   // this value.
   //
-  // Defaults to `50` if not set, and is clamped above at `1000`.
+  // Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+  // page sizes.
   optional uint32 page_size = 3;
 
   // A page token, received from a previous `ListOwnedObjects` call.
@@ -39,7 +42,8 @@ message ListOwnedObjectsRequest {
   // Provide this to retrieve the previous page.
   optional bytes before_token = 5;
 
-  // Whether to fetch the next page from the start or end of the filtered range.
+  // Whether to fetch the next page from the front or back of the filtered
+  // range.
   optional End end = 6;
 }
 
@@ -52,6 +56,18 @@ message ListOwnedObjectsResponse {
 
   // Page of objects owned by the specified owner.
   repeated Object objects = 3;
+}
+
+message ServiceConfigRequest {}
+
+message ServiceConfigResponse {
+  // The size of a page if one is not specified in the request.
+  optional uint32 default_page_size = 1;
+
+  // The maximum size of a page. Responses to requests that specify a size
+  // larger than this will be capped to return at most this many elements per
+  // page.
+  optional uint32 max_page_size = 2;
 }
 
 // Enum of different types of ownership for an object.
@@ -72,8 +88,8 @@ message Owner {
 // The side of the filtered range to fetch the next page from.
 enum End {
   END_UNKNOWN = 0;
-  START = 1;
-  END = 2;
+  FRONT = 1;
+  BACK = 2;
 }
 
 message Object {
