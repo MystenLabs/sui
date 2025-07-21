@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-49:
+task 6, lines 16-50:
 //# run-graphql
 Response: {
   "data": {
@@ -40,6 +40,7 @@ Response: {
         "validatorCandidatesSize": 0
       },
       "totalCheckpoints": 1,
+      "totalTransactions": 1,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0"
@@ -62,6 +63,7 @@ Response: {
         "validatorCandidatesSize": 0
       },
       "totalCheckpoints": 2,
+      "totalTransactions": 3,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0"
@@ -84,6 +86,7 @@ Response: {
         "validatorCandidatesSize": 0
       },
       "totalCheckpoints": 1,
+      "totalTransactions": 2,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0"
@@ -106,6 +109,7 @@ Response: {
         "validatorCandidatesSize": 0
       },
       "totalCheckpoints": 1,
+      "totalTransactions": 1,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0"
@@ -114,7 +118,7 @@ Response: {
   }
 }
 
-task 7, lines 51-85:
+task 7, lines 52-87:
 //# run-graphql
 Response: {
   "data": {
@@ -138,6 +142,7 @@ Response: {
             "validatorCandidatesSize": 0
           },
           "totalCheckpoints": 1,
+          "totalTransactions": 2,
           "totalGasFees": "0",
           "totalStakeRewards": "0",
           "totalStakeSubsidies": "0"
@@ -160,6 +165,7 @@ Response: {
             "validatorCandidatesSize": 0
           },
           "totalCheckpoints": 2,
+          "totalTransactions": 3,
           "totalGasFees": "0",
           "totalStakeRewards": "0",
           "totalStakeSubsidies": "0"
@@ -182,6 +188,7 @@ Response: {
             "validatorCandidatesSize": 0
           },
           "totalCheckpoints": 1,
+          "totalTransactions": 2,
           "totalGasFees": "0",
           "totalStakeRewards": "0",
           "totalStakeSubsidies": "0"

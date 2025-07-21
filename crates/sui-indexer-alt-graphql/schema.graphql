@@ -137,6 +137,10 @@ type Epoch {
 	"""
 	totalCheckpoints: UInt53
 	"""
+	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	totalTransactions: UInt53
+	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
 	"""
 	totalGasFees: BigInt
