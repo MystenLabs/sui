@@ -123,6 +123,20 @@ type Epoch {
 }
 
 """
+The execution status of this transaction: success or failure.
+"""
+enum ExecutionStatus {
+	"""
+	The transaction was successfully executed.
+	"""
+	SUCCESS
+	"""
+	The transaction could not be executed.
+	"""
+	FAILURE
+}
+
+"""
 A boolean protocol configuration.
 """
 type FeatureFlag {
@@ -812,6 +826,10 @@ type TransactionEffects {
 	The checkpoint this transaction was finalized in.
 	"""
 	checkpoint: Checkpoint
+	"""
+	Whether the transaction executed successfully or not.
+	"""
+	status: ExecutionStatus
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
