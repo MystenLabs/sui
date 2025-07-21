@@ -17,11 +17,11 @@ use crate::{
     git::{GitCache, GitTree},
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, OnChainDepInfo, Pin, ResolverDependencyInfo,
+        ManifestGitDependency, OnChainDepInfo, PackageName, Pin, ResolverDependencyInfo,
     },
 };
 
-use super::{CombinedDependency, Dependency, DependencySet};
+use super::{CombinedDependency, Dependency};
 
 /// [Dependency<Pinned>]s are guaranteed to always resolve to the same package source. For example,
 /// a git dependendency with a branch or tag revision may change over time (and is thus not
@@ -49,8 +49,9 @@ impl PinnedDependencyInfo {
             dep_info: Pinned::Local(todo!()),
             use_environment,
             is_override: true,
-            published_at: None,
+            addresses: None,
             containing_file,
+            rename_from: None,
         })
     }
 
@@ -65,7 +66,8 @@ impl PinnedDependencyInfo {
             dep_info,
             use_environment: pin.use_environment.clone().unwrap_or(env.clone()),
             is_override: false, // TODO
-            published_at: None, // TODO
+            addresses: None,    // TODO
+            rename_from: None,  // TODO
             containing_file,
         })
     }
@@ -93,6 +95,14 @@ impl PinnedDependencyInfo {
 
     pub fn use_environment(&self) -> &EnvironmentName {
         self.0.use_environment()
+    }
+
+    pub fn is_override(&self) -> bool {
+        self.0.is_override
+    }
+
+    pub fn rename_from(&self) -> &Option<PackageName> {
+        self.0.rename_from()
     }
 }
 
@@ -136,24 +146,24 @@ impl From<PinnedDependencyInfo> for LockfileDependencyInfo {
 
 /// Replace all dependencies with their pinned versions.
 pub async fn pin<F: MoveFlavor>(
-    deps: DependencySet<CombinedDependency>,
-    envs: &BTreeMap<EnvironmentName, EnvironmentID>,
-) -> PackageResult<DependencySet<PinnedDependencyInfo>> {
+    deps: BTreeMap<PackageName, CombinedDependency>,
+    environment_id: &EnvironmentID,
+) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
     use Pinned as P;
 
     // resolution
-    let deps = ResolvedDependency::resolve(deps, envs).await?;
+    let deps = ResolvedDependency::resolve(deps, environment_id).await?;
     debug!("done resolving");
 
     // pinning
-    let mut result: DependencySet<PinnedDependencyInfo> = DependencySet::new();
-    for (env, pkg, dep) in deps.into_iter() {
+    let mut result: BTreeMap<PackageName, PinnedDependencyInfo> = BTreeMap::new();
+    for (pkg, dep) in deps.into_iter() {
         let transformed = match &dep.0.dep_info {
             ResolverDependencyInfo::Local(loc) => P::Local(loc.clone()),
             ResolverDependencyInfo::Git(git) => P::Git(git.pin().await?),
             ResolverDependencyInfo::OnChain(_) => P::OnChain(todo!()),
         };
-        result.insert(env, pkg, PinnedDependencyInfo(dep.0.map(|_| transformed)));
+        result.insert(pkg, PinnedDependencyInfo(dep.0.map(|_| transformed)));
     }
 
     Ok(result)

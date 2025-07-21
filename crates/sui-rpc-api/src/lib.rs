@@ -21,6 +21,7 @@ mod service;
 pub mod subscription;
 
 pub use crate::grpc::v2beta::ledger_service;
+pub use crate::grpc::v2beta2::protocol_config_to_proto;
 pub use client::Client;
 pub use config::Config;
 pub use error::{

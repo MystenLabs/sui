@@ -75,7 +75,7 @@ use sui_types::transaction::{
     VerifiedCertificate, VerifiedSignedTransaction, VerifiedTransaction,
 };
 use tap::TapOptional;
-use tokio::sync::{mpsc, OnceCell};
+use tokio::sync::{mpsc, oneshot, OnceCell};
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::rocks::{default_db_options, DBBatch, DBMap, DBOptions, MetricConf};
@@ -105,8 +105,9 @@ use crate::checkpoints::{
     PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
 };
 use crate::consensus_handler::{
-    ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
-    SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
+    ConsensusCommitInfo, IndirectStateObserver, SequencedConsensusTransaction,
+    SequencedConsensusTransactionKey, SequencedConsensusTransactionKind,
+    VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
@@ -418,6 +419,15 @@ pub struct AuthorityPerEpochStore {
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 
     pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
+
+    /// Waiters for settlement transactions. Used by execution scheduler to wait for
+    /// settlement transaction keys to resolve to transactions.
+    /// Stored in AuthorityPerEpochStore so that it is automatically cleaned up at the end of the epoch.
+    settlement_registrations: Arc<Mutex<HashMap<TransactionKey, SettlementRegistration>>>,
+}
+enum SettlementRegistration {
+    Ready(Vec<VerifiedExecutableTransaction>),
+    Waiting(oneshot::Sender<Vec<VerifiedExecutableTransaction>>),
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -600,14 +610,16 @@ impl AuthorityEpochTables {
         use typed_store::tidehunter_util::{
             default_cells_per_mutex, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
         };
-        const MUTEXES: usize = 1024;
+        const MUTEXES: usize = 2 * 1024;
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
         const VALUE_CACHE_SIZE: usize = 5000;
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
         let lru_bloom_config = bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE);
         let lru_only_config = KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE);
-        let pending_checkpoint_signatures_config = KeySpaceConfig::new().disable_unload();
+        let pending_checkpoint_signatures_config = KeySpaceConfig::new()
+            .disable_unload()
+            .with_value_cache_size(1000);
         let builder_checkpoint_summary_v2_config = pending_checkpoint_signatures_config.clone();
         let object_ref_indexing = KeyIndexing::hash();
         let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
@@ -784,11 +796,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
-            ),
-            (
-                "deferred_transactions".to_string(),
-                ThConfig::new(1 + 8 + 8, MUTEXES, uniform_key),
+                ThConfig::new_with_indexing(KeyIndexing::Hash, MUTEXES, uniform_key),
             ),
             (
                 "dkg_processed_messages_v2".to_string(),
@@ -820,7 +828,7 @@ impl AuthorityEpochTables {
             ),
             (
                 "congestion_control_object_debts".to_string(),
-                ThConfig::new_with_config(32, MUTEXES, uniform_key, bloom_config.clone()),
+                ThConfig::new_with_config(32, MUTEXES, uniform_key, lru_bloom_config.clone()),
             ),
             (
                 "congestion_control_randomness_object_debts".to_string(),
@@ -1089,13 +1097,14 @@ impl AuthorityPerEpochStore {
                         committee.clone(),
                         &*object_store,
                         &metrics,
+                        protocol_params.default_none_duration_for_new_keys,
                     )
                     // Load observations stored during the current epoch.
                     .chain(execution_time_observations.into_iter().flat_map(
                         |((generation, source), observations)| {
-                            observations
-                                .into_iter()
-                                .map(move |(key, duration)| (source, generation, key, duration))
+                            observations.into_iter().map(move |(key, duration)| {
+                                (source, Some(generation), key, duration)
+                            })
                         },
                     )),
                 ))
@@ -1149,6 +1158,7 @@ impl AuthorityPerEpochStore {
             tx_object_debts: OnceCell::new(),
             end_of_epoch_execution_time_observations: OnceCell::new(),
             consensus_tx_status_cache,
+            settlement_registrations: Default::default(),
         });
 
         s.update_buffer_stake_metric();
@@ -1210,10 +1220,14 @@ impl AuthorityPerEpochStore {
             .set(tokio::sync::Mutex::new(randomness_manager))
             .is_err()
         {
-            error!("BUG: `set_randomness_manager` called more than once; this should never happen");
+            debug_fatal!(
+                "BUG: `set_randomness_manager` called more than once; this should never happen"
+            );
         }
         if self.randomness_reporter.set(reporter).is_err() {
-            error!("BUG: `set_randomness_manager` called more than once; this should never happen");
+            debug_fatal!(
+                "BUG: `set_randomness_manager` called more than once; this should never happen"
+            );
         }
         result
     }
@@ -1487,7 +1501,15 @@ impl AuthorityPerEpochStore {
         committee: Arc<Committee>,
         object_store: &dyn ObjectStore,
         metrics: &EpochMetrics,
-    ) -> impl Iterator<Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration)> {
+        use_none_generation: bool,
+    ) -> impl Iterator<
+        Item = (
+            AuthorityIndex,
+            Option<u64>,
+            ExecutionTimeObservationKey,
+            Duration,
+        ),
+    > {
         if !matches!(
             protocol_config.per_object_congestion_control_mode(),
             PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
@@ -1550,7 +1572,9 @@ impl AuthorityPerEpochStore {
                             .map(|authority_index| {
                                 (
                                     authority_index,
-                                    0, /* generation */
+                                    // For bug compatibility with previous version, can be
+                                    // removed once set to true on mainnet.
+                                    if use_none_generation { None } else { Some(0) },
                                     key.clone(),
                                     duration,
                                 )
@@ -1671,6 +1695,44 @@ impl AuthorityPerEpochStore {
         } else {
             Ok(tables.transaction_key_to_digest.get(key).expect("db error"))
         }
+    }
+
+    pub(crate) fn notify_settlement_transactions_ready(
+        &self,
+        tx_key: TransactionKey,
+        txns: Vec<VerifiedExecutableTransaction>,
+    ) {
+        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
+        let mut registrations = self.settlement_registrations.lock();
+        if let Some(registration) = registrations.remove(&tx_key) {
+            let SettlementRegistration::Waiting(tx) = registration else {
+                fatal!("Settlement registration should be waiting");
+            };
+            tx.send(txns).unwrap();
+        } else {
+            registrations.insert(tx_key, SettlementRegistration::Ready(txns));
+        }
+    }
+
+    pub(crate) async fn wait_for_settlement_transactions(
+        &self,
+        key: TransactionKey,
+    ) -> Vec<VerifiedExecutableTransaction> {
+        let rx = {
+            let mut registrations = self.settlement_registrations.lock();
+            if let Some(registration) = registrations.remove(&key) {
+                let SettlementRegistration::Ready(txns) = registration else {
+                    fatal!("Settlement registration should be ready");
+                };
+                return txns;
+            } else {
+                let (tx, rx) = oneshot::channel();
+                registrations.insert(key, SettlementRegistration::Waiting(tx));
+                rx
+            }
+        };
+
+        rx.await.unwrap()
     }
 
     pub fn revert_executed_transaction(&self, tx_digest: &TransactionDigest) -> SuiResult {
@@ -2201,7 +2263,7 @@ impl AuthorityPerEpochStore {
 
     fn should_defer(
         &self,
-        execution_time_estimator: Option<&ExecutionTimeEstimator>,
+        tx_cost: Option<u64>,
         cert: &VerifiedExecutableTransaction,
         commit_info: &ConsensusCommitInfo,
         dkg_failed: bool,
@@ -2229,7 +2291,7 @@ impl AuthorityPerEpochStore {
         // Defer transaction if it uses shared objects that are congested.
         if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
             .should_defer_due_to_object_congestion(
-                execution_time_estimator,
+                tx_cost,
                 cert,
                 previously_deferred_tx_digests,
                 commit_info,
@@ -2501,46 +2563,48 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// Note: caller usually need to call consensus_message_processed_notify before this call
+    /// Caller must call consensus_message_processed_notify before calling this to ensure that all
+    /// user signatures are available.
     pub fn user_signatures_for_checkpoint(
         &self,
         transactions: &[VerifiedTransaction],
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Vec<GenericSignature>>> {
+    ) -> Vec<Vec<GenericSignature>> {
         assert_eq!(transactions.len(), digests.len());
 
-        let signatures: Vec<_> = {
+        fn is_signature_expected(transaction: &VerifiedTransaction) -> bool {
+            !matches!(
+                transaction.inner().transaction_data().kind(),
+                TransactionKind::RandomnessStateUpdate(_)
+                    | TransactionKind::ProgrammableSystemTransaction(_)
+            )
+        }
+
+        let result: Vec<_> = {
             let mut user_sigs = self
                 .consensus_output_cache
                 .user_signatures_for_checkpoints
                 .lock();
-            digests.iter().map(|d| user_sigs.remove(d)).collect()
+            digests
+                .iter()
+                .zip(transactions.iter())
+                .map(|(d, t)| {
+                    // Some transactions (RandomnessStateUpdate and settlement transactions) don't go through
+                    // consensus, but have system-generated signatures that are guaranteed to be the same,
+                    // so we can just pull them from the transaction.
+                    if is_signature_expected(t) {
+                        // Expect is safe as long as consensus_message_processed_notify is called
+                        // before this call, to ensure that all canonical user signatures are
+                        // available.
+                        user_sigs.remove(d).expect("signature should be available")
+                    } else {
+                        t.tx_signatures().to_vec()
+                    }
+                })
+                .collect()
         };
 
-        let mut result = Vec::with_capacity(digests.len());
-        for (signatures, transaction) in signatures.into_iter().zip(transactions.iter()) {
-            let signatures = if let Some(signatures) = signatures {
-                signatures
-            } else if matches!(
-                transaction.inner().transaction_data().kind(),
-                TransactionKind::RandomnessStateUpdate(_)
-            ) {
-                // RandomnessStateUpdate transactions don't go through consensus, but
-                // have system-generated signatures that are guaranteed to be the same,
-                // so we can just pull it from the transaction.
-                transaction.tx_signatures().to_vec()
-            } else {
-                return Err(SuiError::from(
-                    format!(
-                        "Can not find user signature for checkpoint for transaction {:?}",
-                        transaction.key()
-                    )
-                    .as_str(),
-                ));
-            };
-            result.push(signatures);
-        }
-        Ok(result)
+        result
     }
 
     pub fn clear_override_protocol_upgrade_buffer_stake(&self) -> SuiResult {
@@ -2768,6 +2832,7 @@ impl AuthorityPerEpochStore {
                     Some((*certificate.digest(), certificate.tx_signatures().to_vec()))
                 }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
+                Schedulable::AccumulatorSettlement(_, _) => None,
             })
             .collect();
 
@@ -3029,6 +3094,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: IndirectStateObserver,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(Vec<Schedulable>, AssignedTxAndVersions)> {
         // Split transactions into different types for processing.
@@ -3207,24 +3273,39 @@ impl AuthorityPerEpochStore {
             .execution_time_estimator
             .try_lock()
             .expect("should only ever be called from the commit handler thread");
-        for (
-            key,
-            ExecutionTimeObservation {
-                authority,
-                generation,
-                estimates,
-            },
-        ) in execution_time_observations
+        // It is ok to just release lock here as functions called by this one are the
+        // only place that transition reconfig state, and this function itself is always
+        // executed from consensus task.
+        if !self
+            .protocol_config()
+            .ignore_execution_time_observations_after_certs_closed()
+            || self
+                .get_reconfig_state_read_lock_guard()
+                .should_accept_consensus_certs()
         {
-            let Some(estimator) = execution_time_estimator.as_mut() else {
-                error!("dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled");
-                continue;
-            };
-            let authority_index = self.committee.authority_index(&authority).unwrap();
-            estimator.process_observations_from_consensus(authority_index, generation, &estimates);
-            output.insert_execution_time_observation(authority_index, generation, estimates);
-            if self.protocol_config().record_time_estimate_processed() {
-                output.record_consensus_message_processed(key);
+            for (
+                key,
+                ExecutionTimeObservation {
+                    authority,
+                    generation,
+                    estimates,
+                },
+            ) in execution_time_observations
+            {
+                let Some(estimator) = execution_time_estimator.as_mut() else {
+                    error!("dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled");
+                    continue;
+                };
+                let authority_index = self.committee.authority_index(&authority).unwrap();
+                estimator.process_observations_from_consensus(
+                    authority_index,
+                    Some(generation),
+                    &estimates,
+                );
+                output.insert_execution_time_observation(authority_index, generation, estimates);
+                if self.protocol_config().record_time_estimate_processed() {
+                    output.record_consensus_message_processed(key);
+                }
             }
         }
 
@@ -3274,6 +3355,7 @@ impl AuthorityPerEpochStore {
                 checkpoint_service,
                 cache_reader,
                 consensus_commit_info,
+                indirect_state_observer,
                 &mut roots,
                 &mut randomness_roots,
                 shared_object_congestion_tracker,
@@ -3445,6 +3527,7 @@ impl AuthorityPerEpochStore {
         output: &mut ConsensusCommitOutput,
         transactions: &mut VecDeque<Schedulable<VerifiedExecutableTransaction>>,
         consensus_commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: IndirectStateObserver,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult<Option<TransactionKey>> {
         {
@@ -3488,6 +3571,7 @@ impl AuthorityPerEpochStore {
             self.protocol_config(),
             version_assignment,
             consensus_commit_info,
+            indirect_state_observer,
         );
         let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
@@ -3567,6 +3651,7 @@ impl AuthorityPerEpochStore {
                 Some(Duration::from_millis(80)),
                 skip_consensus_commit_prologue_in_test,
             ),
+            IndirectStateObserver::new(),
             authority_metrics,
         )
         .await
@@ -3626,6 +3711,7 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
+        mut indirect_state_observer: IndirectStateObserver,
         non_randomness_roots: &mut BTreeSet<TransactionKey>,
         randomness_roots: &mut BTreeSet<TransactionKey>,
         mut shared_object_congestion_tracker: SharedObjectCongestionTracker,
@@ -3681,6 +3767,23 @@ impl AuthorityPerEpochStore {
                 .push_back(Schedulable::RandomnessStateUpdate(self.epoch(), round));
         }
 
+        if self.accumulators_enabled() {
+            let checkpoint_height =
+                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
+
+            let non_random_settlement =
+                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
+            non_randomness_roots.insert(non_random_settlement.key());
+            verified_non_randomness_certificates.push_back(non_random_settlement);
+
+            if randomness_round.is_some() {
+                let randomness_settlement =
+                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
+                randomness_roots.insert(randomness_settlement.key());
+                verified_randomness_certificates.push_back(randomness_settlement);
+            }
+        }
+
         for entry in non_randomness_transactions
             .iter()
             .map(Either::Left)
@@ -3707,6 +3810,7 @@ impl AuthorityPerEpochStore {
                     tx,
                     checkpoint_service,
                     consensus_commit_info,
+                    &mut indirect_state_observer,
                     &previously_deferred_tx_digests,
                     randomness_manager.as_deref_mut(),
                     dkg_failed,
@@ -3827,6 +3931,7 @@ impl AuthorityPerEpochStore {
             output,
             &mut verified_non_randomness_certificates,
             consensus_commit_info,
+            indirect_state_observer,
             &cancelled_txns,
         )?;
 
@@ -3966,6 +4071,7 @@ impl AuthorityPerEpochStore {
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: &mut IndirectStateObserver,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_failed: bool,
@@ -4006,6 +4112,7 @@ impl AuthorityPerEpochStore {
                     transaction,
                     certificate_author,
                     commit_info,
+                    indirect_state_observer,
                     tracking_id,
                     previously_deferred_tx_digests,
                     dkg_failed,
@@ -4201,6 +4308,7 @@ impl AuthorityPerEpochStore {
                     transaction,
                     certificate_author,
                     commit_info,
+                    indirect_state_observer,
                     tracking_id,
                     previously_deferred_tx_digests,
                     dkg_failed,
@@ -4238,6 +4346,7 @@ impl AuthorityPerEpochStore {
         transaction: VerifiedExecutableTransaction,
         block_author: &AuthorityPublicKeyBytes,
         commit_info: &ConsensusCommitInfo,
+        indirect_state_observer: &mut IndirectStateObserver,
         tracking_id: u64,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         dkg_failed: bool,
@@ -4277,8 +4386,14 @@ impl AuthorityPerEpochStore {
             return Ok(ConsensusCertificateResult::Ignored);
         }
 
-        let deferral_info = self.should_defer(
+        let tx_cost = shared_object_congestion_tracker.get_tx_cost(
             execution_time_estimator,
+            &transaction,
+            indirect_state_observer,
+        );
+
+        let deferral_info = self.should_defer(
+            tx_cost,
             &transaction,
             commit_info,
             dkg_failed,
@@ -4344,8 +4459,7 @@ impl AuthorityPerEpochStore {
         }
 
         // This certificate will be scheduled. Update object execution cost.
-        shared_object_congestion_tracker
-            .bump_object_execution_cost(execution_time_estimator, &transaction);
+        shared_object_congestion_tracker.bump_object_execution_cost(tx_cost, &transaction);
 
         Ok(ConsensusCertificateResult::SuiTransaction(transaction))
     }
@@ -4504,6 +4618,22 @@ impl AuthorityPerEpochStore {
             .builder_checkpoint_summary_v2
             .get(&sequence)?
             .map(|s| s.summary))
+    }
+
+    pub(crate) fn get_lowest_non_genesis_checkpoint_summary(
+        &self,
+    ) -> SuiResult<Option<CheckpointSummary>> {
+        for result in self
+            .tables()?
+            .builder_checkpoint_summary_v2
+            .safe_iter_with_bounds(None, None)
+        {
+            let (seq, bcs) = result?;
+            if seq > 0 {
+                return Ok(Some(bcs.summary));
+            }
+        }
+        Ok(None)
     }
 
     pub fn builder_included_transactions_in_checkpoint<'a>(

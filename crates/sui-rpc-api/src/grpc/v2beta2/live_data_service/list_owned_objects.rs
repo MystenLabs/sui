@@ -9,7 +9,6 @@ use prost::Message;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2beta2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
@@ -109,11 +108,14 @@ pub fn list_owned_objects(
                 continue;
             };
 
-            let mut object = Object::merge_from(object, &read_mask);
-            if read_mask.contains(Object::BALANCE_FIELD) {
-                object.balance = object_info.balance;
+            let mut message = Object::default();
+
+            if read_mask.contains(Object::JSON_FIELD) {
+                message.json =
+                    crate::grpc::v2beta2::render_object_to_json(service, &object).map(Box::new);
             }
-            object
+            sui_rpc::merge::Merge::merge(&mut message, object, &read_mask);
+            message
         } else {
             owned_object_to_proto(object_info, &read_mask)
         };
@@ -161,7 +163,7 @@ fn owned_object_to_proto(info: OwnedObjectInfo, mask: &FieldMaskTree) -> Object 
     let mut message = Object::default();
 
     if mask.contains(Object::OBJECT_ID_FIELD) {
-        message.object_id = Some(info.object_id.to_string());
+        message.object_id = Some(info.object_id.to_canonical_string(true));
     }
     if mask.contains(Object::VERSION_FIELD) {
         message.version = Some(info.version.value());

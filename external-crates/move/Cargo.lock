@@ -1591,9 +1591,9 @@ dependencies = [
 
 [[package]]
 name = "indoc"
-version = "2.0.5"
+version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
+checksum = "f4c7245a08504955605670dbf141fceab975f15ca21570696aebe9d2e71576bd"
 
 [[package]]
 name = "inline_colorization"
@@ -2566,12 +2566,12 @@ dependencies = [
  "derive-where",
  "futures",
  "git2",
+ "indoc",
  "insta",
  "itertools 0.10.5",
  "jsonrpc",
  "move-command-line-common",
  "move-core-types",
- "move-package",
  "once_cell",
  "path-clean",
  "petgraph",
@@ -2590,6 +2590,32 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "walkdir",
+]
+
+[[package]]
+name = "move-package-alt-compilation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.5.28",
+ "colored",
+ "dunce",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-bytecode-utils",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-docgen",
+ "move-model-2",
+ "move-package-alt",
+ "move-symbol-pool",
+ "petgraph",
+ "serde",
+ "serde_yaml",
+ "tracing",
+ "vfs",
 ]
 
 [[package]]
@@ -2633,6 +2659,30 @@ dependencies = [
  "petgraph",
  "regex",
  "serde",
+]
+
+[[package]]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 4.5.28",
+ "datatest-stable",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-model",
+ "move-model-2",
+ "move-package",
+ "move-stackless-bytecode",
+ "move-stdlib",
+ "move-symbol-pool",
+ "move-vm-runtime",
+ "tempfile",
 ]
 
 [[package]]

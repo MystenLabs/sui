@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.52.0"
+    "version": "1.53.0"
   },
   "methods": [
     {
@@ -1294,13 +1294,15 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "88",
+              "maxSupportedProtocolVersion": "89",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
+                "additional_consensus_digest_indirect_state": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
+                "allow_private_accumulator_entrypoints": false,
                 "allow_receiving_object_id": false,
                 "allow_unbounded_system_objects": false,
                 "authority_capabilities_v2": false,
@@ -1318,6 +1320,7 @@
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "debug_fatal_on_move_invariant_violation": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
@@ -1340,6 +1343,7 @@
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
+                "ignore_execution_time_observations_after_certs_closed": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
@@ -1766,6 +1770,7 @@
                 "max_gas_price": {
                   "u64": "100000"
                 },
+                "max_gas_price_rgp_factor_for_aborted_transactions": null,
                 "max_generic_instantiation_length": {
                   "u64": "32"
                 },

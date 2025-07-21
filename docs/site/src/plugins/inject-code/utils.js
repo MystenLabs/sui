@@ -94,8 +94,8 @@ exports.processOptions = (text, options) => {
     )
     .replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, "")
     .replace(
-      /sui\s?=\s?{\s?local\s?=.*sui-framework.*/i,
-      'Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }',
+      /\[dependencies\]\nsui\s?=\s?{\s?local\s?=.*sui-framework.*\n/i,
+      "[dependencies]",
     );
   processed = removeComments(processed, options);
   processed = removeTests(processed, options);

@@ -4,23 +4,23 @@
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::field::{FieldMask, FieldMaskTree, FieldMaskUtil};
 use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc::v2beta2::get_checkpoint_request::CheckpointId;
+use sui_rpc::proto::sui::rpc::v2beta2::{Checkpoint, GetCheckpointRequest, GetCheckpointResponse};
 use sui_rpc_api::{
-    proto::{
-        google::rpc::bad_request::FieldViolation,
-        rpc::v2beta::{get_checkpoint_request::CheckpointId, Checkpoint, GetCheckpointRequest},
-    },
-    CheckpointNotFoundError, ErrorReason, RpcError,
+    proto::google::rpc::bad_request::FieldViolation, CheckpointNotFoundError, ErrorReason, RpcError,
 };
 use sui_types::digests::CheckpointDigest;
+
+pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
 
 pub async fn get_checkpoint(
     mut client: BigTableClient,
     request: GetCheckpointRequest,
-) -> Result<Checkpoint, RpcError> {
+) -> Result<GetCheckpointResponse, RpcError> {
     let read_mask = {
         let read_mask = request
             .read_mask
-            .unwrap_or_else(|| FieldMask::from_str(GetCheckpointRequest::READ_MASK_DEFAULT));
+            .unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask.validate::<Checkpoint>().map_err(|path| {
             FieldViolation::new("read_mask")
                 .with_description(format!("invalid read_mask path: {path}"))
@@ -67,5 +67,7 @@ pub async fn get_checkpoint(
         );
     }
     // TODO: handle Checkpoint::TRANSACTIONS_FIELD submask
-    Ok(message)
+    Ok(GetCheckpointResponse {
+        checkpoint: Some(message),
+    })
 }

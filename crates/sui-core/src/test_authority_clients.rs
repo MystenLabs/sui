@@ -8,7 +8,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
+use crate::{
+    authority::AuthorityState, authority_client::AuthorityAPI, transaction_driver::SubmitTxResponse,
+};
 use crate::{
     authority::{test_authority_builder::TestAuthorityBuilder, ExecutionEnv},
     execution_scheduler::ExecutionSchedulerAPI,
@@ -18,6 +20,7 @@ use consensus_types::block::BlockRef;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::{
+    committee::EpochId,
     crypto::AuthorityKeyPair,
     error::SuiError,
     executable_transaction::VerifiedExecutableTransaction,
@@ -105,13 +108,12 @@ impl AuthorityAPI for LocalAuthorityClient {
         // dummy consensus position
         // TODO(fastpath): Return the actual consensus position
         let consensus_position = ConsensusPosition {
+            epoch: EpochId::MIN,
             block: BlockRef::MIN,
             index: 0,
         };
 
-        Ok(RawSubmitTxResponse {
-            consensus_position: consensus_position.into_raw()?,
-        })
+        SubmitTxResponse::Submitted { consensus_position }.try_into()
     }
 
     async fn handle_transaction(

@@ -32,6 +32,7 @@ pub type Inputs = Vec<(InputArg, InputType)>;
 pub type Commands = Vec<Command>;
 
 #[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 pub enum InputArg {
     Pure(Vec<u8>),
     Receiving(ObjectRef),
@@ -39,6 +40,7 @@ pub enum InputArg {
 }
 
 #[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
 pub enum ObjectArg {
     ImmObject(ObjectRef),
     OwnedObject(ObjectRef),
@@ -49,7 +51,7 @@ pub enum ObjectArg {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Type {
     Bool,
     U8,
@@ -65,13 +67,13 @@ pub enum Type {
     Reference(/* is mut */ bool, Rc<Type>),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Vector {
     pub abilities: AbilitySet,
     pub element_type: Type,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Datatype {
     pub abilities: AbilitySet,
     pub module: ModuleId,

@@ -31,7 +31,7 @@ mod proposed_block_handler;
 mod round_prober;
 mod round_tracker;
 mod stake_aggregator;
-mod storage;
+pub mod storage;
 mod subscriber;
 mod synchronizer;
 mod threshold_clock;
@@ -58,7 +58,7 @@ pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};
 
 /// Exported API for testing.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
-pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
+pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag};
 pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
 pub use context::Clock;
 pub use network::{

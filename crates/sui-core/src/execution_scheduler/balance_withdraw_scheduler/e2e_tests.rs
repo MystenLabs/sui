@@ -66,7 +66,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
     let account_objects = starting_objects.iter().map(|o| o.id()).collect();
     starting_objects.push(gas_object.clone());
     let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    protocol_config.set_enable_accumulators_for_testing(true);
+    protocol_config.enable_accumulators_for_testing();
     let state = TestAuthorityBuilder::new()
         .with_protocol_config(protocol_config)
         .with_starting_objects(&starting_objects)

@@ -273,4 +273,8 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
             .collect();
         payloads
     }
+
+    fn name(&self) -> &str {
+        "SharedCounter"
+    }
 }

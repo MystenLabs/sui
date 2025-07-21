@@ -4,9 +4,10 @@
 use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
-use std::{cell::RefCell, collections::HashSet, path::PathBuf, rc::Rc, sync::Arc};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
+use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
@@ -71,7 +72,7 @@ impl executor::Executor for Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
@@ -102,7 +103,7 @@ impl executor::Executor for Executor {
             protocol_config,
             metrics,
             enable_expensive_checks,
-            certificate_deny_set,
+            execution_params,
             trace_builder_opt,
         )
     }
@@ -113,7 +114,7 @@ impl executor::Executor for Executor {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
-        certificate_deny_set: &HashSet<TransactionDigest>,
+        execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
@@ -144,7 +145,7 @@ impl executor::Executor for Executor {
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
-                certificate_deny_set,
+                execution_params,
                 &mut None,
             )
         } else {
@@ -162,7 +163,7 @@ impl executor::Executor for Executor {
                 protocol_config,
                 metrics,
                 enable_expensive_checks,
-                certificate_deny_set,
+                execution_params,
                 &mut None,
             )
         };

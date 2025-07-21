@@ -7,8 +7,8 @@ license = "Apache-2.0"
 authors = ["Move Team"]
 
 [environments]
-default = "default"
+_test_env = "_test_env_id"
 
 [dependencies.mock.r.mock-resolver]
-output.default = { result = { not-a-dep = "" } }
+output._test_env_id = { result = { not-a-dep = "" } }
 stderr = "stderr output"

@@ -131,8 +131,9 @@ impl Env {
         // Wait for the embedded reconfig observer.
         sleep(Duration::from_secs(5)).await;
         let (genesis, primary_gas) = genesis_recv.await.unwrap();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
-            Arc::new(LocalValidatorAggregatorProxy::from_genesis(&genesis, registry, None).await);
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_genesis(&genesis, registry, None, None).await,
+        );
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: shutdown_sender,
@@ -194,6 +195,7 @@ impl Env {
                     genesis,
                     registry,
                     reconfig_fullnode_rpc_url.map(|x| &**x),
+                    None,
                 )
                 .await,
             )]
