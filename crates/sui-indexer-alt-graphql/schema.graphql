@@ -927,7 +927,7 @@ type ValidatorAggregatedSignature {
 	"""
 	epoch: Epoch
 	"""
-	The 48-byte BLS12381 aggregated signature, encoded in Base64.
+	The Base64 encoded BLS12381 aggregated signature.
 	"""
 	signature: Base64
 	"""

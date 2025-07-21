@@ -15,7 +15,7 @@ use crate::{
     api::{
         query::Query,
         scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
-        types::signature::ValidatorAggregatedSignature,
+        types::validator_aggregated_signature::ValidatorAggregatedSignature,
     },
     error::RpcError,
     scope::Scope,
@@ -145,13 +145,13 @@ impl CheckpointContents {
 
     /// The aggregation of signatures from a quorum of validators for the checkpoint proposal.
     async fn validator_signatures(&self) -> Result<Option<ValidatorAggregatedSignature>, RpcError> {
-        let Some((_, _, authority)) = &self.contents else {
+        let Some((_, _, authority_info)) = &self.contents else {
             return Ok(None);
         };
-        Ok(Some(ValidatorAggregatedSignature::from((
-            authority.clone(),
+        Ok(Some(ValidatorAggregatedSignature::with_authority_info(
             self.scope.clone(),
-        ))))
+            authority_info.clone(),
+        )))
     }
 }
 
