@@ -23,7 +23,7 @@ regex.workspace = true
 mockall.workspace = true
 base64.workspace = true
 jsonrpc.workspace = true
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["process"] }
 async-trait.workspace = true
 
 [dev-dependencies]
