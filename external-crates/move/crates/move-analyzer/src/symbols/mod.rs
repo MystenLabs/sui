@@ -566,7 +566,7 @@ fn pre_process_typed_modules(
 /// only care about actual address here if it's available). We need this to be able to reliably
 /// compare parsing AST's module identifier with expansion/typing AST's module identifier, even in
 /// presence of module renaming (i.e., we cannot rely on module names if addresses are available).
-pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap) -> E::Address {
+pub fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: Arc<NamedAddressMap>) -> E::Address {
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => E::Address::anonymous(loc, bytes),

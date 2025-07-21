@@ -15,7 +15,7 @@ use crate::{
 
 use lsp_types::Position;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     parser::ast as P,
@@ -45,7 +45,7 @@ pub struct ParsingAnalysisContext<'a> {
     pub alias_lengths: BTreeMap<Position, usize>,
     /// A per-package mapping from package names to their addresses (needs to be appropriately set
     /// before the package processint starts)
-    pub pkg_addresses: &'a NamedAddressMap,
+    pub pkg_addresses: Arc<NamedAddressMap>,
     /// Cursor contextual information, computed as part of the traversal.
     pub cursor: Option<&'a mut CursorContext>,
 }
@@ -189,7 +189,8 @@ impl<'a> ParsingAnalysisContext<'a> {
             }
         }
         // parsing symbolicator is currently only responsible for processing use declarations
-        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses, mod_def) else {
+        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses.clone(), mod_def)
+        else {
             return;
         };
         assert!(self.current_mod_ident_str.is_none());
@@ -712,14 +713,14 @@ impl<'a> ParsingAnalysisContext<'a> {
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str =
-                    parsing_mod_ident_to_map_key(self.pkg_addresses, &mod_ident.value);
+                    parsing_mod_ident_to_map_key(self.pkg_addresses.clone(), &mod_ident.value);
                 self.mod_name_symbol(&mod_ident.value.module, &mod_ident_str);
                 self.mod_use_symbols(mod_use, &mod_ident_str);
             }
             P::Use::NestedModuleUses(leading_name, uses) => {
                 for (mod_name, mod_use) in uses {
                     let mod_ident_str = parsing_leading_and_mod_names_to_map_key(
-                        self.pkg_addresses,
+                        self.pkg_addresses.clone(),
                         *leading_name,
                         *mod_name,
                     );
@@ -960,7 +961,7 @@ impl<'a> ParsingAnalysisContext<'a> {
 /// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST.
 pub fn parsing_mod_def_to_map_key(
-    pkg_addresses: &NamedAddressMap,
+    pkg_addresses: Arc<NamedAddressMap>,
     mod_def: &P::ModuleDefinition,
 ) -> Option<String> {
     // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
@@ -977,7 +978,7 @@ pub fn parsing_mod_def_to_map_key(
 /// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST.
 fn parsing_leading_and_mod_names_to_map_key(
-    pkg_addresses: &NamedAddressMap,
+    pkg_addresses: Arc<NamedAddressMap>,
     ln: P::LeadingNameAccess,
     name: P::ModuleName,
 ) -> String {
@@ -988,7 +989,7 @@ fn parsing_leading_and_mod_names_to_map_key(
 /// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST,
 fn parsing_mod_ident_to_map_key(
-    pkg_addresses: &NamedAddressMap,
+    pkg_addresses: Arc<NamedAddressMap>,
     mod_ident: &P::ModuleIdent_,
 ) -> String {
     format!(

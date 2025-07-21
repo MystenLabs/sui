@@ -15,7 +15,7 @@ use crate::{
 
 use im::ordmap::OrdMap;
 use lsp_types::Position;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     expansion::ast::ModuleIdent,
@@ -46,7 +46,7 @@ pub fn run_parsing_analysis(
         use_defs: UseDefMap::new(),
         current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
-        pkg_addresses: &NamedAddressMap::new(),
+        pkg_addresses: Arc::new(NamedAddressMap::new()),
         cursor: cursor_context,
     };
 
