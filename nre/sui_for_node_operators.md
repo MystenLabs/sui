@@ -319,13 +319,13 @@ sui client call --package 0x3 --module sui_system --function request_set_gas_pri
 To update the commission of a validator, call `sui_system::request_set_commission_rate`, the update will effectuate in the next epoch. The sender of the transaction must be the validator, no additional objects / capabilities are required. Commission rate is expressed in basis points with 0 being 0.00%, and 10000 being 100%.
 
 ```sh
-sui client call --package 0x3 --module sui_system --function request_set_commission_rate ---args 0x5 {commission_rate}
+sui client call --package 0x3 --module sui_system --function request_set_commission_rate --args 0x5 {commission_rate}
 ```
 
 If a validator is not yet in active set (candidate state), commission is updated using the `set_candidate_validator_commission_rate` function with the same arguments, like this:
 
 ```sh
-sui client call --package 0x3 --module sui_system --function set_candidate_validator_commission_rate ---args 0x5 {commission_rate}
+sui client call --package 0x3 --module sui_system --function set_candidate_validator_commission_rate --args 0x5 {commission_rate}
 ```
 
 ### Reporting/Un-reporting Validators
