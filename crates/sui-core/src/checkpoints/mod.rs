@@ -1105,11 +1105,13 @@ impl CheckpointBuilder {
         cache_commit: Arc<dyn ExecutionCacheCommit>,
         consensus_replay_waiter: Option<ReplayWaiter>,
     ) {
+        /*
         if let Some(replay_waiter) = consensus_replay_waiter {
             info!("Waiting for consensus commits to replay ...");
-            replay_waiter.wait_for_replay().await;
+            //replay_waiter.wait_for_replay().await;
             info!("Consensus commits finished replaying");
         }
+        */
 
         info!("Starting Postprocessor task");
 
