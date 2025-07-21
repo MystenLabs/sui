@@ -29,14 +29,14 @@
 //! The indexer and RPC agree on a `Schema` which describes the key types, value types and options
 //! for all column families to be set-up in the database.
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use config::{PipelineLayer, ServiceConfig};
 use db::config::DbConfig;
 use handlers::object_by_owner::ObjectByOwner;
 use indexer::Indexer;
 use prometheus::Registry;
-use rpc::{RpcArgs, RpcService};
+use rpc::{state::State, RpcArgs, RpcService};
 use schema::Schema;
 use sui_indexer_alt_consistent_api::proto::{
     self, rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer,
@@ -83,6 +83,7 @@ pub async fn start_service(
         rocksdb,
         committer,
         pipeline: PipelineLayer { object_by_owner },
+        rpc,
     } = config;
 
     let committer = committer.finish(CommitterConfig::default());
@@ -99,9 +100,14 @@ pub async fn start_service(
     )
     .await?;
 
+    let state = State {
+        store: indexer.store().clone(),
+        config: Arc::new(rpc),
+    };
+
     let rpc = RpcService::new(rpc_args, version, registry, cancel.child_token())
         .register_encoded_file_descriptor_set(proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET)
-        .add_service(ConsistentServiceServer::new(indexer.store().clone()));
+        .add_service(ConsistentServiceServer::new(state.clone()));
 
     macro_rules! add_sequential {
         ($handler:expr, $config:expr) => {
