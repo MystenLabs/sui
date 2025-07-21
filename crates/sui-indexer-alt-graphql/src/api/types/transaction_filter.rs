@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use async_graphql::InputObject;
 
 use crate::api::scalars::uint53::UInt53;
