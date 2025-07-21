@@ -29,28 +29,22 @@ task 4, line 20:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 22-30:
+task 5, lines 22-27:
 //# run-graphql
 Response: {
   "data": {
     "successTransaction": {
-      "digest": "8oTvMSFKtR2oBsj6a3X8PokBiuT2Ykhzkar8WKmEyMnP",
-      "effects": {
-        "status": "SUCCESS"
-      }
+      "status": "SUCCESS"
     }
   }
 }
 
-task 6, lines 32-40:
+task 6, lines 29-34:
 //# run-graphql
 Response: {
   "data": {
     "failedTransaction": {
-      "digest": "7xyrMFpP933Sm7S6nbvAzNqnxddT19XqmLSs3iyUHKKk",
-      "effects": {
-        "status": "FAILURE"
-      }
+      "status": "FAILURE"
     }
   }
 }

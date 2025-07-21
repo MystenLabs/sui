@@ -21,20 +21,14 @@ module test::failed_module {
 
 //# run-graphql
 { # Test status field on successful transaction effects
-  successTransaction: transaction(digest: "@{digest_2}") {
-    digest
-    effects {
-      status
-    }
+  successTransaction: transactionEffects(digest: "@{digest_2}") {
+    status
   }
 } 
 
 //# run-graphql
 { # Test status field on failed transaction
-  failedTransaction: transaction(digest: "@{digest_3}") {
-    digest
-    effects {
-      status
-    }
+  failedTransaction: transactionEffects(digest: "@{digest_3}") {
+    status
   }
 }
