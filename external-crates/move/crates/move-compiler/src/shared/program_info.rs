@@ -54,6 +54,8 @@ pub struct ModuleInfo {
     pub target_kind: TargetKind,
     pub attributes: Attributes,
     pub package: Option<Symbol>,
+    /// The named address map used by this module during `expansion`.
+    pub named_address_map: Arc<NamedAddressMap>,
     pub dependency_order: Option<usize>,
     pub use_funs: ResolvedUseFuns,
     pub syntax_methods: SyntaxMethods,
@@ -122,6 +124,7 @@ macro_rules! program_info {
                 target_kind: mdef.target_kind,
                 attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
+                named_address_map: mdef.named_address_map.clone(),
                 dependency_order: $dependency_order(&mdef),
                 use_funs,
                 syntax_methods: mdef.syntax_methods.clone(),

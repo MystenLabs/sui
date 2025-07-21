@@ -111,10 +111,6 @@ pub struct PreCompiledProgramInfo(BTreeMap<E::ModuleIdent, Arc<PreCompiledModule
 pub struct PreCompiledModuleInfo {
     pub file_name: Symbol,
     pub file_content: Arc<str>,
-    /// to compute address conflicts in expansion/translate.rs
-    /// (address map "inlined" into the module so that
-    /// modules are separated)
-    pub named_address_map: Arc<NamedAddressMap>,
     /// to extract macros in typing/translate.rs (need function bodies for this)
     pub macro_definitions: Option<(N::UseFuns, UniqueMap<FunctionName, N::Function>)>,
     /// information about the module from `TypingProgramInfo` used in to extract
@@ -718,7 +714,6 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, _)) => {
             let program_info = hook.take_typing_info();
-            let mut module_named_addresses = hook.take_module_named_addresses();
             let mut macro_infos = hook.take_macro_definitions();
 
             let mut compiled_units_by_module = compiled
@@ -736,8 +731,6 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                         return Err(anyhow::anyhow!("file name not found for module: {:?}", mod_ident));
                      };
 
-                     let named_address_map = module_named_addresses.remove(&mod_ident).unwrap_or_default();
-
                      let macro_infos = macro_infos.remove(&mod_ident);
 
                      let compiled_unit = compiled_units_by_module
@@ -749,7 +742,6 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                          Arc::new(PreCompiledModuleInfo {
                              file_name,
                              file_content,
-                             named_address_map: Arc::new(named_address_map),
                              macro_definitions: macro_infos,
                              info: typing_module_info.clone(),
                              compiled_unit,
