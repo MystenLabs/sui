@@ -1009,8 +1009,10 @@ impl CheckpointStateHasher {
     }
 }
 
-enum CheckpointBuilderError {
-    StopCheckpointBuilder,
+#[derive(Debug)]
+pub(crate) enum CheckpointBuilderError {
+    ChangeEpochTxAlreadyExecuted,
+    SystemPackagesMissing,
     Retry(anyhow::Error),
 }
 
@@ -1022,7 +1024,7 @@ impl<SuiError: std::error::Error + Send + Sync + 'static> From<SuiError>
     }
 }
 
-type CheckpointBuilderResult<T = ()> = Result<T, CheckpointBuilderError>;
+pub(crate) type CheckpointBuilderResult<T = ()> = Result<T, CheckpointBuilderError>;
 
 pub struct CheckpointBuilder {
     state: Arc<AuthorityState>,
@@ -1114,8 +1116,11 @@ impl CheckpointBuilder {
         loop {
             match self.maybe_build_checkpoints().await {
                 Ok(()) => {}
-                Err(CheckpointBuilderError::StopCheckpointBuilder) => {
-                    info!("CheckpointBuilder stopping");
+                err @ Err(
+                    CheckpointBuilderError::ChangeEpochTxAlreadyExecuted
+                    | CheckpointBuilderError::SystemPackagesMissing,
+                ) => {
+                    info!("CheckpointBuilder stopping: {:?}", err);
                     return;
                 }
                 Err(CheckpointBuilderError::Retry(inner)) => {
@@ -1993,7 +1998,7 @@ impl CheckpointBuilder {
         // >1 checkpoint.
         last_checkpoint: CheckpointSequenceNumber,
     ) -> CheckpointBuilderResult<SuiSystemState> {
-        match self
+        let (system_state, effects) = self
             .state
             .create_and_execute_advance_epoch_tx(
                 &self.epoch_store,
@@ -2003,19 +2008,10 @@ impl CheckpointBuilder {
                 end_of_epoch_observation_keys,
                 last_checkpoint,
             )
-            .await
-        {
-            Ok(Some((system_state, effects))) => {
-                checkpoint_effects.push(effects);
-                signatures.push(vec![]);
-                Ok(system_state)
-            }
-            Ok(None) => {
-                info!("change epoch tx has already been executed via state sync. Checkpoint builder will be shut down briefly");
-                Err(CheckpointBuilderError::StopCheckpointBuilder)
-            }
-            Err(e) => Err(CheckpointBuilderError::Retry(e)),
-        }
+            .await?;
+        checkpoint_effects.push(effects);
+        signatures.push(vec![]);
+        Ok(system_state)
     }
 
     /// For the given roots return complete list of effects to include in checkpoint
