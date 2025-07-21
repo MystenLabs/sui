@@ -245,7 +245,7 @@ pub trait ObjectCacheRead: Send + Sync {
         &self,
         keys: &[InputKey],
         receiving_objects: &HashSet<InputKey>,
-        epoch: &EpochId,
+        epoch: EpochId,
     ) -> Vec<bool> {
         let mut results = vec![false; keys.len()];
         let non_canceled_keys = keys.iter().enumerate().filter(|(idx, key)| {
@@ -289,22 +289,22 @@ pub trait ObjectCacheRead: Send + Sync {
                     .get_object(&id.id())
                     .map(|obj| obj.version() >= **version)
                     .unwrap_or(false)
-                    || self.fastpath_stream_ended_at_version_or_after(id.id(), **version, *epoch);
+                    || self.fastpath_stream_ended_at_version_or_after(id.id(), **version, epoch);
                 results[*idx] = is_available;
             } else {
                 // If the object is an already-removed consensus object, mark it as available if the
                 // version for that object is in the marker table.
                 let is_consensus_stream_ended = self
-                    .get_consensus_stream_end_tx_digest(FullObjectKey::new(**id, **version), *epoch)
+                    .get_consensus_stream_end_tx_digest(FullObjectKey::new(**id, **version), epoch)
                     .is_some();
                 results[*idx] = is_consensus_stream_ended;
             }
         }
 
         package_object_keys.into_iter().for_each(|(idx, id)| {
-            // unwrap is safe since this only errors when the object is not a package,
-            // which is impossible if we have a certificate for execution.
-            results[idx] = self.get_package_object(id).unwrap().is_some();
+            // get_package_object() only errors when the object is not a package, so returning false on error.
+            // Error is possible when this gets called on uncertified transactions.
+            results[idx] = self.get_package_object(id).is_ok_and(|p| p.is_some());
         });
 
         results
@@ -412,7 +412,7 @@ pub trait ObjectCacheRead: Send + Sync {
         &'a self,
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
-        epoch: &'a EpochId,
+        epoch: EpochId,
     ) -> BoxFuture<'a, ()>;
 }
 

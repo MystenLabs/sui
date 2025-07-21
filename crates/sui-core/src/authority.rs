@@ -71,6 +71,7 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::storage::InputKey;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
@@ -81,6 +82,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -385,6 +387,11 @@ const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
 ];
 
 pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000;
+
+// Transaction author should have observed the input objects as finalized output,
+// so usually the wait does not need to be long.
+// When submitted by TransactionDriver, it will retry quickly if there is no return from this validator too.
+pub const WAIT_FOR_FASTPATH_INPUT_TIMEOUT: Duration = Duration::from_secs(2);
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
@@ -1135,7 +1142,32 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self.handle_transaction_impl(transaction, true, epoch_store);
+        // timeout in tests can be reduced to exercise error paths, if QD properly retries
+        // failures to lock on objects waiting for future versions.
+        if epoch_store.protocol_config().mysticeti_fastpath()
+            && !self
+                .wait_for_fastpath_input_objects(
+                    &transaction,
+                    epoch_store.epoch(),
+                    WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
+                )
+                .await?
+        {
+            debug!("fastpath input objects are still unavailable after waiting");
+            // Proceed with input checks to generate a proper error.
+        }
+
+        self.handle_sign_transaction(epoch_store, transaction).await
+    }
+
+    /// Signs a transaction. Exposed for testing.
+    pub async fn handle_sign_transaction(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: VerifiedTransaction,
+    ) -> SuiResult<HandleTransactionResponse> {
+        let tx_digest = *transaction.digest();
+        let signed = self.handle_transaction_impl(transaction, /* sign */ true, epoch_store);
         match signed {
             Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
@@ -1271,6 +1303,53 @@ impl AuthorityState {
             .transaction_overload_sources
             .with_label_values(&[source])
             .inc();
+    }
+
+    /// Waits for fastpath (owned) input objects to become available until the specified max_wait timeout.
+    /// Returns true if all fastpath input objects are available, false otherwise.
+    pub(crate) async fn wait_for_fastpath_input_objects(
+        &self,
+        transaction: &VerifiedTransaction,
+        epoch: EpochId,
+        max_wait: Duration,
+    ) -> SuiResult<bool> {
+        let txn_data = transaction.data().transaction_data();
+        let fastpath_input_objects = txn_data
+            .input_objects()?
+            .iter()
+            .filter_map(|o| match o {
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    Some(InputKey::VersionedObject {
+                        id: FullObjectID::new(object_ref.0, None),
+                        version: object_ref.1,
+                    })
+                }
+                InputObjectKind::MovePackage(package_id) => {
+                    Some(InputKey::Package { id: *package_id })
+                }
+                InputObjectKind::SharedMoveObject { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        if fastpath_input_objects.is_empty() {
+            return Ok(true);
+        }
+        // It is ok to not check receiving objects, unless it turns out to be a common failure.
+        let receiving_keys = HashSet::new();
+        match timeout(
+            max_wait,
+            self.get_object_cache_reader().notify_read_input_objects(
+                &fastpath_input_objects,
+                &receiving_keys,
+                epoch,
+            ),
+        )
+        .await
+        {
+            Ok(()) => Ok(true),
+            // Maybe return an error for unavailable input objects,
+            // and allow the caller to skip the rest of input checks?
+            Err(_) => Ok(false),
+        }
     }
 
     /// Wait for a certificate to be executed.
