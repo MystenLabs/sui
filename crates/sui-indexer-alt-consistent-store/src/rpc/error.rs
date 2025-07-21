@@ -17,7 +17,10 @@ pub(super) trait StatusCode {
 pub(super) enum RpcError<E = Infallible> {
     Unimplemented,
 
-    /// An custom error type to cover the service or method-specific error cases.
+    /// Checkpoint requested is not in the available range.
+    NotInRange(u64),
+
+    /// A custom error type to cover the service or method-specific error cases.
     Custom(Arc<E>),
 
     /// Error to wrap existing framework errors.
@@ -41,7 +44,7 @@ impl<E: std::error::Error + StatusCode> From<E> for RpcError<E> {
 
 /// Cannot use `#[from]` for this conversion because [`anyhow::Error`] does not implement `Clone`,
 /// so it needs to be wrapped in an [`Arc`].
-impl<E: std::error::Error> From<anyhow::Error> for RpcError<E> {
+impl<E> From<anyhow::Error> for RpcError<E> {
     fn from(err: anyhow::Error) -> Self {
         RpcError::InternalError(Arc::new(err))
     }
@@ -55,6 +58,10 @@ where
     fn from(err: RpcError<E>) -> Self {
         match err {
             RpcError::Unimplemented => Status::unimplemented("Not implemented yet"),
+
+            RpcError::NotInRange(checkpoint) => Status::out_of_range(format!(
+                "Checkpoint {checkpoint} not in the consistent range"
+            )),
 
             RpcError::Custom(err) => {
                 let mut status = Status::new(err.code(), err.to_string());
