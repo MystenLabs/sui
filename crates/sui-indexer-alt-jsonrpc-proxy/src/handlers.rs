@@ -298,7 +298,12 @@ async fn proxy_request(
     };
 
     if let Ok(response_str) = std::str::from_utf8(&response_bytes) {
-        info!("Request: {} | Response body (UTF-8): {}", request_info, response_str);
+        let truncated_response = if response_str.len() > 1000 {
+            format!("{}... (truncated, {} total chars)", &response_str[..1000], response_str.len())
+        } else {
+            response_str.to_string()
+        };
+        info!("Request: {} | Response body (UTF-8): {}", request_info, truncated_response);
     } else {
         info!("Request: {} | Response body is not valid UTF-8, {} bytes", request_info, response_bytes.len());
     }
