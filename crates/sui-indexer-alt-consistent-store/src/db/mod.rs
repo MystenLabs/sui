@@ -18,8 +18,8 @@ use sui_indexer_alt_framework::store::CommitterWatermark;
 use self::error::Error;
 
 pub(crate) mod config;
-mod error;
-mod iter;
+pub(crate) mod error;
+pub(crate) mod iter;
 pub(crate) mod key;
 pub(crate) mod map;
 

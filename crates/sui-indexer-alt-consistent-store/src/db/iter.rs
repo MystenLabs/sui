@@ -47,6 +47,12 @@ impl<'d, K, V> FwdIter<'d, K, V> {
     pub(crate) fn raw_value(&self) -> Option<&[u8]> {
         self.inner.as_ref().and_then(|iter| iter.value())
     }
+
+    /// Returns whether the underlying raw iterator is valid (i.e. will produce a next value) or
+    /// not.
+    pub(crate) fn valid(&self) -> bool {
+        self.inner.as_ref().is_some_and(|iter| iter.valid())
+    }
 }
 
 impl<'d, K, V> RevIter<'d, K, V> {
@@ -74,6 +80,12 @@ impl<'d, K, V> RevIter<'d, K, V> {
     /// Returns the raw bytes for the next value the iterator will yield, if any.
     pub(crate) fn raw_value(&self) -> Option<&[u8]> {
         self.inner.as_ref().and_then(|iter| iter.value())
+    }
+
+    /// Returns whether the underlying raw iterator is valid (i.e. will produce a next value) or
+    /// not.
+    pub(crate) fn valid(&self) -> bool {
+        self.inner.as_ref().is_some_and(|iter| iter.valid())
     }
 }
 
