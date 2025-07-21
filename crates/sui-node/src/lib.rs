@@ -206,6 +206,7 @@ mod simulator {
         parse_jwks(
             sui_types::zk_login_util::DEFAULT_JWK_BYTES,
             &OIDCProvider::Twitch,
+            true,
         )
         .map_err(|_| SuiError::JWKRetrievalError)
     }
@@ -381,6 +382,7 @@ impl SuiNode {
         for p in supported_providers.into_iter() {
             let provider_str = p.to_string();
             let epoch_store = epoch_store.clone();
+            let skip_on_invalid_jwk = epoch_store.protocol_config().skip_on_invalid_jwk();
             let consensus_adapter = consensus_adapter.clone();
             let metrics = metrics.clone();
             spawn_monitored_task!(epoch_store.clone().within_alive_epoch(
@@ -391,7 +393,7 @@ impl SuiNode {
                     loop {
                         info!("fetching JWK for provider {:?}", p);
                         metrics.jwk_requests.with_label_values(&[&provider_str]).inc();
-                        match Self::fetch_jwks(authority, &p).await {
+                        match Self::fetch_jwks(authority, &p, skip_on_invalid_jwk).await {
                             Err(e) => {
                                 metrics.jwk_request_errors.with_label_values(&[&provider_str]).inc();
                                 warn!("Error when fetching JWK for provider {:?} {:?}", p, e);
@@ -2101,10 +2103,11 @@ impl SuiNode {
     async fn fetch_jwks(
         _authority: AuthorityName,
         provider: &OIDCProvider,
+        skip_on_invalid_jwk: bool,
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
         let client = reqwest::Client::new();
-        fetch_jwks(provider, &client)
+        fetch_jwks(provider, &client, skip_on_invalid_jwk)
             .await
             .map_err(|_| SuiError::JWKRetrievalError)
     }
@@ -2127,6 +2130,7 @@ impl SuiNode {
     async fn fetch_jwks(
         authority: AuthorityName,
         provider: &OIDCProvider,
+        skip_on_invalid_jwk: bool,
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         get_jwk_injector()(authority, provider)
     }

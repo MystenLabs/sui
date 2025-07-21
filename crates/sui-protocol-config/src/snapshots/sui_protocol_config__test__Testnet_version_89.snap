@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 89
 feature_flags:
@@ -105,6 +106,7 @@ feature_flags:
   ignore_execution_time_observations_after_certs_closed: true
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
+  skip_on_invalid_jwk: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
