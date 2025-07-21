@@ -601,16 +601,16 @@ impl ValidatorService {
 
         // Use shorter wait timeout in simtests to exercise server-side error paths and
         // client-side retry logic.
-        let wait_for_fastpath_input_objects_timeout = if cfg!(msim) {
+        let wait_for_fastpath_dependency_objects_timeout = if cfg!(msim) {
             Duration::from_millis(100)
         } else {
             WAIT_FOR_FASTPATH_INPUT_TIMEOUT
         };
         if !state
-            .wait_for_fastpath_input_objects(
+            .wait_for_fastpath_dependency_objects(
                 &transaction,
                 epoch_store.epoch(),
-                wait_for_fastpath_input_objects_timeout,
+                wait_for_fastpath_dependency_objects_timeout,
             )
             .await?
         {
