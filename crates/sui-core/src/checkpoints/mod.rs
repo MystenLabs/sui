@@ -2180,7 +2180,7 @@ impl CheckpointAggregator {
         info!("Starting CheckpointAggregator");
         loop {
             if let Err(e) = self.run_and_notify().await {
-                debug_fatal!(
+                error!(
                     "Error while aggregating checkpoint, will retry in 1s: {:?}",
                     e
                 );
