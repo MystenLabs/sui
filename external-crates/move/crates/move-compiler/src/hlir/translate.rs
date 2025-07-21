@@ -345,6 +345,7 @@ fn module(
         loc: _,
         warning_filter,
         package_name,
+        named_address_map: _,
         attributes,
         target_kind,
         dependency_order,

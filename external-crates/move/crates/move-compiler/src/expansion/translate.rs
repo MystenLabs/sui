@@ -70,8 +70,8 @@ type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
 // majority of the pass while swapping out how we handle paths and aliases for Move 2024 versus
 // legacy.
 
-pub(super) struct DefnContext<'env, 'map> {
-    pub(super) named_address_mapping: Option<&'map NamedAddressMap>,
+pub(super) struct DefnContext<'env> {
+    pub(super) named_address_mapping: Option<Arc<NamedAddressMap>>,
     pub(super) module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     pub(super) env: &'env CompilationEnv,
     pub(super) address_conflicts: BTreeSet<Symbol>,
@@ -80,8 +80,8 @@ pub(super) struct DefnContext<'env, 'map> {
     pub(super) reporter: DiagnosticReporter<'env>,
 }
 
-pub(super) struct Context<'env, 'map> {
-    defn_context: DefnContext<'env, 'map>,
+pub(super) struct Context<'env> {
+    defn_context: DefnContext<'env>,
     address: Option<Address>,
     warning_filters_table: Mutex<WarningFiltersTable>,
     // Cached warning filters for all available prefixes. Used by non-source defs
@@ -90,7 +90,7 @@ pub(super) struct Context<'env, 'map> {
     pub path_expander: Option<Box<dyn PathExpander>>,
 }
 
-impl<'env> Context<'env, '_> {
+impl<'env> Context<'env> {
     fn new(
         compilation_env: &'env CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
@@ -328,7 +328,7 @@ impl<'env> Context<'env, '_> {
     }
 }
 
-impl DefnContext<'_, '_> {
+impl DefnContext<'_> {
     pub(super) fn add_diag(&self, diag: Diagnostic) {
         self.reporter.add_diag(diag);
     }
@@ -402,13 +402,18 @@ fn compute_address_conflicts(
 ) -> BTreeSet<Symbol> {
     let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
     let mut addr_to_name: BTreeMap<AccountAddress, BTreeSet<Symbol>> = BTreeMap::new();
-    let all_addrs = prog.named_address_maps.all().iter().chain(
-        pre_compiled_lib
+    let all_addrs =
+        prog.named_address_maps
+            .all()
             .iter()
-            .flat_map(|module_info| module_info.iter().map(|(_, m)| &*m.named_address_map)),
-    );
+            .cloned()
+            .chain(pre_compiled_lib.iter().flat_map(|module_info| {
+                module_info
+                    .iter()
+                    .map(|(_, m)| m.info.named_address_map.clone())
+            }));
     for map in all_addrs {
-        for (n, addr) in map {
+        for (n, addr) in &*map {
             let n = *n;
             let addr = addr.into_inner();
             name_to_addr.entry(n).or_default().insert(addr);
@@ -554,8 +559,6 @@ pub fn program(
 
     let mut context = Context::new(compilation_env, module_members, address_conflicts);
 
-    let mut module_named_address_maps = BTreeMap::new();
-
     for P::PackageDefinition {
         package,
         named_address_map,
@@ -572,7 +575,7 @@ pub fn program(
         {
             let mut path_expander = Move2024PathExpander::new();
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
+            let aliases = named_addr_map_to_alias_map_builder(&mut context, &named_address_map);
 
             // should never fail
             if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
@@ -581,27 +584,13 @@ pub fn program(
 
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(path_expander));
-            definition(
-                &mut context,
-                &mut source_module_map,
-                &mut module_named_address_maps,
-                named_address_map.clone(),
-                package,
-                def,
-            );
+            definition(&mut context, &mut source_module_map, package, def);
             context.pop_alias_scope(None); // Handle unused addresses in this case
             context.path_expander = None;
         } else {
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(
-                &mut context,
-                &mut source_module_map,
-                &mut module_named_address_maps,
-                named_address_map.clone(),
-                package,
-                def,
-            );
+            definition(&mut context, &mut source_module_map, package, def);
             context.path_expander = None;
         }
     }
@@ -622,41 +611,23 @@ pub fn program(
         {
             let mut path_expander = Move2024PathExpander::new();
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
+            let aliases = named_addr_map_to_alias_map_builder(&mut context, &named_address_map);
             // should never fail
             if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
                 context.add_diag(*diag);
             }
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(path_expander));
-            definition(
-                &mut context,
-                &mut lib_module_map,
-                &mut module_named_address_maps,
-                named_address_map.clone(),
-                package,
-                def,
-            );
+            definition(&mut context, &mut lib_module_map, package, def);
             context.pop_alias_scope(None); // Handle unused addresses in this case
             context.path_expander = None;
         } else {
             context.defn_context.named_address_mapping = Some(named_address_map);
             context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(
-                &mut context,
-                &mut lib_module_map,
-                &mut module_named_address_maps,
-                named_address_map.clone(),
-                package,
-                def,
-            );
+            definition(&mut context, &mut lib_module_map, package, def);
             context.path_expander = None;
         }
     }
-
-    context
-        .env()
-        .save_module_named_addresses(&module_named_address_maps);
 
     context.defn_context.current_package = None;
 
@@ -681,8 +652,6 @@ pub fn program(
 fn definition(
     context: &mut Context,
     module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
-    module_named_address_maps: &mut BTreeMap<ModuleIdent, NamedAddressMap>,
-    named_address_map: NamedAddressMap,
     package_name: Option<Symbol>,
     def: P::Definition,
 ) {
@@ -699,9 +668,7 @@ fn definition(
                 );
                 sp(addr.loc, address)
             });
-            if let Some(mod_ident) = module(context, module_map, package_name, module_addr, m) {
-                module_named_address_maps.insert(mod_ident, named_address_map);
-            }
+            module(context, module_map, package_name, module_addr, m);
         }
         P::Definition::Address(a) => {
             let addr = top_level_address(
@@ -711,11 +678,7 @@ fn definition(
             );
             for mut m in a.modules {
                 let module_addr = check_module_address(context, a.loc, addr, &mut m);
-                if let Some(mod_ident) =
-                    module(context, module_map, package_name, Some(module_addr), m)
-                {
-                    module_named_address_maps.insert(mod_ident, named_address_map.clone());
-                }
+                module(context, module_map, package_name, Some(module_addr), m)
             }
         }
     }
@@ -730,7 +693,7 @@ pub(super) fn top_level_address(
 ) -> Address {
     top_level_address_(
         context,
-        context.named_address_mapping.as_ref().unwrap(),
+        context.named_address_mapping.clone().unwrap(),
         suggest_declaration,
         ln,
     )
@@ -738,7 +701,7 @@ pub(super) fn top_level_address(
 
 fn top_level_address_(
     context: &mut DefnContext,
-    named_address_mapping: &NamedAddressMap,
+    named_address_mapping: Arc<NamedAddressMap>,
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
 ) -> Address {
@@ -904,18 +867,17 @@ fn module(
     package_name: Option<Symbol>,
     module_address: Option<Spanned<Address>>,
     module_def: P::ModuleDefinition,
-) -> Option<ModuleIdent> {
+) {
     assert!(context.address.is_none());
     if module_def.is_spec_module {
         context.spec_deprecated(module_def.name.0.loc, /* is_error */ false);
-        return None;
+        return;
     }
     let (mident, mod_) = module_(context, package_name, module_address, module_def);
     if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
         duplicate_module(context, module_map, mident, old_loc)
     }
     context.address = None;
-    Some(mident)
 }
 
 fn set_module_address(
@@ -1027,6 +989,7 @@ fn module_(
     context.pop_alias_scope(Some(&mut use_funs));
 
     let def = E::ModuleDefinition {
+        named_address_map: context.defn_context.named_address_mapping.clone().unwrap(),
         doc,
         package_name,
         attributes,
@@ -1310,7 +1273,7 @@ fn all_module_members<'a>(
         ..
     } in defs
     {
-        let named_addr_map: &NamedAddressMap = named_addr_maps.get(*named_address_map_index);
+        let named_addr_map = named_addr_maps.get(*named_address_map_index);
         match def {
             P::Definition::Module(m) => {
                 let addr = match &m.address {
