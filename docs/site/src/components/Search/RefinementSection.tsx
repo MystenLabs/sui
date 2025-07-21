@@ -30,7 +30,7 @@ export default function RefinementSection() {
                     onChange={() => refine(item.value)}
                     className="sr-only peer"
                   />
-                  <div className="block peer-checked:hidden w-4 h-4 rounded border border-sui-gray-55 peer-checked:bg-sui-primary flex items-center justify-center">
+                  <div className="block peer-checked:hidden rounded border border-sui-gray-55 peer-checked:bg-sui-primary flex items-center justify-center">
                     <svg
                       width="20"
                       height="20"
@@ -56,8 +56,8 @@ export default function RefinementSection() {
                   </div>
                   <div className="hidden peer-checked:block w-4 h-4 rounded border border-sui-gray-55 peer-checked:bg-sui-primary flex items-center justify-center">
                     <svg
-                      width="15"
-                      height="15"
+                      width="20"
+                      height="20"
                       viewBox="0 0 20 20"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
