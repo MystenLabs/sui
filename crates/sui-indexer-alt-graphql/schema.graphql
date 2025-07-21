@@ -754,6 +754,44 @@ type ServiceConfig {
 	maxMoveValueDepth: Int
 }
 
+"""
+Flag used to disambiguate the signature schemes supported by Sui.
+
+The enum values match their BCS serialized values when serialized as a u8.
+See https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/enum.SignatureScheme.html
+for more information about signature schemes.
+"""
+enum SignatureScheme {
+	"""
+	Ed25519 signature scheme.
+	"""
+	ED_25519
+	"""
+	Secp256k1 signature scheme.
+	"""
+	SECP_25_6K_1
+	"""
+	Secp256r1 signature scheme.
+	"""
+	SECP_25_6R_1
+	"""
+	BLS12-381 signature scheme.
+	"""
+	BLS_12381
+	"""
+	Multi-signature scheme.
+	"""
+	MULTI_SIG
+	"""
+	ZkLogin authenticator scheme.
+	"""
+	ZK_LOGIN
+	"""
+	Passkey authenticator scheme.
+	"""
+	PASSKEY
+}
+
 
 """
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
@@ -788,6 +826,10 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	User signatures for this transaction.
+	"""
+	signatures: [UserSignature!]!
 }
 
 """
@@ -826,6 +868,19 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+type UserSignature {
+	"""
+	The signature scheme used for this signature.
+	"""
+	scheme: SignatureScheme
+	"""
+	The signature bytes, Base64-encoded.
+	For simple signatures: flag || signature || pubkey
+	For complex signatures: flag || bcs_serialized_struct
+	"""
+	signatureBytes: Base64
+}
 
 """
 Filter for paginating the history of an Object or MovePackage.

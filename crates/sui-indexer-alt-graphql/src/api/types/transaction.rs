@@ -28,6 +28,7 @@ use super::{
     address::Address,
     gas_input::GasInput,
     transaction_effects::{EffectsContents, TransactionEffects},
+    user_signature::UserSignature,
 };
 
 #[derive(Clone)]
@@ -109,6 +110,19 @@ impl TransactionContents {
         };
 
         Ok(Some(Base64(content.raw_transaction()?)))
+    }
+
+    /// User signatures for this transaction.
+    async fn signatures(&self) -> Result<Vec<UserSignature>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(vec![]);
+        };
+
+        let signatures = content.signatures()?;
+        Ok(signatures
+            .into_iter()
+            .map(UserSignature::from_generic_signature)
+            .collect())
     }
 }
 
