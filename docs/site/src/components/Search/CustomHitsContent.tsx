@@ -19,7 +19,9 @@ export default function CustomHitsContent({ name }) {
   } else if (name === "move_book") {
     siteToVisit = `${siteToVisit} or visit <a href="https://move-book.com/" target="_blank">The Move Book</a> dedicated site.`;
   } else if (name === "sui_sdks") {
-    siteToVisit = `${siteToVisit} or visit the official <a href="https://sdk.mystenlabs.com/dapp-kit" target="_blank">dApp Kit</a> site.`;
+    siteToVisit = `${siteToVisit} or visit the official <a href="https://sdk.mystenlabs.com" target="_blank">Sui SDKs</a> site.`;
+  } else if (name === "walrus_sdks") {
+    siteToVisit = `${siteToVisit} or visit the official <a href="https://docs.wal.app/" target="_blank">Walrus Docs</a> site.`;
   } else {
     siteToVisit = `${siteToVisit}.`;
   }
@@ -92,9 +94,14 @@ export default function CustomHitsContent({ name }) {
                         {sectionTitle}
                       </a>
                     )}
-                    <p className="font-normal text-base text-sui-gray-5s">
-                      {hit.content ? truncateAtWord(hit.content) : ""}
-                    </p>
+                    <p
+                      className="font-normal text-base text-sui-gray-5s"
+                      dangerouslySetInnerHTML={{
+                        __html: hit.content
+                          ? truncateAtWord(hit._highlightResult.content.value)
+                          : "",
+                      }}
+                    />
                   </div>
                 );
               })}

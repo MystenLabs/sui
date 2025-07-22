@@ -33,8 +33,9 @@ export default function Search() {
   const tabs = [
     { label: "Sui", indexName: "sui_docs" },
     { label: "SuiNS", indexName: "suins_docs" },
-    { label: "The Move Book and Reference", indexName: "move_book" },
+    { label: "The Move Book", indexName: "move_book" },
     { label: "SDKs", indexName: "sui_sdks" },
+    { label: "Walrus", indexName: "walrus_docs" },
   ];
 
   const handleVisibility = React.useCallback(
@@ -54,6 +55,7 @@ export default function Search() {
         suins_docs: { query: queryParam },
         move_book: { query: queryParam },
         sui_sdks: { query: queryParam },
+        walrus_docs: { query: queryParam },
       }}
     >
       {/* Preload tab visibility */}

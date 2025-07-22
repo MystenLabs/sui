@@ -50,7 +50,7 @@
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
   --sui-black: #090B1A;
   --sui-blue: #6fbcf0;
-  --sui-blue-bright: #00f9fb;
+  --sui-blue-bright: 0 249 251;
   --sui-blue-light: 225 243 255;
   --sui-blue-lighter: #B4C2D0;
   --sui-blue-dark: 52 99 151;
@@ -380,6 +380,7 @@ div[role="tabpanel"] {
 .search-page-wrapper main p {
   @apply !not-italic;
 }
+
 .search-page-wrapper main em {
   @apply font-bold;
 }
@@ -392,6 +393,10 @@ div[role="tabpanel"] {
 .group:hover .tooltip-delay {
   @apply opacity-100;
   transition-delay: 700ms; 
+}
+
+.sui-search mark {
+  @apply bg-sui-blue-bright/40;
 }
 
 /** Globals **/

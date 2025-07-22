@@ -8,17 +8,19 @@ export default function TabbedResults({ activeTab, onChange, tabs }) {
   const suinstooltip = "Search results from Sui Name Service";
   const movetooltip = "Search results from The Move Book";
   const dapptooltip = "Search results from the Sui ecosystem SDKs";
+  const walrustooltip =
+    "Search results from the Walrus decentralized storage platform";
   return (
     <div className="mb-4 flex justify-start border-2 border-solid border-white dark:border-sui-black border-b-sui-gray-50 dark:border-b-sui-gray-80">
       {tabs.map(({ label, indexName, count }) => (
-        <div className="relative group inline-block top-px" key={indexName}>
+        <div className="relative group inline-block" key={indexName}>
           <button
-            className={`mr-4 flex items-center font-semibold text-sm lg:text-md xl:text-lg bg-white dark:bg-sui-black cursor-pointer ${activeTab === indexName ? "text-sui-disabled/100 font-bold border-2 border-solid border-transparent border-b-sui-blue-dark dark:border-b-sui-blue" : "border-transparent text-sui-disabled/70"}`}
+            className={`mr-4 flex items-center font-semibold text-sm lg:text-md xl:text-lg bg-white dark:bg-sui-black cursor-pointer dark:text-sui-gray-45 ${activeTab === indexName ? "text-sui-disabled/100 font-bold border-2 border-solid border-transparent border-b-sui-blue-dark dark:border-b-sui-blue" : "border-transparent text-sui-disabled/70"}`}
             onClick={() => onChange(indexName)}
           >
             {label}{" "}
             <span
-              className={`text-xs rounded-full ml-1 py-1 px-2 ${activeTab === indexName ? "bg-transparent border border-solid" : "bg-sui-gray-45"}`}
+              className={`dark:text-sui-gray-90 text-xs rounded-full ml-1 py-1 px-2 ${activeTab === indexName ? "dark:!text-sui-gray-45 bg-transparent border border-solid" : "bg-sui-gray-45"}`}
             >
               {count}
             </span>
@@ -28,9 +30,11 @@ export default function TabbedResults({ activeTab, onChange, tabs }) {
               ? suitooltip
               : label === "SuiNS"
                 ? suinstooltip
-                : label === "The Move Book and Reference"
+                : label === "The Move Book"
                   ? movetooltip
-                  : dapptooltip}
+                  : label === "SDKs"
+                    ? dapptooltip
+                    : walrustooltip}
           </div>
         </div>
       ))}

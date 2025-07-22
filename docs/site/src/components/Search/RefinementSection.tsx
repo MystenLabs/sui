@@ -13,14 +13,14 @@ export default function RefinementSection() {
   return (
     <div className="col-span-12 md:col-span-4 xl:col-span-3">
       <div className="sticky mr-4 p-6 pb-[40px] top-24 z-10 border border-solid border-sui-gray-55 rounded-[20px]">
-        <h2 className="text-lg font-semibold text-sui-gray-3s">
+        <h2 className="text-lg font-semibold text-sui-gray-3s dark:text-sui-gray-45">
           Refine results
         </h2>
         <ul className="pl-0">
           {items.map((item) => (
             <li
               key={item.label}
-              className="mb-2 flex justify-between items-center w-full"
+              className="dark:text-sui-gray-45 mb-2 flex justify-between items-center w-full"
             >
               <div className="flex items-center space-x-2">
                 <label className="flex items-center space-x-2 text-sm cursor-pointer">
@@ -30,13 +30,14 @@ export default function RefinementSection() {
                     onChange={() => refine(item.value)}
                     className="sr-only peer"
                   />
-                  <div className="block peer-checked:hidden rounded border border-sui-gray-55 peer-checked:bg-sui-primary pl-0 ml-0">
+                  <div className="flex peer-checked:hidden peer-checked:bg-sui-primary rounded !ml-0 dark:bg-sui-gray-35">
                     <svg
                       width="20"
                       height="20"
                       viewBox="0 0 20 20"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
+                      className="dark:text-sui-gray-35"
                     >
                       <rect
                         x="0.5"
@@ -54,7 +55,7 @@ export default function RefinementSection() {
                       />
                     </svg>
                   </div>
-                  <div className="hidden peer-checked:inline-block rounded border border-sui-gray-55 peer-checked:bg-sui-primary pl-0 ml-0">
+                  <div className="hidden peer-checked:flex peer-checked:bg-sui-primary rounded !ml-0 dark:bg-sui-gray-35">
                     <svg
                       width="20"
                       height="20"
@@ -76,12 +77,14 @@ export default function RefinementSection() {
                       />
                     </svg>
                   </div>
-                  <span className="text-sui-gray-3s peer-checked:text-sui-gray-5s peer-checked:font-bold">
+                  <span className="text-sui-gray-3s dark:text-sui-gray-45 peer-checked:text-sui-gray-5s peer-checked:font-bold dark:peer-checked:text-sui-gray-35">
                     {item.label}
                   </span>
                 </label>
               </div>
-              <span className="text-sm text-gray-500">{item.count}</span>
+              <span className="text-sm text-gray-500 dark:text-sui-gray-35">
+                {item.count}
+              </span>
             </li>
           ))}
         </ul>
