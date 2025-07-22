@@ -1029,23 +1029,23 @@ mod checked {
 
         let incoming_protocol_config =
             ProtocolConfig::get_for_version(change_epoch.protocol_version, temporary_store.chain());
-            let new_vm = new_move_vm(
+        let new_vm = new_move_vm(
             all_natives(/* silent */ true, &incoming_protocol_config),
             &incoming_protocol_config,
-                /* enable_profiler */ None,
-            )
-            .expect("Failed to create new MoveVM");
-            process_system_packages(
-                change_epoch,
-                temporary_store,
-                store,
-                tx_ctx,
-                &new_vm,
-                gas_charger,
+            /* enable_profiler */ None,
+        )
+        .expect("Failed to create new MoveVM");
+        process_system_packages(
+            change_epoch,
+            temporary_store,
+            store,
+            tx_ctx,
+            &new_vm,
+            gas_charger,
             &incoming_protocol_config,
-                metrics,
-                trace_builder_opt,
-            );
+            metrics,
+            trace_builder_opt,
+        );
 
         Ok(())
     }
