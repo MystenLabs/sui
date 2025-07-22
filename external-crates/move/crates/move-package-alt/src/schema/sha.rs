@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const SHA_FULL_LENGTH: usize = 40;
+const SHA_MIN_LENGTH: usize = 7;
 
 pub type ShaResult<T> = std::result::Result<T, ShaError>;
 
@@ -28,7 +29,7 @@ pub struct GitSha {
 }
 
 impl GitSha {
-    /// Check if this is a full sha (40 chars) or not
+    /// Check if this is a full sha ({SHA_FULL_LENGTH} chars) or not
     pub fn is_full_sha(&self) -> bool {
         self.inner.len() == SHA_FULL_LENGTH
     }
@@ -40,7 +41,7 @@ impl TryFrom<String> for GitSha {
     /// Check if the given string is a valid commit SHA, min 7 character, max 40 character long
     /// with only lowercase letters and digits.
     fn try_from(input: String) -> ShaResult<Self> {
-        if input.len() > 40 || input.len() < 7 {
+        if input.len() > SHA_FULL_LENGTH || input.len() < SHA_MIN_LENGTH {
             return Err(ShaError::WrongLength { input });
         }
 
