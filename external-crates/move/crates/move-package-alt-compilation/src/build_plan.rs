@@ -15,38 +15,19 @@ use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     shared::{SaveFlag, SaveHook, files::MappedFiles},
 };
-use move_package_alt::{
-    errors::PackageResult,
-    flavor::MoveFlavor,
-    graph::PackageGraph,
-    package::RootPackage,
-    schema::{Environment, PackageName},
-};
+use move_package_alt::{errors::PackageResult, flavor::MoveFlavor, package::RootPackage};
 
 #[derive(Debug)]
 pub struct BuildPlan<F: MoveFlavor> {
     root_pkg: RootPackage<F>,
-    _env: Environment,
-    _sorted_deps: Vec<PackageName>,
-    _package_graph: PackageGraph<F>,
     compiler_vfs_root: Option<VfsPath>,
     build_config: BuildConfig,
 }
 
 impl<F: MoveFlavor> BuildPlan<F> {
-    pub fn create(
-        root_pkg: RootPackage<F>,
-        build_config: &BuildConfig,
-        env: &Environment,
-    ) -> PackageResult<Self> {
-        let _package_graph = root_pkg.package_graph().clone();
-        let _sorted_deps = root_pkg.package_graph().sorted_deps();
-
+    pub fn create(root_pkg: RootPackage<F>, build_config: &BuildConfig) -> PackageResult<Self> {
         Ok(Self {
             root_pkg,
-            _env: env.clone(),
-            _sorted_deps,
-            _package_graph,
             build_config: build_config.clone(),
             compiler_vfs_root: None,
         })
@@ -87,17 +68,12 @@ impl<F: MoveFlavor> BuildPlan<F> {
         )
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
     ) -> PackageResult<CompiledPackage> {
-        let project_root = self.root_pkg.package_path().clone();
-        let project_root = project_root.path();
-        let package_name = self.root_pkg.name().clone();
         let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
         let compiled = build_all::<W, F>(
             writer,
             self.compiler_vfs_root.clone(),
-            project_root,
             self.root_pkg,
-            package_name,
-            &self.build_config.clone(),
+            &self.build_config,
             |compiler| {
                 let compiler = compiler.add_save_hook(&program_info_hook);
                 compiler_driver(compiler)

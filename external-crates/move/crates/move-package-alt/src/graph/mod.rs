@@ -10,25 +10,24 @@ mod to_lockfile;
 pub use linkage::LinkageError;
 pub use rename_from::RenameError;
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, paths::PackagePath},
-    schema::{Environment, PackageName},
+    schema::{Environment, PackageName, PublishAddresses},
 };
 use builder::PackageGraphBuilder;
 
 use derive_where::derive_where;
 use petgraph::{
-    algo::toposort,
     graph::{DiGraph, EdgeIndex, NodeIndex},
+    visit::EdgeRef,
 };
 
 #[derive(Debug)]
-#[derive_where(Clone)]
 pub struct PackageGraph<F: MoveFlavor> {
     root_idx: NodeIndex,
     inner: DiGraph<PackageNode<F>, PackageName>,
@@ -40,6 +39,76 @@ pub struct PackageGraph<F: MoveFlavor> {
 struct PackageNode<F: MoveFlavor> {
     package: Arc<Package<F>>,
     use_env: EnvironmentName,
+}
+
+/// A narrow interface for representing packages outside of `move-package-alt`
+#[derive(Copy)]
+#[derive_where(Clone)]
+pub struct PackageInfo<'a, F: MoveFlavor> {
+    graph: &'a PackageGraph<F>,
+    node: NodeIndex,
+}
+
+impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
+    /// The name that the package has declared for itself
+    pub fn name(&self) -> &PackageName {
+        self.package().name()
+    }
+
+    /// The compiler edition for the package
+    pub fn edition(&self) -> Option<&str> {
+        // TODO: pull this from manifest
+        Some("2024")
+    }
+
+    /// The flavor for the package
+    pub fn flavor(&self) -> Option<&str> {
+        // TODO: pull this from manifest
+        Some("sui")
+    }
+
+    /// The path to the package's files on disk
+    pub fn path(&self) -> &PackagePath {
+        self.package().path()
+    }
+
+    /// Returns the published address of this package, if it is published
+    pub fn published(&self) -> Option<&PublishAddresses> {
+        self.package().publication()
+    }
+
+    /// Returns true if the node is the root of the package graph
+    pub fn is_root(&self) -> bool {
+        self.package().is_root()
+    }
+
+    /// The addresses for the names that are available to this package. For modern packages, this
+    /// contains only the package and its dependencies, but legacy packages may define additional
+    /// addresses as well
+    pub fn named_addresses(&self) -> BTreeMap<PackageName, PackageInfo<'graph, F>> {
+        let mut result: BTreeMap<PackageName, PackageInfo<F>> = self
+            .graph
+            .inner
+            .edges(self.node)
+            .map(|edge| {
+                (
+                    edge.weight().clone(),
+                    Self {
+                        graph: self.graph,
+                        node: edge.target(),
+                    },
+                )
+            })
+            .collect();
+        result.insert(self.package().name().clone(), self.clone());
+
+        result
+    }
+
+    /// The package corresponding to this node
+    fn package(&self) -> &Package<F> {
+        &self.graph.inner[self.node].package
+    }
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
@@ -85,7 +154,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return the dependency corresponding to `edge`
-    pub fn dep_for_edge(&self, edge: EdgeIndex) -> &PinnedDependencyInfo {
+    fn dep_for_edge(&self, edge: EdgeIndex) -> &PinnedDependencyInfo {
         let (source_index, _) = self
             .inner
             .edge_endpoints(edge)
@@ -98,32 +167,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .expect("edges in graph come from dependencies, so the dependency must exist")
     }
 
-    /// Return a list of package names that are topologically sorted
-    pub fn sorted_deps(&self) -> Vec<PackageName> {
-        let sorted = toposort(&self.inner, None).expect("non cyclic directed graph");
-
-        sorted
-            .into_iter()
-            .flat_map(|idx| {
-                self.inner
-                    .node_weight(idx)
-                    .map(|f| f.package.name().clone())
-            })
-            .collect()
-    }
-
     /// Return the list of dependencies in this package graph
-    pub(crate) fn dependencies(&self) -> Vec<Arc<Package<F>>> {
-        let mut output = vec![];
-
-        for (idx, n) in self.inner.node_weights().enumerate() {
-            if NodeIndex::new(idx) == self.root_idx {
-                continue;
-            }
-
-            output.push(n.package.clone())
-        }
-
-        output
+    pub(crate) fn dependencies(&self) -> Vec<PackageInfo<F>> {
+        self.inner
+            .node_indices()
+            .map(|node| PackageInfo { graph: self, node })
+            .collect()
     }
 }

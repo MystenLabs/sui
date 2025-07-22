@@ -45,5 +45,9 @@ impl Cli {
 #[tokio::main]
 async fn main() -> PackageResult<()> {
     let cli = Cli::parse();
-    cli.execute().await
+    let result = cli.execute().await;
+    if let Err(ref e) = result {
+        e.emit();
+    }
+    result
 }
