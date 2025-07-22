@@ -41,9 +41,25 @@ type Checkpoint {
 	"""
 	epoch: Epoch
 	"""
+	The total number of transactions in the network by the end of this checkpoint.
+	"""
+	networkTotalTransactions: UInt53
+	"""
 	The digest of the previous checkpoint's summary.
 	"""
 	previousCheckpointDigest: String
+	"""
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+	"""
+	rollingGasSummary: GasCostSummary
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's summary.
+	"""
+	summaryBcs: Base64
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's contents.
+	"""
+	contentBcs: Base64
 	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
@@ -158,6 +174,32 @@ type FeatureFlag {
 	value: Boolean!
 }
 
+
+"""
+Summary of charges from transactions.
+
+Storage is charged in three parts -- `storage_cost`, `-storage_rebate`, and `non_refundable_storage_fee` -- independently of `computation_cost`.
+
+The overall cost of a transaction, deducted from its gas coins, is its `computation_cost + storage_cost - storage_rebate`. `non_refundable_storage_fee` is collected from objects being mutated or deleted and accumulated by the system in storage funds, the remaining storage costs of previous object versions are what become the `storage_rebate`. The ratio between `non_refundable_storage_fee` and `storage_rebate` is set by the protocol.
+"""
+type GasCostSummary {
+	"""
+	The sum cost of computation/execution
+	"""
+	computationCost: UInt53
+	"""
+	Cost for storage at the time the transaction is executed, calculated as the size of the objects being mutated in bytes multiplied by a storage cost per byte (part of the protocol).
+	"""
+	storageCost: UInt53
+	"""
+	Amount the user gets back from the storage cost of the previous versions of objects being mutated or deleted.
+	"""
+	storageRebate: UInt53
+	"""
+	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
+	"""
+	nonRefundableStorageFee: UInt53
+}
 
 type GasInput {
 	"""
