@@ -171,7 +171,7 @@ pub enum TraceEvent {
         type_parameters: Vec<TypeTag>,
         pc: u16,
         gas_left: u64,
-        instruction: Box<String>,
+        instruction: Bytecode,
     },
     Effect(Box<Effect>),
     External(Box<serde_json::Value>),
@@ -375,7 +375,7 @@ impl MoveTraceBuilder {
             type_parameters,
             pc,
             gas_left,
-            instruction: Box::new(format!("{:?}", instruction_opcode(instruction))),
+            instruction: instruction.clone(),
         });
         for effect in effects {
             self.push_event(TraceEvent::Effect(Box::new(effect)));
