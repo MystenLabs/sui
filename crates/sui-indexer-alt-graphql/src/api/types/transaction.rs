@@ -275,14 +275,14 @@ impl Transaction {
 
         // tx_hi_exclusive is the network_total_transactions of the highest checkpoint bound.
         let tx_hi_exclusive = if let Some((summary, _, _)) = contents.as_ref() {
-            summary.network_total_transactions
+            summary.network_total_transactions as i64
         } else {
             return Ok(Connection::new(false, false));
         };
 
         let mut pagination = dig::tx_digests
-            .filter(dig::tx_sequence_number.ge(tx_lo as i64))
-            .filter(dig::tx_sequence_number.lt(tx_hi_exclusive as i64))
+            .filter(dig::tx_sequence_number.ge(tx_lo))
+            .filter(dig::tx_sequence_number.lt(tx_hi_exclusive))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
 
