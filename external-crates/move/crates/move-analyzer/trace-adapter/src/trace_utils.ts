@@ -1210,7 +1210,7 @@ function processJSONLocation(
  * @returns runtime value.
  * @throws Error with a descriptive error message if conversion has failed.
  */
-function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
+function traceRefValueFromJSON(value: JSONTraceRefValue): IRuntimeRefValue {
     if ('MutRef' in value) {
         const loc = processJSONLocation(value.MutRef.location, []);
         if (!loc) {
