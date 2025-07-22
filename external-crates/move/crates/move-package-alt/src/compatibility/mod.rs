@@ -119,7 +119,7 @@ fn strip_doc_comments(source: &str) -> String {
         let trimmed = line.trim_start();
 
         // Regular comments case -- whole line is a comment.
-        if trimmed.starts_with("///") || trimmed.starts_with("//!") {
+        if trimmed.starts_with("///") || trimmed.starts_with("//") {
             continue;
         }
 
@@ -133,7 +133,7 @@ fn strip_doc_comments(source: &str) -> String {
         }
 
         // Remove any inline doc block comments (multiple if present)
-        while let Some(start) = line_cleaned.find("/*").or_else(|| line_cleaned.find("/*!")) {
+        while let Some(start) = line_cleaned.find("/*") {
             if let Some(end) = line_cleaned[start..].find("*/") {
                 line_cleaned.replace_range(start..start + end + 2, "");
             } else {
