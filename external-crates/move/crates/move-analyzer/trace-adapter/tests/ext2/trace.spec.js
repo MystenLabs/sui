@@ -2,14 +2,14 @@ const path = require('path');
 let action = (runtime) => {
     const filePath = path.join(
         __dirname,
-        'Hh6GKJ1ZQgyei6gqf2Dv74ZqUwoXAENSymvb7u6ADt3u',
-         'bytecode',
-         '0xd57798f09b33bdf87d7467d08eb99e545af9568fad06e7a006088641a01d922b',
-         'global_assign_ref.mvb'
-        );
+        'CNiT7vcohmcLhCLKTTwLfiNDLsKLJCk2deCXph835fsf',
+        'bytecode',
+        '0x1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d',
+        'global_assign_ref.mvb'
+    );
     console.log(filePath);
     let res = '';
-    runtime.setLineBreakpoints(filePath, [ 37, 39 ]);
+    runtime.setLineBreakpoints(filePath, [ 46, 48 ]);
     // execute until before WRITE_REF instruction
     // that may have incorrectly processed effects
     runtime.continue();
