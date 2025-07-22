@@ -13,7 +13,7 @@ use sui_types::{
 use crate::{
     api::{
         query::Query,
-        scalars::{date_time::DateTime, uint53::UInt53},
+        scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
     },
     error::RpcError,
     scope::Scope,
@@ -110,6 +110,26 @@ impl CheckpointContents {
         Some(GasCostSummary::from(
             summary.epoch_rolling_gas_cost_summary.clone(),
         ))
+    }
+
+    /// The Base64 serialized BCS bytes of this checkpoint's summary.
+    async fn summary_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(Base64::from(
+            bcs::to_bytes(summary).context("Failed to serialize checkpoint summary")?,
+        )))
+    }
+
+    /// The Base64 serialized BCS bytes of this checkpoint's contents.
+    async fn content_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let Some((_, content, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(Base64::from(
+            bcs::to_bytes(content).context("Failed to serialize checkpoint content")?,
+        )))
     }
 
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
