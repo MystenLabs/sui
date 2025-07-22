@@ -111,7 +111,7 @@ impl PinnedDependencyInfo {
             Pinned::Git(ref pinned_git_dependency) => {
                 pinned_git_dependency.inner.sha().is_full_sha()
             }
-            _ => false,
+            _ => true,
         }
     }
 }

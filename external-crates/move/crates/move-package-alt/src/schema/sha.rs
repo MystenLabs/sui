@@ -82,6 +82,7 @@ impl From<GitSha> for String {
 #[cfg(test)]
 mod tests {
     use crate::schema::GitSha;
+    use insta::assert_snapshot;
 
     #[test]
     fn test_git_sha() {
@@ -89,18 +90,16 @@ mod tests {
         assert!(GitSha::try_from(sha.to_string()).is_ok());
 
         let sha = "1234ac";
-        assert!(GitSha::try_from(sha.to_string()).is_err_and(|f| f.to_string() == "`1234ac` is an invalid commit sha; commits must be between 7 and 40 characters"));
+        assert_snapshot!(GitSha::try_from(sha.to_string()).unwrap_err().to_string(), @"`1234ac` is an invalid commit sha; commits must be between 7 and 40 characters");
 
         let sha = "test1234";
-        assert!(
-            GitSha::try_from(sha.to_string()).is_err_and(|f| f.to_string()
-                == "`test1234` is an invalid commit sha; commits must be lowercase hex strings")
-        );
+        assert_snapshot!(
+            GitSha::try_from(sha.to_string()).unwrap_err().to_string(), @"`test1234` is an invalid commit sha; commits must be lowercase hex strings");
 
         let full_sha = "209f0da8e316ba6eb7310d1667bdb22ae7fcb931";
         assert!(GitSha::try_from(full_sha.to_string()).is_ok());
 
         let too_long_full_sha = "209f0da8e316ba6eb7310d1667bdb22ae7fcb9310";
-        assert!(GitSha::try_from(too_long_full_sha.to_string()).is_err());
+        assert_snapshot!(GitSha::try_from(too_long_full_sha.to_string()).unwrap_err().to_string(), @"`209f0da8e316ba6eb7310d1667bdb22ae7fcb9310` is an invalid commit sha; commits must be between 7 and 40 characters");
     }
 }

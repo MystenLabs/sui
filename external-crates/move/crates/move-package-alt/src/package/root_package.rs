@@ -126,8 +126,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let pkg = graph.root_package();
         if pkg.direct_deps().iter().any(|(_, p)| !p.has_full_sha()) {
             let msg = "WARNING: found one or more short SHAs in the manifest's dependencies which \
-                    require to download the full git history.\n\nIt is recommended to use a full \
-                    40 characters sha if possible."
+                    require to download the full git history.\n\nUse a full 40-characters sha if \
+                    possible."
                 .yellow();
             println!("{}", msg);
         }
