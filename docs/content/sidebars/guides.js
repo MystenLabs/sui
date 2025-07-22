@@ -188,6 +188,21 @@ const guides = [
 	},
 	{
 		type: 'category',
+		label: 'SuiPlay0X1',
+		collapsed: false,
+		link: {
+			type: 'doc',
+			id: 'guides/suiplay0x1',
+		},
+		items: [
+			'guides/suiplay0x1/integration',
+			'guides/suiplay0x1/migration-strategies',
+			'guides/suiplay0x1/wallet-integration',
+			'guides/suiplay0x1/best-practices',
+		],
+	},
+	{
+		type: 'category',
 		label: 'Operator Guides',
 		link: {
 			type: 'doc',
@@ -207,21 +222,6 @@ const guides = [
 			'guides/operator/bridge-node-configuration',
 			'guides/operator/validator-committee',
 			'guides/operator/validator-tasks',
-		],
-	},
-	{
-		type: 'category',
-		label: 'SuiPlay0X1',
-		collapsed: false,
-		link: {
-			type: 'doc',
-			id: 'guides/suiplay0x1',
-		},
-		items: [
-			'guides/suiplay0x1/integration',
-			'guides/suiplay0x1/migration-strategies',
-			'guides/suiplay0x1/wallet-integration',
-			'guides/suiplay0x1/best-practices',
 		],
 	}
 ];
