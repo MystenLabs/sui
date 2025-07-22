@@ -2766,13 +2766,38 @@ impl CheckpointService {
     /// operation. Upon startup, we may have a number of consensus commits and resulting
     /// checkpoints that were built but not committed to disk. We want to reprocess the
     /// commits and rebuild the checkpoints before starting normal operation.
-    pub async fn spawn(&self, consensus_replay_waiter: Option<ReplayWaiter>) -> JoinSet<()> {
+    pub async fn spawn(
+        &self,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        consensus_replay_waiter: Option<ReplayWaiter>,
+    ) -> JoinSet<()> {
         let mut tasks = JoinSet::new();
 
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
-        tasks.spawn(monitored_future!(builder.run(consensus_replay_waiter)));
-        tasks.spawn(monitored_future!(aggregator.run()));
-        tasks.spawn(monitored_future!(state_hasher.run()));
+        tasks.spawn({
+            let epoch_store = epoch_store.clone();
+            monitored_future!(async move {
+                epoch_store
+                    .within_alive_epoch(builder.run(consensus_replay_waiter))
+                    .await
+                    .ok();
+            })
+        });
+        tasks.spawn({
+            let epoch_store = epoch_store.clone();
+            monitored_future!(async move {
+                epoch_store.within_alive_epoch(aggregator.run()).await.ok();
+            })
+        });
+        tasks.spawn({
+            let epoch_store = epoch_store.clone();
+            monitored_future!(async move {
+                epoch_store
+                    .within_alive_epoch(state_hasher.run())
+                    .await
+                    .ok();
+            })
+        });
 
         // If this times out, the validator may still start up. The worst that can
         // happen is that we will crash later on instead of immediately. The eventual
@@ -3116,7 +3141,7 @@ mod tests {
             3,
             100_000,
         );
-        let _tasks = checkpoint_service.spawn(None).await;
+        let _tasks = checkpoint_service.spawn(epoch_store.clone(), None).await;
 
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))
