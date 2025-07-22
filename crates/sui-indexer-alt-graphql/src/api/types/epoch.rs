@@ -174,6 +174,19 @@ impl Epoch {
 
         Ok(total_stake_rewards_distributed.map(BigInt::from))
     }
+
+    /// The amount added to total gas fees to make up the total stake rewards.
+    async fn total_stake_subsidies(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd {
+            stake_subsidy_amount,
+            ..
+        }) = self.end(ctx).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(stake_subsidy_amount.map(BigInt::from))
+    }
 }
 
 impl Epoch {

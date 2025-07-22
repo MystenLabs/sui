@@ -128,6 +128,10 @@ type Epoch {
 	The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
 	"""
 	totalStakeRewards: BigInt
+	"""
+	The amount added to total gas fees to make up the total stake rewards.
+	"""
+	totalStakeSubsidies: BigInt
 }
 
 """
