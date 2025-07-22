@@ -105,7 +105,7 @@ use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
-use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
@@ -244,7 +244,7 @@ pub struct SuiNode {
     http_servers: HttpServers,
 
     state: Arc<AuthorityState>,
-    transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
+    transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
     metrics: Arc<SuiNodeMetrics>,
 
@@ -790,15 +790,13 @@ impl SuiNode {
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
         let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
-            Some(Arc::new(
-                TransactiondOrchestrator::new_with_auth_aggregator(
-                    auth_agg.load_full(),
-                    state.clone(),
-                    end_of_epoch_receiver,
-                    &config.db_path(),
-                    &prometheus_registry,
-                ),
-            ))
+            Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
+                auth_agg.load_full(),
+                state.clone(),
+                end_of_epoch_receiver,
+                &config.db_path(),
+                &prometheus_registry,
+            )))
         } else {
             None
         };
@@ -1709,7 +1707,7 @@ impl SuiNode {
 
     pub fn transaction_orchestrator(
         &self,
-    ) -> Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>> {
+    ) -> Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>> {
         self.transaction_orchestrator.clone()
     }
 
@@ -2227,7 +2225,7 @@ fn build_kv_store(
 async fn build_http_servers(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
-    transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
+    transaction_orchestrator: &Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
     server_version: ServerVersion,
