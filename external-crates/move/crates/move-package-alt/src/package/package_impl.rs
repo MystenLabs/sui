@@ -51,6 +51,7 @@ pub struct Package<F: MoveFlavor> {
 
     /// Optional legacy information for a supplied package.
     /// TODO(manos): Make `LegacyData` single environment too, or use multiple types for this.
+    /// TODO(mike): should not be pub
     pub legacy_data: Option<LegacyData>,
 
     /// The pinned direct dependencies for this package

@@ -22,6 +22,7 @@ pub struct LegacyData {
     pub incompatible_name: Option<String>,
 
     /// These addresses should store all addresses that were part of the package.
+    // TODO: this duplicates the names that are in the dependencies
     pub addresses: LegacyAddressDeclarations,
 
     /// These addresses should store all DEV addresses that were part of the package.

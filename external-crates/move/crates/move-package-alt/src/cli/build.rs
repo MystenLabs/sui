@@ -48,8 +48,7 @@ impl Build {
             }
             println!("  path: {:?}", pkg.path());
             println!("  named addresses:");
-            for (name, dep) in pkg.named_addresses() {
-                let addr = dep.published().map(|addrs| &addrs.original_id);
+            for (name, addr) in pkg.named_addresses() {
                 println!("    {name}: {addr:?}");
             }
             println!();
