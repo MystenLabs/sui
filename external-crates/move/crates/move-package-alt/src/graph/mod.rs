@@ -17,7 +17,7 @@ use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, paths::PackagePath},
-    schema::{Environment, PackageName, PublishAddresses},
+    schema::{Environment, OriginalID, PackageName, PublishAddresses},
 };
 use builder::PackageGraphBuilder;
 
@@ -47,6 +47,13 @@ struct PackageNode<F: MoveFlavor> {
 pub struct PackageInfo<'a, F: MoveFlavor> {
     graph: &'a PackageGraph<F>,
     node: NodeIndex,
+}
+
+#[derive(Debug)]
+pub enum NamedAddress {
+    RootPackage(Option<OriginalID>),
+    Unpublished,
+    Published(OriginalID),
 }
 
 impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
@@ -85,24 +92,29 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
     /// The addresses for the names that are available to this package. For modern packages, this
     /// contains only the package and its dependencies, but legacy packages may define additional
     /// addresses as well
-    pub fn named_addresses(&self) -> BTreeMap<PackageName, PackageInfo<'graph, F>> {
-        let mut result: BTreeMap<PackageName, PackageInfo<F>> = self
+    pub fn named_addresses(&self) -> BTreeMap<PackageName, NamedAddress> {
+        let mut result: BTreeMap<PackageName, NamedAddress> = self
             .graph
             .inner
             .edges(self.node)
-            .map(|edge| {
-                (
-                    edge.weight().clone(),
-                    Self {
-                        graph: self.graph,
-                        node: edge.target(),
-                    },
-                )
-            })
+            .map(|edge| (edge.weight().clone(), self.node_to_addr(edge.target())))
             .collect();
-        result.insert(self.package().name().clone(), self.clone());
+        result.insert(self.package().name().clone(), self.node_to_addr(self.node));
 
         result
+    }
+
+    /// Return the NamedAddress for `node`
+    fn node_to_addr(&self, node: NodeIndex) -> NamedAddress {
+        let package = self.graph.inner[node].package.clone();
+        if package.is_root() {
+            return NamedAddress::RootPackage(package.original_id());
+        }
+        if let Some(oid) = package.original_id() {
+            NamedAddress::Published(oid)
+        } else {
+            NamedAddress::Unpublished
+        }
     }
 
     /// The package corresponding to this node
