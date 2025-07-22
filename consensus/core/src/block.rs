@@ -11,6 +11,7 @@ use consensus_config::{
 use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::HashFunction;
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
@@ -543,10 +544,10 @@ impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{:?}({}ms;{:?};{}t;{}c)",
+            "{:?}([{}];{}ms;{}t;{}c)",
             self.reference(),
+            self.ancestors().iter().map(|a| a.to_string()).join(", "),
             self.timestamp_ms(),
-            self.ancestors(),
             self.transactions().len(),
             self.commit_votes().len(),
         )
