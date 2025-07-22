@@ -25,7 +25,7 @@ impl RpcMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             request_latency: register_histogram_vec_with_registry!(
-                "rpc_request_latency",
+                "consistent_rpc_request_latency",
                 "Time taken to response to gRPC requests, by path",
                 &["path"],
                 LATENCY_SEC_BUCKETS.to_vec(),
@@ -34,7 +34,7 @@ impl RpcMetrics {
             .unwrap(),
 
             requests_received: register_int_counter_vec_with_registry!(
-                "rpc_requests_received",
+                "consistent_rpc_requests_received",
                 "Number of requests initiated for each gRPC method",
                 &["path"],
                 registry,
@@ -42,7 +42,7 @@ impl RpcMetrics {
             .unwrap(),
 
             requests_succeeded: register_int_counter_vec_with_registry!(
-                "rpc_requests_succeeded",
+                "consistent_rpc_requests_succeeded",
                 "Number of requests that completed successfully, by path",
                 &["service", "method"],
                 registry,
@@ -50,7 +50,7 @@ impl RpcMetrics {
             .unwrap(),
 
             requests_failed: register_int_counter_vec_with_registry!(
-                "rpc_requests_failed",
+                "consistent_rpc_requests_failed",
                 "Number of requests that completed with an error, by path",
                 &["path", "code"],
                 registry,
@@ -58,7 +58,7 @@ impl RpcMetrics {
             .unwrap(),
 
             requests_cancelled: register_int_counter_vec_with_registry!(
-                "rpc_requests_cancelled",
+                "consistent_rpc_requests_cancelled",
                 "Number of requests that were cancelled before completion, by path",
                 &["path"],
                 registry,

@@ -74,11 +74,13 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
             cancel.child_token(),
         );
 
+        let metrics_prefix = Some("consistent_indexer");
         let indexer = framework::Indexer::new(
             store,
             indexer_args,
             client_args,
             ingestion_config,
+            metrics_prefix,
             registry,
             cancel.child_token(),
         )
