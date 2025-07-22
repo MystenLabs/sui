@@ -14570,6 +14570,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic 0.13.1",
  "tracing",
  "url",
 ]

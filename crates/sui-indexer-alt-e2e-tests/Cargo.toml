@@ -48,6 +48,7 @@ async-trait.workspace = true
 datatest-stable.workspace = true
 jsonrpsee.workspace = true
 telemetry-subscribers.workspace = true
+tonic.workspace = true
 
 move-core-types.workspace = true
 
