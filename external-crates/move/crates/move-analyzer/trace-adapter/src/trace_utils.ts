@@ -736,12 +736,16 @@ export async function readTrace(
                     const value = 'RuntimeValue' in effect.Write.root_value_after_write
                         ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
                         : 'globalIndex' in runtimeLoc.loc
-                            // global variable is the end of the reference chain
-                            // without it reaching the actual (non-reference) value
-                            // and when updating it we need to update it with the actual
-                            // value rather than the reference one (which, if we are not
-                            // careful, may be a reference to the same global variable
-                            // causing infinite recursion when trying to access it afterwards)
+                            // We are writing to a global value here. Global values are
+                            // effectively references that appear "out of thin air" (e.g.,
+                            // are passed as parameters to top level functions). Unlike regular
+                            // references, for the global ones there isn't a natural end to the
+                            // the reference chain ending in a "regular" value - we need to
+                            // create one. When processing the trace, when writing to a global,
+                            // we need the actual value, so that the runtime has a chance to
+                            // store (and update) it accordingly. Failing to do so may result
+                            // in infinite recursion when trying to assign a global (reference)
+                            // to (potentially indexed) self.
                             ? derefTraceRefValueFromJSON(effect.Write.root_value_after_write)
                             : traceRefValueFromJSON(effect.Write.root_value_after_write);
 
