@@ -470,7 +470,10 @@ where
                 },
             )
             .await
-            .map_err(|e| QuorumDriverError::TransactionDriverError(e.to_string()));
+            .map_err(|e| QuorumDriverError::TransactionFailed {
+                retriable: e.is_retriable(),
+                details: e.to_string(),
+            });
 
         // Clean up transaction from WAL log
         if let Err(err) = self.pending_tx_log.finish_transaction(&tx_digest) {

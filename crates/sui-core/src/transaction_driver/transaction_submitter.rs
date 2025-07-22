@@ -14,7 +14,8 @@ use crate::{
     authority_client::AuthorityAPI,
     safe_client::SafeClient,
     transaction_driver::{
-        error::TransactionDriverError, transaction_retrier::TransactionRetrier,
+        error::{TransactionDriverError, TransactionRequestError},
+        request_retrier::RequestRetrier,
         SubmitTransactionOptions, SubmitTxResponse, TransactionDriverMetrics,
     },
 };
@@ -30,8 +31,7 @@ impl TransactionSubmitter {
         Self { metrics }
     }
 
-    // TODO(fastpath): this should return an aggregated error from submission retries.
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -42,7 +42,7 @@ impl TransactionSubmitter {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let mut retrier = TransactionRetrier::new(authority_aggregator);
+        let mut retrier = RequestRetrier::new(authority_aggregator);
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
         // or all feasible targets returned errors or timed out.
         loop {
@@ -64,13 +64,13 @@ impl TransactionSubmitter {
         }
     }
 
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "error", skip_all)]
     async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
         raw_request: &RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-    ) -> Result<SubmitTxResponse, TransactionDriverError>
+    ) -> Result<SubmitTxResponse, TransactionRequestError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
@@ -79,8 +79,8 @@ impl TransactionSubmitter {
             client.submit_transaction(raw_request.clone(), options.forwarded_client_addr),
         )
         .await
-        .map_err(|_| TransactionDriverError::TimedOutSubmittingTransaction)?
-        .map_err(TransactionDriverError::ValidatorInternalError)?;
+        .map_err(|_| TransactionRequestError::TimedOutSubmittingTransaction)?
+        .map_err(TransactionRequestError::RejectedAtValidator)?;
         Ok(resp)
     }
 }
