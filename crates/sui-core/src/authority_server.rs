@@ -66,7 +66,7 @@ use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
-        shared_object_version_manager::Schedulable, ExecutionEnv,
+        shared_object_version_manager::Schedulable, ExecutionEnv, WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
     },
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
@@ -597,6 +597,28 @@ impl ValidatorService {
                 let executed_resp = executed_resp.try_into()?;
                 return Ok((tonic::Response::new(executed_resp), Weight::zero()));
             }
+        }
+
+        // Use shorter wait timeout in simtests to exercise server-side error paths and
+        // client-side retry logic.
+        let wait_for_fastpath_input_objects_timeout = if cfg!(msim) {
+            Duration::from_millis(100)
+        } else {
+            WAIT_FOR_FASTPATH_INPUT_TIMEOUT
+        };
+        if !state
+            .wait_for_fastpath_input_objects(
+                &transaction,
+                epoch_store.epoch(),
+                wait_for_fastpath_input_objects_timeout,
+            )
+            .await?
+        {
+            debug!(
+                ?tx_digest,
+                "Fastpath input objects are still unavailable after waiting"
+            );
+            // Proceed with input checks to generate a proper error.
         }
 
         state

@@ -215,7 +215,7 @@ impl<F: MoveFlavor> Package<F> {
         &self.deps
     }
 
-    fn publication(&self) -> Option<&PublishAddresses> {
+    pub fn publication(&self) -> Option<&PublishAddresses> {
         self.publish_data.as_ref().map(|data| &data.addresses)
     }
 

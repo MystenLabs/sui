@@ -413,7 +413,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
     let multisig =
         MultiSig::insecure_new(vec![zklogin_sig.to_compressed().unwrap()], 1, multisig_pk);
 
-    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch, true)
         .unwrap()
         .into_iter()
         .collect();

@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoints::CheckpointBuilderError;
+use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
 use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
@@ -15,7 +17,6 @@ use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::traffic_controller::TrafficController;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
-use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
@@ -64,6 +65,7 @@ use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::get_early_execution_error;
+use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
@@ -71,6 +73,7 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::storage::InputKey;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
@@ -81,6 +84,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -385,6 +389,11 @@ const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
 ];
 
 pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000;
+
+// Transaction author should have observed the input objects as finalized output,
+// so usually the wait does not need to be long.
+// When submitted by TransactionDriver, it will retry quickly if there is no return from this validator too.
+pub const WAIT_FOR_FASTPATH_INPUT_TIMEOUT: Duration = Duration::from_secs(2);
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
@@ -822,14 +831,6 @@ impl AuthorityMetrics {
 ///
 pub type StableSyncAuthoritySigner = Pin<Arc<dyn Signer<AuthoritySignature> + Send + Sync>>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BalanceWithdrawStatus {
-    NoWithdraw,
-    SufficientBalance,
-    // TODO(address-balances): Add information on the address and type?
-    InsufficientBalance,
-}
-
 /// Execution env contains the "environment" for the transaction to be executed in, that is,
 /// all the information necessary for execution that is not specified by the transaction itself.
 #[derive(Debug, Clone)]
@@ -1135,7 +1136,32 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self.handle_transaction_impl(transaction, true, epoch_store);
+        // timeout in tests can be reduced to exercise error paths, if QD properly retries
+        // failures to lock on objects waiting for future versions.
+        if epoch_store.protocol_config().mysticeti_fastpath()
+            && !self
+                .wait_for_fastpath_input_objects(
+                    &transaction,
+                    epoch_store.epoch(),
+                    WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
+                )
+                .await?
+        {
+            debug!("fastpath input objects are still unavailable after waiting");
+            // Proceed with input checks to generate a proper error.
+        }
+
+        self.handle_sign_transaction(epoch_store, transaction).await
+    }
+
+    /// Signs a transaction. Exposed for testing.
+    pub async fn handle_sign_transaction(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: VerifiedTransaction,
+    ) -> SuiResult<HandleTransactionResponse> {
+        let tx_digest = *transaction.digest();
+        let signed = self.handle_transaction_impl(transaction, /* sign */ true, epoch_store);
         match signed {
             Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
@@ -1271,6 +1297,53 @@ impl AuthorityState {
             .transaction_overload_sources
             .with_label_values(&[source])
             .inc();
+    }
+
+    /// Waits for fastpath (owned) input objects to become available until the specified max_wait timeout.
+    /// Returns true if all fastpath input objects are available, false otherwise.
+    pub(crate) async fn wait_for_fastpath_input_objects(
+        &self,
+        transaction: &VerifiedTransaction,
+        epoch: EpochId,
+        max_wait: Duration,
+    ) -> SuiResult<bool> {
+        let txn_data = transaction.data().transaction_data();
+        let fastpath_input_objects = txn_data
+            .input_objects()?
+            .iter()
+            .filter_map(|o| match o {
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    Some(InputKey::VersionedObject {
+                        id: FullObjectID::new(object_ref.0, None),
+                        version: object_ref.1,
+                    })
+                }
+                InputObjectKind::MovePackage(package_id) => {
+                    Some(InputKey::Package { id: *package_id })
+                }
+                InputObjectKind::SharedMoveObject { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        if fastpath_input_objects.is_empty() {
+            return Ok(true);
+        }
+        // It is ok to not check receiving objects, unless it turns out to be a common failure.
+        let receiving_keys = HashSet::new();
+        match timeout(
+            max_wait,
+            self.get_object_cache_reader().notify_read_input_objects(
+                &fastpath_input_objects,
+                &receiving_keys,
+                epoch,
+            ),
+        )
+        .await
+        {
+            Ok(()) => Ok(true),
+            // Maybe return an error for unavailable input objects,
+            // and allow the caller to skip the rest of input checks?
+            Err(_) => Ok(false),
+        }
     }
 
     /// Wait for a certificate to be executed.
@@ -1679,6 +1752,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             expected_effects_digest,
+            execution_env.withdraw_status,
             epoch_store,
         )
     }
@@ -1802,6 +1876,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
+        withdraw_status: BalanceWithdrawStatus,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(
         TransactionOutputs,
@@ -1836,6 +1911,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            &withdraw_status,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -1954,6 +2030,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             None,
+            BalanceWithdrawStatus::NoWithdraw,
             epoch_store,
         )?;
         Ok((transaction_outputs, execution_error_opt))
@@ -2093,6 +2170,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            &BalanceWithdrawStatus::NoWithdraw,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2298,6 +2377,8 @@ impl AuthorityState {
             &transaction.digest(),
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            &BalanceWithdrawStatus::NoWithdraw,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2495,6 +2576,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            &BalanceWithdrawStatus::NoWithdraw,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -5310,7 +5393,7 @@ impl AuthorityState {
         // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
         // >1 checkpoint.
         last_checkpoint: CheckpointSequenceNumber,
-    ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
+    ) -> CheckpointBuilderResult<(SuiSystemState, TransactionEffects)> {
         let mut txns = Vec::new();
 
         if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
@@ -5387,9 +5470,7 @@ impl AuthorityState {
             //   state sync, and execute it. This will upgrade the framework packages, reconfigure,
             //   and most likely shut down in the new epoch (this validator likely doesn't support
             //   the new protocol version, or else it should have had the packages.)
-            return Err(anyhow!(
-                "missing system packages: cannot form ChangeEpochTx"
-            ));
+            return Err(CheckpointBuilderError::SystemPackagesMissing);
         };
 
         let tx = if epoch_store
@@ -5451,9 +5532,7 @@ impl AuthorityState {
             .is_tx_already_executed(tx_digest)
         {
             warn!("change epoch tx has already been executed via state sync");
-            return Err(anyhow::anyhow!(
-                "change epoch tx has already been executed via state sync"
-            ));
+            return Err(CheckpointBuilderError::ChangeEpochTxAlreadyExecuted);
         }
 
         let execution_guard = self.execution_lock_for_executable_transaction(&executable_tx)?;
@@ -5480,6 +5559,7 @@ impl AuthorityState {
             &executable_tx,
             input_objects,
             None,
+            BalanceWithdrawStatus::NoWithdraw,
             epoch_store,
         )?;
         let system_obj = get_sui_system_state(&transaction_outputs.written)

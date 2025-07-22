@@ -123,6 +123,7 @@ interface JSONTraceFrame {
     is_native: boolean;
     locals_types: JSONTraceType[];
     module: JSONTraceModule;
+    version_id?: string; // introduced in trace v3
     parameters: JSONTraceValue[];
     return_types: JSONTraceType[];
     type_instantiation: string[];
@@ -551,21 +552,26 @@ export async function readTrace(
                 }
             }
             localLifetimeEnds.set(frame.frame_id, lifetimeEnds);
+            // Trace v3 introduces `version_id` field in frame, which represents
+            // address of the on-chain package version that contains the function.
+            // It is different from `frame.module.address` if the package has been
+            // upgraded.
+            const addr = frame.version_id ? frame.version_id : frame.module.address;
             const modInfo = {
-                addr: frame.module.address,
+                addr: addr,
                 name: frame.module.name
             };
-            const sourceMap = srcDebugInfosModMap.get(JSON.stringify(modInfo));
-            if (!sourceMap) {
-                throw new Error('Source map for module '
+            const debugInfo = srcDebugInfosModMap.get(JSON.stringify(modInfo));
+            if (!debugInfo) {
+                throw new Error('Debug info for module '
                     + modInfo.name
                     + ' in package '
                     + modInfo.addr
                     + ' not found');
             }
-            const srcFunEntry = sourceMap.functions.get(frame.function_name);
+            const srcFunEntry = debugInfo.functions.get(frame.function_name);
             if (!srcFunEntry) {
-                throw new Error('Cannot find function entry in source map for function '
+                throw new Error('Cannot find function entry in debug info for function '
                     + frame.function_name
                     + ' in module '
                     + modInfo.name
@@ -574,8 +580,8 @@ export async function readTrace(
                     + ' when processing OpenFrame event');
             }
 
-            const srcFileHash = sourceMap.fileHash;
-            const optimizedSrcLines = sourceMap.optimizedLines;
+            const srcFileHash = debugInfo.fileHash;
+            const optimizedSrcLines = debugInfo.optimizedLines;
             // there may be no disassembly info
             let bcodeFileHash = undefined;
             let optimizedBcodeLines = undefined;
@@ -605,10 +611,10 @@ export async function readTrace(
                 optimizedSrcLines,
                 optimizedBcodeLines
             });
-            const currentSrcFile = filesMap.get(sourceMap.fileHash);
+            const currentSrcFile = filesMap.get(debugInfo.fileHash);
 
             if (!currentSrcFile) {
-                throw new Error(`Cannot find file with hash: ${sourceMap.fileHash}`);
+                throw new Error(`Cannot find file with hash: ${debugInfo.fileHash}`);
             }
             frameInfoStack.push({
                 ID: frame.frame_id,

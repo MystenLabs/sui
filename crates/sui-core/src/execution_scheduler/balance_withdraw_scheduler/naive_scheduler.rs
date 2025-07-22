@@ -53,6 +53,19 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                 return;
             }
         }
+        if *receiver.borrow() > withdraws.accumulator_version {
+            debug!(
+                "Accumulator version {:?} is already settled",
+                withdraws.accumulator_version
+            );
+            for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
+                let _ = sender.send(ScheduleResult {
+                    tx_digest: withdraw.tx_digest,
+                    status: ScheduleStatus::AlreadyExecuted,
+                });
+            }
+            return;
+        }
 
         // Map from each account ID that we have seen so far to the current
         // remaining balance for reservation.
