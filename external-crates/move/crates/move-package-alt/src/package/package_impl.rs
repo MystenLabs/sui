@@ -96,7 +96,7 @@ impl<F: MoveFlavor> Package<F> {
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
 
             let implicit_deps =
-                implicit_deps::<F>(env, manifest.parsed().package.implicit_deps, None);
+                Self::implicit_deps(env, manifest.parsed().package.implicit_deps, None);
 
             // TODO: We should error if there environment is not supported!
             let combined_deps = CombinedDependency::combine_deps(
@@ -132,7 +132,7 @@ impl<F: MoveFlavor> Package<F> {
         // Here, that means that we're working on legacy package, so we can throw its errors.
         let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
         let implicit_deps =
-            implicit_deps::<F>(env, ImplicitDepMode::Legacy, Some(&legacy_manifest));
+            Self::implicit_deps(env, ImplicitDepMode::Legacy, Some(&legacy_manifest));
 
         let combined_deps = CombinedDependency::combine_deps(
             &legacy_manifest.file_handle,
@@ -230,36 +230,53 @@ impl<F: MoveFlavor> Package<F> {
     pub fn original_id(&self) -> Option<OriginalID> {
         self.publication().map(|data| data.original_id.clone())
     }
-}
 
-/// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
-/// is ImplicitDepMode::Legacy, a `legacy_manifest` is required otherwise it will panic.
-// TODO this needs to be moved into a ImplicitDeps trait
-fn implicit_deps<F: MoveFlavor>(
-    env: &Environment,
-    implicit_dep_mode: ImplicitDepMode,
-    legacy_manifest: Option<&ParsedLegacyPackage>,
-) -> BTreeMap<PackageName, ReplacementDependency> {
-    // TODO: is this correct? Do we need to include the git repo? What if somebody names it
-    // differently and specifies a different git repository (e.g., a fork) - is that possible?
-    // e.g., SuiFork = { git = "https://github.com/suifork/sui.git", branch = "main" }
+    /// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
+    /// is ImplicitDepMode::Legacy, a `legacy_manifest` is required otherwise it will panic.
+    // TODO this needs to be moved into a ImplicitDeps trait
+    fn implicit_deps(
+        env: &Environment,
+        implicit_dep_mode: ImplicitDepMode,
+        legacy_manifest: Option<&ParsedLegacyPackage>,
+    ) -> BTreeMap<PackageName, ReplacementDependency> {
+        // TODO - rethink how this implict dep mode works
+        // let system_pacakages = F::implicit_deps;
+        // if let Some(legacy) = package.legacy_deta {
+        //   check if package is a system package (i.e. if package.name() is in system_packages)
+        //   check if package has any deps with same names as system packages
+        //   if either is true: set implicit_dep_mode to Disabled
+        // }
 
-    match implicit_dep_mode {
-        ImplicitDepMode::Enabled => F::implicit_deps(env.id().to_string()),
-        ImplicitDepMode::Disabled => BTreeMap::new(),
-        ImplicitDepMode::Legacy => {
-            let system_deps_in_legacy_manifest = legacy_manifest
-                .expect("Legacy manifest should be present")
-                .deps
-                .iter()
-                .any(|(name, _)| SYSTEM_DEPS_NAMES.contains(&name.as_str()));
-            // if the legacy manifest has system dependencies, we return an empty map
-            if system_deps_in_legacy_manifest {
-                BTreeMap::new()
-            } else {
-                F::implicit_deps(env.id().to_string())
+        match implicit_dep_mode {
+            // for modern packages, the manifest should have the implicit-deps field set to true
+            // (by default), or to false.
+            ImplicitDepMode::Enabled => F::implicit_deps(env.id().to_string()),
+            ImplicitDepMode::Disabled => BTreeMap::new(),
+            ImplicitDepMode::Legacy => {
+                let legacy_manifest = legacy_manifest.expect("Legacy manifest should be present");
+                let system_deps_in_legacy_manifest = legacy_manifest
+                    .deps
+                    .iter()
+                    .any(|(name, _)| SYSTEM_DEPS_NAMES.contains(&name.as_str()));
+
+                // if the legacy manifest has system dependencies explicitly defined, return an empty
+                // map
+                if system_deps_in_legacy_manifest {
+                    BTreeMap::new()
+                } else {
+                    let deps = F::implicit_deps(env.id().to_string());
+
+                    // for legacy system packages, we don't need to add implicit deps for them as their
+                    // dependencies are explicitly set in their manifest
+
+                    if deps.contains_key(legacy_manifest.metadata.name.get_ref()) {
+                        BTreeMap::new()
+                    } else {
+                        deps
+                    }
+                }
             }
+            ImplicitDepMode::Testing => todo!(),
         }
-        ImplicitDepMode::Testing => todo!(),
     }
 }
