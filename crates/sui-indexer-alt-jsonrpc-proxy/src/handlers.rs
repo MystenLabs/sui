@@ -289,23 +289,49 @@ async fn proxy_request(
         .observe(response_bytes.len() as f64);
 
     // Debug: Print request method/params and response bytes in readable format
-    let request_info = if let Ok(request_json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-        let method = request_json.get("method").and_then(|m| m.as_str()).unwrap_or("unknown");
-        let params = request_json.get("params").unwrap_or(&serde_json::Value::Null);
-        format!("Method: {}, Params: {}", method, serde_json::to_string(params).unwrap_or_else(|_| "null".to_string()))
-    } else {
-        "Could not parse request".to_string()
-    };
+    let request_info =
+        if let Ok(request_json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+            let method = request_json
+                .get("method")
+                .and_then(|m| m.as_str())
+                .unwrap_or("unknown");
+            let params = request_json
+                .get("params")
+                .unwrap_or(&serde_json::Value::Null);
+            format!(
+                "Method: {}, Params: {}",
+                method,
+                serde_json::to_string(params).unwrap_or_else(|_| "null".to_string())
+            )
+        } else {
+            "Could not parse request".to_string()
+        };
 
     if let Ok(response_str) = std::str::from_utf8(&response_bytes) {
         let truncated_response = if response_str.len() > 1000 {
-            format!("{}... (truncated, {} total chars)", &response_str[..1000], response_str.len())
+            let truncate_at = response_str
+                .char_indices()
+                .nth(1000)
+                .map(|(i, _)| i)
+                .unwrap_or(1000);
+            format!(
+                "{}... (truncated, {} total chars)",
+                &response_str[..truncate_at],
+                response_str.len()
+            )
         } else {
             response_str.to_string()
         };
-        info!("Request: {} | Response body (UTF-8): {}", request_info, truncated_response);
+        info!(
+            "Request: {} | Response body (UTF-8): {}",
+            request_info, truncated_response
+        );
     } else {
-        info!("Request: {} | Response body is not valid UTF-8, {} bytes", request_info, response_bytes.len());
+        info!(
+            "Request: {} | Response body is not valid UTF-8, {} bytes",
+            request_info,
+            response_bytes.len()
+        );
     }
 
     let mut resp = Response::new(response_bytes.clone().into());
