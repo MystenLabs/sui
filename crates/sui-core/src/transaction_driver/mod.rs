@@ -178,6 +178,29 @@ where
     }
 }
 
+// Chooses the percentage of transactions to be driven by TransactionDriver.
+pub fn choose_transaction_driver_percentage() -> u8 {
+    // Currently, TD cannot work in non-test environments.
+    if std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME).is_ok() {
+        return 0;
+    }
+
+    if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
+        if let Ok(tx_driver_percentage) = v.parse::<u8>() {
+            if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
+                return tx_driver_percentage;
+            }
+        }
+    }
+
+    // Default to 50% in simtests.
+    if cfg!(msim) {
+        return 50;
+    }
+
+    0
+}
+
 // Inner state of TransactionDriver.
 struct State {
     tasks: JoinSet<()>,
