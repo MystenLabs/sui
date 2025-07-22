@@ -133,17 +133,13 @@ fn strip_doc_comments(source: &str) -> String {
         }
 
         // Remove any inline doc block comments (multiple if present)
-        loop {
-            if let Some(start) = line_cleaned.find("/*").or_else(|| line_cleaned.find("/*!")) {
-                if let Some(end) = line_cleaned[start..].find("*/") {
-                    line_cleaned.replace_range(start..start + end + 2, "");
-                } else {
-                    // Start of multiline doc block; remove to end of line and set flag
-                    line_cleaned.replace_range(start.., "");
-                    in_block_doc = true;
-                    break;
-                }
+        while let Some(start) = line_cleaned.find("/*").or_else(|| line_cleaned.find("/*!")) {
+            if let Some(end) = line_cleaned[start..].find("*/") {
+                line_cleaned.replace_range(start..start + end + 2, "");
             } else {
+                // Start of multiline doc block; remove to end of line and set flag
+                line_cleaned.replace_range(start.., "");
+                in_block_doc = true;
                 break;
             }
         }
