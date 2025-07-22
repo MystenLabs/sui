@@ -95,7 +95,7 @@ fn find_files(files: &mut Vec<PathBuf>, dir: &Path, extension: &str, max_depth: 
 
 // Consider supporting the legacy `address { module {} }` format.
 fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
-    let clean = strip_doc_comments(contents);
+    let clean = strip_comments(contents);
     let mut set = HashSet::new();
     // This matches `module a::b {}`, and `module a::b;` cases.
     // In both cases, the match is the 2nd group (so `match.get(1)`)
@@ -108,19 +108,22 @@ fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
     Ok(set)
 }
 
-/// A naive implememntation to strip doc comments out of a file, to avoid
-/// detecting invalid module names.
-fn strip_doc_comments(source: &str) -> String {
+/// Returns a copy of `source` with all the comments removed.
+fn strip_comments(source: &str) -> String {
     let mut result = String::new();
     let mut in_block_doc = false;
 
     for line in source.lines() {
         let mut line_cleaned = line.to_string();
-        let trimmed = line.trim_start();
 
-        // Regular comments case -- whole line is a comment.
-        if trimmed.starts_with("///") || trimmed.starts_with("//") {
-            continue;
+        // Catch the `///` case.
+        if let Some(start) = line_cleaned.find("///") {
+            line_cleaned.replace_range(start.., "");
+        }
+
+        // Catch the `//` case.
+        if let Some(start) = line_cleaned.find("//") {
+            line_cleaned.replace_range(start.., "");
         }
 
         if in_block_doc {
@@ -144,13 +147,7 @@ fn strip_doc_comments(source: &str) -> String {
             }
         }
 
-        // Only add non-empty lines
-        if line_cleaned.trim().is_empty() {
-            continue;
-        }
-
         result.push_str(&line_cleaned);
-        result.push('\n');
     }
 
     result
@@ -242,6 +239,19 @@ mod tests {
             (
                 r"
                 /* module aa::bb {} */ /* module ee::dd {} */ module a::b {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                   module a::b {} // module bb::aa {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                module a::/* this is odd but 
+                it works */b {} // module bb::aa {}
                 ",
                 set(vec!["a"]),
             ),
