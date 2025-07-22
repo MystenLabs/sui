@@ -380,6 +380,8 @@ fn display_cmd(cmd: &Command) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::flavor::Vanilla;
+    use crate::package::RootPackage;
     use crate::test_utils::basic_manifest;
     use crate::test_utils::git;
     use std::collections::BTreeSet;
@@ -708,24 +710,47 @@ mod tests {
         let result = git_tree.fetch().await.unwrap();
     }
 
-    #[test]
-    fn test_git_sha() {
-        let sha = "1234acb";
-        assert!(GitSha::try_from(sha.to_string()).is_ok());
+    #[tokio::test]
+    async fn test_short_full_sha_checkout() {
+        let env = crate::flavor::vanilla::default_environment();
+        let project_with_git = git::new("pkg_git", |project| {
+            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
+        });
 
-        let sha = "1234ac";
-        assert!(GitSha::try_from(sha.to_string()).is_err_and(|f| f.to_string() == "`1234ac` is an invalid commit sha; commits must be between 7 and 40 characters"));
+        let commits = project_with_git.commits();
+        let short_sha = commits.first().unwrap()[..7].to_string();
 
-        let sha = "test1234";
+        let path = project_with_git.root();
+
+        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
+            project.file(
+                "Move.toml",
+                &format!(
+                    r#"[package]
+name = "pkg_dep_on_git"
+edition = "2025"
+license = "Apache-2.0"
+authors = ["Move Team"]
+version = "0.0.1"
+
+[dependencies]
+pkg_git = {{ git = "{}", rev = "{short_sha}" }}
+
+[environments]
+{} = "{}"
+"#,
+                    path.to_string_lossy(),
+                    env.name(),
+                    env.id(),
+                ),
+            )
+        });
+
+        // check that we can checkout from short sha
         assert!(
-            GitSha::try_from(sha.to_string()).is_err_and(|f| f.to_string()
-                == "`test1234` is an invalid commit sha; commits must be lowercase hex strings")
-        );
-
-        let full_sha = "209f0da8e316ba6eb7310d1667bdb22ae7fcb931";
-        assert!(GitSha::try_from(full_sha.to_string()).is_ok());
-
-        let too_long_full_sha = "209f0da8e316ba6eb7310d1667bdb22ae7fcb9310";
-        assert!(GitSha::try_from(too_long_full_sha.to_string()).is_err());
+            RootPackage::<Vanilla>::load(pkg_dep_on_git.root(), env)
+                .await
+                .is_ok()
+        )
     }
 }

@@ -12,6 +12,7 @@ anyhow.workspace = true
 append-only-vec.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
+colored.workspace = true
 derive-where.workspace = true
 futures.workspace = true
 indoc.workspace = true

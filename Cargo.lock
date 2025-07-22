@@ -8184,6 +8184,7 @@ dependencies = [
  "append-only-vec",
  "clap",
  "codespan-reporting",
+ "colored",
  "derive-where",
  "futures",
  "indoc",

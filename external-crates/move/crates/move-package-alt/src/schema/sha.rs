@@ -33,6 +33,11 @@ impl GitSha {
     pub fn is_full_sha(&self) -> bool {
         self.inner.len() == SHA_FULL_LENGTH
     }
+
+    #[cfg(test)]
+    pub fn to_short_sha(&self) -> String {
+        self.inner[..7].to_string()
+    }
 }
 
 impl TryFrom<String> for GitSha {
