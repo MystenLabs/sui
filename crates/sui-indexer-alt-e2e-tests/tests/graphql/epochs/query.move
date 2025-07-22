@@ -30,6 +30,18 @@ fragment E on Epoch {
   referenceGasPrice
   startTimestamp
   endTimestamp
+  validatorSet {
+    totalStake
+    pendingRemovals
+    pendingActiveValidatorsId
+    pendingActiveValidatorsSize
+    stakingPoolMappingsId
+    stakingPoolMappingsSize
+    inactivePoolsId
+    inactivePoolsSize
+    validatorCandidatesId
+    validatorCandidatesSize
+  }
   totalCheckpoints
   totalGasFees
   totalStakeRewards
@@ -54,6 +66,18 @@ fragment E on Epoch {
   referenceGasPrice
   startTimestamp
   endTimestamp
+  validatorSet {
+    totalStake
+    pendingRemovals
+    pendingActiveValidatorsId
+    pendingActiveValidatorsSize
+    stakingPoolMappingsId
+    stakingPoolMappingsSize
+    inactivePoolsId
+    inactivePoolsSize
+    validatorCandidatesId
+    validatorCandidatesSize
+  }
   totalCheckpoints
   totalGasFees
   totalStakeRewards

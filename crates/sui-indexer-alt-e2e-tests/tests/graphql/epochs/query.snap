@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-37:
+task 6, lines 16-49:
 //# run-graphql
 Response: {
   "data": {
@@ -27,6 +27,18 @@ Response: {
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
       "totalCheckpoints": 1,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
@@ -37,6 +49,18 @@ Response: {
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00Z",
       "endTimestamp": "1970-01-01T00:00:00.123Z",
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
       "totalCheckpoints": 2,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
@@ -47,6 +71,18 @@ Response: {
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.123Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
       "totalCheckpoints": 1,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
@@ -57,6 +93,18 @@ Response: {
       "referenceGasPrice": "1000",
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
+      "validatorSet": {
+        "totalStake": "20000000000000000",
+        "pendingRemovals": [],
+        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+        "pendingActiveValidatorsSize": 0,
+        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+        "stakingPoolMappingsSize": 1,
+        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+        "inactivePoolsSize": 0,
+        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+        "validatorCandidatesSize": 0
+      },
       "totalCheckpoints": 1,
       "totalGasFees": "0",
       "totalStakeRewards": "0",
@@ -66,7 +114,7 @@ Response: {
   }
 }
 
-task 7, lines 39-61:
+task 7, lines 51-85:
 //# run-graphql
 Response: {
   "data": {
@@ -77,6 +125,18 @@ Response: {
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
+          "validatorSet": {
+            "totalStake": "20000000000000000",
+            "pendingRemovals": [],
+            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+            "pendingActiveValidatorsSize": 0,
+            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "stakingPoolMappingsSize": 1,
+            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "inactivePoolsSize": 0,
+            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "validatorCandidatesSize": 0
+          },
           "totalCheckpoints": 1,
           "totalGasFees": "0",
           "totalStakeRewards": "0",
@@ -87,6 +147,18 @@ Response: {
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00Z",
           "endTimestamp": "1970-01-01T00:00:00.123Z",
+          "validatorSet": {
+            "totalStake": "20000000000000000",
+            "pendingRemovals": [],
+            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+            "pendingActiveValidatorsSize": 0,
+            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "stakingPoolMappingsSize": 1,
+            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "inactivePoolsSize": 0,
+            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "validatorCandidatesSize": 0
+          },
           "totalCheckpoints": 2,
           "totalGasFees": "0",
           "totalStakeRewards": "0",
@@ -97,6 +169,18 @@ Response: {
           "referenceGasPrice": "1000",
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
+          "validatorSet": {
+            "totalStake": "20000000000000000",
+            "pendingRemovals": [],
+            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+            "pendingActiveValidatorsSize": 0,
+            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "stakingPoolMappingsSize": 1,
+            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "inactivePoolsSize": 0,
+            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "validatorCandidatesSize": 0
+          },
           "totalCheckpoints": 1,
           "totalGasFees": "0",
           "totalStakeRewards": "0",

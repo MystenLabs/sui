@@ -1,6 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    move_package::{self, CSysPackage, MovePackage},
+    object::{self, Object},
+    protocol_configs::ProtocolConfigs,
+};
+use crate::api::types::validator_set::ValidatorSet;
+use crate::{
+    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
+    error::RpcError,
+    pagination::{Page, PaginationConfig},
+    scope::Scope,
+};
 use anyhow::Context as _;
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Error, Object};
 use futures::try_join;
@@ -10,20 +22,9 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use tokio::sync::OnceCell;
-
-use super::{
-    move_package::{self, CSysPackage, MovePackage},
-    object::{self, Object},
-    protocol_configs::ProtocolConfigs,
-};
-use crate::{
-    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
 
 pub(crate) struct Epoch {
     pub(crate) epoch_id: u64,
@@ -136,6 +137,26 @@ impl Epoch {
         };
 
         Ok(Some(DateTime::from_ms(end.end_timestamp_ms)?))
+    }
+
+    /// Validator-related properties, including the active validators.
+    async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>, RpcError> {
+        let Some(start) = self.start(ctx).await? else {
+            return Ok(None);
+        };
+
+        let validator_set: ValidatorSet =
+            match bcs::from_bytes::<SuiSystemState>(&start.system_state) {
+                Ok(SuiSystemState::V1(inner)) => inner.validators.into(),
+                Ok(SuiSystemState::V2(inner)) => inner.validators.into(),
+                #[cfg(msim)]
+                Ok(SuiSystemState::SimTestV1(_))
+                | Ok(SuiSystemState::SimTestShallowV2(_))
+                | Ok(SuiSystemState::SimTestDeepV2(_)) => return Ok(None),
+                Err(e) => return Err(RpcError::InternalError(Arc::new(e.into()))),
+            };
+
+        Ok(Some(validator_set))
     }
 
     /// The total number of checkpoints in this epoch.
