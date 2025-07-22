@@ -8,6 +8,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
 use sui_indexer_alt_framework::types::base_types::SuiAddress;
 
 use crate::rpc::error::{RpcError, StatusCode};
+use crate::rpc::pagination::Page;
 use crate::schema;
 
 use super::State;
@@ -39,7 +40,8 @@ impl StatusCode for Error {
 }
 
 pub(super) fn list_owned_objects(
-    _state: &State,
+    state: &State,
+    checkpoint: u64,
     request: grpc::ListOwnedObjectsRequest,
 ) -> Result<grpc::ListOwnedObjectsResponse, RpcError<Error>> {
     let owner = request.owner.as_ref().ok_or(Error::MissingOwner)?;
@@ -75,8 +77,31 @@ pub(super) fn list_owned_objects(
         return Err(RpcError::Unimplemented);
     }
 
-    // Address filters not supported yet.
-    Err(RpcError::Unimplemented)
+    let page = Page::from_request(
+        &state.config.pagination,
+        request.after_token(),
+        request.before_token(),
+        request.page_size(),
+        request.end(),
+    );
+
+    let index = &state.store.schema().object_by_owner;
+    let resp = page.paginate_prefix(index, checkpoint, &kind)?;
+
+    Ok(grpc::ListOwnedObjectsResponse {
+        has_previous_page: Some(resp.has_prev),
+        has_next_page: Some(resp.has_next),
+        objects: resp
+            .results
+            .into_iter()
+            .map(|(token, key, (version, digest))| grpc::Object {
+                object_id: Some(key.object_id.to_canonical_string(/* with_prefix */ true)),
+                version: Some(version.value()),
+                digest: Some(digest.base58_encode()),
+                page_token: Some(token.into()),
+            })
+            .collect(),
+    })
 }
 
 /// Parse a `SuiAddress` from a string. Addresses must start with `0x` followed by between 1 and 64

@@ -417,7 +417,7 @@ fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, size: u64) -> Object
     assert!(fx.status().is_ok(), "create bag transaction failed");
 
     find_address_owned(&fx)
-        .expect("Failed to find created coin")
+        .expect("Failed to find created bag")
         .0
 }
 

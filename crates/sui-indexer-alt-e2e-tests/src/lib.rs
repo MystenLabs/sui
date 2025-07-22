@@ -678,3 +678,16 @@ pub fn find_shared(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
         .find_map(|(oref, owner)| matches!(owner, Owner::Shared { .. }).then_some(oref))
         .context("Could not find created object")
 }
+
+/// Returns the reference for the first address-owned object mutated in the effects that is not a
+/// gas payment, or an error if there is none.
+pub fn find_address_mutated(fx: &TransactionEffects) -> anyhow::Result<ObjectRef> {
+    if let ExecutionStatus::Failure { error, command } = fx.status() {
+        bail!("Transaction failed: {error} (command {command:?})");
+    }
+
+    fx.mutated_excluding_gas()
+        .into_iter()
+        .find_map(|(oref, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(oref))
+        .context("Could not find mutated object")
+}

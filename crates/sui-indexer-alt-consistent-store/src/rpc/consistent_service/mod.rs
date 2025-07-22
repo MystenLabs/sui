@@ -7,7 +7,7 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     ListOwnedObjectsResponse, ServiceConfigRequest, ServiceConfigResponse,
 };
 
-use super::state::State;
+use super::state::{checkpointed_response, State};
 
 use self::available_range::available_range;
 use self::list_owned_objects::list_owned_objects;
@@ -32,9 +32,9 @@ impl ConsistentService for State {
         &self,
         request: tonic::Request<ListOwnedObjectsRequest>,
     ) -> Result<tonic::Response<ListOwnedObjectsResponse>, tonic::Status> {
-        list_owned_objects(self, request.into_inner())
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        let checkpoint = self.checkpoint(&request)?;
+        let response = list_owned_objects(self, checkpoint, request.into_inner())?;
+        Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn service_config(
