@@ -15,10 +15,10 @@ use crate::{
     api::{
         query::Query,
         scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
-        types::validator_aggregated_signature::ValidatorAggregatedSignature,
         types::{
             transaction::{CTransaction, Transaction},
             transaction_filter::TransactionFilter,
+            validator_aggregated_signature::ValidatorAggregatedSignature,
         },
     },
     error::RpcError,
