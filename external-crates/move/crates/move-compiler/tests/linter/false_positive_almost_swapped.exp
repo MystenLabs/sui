@@ -1,0 +1,8 @@
+warning[Lint W04013]: swap sequence can be simplified
+   ┌─ tests/linter/false_positive_almost_swapped.move:12:9
+   │
+12 │         balance2 = previous_balance;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary swap sequence detected - consider using a tuple assignment
+   │
+   = This warning can be suppressed with '#[allow(lint(almost_swapped))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
