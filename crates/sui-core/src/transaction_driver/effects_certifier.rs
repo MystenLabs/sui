@@ -49,6 +49,7 @@ impl EffectsCertifier {
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
+        // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
         submit_txn_resp: SubmitTxResponse,
         options: &SubmitTransactionOptions,
@@ -72,7 +73,6 @@ impl EffectsCertifier {
             },
         };
 
-        // List of peers to try getting full effects from.
         let mut retrier = TransactionRetrier::new(authority_aggregator);
 
         let (acknowledgments_result, mut full_effects_result) = join!(
@@ -85,6 +85,9 @@ impl EffectsCertifier {
             async {
                 // No need to send a full effects request if it is already provided.
                 if let Some(full_effects) = full_effects {
+                    // In this branch, current_target is the authority providing the full effects,
+                    // so it is consistent. This is not used though because current_target is
+                    // only used with failed full effects query.
                     return Ok(full_effects);
                 }
                 let (name, client) = retrier.next_target()?;
@@ -94,13 +97,13 @@ impl EffectsCertifier {
             },
         );
 
-        // If certification of transaction effects failed, it should be the error from this function,
-        // instead of failure to get individual full effects.
+        // If the consensus position got rejected, effects certification will see the failure and gather
+        // error messages to explain the rejection.
         let certified_digest = acknowledgments_result?;
 
-        // Retry until there is a valid full effects that matches the certified digest.
-        // This loop terminates when there are enough (f+1) non-retriable errors when getting full effects,
-        // or all feasible targets returned errors or timed out.
+        // Retry until there is a valid full effects that matches the certified digest, or all targets
+        // have been attempted.
+        //
         // TODO(fastpath): send backup requests to get full effects before timeout or failure.
         loop {
             match full_effects_result {
@@ -121,13 +124,18 @@ impl EffectsCertifier {
                 }
                 Err(e) => {
                     tracing::warn!("Failed to get full effects: {e}");
+                    // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
+                    // but the error should not happen after effects certification unless there are software bugs
+                    // or > f malicious validators.
                     retrier.add_error(current_target, e)?;
                 }
             };
 
             tokio::task::yield_now().await;
 
-            // Retry getting full effects.
+            // Retry getting full effects from the next target.
+
+            // This emits an error when retrier has no targets available.
             let (name, client) = retrier.next_target()?;
             current_target = name;
             full_effects_result = self
@@ -164,8 +172,6 @@ impl EffectsCertifier {
                     effects_digest,
                     details,
                 } => {
-                    // All error cases are retriable until max attempt due to the chance
-                    // of the status being returned from a byzantine validator.
                     if let Some(details) = details {
                         Ok((effects_digest, details))
                     } else {
@@ -216,7 +222,6 @@ impl EffectsCertifier {
             let name = *name;
             let raw_request = raw_request.clone();
             let future = async move {
-                // TODO(fastpath): add a timeout for the loop.
                 loop {
                     let result = timeout(
                         WAIT_FOR_EFFECTS_TIMEOUT,
@@ -298,7 +303,7 @@ impl EffectsCertifier {
             // Quorum threshold is used here to gather as many responses as possible for summary,
             // while making sure the loop can exit with f malicious peers.
             if total_weight >= committee.quorum_threshold() {
-                // TransactionRejected status may or may not be retriable.
+                // TransactionRejected status may or may not be submission retriable.
                 if rejected_weight >= committee.validity_threshold() {
                     return Err(TransactionDriverError::TransactionRejected(
                         rejected_weight,
@@ -309,7 +314,7 @@ impl EffectsCertifier {
                             .join(", "),
                     ));
                 }
-                // TransactionRejectedOrExpired status is always retriable.
+                // TransactionRejectedOrExpired status is always submission retriable.
                 if rejected_weight + expired_weight >= committee.validity_threshold() {
                     return Err(TransactionDriverError::TransactionRejectedOrExpired(
                         rejected_weight,

@@ -54,7 +54,10 @@ impl<A: Clone> TransactionRetrier<A> {
     }
 
     // Adds an error associated with the operation against the authority.
-    // Returns an error if there are enough non-retriable errors to reject the transaction.
+    //
+    // Returns an error if it has aggregated >= f+1 submission non-retriable errors.
+    // In this case, the transaction cannot finalize unless there is a software bug
+    // or > f malicious validators.
     // TODO(fastpath): return an aggregated error.
     pub(crate) fn add_error(
         &mut self,
@@ -64,8 +67,6 @@ impl<A: Clone> TransactionRetrier<A> {
         // TODO(fastpath): check if the error is non-retriable.
         self.non_retriable_errors_aggregator.insert(name, error);
 
-        // Ensuring there is at least one non-retriable error from a honest validator
-        // is enough to reject the transaction, same as the logic in EffectsCertifier.
         if self
             .non_retriable_errors_aggregator
             .reached_validity_threshold()
