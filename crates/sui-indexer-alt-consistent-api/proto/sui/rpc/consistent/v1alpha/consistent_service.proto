@@ -6,10 +6,24 @@ syntax = "proto3";
 package sui.rpc.consistent.v1alpha;
 
 service ConsistentService {
+  rpc AvailableRange(AvailableRangeRequest) returns (AvailableRangeResponse);
+
   rpc ListOwnedObjects(ListOwnedObjectsRequest)
       returns (ListOwnedObjectsResponse);
 
   rpc ServiceConfig(ServiceConfigRequest) returns (ServiceConfigResponse);
+}
+
+message AvailableRangeRequest {}
+
+message AvailableRangeResponse {
+  // The (inclusive) minimum checkpoint sequence number that the service can
+  // answer questions for.
+  optional uint64 min_checkpoint = 1;
+
+  // The (inclusive) maximum checkpoint sequence number that the service can
+  // answer questions for.
+  optional uint64 max_checkpoint = 2;
 }
 
 message ListOwnedObjectsRequest {

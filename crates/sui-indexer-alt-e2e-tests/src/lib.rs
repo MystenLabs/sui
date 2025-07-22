@@ -15,6 +15,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
+    consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
+};
+use sui_indexer_alt_consistent_store::{
+    args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
+    start_service as start_consistent_store,
+};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::schema::watermarks, IndexerArgs};
 use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
@@ -44,6 +51,7 @@ use tempfile::TempDir;
 use tokio::{
     task::JoinHandle,
     time::{error::Elapsed, interval},
+    try_join,
 };
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -71,6 +79,9 @@ pub struct FullCluster {
 /// set-up to listen on a random, available port, to avoid conflicts when multiple instances are
 /// running concurrently in the same process.
 pub struct OffchainCluster {
+    /// The address the consistent store is listening on.
+    consistent_listen_address: SocketAddr,
+
     /// The address the JSON-RPC server is listening on.
     jsonrpc_listen_address: SocketAddr,
 
@@ -87,6 +98,10 @@ pub struct OffchainCluster {
     /// earlier of its own accord).
     indexer: JoinHandle<()>,
 
+    /// A handle to the consistent store task -- it will stop when the `cancel` token is triggered
+    /// (or earlier of its own accord).
+    consistent_store: JoinHandle<()>,
+
     /// A handle to the JSON-RPC server task -- it will stop when the `cancel` token is triggered
     /// (or earlier of its own accord).
     jsonrpc: JoinHandle<()>,
@@ -99,6 +114,11 @@ pub struct OffchainCluster {
     #[allow(unused)]
     database: TempDb,
 
+    /// Hold on to the temporary directory where the consistent store writes its data, so it
+    /// doesn't get cleaned up until the cluster is stopped.
+    #[allow(unused)]
+    dir: TempDir,
+
     /// This token controls the clean up of the cluster.
     cancel: CancellationToken,
 }
@@ -110,7 +130,9 @@ impl FullCluster {
         Self::new_with_configs(
             Simulacrum::new(),
             IndexerArgs::default(),
-            IndexerConfig::example(),
+            IndexerArgs::default(),
+            IndexerConfig::for_test(),
+            ConsistentConfig::for_test(),
             JsonRpcConfig::default(),
             GraphQlConfig::default(),
             &prometheus::Registry::new(),
@@ -125,7 +147,9 @@ impl FullCluster {
     pub async fn new_with_configs(
         mut executor: Simulacrum,
         indexer_args: IndexerArgs,
+        consistent_indexer_args: IndexerArgs,
         indexer_config: IndexerConfig,
+        consistent_config: ConsistentConfig,
         jsonrpc_config: JsonRpcConfig,
         graphql_config: GraphQlConfig,
         registry: &prometheus::Registry,
@@ -144,8 +168,10 @@ impl FullCluster {
 
         let offchain = OffchainCluster::new(
             indexer_args,
+            consistent_indexer_args,
             client_args,
             indexer_config,
+            consistent_config,
             jsonrpc_config,
             graphql_config,
             registry,
@@ -203,10 +229,15 @@ impl FullCluster {
     /// contents.
     pub async fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
         let checkpoint = self.executor.create_checkpoint();
-        self.offchain
-            .wait_for_indexer(checkpoint.sequence_number, Duration::from_secs(10))
-            .await
-            .expect("Timed out waiting for a checkpoint");
+        let indexer = self
+            .offchain
+            .wait_for_indexer(checkpoint.sequence_number, Duration::from_secs(10));
+        let consistent_store = self
+            .offchain
+            .wait_for_consistent_store(checkpoint.sequence_number, Duration::from_secs(10));
+
+        try_join!(indexer, consistent_store)
+            .expect("Timed out waiting for indexer and consistent store");
 
         checkpoint
     }
@@ -214,6 +245,11 @@ impl FullCluster {
     /// The URL to talk to the database on.
     pub fn db_url(&self) -> Url {
         self.offchain.db_url()
+    }
+
+    /// The URL to send Consistent Store requests to.
+    pub fn consistent_store_url(&self) -> Url {
+        self.offchain.consistent_store_url()
     }
 
     /// The URL to send JSON-RPC requests to.
@@ -272,13 +308,19 @@ impl OffchainCluster {
     /// - `registry` is used to register metrics for the indexer, JSON-RPC, and GraphQL servers.
     pub async fn new(
         indexer_args: IndexerArgs,
+        consistent_indexer_args: IndexerArgs,
         client_args: ClientArgs,
         indexer_config: IndexerConfig,
+        consistent_config: ConsistentConfig,
         jsonrpc_config: JsonRpcConfig,
         graphql_config: GraphQlConfig,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
+        let consistent_port = get_available_port();
+        let consistent_listen_address =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), consistent_port);
+
         let jsonrpc_port = get_available_port();
         let jsonrpc_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), jsonrpc_port);
 
@@ -287,6 +329,13 @@ impl OffchainCluster {
 
         let database = TempDb::new().context("Failed to create database")?;
         let database_url = database.database().url();
+
+        let dir = tempfile::tempdir().context("Failed to create temporary directory")?;
+        let rocksdb_path = dir.path().join("rocksdb");
+
+        let consistent_args = ConsistentArgs {
+            rpc_listen_address: consistent_listen_address,
+        };
 
         let jsonrpc_args = JsonRpcArgs {
             rpc_listen_address: jsonrpc_listen_address,
@@ -307,7 +356,7 @@ impl OffchainCluster {
             database_url.clone(),
             DbArgs::default(),
             indexer_args,
-            client_args,
+            client_args.clone(),
             indexer_config,
             with_genesis,
             registry,
@@ -318,6 +367,19 @@ impl OffchainCluster {
 
         let pipelines: Vec<_> = indexer.pipelines().collect();
         let indexer = indexer.run().await.context("Failed to start indexer")?;
+
+        let consistent_store = start_consistent_store(
+            rocksdb_path,
+            consistent_indexer_args,
+            client_args,
+            consistent_args,
+            "0.0.0",
+            consistent_config,
+            registry,
+            cancel.child_token(),
+        )
+        .await
+        .context("Failed to start Consistent Store")?;
 
         let jsonrpc = start_jsonrpc(
             Some(database_url.clone()),
@@ -351,14 +413,17 @@ impl OffchainCluster {
         .context("Failed to start GraphQL server")?;
 
         Ok(Self {
+            consistent_listen_address,
             jsonrpc_listen_address,
             graphql_listen_address,
             db,
             pipelines,
             indexer,
+            consistent_store,
             jsonrpc,
             graphql,
             database,
+            dir,
             cancel,
         })
     }
@@ -366,6 +431,12 @@ impl OffchainCluster {
     /// The URL to talk to the database on.
     pub fn db_url(&self) -> Url {
         self.database.database().url().clone()
+    }
+
+    /// The URL to send Consistent Store requests to.
+    pub fn consistent_store_url(&self) -> Url {
+        Url::parse(&format!("http://{}/", self.consistent_listen_address))
+            .expect("Failed to parse RPC URL")
     }
 
     /// The URL to send JSON-RPC requests to.
@@ -425,6 +496,19 @@ impl OffchainCluster {
             .optional()?;
 
         Ok(latest.map(|l| l as u64))
+    }
+
+    /// Returns the latest checkpoint that the consistent store is aware of.
+    pub async fn latest_consistent_store_checkpoint(&self) -> anyhow::Result<u64> {
+        ConsistentServiceClient::connect(self.consistent_store_url().to_string())
+            .await
+            .context("Failed to connect to Consistent Store")?
+            .available_range(AvailableRangeRequest {})
+            .await
+            .context("Failed to fetch available range from Consistent Store")?
+            .into_inner()
+            .max_checkpoint
+            .context("Consistent Store has not started yet")
     }
 
     /// Returns the latest checkpoint that the GraphQL service is aware of.
@@ -507,6 +591,25 @@ impl OffchainCluster {
         }).await
     }
 
+    /// Waits until the Consistent Store has caught up to the given `checkpoint`, or the `timeout`
+    /// is reached (an error).
+    pub async fn wait_for_consistent_store(
+        &self,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        tokio::time::timeout(timeout, async move {
+            let mut interval = interval(Duration::from_millis(200));
+            loop {
+                interval.tick().await;
+                if matches!(self.latest_consistent_store_checkpoint().await, Ok(l) if l >= checkpoint) {
+                    break;
+                }
+            }
+        })
+        .await
+    }
+
     /// Waits until GraphQL has caught up to the given `checkpoint`, or the `timeout` is reached
     /// (an error).
     pub async fn wait_for_graphql(
@@ -531,6 +634,7 @@ impl OffchainCluster {
     pub async fn stopped(self) {
         self.cancel.cancel();
         let _ = self.indexer.await;
+        let _ = self.consistent_store.await;
         let _ = self.jsonrpc.await;
         let _ = self.graphql.await;
     }

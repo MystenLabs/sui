@@ -14549,6 +14549,8 @@ dependencies = [
  "serde_json",
  "simulacrum",
  "sui-indexer-alt",
+ "sui-indexer-alt-consistent-api",
+ "sui-indexer-alt-consistent-store",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-graphql",
  "sui-indexer-alt-jsonrpc",

@@ -11,6 +11,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
+use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
@@ -213,10 +214,12 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
         IndexerArgs::default(),
+        IndexerArgs::default(),
         IndexerConfig {
             pipeline,
             ..IndexerConfig::for_test()
         },
+        ConsistentConfig::for_test(),
         JsonRpcConfig::default(),
         GraphQlConfig::default(),
         &prometheus::Registry::new(),
