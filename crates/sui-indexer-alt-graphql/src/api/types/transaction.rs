@@ -26,14 +26,17 @@ use crate::{
 
 use super::{
     address::Address,
+    checkpoint_bounds::CheckpointBounds,
     epoch::Epoch,
     gas_input::GasInput,
+    transaction_bounds::TransactionBounds,
     transaction_effects::{EffectsContents, TransactionEffects},
     transaction_filter::TransactionFilter,
     user_signature::UserSignature,
 };
+
+use sui_indexer_alt_schema::schema::tx_digests;
 use sui_indexer_alt_schema::transactions::StoredTxDigest;
-use sui_indexer_alt_schema::{schema::cp_sequence_numbers, schema::tx_digests};
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     digests::TransactionDigest,
@@ -208,39 +211,18 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
-        use cp_sequence_numbers::dsl as cp;
         use tx_digests::dsl as dig;
 
         let mut conn = Connection::new(false, false);
-
-        let cp_after = filter.after_checkpoint.map(u64::from);
-        let cp_at = filter.at_checkpoint.map(u64::from);
-        let cp_before = filter.before_checkpoint.map(u64::from);
 
         if filter.is_empty() || page.limit() == 0 {
             return Ok(Connection::new(false, false));
         }
 
-        // TODO: Do we need to get the min_unpruned_checkpoint to handle if cp_after and cp_at are none, get min from Watermarks.pipeline_lo?
-        let cp_lo = max_option([cp_after.map(|x| x.saturating_add(1)), cp_at]).unwrap();
-
-        let cp_before_exclusive = match cp_before {
-            // There are no results strictly before checkpoint 0.
-            Some(0) => return Ok(Connection::new(false, false)),
-            Some(x) => Some(x - 1),
-            None => None,
-        };
-
-        // Inclusive upper bound in terms of checkpoint sequence number. If no upperbound is given,
-        // use `checkpoint_viewed_at`.
-        //
-        // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)
-        let cp_hi = min_option([
-            cp_before_exclusive,
-            cp_at,
-            Some(scope.checkpoint_viewed_at()),
-        ])
-        .unwrap();
+        // TODO: Unsafe unwrap, handle errors?
+        let checkpoint_bounds =
+            CheckpointBounds::from_transaction_filter(&filter, scope.checkpoint_viewed_at())
+                .unwrap();
 
         let pg_reader: &PgReader = ctx.data()?;
         let mut c = pg_reader
@@ -248,41 +230,15 @@ impl Transaction {
             .await
             .context("Failed to connect to database")?;
 
-        let cp_tx_lo_query = cp::cp_sequence_numbers
-            .select((cp::cp_sequence_number, cp::tx_lo))
-            .filter(cp::cp_sequence_number.eq(cp_lo as i64))
-            .limit(1)
-            .order_by(cp::cp_sequence_number);
-
-        let cp_tx_lo: Vec<(i64, i64)> = c
-            .results(cp_tx_lo_query)
-            .await
-            .context("Failed to execute checkpoint bounds query")?;
-
-        let Some(lo_record) = cp_tx_lo
-            .iter()
-            .find(|&(checkpoint, _)| *checkpoint == cp_lo as i64)
-        else {
-            return Ok(Connection::new(false, false));
-        };
-        let tx_lo = lo_record.1;
-
         let kv_loader: &KvLoader = ctx.data()?;
-        let contents = kv_loader
-            .load_one_checkpoint(cp_hi)
-            .await
-            .context("Failed to fetch checkpoint contents")?;
-
-        // tx_hi_exclusive is the network_total_transactions of the highest checkpoint bound.
-        let tx_hi_exclusive = if let Some((summary, _, _)) = contents.as_ref() {
-            summary.network_total_transactions as i64
-        } else {
-            return Ok(Connection::new(false, false));
-        };
+        // TODO: Unsafe unwrap, handle errors?
+        let transaction_bounds =
+            TransactionBounds::fetch_transaction_bounds(&mut c, kv_loader, checkpoint_bounds)
+                .await?;
 
         let mut pagination = dig::tx_digests
-            .filter(dig::tx_sequence_number.ge(tx_lo))
-            .filter(dig::tx_sequence_number.lt(tx_hi_exclusive))
+            .filter(dig::tx_sequence_number.ge(transaction_bounds.lower() as i64))
+            .filter(dig::tx_sequence_number.lt(transaction_bounds.upper_exclusive() as i64))
             .limit(page.limit() as i64 + 2)
             .into_boxed();
 
@@ -381,14 +337,4 @@ impl From<TransactionEffects> for Transaction {
             contents: TransactionContents { scope, contents },
         }
     }
-}
-
-/// Determines the maximum value in an arbitrary number of Option<impl Ord>.
-fn max_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
-    xs.into_iter().flatten().max()
-}
-
-/// Determines the minimum value in an arbitrary number of Option<impl Ord>.
-fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
-    xs.into_iter().flatten().min()
 }
