@@ -59,7 +59,7 @@ module test::gas_test {
       }
     }
   }
-} 
+}
 
 //# run-graphql
 { # Test gas_effects on system transaction
@@ -78,4 +78,4 @@ module test::gas_test {
       }
     }
   }
-} 
+}
