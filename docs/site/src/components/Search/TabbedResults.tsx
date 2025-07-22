@@ -18,7 +18,7 @@ export default function TabbedResults({
   return (
     <div className="mb-4 flex justify-start border-2 border-solid border-white rounded-t-lg dark:bg-black dark:border-sui-black border-b-sui-gray-50 dark:border-b-sui-gray-80">
       {tabs.map(({ label, indexName, count }) => (
-        <div className="relative group inline-block top-px" key={indexName}>
+        <div className="relative group inline-block" key={indexName}>
           <button
             className={`mr-4 flex items-center font-semibold text-sm lg:text-md xl:text-lg bg-white dark:bg-sui-black cursor-pointer dark:text-sui-gray-45 ${activeTab === indexName ? "text-sui-disabled/100 font-bold border-2 border-solid border-transparent border-b-sui-blue-dark dark:border-b-sui-blue" : "border-transparent text-sui-disabled/70"}`}
             onClick={() => onChange(indexName)}
