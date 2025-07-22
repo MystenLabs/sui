@@ -124,7 +124,7 @@ impl RpcMetrics {
             .unwrap(),
 
             query_latency: register_histogram_with_registry!(
-                "query_latency",
+                "graphql_query_latency",
                 "Time taken to respond to read requests",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -132,21 +132,21 @@ impl RpcMetrics {
             .unwrap(),
 
             queries_received: register_int_counter_with_registry!(
-                "queries_received",
+                "graphql_queries_received",
                 "Number of read requests the service has received",
                 registry,
             )
             .unwrap(),
 
             queries_succeeded: register_int_counter_with_registry!(
-                "queries_succeeded",
+                "graphql_queries_succeeded",
                 "Number of read requests that have completed without any errors",
                 registry,
             )
             .unwrap(),
 
             queries_failed: register_int_counter_vec_with_registry!(
-                "queries_failed",
+                "graphql_queries_failed",
                 "Number of read requests that have completed with at least one error",
                 &["code"],
                 registry,
@@ -154,14 +154,14 @@ impl RpcMetrics {
             .unwrap(),
 
             queries_in_flight: register_int_gauge_with_registry!(
-                "queries_in_flight",
+                "graphql_queries_in_flight",
                 "Number of read requests currently flowing through the service",
                 registry
             )
             .unwrap(),
 
             limits_validation_latency: register_histogram_with_registry!(
-                "limits_validation_latency",
+                "graphql_limits_validation_latency",
                 "Time taken to validate query limits",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -169,7 +169,7 @@ impl RpcMetrics {
             .unwrap(),
 
             input_nodes: register_histogram_with_registry!(
-                "input_nodes",
+                "graphql_input_nodes",
                 "Number of nodes in the request input",
                 INPUT_NODES_BUCKETS.to_vec(),
                 registry
@@ -177,7 +177,7 @@ impl RpcMetrics {
             .unwrap(),
 
             input_depth: register_histogram_with_registry!(
-                "input_depth",
+                "graphql_input_depth",
                 "Depth of the request input",
                 INPUT_DEPTH_BUCKETS.to_vec(),
                 registry
@@ -185,7 +185,7 @@ impl RpcMetrics {
             .unwrap(),
 
             output_nodes: register_histogram_with_registry!(
-                "output_nodes",
+                "graphql_output_nodes",
                 "Number of nodes in the response output",
                 OUTPUT_NODES_BUCKETS.to_vec(),
                 registry
@@ -193,7 +193,7 @@ impl RpcMetrics {
             .unwrap(),
 
             total_payload_size: register_histogram_with_registry!(
-                "total_payload_size",
+                "graphql_total_payload_size",
                 "Total size of the request",
                 PAYLOAD_SIZE_BUCKETS.to_vec(),
                 registry,
@@ -201,7 +201,7 @@ impl RpcMetrics {
             .unwrap(),
 
             query_payload_size: register_histogram_with_registry!(
-                "query_payload_size",
+                "graphql_query_payload_size",
                 "Size of the query part of a request",
                 PAYLOAD_SIZE_BUCKETS.to_vec(),
                 registry,
@@ -209,7 +209,7 @@ impl RpcMetrics {
             .unwrap(),
 
             tx_payload_size: register_histogram_with_registry!(
-                "tx_payload_size",
+                "graphql_tx_payload_size",
                 "Size of the transaction part of a request",
                 PAYLOAD_SIZE_BUCKETS.to_vec(),
                 registry,
@@ -217,7 +217,7 @@ impl RpcMetrics {
             .unwrap(),
 
             fields_received: register_int_counter_vec_with_registry!(
-                "fields_received",
+                "graphql_fields_received",
                 "Number of times a field of a type has been requested in the GraphQL schema",
                 &["type", "field"],
                 registry,
@@ -225,7 +225,7 @@ impl RpcMetrics {
             .unwrap(),
 
             fields_succeeded: register_int_counter_vec_with_registry!(
-                "fields_succeeded",
+                "graphql_fields_succeeded",
                 "Number of times a field of a type has been successfully resolved",
                 &["type", "field"],
                 registry,
@@ -233,7 +233,7 @@ impl RpcMetrics {
             .unwrap(),
 
             fields_failed: register_int_counter_vec_with_registry!(
-                "fields_failed",
+                "graphql_fields_failed",
                 "Number of times a field of a type has failed to resolve",
                 &["type", "field"],
                 registry,

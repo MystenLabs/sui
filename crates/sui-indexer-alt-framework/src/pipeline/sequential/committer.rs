@@ -438,7 +438,7 @@ mod tests {
         config: SequentialConfig,
         store: MockStore,
     ) -> TestSetup {
-        let metrics = IndexerMetrics::new(&Registry::default());
+        let metrics = IndexerMetrics::new(None, &Registry::default());
         let cancel = CancellationToken::new();
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);

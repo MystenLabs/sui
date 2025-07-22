@@ -528,7 +528,7 @@ mod tests {
             prune_concurrency: 1,
         };
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let cancel = CancellationToken::new();
 
         // Update data
@@ -624,7 +624,7 @@ mod tests {
             prune_concurrency: 1,
         };
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let cancel = CancellationToken::new();
 
         // Update data
@@ -702,7 +702,7 @@ mod tests {
             prune_concurrency: 1,
         };
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let cancel = CancellationToken::new();
 
         // Set up test data for checkpoints 1-4
