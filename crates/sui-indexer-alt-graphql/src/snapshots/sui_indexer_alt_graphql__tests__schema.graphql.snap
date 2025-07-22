@@ -57,6 +57,14 @@ type Checkpoint {
 	"""
 	rollingGasSummary: GasCostSummary
 	"""
+	The Base64 serialized BCS bytes of this checkpoint's summary.
+	"""
+	summaryBcs: Base64
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's contents.
+	"""
+	contentBcs: Base64
+	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
