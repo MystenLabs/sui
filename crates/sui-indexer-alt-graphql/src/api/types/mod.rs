@@ -4,6 +4,7 @@
 pub(crate) mod address;
 pub(crate) mod checkpoint;
 pub(crate) mod epoch;
+pub(crate) mod event;
 pub(crate) mod execution_error;
 pub(crate) mod gas;
 pub(crate) mod gas_input;
