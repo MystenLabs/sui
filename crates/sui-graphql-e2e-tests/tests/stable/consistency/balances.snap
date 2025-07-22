@@ -6,18 +6,18 @@ processed 42 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 19-46:
+task 1, lines 19-47:
 //# publish --sender A
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 48:
+task 2, line 49:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 50-52:
+task 3, lines 51-53:
 //# programmable --sender A --inputs object(1,5) 100 object(1,1)
 //> 0: sui::coin::mint<P0::fake::FAKE>(Input(0), Input(1));
 //> MergeCoins(Input(2), [Result(0)]);
@@ -25,43 +25,43 @@ mutated: object(0,0), object(1,1), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 3972672, non_refundable_storage_fee: 40128
 
-task 4, line 54:
+task 4, line 55:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 5, line 56:
+task 5, line 57:
 //# transfer-object 1,2 --sender A --recipient B
 mutated: object(0,0), object(1,2)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
-task 6, line 58:
+task 6, line 59:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 7, line 60:
+task 7, line 61:
 //# transfer-object 1,3 --sender A --recipient B
 mutated: object(0,0), object(1,3)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
-task 9, line 64:
+task 9, line 65:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 11, line 68:
+task 11, line 69:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 13, line 72:
+task 13, line 73:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 15, line 76:
+task 15, line 77:
 //# create-checkpoint
 Checkpoint created: 7
 
-task 16, lines 78-99:
+task 16, lines 79-100:
 //# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
@@ -97,7 +97,7 @@ Response: {
   }
 }
 
-task 17, lines 101-122:
+task 17, lines 102-123:
 //# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
@@ -133,7 +133,7 @@ Response: {
   }
 }
 
-task 18, lines 124-145:
+task 18, lines 125-146:
 //# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
@@ -169,11 +169,11 @@ Response: {
   }
 }
 
-task 20, line 149:
+task 20, line 150:
 //# create-checkpoint
 Checkpoint created: 8
 
-task 21, lines 151-172:
+task 21, lines 152-173:
 //# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
@@ -209,7 +209,7 @@ Response: {
   }
 }
 
-task 22, lines 174-195:
+task 22, lines 175-196:
 //# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
@@ -245,7 +245,7 @@ Response: {
   }
 }
 
-task 23, lines 197-218:
+task 23, lines 198-219:
 //# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
@@ -281,15 +281,15 @@ Response: {
   }
 }
 
-task 25, line 222:
+task 25, line 223:
 //# create-checkpoint
 Checkpoint created: 9
 
-task 27, line 226:
+task 27, line 227:
 //# create-checkpoint
 Checkpoint created: 10
 
-task 28, lines 228-257:
+task 28, lines 229-258:
 //# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
@@ -332,7 +332,7 @@ Response: {
   ]
 }
 
-task 29, lines 259-280:
+task 29, lines 260-281:
 //# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
@@ -368,7 +368,7 @@ Response: {
   }
 }
 
-task 30, lines 282-303:
+task 30, lines 283-304:
 //# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
@@ -404,23 +404,23 @@ Response: {
   }
 }
 
-task 32, line 307:
+task 32, line 308:
 //# create-checkpoint
 Checkpoint created: 11
 
-task 34, line 311:
+task 34, line 312:
 //# create-checkpoint
 Checkpoint created: 12
 
-task 36, line 315:
+task 36, line 316:
 //# create-checkpoint
 Checkpoint created: 13
 
-task 38, line 319:
+task 38, line 320:
 //# create-checkpoint
 Checkpoint created: 14
 
-task 39, lines 321-350:
+task 39, lines 322-351:
 //# run-graphql --cursors {"c":2,"t":1,"i":false}
 Response: {
   "data": {
@@ -463,7 +463,7 @@ Response: {
   ]
 }
 
-task 40, lines 352-381:
+task 40, lines 353-382:
 //# run-graphql --cursors {"c":3,"t":1,"i":false}
 Response: {
   "data": {
@@ -506,7 +506,7 @@ Response: {
   ]
 }
 
-task 41, lines 383-412:
+task 41, lines 384-413:
 //# run-graphql --cursors {"c":4,"t":1,"i":false}
 Response: {
   "data": {
