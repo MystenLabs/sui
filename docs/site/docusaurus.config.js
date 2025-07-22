@@ -92,7 +92,7 @@ const config = {
       "@graphql-markdown/docusaurus",
       {
         id: "beta",
-        schema: "../../crates/sui-graphql-rpc/staging.graphql",
+        schema: "../../crates/sui-indexer-alt-graphql/schema.graphql",
         rootPath: "../content",
         baseURL: "references/sui-api/sui-graphql/beta/reference",
         homepage: false,
