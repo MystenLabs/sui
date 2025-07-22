@@ -14,13 +14,11 @@ use sui_indexer_alt_reader::kv_loader::{
 };
 use sui_types::{
     digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus,
+    execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
 };
 
 use crate::{
-    api::scalars::{
-        base64::Base64, big_int::BigInt, cursor::JsonCursor, digest::Digest, uint53::UInt53,
-    },
+    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, uint53::UInt53},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -28,6 +26,7 @@ use crate::{
 
 use super::{
     checkpoint::Checkpoint,
+    execution_error::ExecutionError,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
@@ -112,16 +111,25 @@ impl EffectsContents {
         Ok(Some(UInt53::from(effects.lamport_version().value())))
     }
 
-    /// The error code of the Move abort, populated if this transaction failed with a Move abort.
-    async fn move_abort_code(&self) -> Result<Option<BigInt>, RpcError> {
+    /// Rich execution error information for failed transactions.
+    async fn execution_error(&self, ctx: &Context<'_>) -> Result<Option<ExecutionError>, RpcError> {
         let Some(content) = &self.contents else {
             return Ok(None);
         };
 
         let effects = content.effects()?;
-        Ok(effects
-            .move_abort()
-            .map(|(_location, code)| BigInt::from(code)))
+        let status = effects.status();
+
+        // Extract programmable transaction if available
+        let programmable_tx = content
+            .data()
+            .ok()
+            .and_then(|tx_data| match tx_data.into_kind() {
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => Some(tx),
+                _ => None,
+            });
+
+        ExecutionError::from_execution_status(ctx, status, programmable_tx.as_ref()).await
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.

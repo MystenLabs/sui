@@ -116,6 +116,26 @@ type Epoch {
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: UInt53
+	"""
+	The total amount of gas fees (in MIST) that were paid in this epoch.
+	"""
+	totalGasFees: BigInt
+}
+
+"""
+Represents execution error information for failed transactions.
+"""
+type ExecutionError {
+	"""
+	Human-readable error message explaining why the transaction failed.
+	For Move aborts, attempts to resolve to human-readable form using clever errors,
+	otherwise falls back to displaying the abort code and location.
+	"""
+	message: String
+	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	"""
+	moveAbortCode: BigInt
 }
 
 """
@@ -831,9 +851,9 @@ type TransactionEffects {
 	"""
 	lamportVersion: UInt53
 	"""
-	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	Rich execution error information for failed transactions.
 	"""
-	moveAbortCode: BigInt
+	executionError: ExecutionError
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
