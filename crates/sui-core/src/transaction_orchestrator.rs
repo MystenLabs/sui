@@ -135,6 +135,7 @@ where
         let td_percentage = env::var("TRANSACTION_DRIVER")
             .ok()
             .and_then(|s| s.parse::<u8>().ok())
+            .filter(|&p| p <= 100) // Ensure percentage is between 0-100
             .unwrap_or(0);
 
         let transaction_driver = if td_percentage > 0 {
@@ -268,37 +269,27 @@ where
 
         // Wait for either execution result or local effects to become available
         let mut local_effects_future = effects_await.boxed();
-        let execution_future = self
+        let mut execution_future = self
             .execute_transaction_impl(&epoch_store, request, client_addr)
             .boxed();
 
-        // Add timeout to the overall operation by combining it with execution_future
+        // Add timeout to the overall operation
         let finality_timeout = std::env::var("WAIT_FOR_FINALITY_TIMEOUT_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
             .map(Duration::from_secs)
             .unwrap_or(WAIT_FOR_FINALITY_TIMEOUT);
 
-        let mut execution_with_timeout = select(
-            execution_future,
-            tokio::time::sleep(finality_timeout).boxed(),
-        );
+        let mut timeout_future = tokio::time::sleep(finality_timeout).boxed();
 
         loop {
-            match select(execution_with_timeout, local_effects_future).await {
-                Either::Left((execution_with_timeout_result, _)) => {
-                    match execution_with_timeout_result {
-                        Either::Left((execution_result, _)) => {
-                            return execution_result.map(|resp| (resp, false));
-                        }
-                        Either::Right((_, _)) => {
-                            debug!(?tx_digest, "Timeout waiting for transaction finality.");
-                            self.metrics.wait_for_finality_timeout.inc();
-                            return Err(QuorumDriverError::TimeoutBeforeFinality);
-                        }
-                    }
+            tokio::select! {
+                // Execution result returned
+                execution_result = &mut execution_future => {
+                    return execution_result.map(|resp| (resp, false));
                 }
-                Either::Right((local_effects_result, execution_with_timeout_remaining)) => {
+                // Local effects might be available
+                local_effects_result = &mut local_effects_future => {
                     debug!(
                         ?tx_digest,
                         "Effects became available while execution was running"
@@ -325,9 +316,14 @@ where
                         }
                     };
 
-                    // If local effects could not be returned, continue waiting on normal execution
+                    // Prevent this branch from being selected again
                     local_effects_future = futures::future::pending().boxed();
-                    execution_with_timeout = execution_with_timeout_remaining;
+                }
+                // A timeout has occurred while waiting for finality
+                _ = &mut timeout_future => {
+                    debug!(?tx_digest, "Timeout waiting for transaction finality.");
+                    self.metrics.wait_for_finality_timeout.inc();
+                    return Err(QuorumDriverError::TimeoutBeforeFinality);
                 }
             }
         }
@@ -371,35 +367,33 @@ where
         });
 
         // Check if TransactionDriver should be used for submission
-        if self.td_percentage > 0 {
+        if let Some(td) = &self.transaction_driver {
             let random_value = rand::thread_rng().gen_range(1..=100);
             if random_value <= self.td_percentage {
-                if let Some(td) = &self.transaction_driver {
-                    let td_response = self
-                        .submit_with_td(
-                            td,
-                            &request,
-                            client_addr,
-                            &verified_transaction,
-                            good_response_metrics,
-                            tx_digest,
-                        )
-                        .await;
+                let td_response = self
+                    .submit_with_transaction_driver(
+                        td,
+                        &request,
+                        client_addr,
+                        &verified_transaction,
+                        good_response_metrics,
+                        tx_digest,
+                    )
+                    .await;
 
-                    add_server_timing("[TransactionDriver] wait_for_finality");
+                add_server_timing("[TransactionDriver] wait_for_finality");
 
-                    drop(_txn_finality_timer);
-                    drop(_wait_for_finality_gauge);
-                    self.metrics.wait_for_finality_finished.inc();
+                drop(_txn_finality_timer);
+                drop(_wait_for_finality_gauge);
+                self.metrics.wait_for_finality_finished.inc();
 
-                    return td_response;
-                }
+                return td_response;
             }
         }
 
         // Submit transaction through QuorumDriver
         let result = self
-            .submit_with_qd(
+            .submit_with_quorum_driver(
                 epoch_store.clone(),
                 verified_transaction.clone(),
                 request,
@@ -440,7 +434,7 @@ where
         }
     }
 
-    async fn submit_with_td(
+    async fn submit_with_transaction_driver(
         &self,
         td: &Arc<TransactionDriver<A>>,
         request: &ExecuteTransactionRequestV3,
@@ -501,7 +495,7 @@ where
     /// Submits the transaction to Quorum Driver for execution.
     /// Returns an awaitable Future.
     #[instrument(name = "tx_orchestrator_submit", level = "trace", skip_all)]
-    async fn submit_with_qd(
+    async fn submit_with_quorum_driver(
         &self,
         epoch_store: Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
