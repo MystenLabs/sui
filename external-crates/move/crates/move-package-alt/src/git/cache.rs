@@ -157,7 +157,7 @@ impl GitTree {
         // create repo if necessary
         if !self.path_to_repo.exists() {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
-            let mut args: Vec<_> = vec![
+            let mut args = vec![
                 "-c",
                 "advice.detachedHead=false",
                 "clone",
@@ -169,12 +169,6 @@ impl GitTree {
 
             if self.sha().is_full_sha() {
                 args.extend(["--depth", "1"])
-            } else {
-                println!(
-                    "WARNING: found a short SHA {} which requires to download the full git history \
-                    for repository {}. We recommend using a full 40 characters sha if possible.",
-                    self.sha, self.repo
-                );
             }
 
             let path = self.path_to_repo.to_string_lossy();

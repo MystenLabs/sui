@@ -64,6 +64,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
         let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
+
         root_pkg.update_lockfile_digests();
 
         Ok(root_pkg)
@@ -119,6 +120,17 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
+
+        // warn if the root package has any direct deps with short shas
+        let pkg = graph.root_package();
+        if pkg.direct_deps().iter().any(|(_, p)| !p.has_full_sha()) {
+            println!(
+                "WARNING: found one or more short SHAs in the manifest's dependencies which \
+                    require to download the full git history.\n It is recommended to use a full 40 \
+                    characters sha if possible.",
+            );
+        }
+
         // check that there is a consistent linkage
 
         let _linkage = graph.linkage()?;
