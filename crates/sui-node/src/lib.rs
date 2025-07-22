@@ -206,6 +206,7 @@ mod simulator {
         parse_jwks(
             sui_types::zk_login_util::DEFAULT_JWK_BYTES,
             &OIDCProvider::Twitch,
+            true,
         )
         .map_err(|_| SuiError::JWKRetrievalError)
     }
@@ -2104,7 +2105,7 @@ impl SuiNode {
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
         let client = reqwest::Client::new();
-        fetch_jwks(provider, &client)
+        fetch_jwks(provider, &client, true)
             .await
             .map_err(|_| SuiError::JWKRetrievalError)
     }
