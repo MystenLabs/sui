@@ -225,6 +225,21 @@ impl Epoch {
 
         Ok(stake_subsidy_amount.map(BigInt::from))
     }
+
+    /// The storage fund available in this epoch.
+    /// This fund is used to redistribute storage fees from past transactions
+    /// to future validators.
+    async fn fund_size(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd {
+            storage_fund_balance,
+            ..
+        }) = self.end(ctx).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(storage_fund_balance.map(BigInt::from))
+    }
 }
 
 impl Epoch {

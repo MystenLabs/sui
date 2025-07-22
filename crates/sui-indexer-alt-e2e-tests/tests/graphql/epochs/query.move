@@ -47,6 +47,7 @@ fragment E on Epoch {
   totalGasFees
   totalStakeRewards
   totalStakeSubsidies
+  fundSize
 }
 
 //# run-graphql
@@ -84,4 +85,5 @@ fragment E on Epoch {
   totalGasFees
   totalStakeRewards
   totalStakeSubsidies
+  fundSize
 }
