@@ -82,6 +82,6 @@ macro_rules! git_revision {
                 }
                 version
             }
-        }
+        };
     };
 }
