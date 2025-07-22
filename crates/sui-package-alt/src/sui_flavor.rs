@@ -65,7 +65,10 @@ impl MoveFlavor for SuiFlavor {
     type PackageMetadata = (); // TODO
 
     fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID> {
-        todo!()
+        BTreeMap::from([
+            ("mainnet".to_string(), "35834a8a".to_string()),
+            ("testnet".to_string(), "4c78adac".to_string()),
+        ])
     }
 
     fn system_deps_names() -> BTreeSet<PackageName> {
