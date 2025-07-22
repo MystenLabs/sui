@@ -22,6 +22,7 @@ pub mod meaningless_math_operation;
 pub mod redundant_ref_deref;
 pub mod self_assignment;
 pub mod unnecessary_conditional;
+pub mod unnecessary_mut_params;
 pub mod unnecessary_unit;
 pub mod unnecessary_while_loop;
 pub mod unneeded_return;
@@ -175,6 +176,12 @@ lints!(
         LinterDiagnosticCategory::Complexity,
         "combinable_comparisons",
         "comparison operations condition can be simplified"
+    ),
+    (
+        UnnecessaryMutParams,
+        LinterDiagnosticCategory::Style,
+        "unnecessary_mut_params",
+        "unnecessary mutable parameters"
     )
 );
 
@@ -215,6 +222,7 @@ pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
                 unnecessary_unit::UnnecessaryUnit.visitor(),
                 equal_operands::EqualOperands.visitor(),
                 combinable_comparisons::CombinableComparisons.visitor(),
+                unnecessary_mut_params::UnusedMutableParams.visitor(),
             ]
         }
     }
