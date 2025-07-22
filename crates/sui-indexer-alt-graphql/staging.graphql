@@ -962,6 +962,10 @@ type TransactionEffects {
 	"""
 	timestamp: DateTime
 	"""
+	The epoch this transaction was finalized in.
+	"""
+	epoch: Epoch
+	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
