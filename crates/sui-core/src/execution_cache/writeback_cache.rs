@@ -1263,7 +1263,7 @@ impl WritebackCache {
         self.cache_latest_object_by_id(object_id, LatestObjectCacheEntry::NonExistent, ticket);
     }
 
-    fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
+    fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
         assert!(
             self.dirty.pending_transaction_writes.is_empty(),
@@ -1272,6 +1272,10 @@ impl WritebackCache {
         self.dirty.clear();
         info!("clearing old transaction locks");
         self.object_locks.clear();
+        info!("clearing object per epoch marker table");
+        self.store
+            .clear_object_per_epoch_marker_table(execution_guard)
+            .expect("db error");
     }
 
     fn revert_state_update_impl(&self, tx: &TransactionDigest) {
