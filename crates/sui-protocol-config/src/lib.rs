@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 89;
+const MAX_PROTOCOL_VERSION: u64 = 90;
 
 // Record history of protocol version allocations here:
 //
@@ -3867,21 +3867,18 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                             },
                         );
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_coin_registry = true;
-                    }
                 }
-<<<<<<< HEAD
                 89 => {
                     // 100x RGP
                     cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
                 }
-||||||| parent of d5b1f97607 (Test not for landing)
-=======
-                89 => {}
->>>>>>> d5b1f97607 (Test not for landing)
+                90 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_coin_registry = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

@@ -3,7 +3,7 @@ source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object().into_genesis_version_for_tooling()
 ---
 epoch: 0
-protocol_version: 89
+protocol_version: 90
 system_state_version: 1
 validators:
   total_stake: 20000000000000000
@@ -240,31 +240,13 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
-<<<<<<< HEAD
-            id: "0x9b4a66efc055f9b75249ce163ca2438bfed444bbf442a86ef3d9be04bdd6010f"
-||||||| parent of d5b1f97607 (Test not for landing)
-            id: "0x67606481869090b449b09b4f38f5e726a6f7114178035a114513befae62a02c2"
-=======
-            id: "0x1cfbc25a85ba7fa9bb46017e2eb40c4285ce48fca00681c3d3d24082457f5120"
->>>>>>> d5b1f97607 (Test not for landing)
+            id: "0x22547cdd05a7d4897dd7fa146aef699d087fec2cd059b325e367dee0839eb190"
           size: 0
       voting_power: 10000
-<<<<<<< HEAD
-      operation_cap_id: "0x3b1dea06575f55586ba3862336b216cde00815f943318be92ae0b7590e8e1626"
-||||||| parent of d5b1f97607 (Test not for landing)
-      operation_cap_id: "0x27b4a33d8b35ad7b6e7a56d0b4d4c330f13897b22a8bc5f379f033cf774d836b"
-=======
-      operation_cap_id: "0xf6197d160c45ca5d9cf4a45d0229bf8a3569aca7eb06a3d9e0581c2f39c7cf0c"
->>>>>>> d5b1f97607 (Test not for landing)
+      operation_cap_id: "0x0a59010f22aefa5844587c1906f51d5d2a91b52044a48b5b2ffe309e80f40da7"
       gas_price: 1000
       staking_pool:
-<<<<<<< HEAD
-        id: "0x3f77671106f3310726bb33981c3093f8457e8f7a25263128d7585d1b5a61995d"
-||||||| parent of d5b1f97607 (Test not for landing)
-        id: "0xa31284fe143c7a49b32377a35d8fdc8c7338642701554bd8b872a61d0f2e3e50"
-=======
-        id: "0xbee451de58af065475b6256f1321895de2b9d785972c479636aadc8eaff729b6"
->>>>>>> d5b1f97607 (Test not for landing)
+        id: "0xd7038ae423667d8ff0ea5694f70f588f86a50a463dbb2d2ffeae3ea2418a681a"
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -272,26 +254,14 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
-<<<<<<< HEAD
-          id: "0xfdb3495197b6c22b8f14904f6dcf991d69c4749e59ac75a64d524bb66a1adaa3"
-||||||| parent of d5b1f97607 (Test not for landing)
-          id: "0xc968056b4bb83338e5aa8243d73e0d0981b9266e0394efa5067e9dfedc48016a"
-=======
-          id: "0x26f8d478aa49a2682984b6994e8b74f14c7822d28df788da4feae3ffd86fb44f"
->>>>>>> d5b1f97607 (Test not for landing)
+          id: "0xb480614ac2bf19cb740541798d8a5c778a873c18b37a729f4d015c8c43f7f1e3"
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
-<<<<<<< HEAD
-            id: "0xee232a421d620c82b6bce859641d25e4095143cec8ff2bcbf817005119ba66ea"
-||||||| parent of d5b1f97607 (Test not for landing)
-            id: "0x1a2871b4ba21945bb39bfbe762745edc62543b15865a04c6317d391874367d45"
-=======
-            id: "0xe3868473f658f7ab4c62b7aaf807d40070c3a03d8c4e2d9fd1736c063b18c0f8"
->>>>>>> d5b1f97607 (Test not for landing)
+            id: "0x1deeb2adbbe6949535c18a7318c7b75ccf7f198d80b409ed0edf9dce6a1e5804"
           size: 0
       commission_rate: 200
       next_epoch_stake: 20000000000000000
@@ -299,63 +269,27 @@ validators:
       next_epoch_commission_rate: 200
       extra_fields:
         id:
-<<<<<<< HEAD
-          id: "0x6bbae559b7d13391b824b0274f880d81cec1f47ce507a60b4da3092b27d8f338"
-||||||| parent of d5b1f97607 (Test not for landing)
-          id: "0x26df03a043610777d89e03fcec10e1a0b50ee237f6984790ea51a9cafba67eab"
-=======
-          id: "0x36aec102e6d69c3becfeb0b42b86046a077b7fe1eb09852d96c48a0a7ca2b4bf"
->>>>>>> d5b1f97607 (Test not for landing)
+          id: "0x4c063dc023b660f78e4aac8630f880ba14f876f0ee11107dcbfb320dee233eef"
         size: 0
   pending_active_validators:
     contents:
-<<<<<<< HEAD
-      id: "0xeedd3fb97e939945ae46b08828945cea242ff14d13846e59f894cd28785748cc"
-||||||| parent of d5b1f97607 (Test not for landing)
-      id: "0xb1afe12535bb2f0f2c51eb38eefaae2fc1a0f7f0ef6fe34a7eb32e4e567f9d8b"
-=======
-      id: "0xe76cd420266a8ffd92c3626735104b826e0f6d3206e889930799e63de1144b19"
->>>>>>> d5b1f97607 (Test not for landing)
+      id: "0xcfc78663da18a234b02969652051d5546b2240123a102a3ae75718aab55b2d07"
       size: 0
   pending_removals: []
   staking_pool_mappings:
-<<<<<<< HEAD
-    id: "0xba96c4af67eb4c7e9a727b8bac3dcc80945dbbc501e445025c9967d5370f3de6"
-||||||| parent of d5b1f97607 (Test not for landing)
-    id: "0x9ce79494e484ec2e3338cb3feb47d8d58bf6bd8ecb848d117892f287cdb4bf94"
-=======
-    id: "0x968e6e045ef17a001fdab8655f762c7a60bf87808897cb60cda370f8a87328b4"
->>>>>>> d5b1f97607 (Test not for landing)
+    id: "0x7adfc23084d80eef78d089475e305158e358176b3d41983e0360f24be2ea6508"
     size: 1
   inactive_validators:
-<<<<<<< HEAD
-    id: "0x034fdac0fbdd625e89ecf0dfbc8eefdec8da7f364c59ae1f8d9f44c89789b284"
-||||||| parent of d5b1f97607 (Test not for landing)
-    id: "0xf5f5ae8f0443cc15dbc940907217cacc568451e990f499feb2c85c78f54752b5"
-=======
-    id: "0xd4445ff476c1e15715753c6e8ba6d514a3249b0cee5bb52d42ea10f9214fd0e7"
->>>>>>> d5b1f97607 (Test not for landing)
+    id: "0x3c41e98b74d05fb54a13590d67f8203d7fdb059e6c5db0cee0e94b39de85c60a"
     size: 0
   validator_candidates:
-<<<<<<< HEAD
-    id: "0x2b10b86ece1238155f26f7590e039baf00322d2dfde97026caf9a7a6458940a7"
-||||||| parent of d5b1f97607 (Test not for landing)
-    id: "0xe06c812fc4d6d2f1b448b44625e8d462283169ea78484a37b431f60d3ce24601"
-=======
-    id: "0x290bd4c65ce08e03145910ca440bf9a2cd227f0c5eea276baea94a58ae88c2f7"
->>>>>>> d5b1f97607 (Test not for landing)
+    id: "0x99ef0128293340b12e58aa645da98d223de0ec7ed4b9617f5d0269fc2aa48591"
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
-<<<<<<< HEAD
-      id: "0xec30359ff23e77ead7ff45a1402b779ea70db29f02498716ac4e9741593e9213"
-||||||| parent of d5b1f97607 (Test not for landing)
-      id: "0xe00d03299f600b23220114af71c2c7cb92f7bc8c0e22fbf3161189af3442f983"
-=======
-      id: "0x2cc1bbb4225ccc9822de5292dc04e20af42621d1560f5fef3b0b758747481e13"
->>>>>>> d5b1f97607 (Test not for landing)
+      id: "0xc8acc3560fcb0742a0629808c68f5b0076c9bae956b3e17eaf450631d7d931e7"
     size: 0
 storage_fund:
   total_object_storage_rebates:
@@ -372,13 +306,7 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
-<<<<<<< HEAD
-      id: "0xc6cb64fea032b70a23f257476f1b670dba9ec9bb92cafb92067d498bc5c67580"
-||||||| parent of d5b1f97607 (Test not for landing)
-      id: "0x9174e92651fa9af4dfcda957434949ebd766ea46c5245e8d523ff2d328988b3d"
-=======
-      id: "0x4db87cde973f011f61a2625d2100817e9222254fbb775d5ae0124dbc26ba3597"
->>>>>>> d5b1f97607 (Test not for landing)
+      id: "0xd14aa107300a6bab556a595eb8efa8864233141bb9f4c3771189947cb976143a"
     size: 0
 reference_gas_price: 1000
 validator_report_records:
@@ -392,13 +320,7 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 1000
   extra_fields:
     id:
-<<<<<<< HEAD
-      id: "0x6599cb91aa09e483a0d0d921dfee9efcf9b7f2f9ee3bea261596db748d5f2971"
-||||||| parent of d5b1f97607 (Test not for landing)
-      id: "0x2e475e6940be319df75dfc2364e1b04517d8d560bfcce694cd339c086708b596"
-=======
-      id: "0x172a42fc1d1d333570e355fcd6f15ff027ec8a4f544f17387d59bfe2bd479738"
->>>>>>> d5b1f97607 (Test not for landing)
+      id: "0x14c3e24ce45de0af77929574f64a308fd13fc117d2b5badb920655cd6db393f5"
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -410,11 +332,5 @@ safe_mode_non_refundable_storage_fee: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
-<<<<<<< HEAD
-    id: "0x97b24ba2309ad8fc6e51b901fe82017071a676e7c27a419a427ce46acdef911d"
-||||||| parent of d5b1f97607 (Test not for landing)
-    id: "0x5eb4e7e0540a639f47e48f2801f5dca268e43513eaadf30096b4c357537ef20d"
-=======
-    id: "0x35d9ac90bc0004a1c53751d21c2bc87b1640788bba571db288ea5b3361ff5fa0"
->>>>>>> d5b1f97607 (Test not for landing)
+    id: "0x81d022b6b3f9e2db855f4dc169fa409d7ff1b127850fd40433d5f780a8b2a564"
   size: 0
