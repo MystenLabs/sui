@@ -87,6 +87,22 @@ impl ServiceConfig {
 
         example
     }
+
+    /// Generate a configuration suitable for testing. This is the same as the example
+    /// configuration, but with reduced concurrency and faster polling intervals so tests spend
+    /// less time waiting.
+    pub fn for_test() -> Self {
+        let mut for_test = Self::example();
+
+        for_test.ingestion.retry_interval_ms = 10;
+        for_test.ingestion.ingest_concurrency = 1;
+
+        for_test.committer.collect_interval_ms = Some(50);
+        for_test.committer.watermark_interval_ms = Some(50);
+        for_test.committer.write_concurrency = Some(1);
+
+        for_test
+    }
 }
 
 impl PipelineLayer {
