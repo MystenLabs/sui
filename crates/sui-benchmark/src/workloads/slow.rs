@@ -15,7 +15,7 @@ use crate::ProgrammableTransactionBuilder;
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::transaction::ObjectArg;
 use sui_types::{base_types::ObjectID, object::Owner};
@@ -225,7 +225,15 @@ impl Workload<dyn Payload> for SlowWorkload {
             .unwrap();
 
         for o in &created {
-            let obj = proxy.get_object(o.0 .0).await.unwrap();
+            let obj = loop {
+                match proxy.get_object(o.0 .0).await {
+                    Ok(obj) => break obj,
+                    Err(e) => {
+                        tracing::debug!("Failed to get object {}: {}", o.0 .0, e);
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                }
+            };
             if let Some(tag) = obj.data.struct_tag() {
                 if tag.to_string().contains("::slow::Obj") {
                     self.shared_obj_ref = o.0;
