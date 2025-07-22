@@ -315,7 +315,7 @@
     ]
   },
   "16": {
-    "git_revision": "0f31634377",
+    "git_revision": "0f316343778b3a17497acf76b04170020353be0e",
     "packages": [
       {
         "name": "MoveStdlib",
@@ -365,7 +365,7 @@
     ]
   },
   "18": {
-    "git_revision": "1828bbd10",
+    "git_revision": "1828bbd103c76188d28ee15733707b7ec2579363",
     "packages": [
       {
         "name": "MoveStdlib",
@@ -390,7 +390,7 @@
     ]
   },
   "19": {
-    "git_revision": "ee604ddd81",
+    "git_revision": "ee604ddd81b55cde041939ac0cc8f010821f77e8",
     "packages": [
       {
         "name": "MoveStdlib",
@@ -490,7 +490,7 @@
     ]
   },
   "23": {
-    "git_revision": "f217258725",
+    "git_revision": "f2172587257b97360031f42039d5e45580bdcde4",
     "packages": [
       {
         "name": "MoveStdlib",
@@ -640,7 +640,7 @@
     ]
   },
   "30": {
-    "git_revision": "4922d58a26",
+    "git_revision": "4922d58a26c4f61bb2d00b7c51db7557a3ab1b15",
     "packages": [
       {
         "name": "MoveStdlib",
@@ -690,7 +690,7 @@
     ]
   },
   "32": {
-    "git_revision": "4927dc9a38",
+    "git_revision": "4927dc9a381f5bee365fb1e26fa43ff651f17369",
     "packages": [
       {
         "name": "MoveStdlib",
@@ -740,7 +740,7 @@
     ]
   },
   "34": {
-    "git_revision": "66b3329fda",
+    "git_revision": "66b3329fda686d169dee8dd92d1b6ac59a606672",
     "packages": [
       {
         "name": "MoveStdlib",
@@ -1530,7 +1530,7 @@
     ]
   },
   "71": {
-    "git_revision": "ea3d71eb4d92",
+    "git_revision": "ea3d71eb4d92af38caebea268436188090eeed6e",
     "packages": [
       {
         "name": "MoveStdlib",
