@@ -873,6 +873,10 @@ type TransactionEffects {
 	"""
 	gasEffects: GasEffects
 	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	"""
+	timestamp: DateTime
+	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
