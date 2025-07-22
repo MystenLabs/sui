@@ -95,16 +95,62 @@ fn find_files(files: &mut Vec<PathBuf>, dir: &Path, extension: &str, max_depth: 
 
 // Consider supporting the legacy `address { module {} }` format.
 fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
+    let clean = strip_comments(contents);
     let mut set = HashSet::new();
     // This matches `module a::b {}`, and `module a::b;` cases.
     // In both cases, the match is the 2nd group (so `match.get(1)`)
     let regex = Regex::new(MODULE_REGEX).unwrap();
 
-    for cap in regex.captures_iter(contents) {
+    for cap in regex.captures_iter(&clean) {
         set.insert(cap[1].to_string());
     }
 
     Ok(set)
+}
+
+/// Returns a copy of `source` with all the comments removed.
+fn strip_comments(source: &str) -> String {
+    let mut result = String::new();
+    let mut in_block_doc = false;
+
+    for line in source.lines() {
+        let mut line_cleaned = line.to_string();
+
+        // Catch the `///` case.
+        if let Some(start) = line_cleaned.find("///") {
+            line_cleaned.replace_range(start.., "");
+        }
+
+        // Catch the `//` case.
+        if let Some(start) = line_cleaned.find("//") {
+            line_cleaned.replace_range(start.., "");
+        }
+
+        if in_block_doc {
+            if let Some(end) = line_cleaned.find("*/") {
+                line_cleaned.replace_range(..=end + 1, ""); // remove up to and including */
+                in_block_doc = false;
+            } else {
+                continue; // inside block doc, skip entire line
+            }
+        }
+
+        // Remove any inline doc block comments (multiple if present)
+        while let Some(start) = line_cleaned.find("/*") {
+            if let Some(end) = line_cleaned[start..].find("*/") {
+                line_cleaned.replace_range(start..start + end + 2, "");
+            } else {
+                // Start of multiline doc block; remove to end of line and set flag
+                line_cleaned.replace_range(start.., "");
+                in_block_doc = true;
+                break;
+            }
+        }
+
+        result.push_str(&line_cleaned);
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -144,6 +190,70 @@ mod tests {
                 r" module b {}
             ",
                 set(vec![]),
+            ),
+            (
+                r"
+                /// module yy::ff {
+                ///     module a::b {}
+                /// }
+                module works::perfectly {}
+            ",
+                set(vec!["works"]),
+            ),
+            (
+                r"
+                /* module yy::ff {
+                    module a::b {}
+                }
+                */
+                /// module aa::bb {
+                /// 
+                /// }
+                module works::perfectly {}
+            ",
+                set(vec!["works"]),
+            ),
+            (
+                r"
+                /* module aa::bb {} */
+                /* module ee::dd {} */
+                module a::b {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                /*
+                    multi-line comments
+                    module a::b {} */
+                    module works::perfectly {}
+                ",
+                set(vec!["works"]),
+            ),
+            (
+                r"
+                /* module aa::bb {} */ module a::b {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                /* module aa::bb {} */ /* module ee::dd {} */ module a::b {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                   module a::b {} // module bb::aa {}
+                ",
+                set(vec!["a"]),
+            ),
+            (
+                r"
+                module a::/* this is odd but 
+                it works */b {} // module bb::aa {}
+                ",
+                set(vec!["a"]),
             ),
         ];
 
