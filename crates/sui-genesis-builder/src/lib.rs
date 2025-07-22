@@ -915,7 +915,7 @@ fn create_genesis_transaction(
 
         let executor =
             sui_execution::executor(protocol_config, silent, get_genesis_chain_id(), None)
-            .expect("Creating an executor should not fail here");
+                .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
         let transaction_data = &genesis_transaction.data().intent_message().value;
