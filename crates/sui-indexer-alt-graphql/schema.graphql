@@ -155,6 +155,36 @@ type FeatureFlag {
 }
 
 
+"""
+Breakdown of gas costs in effects.
+"""
+type GasCostSummary {
+	"""
+	Gas paid for executing this transaction (in MIST).
+	"""
+	computationCost: BigInt
+	"""
+	Gas paid for the data stored on-chain by this transaction (in MIST).
+	"""
+	storageCost: BigInt
+	"""
+	Part of storage cost that can be reclaimed by cleaning up data created by this transaction (when objects are deleted or an object is modified, which is treated as a deletion followed by a creation) (in MIST).
+	"""
+	storageRebate: BigInt
+	"""
+	Part of storage cost that is not reclaimed when data created by this transaction is cleaned up (in MIST).
+	"""
+	nonRefundableStorageFee: BigInt
+}
+
+"""
+Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+"""
+type GasEffects {
+	gasObject: Object
+	gasSummary: GasCostSummary
+}
+
 type GasInput {
 	"""
 	Address of the owner of the gas object(s) used.
@@ -838,6 +868,10 @@ type TransactionEffects {
 	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
 	"""
 	lamportVersion: UInt53
+	"""
+	Effects to the gas object.
+	"""
+	gasEffects: GasEffects
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""

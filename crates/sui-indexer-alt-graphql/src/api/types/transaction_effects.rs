@@ -26,6 +26,7 @@ use crate::{
 
 use super::{
     checkpoint::Checkpoint,
+    gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
@@ -108,6 +109,16 @@ impl EffectsContents {
 
         let effects = content.effects()?;
         Ok(Some(UInt53::from(effects.lamport_version().value())))
+    }
+
+    /// Effects to the gas object.
+    async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(GasEffects::from(self.scope.clone(), effects)))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
