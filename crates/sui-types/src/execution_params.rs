@@ -12,6 +12,14 @@ use crate::{
 
 pub type ExecutionOrEarlyError = Result<(), ExecutionErrorKind>;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BalanceWithdrawStatus {
+    NoWithdraw,
+    SufficientBalance,
+    // TODO(address-balances): Add information on the address and type?
+    InsufficientBalance,
+}
+
 /// Determine if a transaction is predetermined to fail execution.
 /// If so, return the error kind, otherwise return `None`.
 /// When we pass this to the execution engine, we will not execute the transaction
@@ -20,6 +28,7 @@ pub fn get_early_execution_error(
     transaction_digest: &TransactionDigest,
     input_objects: &CheckedInputObjects,
     config_certificate_deny_set: &HashSet<TransactionDigest>,
+    balance_withdraw_status: &BalanceWithdrawStatus,
 ) -> Option<ExecutionErrorKind> {
     if is_certificate_denied(transaction_digest, config_certificate_deny_set) {
         return Some(ExecutionErrorKind::CertificateDenied);
@@ -47,6 +56,13 @@ pub fn get_early_execution_error(
             }
             _ => panic!("invalid cancellation reason SequenceNumber: {reason}"),
         }
+    }
+
+    if matches!(
+        balance_withdraw_status,
+        BalanceWithdrawStatus::InsufficientBalance
+    ) {
+        return Some(ExecutionErrorKind::InsufficientBalanceForWithdraw);
     }
 
     None
@@ -89,4 +105,115 @@ fn is_certificate_denied(
 ) -> bool {
     certificate_deny_set.contains(transaction_digest)
         || get_denied_certificates().contains(transaction_digest)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        base_types::ObjectID,
+        transaction::{
+            CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
+            ObjectReadResultKind,
+        },
+    };
+
+    fn create_test_input_objects() -> CheckedInputObjects {
+        let input_objects = InputObjects::new(vec![]);
+        CheckedInputObjects::new_for_replay(input_objects)
+    }
+
+    #[test]
+    fn test_early_execution_error_insufficient_balance() {
+        let tx_digest = crate::digests::TransactionDigest::random();
+        let input_objects = create_test_input_objects();
+        let deny_set = HashSet::new();
+
+        // Test with insufficient balance
+        let result = get_early_execution_error(
+            &tx_digest,
+            &input_objects,
+            &deny_set,
+            &BalanceWithdrawStatus::InsufficientBalance,
+        );
+        assert_eq!(
+            result,
+            Some(ExecutionErrorKind::InsufficientBalanceForWithdraw)
+        );
+
+        // Test with sufficient balance
+        let result = get_early_execution_error(
+            &tx_digest,
+            &input_objects,
+            &deny_set,
+            &BalanceWithdrawStatus::SufficientBalance,
+        );
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_early_execution_error_precedence() {
+        let tx_digest = crate::digests::TransactionDigest::random();
+        let input_objects = create_test_input_objects();
+
+        // Test that certificate denial takes precedence over insufficient balance
+        let mut deny_set = HashSet::new();
+        deny_set.insert(tx_digest);
+        let result = get_early_execution_error(
+            &tx_digest,
+            &input_objects,
+            &deny_set,
+            &BalanceWithdrawStatus::InsufficientBalance,
+        );
+        assert_eq!(result, Some(ExecutionErrorKind::CertificateDenied));
+
+        // Test that deleted input objects take precedence over insufficient balance
+        let input_objects = InputObjects::new(vec![
+            // canceled object
+            ObjectReadResult {
+                input_object_kind: InputObjectKind::SharedMoveObject {
+                    id: ObjectID::random(),
+                    initial_shared_version: SequenceNumber::MIN,
+                    mutable: false,
+                },
+                object: ObjectReadResultKind::ObjectConsensusStreamEnded(
+                    SequenceNumber::MIN, // doesn't matter
+                    tx_digest,
+                ),
+            },
+        ]);
+        deny_set.clear();
+        let result = get_early_execution_error(
+            &tx_digest,
+            &CheckedInputObjects::new_for_replay(input_objects),
+            &deny_set,
+            &BalanceWithdrawStatus::InsufficientBalance,
+        );
+        assert_eq!(result, Some(ExecutionErrorKind::InputObjectDeleted));
+
+        // Test that canceled takes precedence over insufficient balance
+        let input_objects = InputObjects::new(vec![
+            // canceled object
+            ObjectReadResult {
+                input_object_kind: InputObjectKind::SharedMoveObject {
+                    id: ObjectID::random(),
+                    initial_shared_version: SequenceNumber::MIN,
+                    mutable: false,
+                },
+                object: ObjectReadResultKind::CancelledTransactionSharedObject(
+                    SequenceNumber::CONGESTED,
+                ),
+            },
+        ]);
+        let result = get_early_execution_error(
+            &tx_digest,
+            &CheckedInputObjects::new_for_replay(input_objects),
+            &deny_set,
+            &BalanceWithdrawStatus::InsufficientBalance,
+        );
+        assert!(matches!(
+            result,
+            Some(ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion { .. })
+        ));
+    }
 }

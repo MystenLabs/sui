@@ -613,6 +613,8 @@ ExecutionFailureStatus:
           - max_scaled_size: U64
     39:
       InvalidLinkage: UNIT
+    40:
+      InsufficientBalanceForWithdraw: UNIT
 ExecutionStatus:
   ENUM:
     0:
