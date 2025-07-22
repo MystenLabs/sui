@@ -40,12 +40,11 @@ simple_visitor!(
                 PUBLIC_ENTRY_DIAG,
                 (
                     fdef.entry.unwrap(),
-                    "`entry` on `public` functions limits composability, as it forces the return value to have `drop` ability. It is only meaningful in niche scenarios."
+                    "`entry` on `public` functions limits composability as it adds additional restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios."
                 )
             );
 
-            d.add_note("`public` functions can be called from PTBs. As such, `entry` on `public` functions should be used only if you are concerned with the value flow limitations around `entry` functions");
-            d.add_note("Unless this function interacts with an intricate set of private `entry` functions, the modifier is likely superfluous");
+            d.add_note("`public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.");
             self.add_diag(d);
         }
 
