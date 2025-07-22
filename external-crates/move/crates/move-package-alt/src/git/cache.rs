@@ -157,23 +157,30 @@ impl GitTree {
         // create repo if necessary
         if !self.path_to_repo.exists() {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
-            run_git_cmd_with_args(
-                &[
-                    "-c",
-                    "advice.detachedHead=false",
-                    "clone",
-                    "--quiet",
-                    "--sparse",
-                    "--filter=blob:none",
-                    "--no-checkout",
-                    "--depth",
-                    "1",
-                    &self.repo,
-                    &self.path_to_repo.to_string_lossy(),
-                ],
-                None,
-            )
-            .await?;
+            let mut args: Vec<_> = vec![
+                "-c",
+                "advice.detachedHead=false",
+                "clone",
+                "--quiet",
+                "--sparse",
+                "--filter=blob:none",
+                "--no-checkout",
+            ];
+
+            if self.sha().is_full_sha() {
+                args.extend(["--depth", "1"])
+            } else {
+                println!(
+                    "WARNING: found a short SHA {} which requires to download the full git history \
+                    for repository {}. We recommend using a full 40 characters sha if possible.",
+                    self.sha, self.repo
+                );
+            }
+
+            let path = self.path_to_repo.to_string_lossy();
+            args.extend([self.repo.as_str(), &path]);
+
+            run_git_cmd_with_args(&args, None).await?;
 
             fresh = true;
         }
@@ -705,5 +712,20 @@ mod tests {
 
         // fetch again - subtree should still be clean so it should succeed
         let result = git_tree.fetch().await.unwrap();
+    }
+
+    #[test]
+    fn test_git_sha() {
+        let sha = "1234acb";
+        assert!(GitSha::try_from(sha.to_string()).is_ok());
+
+        let sha = "1234ac";
+        assert!(GitSha::try_from(sha.to_string()).is_err_and(|f| f.to_string() == "`1234ac` is an invalid commit sha; commits must be between 7 and 40 characters"));
+
+        let sha = "test1234";
+        assert!(
+            GitSha::try_from(sha.to_string()).is_err_and(|f| f.to_string()
+                == "`test1234` is an invalid commit sha; commits must be lowercase hex strings")
+        );
     }
 }
