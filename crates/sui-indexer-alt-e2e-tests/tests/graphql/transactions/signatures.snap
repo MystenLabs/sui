@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 7 tasks
+processed 6 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
@@ -26,7 +26,7 @@ task 3, line 14:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 16-25:
+task 4, lines 16-24:
 //# run-graphql
 Response: {
   "data": {
@@ -34,7 +34,6 @@ Response: {
       "digest": "54hQH5EDiV52i4wDp5KgjbwGMBfQWZmc7Zh73u3vY1LK",
       "signatures": [
         {
-          "scheme": "ED_25519",
           "signatureBytes": "ADxBVYxMQQJmf2f3SHzLbRePRNFYiVov7X9z58xQ7VviIE/OmN5JtJs3lpE4LMvOmT54xLfcGGvt99T/g/CeAwh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
         }
       ]
@@ -42,7 +41,7 @@ Response: {
   }
 }
 
-task 5, lines 27-36:
+task 5, lines 26-34:
 //# run-graphql
 Response: {
   "data": {
@@ -50,33 +49,10 @@ Response: {
       "digest": "2WR8XNBnXp1sEnJZ5JDvdWhsLgWPLD2X3DRSPVNRqXgm",
       "signatures": [
         {
-          "scheme": "ED_25519",
           "signatureBytes": "AJ5bHadta61dW8WGzqhlRV6KoTbWbWrF/AAOp4ijq0hvUpnXy+bYX0HW5n2pn5D2Y34/Eay7wTkAz7YLSNh8egRjShJ/h11TzB1kNRDs/tZZYOUuR7hLdy4MWvdZMWHaqw=="
         },
         {
-          "scheme": "ED_25519",
           "signatureBytes": "AAqtyIIHh7KtUbjbNyxlGtNh/6AL+bkdA/4wk13AyHI62g8bLnA3ekAdEdYrNQ2Pe9Mlhq85rvd/JByIZII6HAiea9+AYO7cFrl2UiI8mqgOfdypWEBHOeWh8bAaRfXLzA=="
-        }
-      ]
-    }
-  }
-}
-
-task 6, lines 39-52:
-//# run-graphql
-Response: {
-  "data": {
-    "singleSigScheme": {
-      "signatures": [
-        {
-          "scheme": "ED_25519"
-        }
-      ]
-    },
-    "singleSigSignatureBytes": {
-      "signatures": [
-        {
-          "signatureBytes": "ADxBVYxMQQJmf2f3SHzLbRePRNFYiVov7X9z58xQ7VviIE/OmN5JtJs3lpE4LMvOmT54xLfcGGvt99T/g/CeAwh/UUY663bYjcm3XmNyULIgxJz1t5Z9vxfB+fp8WUoJKA=="
         }
       ]
     }

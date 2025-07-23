@@ -18,7 +18,6 @@
   singleSig: transaction(digest: "@{digest_1}") {
     digest
     signatures {
-      scheme
       signatureBytes
     }
   }
@@ -28,23 +27,6 @@
 { # Test multiple signature transaction (sender + sponsor)
   multiSig: transaction(digest: "@{digest_2}") {
     digest
-    signatures {
-      scheme
-      signatureBytes
-    }
-  }
-}
-
-
-//# run-graphql
-{ # Test partial queries
-  singleSigScheme: transaction(digest: "@{digest_1}") {
-    signatures {
-      scheme
-    }
-  }
-
-  singleSigSignatureBytes: transaction(digest: "@{digest_1}") {
     signatures {
       signatureBytes
     }
