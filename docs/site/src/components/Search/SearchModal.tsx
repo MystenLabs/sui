@@ -180,7 +180,7 @@ export default function MultiIndexSearchModal({
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex justify-center p-4">
-      <div className="bg-white dark:bg-sui-gray-90 w-full max-w-3xl px-6 rounded-lg shadow-md max-h-xl flex flex-col">
+      <div className="bg-white dark:bg-sui-gray-90 w-full max-w-3xl px-6 rounded-lg shadow-md max-h-[600px] flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <InstantSearch searchClient={searchClient} indexName={activeIndex}>
             <div className="bg-white dark:bg-sui-gray-90 rounded-t sticky top-0 z-10">
