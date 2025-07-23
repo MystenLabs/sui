@@ -9,10 +9,10 @@ mod resolve;
 pub use resolve::{ResolvedDependency, ResolverError};
 
 mod pin;
-pub use pin::{PinnedDependencyInfo, pin};
+pub use pin::PinnedDependencyInfo;
 
 mod fetch;
-pub use fetch::FetchedDependency;
+pub use fetch::{FetchError, FetchedDependency};
 
 mod dependency_set;
 pub use dependency_set::DependencySet;

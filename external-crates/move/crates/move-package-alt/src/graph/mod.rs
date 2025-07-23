@@ -16,29 +16,27 @@ use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentName, Package, paths::PackagePath},
+    package::{Package, paths::PackagePath},
     schema::{Environment, OriginalID, PackageName, PublishAddresses},
 };
 use builder::PackageGraphBuilder;
 
 use derive_where::derive_where;
 use petgraph::{
-    graph::{DiGraph, EdgeIndex, NodeIndex},
+    graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
 };
 
-#[derive(Debug)]
-pub struct PackageGraph<F: MoveFlavor> {
-    root_idx: NodeIndex,
-    inner: DiGraph<PackageNode<F>, PackageName>,
+#[derive(Debug, Clone)]
+pub struct PackageGraphEdge {
+    name: PackageName,
+    dep: PinnedDependencyInfo,
 }
 
-/// A node in the package graph, containing a [Package] in a particular environment
 #[derive(Debug)]
-#[derive_where(Clone)]
-struct PackageNode<F: MoveFlavor> {
-    package: Arc<Package<F>>,
-    use_env: EnvironmentName,
+pub struct PackageGraph<F: MoveFlavor> {
+    root_index: NodeIndex,
+    inner: DiGraph<Arc<Package<F>>, PackageGraphEdge>,
 }
 
 /// A narrow interface for representing packages outside of `move-package-alt`
@@ -56,7 +54,7 @@ pub enum NamedAddress {
     Published(OriginalID),
 }
 
-impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
+impl<F: MoveFlavor> PackageInfo<'_, F> {
     /// The name that the package has declared for itself
     pub fn name(&self) -> &PackageName {
         self.package().name()
@@ -97,7 +95,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
             .graph
             .inner
             .edges(self.node)
-            .map(|edge| (edge.weight().clone(), self.node_to_addr(edge.target())))
+            .map(|edge| (edge.weight().name.clone(), self.node_to_addr(edge.target())))
             .collect();
         result.insert(self.package().name().clone(), self.node_to_addr(self.node));
 
@@ -106,7 +104,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
     /// Return the NamedAddress for `node`
     fn node_to_addr(&self, node: NodeIndex) -> NamedAddress {
-        let package = self.graph.inner[node].package.clone();
+        let package = self.graph.inner[node].clone();
         if package.is_root() {
             return NamedAddress::RootPackage(package.original_id());
         }
@@ -119,7 +117,7 @@ impl<'graph, F: MoveFlavor> PackageInfo<'graph, F> {
 
     /// The package corresponding to this node
     fn package(&self) -> &Package<F> {
-        &self.graph.inner[self.node].package
+        &self.graph.inner[self.node]
     }
 }
 
@@ -162,21 +160,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
     /// Returns the root package of the graph.
     pub fn root_package(&self) -> &Package<F> {
-        self.inner[self.root_idx].package.as_ref()
-    }
-
-    /// Return the dependency corresponding to `edge`
-    fn dep_for_edge(&self, edge: EdgeIndex) -> &PinnedDependencyInfo {
-        let (source_index, _) = self
-            .inner
-            .edge_endpoints(edge)
-            .expect("edge is a valid index into the graph");
-
-        self.inner[source_index]
-            .package
-            .direct_deps()
-            .get(&self.inner[edge])
-            .expect("edges in graph come from dependencies, so the dependency must exist")
+        self.inner[self.root_index].as_ref()
     }
 
     /// Return the list of dependencies in this package graph
