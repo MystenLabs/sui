@@ -468,6 +468,7 @@ pub enum OperationType {
     AuthenticatorStateUpdate,
     RandomnessStateUpdate,
     EndOfEpochTransaction,
+    ProgrammableSystemTransaction,
 }
 
 impl From<&SuiTransactionBlockKind> for OperationType {
@@ -492,6 +493,9 @@ impl From<&SuiTransactionBlockKind> for OperationType {
             }
             SuiTransactionBlockKind::EndOfEpochTransaction(_) => {
                 OperationType::EndOfEpochTransaction
+            }
+            SuiTransactionBlockKind::ProgrammableSystemTransaction(_) => {
+                OperationType::ProgrammableSystemTransaction
             }
         }
     }

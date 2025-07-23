@@ -8,7 +8,7 @@ A: object(0,0)
 
 task 1, line 6:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 2, lines 8-25:
 //# run-graphql

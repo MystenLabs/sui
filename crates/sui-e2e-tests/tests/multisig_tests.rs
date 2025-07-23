@@ -426,6 +426,10 @@ async fn test_multisig_e2e() {
 
 #[sim_test]
 async fn test_multisig_with_zklogin_scenerios() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_cluster = TestClusterBuilder::new()
         // Use a long epoch duration such that it won't change epoch on its own.
         .with_epoch_duration_ms(10000000)
@@ -959,6 +963,10 @@ async fn test_max_epoch_too_large_fail_zklogin_in_multisig() {
 
 #[sim_test]
 async fn test_random_zklogin_in_multisig() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_vectors =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..11];
     let test_cluster = TestClusterBuilder::new()

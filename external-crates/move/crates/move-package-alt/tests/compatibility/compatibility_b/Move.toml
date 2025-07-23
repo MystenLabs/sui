@@ -1,0 +1,10 @@
+[package]
+name = "B"
+edition = "2024.beta"
+
+[dependencies]
+aba = { local = "../compatibility_a" }
+wow = { r.mvr = "@pkg/qwer"}
+
+[addresses]
+b = "0x0"

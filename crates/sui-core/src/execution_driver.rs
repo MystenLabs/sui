@@ -37,14 +37,14 @@ pub async fn execution_process(
         let _scope = monitored_scope("ExecutionDriver::loop");
 
         let certificate;
-        let expected_effects_digest;
+        let execution_env;
         let txn_ready_time;
         let _executing_guard;
         tokio::select! {
             result = rx_ready_certificates.recv() => {
                 if let Some(pending_cert) = result {
                     certificate = pending_cert.certificate;
-                    expected_effects_digest = pending_cert.expected_effects_digest;
+                    execution_env = pending_cert.execution_env;
                     txn_ready_time = pending_cert.stats.ready_time.unwrap();
                     _executing_guard = pending_cert.executing_guard;
                 } else {
@@ -119,7 +119,7 @@ pub async fn execution_process(
 
             match authority.try_execute_immediately(
                 &certificate,
-                expected_effects_digest,
+                execution_env,
                 &epoch_store_clone,
             ).await {
                 Err(SuiError::ValidatorHaltedAtEpochEnd) => {

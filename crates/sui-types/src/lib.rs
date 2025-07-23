@@ -26,6 +26,8 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 #[macro_use]
 pub mod error;
 
+pub mod accumulator_event;
+pub mod accumulator_root;
 pub mod authenticator_state;
 pub mod balance;
 pub mod balance_change;
@@ -48,6 +50,7 @@ pub mod event;
 pub mod executable_transaction;
 pub mod execution;
 pub mod execution_config_utils;
+pub mod execution_params;
 pub mod execution_status;
 pub mod full_checkpoint_content;
 pub mod gas;
@@ -74,8 +77,10 @@ pub mod object;
 pub mod passkey_authenticator;
 pub mod programmable_transaction_builder;
 pub mod proto_value;
+pub mod ptb_trace;
 pub mod quorum_driver_types;
 pub mod randomness_state;
+pub mod rpc_proto_conversions;
 pub mod signature;
 pub mod signature_verification;
 pub mod storage;
@@ -130,6 +135,7 @@ built_in_ids! {
     SUI_RANDOMNESS_STATE_ADDRESS / SUI_RANDOMNESS_STATE_OBJECT_ID = 0x8;
     SUI_BRIDGE_ADDRESS / SUI_BRIDGE_OBJECT_ID = 0x9;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
+    SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

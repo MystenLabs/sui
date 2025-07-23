@@ -157,6 +157,9 @@ initial_exchange_rate
 check_balance_invariants
 	fun
 	0x3::staking_pool
+calculate_rewards
+	public(package) fun
+	0x3::staking_pool
 ValidatorMetadata
 	public struct
 	0x3::validator
@@ -550,6 +553,9 @@ validator_address_by_pool_id
 pool_exchange_rates
 	public(package) fun
 	0x3::validator_set
+validator_by_pool_id
+	public(package) fun
+	0x3::validator_set
 next_epoch_validator_count
 	public(package) fun
 	0x3::validator_set
@@ -889,6 +895,12 @@ extract_coin_balance
 store_execution_time_estimates
 	public(package) fun
 	0x3::sui_system_state_inner
+validators
+	public(package) fun
+	0x3::sui_system_state_inner
+validators_mut
+	public(package) fun
+	0x3::sui_system_state_inner
 SuiSystemState
 	public struct
 	0x3::sui_system
@@ -1012,6 +1024,9 @@ pool_exchange_rates
 active_validator_addresses
 	public fun
 	0x3::sui_system
+calculate_rewards
+	public(package) fun
+	0x3::sui_system
 advance_epoch
 	fun
 	0x3::sui_system
@@ -1087,45 +1102,6 @@ vdf_verify
 vdf_verify_internal
 	fun
 	0x2::vdf
-encode
-	public fun
-	0x2::hex
-decode
-	public fun
-	0x2::hex
-decode_byte
-	fun
-	0x2::hex
-to_u256
-	public fun
-	0x2::address
-from_u256
-	public fun
-	0x2::address
-from_bytes
-	public fun
-	0x2::address
-to_bytes
-	public fun
-	0x2::address
-to_ascii_string
-	public fun
-	0x2::address
-to_string
-	public fun
-	0x2::address
-from_ascii_bytes
-	public fun
-	0x2::address
-hex_char_value
-	fun
-	0x2::address
-length
-	public fun
-	0x2::address
-max
-	public fun
-	0x2::address
 TxContext
 	public struct
 	0x2::tx_context
@@ -1159,13 +1135,19 @@ fresh_object_address
 fresh_id
 	fun
 	0x2::tx_context
-ids_created
+reference_gas_price
+	public fun
+	0x2::tx_context
+native_rgp
+	fun
+	0x2::tx_context
+gas_price
+	public fun
+	0x2::tx_context
+native_gas_price
 	fun
 	0x2::tx_context
 native_ids_created
-	fun
-	0x2::tx_context
-native_gas_price
 	fun
 	0x2::tx_context
 native_gas_budget
@@ -1264,6 +1246,45 @@ is_single_owner
 into_native
 	public(package) fun
 	0x2::party
+encode
+	public fun
+	0x2::hex
+decode
+	public fun
+	0x2::hex
+decode_byte
+	fun
+	0x2::hex
+to_u256
+	public fun
+	0x2::address
+from_u256
+	public fun
+	0x2::address
+from_bytes
+	public fun
+	0x2::address
+to_bytes
+	public fun
+	0x2::address
+to_ascii_string
+	public fun
+	0x2::address
+to_string
+	public fun
+	0x2::address
+from_ascii_bytes
+	public fun
+	0x2::address
+hex_char_value
+	fun
+	0x2::address
+length
+	public fun
+	0x2::address
+max
+	public fun
+	0x2::address
 ID
 	public struct
 	0x2::object
@@ -1295,6 +1316,12 @@ randomness_state
 	public(package) fun
 	0x2::object
 sui_deny_list_object_id
+	public(package) fun
+	0x2::object
+sui_accumulator_root_object_id
+	public(package) fun
+	0x2::object
+sui_accumulator_root_address
 	public(package) fun
 	0x2::object
 bridge
@@ -1444,6 +1471,45 @@ has_child_object
 has_child_object_with_ty
 	public(package) fun
 	0x2::dynamic_field
+AccumulatorRoot
+	public struct
+	0x2::accumulator
+Key
+	public struct
+	0x2::accumulator
+U128
+	public struct
+	0x2::accumulator
+create
+	fun
+	0x2::accumulator
+accumulator_address
+	public(package) fun
+	0x2::accumulator
+root_has_accumulator
+	fun
+	0x2::accumulator
+root_add_accumulator
+	fun
+	0x2::accumulator
+root_borrow_accumulator_mut
+	fun
+	0x2::accumulator
+root_remove_accumulator
+	fun
+	0x2::accumulator
+settlement_prologue
+	fun
+	0x2::accumulator
+settle_u128
+	fun
+	0x2::accumulator
+emit_deposit_event
+	public(package) fun
+	0x2::accumulator
+emit_withdraw_event
+	public(package) fun
+	0x2::accumulator
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1575,6 +1641,12 @@ destroy_storage_rebates
 	0x2::balance
 destroy_supply
 	public(package) fun
+	0x2::balance
+send_to_account
+	fun
+	0x2::balance
+withdraw_from_account
+	fun
 	0x2::balance
 BCS
 	public struct
@@ -1965,12 +2037,6 @@ from_keys
 	0x2::vec_set
 keys
 	public fun
-	0x2::vec_set
-get_idx_opt
-	fun
-	0x2::vec_set
-get_idx
-	fun
 	0x2::vec_set
 Table
 	public struct
@@ -4511,6 +4577,12 @@ insert
 	public fun
 	0x1::vector
 swap_remove
+	public fun
+	0x1::vector
+skip
+	public fun
+	0x1::vector
+take
 	public fun
 	0x1::vector
 flatten

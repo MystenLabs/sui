@@ -9,6 +9,8 @@ use crate::{
     GroupedObjectOutput, SnapshotVerifyMode, VerboseObjectOutput,
 };
 use anyhow::Result;
+use consensus_core::storage::{rocksdb_store::RocksDBStore, Store};
+use consensus_core::{BlockAPI, CommitAPI, CommitRange};
 use futures::{future::join_all, StreamExt};
 use std::path::PathBuf;
 use std::{collections::BTreeMap, env, sync::Arc};
@@ -17,6 +19,7 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
 use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
+use sui_types::messages_consensus::ConsensusTransaction;
 use telemetry_subscribers::TracingHandle;
 
 use sui_types::{
@@ -42,6 +45,16 @@ pub enum Verbosity {
 
 #[derive(Parser)]
 pub enum ToolCommand {
+    #[command(name = "scan-consensus-commits")]
+    ScanConsensusCommits {
+        #[arg(long = "db-path")]
+        db_path: String,
+        #[arg(long = "start-commit")]
+        start_commit: Option<u32>,
+        #[arg(long = "end-commit")]
+        end_commit: Option<u32>,
+    },
+
     /// Inspect if a specific object is or all gas objects owned by an address are locked by validators
     #[command(name = "locked-object")]
     LockedObject {
@@ -56,9 +69,6 @@ pub enum ToolCommand {
         /// RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
-        /// If true, uses plain HTTP to connect to validator interface
-        #[arg(long = "no-tls")]
-        no_tls: bool,
         /// Should attempt to rescue the object if it's locked but not fully locked
         #[arg(long = "rescue")]
         rescue: bool,
@@ -82,10 +92,6 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
-
-        /// If true, uses plain HTTP to connect to validator interface
-        #[arg(long = "no-tls")]
-        no_tls: bool,
 
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
@@ -116,10 +122,6 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
-
-        /// If true, uses plain HTTP to connect to validator interface
-        #[arg(long = "no-tls")]
-        no_tls: bool,
 
         #[arg(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -189,10 +191,6 @@ pub enum ToolCommand {
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: String,
-
-        /// If true, uses plain HTTP to connect to validator interface
-        #[arg(long = "no-tls")]
-        no_tls: bool,
 
         #[arg(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -389,9 +387,8 @@ async fn check_locked_object(
     committee: Arc<BTreeMap<AuthorityPublicKeyBytes, u64>>,
     id: ObjectID,
     rescue: bool,
-    use_tls: bool,
 ) -> anyhow::Result<()> {
-    let clients = Arc::new(make_clients(sui_client, use_tls).await?);
+    let clients = Arc::new(make_clients(sui_client).await?);
     let output = get_object(id, None, None, clients.clone()).await?;
     let output = GroupedObjectOutput::new(output, committee);
     if output.fully_locked {
@@ -451,10 +448,45 @@ impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
     pub async fn execute(self, tracing_handle: TracingHandle) -> Result<(), anyhow::Error> {
         match self {
+            ToolCommand::ScanConsensusCommits {
+                db_path,
+                start_commit,
+                end_commit,
+            } => {
+                let rocks_db_store = RocksDBStore::new(&db_path);
+
+                let start_commit = start_commit.unwrap_or(0);
+                let end_commit = end_commit.unwrap_or(u32::MAX);
+
+                let commits = rocks_db_store
+                    .scan_commits(CommitRange::new(start_commit..=end_commit))
+                    .unwrap();
+                println!("found {} consensus commits", commits.len());
+
+                for commit in commits {
+                    let inner = &*commit;
+                    let block_refs = inner.blocks();
+                    let blocks = rocks_db_store.read_blocks(block_refs).unwrap();
+
+                    for block in blocks.iter().flatten() {
+                        let data = block.transactions_data();
+                        println!(
+                            "\"index\": \"{}\", \"leader\": \"{}\", \"blocks\": \"{:#?}\", {} txs",
+                            inner.index(),
+                            inner.leader(),
+                            inner.blocks(),
+                            data.len()
+                        );
+                        for txns in &data {
+                            let tx: ConsensusTransaction = bcs::from_bytes(txns).unwrap();
+                            println!("\t{:?}", tx.key());
+                        }
+                    }
+                }
+            }
             ToolCommand::LockedObject {
                 id,
                 fullnode_rpc_url,
-                no_tls,
                 rescue,
                 address,
             } => {
@@ -489,7 +521,6 @@ impl ToolCommand {
                             committee.clone(),
                             *id,
                             rescue,
-                            !no_tls,
                         ))
                     }
                     join_all(tasks)
@@ -503,13 +534,12 @@ impl ToolCommand {
                 validator,
                 version,
                 fullnode_rpc_url,
-                no_tls,
                 verbosity,
                 concise_no_header,
             } => {
                 let sui_client =
                     Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
-                let clients = Arc::new(make_clients(&sui_client, !no_tls).await?);
+                let clients = Arc::new(make_clients(&sui_client).await?);
                 let output = get_object(id, version, validator, clients).await?;
 
                 match verbosity {
@@ -540,11 +570,10 @@ impl ToolCommand {
                 digest,
                 show_input_tx,
                 fullnode_rpc_url,
-                no_tls,
             } => {
                 print!(
                     "{}",
-                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url, !no_tls).await?
+                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
                 );
             }
             ToolCommand::DbTool { db_path, cmd } => {
@@ -593,11 +622,10 @@ impl ToolCommand {
             ToolCommand::FetchCheckpoint {
                 sequence_number,
                 fullnode_rpc_url,
-                no_tls,
             } => {
                 let sui_client =
                     Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
-                let clients = make_clients(&sui_client, !no_tls).await?;
+                let clients = make_clients(&sui_client).await?;
 
                 for (name, (_, client)) in clients {
                     let resp = client
@@ -611,6 +639,17 @@ impl ToolCommand {
                         checkpoint,
                         contents,
                     } = resp;
+
+                    let summary = checkpoint.clone().unwrap().data().clone();
+                    // write summary to file
+                    let mut file = std::fs::File::create("/tmp/ckpt_summary")
+                        .expect("Failed to create /tmp/summary");
+                    let bytes =
+                        bcs::to_bytes(&summary).expect("Failed to serialize summary to BCS");
+                    use std::io::Write;
+                    file.write_all(&bytes)
+                        .expect("Failed to write summary to /tmp/ckpt_summary");
+
                     println!("Validator: {:?}\n", name.concise());
                     println!("Checkpoint: {:?}\n", checkpoint);
                     println!("Content: {:?}\n", contents);

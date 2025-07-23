@@ -62,10 +62,10 @@ Implement these features in your wallet class under the `features` property:
 
 ```tsx
 import {
-  ConnectFeature,
-  ConnectMethod,
-  EventsFeature,
-  EventsOnMethod,
+  StandardConnectFeature,
+  StandardConnectMethod,
+  StandardEventsFeature,
+  StandardEventsOnMethod,
   SuiFeatures,
   SuiSignPersonalMessageMethod,
   SuiSignTransactionMethod,
@@ -102,7 +102,7 @@ class YourWallet implements Wallet {
         version: "1.0.0",
         reportTransactionEffects: this.#reportTransactionEffects,
     };
-  },
+  };
 
   #on: EventsOnMethod = () => {
     // Your wallet's events on implementation.
@@ -330,4 +330,4 @@ These values are all arrays containing the new or changed items. Consequently, e
 
 ### Implementation example
 
-Mysten Labs offers a bare bones scaffold for React-based applications called `@mysten/dapp-kit`. See the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit) for more informqtion.
+Mysten Labs offers a bare bones scaffold for React-based applications called `@mysten/dapp-kit`. See the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit) for more information.

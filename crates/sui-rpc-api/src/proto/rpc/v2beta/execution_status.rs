@@ -16,11 +16,20 @@ impl From<sui_sdk_types::ExecutionStatus> for super::ExecutionStatus {
                 error: None,
             },
             sui_sdk_types::ExecutionStatus::Failure { error, command } => {
-                let mut error = super::ExecutionError::from(error);
-                error.command = command;
+                let mut error_message = super::ExecutionError::from(error.clone());
+                error_message.command = command;
+                error_message.description = {
+                    let error = sui_types::execution_status::ExecutionFailureStatus::from(error);
+                    if let Some(command) = command {
+                        format!("{error:?} in command {command}")
+                    } else {
+                        format!("{error:?}")
+                    }
+                }
+                .pipe(Some);
                 Self {
                     success: Some(false),
-                    error: Some(error),
+                    error: Some(error_message),
                 }
             }
         }
@@ -188,6 +197,28 @@ impl From<sui_sdk_types::ExecutionError> for super::ExecutionError {
             ExecutionCanceledDueToRandomnessUnavailable => {
                 ExecutionErrorKind::ExecutionCanceledDueToRandomnessUnavailable
             }
+            MoveVectorElemTooBig {
+                value_size,
+                max_scaled_size,
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(value_size),
+                    max_size: Some(max_scaled_size),
+                });
+
+                ExecutionErrorKind::MoveVectorElemTooBig
+            }
+            MoveRawValueTooBig {
+                value_size,
+                max_scaled_size,
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(value_size),
+                    max_size: Some(max_scaled_size),
+                });
+                ExecutionErrorKind::MoveRawValueTooBig
+            }
+            InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
         };
 
         message.set_kind(kind);
@@ -203,7 +234,6 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
 
         match value.kind() {
             Unknown => return Err(TryFromProtoError::from_error("unknown ExecutionErrorKind")),
-
             InsufficientGas => Self::InsufficientGas,
             InvalidGasObject => Self::InvalidGasObject,
             InvariantViolation => Self::InvariantViolation,
@@ -372,6 +402,31 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
             ExecutionCanceledDueToRandomnessUnavailable => {
                 Self::ExecutionCanceledDueToRandomnessUnavailable
             }
+            MoveVectorElemTooBig => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+
+                Self::MoveVectorElemTooBig {
+                    value_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
+                    max_scaled_size: max_size
+                        .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+                }
+            }
+            MoveRawValueTooBig => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+
+                Self::MoveRawValueTooBig {
+                    value_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
+                    max_scaled_size: max_size
+                        .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+                }
+            }
+            InvalidLinkage => Self::InvalidLinkage,
         }
         .pipe(Ok)
     }
@@ -415,6 +470,7 @@ impl From<sui_sdk_types::CommandArgumentError> for super::CommandArgumentError {
             SharedObjectOperationNotAllowed => {
                 CommandArgumentErrorKind::SharedObjectOperationNotAllowed
             }
+            InvalidArgumentArity => CommandArgumentErrorKind::InvalidArgumentArity,
         };
 
         message.set_kind(kind);
@@ -465,6 +521,7 @@ impl TryFrom<&super::CommandArgumentError> for sui_sdk_types::CommandArgumentErr
             InvalidObjectByValue => Self::InvalidObjectByValue,
             InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
             SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            InvalidArgumentArity => Self::InvalidArgumentArity,
         }
         .pipe(Ok)
     }

@@ -291,7 +291,7 @@ impl ValidatorMetadataV1 {
 /// Rust version of the Move sui::validator::Validator type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct ValidatorV1 {
-    metadata: ValidatorMetadataV1,
+    pub metadata: ValidatorMetadataV1,
     #[serde(skip)]
     verified_metadata: OnceCell<VerifiedValidatorMetadataV1>,
 

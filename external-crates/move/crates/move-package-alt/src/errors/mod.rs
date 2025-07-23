@@ -3,32 +3,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod lockfile_error;
-mod manifest_error;
-use append_only_vec::AppendOnlyVec;
-use codespan_reporting::files::SimpleFile;
-use codespan_reporting::files::SimpleFiles;
+use codespan_reporting::diagnostic::Diagnostic;
+use codespan_reporting::term;
+use codespan_reporting::term::Config;
+use codespan_reporting::term::termcolor::ColorChoice;
+use codespan_reporting::term::termcolor::StandardStream;
 pub use lockfile_error::LockfileError;
-pub use manifest_error::ManifestError;
-pub use manifest_error::ManifestErrorKind;
 
 mod located;
-pub use located::{Located, with_file};
+pub use located::Location;
 
 mod files;
 pub use files::FileHandle;
+pub use files::Files;
 
-use std::fs;
-use std::path::Path;
-use std::sync::LazyLock;
-use std::sync::Mutex;
-use std::{ops::Range, path::PathBuf};
-
-use codespan_reporting::diagnostic::Diagnostic;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::dependency::external::ResolverError;
-use crate::git::errors::GitError;
+use crate::dependency::ResolverError;
+use crate::git::GitError;
+use crate::graph::LinkageError;
+use crate::graph::RenameError;
+use crate::package::manifest::ManifestError;
+use crate::package::paths::PackagePathError;
 
 /// Result type for package operations
 pub type PackageResult<T> = Result<T, PackageError>;
@@ -62,22 +58,28 @@ pub enum PackageError {
 
     #[error(transparent)]
     Resolver(#[from] ResolverError),
+
+    #[error(transparent)]
+    PackagePath(#[from] PackagePathError),
+
+    #[error(transparent)]
+    Linkage(#[from] LinkageError),
+
+    #[error(transparent)]
+    RenameFrom(#[from] RenameError),
 }
 
 impl PackageError {
-    pub fn to_diagnostic(&self) -> Diagnostic<usize> {
+    pub fn to_diagnostic(&self) -> Diagnostic<FileHandle> {
         match self {
-            Self::Manifest(err) => err.to_diagnostic(),
-            _ => Diagnostic::error()
-                .with_message(self.to_string())
-                .with_labels(vec![]),
+            Self::Manifest(e) => e.to_diagnostic(),
+            _ => Diagnostic::error().with_message(format!("{self}")),
         }
     }
 
-    pub fn emit(&self) -> Result<(), codespan_reporting::files::Error> {
-        match self {
-            Self::Manifest(err) => err.emit(),
-            _ => Ok(()),
-        }
+    pub fn emit(&self) {
+        let diagnostic = self.to_diagnostic();
+        let mut writer = StandardStream::stderr(ColorChoice::Auto);
+        term::emit(&mut writer, &Config::default(), &Files, &diagnostic).unwrap();
     }
 }

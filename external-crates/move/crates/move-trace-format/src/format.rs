@@ -9,7 +9,10 @@ use move_binary_format::{
     file_format::{Bytecode, FunctionDefinitionIndex as BinaryFunctionDefinitionIndex},
     file_format_common::instruction_opcode,
 };
-use move_core_types::language_storage::{ModuleId, TypeTag};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, TypeTag},
+};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::{fmt::Display, sync::mpsc::Receiver};
@@ -23,7 +26,7 @@ pub type TraceVersion = u64;
 pub const TRACE_FILE_EXTENSION: &str = "json.zst";
 
 /// The current version of the trace format.
-const TRACE_VERSION: TraceVersion = 2;
+const TRACE_VERSION: TraceVersion = 3;
 
 /// Compression level for the trace. This is the level of compression that we will use for the
 /// trace in zstd.
@@ -114,6 +117,7 @@ pub struct Frame {
     pub frame_id: TraceIndex,
     pub function_name: String,
     pub module: ModuleId,
+    pub version_id: AccountAddress,
     // External pointer out into the module -- the `FunctionDefinitionIndex` in the module.
     pub binary_member_index: u16,
     pub type_instantiation: Vec<TypeTag>,
@@ -332,6 +336,7 @@ impl MoveTraceBuilder {
         binary_member_index: BinaryFunctionDefinitionIndex,
         name: String,
         module: ModuleId,
+        version_id: AccountAddress,
         parameters: Vec<TraceValue>,
         type_instantiation: Vec<TypeTag>,
         return_types: Vec<TypeTagWithRefs>,
@@ -343,6 +348,7 @@ impl MoveTraceBuilder {
             frame_id,
             function_name: name,
             module,
+            version_id,
             binary_member_index: binary_member_index.0,
             type_instantiation,
             parameters,
@@ -389,7 +395,7 @@ impl MoveTraceBuilder {
 
     // All events pushed to the trace are first pushed, and then the tracer is notified of the
     // event.
-    fn push_event(&mut self, event: TraceEvent) {
+    pub fn push_event(&mut self, event: TraceEvent) {
         self.trace.push_event(event.clone());
         self.tracer.notify(&event, Writer(&mut self.trace));
     }

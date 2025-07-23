@@ -3,22 +3,23 @@
 
 #[cfg(test)]
 pub(crate) mod mem_store;
-pub(crate) mod rocksdb_store;
+pub mod rocksdb_store;
 
 #[cfg(test)]
 mod store_tests;
 
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
+    block::VerifiedBlock,
     commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
     CommitIndex,
 };
 
 /// A common interface for consensus storage.
-pub(crate) trait Store: Send + Sync {
+pub trait Store: Send + Sync {
     /// Writes blocks, consensus commits and other data to store atomically.
     fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()>;
 
@@ -60,14 +61,14 @@ pub(crate) trait Store: Send + Sync {
 
 /// Represents data to be written to the store together atomically.
 #[derive(Debug, Default)]
-pub(crate) struct WriteBatch {
-    pub(crate) blocks: Vec<VerifiedBlock>,
-    pub(crate) commits: Vec<TrustedCommit>,
-    pub(crate) commit_info: Vec<(CommitRef, CommitInfo)>,
+pub struct WriteBatch {
+    pub blocks: Vec<VerifiedBlock>,
+    pub commits: Vec<TrustedCommit>,
+    pub commit_info: Vec<(CommitRef, CommitInfo)>,
 }
 
 impl WriteBatch {
-    pub(crate) fn new(
+    pub fn new(
         blocks: Vec<VerifiedBlock>,
         commits: Vec<TrustedCommit>,
         commit_info: Vec<(CommitRef, CommitInfo)>,
@@ -82,19 +83,19 @@ impl WriteBatch {
     // Test setters.
 
     #[cfg(test)]
-    pub(crate) fn blocks(mut self, blocks: Vec<VerifiedBlock>) -> Self {
+    pub fn blocks(mut self, blocks: Vec<VerifiedBlock>) -> Self {
         self.blocks = blocks;
         self
     }
 
     #[cfg(test)]
-    pub(crate) fn commits(mut self, commits: Vec<TrustedCommit>) -> Self {
+    pub fn commits(mut self, commits: Vec<TrustedCommit>) -> Self {
         self.commits = commits;
         self
     }
 
     #[cfg(test)]
-    pub(crate) fn commit_info(mut self, commit_info: Vec<(CommitRef, CommitInfo)>) -> Self {
+    pub fn commit_info(mut self, commit_info: Vec<(CommitRef, CommitInfo)>) -> Self {
         self.commit_info = commit_info;
         self
     }

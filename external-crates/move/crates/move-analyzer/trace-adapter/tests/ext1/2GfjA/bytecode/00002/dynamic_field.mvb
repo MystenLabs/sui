@@ -1,0 +1,245 @@
+// Move bytecode v6
+module 2.dynamic_field {
+use 0000000000000000000000000000000000000000000000000000000000000001::option;
+use 0000000000000000000000000000000000000000000000000000000000000002::object;
+
+struct Field<Ty0: copy + drop + store, Ty1: store> has key {
+	id: UID,
+	name: Ty0,
+	value: Ty1
+}
+
+public add<Ty0: copy + drop + store, Ty1: store>(Arg0: &mut UID, Arg1: Ty0, Arg2: Ty1) {
+L3:	loc0: Field<Ty0, Ty1>
+L4:	loc1: address
+L5:	loc2: address
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: FreezeRef
+	2: Call object::uid_to_address(&UID): address
+	3: StLoc[5](loc2: address)
+	4: CopyLoc[5](loc2: address)
+	5: CopyLoc[1](Arg1: Ty0)
+	6: Call hash_type_and_key<Ty0>(address, Ty0): address
+	7: StLoc[4](loc1: address)
+	8: CopyLoc[5](loc2: address)
+	9: CopyLoc[4](loc1: address)
+	10: Call has_child_object(address, address): bool
+	11: Not
+	12: BrFalse(14)
+B1:
+	13: Branch(16)
+B2:
+	14: LdConst[0](u64: 0)
+	15: Abort
+B3:
+	16: MoveLoc[4](loc1: address)
+	17: Call object::new_uid_from_hash(address): UID
+	18: MoveLoc[1](Arg1: Ty0)
+	19: MoveLoc[2](Arg2: Ty1)
+	20: PackGeneric[0](Field<Ty0, Ty1>)
+	21: StLoc[3](loc0: Field<Ty0, Ty1>)
+	22: MoveLoc[5](loc2: address)
+	23: MoveLoc[3](loc0: Field<Ty0, Ty1>)
+	24: Call add_child_object<Field<Ty0, Ty1>>(address, Field<Ty0, Ty1>)
+	25: Ret
+}
+
+public borrow<Ty0: copy + drop + store, Ty1: store>(Arg0: &UID, Arg1: Ty0): &Ty1 {
+L2:	loc0: address
+B0:
+	0: CopyLoc[0](Arg0: &UID)
+	1: Call object::uid_to_address(&UID): address
+	2: MoveLoc[1](Arg1: Ty0)
+	3: Call hash_type_and_key<Ty0>(address, Ty0): address
+	4: StLoc[2](loc0: address)
+	5: MoveLoc[0](Arg0: &UID)
+	6: MoveLoc[2](loc0: address)
+	7: Call borrow_child_object<Field<Ty0, Ty1>>(&UID, address): &Field<Ty0, Ty1>
+	8: ImmBorrowFieldGeneric[0](Field.value: Ty1)
+	9: Ret
+}
+
+public borrow_mut<Ty0: copy + drop + store, Ty1: store>(Arg0: &mut UID, Arg1: Ty0): &mut Ty1 {
+L2:	loc0: address
+B0:
+	0: CopyLoc[0](Arg0: &mut UID)
+	1: FreezeRef
+	2: Call object::uid_to_address(&UID): address
+	3: MoveLoc[1](Arg1: Ty0)
+	4: Call hash_type_and_key<Ty0>(address, Ty0): address
+	5: StLoc[2](loc0: address)
+	6: MoveLoc[0](Arg0: &mut UID)
+	7: MoveLoc[2](loc0: address)
+	8: Call borrow_child_object_mut<Field<Ty0, Ty1>>(&mut UID, address): &mut Field<Ty0, Ty1>
+	9: MutBorrowFieldGeneric[0](Field.value: Ty1)
+	10: Ret
+}
+
+public remove<Ty0: copy + drop + store, Ty1: store>(Arg0: &mut UID, Arg1: Ty0): Ty1 {
+L2:	loc0: address
+L3:	loc1: address
+L4:	loc2: Ty1
+B0:
+	0: MoveLoc[0](Arg0: &mut UID)
+	1: FreezeRef
+	2: Call object::uid_to_address(&UID): address
+	3: StLoc[3](loc1: address)
+	4: CopyLoc[3](loc1: address)
+	5: MoveLoc[1](Arg1: Ty0)
+	6: Call hash_type_and_key<Ty0>(address, Ty0): address
+	7: StLoc[2](loc0: address)
+	8: MoveLoc[3](loc1: address)
+	9: MoveLoc[2](loc0: address)
+	10: Call remove_child_object<Field<Ty0, Ty1>>(address, address): Field<Ty0, Ty1>
+	11: UnpackGeneric[0](Field<Ty0, Ty1>)
+	12: StLoc[4](loc2: Ty1)
+	13: Pop
+	14: Call object::delete(UID)
+	15: MoveLoc[4](loc2: Ty1)
+	16: Ret
+}
+
+public exists_<Ty0: copy + drop + store>(Arg0: &UID, Arg1: Ty0): bool {
+L2:	loc0: address
+L3:	loc1: address
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: Call object::uid_to_address(&UID): address
+	2: StLoc[3](loc1: address)
+	3: CopyLoc[3](loc1: address)
+	4: MoveLoc[1](Arg1: Ty0)
+	5: Call hash_type_and_key<Ty0>(address, Ty0): address
+	6: StLoc[2](loc0: address)
+	7: MoveLoc[3](loc1: address)
+	8: MoveLoc[2](loc0: address)
+	9: Call has_child_object(address, address): bool
+	10: Ret
+}
+
+public remove_if_exists<Ty0: copy + drop + store, Ty1: store>(Arg0: &mut UID, Arg1: Ty0): Option<Ty1> {
+L2:	loc0: Option<Ty1>
+B0:
+	0: CopyLoc[0](Arg0: &mut UID)
+	1: FreezeRef
+	2: CopyLoc[1](Arg1: Ty0)
+	3: Call exists_<Ty0>(&UID, Ty0): bool
+	4: BrFalse(11)
+B1:
+	5: MoveLoc[0](Arg0: &mut UID)
+	6: MoveLoc[1](Arg1: Ty0)
+	7: Call remove<Ty0, Ty1>(&mut UID, Ty0): Ty1
+	8: Call option::some<Ty1>(Ty1): Option<Ty1>
+	9: StLoc[2](loc0: Option<Ty1>)
+	10: Branch(15)
+B2:
+	11: MoveLoc[0](Arg0: &mut UID)
+	12: Pop
+	13: Call option::none<Ty1>(): Option<Ty1>
+	14: StLoc[2](loc0: Option<Ty1>)
+B3:
+	15: MoveLoc[2](loc0: Option<Ty1>)
+	16: Ret
+}
+
+public exists_with_type<Ty0: copy + drop + store, Ty1: store>(Arg0: &UID, Arg1: Ty0): bool {
+L2:	loc0: address
+L3:	loc1: address
+B0:
+	0: MoveLoc[0](Arg0: &UID)
+	1: Call object::uid_to_address(&UID): address
+	2: StLoc[3](loc1: address)
+	3: CopyLoc[3](loc1: address)
+	4: MoveLoc[1](Arg1: Ty0)
+	5: Call hash_type_and_key<Ty0>(address, Ty0): address
+	6: StLoc[2](loc0: address)
+	7: MoveLoc[3](loc1: address)
+	8: MoveLoc[2](loc0: address)
+	9: Call has_child_object_with_ty<Field<Ty0, Ty1>>(address, address): bool
+	10: Ret
+}
+
+public(friend) field_info<Ty0: copy + drop + store>(Arg0: &UID, Arg1: Ty0): &UID * address {
+L2:	loc0: &Field<Ty0, ID>
+L3:	loc1: address
+L4:	loc2: &UID
+L5:	loc3: &ID
+B0:
+	0: CopyLoc[0](Arg0: &UID)
+	1: Call object::uid_to_address(&UID): address
+	2: MoveLoc[1](Arg1: Ty0)
+	3: Call hash_type_and_key<Ty0>(address, Ty0): address
+	4: StLoc[3](loc1: address)
+	5: MoveLoc[0](Arg0: &UID)
+	6: MoveLoc[3](loc1: address)
+	7: Call borrow_child_object<Field<Ty0, ID>>(&UID, address): &Field<Ty0, ID>
+	8: StLoc[2](loc0: &Field<Ty0, ID>)
+	9: CopyLoc[2](loc0: &Field<Ty0, ID>)
+	10: ImmBorrowFieldGeneric[1](Field.id: UID)
+	11: StLoc[4](loc2: &UID)
+	12: CopyLoc[2](loc0: &Field<Ty0, ID>)
+	13: ImmBorrowFieldGeneric[2](Field.name: Ty0)
+	14: Pop
+	15: MoveLoc[2](loc0: &Field<Ty0, ID>)
+	16: ImmBorrowFieldGeneric[3](Field.value: ID)
+	17: StLoc[5](loc3: &ID)
+	18: MoveLoc[4](loc2: &UID)
+	19: MoveLoc[5](loc3: &ID)
+	20: Call object::id_to_address(&ID): address
+	21: Ret
+}
+
+public(friend) field_info_mut<Ty0: copy + drop + store>(Arg0: &mut UID, Arg1: Ty0): &mut UID * address {
+L2:	loc0: &mut Field<Ty0, ID>
+L3:	loc1: address
+L4:	loc2: &mut UID
+L5:	loc3: &mut ID
+B0:
+	0: CopyLoc[0](Arg0: &mut UID)
+	1: FreezeRef
+	2: Call object::uid_to_address(&UID): address
+	3: MoveLoc[1](Arg1: Ty0)
+	4: Call hash_type_and_key<Ty0>(address, Ty0): address
+	5: StLoc[3](loc1: address)
+	6: MoveLoc[0](Arg0: &mut UID)
+	7: MoveLoc[3](loc1: address)
+	8: Call borrow_child_object_mut<Field<Ty0, ID>>(&mut UID, address): &mut Field<Ty0, ID>
+	9: StLoc[2](loc0: &mut Field<Ty0, ID>)
+	10: CopyLoc[2](loc0: &mut Field<Ty0, ID>)
+	11: MutBorrowFieldGeneric[1](Field.id: UID)
+	12: StLoc[4](loc2: &mut UID)
+	13: CopyLoc[2](loc0: &mut Field<Ty0, ID>)
+	14: MutBorrowFieldGeneric[2](Field.name: Ty0)
+	15: Pop
+	16: MoveLoc[2](loc0: &mut Field<Ty0, ID>)
+	17: MutBorrowFieldGeneric[3](Field.value: ID)
+	18: StLoc[5](loc3: &mut ID)
+	19: MoveLoc[4](loc2: &mut UID)
+	20: MoveLoc[5](loc3: &mut ID)
+	21: FreezeRef
+	22: Call object::id_to_address(&ID): address
+	23: Ret
+}
+
+native public(friend) hash_type_and_key<Ty0: copy + drop + store>(Arg0: address, Arg1: Ty0): address;
+
+native public(friend) add_child_object<Ty0: key>(Arg0: address, Arg1: Ty0);
+
+native public(friend) borrow_child_object<Ty0: key>(Arg0: &UID, Arg1: address): &Ty0;
+
+native public(friend) borrow_child_object_mut<Ty0: key>(Arg0: &mut UID, Arg1: address): &mut Ty0;
+
+native public(friend) remove_child_object<Ty0: key>(Arg0: address, Arg1: address): Ty0;
+
+native public(friend) has_child_object(Arg0: address, Arg1: address): bool;
+
+native public(friend) has_child_object_with_ty<Ty0: key>(Arg0: address, Arg1: address): bool;
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => u64: 2
+	3 => u64: 3
+	4 => u64: 4
+]
+}

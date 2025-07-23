@@ -3,7 +3,9 @@
 
 use crate::base_types::{AuthorityName, ConsensusObjectSequenceKey, ObjectRef, TransactionDigest};
 use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
+use crate::committee::EpochId;
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
+use crate::error::SuiError;
 use crate::execution::ExecutionTimeObservationKey;
 use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::supported_protocol_versions::{
@@ -11,6 +13,8 @@ use crate::supported_protocol_versions::{
 };
 use crate::transaction::{CertifiedTransaction, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
+use bytes::Bytes;
+use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::dkg_v1;
@@ -27,14 +31,58 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// The value should be the same in Sui committee.
 pub type AuthorityIndex = u32;
 
+// TODO: Switch to using consensus_types::block::Round?
 /// Consensus round number in u64 instead of u32 for compatibility with Narwhal.
 pub type Round = u64;
 
-/// The index of a transaction in a consensus block.
-pub type TransactionIndex = u16;
-
+// TODO: Switch to using consensus_types::block::BlockTimestampMs?
 /// Non-decreasing timestamp produced by consensus in ms.
 pub type TimestampMs = u64;
+
+/// The position of a transaction in consensus.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ConsensusPosition {
+    // Epoch of the consensus instance.
+    pub epoch: EpochId,
+    // Block containing a transaction.
+    pub block: BlockRef,
+    // Index of the transaction in the block.
+    pub index: TransactionIndex,
+}
+
+impl ConsensusPosition {
+    pub fn into_raw(self) -> Result<Bytes, SuiError> {
+        bcs::to_bytes(&self)
+            .map_err(|e| SuiError::GrpcMessageSerializeError {
+                type_info: "ConsensusPosition".to_string(),
+                error: e.to_string(),
+            })
+            .map(Bytes::from)
+    }
+}
+
+impl TryFrom<&[u8]> for ConsensusPosition {
+    type Error = SuiError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        bcs::from_bytes(bytes).map_err(|e| SuiError::GrpcMessageDeserializeError {
+            type_info: "ConsensusPosition".to_string(),
+            error: e.to_string(),
+        })
+    }
+}
+
+impl std::fmt::Display for ConsensusPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "P(E{}, {}, {})", self.epoch, self.block, self.index)
+    }
+}
+
+impl std::fmt::Debug for ConsensusPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "P(E{}, {:?}, {})", self.epoch, self.block, self.index)
+    }
+}
 
 /// Only commit_timestamp_ms is passed to the move call currently.
 /// However we include epoch and round to make sure each ConsensusCommitPrologue has a unique tx digest.
@@ -322,14 +370,9 @@ pub struct ExecutionTimeObservation {
 impl ExecutionTimeObservation {
     pub fn new(
         authority: AuthorityName,
+        generation: u64,
         estimates: Vec<(ExecutionTimeObservationKey, Duration)>,
     ) -> Self {
-        let generation = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Sui did not exist prior to 1970")
-            .as_micros()
-            .try_into()
-            .expect("This build of sui is not supported in the year 500,000");
         Self {
             authority,
             generation,

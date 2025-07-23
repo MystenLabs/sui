@@ -30,7 +30,6 @@ const ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE: &str = "OBJECTS_BLOCK_CACHE_MB";
 pub(crate) const ENV_VAR_LOCKS_BLOCK_CACHE_SIZE: &str = "LOCKS_BLOCK_CACHE_MB";
 const ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE: &str = "TRANSACTIONS_BLOCK_CACHE_MB";
 const ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE: &str = "EFFECTS_BLOCK_CACHE_MB";
-const ENV_VAR_EVENTS_BLOCK_CACHE_SIZE: &str = "EVENTS_BLOCK_CACHE_MB";
 
 /// Options to apply to every column family of the `perpetual` DB.
 #[derive(Default)]
@@ -95,11 +94,9 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    // Currently this is needed in the validator for returning events during process certificates.
-    // We could potentially remove this if we decided not to provide events in the execution path.
-    // TODO: Figure out what to do with this table in the long run.
-    // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
-    pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+    #[allow(dead_code)]
+    #[deprecated]
+    events: DBMap<(TransactionEventsDigest, usize), Event>,
 
     // Events keyed by the digest of the transaction that produced them.
     pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
@@ -193,10 +190,6 @@ impl AuthorityPerpetualTables {
                 "effects".to_string(),
                 effects_table_config(db_options.clone()),
             ),
-            (
-                "events".to_string(),
-                events_table_config(db_options.clone()),
-            ),
         ]));
 
         Self::open_tables_read_write(
@@ -212,13 +205,14 @@ impl AuthorityPerpetualTables {
     pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition,
+            default_cells_per_mutex, Bytes, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType,
+            ThConfig,
         };
-        const MUTEXES: usize = 1024;
-        const VALUE_CACHE_SIZE: usize = 20_000;
+        const MUTEXES: usize = 2 * 1024;
+        const VALUE_CACHE_SIZE: usize = 2_000;
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
-        let objects_compactor = |index: &mut BTreeMap<Bytes, WalPosition>| {
+        let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
             const OID_SIZE: usize = 32;
@@ -235,6 +229,7 @@ impl AuthorityPerpetualTables {
         };
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
+        let uniform_key = KeyType::uniform(default_cells_per_mutex());
 
         let configs = vec![
             (
@@ -242,7 +237,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config(
                     32 + 8,
                     MUTEXES,
-                    default_cells_per_mutex() * 4,
+                    KeyType::uniform(default_cells_per_mutex() * 4),
                     KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
                 ),
             ),
@@ -251,45 +246,37 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config(
                     32 + 8 + 32 + 8,
                     MUTEXES,
-                    default_cells_per_mutex() * 4,
+                    KeyType::uniform(default_cells_per_mutex() * 4),
                     bloom_config.clone(),
                 ),
             ),
             (
                 "transactions".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
-                    default_cells_per_mutex(),
-                    KeySpaceConfig::new()
-                        .with_key_reduction(0..16)
-                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    uniform_key,
+                    KeySpaceConfig::new().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "effects".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
-                    default_cells_per_mutex(),
-                    bloom_config
-                        .clone()
-                        .with_key_reduction(0..16)
-                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    uniform_key,
+                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "executed_effects".to_string(),
-                ThConfig::new_with_rm_prefix(
-                    32,
+                ThConfig::new_with_rm_prefix_indexing(
+                    KeyIndexing::key_reduction(32, 0..16),
                     MUTEXES,
-                    default_cells_per_mutex(),
-                    bloom_config
-                        .clone()
-                        .with_key_reduction(0..16)
-                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    uniform_key,
+                    bloom_config.clone().with_value_cache_size(VALUE_CACHE_SIZE),
                     digest_prefix.clone(),
                 ),
             ),
@@ -298,7 +285,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_rm_prefix(
                     32 + 8,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
                 ),
@@ -308,7 +295,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_rm_prefix(
                     32,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
                 ),
@@ -318,44 +305,47 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_rm_prefix(
                     32,
                     MUTEXES,
-                    default_cells_per_mutex(),
+                    uniform_key,
                     KeySpaceConfig::default(),
                     digest_prefix.clone(),
                 ),
             ),
             (
                 "root_state_hash_by_epoch".to_string(),
-                ThConfig::new(8, 1, 1),
+                ThConfig::new(8, 1, KeyType::uniform(1)),
             ),
             (
                 "epoch_start_configuration".to_string(),
-                ThConfig::new(0, 1, 1),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
-            ("pruned_checkpoint".to_string(), ThConfig::new(0, 1, 1)),
+            (
+                "pruned_checkpoint".to_string(),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
+            ),
             (
                 "expected_network_sui_amount".to_string(),
-                ThConfig::new(0, 1, 1),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
                 "expected_storage_fund_imbalance".to_string(),
-                ThConfig::new(0, 1, 1),
+                ThConfig::new(0, 1, KeyType::uniform(1)),
             ),
             (
                 "object_per_epoch_marker_table".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
                     MUTEXES,
-                    default_cells_per_mutex(),
-                    KeySpaceConfig::new_with_key_offset(8),
+                    uniform_key,
+                    KeySpaceConfig::default(),
                 ),
             ),
             (
                 "object_per_epoch_marker_table_v2".to_string(),
-                ThConfig::new_with_config(
-                    32 + 8 + 8,
+                ThConfig::new_with_config_indexing(
+                    KeyIndexing::VariableLength,
                     MUTEXES,
-                    default_cells_per_mutex(),
-                    KeySpaceConfig::new_with_key_offset(8),
+                    uniform_key,
+                    KeySpaceConfig::default(),
                 ),
             ),
         ];
@@ -838,10 +828,4 @@ fn effects_table_config(db_options: DBOptions) -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
-}
-
-fn events_table_config(db_options: DBOptions) -> DBOptions {
-    db_options
-        .optimize_for_write_throughput()
-        .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
 }

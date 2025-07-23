@@ -64,6 +64,7 @@ impl BigtableReader {
                 bigtable_args.statement_timeout(),
                 client_name,
                 Some(registry),
+                None,
             )
             .await
             .map_err(Error::BigtableCreate)?,

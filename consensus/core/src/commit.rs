@@ -3,6 +3,7 @@
 
 use std::{
     cmp::Ordering,
+    collections::BTreeMap,
     fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Deref, Range, RangeInclusive},
@@ -11,15 +12,16 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
+use consensus_types::block::{BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
+    block::{BlockAPI, Slot, VerifiedBlock},
     leader_scoring::ReputationScores,
     storage::Store,
-    TransactionIndex,
 };
 
 /// Index of a commit among all consensus commits.
@@ -55,7 +57,7 @@ pub(crate) type WaveNumber = u32;
 /// sequence of Commits.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[enum_dispatch(CommitAPI)]
-pub(crate) enum Commit {
+pub enum Commit {
     V1(CommitV1),
 }
 
@@ -85,7 +87,7 @@ impl Commit {
 
 /// Accessors to Commit info.
 #[enum_dispatch]
-pub(crate) trait CommitAPI {
+pub trait CommitAPI {
     fn round(&self) -> Round;
     fn index(&self) -> CommitIndex;
     fn previous_digest(&self) -> CommitDigest;
@@ -97,7 +99,7 @@ pub(crate) trait CommitAPI {
 /// Specifies one consensus commit.
 /// It is stored on disk, so it does not contain blocks which are stored individually.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub(crate) struct CommitV1 {
+pub struct CommitV1 {
     /// Index of the commit.
     /// First commit after genesis has an index of 1, then every next commit has an index incremented by 1.
     index: CommitIndex,
@@ -145,7 +147,7 @@ impl CommitAPI for CommitV1 {
 ///
 /// Note: clone() is relatively cheap with the underlying data refcounted.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct TrustedCommit {
+pub struct TrustedCommit {
     inner: Arc<Commit>,
 
     // Cached digest and serialized value, to avoid re-computing these values.
@@ -341,22 +343,32 @@ pub type CommitVote = CommitRef;
 /// each sub-dag (but using a deterministic algorithm).
 #[derive(Clone, PartialEq)]
 pub struct CommittedSubDag {
+    /// Set by Linearizer.
+    ///
     /// A reference to the leader of the sub-dag
     pub leader: BlockRef,
-    // TODO: refactor blocks and rejected_transactions_by_block to CertifiedBlock.
     /// All the committed blocks that are part of this sub-dag
     pub blocks: Vec<VerifiedBlock>,
-    /// Indices of rejected transactions in each block.
-    pub rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
     /// The reference of the commit.
     /// First commit after genesis has a index of 1, then every next commit has a
     /// index incremented by 1.
     pub commit_ref: CommitRef,
+
+    /// Set by CommitObserver.
+    ///
+    /// Whether the commit is produced from local DAG, or received through commit sync.
+    /// In the 2nd case, this commit may not have blocks in the local DAG to finalize it.
+    pub local: bool,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
+
+    /// Set by CommitFinalizer.
+    ///
+    /// Indices of rejected transactions in each block.
+    pub rejected_transactions_by_block: BTreeMap<BlockRef, Vec<TransactionIndex>>,
 }
 
 impl CommittedSubDag {
@@ -364,19 +376,17 @@ impl CommittedSubDag {
     pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
-        rejected_transactions_by_block: Vec<Vec<TransactionIndex>>,
         timestamp_ms: BlockTimestampMs,
         commit_ref: CommitRef,
-        reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Self {
-        assert_eq!(blocks.len(), rejected_transactions_by_block.len());
         Self {
             leader,
             blocks,
-            rejected_transactions_by_block,
             timestamp_ms,
             commit_ref,
-            reputation_scores_desc,
+            local: true,
+            reputation_scores_desc: vec![],
+            rejected_transactions_by_block: BTreeMap::new(),
         }
     }
 }
@@ -395,16 +405,14 @@ impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CommittedSubDag(leader={}, ref={}, blocks=[",
-            self.leader, self.commit_ref
-        )?;
-        for (idx, block) in self.blocks.iter().enumerate() {
-            if idx > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", block.digest())?;
-        }
-        write!(f, "])")
+            "CommittedSubDag(leader={}, ref={}, blocks=[{}])",
+            self.leader,
+            self.commit_ref,
+            self.blocks
+                .iter()
+                .map(|b| b.reference().to_string())
+                .join(", ")
+        )
     }
 }
 
@@ -444,18 +452,16 @@ pub fn load_committed_subdag_from_store(
             commit_block
         })
         .collect::<Vec<_>>();
-    // TODO(fastpath): recover rejected transaction indices from commit.
-    let rejected_transactions = vec![vec![]; blocks.len()];
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
-    CommittedSubDag::new(
+    let mut subdag = CommittedSubDag::new(
         leader_block_ref,
         blocks,
-        rejected_transactions,
         commit.timestamp_ms(),
         commit.reference(),
-        reputation_scores_desc,
-    )
+    );
+    subdag.reputation_scores_desc = reputation_scores_desc;
+    subdag
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -490,9 +496,9 @@ impl LeaderStatus {
         }
     }
 
-    pub(crate) fn into_decided_leader(self) -> Option<DecidedLeader> {
+    pub(crate) fn into_decided_leader(self, direct: bool) -> Option<DecidedLeader> {
         match self {
-            Self::Commit(block) => Some(DecidedLeader::Commit(block)),
+            Self::Commit(block) => Some(DecidedLeader::Commit(block, direct)),
             Self::Skip(slot) => Some(DecidedLeader::Skip(slot)),
             Self::Undecided(..) => None,
         }
@@ -512,7 +518,11 @@ impl Display for LeaderStatus {
 /// Decision of each leader slot.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum DecidedLeader {
-    Commit(VerifiedBlock),
+    /// The committed leader block and whether it is a direct commit.
+    /// It is incorrect to trigger the direct commit optimization when the commit is not.
+    /// So when it is unknown if the commit is direct, the boolean flag should be false.
+    Commit(VerifiedBlock, bool),
+    /// The skipped leader slot where no block is committed.
     Skip(Slot),
 }
 
@@ -520,7 +530,7 @@ impl DecidedLeader {
     // Slot where the leader is decided.
     pub(crate) fn slot(&self) -> Slot {
         match self {
-            Self::Commit(block) => block.reference().into(),
+            Self::Commit(block, _direct) => block.reference().into(),
             Self::Skip(slot) => *slot,
         }
     }
@@ -528,7 +538,7 @@ impl DecidedLeader {
     // Converts to committed block if the decision is to commit. Returns None otherwise.
     pub(crate) fn into_committed_block(self) -> Option<VerifiedBlock> {
         match self {
-            Self::Commit(block) => Some(block),
+            Self::Commit(block, _direct) => Some(block),
             Self::Skip(_) => None,
         }
     }
@@ -536,7 +546,7 @@ impl DecidedLeader {
     #[cfg(test)]
     pub(crate) fn round(&self) -> Round {
         match self {
-            Self::Commit(block) => block.round(),
+            Self::Commit(block, _direct) => block.round(),
             Self::Skip(leader) => leader.round,
         }
     }
@@ -544,7 +554,7 @@ impl DecidedLeader {
     #[cfg(test)]
     pub(crate) fn authority(&self) -> AuthorityIndex {
         match self {
-            Self::Commit(block) => block.author(),
+            Self::Commit(block, _direct) => block.author(),
             Self::Skip(leader) => leader.authority,
         }
     }
@@ -553,7 +563,7 @@ impl DecidedLeader {
 impl Display for DecidedLeader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Commit(block) => write!(f, "Commit({})", block.reference()),
+            Self::Commit(block, _direct) => write!(f, "Commit({})", block.reference()),
             Self::Skip(slot) => write!(f, "Skip({slot})"),
         }
     }
@@ -565,43 +575,43 @@ impl Display for DecidedLeader {
 /// and potentially restoring from an earlier state.
 // TODO: version this struct.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct CommitInfo {
+pub struct CommitInfo {
     pub(crate) committed_rounds: Vec<Round>,
     pub(crate) reputation_scores: ReputationScores,
 }
 
-/// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
+/// `CommitRange` stores a range of `CommitIndex`. The range contains the start (inclusive)
 /// and end (inclusive) commit indices and can be ordered for use as the key of a table.
 ///
-/// NOTE: using Range<CommitIndex> for internal representation for backward compatibility.
-/// The external semantics of CommitRange is closer to RangeInclusive<CommitIndex>.
+/// NOTE: using `Range<CommitIndex>` for internal representation for backward compatibility.
+/// The external semantics of `CommitRange` is closer to `RangeInclusive<CommitIndex>`.
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CommitRange(Range<CommitIndex>);
+pub struct CommitRange(Range<CommitIndex>);
 
 impl CommitRange {
-    pub(crate) fn new(range: RangeInclusive<CommitIndex>) -> Self {
+    pub fn new(range: RangeInclusive<CommitIndex>) -> Self {
         // When end is CommitIndex::MAX, the range can be considered as unbounded
         // so it is ok to saturate at the end.
         Self(*range.start()..(*range.end()).saturating_add(1))
     }
 
     // Inclusive
-    pub(crate) fn start(&self) -> CommitIndex {
+    pub fn start(&self) -> CommitIndex {
         self.0.start
     }
 
     // Inclusive
-    pub(crate) fn end(&self) -> CommitIndex {
+    pub fn end(&self) -> CommitIndex {
         self.0.end.saturating_sub(1)
     }
 
-    pub(crate) fn extend_to(&mut self, other: CommitIndex) {
+    pub fn extend_to(&mut self, other: CommitIndex) {
         let new_end = other.saturating_add(1);
         assert!(self.0.end <= new_end);
         self.0 = self.0.start..new_end;
     }
 
-    pub(crate) fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.0
             .end
             .checked_sub(self.0.start)
@@ -609,12 +619,12 @@ impl CommitRange {
     }
 
     /// Check whether the two ranges have the same size.
-    pub(crate) fn is_equal_size(&self, other: &Self) -> bool {
+    pub fn is_equal_size(&self, other: &Self) -> bool {
         self.size() == other.size()
     }
 
     /// Check if the provided range is sequentially after this range.
-    pub(crate) fn is_next_range(&self, other: &Self) -> bool {
+    pub fn is_next_range(&self, other: &Self) -> bool {
         self.0.end == other.0.start
     }
 }

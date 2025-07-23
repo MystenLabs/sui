@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -118,6 +119,10 @@ impl TransactionEffectsV1 {
     pub fn wrapped(&self) -> &[ObjectRef] {
         &self.wrapped
     }
+
+    pub fn shared_objects(&self) -> &[ObjectRef] {
+        &self.shared_objects
+    }
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV1 {
@@ -216,6 +221,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         vec![]
     }
 
+    fn consensus_owner_changed(&self) -> Vec<ObjectRef> {
+        // Transferrable consensus objects cannot exist with effects v1
+        vec![]
+    }
+
     fn object_changes(&self) -> Vec<ObjectChange> {
         let modified_at: BTreeMap<_, _> = self.modified_at_versions.iter().copied().collect();
 
@@ -283,6 +293,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .chain(unwrapped_then_deleted)
             .chain(wrapped)
             .collect()
+    }
+
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
+        // v1 did not have accumulator events
+        vec![]
     }
 
     fn gas_object(&self) -> (ObjectRef, Owner) {

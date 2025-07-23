@@ -14,9 +14,10 @@ use crate::{
 use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
+        address::Address,
         checkpoint::Checkpoint,
         epoch::Epoch,
-        move_package::{self, MovePackage, PackageKey},
+        move_package::{self, CheckpointFilter, MovePackage, PackageKey},
         object::{self, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
@@ -34,6 +35,12 @@ pub struct Query {
 
 #[Object]
 impl Query {
+    /// Look-up an account by its SuiAddress.
+    async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Address, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(Address::with_address(scope, address.into()))
+    }
+
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
         let chain_id: ChainIdentifier = *ctx.data()?;
@@ -256,6 +263,31 @@ impl Query {
             },
         )
         .await
+    }
+
+    /// Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
+    async fn packages(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<move_package::CPackage>,
+        last: Option<u64>,
+        before: Option<move_package::CPackage>,
+        filter: Option<CheckpointFilter>,
+    ) -> Result<Option<Connection<String, MovePackage>>, RpcError<move_package::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "packages");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Ok(Some(
+            MovePackage::paginate_by_checkpoint(
+                ctx,
+                self.scope(ctx)?,
+                page,
+                filter.unwrap_or_default(),
+            )
+            .await?,
+        ))
     }
 
     /// Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.

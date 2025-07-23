@@ -30,6 +30,24 @@ fragment E on Epoch {
   referenceGasPrice
   startTimestamp
   endTimestamp
+  validatorSet {
+    totalStake
+    pendingRemovals
+    pendingActiveValidatorsId
+    pendingActiveValidatorsSize
+    stakingPoolMappingsId
+    stakingPoolMappingsSize
+    inactivePoolsId
+    inactivePoolsSize
+    validatorCandidatesId
+    validatorCandidatesSize
+  }
+  totalCheckpoints
+  totalTransactions
+  totalGasFees
+  totalStakeRewards
+  totalStakeSubsidies
+  fundSize
 }
 
 //# run-graphql
@@ -50,4 +68,22 @@ fragment E on Epoch {
   referenceGasPrice
   startTimestamp
   endTimestamp
+  validatorSet {
+    totalStake
+    pendingRemovals
+    pendingActiveValidatorsId
+    pendingActiveValidatorsSize
+    stakingPoolMappingsId
+    stakingPoolMappingsSize
+    inactivePoolsId
+    inactivePoolsSize
+    validatorCandidatesId
+    validatorCandidatesSize
+  }
+  totalCheckpoints
+  totalTransactions
+  totalGasFees
+  totalStakeRewards
+  totalStakeSubsidies
+  fundSize
 }

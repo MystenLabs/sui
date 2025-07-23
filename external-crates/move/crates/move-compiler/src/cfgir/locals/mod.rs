@@ -171,8 +171,6 @@ impl TransferFunctions for LocalsSafety<'_> {
     }
 }
 
-impl AbstractInterpreter for LocalsSafety<'_> {}
-
 pub fn verify(
     context: &super::CFGContext,
     cfg: &super::cfg::MutForwardCFG,
@@ -182,7 +180,7 @@ pub fn verify(
     } = context;
     let initial_state = LocalStates::initial(&signature.parameters, locals);
     let mut locals_safety = LocalsSafety::new(context, locals, signature);
-    let (final_state, ds) = locals_safety.analyze_function(cfg, initial_state);
+    let (final_state, ds) = analyze_function(&mut locals_safety, cfg, initial_state);
     unused_let_muts(context, locals, locals_safety.unused_mut);
     context.add_diags(ds);
     final_state
@@ -565,7 +563,7 @@ fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType
             let abilities = match &ty_arg.value {
                 T::Unit => AbilitySet::collection(ty_arg.loc),
                 T::Ref(_, _) => AbilitySet::references(ty_arg.loc),
-                T::UnresolvedError | T::Anything => AbilitySet::all(ty_arg.loc),
+                T::UnresolvedError | T::Anything | T::Void => AbilitySet::all(ty_arg.loc),
                 T::Param(TParam { abilities, .. }) | T::Apply(Some(abilities), _, _) => {
                     abilities.clone()
                 }

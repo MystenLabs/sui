@@ -7,9 +7,7 @@
 use crate::coverage_map::{
     ExecCoverageMap, ExecCoverageMapWithModules, ModuleCoverageMap, TraceMap,
 };
-use move_abstract_interpreter::control_flow_graph::{
-    BlockId, ControlFlowGraph, VMControlFlowGraph,
-};
+use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
     CompiledModule,
     file_format::{Bytecode, CodeOffset},
@@ -21,6 +19,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     io::{self, Write},
 };
+
+type BlockId = CodeOffset;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ModuleSummary {
@@ -109,12 +109,20 @@ impl ModuleSummary {
             }
         }
 
-        let covered_percentage = (all_covered as f64) / (all_total as f64) * 100f64;
-        writeln!(
-            summary_writer,
-            ">>> % Module coverage: {:.2}",
-            covered_percentage
-        )?;
+        if all_covered == 0 && all_total == 0 {
+            writeln!(
+                summary_writer,
+                ">>> No source code to compute coverage of in module",
+            )?;
+        } else {
+            let covered_percentage = (all_covered as f64) / (all_total as f64) * 100f64;
+            writeln!(
+                summary_writer,
+                ">>> % Module coverage: {:.2}",
+                covered_percentage
+            )?;
+        }
+
         Ok((all_total, all_covered))
     }
 }
@@ -200,7 +208,7 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
                     // get function entry and return points
                     let fn_entry = fn_cfg.block_start(fn_cfg.entry_block_id());
                     let mut fn_returns: BTreeSet<CodeOffset> = BTreeSet::new();
-                    for block_id in fn_cfg.blocks().into_iter() {
+                    for block_id in fn_cfg.blocks() {
                         for i in fn_cfg.block_start(block_id)..=fn_cfg.block_end(block_id) {
                             if let Bytecode::Ret = &code_unit.code[i as usize] {
                                 fn_returns.insert(i);
@@ -213,15 +221,14 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
 
                     let block_to_node: BTreeMap<_, _> = fn_cfg
                         .blocks()
-                        .into_iter()
                         .map(|block_id| (block_id, fn_dgraph.add_node(block_id)))
                         .collect();
 
-                    for block_id in fn_cfg.blocks().into_iter() {
-                        for succ_block_id in fn_cfg.successors(block_id).iter() {
+                    for block_id in fn_cfg.blocks() {
+                        for succ_block_id in fn_cfg.successors(block_id) {
                             fn_dgraph.add_edge(
                                 *block_to_node.get(&block_id).unwrap(),
-                                *block_to_node.get(succ_block_id).unwrap(),
+                                *block_to_node.get(&succ_block_id).unwrap(),
                                 (),
                             );
                         }

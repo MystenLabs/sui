@@ -9,6 +9,7 @@ pub mod programmable_transaction_test_parser;
 mod simulator_persisted_store;
 pub mod test_adapter;
 
+use move_command_line_common::testing::InstaOptions;
 pub use move_transactional_test_runner::framework::{
     create_adapter, run_tasks_with_adapter, run_test_impl,
 };
@@ -20,6 +21,7 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::CertLockGuard;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
+use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc::authority_state::StateRead;
 use sui_json_rpc_types::EventFilter;
@@ -45,18 +47,39 @@ use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::Transaction;
-use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction::{InputObjects, TransactionData};
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 
+use crate::test_adapter::ENABLE_PTB_V2;
+
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    ENABLE_PTB_V2.set(false).unwrap();
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
-    run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone()))).await?;
+    run_test_impl::<SuiTestAdapter>(path, Some(std::sync::Arc::new(PRE_COMPILED.clone())), None)
+        .await?;
+    Ok(())
+}
+
+#[cfg_attr(not(msim), tokio::main)]
+#[cfg_attr(msim, msim::main)]
+pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    ENABLE_PTB_V2.set(true).unwrap();
+    let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
+    let mut options = InstaOptions::new();
+    options.suffix("v2");
+    run_test_impl::<SuiTestAdapter>(
+        path,
+        Some(std::sync::Arc::new(PRE_COMPILED.clone())),
+        Some(options),
+    )
+    .await?;
     Ok(())
 }
 
@@ -75,7 +98,11 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)>;
 
-    async fn read_input_objects(&self, transaction: Transaction) -> SuiResult<InputObjects>;
+    async fn read_input_objects(
+        &self,
+        transaction: Transaction,
+        assigned_versions: AssignedVersions,
+    ) -> SuiResult<InputObjects>;
 
     fn prepare_txn(
         &self,
@@ -126,23 +153,23 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         &mut self,
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let with_shared = transaction
-            .data()
-            .intent_message()
-            .value
-            .contains_shared_object();
+        let is_consensus_tx = transaction.is_consensus_tx();
         let (_, effects, execution_error) = send_and_confirm_transaction_with_execution_error(
             &self.validator,
             Some(&self.fullnode),
             transaction,
-            with_shared,
+            is_consensus_tx,
             false,
         )
         .await?;
         Ok((effects.into_data(), execution_error))
     }
 
-    async fn read_input_objects(&self, transaction: Transaction) -> SuiResult<InputObjects> {
+    async fn read_input_objects(
+        &self,
+        transaction: Transaction,
+        assigned_versions: AssignedVersions,
+    ) -> SuiResult<InputObjects> {
         let tx = VerifiedExecutableTransaction::new_unchecked(
             ExecutableTransaction::new_from_data_and_sig(
                 transaction.data().clone(),
@@ -154,6 +181,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         self.validator.read_objects_for_execution(
             &CertLockGuard::dummy_for_tests(),
             &tx,
+            assigned_versions,
             &epoch_store,
         )
     }
@@ -398,7 +426,11 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         Ok(self.execute_transaction(transaction)?)
     }
 
-    async fn read_input_objects(&self, _transaction: Transaction) -> SuiResult<InputObjects> {
+    async fn read_input_objects(
+        &self,
+        _transaction: Transaction,
+        _assigned_versions: AssignedVersions,
+    ) -> SuiResult<InputObjects> {
         unimplemented!("read_input_objects not supported in simulator mode")
     }
 

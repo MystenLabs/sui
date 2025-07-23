@@ -1,0 +1,204 @@
+// Move bytecode v6
+module 2.hex {
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+public encode(Arg0: vector<u8>): vector<u8> {
+L1:	loc0: vector<vector<u8>>
+L2:	loc1: u64
+L3:	loc2: u64
+L4:	loc3: vector<u8>
+B0:
+	0: LdU64(0)
+	1: LdConst[3](vector<u8>: "" /..)
+	2: ImmBorrowLoc[0](Arg0: vector<u8>)
+	3: VecLen(1)
+	4: StLoc[3](loc2: u64)
+	5: StLoc[4](loc3: vector<u8>)
+	6: StLoc[2](loc1: u64)
+	7: LdConst[2](vector<vector<u8>>: 8002..)
+	8: StLoc[1](loc0: vector<vector<u8>>)
+B1:
+	9: CopyLoc[2](loc1: u64)
+	10: CopyLoc[3](loc2: u64)
+	11: Lt
+	12: BrFalse(29)
+B2:
+	13: Branch(14)
+B3:
+	14: MutBorrowLoc[4](loc3: vector<u8>)
+	15: ImmBorrowLoc[1](loc0: vector<vector<u8>>)
+	16: ImmBorrowLoc[0](Arg0: vector<u8>)
+	17: CopyLoc[2](loc1: u64)
+	18: VecImmBorrow(1)
+	19: ReadRef
+	20: CastU64
+	21: VecImmBorrow(0)
+	22: ReadRef
+	23: Call vector::append<u8>(&mut vector<u8>, vector<u8>)
+	24: MoveLoc[2](loc1: u64)
+	25: LdU64(1)
+	26: Add
+	27: StLoc[2](loc1: u64)
+	28: Branch(9)
+B4:
+	29: MoveLoc[4](loc3: vector<u8>)
+	30: Ret
+}
+
+public decode(Arg0: vector<u8>): vector<u8> {
+L1:	loc0: u8
+L2:	loc1: u64
+L3:	loc2: u64
+L4:	loc3: vector<u8>
+B0:
+	0: LdU64(0)
+	1: LdConst[3](vector<u8>: "" /..)
+	2: ImmBorrowLoc[0](Arg0: vector<u8>)
+	3: VecLen(1)
+	4: StLoc[3](loc2: u64)
+	5: StLoc[4](loc3: vector<u8>)
+	6: StLoc[2](loc1: u64)
+	7: CopyLoc[3](loc2: u64)
+	8: LdU64(2)
+	9: Mod
+	10: LdU64(0)
+	11: Eq
+	12: BrFalse(14)
+B1:
+	13: Branch(16)
+B2:
+	14: LdConst[0](u64: 0)
+	15: Abort
+B3:
+	16: CopyLoc[2](loc1: u64)
+	17: CopyLoc[3](loc2: u64)
+	18: Lt
+	19: BrFalse(44)
+B4:
+	20: ImmBorrowLoc[0](Arg0: vector<u8>)
+	21: CopyLoc[2](loc1: u64)
+	22: VecImmBorrow(1)
+	23: ReadRef
+	24: Call decode_byte(u8): u8
+	25: LdU8(16)
+	26: Mul
+	27: ImmBorrowLoc[0](Arg0: vector<u8>)
+	28: CopyLoc[2](loc1: u64)
+	29: LdU64(1)
+	30: Add
+	31: VecImmBorrow(1)
+	32: ReadRef
+	33: Call decode_byte(u8): u8
+	34: Add
+	35: StLoc[1](loc0: u8)
+	36: MutBorrowLoc[4](loc3: vector<u8>)
+	37: MoveLoc[1](loc0: u8)
+	38: VecPushBack(1)
+	39: MoveLoc[2](loc1: u64)
+	40: LdU64(2)
+	41: Add
+	42: StLoc[2](loc1: u64)
+	43: Branch(16)
+B5:
+	44: MoveLoc[4](loc3: vector<u8>)
+	45: Ret
+}
+
+decode_byte(Arg0: u8): u8 {
+L1:	loc0: bool
+L2:	loc1: bool
+L3:	loc2: bool
+L4:	loc3: u8
+L5:	loc4: u8
+B0:
+	0: LdU8(48)
+	1: CopyLoc[0](Arg0: u8)
+	2: Le
+	3: BrFalse(9)
+B1:
+	4: CopyLoc[0](Arg0: u8)
+	5: LdU8(58)
+	6: Lt
+	7: StLoc[1](loc0: bool)
+	8: Branch(11)
+B2:
+	9: LdFalse
+	10: StLoc[1](loc0: bool)
+B3:
+	11: MoveLoc[1](loc0: bool)
+	12: BrFalse(18)
+B4:
+	13: MoveLoc[0](Arg0: u8)
+	14: LdU8(48)
+	15: Sub
+	16: StLoc[5](loc4: u8)
+	17: Branch(62)
+B5:
+	18: LdU8(65)
+	19: CopyLoc[0](Arg0: u8)
+	20: Le
+	21: BrFalse(27)
+B6:
+	22: CopyLoc[0](Arg0: u8)
+	23: LdU8(71)
+	24: Lt
+	25: StLoc[2](loc1: bool)
+	26: Branch(29)
+B7:
+	27: LdFalse
+	28: StLoc[2](loc1: bool)
+B8:
+	29: MoveLoc[2](loc1: bool)
+	30: BrFalse(38)
+B9:
+	31: LdU8(10)
+	32: MoveLoc[0](Arg0: u8)
+	33: Add
+	34: LdU8(65)
+	35: Sub
+	36: StLoc[4](loc3: u8)
+	37: Branch(60)
+B10:
+	38: LdU8(97)
+	39: CopyLoc[0](Arg0: u8)
+	40: Le
+	41: BrFalse(47)
+B11:
+	42: CopyLoc[0](Arg0: u8)
+	43: LdU8(103)
+	44: Lt
+	45: StLoc[3](loc2: bool)
+	46: Branch(49)
+B12:
+	47: LdFalse
+	48: StLoc[3](loc2: bool)
+B13:
+	49: MoveLoc[3](loc2: bool)
+	50: BrFalse(52)
+B14:
+	51: Branch(54)
+B15:
+	52: LdConst[1](u64: 1)
+	53: Abort
+B16:
+	54: LdU8(10)
+	55: MoveLoc[0](Arg0: u8)
+	56: Add
+	57: LdU8(97)
+	58: Sub
+	59: StLoc[4](loc3: u8)
+B17:
+	60: MoveLoc[4](loc3: u8)
+	61: StLoc[5](loc4: u8)
+B18:
+	62: MoveLoc[5](loc4: u8)
+	63: Ret
+}
+
+Constants [
+	0 => u64: 0
+	1 => u64: 1
+	2 => vector<vector<u8>>: 8002023030023031023032023033023034023035023036023037023038023039023061023062023063023064023065023066023130023131023132023133023134023135023136023137023138023139023161023162023163023164023165023166023230023231023232023233023234023235023236023237023238023239023261023262023263023264023265023266023330023331023332023333023334023335023336023337023338023339023361023362023363023364023365023366023430023431023432023433023434023435023436023437023438023439023461023462023463023464023465023466023530023531023532023533023534023535023536023537023538023539023561023562023563023564023565023566023630023631023632023633023634023635023636023637023638023639023661023662023663023664023665023666023730023731023732023733023734023735023736023737023738023739023761023762023763023764023765023766023830023831023832023833023834023835023836023837023838023839023861023862023863023864023865023866023930023931023932023933023934023935023936023937023938023939023961023962023963023964023965023966026130026131026132026133026134026135026136026137026138026139026161026162026163026164026165026166026230026231026232026233026234026235026236026237026238026239026261026262026263026264026265026266026330026331026332026333026334026335026336026337026338026339026361026362026363026364026365026366026430026431026432026433026434026435026436026437026438026439026461026462026463026464026465026466026530026531026532026533026534026535026536026537026538026539026561026562026563026564026565026566026630026631026632026633026634026635026636026637026638026639026661026662026663026664026665026666
+	3 => vector<u8>: "" // interpreted as UTF8 string
+]
+}

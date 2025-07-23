@@ -15,4 +15,8 @@ sui-transactional-test-runner.workspace = true
 name = "tests"
 harness = false
 
+[[test]]
+name = "ptb_v2_tests"
+harness = false
+
 [dependencies]

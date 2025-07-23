@@ -324,6 +324,7 @@ pub enum Type_ {
     Fun(Vec<Type>, Box<Type>),
     Var(TVar),
     Anything,
+    Void,
     UnresolvedError,
 }
 pub type Type = Spanned<Type_>;
@@ -910,26 +911,28 @@ impl Type_ {
     }
 
     pub fn abilities(&self, loc: Loc) -> Option<AbilitySet> {
+        use Type_ as T;
         match self {
-            Type_::Apply(abilities, _, _) => abilities.clone(),
-            Type_::Param(tp) => Some(tp.abilities.clone()),
-            Type_::Unit => Some(AbilitySet::collection(loc)),
-            Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
-            Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
-            Type_::Fun(_, _) => Some(AbilitySet::functions(loc)),
-            Type_::Var(_) => None,
+            T::Apply(abilities, _, _) => abilities.clone(),
+            T::Param(tp) => Some(tp.abilities.clone()),
+            T::Unit => Some(AbilitySet::collection(loc)),
+            T::Ref(_, _) => Some(AbilitySet::references(loc)),
+            T::Anything | T::Void | T::UnresolvedError => Some(AbilitySet::all(loc)),
+            T::Fun(_, _) => Some(AbilitySet::functions(loc)),
+            T::Var(_) => None,
         }
     }
 
     pub fn has_ability_(&self, ability: Ability_) -> Option<bool> {
+        use Type_ as T;
         match self {
-            Type_::Apply(abilities, _, _) => abilities.as_ref().map(|s| s.has_ability_(ability)),
-            Type_::Param(tp) => Some(tp.abilities.has_ability_(ability)),
-            Type_::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
-            Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
-            Type_::Anything | Type_::UnresolvedError => Some(true),
-            Type_::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
-            Type_::Var(_) => None,
+            T::Apply(abilities, _, _) => abilities.as_ref().map(|s| s.has_ability_(ability)),
+            T::Param(tp) => Some(tp.abilities.has_ability_(ability)),
+            T::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
+            T::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
+            T::Anything | T::Void | T::UnresolvedError => Some(true),
+            T::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
+            T::Var(_) => None,
         }
     }
 
@@ -945,6 +948,7 @@ impl Type_ {
             | Type_::Fun(_, _)
             | Type_::Var(_)
             | Type_::Anything
+            | Type_::Void
             | Type_::UnresolvedError => None,
         }
     }
@@ -959,6 +963,7 @@ impl Type_ {
             | Type_::Fun(_, _)
             | Type_::Var(_)
             | Type_::Anything
+            | Type_::Void
             | Type_::UnresolvedError => self.clone(),
         }
     }
@@ -1583,6 +1588,7 @@ impl AstDebug for Type_ {
             }
             Type_::Var(tv) => w.write(format!("#{}", tv.0)),
             Type_::Anything => w.write("_"),
+            Type_::Void => w.write("_"),
             Type_::UnresolvedError => w.write("_|_"),
         }
     }

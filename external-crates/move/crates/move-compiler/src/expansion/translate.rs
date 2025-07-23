@@ -6,7 +6,10 @@ use crate::{
     FullyCompiledProgram, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
-        warning_filters::{FILTER_ALL, WarningFilters, WarningFiltersBuilder, WarningFiltersTable},
+        warning_filters::{
+            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters, WarningFiltersBuilder,
+            WarningFiltersTable,
+        },
     },
     editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
@@ -38,7 +41,7 @@ use crate::{
     },
     shared::{
         ide::{IDEAnnotation, IDEInfo},
-        known_attributes::AttributePosition,
+        known_attributes::{AttributeKind_, AttributePosition},
         string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
         *,
@@ -93,12 +96,7 @@ impl<'env> Context<'env, '_> {
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
         let mut warning_filters_table = WarningFiltersTable::new();
-        let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
-        for prefix in compilation_env.known_filter_names() {
-            for f in compilation_env.filter_from_str(prefix, FILTER_ALL) {
-                all_filter_alls.add(f);
-            }
-        }
+        let all_filter_alls = WarningFiltersBuilder::new_all_filter_alls(compilation_env);
         let all_filter_alls = warning_filters_table.add(all_filter_alls);
         let reporter = compilation_env.diagnostic_reporter_at_top_level();
         let defn_context = DefnContext {
@@ -633,7 +631,7 @@ pub fn program(
     //
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
-            if !context.env().flags().sources_shadow_deps() {
+            if !context.env().sources_shadow_deps() {
                 duplicate_module(&mut context, &source_module_map, mident, old_loc)
             }
         }
@@ -1156,6 +1154,32 @@ fn module_warning_filter(
     }
 }
 
+fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
+    let mut wf = warning_filter_(context, attributes);
+    // If a struct is marked as deprecated, do not report unused fields in it.
+    if attributes.contains_key_(&AttributeKind_::Deprecation) {
+        let none: Option<Symbol> = None;
+        let new_filters = context.env().filter_from_str(none, FILTER_DEPRECATED);
+        wf.add_all(new_filters);
+        let new_filters = context
+            .env()
+            .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD);
+        wf.add_all(new_filters);
+    }
+    context.warning_filters_table.get_mut().unwrap().add(wf)
+}
+
+fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
+    let mut wf = warning_filter_(context, attributes);
+    // If a function is marked as deprecated, do not report deprecations used within it.
+    if attributes.contains_key_(&AttributeKind_::Deprecation) {
+        let none: Option<Symbol> = None;
+        let new_filters = context.env().filter_from_str(none, FILTER_DEPRECATED);
+        wf.add_all(new_filters);
+    }
+    context.warning_filters_table.get_mut().unwrap().add(wf)
+}
+
 fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
     let wf = warning_filter_(context, attributes);
     context.warning_filters_table.get_mut().unwrap().add(wf)
@@ -1192,9 +1216,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                 context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                 continue;
             };
-            filters
-                .into_iter()
-                .for_each(|filter| warning_filters.add(filter));
+            warning_filters.add_all(filters);
         }
     };
 
@@ -1223,9 +1245,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                 context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
                 continue;
             };
-            filters
-                .into_iter()
-                .for_each(|filter| warning_filters.add(filter));
+            warning_filters.add_all(filters);
         }
     };
     warning_filters
@@ -1741,7 +1761,7 @@ fn struct_def_(
         fields: pfields,
     } = pstruct;
     let attributes = expand_attributes(context, AttributePosition::Struct, attributes);
-    let warning_filter = warning_filter(context, &attributes);
+    let warning_filter = struct_warning_filter(context, &attributes);
     context.push_warning_filter_scope(warning_filter);
     let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
@@ -2068,7 +2088,7 @@ fn function_(
         body: pbody,
     } = pfunction;
     let attributes = expand_attributes(context, AttributePosition::Function, pattributes);
-    let warning_filter = warning_filter(context, &attributes);
+    let warning_filter = function_warning_filter(context, &attributes);
     context.push_warning_filter_scope(warning_filter);
     if let (Some(entry_loc), Some(macro_loc)) = (entry, macro_) {
         let e_msg = format!(

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{cmp::Ordering, fmt::Display};
 
-use consensus_core::{BlockAPI, BlockRef, CommitDigest, TransactionIndex, VerifiedBlock};
+use consensus_core::{BlockAPI, CommitDigest, VerifiedBlock};
+use consensus_types::block::{BlockRef, TransactionIndex};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     digests::ConsensusCommitDigest,
@@ -68,10 +69,14 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     }
 
     fn transactions(&self) -> Vec<(BlockRef, Vec<ParsedTransaction>)> {
+        let no_transaction = vec![];
         self.blocks
             .iter()
-            .zip(self.rejected_transactions_by_block.iter())
-            .map(|(block, rejected_transactions)| {
+            .map(|block| {
+                let rejected_transactions = self
+                    .rejected_transactions_by_block
+                    .get(&block.reference())
+                    .unwrap_or(&no_transaction);
                 (
                     block.reference(),
                     parse_block_transactions(block, rejected_transactions),

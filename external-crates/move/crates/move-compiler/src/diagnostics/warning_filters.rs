@@ -6,7 +6,7 @@ use crate::{
         Diagnostic, DiagnosticCode,
         codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},
     },
-    shared::{AstDebug, known_attributes},
+    shared::{AstDebug, CompilationEnv, known_attributes},
 };
 use move_symbol_pool::Symbol;
 use std::{
@@ -271,6 +271,16 @@ impl WarningFiltersBuilder {
         }
     }
 
+    pub fn new_all_filter_alls(env: &CompilationEnv) -> Self {
+        let mut all_filter_alls = WarningFiltersBuilder::new_for_dependency();
+        for prefix in env.known_filter_names() {
+            for f in env.filter_from_str(prefix, FILTER_ALL) {
+                all_filter_alls.add(f);
+            }
+        }
+        all_filter_alls
+    }
+
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
         self.is_filtered_by_info(&diag.info)
     }
@@ -293,6 +303,12 @@ impl WarningFiltersBuilder {
         // code and this information must be preserved when stacking up additional filters (which
         // involves union of the current filter with the new one)
         self.for_dependency = self.for_dependency || other.for_dependency;
+    }
+
+    pub fn add_all(&mut self, filters: impl IntoIterator<Item = WarningFilter>) {
+        for filter in filters {
+            self.add(filter);
+        }
     }
 
     pub fn add(&mut self, filter: WarningFilter) {

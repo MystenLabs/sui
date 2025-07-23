@@ -4,11 +4,8 @@
 use crate::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use crate::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEvents,
-    VerifiedSignedTransactionEffects,
+    SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use crate::error::SuiError;
-use crate::messages_consensus::Round;
 use crate::object::Object;
 use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use bytes::Bytes;
@@ -227,197 +224,40 @@ pub struct HandleCertificateRequestV3 {
 pub struct RawSubmitTxRequest {
     #[prost(bytes = "bytes", tag = "1")]
     pub transaction: Bytes,
-    #[prost(bool, tag = "2")]
-    pub include_events: bool,
-    #[prost(bool, tag = "3")]
-    pub include_input_objects: bool,
-    #[prost(bool, tag = "4")]
-    pub include_output_objects: bool,
 }
 
-/// Serialized response type for submit transaction validator API.
-///
-/// The corresponding request type allows for a client to request events as well as
-/// input/output objects from a transaction's execution. Given Validators operate with very
-/// aggressive object pruning, the return of input/output objects is only done immediately after
-/// the transaction has been executed locally on the validator and will not be returned for
-/// requests to previously executed transactions.
 #[derive(Clone, prost::Message)]
 pub struct RawSubmitTxResponse {
-    // Serialized TransactionEffects
+    // Serialized Consensus Position
+    #[prost(oneof = "RawValidatorSubmitStatus", tags = "1, 2, 3")]
+    pub inner: Option<RawValidatorSubmitStatus>,
+}
+
+#[derive(Clone, prost::Oneof)]
+pub enum RawValidatorSubmitStatus {
+    // Serialized Consensus Position.
     #[prost(bytes = "bytes", tag = "1")]
-    pub effects: Bytes,
-    // Serialized TransactionEvents
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub events: Option<Bytes>,
+    Submitted(Bytes),
 
-    /// If requested, will included all initial versions of objects modified in this transaction.
-    /// This includes owned objects included as input into the transaction as well as the assigned
-    /// versions of shared objects.
-    /// Vec of serialized Object
-    #[prost(bytes = "vec", repeated, tag = "3")]
-    pub input_objects: Vec<Vec<u8>>,
-
-    /// If requested, will included all changed objects, including mutated, created and unwrapped
-    /// objects. In other words, all objects that still exist in the object state after this
-    /// transaction.
-    /// Vec of serialized Object
-    #[prost(bytes = "vec", repeated, tag = "4")]
-    pub output_objects: Vec<Vec<u8>>,
-}
-
-impl RawSubmitTxResponse {
-    pub fn into_raw(
-        effects: TransactionEffects,
-        include_events: bool,
-        events: Option<TransactionEvents>,
-        input_objects: Option<Vec<Object>>,
-        output_objects: Option<Vec<Object>>,
-    ) -> Result<Self, SuiError> {
-        Ok(Self {
-            effects: bcs::to_bytes(&effects)
-                .map_err(|e| SuiError::GrpcMessageSerializeError {
-                    type_info: "RawSubmitTxResponse.effects".to_string(),
-                    error: e.to_string(),
-                })?
-                .into(),
-            events: if include_events {
-                events
-                    .map(|e| {
-                        bcs::to_bytes(&e)
-                            .map_err(|e| SuiError::GrpcMessageSerializeError {
-                                type_info: "RawSubmitTxResponse.events".to_string(),
-                                error: e.to_string(),
-                            })
-                            .map(Bytes::from)
-                    })
-                    .transpose()?
-            } else {
-                None
-            },
-            input_objects: input_objects
-                .unwrap_or_default()
-                .into_iter()
-                .map(|obj| {
-                    bcs::to_bytes(&obj).map_err(|e| SuiError::GrpcMessageSerializeError {
-                        type_info: "RawSubmitTxResponse.input_objects".to_string(),
-                        error: e.to_string(),
-                    })
-                })
-                .collect::<Result<_, _>>()?,
-            output_objects: output_objects
-                .unwrap_or_default()
-                .into_iter()
-                .map(|obj| {
-                    bcs::to_bytes(&obj).map_err(|e| SuiError::GrpcMessageSerializeError {
-                        type_info: "RawSubmitTxResponse.output_objects".to_string(),
-                        error: e.to_string(),
-                    })
-                })
-                .collect::<Result<_, _>>()?,
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SubmitTxResponse {
-    pub effects: TransactionEffects,
-    pub events: Option<TransactionEvents>,
-    pub input_objects: Option<Vec<Object>>,
-    pub output_objects: Option<Vec<Object>>,
-    pub auxiliary_data: Option<Vec<u8>>,
-}
-
-impl SubmitTxResponse {
-    pub fn from_bytes(
-        effects: Bytes,
-        include_events: bool,
-        events: Option<Bytes>,
-        include_input_objects: bool,
-        input_objects: Vec<Vec<u8>>,
-        include_output_objects: bool,
-        output_objects: Vec<Vec<u8>>,
-        include_auxiliary_data: bool,
-        auxiliary_data: Option<Bytes>,
-    ) -> Result<Self, SuiError> {
-        Ok(Self {
-            effects: bcs::from_bytes(&effects).map_err(|e| {
-                SuiError::GrpcMessageDeserializeError {
-                    type_info: "SubmitTxResponse.effects".to_string(),
-                    error: e.to_string(),
-                }
-            })?,
-            events: if include_events {
-                events
-                    .map(|events| {
-                        bcs::from_bytes(&events).map_err(|e| {
-                            SuiError::GrpcMessageDeserializeError {
-                                type_info: "SubmitTxResponse.events".to_string(),
-                                error: e.to_string(),
-                            }
-                        })
-                    })
-                    .transpose()?
-            } else {
-                None
-            },
-            input_objects: if include_input_objects {
-                Some(
-                    input_objects
-                        .into_iter()
-                        .map(|object| {
-                            bcs::from_bytes(&object).map_err(|e| {
-                                SuiError::GrpcMessageDeserializeError {
-                                    type_info: "SubmitTxResponse.input_objects".to_string(),
-                                    error: e.to_string(),
-                                }
-                            })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-            } else {
-                None
-            },
-            output_objects: if include_output_objects {
-                Some(
-                    output_objects
-                        .into_iter()
-                        .map(|object| {
-                            bcs::from_bytes(&object).map_err(|e| {
-                                SuiError::GrpcMessageDeserializeError {
-                                    type_info: "SubmitTxResponse.output_objects".to_string(),
-                                    error: e.to_string(),
-                                }
-                            })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-            } else {
-                None
-            },
-            auxiliary_data: if include_auxiliary_data {
-                auxiliary_data.map(|data| data.to_vec())
-            } else {
-                None
-            },
-        })
-    }
+    // Transaction has already been executed (finalized).
+    #[prost(message, tag = "2")]
+    Executed(RawExecutedStatus),
 }
 
 #[derive(Clone, prost::Message)]
 pub struct RawWaitForEffectsRequest {
-    #[prost(uint64, tag = "1")]
-    pub epoch: u64,
-
-    #[prost(bytes = "bytes", tag = "2")]
+    #[prost(bytes = "bytes", tag = "1")]
     pub transaction_digest: Bytes,
 
-    #[prost(bytes = "bytes", tag = "3")]
-    pub transaction_position: Bytes,
+    /// If provided, wait for the consensus position to execute and wait for fastpath outputs of the transaction,
+    /// in addition to waiting for finalized effects.
+    /// If not provided, only wait for finalized effects.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub consensus_position: Option<Bytes>,
 
     /// Whether to include details of the effects,
     /// including the effects content, events, input objects, and output objects.
-    #[prost(bool, tag = "4")]
+    #[prost(bool, tag = "3")]
     pub include_details: bool,
 }
 
@@ -437,8 +277,8 @@ pub enum RawValidatorTransactionStatus {
     Executed(RawExecutedStatus),
     #[prost(message, tag = "2")]
     Rejected(RawRejectedStatus),
-    #[prost(uint64, tag = "3")]
-    Expired(Round),
+    #[prost(message, tag = "3")]
+    Expired(RawExpiredStatus),
 }
 
 #[derive(Clone, prost::Message)]
@@ -463,25 +303,18 @@ pub struct RawExecutedData {
 
 #[derive(Clone, prost::Message)]
 pub struct RawRejectedStatus {
-    #[prost(enumeration = "RawRejectReason", tag = "1")]
-    pub reason: i32,
-    #[prost(string, optional, tag = "2")]
-    pub message: Option<String>, // Only for string-carrying variants
+    #[prost(bytes = "bytes", tag = "1")]
+    pub error: Bytes,
 }
 
-#[derive(Clone, Debug, prost::Enumeration)]
-#[repr(i32)]
-pub enum RawRejectReason {
-    // Transaction is not voted to be rejected locally.
-    None = 0,
-    // Rejected due to lock conflict.
-    LockConflict = 1,
-    // Rejected due to package verification.
-    PackageVerification = 2,
-    // Rejected due to overload.
-    Overload = 3,
-    // Rejected due to coin deny list.
-    CoinDenyList = 4,
+#[derive(Clone, prost::Message)]
+pub struct RawExpiredStatus {
+    // Validator's current epoch.
+    #[prost(uint64, tag = "1")]
+    pub epoch: u64,
+    // Validator's current round. 0 if it is not yet checked.
+    #[prost(uint32, optional, tag = "2")]
+    pub round: Option<u32>,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

@@ -11,18 +11,19 @@ use std::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockRef, Round};
 use futures::{ready, stream, task, Stream, StreamExt};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use rand::seq::SliceRandom as _;
 use sui_macros::fail_point_async;
 use tap::TapFallible;
-use tokio::{sync::broadcast, time::sleep};
+use tokio::sync::broadcast;
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{BlockAPI as _, BlockRef, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
+    block::{BlockAPI as _, ExtendedBlock, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
@@ -36,7 +37,7 @@ use crate::{
     storage::Store,
     synchronizer::SynchronizerHandle,
     transaction_certifier::TransactionCertifier,
-    CommitIndex, Round,
+    CommitIndex,
 };
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
@@ -201,60 +202,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let forward_time_drift =
             Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
 
-        if !self
-            .context
-            .protocol_config
-            .consensus_median_based_commit_timestamp()
-        {
-            // Reject block with timestamp too far in the future.
-            if forward_time_drift > self.context.parameters.max_forward_time_drift {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .rejected_future_blocks
-                    .with_label_values(&[peer_hostname])
-                    .inc();
-                debug!(
-                    "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
-                    block_ref,
-                    verified_block.timestamp_ms(),
-                    now,
-                );
-                return Err(ConsensusError::BlockRejected {
-                    block_ref,
-                    reason: format!(
-                        "Block timestamp is too far in the future: {} > {}",
-                        verified_block.timestamp_ms(),
-                        now
-                    ),
-                });
-            }
-
-            // Wait until the block's timestamp is current.
-            if forward_time_drift > Duration::ZERO {
-                self.context
-                    .metrics
-                    .node_metrics
-                    .block_timestamp_drift_ms
-                    .with_label_values(&[peer_hostname, "handle_send_block"])
-                    .inc_by(forward_time_drift.as_millis() as u64);
-                debug!(
-                    "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
-                    block_ref,
-                    verified_block.timestamp_ms(),
-                    now,
-                    forward_time_drift.as_millis(),
-                );
-                sleep(forward_time_drift).await;
-            }
-        } else {
-            self.context
-                .metrics
-                .node_metrics
-                .block_timestamp_drift_ms
-                .with_label_values(&[peer_hostname, "handle_send_block"])
-                .inc_by(forward_time_drift.as_millis() as u64);
-        }
+        self.context
+            .metrics
+            .node_metrics
+            .block_timestamp_drift_ms
+            .with_label_values(&[peer_hostname, "handle_send_block"])
+            .inc_by(forward_time_drift.as_millis() as u64);
 
         // Observe the block for the commit votes. When local commit is lagging too much,
         // commit sync loop will trigger fetching.
@@ -897,14 +850,14 @@ mod tests {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
+    use consensus_types::block::{BlockRef, Round};
     use mysten_metrics::monitored_mpsc;
     use parking_lot::{Mutex, RwLock};
-    use rstest::rstest;
     use tokio::{sync::broadcast, time::sleep};
 
     use crate::{
         authority_service::AuthorityService,
-        block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
         commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
@@ -917,7 +870,6 @@ mod tests {
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
         transaction_certifier::TransactionCertifier,
-        Round,
     };
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
@@ -1048,13 +1000,9 @@ mod tests {
         }
     }
 
-    #[rstest]
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_handle_send_block(#[values(false, true)] median_based_timestamp: bool) {
-        let (mut context, _keys) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_median_based_commit_timestamp_for_testing(median_based_timestamp);
+    async fn test_handle_send_block() {
+        let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -1114,11 +1062,6 @@ mod tests {
         });
 
         sleep(max_drift / 2).await;
-
-        if !median_based_timestamp {
-            assert!(core_dispatcher.get_blocks().is_empty());
-            sleep(max_drift).await;
-        }
 
         let blocks = core_dispatcher.get_blocks();
         assert_eq!(blocks.len(), 1);

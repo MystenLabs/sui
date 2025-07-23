@@ -7,7 +7,7 @@ use crate::balance_change::{derive_balance_changes, BalanceChange};
 use crate::base_types::{EpochId, ObjectID, ObjectType, SequenceNumber, SuiAddress};
 use crate::committee::Committee;
 use crate::digests::{
-    ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, ObjectDigest, TransactionDigest,
+    ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
 };
 use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
@@ -26,6 +26,10 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use typed_store_error::TypedStoreError;
+
+pub type BalanceIterator<'a> = Box<dyn Iterator<Item = Result<(StructTag, BalanceInfo)>> + 'a>;
+pub type PackageVersionsIterator<'a> =
+    Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + 'a>;
 
 pub trait ReadStore: ObjectStore {
     //
@@ -574,8 +578,7 @@ pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
     fn get_struct_layout(&self, type_tag: &StructTag) -> Result<Option<MoveTypeLayout>>;
 }
 
-pub type DynamicFieldIteratorItem =
-    Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>;
+pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
 pub trait RpcIndexes: Send + Sync {
     fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<EpochInfo>>;
 
@@ -595,6 +598,21 @@ pub trait RpcIndexes: Send + Sync {
     ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>>;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
+
+    fn get_balance(&self, owner: &SuiAddress, coin_type: &StructTag)
+        -> Result<Option<BalanceInfo>>;
+
+    fn balance_iter(
+        &self,
+        owner: &SuiAddress,
+        cursor: Option<(SuiAddress, StructTag)>,
+    ) -> Result<BalanceIterator<'_>>;
+
+    fn package_versions_iter(
+        &self,
+        original_id: ObjectID,
+        cursor: Option<u64>,
+    ) -> Result<PackageVersionsIterator<'_>>;
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -604,7 +622,6 @@ pub struct OwnedObjectInfo {
     pub balance: Option<u64>,
     pub object_id: ObjectID,
     pub version: SequenceNumber,
-    pub digest: ObjectDigest,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -640,6 +657,11 @@ pub struct CoinInfo {
     pub coin_metadata_object_id: Option<ObjectID>,
     pub treasury_object_id: Option<ObjectID>,
     pub regulated_coin_metadata_object_id: Option<ObjectID>,
+}
+
+#[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
+pub struct BalanceInfo {
+    pub balance: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

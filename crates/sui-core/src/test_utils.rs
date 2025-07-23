@@ -31,11 +31,12 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-use crate::authority::AuthorityState;
+use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::global_state_hasher::GlobalStateHasher;
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
+// TODO(fastpath): switch to use MFP flow.
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
@@ -43,10 +44,10 @@ pub async fn send_and_confirm_transaction(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
-    transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+    transaction.validity_check(&epoch_store.tx_validity_check_context())?;
     let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
-        .handle_transaction(&epoch_store, transaction.clone())
+        .handle_sign_transaction(&epoch_store, transaction.clone())
         .await?;
     let vote = response.status.into_signed_for_testing();
 
@@ -71,7 +72,9 @@ pub async fn send_and_confirm_transaction(
         .simplified_unwrap_then_delete();
     let mut state =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
-    let (result, _execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
+    let (result, _execution_error_opt) = authority
+        .try_execute_for_test(&certificate, ExecutionEnv::new())
+        .await?;
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
@@ -83,7 +86,9 @@ pub async fn send_and_confirm_transaction(
     assert_eq!(state_after.digest(), state.digest());
 
     if let Some(fullnode) = fullnode {
-        fullnode.try_execute_for_test(&certificate).await?;
+        fullnode
+            .try_execute_for_test(&certificate, ExecutionEnv::new())
+            .await?;
     }
     Ok((certificate.into_inner(), result.into_inner()))
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     event::Event,
@@ -12,9 +13,8 @@ use crate::{
     type_input::TypeInput,
 };
 use move_core_types::language_storage::TypeTag;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 /// A type containing all of the information needed to work in execution with an object whose
@@ -79,6 +79,8 @@ pub struct ExecutionResultsV2 {
     pub deleted_object_ids: BTreeSet<ObjectID>,
     /// All Move events emitted in this transaction.
     pub user_events: Vec<Event>,
+    /// All accumulator events emitted in this transaction.
+    pub accumulator_events: Vec<AccumulatorEvent>,
 }
 
 pub type ExecutionResult = (
@@ -93,6 +95,7 @@ impl ExecutionResultsV2 {
         self.created_object_ids.clear();
         self.deleted_object_ids.clear();
         self.user_events.clear();
+        self.accumulator_events.clear();
     }
 
     pub fn merge_results(&mut self, new_results: Self) {
@@ -103,6 +106,8 @@ impl ExecutionResultsV2 {
         self.deleted_object_ids
             .extend(new_results.deleted_object_ids);
         self.user_events.extend(new_results.user_events);
+        self.accumulator_events
+            .extend(new_results.accumulator_events);
     }
 
     pub fn update_version_and_previous_tx(
@@ -169,17 +174,26 @@ impl ExecutionResultsV2 {
             }
 
             // Record start version for ConsensusAddressOwner objects.
-            if let Owner::ConsensusAddressOwner { start_version, .. } = &mut obj.owner {
+            if let Owner::ConsensusAddressOwner {
+                start_version,
+                owner,
+            } = &mut obj.owner
+            {
                 debug_assert!(!self.deleted_object_ids.contains(id));
 
                 if let Some(Owner::ConsensusAddressOwner {
                     start_version: previous_start_version,
-                    ..
+                    owner: previous_owner,
                 }) = input_objects.get(id).map(|obj| &obj.owner)
                 {
-                    // Assign existing start_version in case a ConsensusAddressOwner object was
-                    // transferred to the same Owner type.
-                    *start_version = *previous_start_version;
+                    if owner == previous_owner {
+                        // Assign existing start_version in case a ConsensusAddressOwner object was
+                        // transferred to the same owner.
+                        *start_version = *previous_start_version;
+                    } else {
+                        // If owner changes, we need to begin a new stream.
+                        *start_version = lamport_version;
+                    }
                 } else {
                     // ConsensusAddressOwner object was created, transferred from another Owner
                     // type, or unwrapped, so we begin a new stream.
@@ -194,7 +208,7 @@ impl ExecutionResultsV2 {
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Serialize, Deserialize)]
 pub enum ExecutionTimeObservationKey {
-    // Containts all the fields from `ProgrammableMoveCall` besides `arguments`.
+    // Contains all the fields from `ProgrammableMoveCall` besides `arguments`.
     MoveEntryPoint {
         /// The package containing the module and function.
         package: ObjectID,
@@ -287,36 +301,3 @@ impl ExecutionTiming {
 }
 
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
-
-/// If a transaction digest shows up in this list, when executing such transaction,
-/// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
-/// gas smashing). Because this list is not gated by protocol version, there are a few important
-/// criteria for adding a digest to this list:
-/// 1. The certificate must be causing all validators to either panic or hang forever deterministically.
-/// 2. If we ever ship a fix to make it no longer panic or hang when executing such transaction, we
-///    must make sure the transaction is already in this list. Otherwise nodes running the newer
-///    version without these transactions in the list will generate forked result.
-///
-/// Below is a scenario of when we need to use this list:
-/// 1. We detect that a specific transaction is causing all validators to either panic or hang forever deterministically.
-/// 2. We push a CertificateDenyConfig to deny such transaction to all validators asap.
-/// 3. To make sure that all fullnodes are able to sync to the latest version, we need to add the
-///    transaction digest to this list as well asap, and ship this binary to all fullnodes, so that
-///    they can sync past this transaction.
-/// 4. We then can start fixing the issue, and ship the fix to all nodes.
-/// 5. Unfortunately, we can't remove the transaction digest from this list, because if we do so,
-///    any future node that sync from genesis will fork on this transaction. We may be able to
-///    remove it once we have stable snapshots and the binary has a minimum supported protocol
-///    version past the epoch.
-pub fn get_denied_certificates() -> &'static HashSet<TransactionDigest> {
-    static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> = Lazy::new(|| HashSet::from([]));
-    Lazy::force(&DENIED_CERTIFICATES)
-}
-
-pub fn is_certificate_denied(
-    transaction_digest: &TransactionDigest,
-    certificate_deny_set: &HashSet<TransactionDigest>,
-) -> bool {
-    certificate_deny_set.contains(transaction_digest)
-        || get_denied_certificates().contains(transaction_digest)
-}

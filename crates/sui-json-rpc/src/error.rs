@@ -271,6 +271,18 @@ impl From<Error> for ErrorObjectOwned {
                     | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                         ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
                     }
+                    QuorumDriverError::TransactionFailed { retriable, details } => {
+                        // TODO(fastpath): Replace with a proper error code
+                        ErrorObject::owned(
+                            if retriable {
+                                TRANSIENT_ERROR_CODE
+                            } else {
+                                TRANSACTION_EXECUTION_CLIENT_ERROR_CODE
+                            },
+                            format!("[MFP experimental]: {details}"),
+                            None::<()>,
+                        )
+                    }
                 }
             }
             _ => failed(e),

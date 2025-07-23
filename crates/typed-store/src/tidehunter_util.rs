@@ -5,6 +5,7 @@ use crate::DBMetrics;
 use bincode::Options;
 use prometheus::Registry;
 use serde::de::DeserializeOwned;
+use std::env;
 use std::path::Path;
 use std::sync::Arc;
 use tidehunter::config::Config;
@@ -13,17 +14,17 @@ use tidehunter::iterators::db_iterator::DbIterator;
 use tidehunter::key_shape::{KeyShape, KeySpace};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
-    key_shape::{KeyShapeBuilder, KeySpaceConfig},
+    key_shape::{KeyIndexing, KeyShapeBuilder, KeySpaceConfig, KeyType},
     minibytes::Bytes,
-    WalPosition,
+    IndexWalPosition, WalPosition,
 };
 use typed_store_error::TypedStoreError;
 
 #[derive(Clone)]
 pub struct ThConfig {
-    key_size: usize,
+    key_indexing: KeyIndexing,
+    key_type: KeyType,
     mutexes: usize,
-    per_mutex: usize,
     config: KeySpaceConfig,
     pub prefix: Option<Vec<u8>>,
 }
@@ -46,18 +47,29 @@ fn new_db_registry(name: String) -> Registry {
 }
 
 pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfig) -> KeySpace {
-    builder.add_key_space_config(
+    builder.add_key_space_config_indexing(
         name,
-        config.key_size,
+        config.key_indexing.clone(),
         config.mutexes,
-        config.per_mutex,
+        config.key_type,
         config.config.clone(),
     )
 }
-
 fn thdb_config() -> Config {
+    let frag_size = if let Ok(frag_size) = env::var("TH_FRAG_SIZE") {
+        let frag_size = frag_size.parse().expect("Failed to parse TH_FRAG_SIZE");
+        assert!(frag_size > 0, "TH_FRAG_SIZE must be more then 0");
+        assert!(
+            frag_size % (4 * 1024) == 0,
+            "TH_FRAG_SIZE must be page aligned({frag_size} given)"
+        );
+        println!("Using frag size from env variable {frag_size}");
+        frag_size
+    } else {
+        1024 * 1024 * 1024
+    };
     Config {
-        frag_size: 1024 * 1024 * 1024,
+        frag_size,
         // run snapshot every 64 Gb written to wal
         snapshot_written_bytes: 64 * 1024 * 1024 * 1024,
         // force unloading dirty index entries if behind 128 Gb of wal
@@ -132,12 +144,36 @@ pub(crate) fn typed_store_error_from_th_error(err: tidehunter::db::DbError) -> T
 }
 
 impl ThConfig {
-    pub fn new(key_size: usize, mutexes: usize, per_mutex: usize) -> Self {
+    pub fn new(key_size: usize, mutexes: usize, key_type: KeyType) -> Self {
         Self {
-            key_size,
+            key_indexing: KeyIndexing::fixed(key_size),
             mutexes,
-            per_mutex,
+            key_type,
             config: KeySpaceConfig::default(),
+            prefix: None,
+        }
+    }
+    pub fn new_with_indexing(key_indexing: KeyIndexing, mutexes: usize, key_type: KeyType) -> Self {
+        Self {
+            key_indexing,
+            mutexes,
+            key_type,
+            config: KeySpaceConfig::default(),
+            prefix: None,
+        }
+    }
+
+    pub fn new_with_config_indexing(
+        key_indexing: KeyIndexing,
+        mutexes: usize,
+        key_type: KeyType,
+        config: KeySpaceConfig,
+    ) -> Self {
+        Self {
+            key_indexing,
+            mutexes,
+            key_type,
+            config,
             prefix: None,
         }
     }
@@ -145,35 +181,50 @@ impl ThConfig {
     pub fn new_with_config(
         key_size: usize,
         mutexes: usize,
-        per_mutex: usize,
+        key_type: KeyType,
         config: KeySpaceConfig,
     ) -> Self {
-        Self {
-            key_size,
-            mutexes,
-            per_mutex,
-            config,
-            prefix: None,
-        }
+        Self::new_with_config_indexing(KeyIndexing::fixed(key_size), mutexes, key_type, config)
     }
 
     pub fn new_with_rm_prefix(
         key_size: usize,
         mutexes: usize,
-        per_mutex: usize,
+        key_type: KeyType,
+        config: KeySpaceConfig,
+        prefix: Vec<u8>,
+    ) -> Self {
+        Self::new_with_rm_prefix_indexing(
+            KeyIndexing::fixed(key_size),
+            mutexes,
+            key_type,
+            config,
+            prefix,
+        )
+    }
+
+    pub fn new_with_rm_prefix_indexing(
+        key_indexing: KeyIndexing,
+        mutexes: usize,
+        key_type: KeyType,
         config: KeySpaceConfig,
         prefix: Vec<u8>,
     ) -> Self {
         Self {
-            key_size,
+            key_indexing,
             mutexes,
-            per_mutex,
+            key_type,
             config,
             prefix: Some(prefix),
         }
     }
+
+    pub fn with_config(mut self, config: KeySpaceConfig) -> Self {
+        self.config = config;
+        self
+    }
 }
 
 pub fn default_cells_per_mutex() -> usize {
-    8
+    2
 }

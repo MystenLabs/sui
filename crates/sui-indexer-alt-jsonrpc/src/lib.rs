@@ -32,7 +32,7 @@ use tower_layer::Identity;
 use tracing::{info, warn};
 use url::Url;
 
-use crate::api::governance::Governance;
+use crate::api::governance::{DelegationGovernance, Governance};
 use crate::context::Context;
 
 pub mod api;
@@ -229,8 +229,8 @@ pub struct NodeArgs {
 /// will signal cancellation on the token when it is shutting down.
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not work.
-/// The only exception is the `DelegationCoins` module, which is controlled by `node_args.fullnode_rpc_url`,
-/// which can be omitted to disable reads from this RPC.
+/// The only exceptions are the `DelegationCoins` and `DelegationGovernance` modules, which are controlled
+/// by `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
 ///
 /// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
 /// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
@@ -291,9 +291,13 @@ pub async fn start_rpc(
             fullnode_rpc_url.clone(),
             context.config().node.clone(),
         )?)?;
+        rpc.add_module(DelegationGovernance::new(
+            fullnode_rpc_url.clone(),
+            context.config().node.clone(),
+        )?)?;
         rpc.add_module(Write::new(fullnode_rpc_url, context.config().node.clone())?)?;
     } else {
-        warn!("No fullnode rpc url provided, DelegationCoins and Write modules will not be added.");
+        warn!("No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added.");
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
@@ -537,7 +541,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_received
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             1
         );
@@ -545,7 +549,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_succeeded
-                .with_label_values(&["<UNKNOWN>"])
+                .with_label_values(&["UNKNOWN:test_baz"])
                 .get(),
             0
         );
@@ -553,7 +557,7 @@ mod tests {
         assert_eq!(
             metrics
                 .requests_failed
-                .with_label_values(&["<UNKNOWN>", &format!("{METHOD_NOT_FOUND_CODE}")])
+                .with_label_values(&["UNKNOWN:test_baz", &format!("{METHOD_NOT_FOUND_CODE}")])
                 .get(),
             1
         );

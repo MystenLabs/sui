@@ -3,22 +3,25 @@
 
 use anyhow::Context as _;
 use async_graphql::{Context, Object};
+
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
+    message_envelope::Message,
     messages_checkpoint::{CheckpointContents as NativeCheckpointContents, CheckpointSummary},
 };
 
 use crate::{
     api::{
         query::Query,
-        scalars::{date_time::DateTime, uint53::UInt53},
+        scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
+        types::validator_aggregated_signature::ValidatorAggregatedSignature,
     },
     error::RpcError,
     scope::Scope,
 };
 
-use super::epoch::Epoch;
+use super::{epoch::Epoch, gas::GasCostSummary};
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -64,10 +67,71 @@ impl Checkpoint {
 
 #[Object]
 impl CheckpointContents {
+    /// A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
+    async fn digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(summary.digest().base58_encode()))
+    }
+
+    /// A 32-byte hash that uniquely identifies the checkpoint's content, encoded in Base58.
+    async fn content_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(summary.content_digest.base58_encode()))
+    }
+
     /// The epoch that this checkpoint is part of.
     async fn epoch(&self) -> Option<Epoch> {
         let (summary, _, _) = self.contents.as_ref()?;
         Some(Epoch::with_id(self.scope.clone(), summary.epoch))
+    }
+
+    /// The total number of transactions in the network by the end of this checkpoint.
+    async fn network_total_transactions(&self) -> Option<UInt53> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(summary.network_total_transactions.into())
+    }
+
+    /// The digest of the previous checkpoint's summary.
+    async fn previous_checkpoint_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(summary
+            .previous_digest
+            .as_ref()
+            .map(|digest| digest.base58_encode()))
+    }
+
+    /// The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+    async fn rolling_gas_summary(&self) -> Option<GasCostSummary> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(GasCostSummary::from(
+            summary.epoch_rolling_gas_cost_summary.clone(),
+        ))
+    }
+
+    /// The Base64 serialized BCS bytes of this checkpoint's summary.
+    async fn summary_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(Base64::from(
+            bcs::to_bytes(summary).context("Failed to serialize checkpoint summary")?,
+        )))
+    }
+
+    /// The Base64 serialized BCS bytes of this checkpoint's contents.
+    async fn content_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let Some((_, content, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(Base64::from(
+            bcs::to_bytes(content).context("Failed to serialize checkpoint content")?,
+        )))
     }
 
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
@@ -77,6 +141,17 @@ impl CheckpointContents {
         };
 
         Ok(Some(DateTime::from_ms(summary.timestamp_ms as i64)?))
+    }
+
+    /// The aggregation of signatures from a quorum of validators for the checkpoint proposal.
+    async fn validator_signatures(&self) -> Result<Option<ValidatorAggregatedSignature>, RpcError> {
+        let Some((_, _, authority_info)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(ValidatorAggregatedSignature::with_authority_info(
+            self.scope.clone(),
+            authority_info.clone(),
+        )))
     }
 }
 

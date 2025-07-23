@@ -119,6 +119,7 @@ impl<'a> ParsingAnalysisContext<'a> {
             | A::DefinesPrimitive(..)
             | A::Deprecation { .. }
             | A::Error { .. }
+            | A::Mode { .. }
             | A::Syntax { .. }
             | A::Allow { .. }
             | A::LintAllow { .. } => (),
@@ -128,8 +129,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.parsed_attr_symbols(parsed);
                 }
             }
-            A::VerifyOnly => {}
-            A::Test | A::TestOnly | A::RandomTest => {}
+            A::Test | A::RandomTest => {}
             A::ExpectedFailure {
                 minor_status,
                 failure_kind,
@@ -203,18 +203,25 @@ impl<'a> ParsingAnalysisContext<'a> {
         mod_def
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
         // location of the latest use declaration (if any)
         let mut latest_use_loc = Loc::new(mod_def.loc.file_hash(), 0, 0);
         // location of the earliest member (if any)
         let mut earliest_member_loc = Loc::new(mod_def.loc.file_hash(), u32::MAX, u32::MAX);
+        // we need this to avoid adding auto-imports for `use` declarations
+        // in "use blocks" that follow the follow the initial one (and come
+        // after other module members)
+        let mut non_use_member_after_use = false;
         for m in &mod_def.members {
             use P::ModuleMember as MM;
             match m {
                 MM::Function(fun) => {
                     if ignored_function(fun.name.value()) {
                         continue;
+                    }
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
                     }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, fun.doc.loc().unwrap_or(fun.loc));
@@ -234,9 +241,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    fun.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    fun.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     for (_, x, t) in fun.signature.parameters.iter() {
                         update_cursor!(IDENT, self.cursor, x, Parameter);
@@ -254,6 +261,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
                 }
                 MM::Struct(sdef) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, sdef.doc.loc().unwrap_or(sdef.loc));
                     // If the cursor is in this item, mark that down.
@@ -268,9 +278,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    sdef.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    sdef.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     match &sdef.fields {
                         P::StructFields::Named(v) => v.iter().for_each(|(_, x, t)| {
@@ -284,6 +294,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Enum(edef) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, edef.doc.loc().unwrap_or(edef.loc));
                     // If the cursor is in this item, mark that down.
@@ -298,9 +311,9 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    edef.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    edef.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     let P::EnumDefinition { variants, .. } = edef;
                     for variant in variants {
@@ -318,14 +331,24 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Use(use_decl) => {
-                    latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    if !non_use_member_after_use {
+                        // update only if we have not seen a use that was already
+                        // followed by a non-use member
+                        latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    }
                     self.use_decl_symbols(use_decl)
                 }
                 MM::Friend(fdecl) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc = earliest_loc(earliest_member_loc, fdecl.loc);
                     self.chain_symbols(&fdecl.friend)
                 }
                 MM::Constant(c) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc =
                         earliest_loc(earliest_member_loc, c.doc.loc().unwrap_or(c.loc));
                     // If the cursor is in this item, mark that down.
@@ -340,14 +363,17 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     };
 
-                    c.attributes
-                        .iter()
-                        .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+                    c.attributes.iter().for_each(|sp!(_, attrs)| {
+                        attrs.0.iter().for_each(|a| self.attr_symbols(a))
+                    });
 
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
                 MM::Spec(s) => {
+                    if latest_use_loc.end() > 0 {
+                        non_use_member_after_use = true;
+                    }
                     earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
                 }
             }
@@ -671,7 +697,7 @@ impl<'a> ParsingAnalysisContext<'a> {
         use_decl
             .attributes
             .iter()
-            .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a)));
+            .for_each(|sp!(_, attrs)| attrs.0.iter().for_each(|a| self.attr_symbols(a)));
 
         update_cursor!(self.cursor, sp(use_decl.loc, use_decl.use_.clone()), Use);
 

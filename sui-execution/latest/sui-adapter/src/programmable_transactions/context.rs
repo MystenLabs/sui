@@ -7,7 +7,11 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::new_native_extensions,
-        error::convert_vm_error,
+        data_store::{
+            PackageStore,
+            cached_package_store::CachedPackageStore,
+            legacy::{linkage_view::LinkageView, sui_data_store::SuiDataStore},
+        },
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, InputObjectMetadata, InputValue, ObjectContents,
@@ -15,7 +19,6 @@ mod checked {
         },
         gas_charger::GasCharger,
         gas_meter::SuiGasMeter,
-        programmable_transactions::{data_store::SuiDataStore, linkage_view::LinkageView},
         type_resolver::TypeTagResolver,
     };
     use indexmap::IndexSet;
@@ -28,6 +31,7 @@ mod checked {
         account_address::AccountAddress,
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
+        resolver::MoveResolver,
         vm_status::StatusCode,
     };
     use move_trace_format::format::MoveTraceBuilder;
@@ -46,21 +50,25 @@ mod checked {
         sync::Arc,
     };
     use sui_move_natives::object_runtime::{
-        self, LoadedRuntimeObject, ObjectRuntime, RuntimeResults, get_all_uids, max_event_error,
+        self, LoadedRuntimeObject, MoveAccumulatorEvent, MoveAccumulatorValue, ObjectRuntime,
+        RuntimeResults, get_all_uids, max_event_error,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
+        accumulator_event::AccumulatorEvent,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind, command_argument_error},
+        effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
+        error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
+        execution_config_utils::to_binary_config,
         execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
-        storage::{BackingPackageStore, DenyListResult, PackageObject},
+        storage::DenyListResult,
         transaction::{Argument, CallArg, ObjectArg},
     };
     use tracing::instrument;
@@ -145,7 +153,9 @@ mod checked {
         where
             'a: 'state,
         {
-            let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
+            let mut linkage_view = LinkageView::new(Box::new(CachedPackageStore::new(Box::new(
+                state_view.as_sui_resolver(),
+            ))));
             let mut input_object_map = BTreeMap::new();
             let inputs = inputs
                 .into_iter()
@@ -286,10 +296,10 @@ mod checked {
                     .unwrap_or(*package_id));
             }
 
-            let package = package_for_linkage(&self.linkage_view, package_id)
+            let move_package = get_package(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(package.move_package())
+            self.linkage_view.set_linkage(&move_package)
         }
 
         /// Load a type using the context's current session.
@@ -332,13 +342,27 @@ mod checked {
             }
             let new_events = events
                 .into_iter()
-                .map(|(ty, tag, value)| {
+                .map(|(tag, value)| {
+                    let type_tag = TypeTag::Struct(Box::new(tag.clone()));
+                    let ty = unwrap_type_tag_load(
+                        self.protocol_config,
+                        self.vm
+                            .get_runtime()
+                            .try_load_cached_type(&type_tag)
+                            .map_err(|e| self.convert_vm_error(e))?
+                            .ok_or_else(|| {
+                                make_invariant_violation!(
+                                    "Failed to load type for event tag: {}",
+                                    tag
+                                )
+                            }),
+                    )?;
                     let layout = self
                         .vm
                         .get_runtime()
                         .type_to_type_layout(&ty)
                         .map_err(|e| self.convert_vm_error(e))?;
-                    let Some(bytes) = value.simple_serialize(&layout) else {
+                    let Some(bytes) = value.typed_serialize(&layout) else {
                         invariant_violation!("Failed to deserialize already serialized Move value");
                     };
                     Ok((module_id.clone(), tag, bytes))
@@ -818,6 +842,7 @@ mod checked {
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
+                accumulator_events,
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
@@ -863,7 +888,23 @@ mod checked {
                 }
             }
 
-            for (id, (recipient, ty, value)) in writes {
+            for (id, (recipient, tag, value)) in writes {
+                let ty = unwrap_type_tag_load(
+                    protocol_config,
+                    vm.get_runtime()
+                        .try_load_cached_type(&TypeTag::from(tag.clone()))
+                        .map_err(|e| {
+                            convert_vm_error(
+                                e,
+                                vm,
+                                &linkage_view,
+                                protocol_config.resolve_abort_locations_to_package_id(),
+                            )
+                        })?
+                        .ok_or_else(|| {
+                            make_invariant_violation!("Failed to load type for event tag: {}", tag)
+                        }),
+                )?;
                 let abilities = vm.get_runtime().get_type_abilities(&ty).map_err(|e| {
                     convert_vm_error(
                         e,
@@ -881,7 +922,7 @@ mod checked {
                         protocol_config.resolve_abort_locations_to_package_id(),
                     )
                 })?;
-                let Some(bytes) = value.simple_serialize(&layout) else {
+                let Some(bytes) = value.typed_serialize(&layout) else {
                     invariant_violation!("Failed to deserialize already serialized Move value");
                 };
                 // safe because has_public_transfer has been determined by the abilities
@@ -913,12 +954,13 @@ mod checked {
                 created_object_ids,
                 deleted_object_ids,
                 user_events,
+                accumulator_events,
             )
         }
 
         /// Convert a VM Error to an execution one
         pub fn convert_vm_error(&self, error: VMError) -> ExecutionError {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 error,
                 self.vm,
                 &self.linkage_view,
@@ -928,7 +970,6 @@ mod checked {
 
         /// Special case errors for type arguments to Move functions
         pub fn convert_type_argument_error(&self, idx: usize, error: VMError) -> ExecutionError {
-            use move_core_types::vm_status::StatusCode;
             use sui_types::execution_status::TypeArgumentError;
             match error.major_status() {
                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
@@ -1153,6 +1194,28 @@ mod checked {
                 SizeBound::Object(bound)
             }
         }
+
+        pub(crate) fn deserialize_modules(
+            &self,
+            module_bytes: &[Vec<u8>],
+        ) -> Result<Vec<CompiledModule>, ExecutionError> {
+            let binary_config = to_binary_config(self.protocol_config);
+            let modules = module_bytes
+                .iter()
+                .map(|b| {
+                    CompiledModule::deserialize_with_config(b, &binary_config)
+                        .map_err(|e| e.finish(Location::Undefined))
+                })
+                .collect::<VMResult<Vec<CompiledModule>>>()
+                .map_err(|e| self.convert_vm_error(e))?;
+
+            assert_invariant!(
+                !modules.is_empty(),
+                "input checker ensures package is not empty"
+            );
+
+            Ok(modules)
+        }
     }
 
     impl Arg {
@@ -1189,22 +1252,17 @@ mod checked {
 
     /// Fetch the package at `package_id` with a view to using it as a link context.  Produces an error
     /// if the object at that ID does not exist, or is not a package.
-    fn package_for_linkage(
-        linkage_view: &LinkageView,
+    fn get_package(
+        package_store: &dyn PackageStore,
         package_id: ObjectID,
-    ) -> VMResult<PackageObject> {
-        use move_binary_format::errors::PartialVMError;
-        use move_core_types::vm_status::StatusCode;
-
-        match linkage_view.get_package_object(&package_id) {
+    ) -> VMResult<Rc<MovePackage>> {
+        match package_store.get_package(&package_id) {
             Ok(Some(package)) => Ok(package),
             Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!("Cannot find link context {package_id} in store"))
                 .finish(Location::Undefined)),
             Err(err) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!(
-                    "Error loading link context {package_id} from store: {err}"
-                ))
+                .with_message(format!("Error loading {package_id} from store: {err}"))
                 .finish(Location::Undefined)),
         }
     }
@@ -1221,6 +1279,7 @@ mod checked {
         created_object_ids: IndexSet<ObjectID>,
         deleted_object_ids: IndexSet<ObjectID>,
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+        accumulator_events: Vec<MoveAccumulatorEvent>,
     ) -> Result<ExecutionResults, ExecutionError> {
         // Before finishing, ensure that any shared object taken by value by the transaction is either:
         // 1. Mutated (and still has a shared ownership); or
@@ -1310,6 +1369,27 @@ mod checked {
             })
             .collect();
 
+        let accumulator_events = accumulator_events
+            .into_iter()
+            .map(|accum_event| match accum_event.value {
+                MoveAccumulatorValue::U64(amount) => {
+                    let value = AccumulatorValue::Integer(amount);
+                    let address = AccumulatorAddress::new(
+                        accum_event.target_addr.into(),
+                        accum_event.target_ty,
+                    );
+
+                    let write = AccumulatorWriteV1 {
+                        address,
+                        operation: accum_event.action.into_sui_accumulator_action(),
+                        value,
+                    };
+
+                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                }
+            })
+            .collect();
+
         Ok(ExecutionResults::V2(ExecutionResultsV2 {
             written_objects,
             modified_objects: loaded_runtime_objects
@@ -1319,6 +1399,7 @@ mod checked {
             created_object_ids: created_object_ids.into_iter().collect(),
             deleted_object_ids: deleted_object_ids.into_iter().collect(),
             user_events,
+            accumulator_events,
         }))
     }
 
@@ -1341,17 +1422,17 @@ mod checked {
 
         // Load the package that the struct is defined in, in storage
         let defining_id = ObjectID::from_address(*address);
-        let package = package_for_linkage(linkage_view, defining_id)?;
+
+        let data_store = SuiDataStore::new(linkage_view, new_packages);
+        let move_package = get_package(&data_store, defining_id)?;
 
         // Set the defining package as the link context while loading the
         // struct
-        let original_address = linkage_view
-            .set_linkage(package.move_package())
-            .map_err(|e| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(e.to_string())
-                    .finish(Location::Undefined)
-            })?;
+        let original_address = linkage_view.set_linkage(&move_package).map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
 
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
@@ -1441,7 +1522,7 @@ mod checked {
 
         let tag: StructTag = type_.into();
         let type_ = load_type_from_struct(vm, linkage_view, new_packages, &tag).map_err(|e| {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 e,
                 vm,
                 linkage_view,
@@ -1450,7 +1531,7 @@ mod checked {
         })?;
         let has_public_transfer = if protocol_config.recompute_has_public_transfer_in_execution() {
             let abilities = vm.get_runtime().get_type_abilities(&type_).map_err(|e| {
-                crate::error::convert_vm_error(
+                convert_vm_error(
                     e,
                     vm,
                     linkage_view,
@@ -1592,6 +1673,10 @@ mod checked {
                 input_object_map,
                 obj_arg,
             )?,
+            CallArg::BalanceWithdraw(_) => {
+                // TODO(address-balances): Add support for balance withdraws.
+                todo!("Load balance withdraw call arg")
+            }
         })
     }
 
@@ -1709,7 +1794,7 @@ mod checked {
             .map(|obj: &LoadedRuntimeObject| obj.version);
 
         let type_tag = vm.get_runtime().get_type_tag(&type_).map_err(|e| {
-            crate::error::convert_vm_error(
+            convert_vm_error(
                 e,
                 vm,
                 linkage_view,
@@ -1730,6 +1815,17 @@ mod checked {
                 protocol_config,
                 Mode::packages_are_predefined(),
             )
+        }
+    }
+
+    fn unwrap_type_tag_load(
+        protocol_config: &ProtocolConfig,
+        ty: Result<Type, ExecutionError>,
+    ) -> Result<Type, ExecutionError> {
+        if ty.is_err() && !protocol_config.type_tags_in_object_runtime() {
+            panic!("Failed to load a type tag from the object runtime -- this shouldn't happen")
+        } else {
+            ty
         }
     }
 
@@ -1757,5 +1853,30 @@ mod checked {
                 EitherError::Execution(e) => e,
             }
         }
+    }
+
+    fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
+        error: VMError,
+        vm: &MoveVM,
+        state_view: &S,
+        resolve_abort_location_to_package_id: bool,
+    ) -> ExecutionError {
+        crate::error::convert_vm_error_impl(
+            error,
+            &|id: &ModuleId| {
+                if resolve_abort_location_to_package_id {
+                    state_view.relocate(id).unwrap_or_else(|_| id.clone())
+                } else {
+                    id.clone()
+                }
+            },
+            &|id, function| {
+                vm.load_module(id, state_view).ok().map(|module| {
+                    let fdef = module.function_def_at(function);
+                    let fhandle = module.function_handle_at(fdef.function);
+                    module.identifier_at(fhandle.name).to_string()
+                })
+            },
+        )
     }
 }

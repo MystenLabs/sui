@@ -9,6 +9,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use consensus_types::block::{BlockDigest, BlockRef, Round};
 use sui_macros::fail_point;
 use typed_store::{
     metrics::SamplingInterval,
@@ -18,7 +19,7 @@ use typed_store::{
 
 use super::{CommitInfo, Store, WriteBatch};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
+    block::{BlockAPI as _, SignedBlock, VerifiedBlock},
     commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
     error::{ConsensusError, ConsensusResult},
 };
@@ -26,7 +27,7 @@ use crate::{
 /// Persistent storage with RocksDB.
 #[derive(DBMapUtils)]
 #[cfg_attr(tidehunter, tidehunter)]
-pub(crate) struct RocksDBStore {
+pub struct RocksDBStore {
     /// Stores SignedBlock by refs.
     blocks: DBMap<(Round, AuthorityIndex, BlockDigest), Bytes>,
     /// A secondary index that orders refs first by authors.
@@ -50,7 +51,7 @@ impl RocksDBStore {
 
     /// Creates a new instance of RocksDB storage.
     #[cfg(not(tidehunter))]
-    pub(crate) fn new(path: &str) -> Self {
+    pub fn new(path: &str) -> Self {
         // Consensus data has high write throughput (all transactions) and is rarely read
         // (only during recovery and when helping peers catch up).
         let db_options = default_db_options().optimize_db_for_write_throughput(2);
@@ -82,23 +83,58 @@ impl RocksDBStore {
     }
 
     #[cfg(tidehunter)]
-    pub(crate) fn new(path: &str) -> Self {
-        tracing::warn!("Consensus RocksDBStore using tidehunter");
-        use typed_store::tidehunter_util::{default_cells_per_mutex, ThConfig};
-        let config = ThConfig::new(4, 1024, default_cells_per_mutex());
-        let cfs = [
-            Self::BLOCKS_CF,
-            Self::DIGESTS_BY_AUTHORITIES_CF,
-            Self::COMMITS_CF,
-            Self::COMMIT_VOTES_CF,
-            Self::COMMIT_INFO_CF,
+    pub fn new(path: &str) -> Self {
+        tracing::warn!("Consensus store using tidehunter");
+        use typed_store::tidehunter_util::{KeyIndexing, KeySpaceConfig, KeyType, ThConfig};
+        const MUTEXES: usize = 1024;
+        let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
+        let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
+        let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
+        let u32_prefix = KeyType::prefix_uniform(3, 0);
+        let u64_prefix = KeyType::prefix_uniform(6, 0);
+        let override_dirty_keys_config = KeySpaceConfig::new().with_max_dirty_keys(4_000);
+        let configs = vec![
+            (
+                Self::BLOCKS_CF.to_string(),
+                ThConfig::new_with_config_indexing(
+                    index_index_digest_key.clone(),
+                    MUTEXES,
+                    u32_prefix.clone(),
+                    override_dirty_keys_config.clone(),
+                ),
+            ),
+            (
+                Self::DIGESTS_BY_AUTHORITIES_CF.to_string(),
+                ThConfig::new_with_config_indexing(
+                    index_index_digest_key.clone(),
+                    MUTEXES,
+                    u64_prefix.clone(),
+                    override_dirty_keys_config.clone(),
+                ),
+            ),
+            (
+                Self::COMMITS_CF.to_string(),
+                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
+            ),
+            (
+                Self::COMMIT_VOTES_CF.to_string(),
+                ThConfig::new_with_config_indexing(
+                    commit_vote_key,
+                    MUTEXES,
+                    u32_prefix.clone(),
+                    override_dirty_keys_config.clone(),
+                ),
+            ),
+            (
+                Self::COMMIT_INFO_CF.to_string(),
+                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
+            ),
         ];
-        let configs = cfs.iter().map(|cf| (cf.to_string(), config.clone()));
         Self::open_tables_read_write(
             path.into(),
             MetricConf::new("consensus")
                 .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
-            configs.collect(),
+            configs.into_iter().collect(),
         )
     }
 }

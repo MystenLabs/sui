@@ -30,8 +30,6 @@ Running Move unit tests
 [ PASS    ] 0x1::references::test_vector_mut_borrow_pop
 Test result: OK. Total tests: 26; passed: 26; failed: 0
 External Command `diff -qr traces saved_traces`:
-Only in traces: 0x1__differential_test__f1.json.zst
-Only in traces: 0x1__differential_test__f21.json.zst
 Command `coverage lcov`:
 External Command `wc -l lcov.info`:
 6012 lcov.info

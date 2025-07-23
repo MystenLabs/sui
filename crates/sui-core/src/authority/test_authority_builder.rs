@@ -3,6 +3,7 @@
 
 use super::backpressure::BackpressureManager;
 use super::epoch_start_configuration::EpochFlag;
+use super::ExecutionEnv;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_tables::{
@@ -15,6 +16,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::RandomnessManager;
 use crate::execution_cache::build_execution_cache;
+use crate::execution_scheduler::SchedulingSource;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
@@ -172,6 +174,12 @@ impl<'a> TestAuthorityBuilder<'a> {
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
+        // `_guard` must be declared here so it is not dropped before
+        // `AuthorityPerEpochStore::new` is called
+        let protocol_config = self.protocol_config.clone();
+        let _guard = protocol_config
+            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
+
         let mut local_network_config_builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
                 .with_accounts(self.accounts)
@@ -238,11 +246,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         let name: AuthorityName = secret.public().into();
         let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-        // `_guard` must be declared here so it is not dropped before
-        // `AuthorityPerEpochStore::new` is called
-        let _guard = self
-            .protocol_config
-            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
         let epoch_flags = EpochFlag::default_flags_for_new_epoch(&config);
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
@@ -324,6 +327,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                     &checkpoint_store,
                     &epoch_store,
                     &cache_traits.backing_package_store,
+                    None,
                 )
                 .await,
             ))
@@ -347,6 +351,8 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.authority_store_pruning_config = pruning_config;
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+        let policy_config = config.policy_config.clone();
+        let firewall_config = config.firewall_config.clone();
 
         let state = AuthorityState::new(
             name,
@@ -366,6 +372,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             chain_identifier,
             pruner_db,
+            policy_config,
+            firewall_config,
         )
         .await;
 
@@ -403,7 +411,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                     genesis.epoch(),
                     genesis.checkpoint().sequence_number,
                 ),
-                None,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
                 &state.epoch_store_for_testing(),
             )
             .await

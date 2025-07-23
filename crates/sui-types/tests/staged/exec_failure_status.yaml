@@ -38,3 +38,5 @@
 36: ExecutionCancelledDueToRandomnessUnavailable
 37: MoveVectorElemTooBig
 38: MoveRawValueTooBig
+39: InvalidLinkage
+40: InsufficientBalanceForWithdraw

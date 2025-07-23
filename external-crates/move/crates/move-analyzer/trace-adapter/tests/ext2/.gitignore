@@ -1,0 +1,44 @@
+# ignore emacs temps
+*~
+# ignore kiosk and crypto files to save space
+**/kiosk.*
+**/kiosk_extension.*
+**/transfer_policy.*
+**/bls12381.*
+**/ecdsa_k1.*
+**/ecdsa_r1.*
+**/ecvrf.*
+**/ed25519.*
+**/groth16.*
+**/group_ops.*
+**/hash.*
+**/hmac.*
+**/nitro_attestation.*
+**/poseidon.*
+**/vdf.*
+**/zklogin_verified_id.*
+**/zklogin_verified_issuer.*
+# ingore sui framework packages not commonly used in simpler tests
+**/authenticator_state.*
+**/bag.*
+**/bcs.*
+**/clock.*
+**/display.*
+**/linked_table.*
+**/object_bag.*
+**/object_bag.*
+**/object_table.*
+**/pay.*
+**/party.*
+**/priority_queue.*
+**/prover.*
+**/sui.*
+**/table.*
+**/table_vec.*
+**/token.*
+**/vec_map.*
+**/vec_set.*
+**/versioned.*
+# ignore other files not relevant for runinng tests
+**/transaction_effects.json
+**/transaction_gas_report.json

@@ -16,6 +16,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
 };
+use sui_types::messages_consensus::TimestampMs;
 use sui_types::object::Object;
 use sui_types::storage::{EpochInfo, ObjectKey};
 use sui_types::transaction::Transaction;
@@ -39,11 +40,12 @@ pub trait KeyValueStoreReader {
     async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>>;
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>>;
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>>;
 }
 
 #[async_trait]
 pub trait KeyValueStoreWriter {
-    async fn save_objects(&mut self, objects: &[&Object]) -> Result<()>;
+    async fn save_objects(&mut self, objects: &[&Object], timestamp_ms: TimestampMs) -> Result<()>;
     async fn save_transactions(&mut self, transactions: &[TransactionData]) -> Result<()>;
     async fn save_checkpoint(&mut self, checkpoint: &CheckpointData) -> Result<()>;
     async fn save_watermark(&mut self, watermark: CheckpointSequenceNumber) -> Result<()>;

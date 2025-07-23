@@ -872,7 +872,6 @@ impl Disassembler<'_> {
         let cfg_opt = if self.options.print_basic_blocks {
             let cfg: BTreeMap<_, _> = VMControlFlowGraph::new(&code.code, &code.jump_tables)
                 .blocks()
-                .into_iter()
                 .enumerate()
                 .map(|(block_number, pc_start)| (pc_start, block_number))
                 .collect();

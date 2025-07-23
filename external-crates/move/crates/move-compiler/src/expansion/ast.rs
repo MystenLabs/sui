@@ -11,7 +11,7 @@ use crate::{
     },
     shared::{
         ast_debug::*,
-        known_attributes::{AttributeKind, KnownAttribute},
+        known_attributes::{AttributeKind, KnownAttribute, ModeAttribute},
         unique_map::UniqueMap,
         unique_set::UniqueSet,
         *,
@@ -538,9 +538,13 @@ impl Hash for Address {
 
 impl Attributes {
     pub fn is_test_or_test_only(&self) -> bool {
-        self.contains_key_(&known_attributes::AttributeKind_::TestOnly)
-            || self.contains_key_(&known_attributes::AttributeKind_::RandTest)
-            || self.contains_key_(&known_attributes::AttributeKind_::Test)
+        let Some(attr) = self.get_(&known_attributes::AttributeKind_::Mode) else {
+            return false;
+        };
+        let KnownAttribute::Mode(ModeAttribute { modes }) = &attr.value else {
+            unreachable!()
+        };
+        modes.contains_(&ModeAttribute::TEST.into())
     }
 }
 

@@ -52,7 +52,7 @@ You can request test tokens within [Sui Wallet](https://github.com/MystenLabs/my
 Use the following cURL command to request tokens directly from the faucet server:
 
 ```
-curl --location --request POST 'https://faucet.devnet.sui.io/v1/gas' \
+curl --location --request POST 'https://faucet.devnet.sui.io/v2/gas' \
 --header 'Content-Type: application/json' \
 --data-raw '{
     "FixedAmountRequest": {
@@ -61,20 +61,20 @@ curl --location --request POST 'https://faucet.devnet.sui.io/v1/gas' \
 }'
 ```
 
-If you're working with a local network, replace `'https://faucet.devnet.sui.io/v1/gas'` with the appropriate value based on which package runs your network:
+If you're working with a local network, replace `'https://faucet.devnet.sui.io/v2/gas'` with the appropriate value based on which package runs your network:
 
 - `sui-faucet`: `http://127.0.0.1:5003/gas`
 - `sui`: `http://127.0.0.1:9123/gas`
 
 ## Request test tokens through TypeScript SDK
 
-You can also access the faucet using the Sui TypeScript-SDK.
+You can also access the faucet using the Sui TypeScript SDK.
 
 ```typescript
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { getFaucetHost, requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
 
 // get tokens from the Devnet faucet server
-await requestSuiFromFaucetV0({
+await requestSuiFromFaucetV2({
 	// connect to Devnet
 	host: getFaucetHost('devnet'),
 	recipient: '<YOUR SUI ADDRESS>',

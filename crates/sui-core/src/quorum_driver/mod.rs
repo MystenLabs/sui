@@ -596,7 +596,7 @@ where
         } = task;
         let transaction = &request.transaction;
         let tx_digest = *transaction.digest();
-        let is_single_writer_tx = !transaction.contains_shared_object();
+        let is_single_writer_tx = !transaction.is_consensus_tx();
 
         let timer = Instant::now();
         let (tx_cert, newly_formed) = match tx_cert {
@@ -711,7 +711,7 @@ where
         let tx_digest = *request.transaction.digest();
         match err {
             None => {
-                debug!(?tx_digest, "Failed to {action} - Retrying");
+                info!(?tx_digest, "Failed to {action}: {err:?} - Retrying");
                 spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
                     request.clone(),
                     tx_cert,
@@ -727,7 +727,10 @@ where
                 // TODO: the txn can potentially be retried unlimited times, therefore, we need to bound the number
                 // of on going transactions in a quorum driver. When the limit is reached, the quorum driver should
                 // reject any new transaction requests.
-                debug!(?tx_digest, "Failed to {action} - Retrying");
+                info!(
+                    ?tx_digest,
+                    "Failed to {action} - Validator overloaded. Retrying"
+                );
                 spawn_monitored_task!(quorum_driver.backoff_and_enqueue(
                     request.clone(),
                     tx_cert,
@@ -737,7 +740,7 @@ where
                 ));
             }
             Some(qd_error) => {
-                debug!(?tx_digest, "Failed to {action}: {}", qd_error);
+                info!(?tx_digest, "Failed to {action}: {}", qd_error);
                 // non-retryable failure, this task reaches terminal state for now, notify waiter.
                 quorum_driver.notify(&request.transaction, &Err(qd_error), old_retry_times + 1);
             }

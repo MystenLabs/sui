@@ -60,7 +60,7 @@ macro_rules! make_invariant_violation {
         if cfg!(debug_assertions) {
             panic!($($args),*)
         }
-        ExecutionError::invariant_violation(format!($($args),*))
+        $crate::error::ExecutionError::invariant_violation(format!($($args),*))
     }}
 }
 
@@ -297,6 +297,9 @@ pub enum UserInputError {
 
     #[error("Object used as owned is not owned")]
     NotOwnedObjectError,
+
+    #[error("Invalid withdraw reservation: {error}")]
+    InvalidWithdrawReservation { error: String },
 }
 
 #[derive(
@@ -497,6 +500,8 @@ pub enum SuiError {
     TransactionsNotFound { digests: Vec<TransactionDigest> },
     #[error("Could not find the referenced transaction events [{digest:?}].")]
     TransactionEventsNotFound { digest: TransactionDigest },
+    #[error("Could not find the referenced transaction effects [{digest:?}].")]
+    TransactionEffectsNotFound { digest: TransactionDigest },
     #[error(
         "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
         digest
@@ -713,9 +718,11 @@ pub enum SuiError {
         "Validator consensus rounds are lagging behind. last committed leader round: {last_committed_round:?}, requested round: {round:?}"
     )]
     ValidatorConsensusLagging {
-        round: u64,
-        last_committed_round: u64,
+        round: u32,
+        last_committed_round: u32,
     },
+    #[error("Invalid admin request: {0}")]
+    InvalidAdminRequest(String),
 }
 
 #[repr(u64)]
@@ -897,6 +904,39 @@ impl SuiError {
         };
 
         (retryable, true)
+    }
+
+    /// Checks if this error is retriable with transaction resubmission attempts,
+    /// when this error is received outside of validators during transaction lifecycle.
+    ///
+    /// When a non-retriable error is returned by an honest validator during
+    /// transaction submission or effects query, this and other honest validators will
+    /// never vote to accept the same transaction with the same user signature.
+    /// So this transaction can never be finalized and retrying submission will not help.
+    ///
+    /// Also, when an error is categorized as non-retriable, we expect some consistency
+    /// among honest validators in also returning non-retriable errors for the same transaction
+    /// when there are no other temporary failures (network, overload, etc).
+    ///
+    /// SuiError contains many variants unrelated to transaction processing.
+    /// They can be returned externally by malicious validators or due to software bugs.
+    /// These variants are considered retriable, because they don't meet the criteria for
+    /// non-retriable errors above.
+    pub fn is_transaction_submission_retriable(&self) -> bool {
+        match self {
+            SuiError::UserInputError { error } => {
+                match error {
+                    // ObjectNotFound and DependentPackageNotFound are potentially retriable because the missing
+                    // input can be created by other transactions.
+                    UserInputError::ObjectNotFound { .. } => true,
+                    UserInputError::DependentPackageNotFound { .. } => true,
+                    // Other UserInputError variants are not retriable with resubmission.
+                    _ => false,
+                }
+            }
+            // Other variants are assumed to be retriable.
+            _ => true,
+        }
     }
 
     pub fn is_object_or_package_not_found(&self) -> bool {

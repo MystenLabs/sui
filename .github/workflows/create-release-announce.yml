@@ -6,17 +6,22 @@ concurrency: ${{ github.workflow }}-${{ inputs.network }}
 on:
   workflow_dispatch:
     inputs:
+      sui_commit:
+        description: "Sui commit to ship"
+        type: string
+        required: true
       network:
         description: Network to generate and announce release for
         required: true
         type: choice
         options:
+          - devnet
           - testnet
           - mainnet
       announce:
         description: Announce the release?
         type: boolean
-        default: true
+        default: false
         required: true
 env:
   RELEASE_NOTES_FILE: './release_notes.txt'
@@ -25,8 +30,6 @@ jobs:
   create-release:
     name: Create Release for ${{ inputs.network }}
     runs-on: ubuntu-latest
-    outputs:
-      sui_commit: ${{ steps.release-commit.outputs.sui_commit }}
 
     steps:
       - name: Checkout sui main branch
@@ -56,33 +59,34 @@ jobs:
 
       - name: Checkout release branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
-        env:
-          RELEASE_BRANCH: ${{ env.current_release_branch }}
         with:
           fetch-depth: 0
-          ref: ${{ env.RELEASE_BRANCH }}
+          ref: ${{ inputs.sui_commit }}
 
       - name: Update ${{ inputs.network }} branch
         shell: bash
-        id: release-commit
-        run: |
-          export sui_commit=$(git rev-parse HEAD)
-          echo "sui_commit=${sui_commit}" >> $GITHUB_ENV
-          echo "sui_commit=${sui_commit}" >> "$GITHUB_OUTPUT"
+        run: |          
           export sui_release_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')
           echo "sui_release_version=${sui_release_version}" >> $GITHUB_ENV
 
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
-          echo "{\"sha\": \"${sui_commit}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/${{ inputs.network }} \
+          echo "{\"sha\": \"${{ inputs.sui_commit }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/${{ inputs.network }} \
             --header "Accept: application/vnd.github+json" --input -
+
+      - name: Update framework/${{ inputs.network }} branch
+        if: ${{ inputs.network == 'devnet' }}
+        shell: bash
+        run: |
+          echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
+          echo "{\"sha\": \"${{ inputs.sui_commit }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/framework/${{ inputs.network }} \
+            --header "Accept: application/vnd.github+json" --input -            
 
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
         shell: bash
         env:
-          sui_commit: ${{ env.sui_commit }}
-          sui_release_version: ${{ env.sui_release_version }}
+          SUI_RELEASE_VERSION: ${{ env.sui_release_version }}
         run: |
-          export release_tag="${{ inputs.network }}-v${{ env.sui_release_version }}"
+          export release_tag="${{ inputs.network }}-v${{ env.SUI_RELEASE_VERSION }}"
           echo "release_tag=${release_tag}" >> $GITHUB_ENV
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -90,7 +94,7 @@ jobs:
             https://api.github.com/repos/MystenLabs/sui/git/refs \
             -d "{
               \"ref\": \"refs/tags/${release_tag}\",
-              \"sha\": \"${{ env.sui_commit }}\"
+              \"sha\": \"${{ inputs.sui_commit }}\"
             }"
 
       - name: Get commits for branches
@@ -152,7 +156,7 @@ jobs:
 
   announce-release:
     name: Announce Release in Discord
-    if: ${{ inputs.announce == true }}
+    if: ${{ inputs.announce == true && inputs.network != 'devnet' }}
     needs: create-release
     runs-on: ubuntu-latest
     steps:
@@ -162,4 +166,4 @@ jobs:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: sui-release-announce
-          client-payload: '{"sui_commit": "${{ needs.create-release.outputs.sui_commit }}", "environment": "${{ inputs.network }}"}'
+          client-payload: '{"environment": "${{ inputs.network }}"}'

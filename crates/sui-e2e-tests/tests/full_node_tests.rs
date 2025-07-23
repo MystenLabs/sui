@@ -159,17 +159,12 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     let tx = to_sender_signed_transaction_with_multi_signers(
         tx_data,
         vec![
+            test_cluster.wallet.config.keystore.export(&sender).unwrap(),
             test_cluster
                 .wallet
                 .config
                 .keystore
-                .get_key(&sender)
-                .unwrap(),
-            test_cluster
-                .wallet
-                .config
-                .keystore
-                .get_key(&sponsor)
+                .export(&sponsor)
                 .unwrap(),
         ],
     );
@@ -834,11 +829,11 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     context
         .config
         .keystore
-        .add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
+        .import(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
     context
         .config
         .keystore
-        .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
 
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
@@ -913,6 +908,32 @@ async fn test_full_node_transaction_orchestrator_rpc_ok() -> Result<(), anyhow::
         .unwrap();
 
     // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
+    // Use the same txn which should return local finalized effects
+    let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
+    let params = rpc_params![
+        tx_bytes,
+        signatures,
+        SuiTransactionBlockResponseOptions::new().with_effects(),
+        ExecuteTransactionRequestType::WaitForEffectsCert
+    ];
+    let response: SuiTransactionBlockResponse = jsonrpc_client
+        .request("sui_executeTransactionBlock", params)
+        .await
+        .unwrap();
+
+    let SuiTransactionBlockResponse {
+        effects,
+        confirmed_local_execution,
+        ..
+    } = response;
+    assert_eq!(effects.unwrap().transaction_digest(), tx_digest);
+    assert!(confirmed_local_execution.unwrap());
+
+    // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
+    // Use a different txn to avoid the case where the txn effects are already cached locally
+    let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
+
     let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
     let params = rpc_params![
         tx_bytes,
@@ -1172,7 +1193,7 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
     )
     .unwrap();
     let tx =
-        to_sender_signed_transaction(tx_data, context.config.keystore.get_key(&sender).unwrap());
+        to_sender_signed_transaction(tx_data, context.config.keystore.export(&sender).unwrap());
 
     let digest = *tx.digest();
     let _res = transaction_orchestrator

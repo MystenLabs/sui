@@ -46,6 +46,7 @@ pub(crate) enum EndOfEpochTransactionKind {
     BridgeStateCreate(BridgeStateCreateTransaction),
     BridgeCommitteeInit(BridgeCommitteeInitTransaction),
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
+    AccumulatorRootCreate(AccumulatorRootCreateTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -100,6 +101,13 @@ pub(crate) struct BridgeCommitteeInitTransaction {
 
 #[derive(SimpleObject, Clone, PartialEq, Eq)]
 pub(crate) struct StoreExecutionTimeObservationsTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct AccumulatorRootCreateTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
@@ -313,6 +321,9 @@ impl EndOfEpochTransactionKind {
                 K::StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction {
                     dummy: None,
                 })
+            }
+            N::AccumulatorRootCreate => {
+                K::AccumulatorRootCreate(AccumulatorRootCreateTransaction { dummy: None })
             }
         }
     }

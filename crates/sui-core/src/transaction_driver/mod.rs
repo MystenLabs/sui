@@ -1,9 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod effects_certifier;
 mod error;
 mod message_types;
 mod metrics;
+mod request_retrier;
+mod transaction_submitter;
+
+/// Exports
+pub use message_types::*;
+pub use metrics::*;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
 use std::{
     net::SocketAddr,
@@ -12,22 +20,16 @@ use std::{
 };
 
 use arc_swap::ArcSwap;
-pub use error::*;
-pub use message_types::*;
-pub use metrics::*;
+use effects_certifier::*;
+use error::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
-use rand::seq::SliceRandom as _;
 use sui_types::{
-    base_types::ConciseableName,
-    committee::EpochId,
-    quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
+    committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
 };
-use tokio::{
-    task::JoinSet,
-    time::{sleep, timeout},
-};
+use tokio::{task::JoinSet, time::sleep};
 use tracing::instrument;
+use transaction_submitter::*;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -47,6 +49,8 @@ pub struct TransactionDriver<A: Clone> {
     authority_aggregator: ArcSwap<AuthorityAggregator<A>>,
     state: Mutex<State>,
     metrics: Arc<TransactionDriverMetrics>,
+    submitter: TransactionSubmitter,
+    certifier: EffectsCertifier,
 }
 
 impl<A> TransactionDriver<A>
@@ -61,23 +65,36 @@ where
         let driver = Arc::new(Self {
             authority_aggregator: ArcSwap::new(authority_aggregator),
             state: Mutex::new(State::new()),
-            metrics,
+            metrics: metrics.clone(),
+            submitter: TransactionSubmitter::new(metrics.clone()),
+            certifier: EffectsCertifier::new(metrics),
         });
         driver.enable_reconfig(reconfig_observer);
         driver
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
-    pub async fn submit_transaction(
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
+    pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
         options: SubmitTransactionOptions,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
-        let is_single_writer_tx = !request.transaction.contains_shared_object();
+        let is_single_writer_tx = !request.transaction.is_consensus_tx();
+        let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
+
+        const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
+        let mut backoff = ExponentialBackoff::from_millis(100)
+            .max_delay(MAX_RETRY_DELAY)
+            .map(jitter);
+        let mut attempts = 0;
         loop {
-            match self.submit_transaction_once(&request, &options).await {
+            // TODO(fastpath): Check local state before submitting transaction
+            match self
+                .drive_transaction_once(tx_digest, raw_request.clone(), &options)
+                .await
+            {
                 Ok(resp) => {
                     let settlement_finality_latency = timer.elapsed().as_secs_f64();
                     self.metrics
@@ -91,53 +108,41 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to submit transaction {tx_digest}: {}", e);
-                    sleep(Duration::from_secs(1)).await;
+                    if !e.is_retriable() {
+                        return Err(e);
+                    }
+                    tracing::info!(
+                        "Failed to finalize transaction (attempt {}): {}. Retrying ...",
+                        attempts,
+                        e
+                    );
                 }
             }
+
+            sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+            attempts += 1;
         }
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
-    async fn submit_transaction_once(
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
+    async fn drive_transaction_once(
         &self,
-        request: &SubmitTxRequest,
+        tx_digest: &TransactionDigest,
+        raw_request: RawSubmitTxRequest,
         options: &SubmitTransactionOptions,
-    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
-        // Store the epoch number; we read it from the votes and use it later to create the certificate.
+    ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
-        let committee = auth_agg.committee.clone();
-        let epoch = committee.epoch();
-        let raw_request = request
-            .into_raw()
-            .map_err(TransactionDriverError::SerializationError)?;
 
-        // TODO(fastpath): Use validator performance metrics to choose who to submit with
-        // Send the transaction to a random validator.
-        let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
-        let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
-        let response = timeout(
-            Duration::from_secs(2),
-            client.submit_transaction(raw_request, options.forwarded_client_addr),
-        )
-        .await
-        .map_err(|_| TransactionDriverError::TimeoutBeforeFinality)?
-        .map_err(|e| {
-            TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
-        })?;
+        // Get consensus position using TransactionSubmitter
+        let (name, submit_txn_resp) = self
+            .submitter
+            .submit_transaction(&auth_agg, tx_digest, raw_request, options)
+            .await?;
 
-        // TODO(fastpath): Aggregate quorum of responses before returning QuorumSubmitTransactionResponse
-        Ok(QuorumSubmitTransactionResponse {
-            effects: FinalizedEffects {
-                effects: response.effects,
-                // TODO(fastpath): return the epoch in response.
-                finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-            },
-            events: response.events,
-            input_objects: response.input_objects,
-            output_objects: response.output_objects,
-            auxiliary_data: response.auxiliary_data,
-        })
+        // Wait for quorum effects using EffectsCertifier
+        self.certifier
+            .get_certified_finalized_effects(&auth_agg, tx_digest, name, submit_txn_resp, options)
+            .await
     }
 
     fn enable_reconfig(
@@ -171,6 +176,29 @@ where
         );
         self.authority_aggregator.store(new_authorities);
     }
+}
+
+// Chooses the percentage of transactions to be driven by TransactionDriver.
+pub fn choose_transaction_driver_percentage() -> u8 {
+    // Currently, TD cannot work in non-test environments.
+    if std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME).is_ok() {
+        return 0;
+    }
+
+    if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
+        if let Ok(tx_driver_percentage) = v.parse::<u8>() {
+            if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
+                return tx_driver_percentage;
+            }
+        }
+    }
+
+    // Default to 50% in simtests.
+    if cfg!(msim) {
+        return 50;
+    }
+
+    0
 }
 
 // Inner state of TransactionDriver.

@@ -6,7 +6,7 @@ use crate::{
     digests::ObjectDigest,
     object::{Object, Owner},
 };
-use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
 use serde::{Deserialize, Serialize};
 
 use super::IDOperation;
@@ -55,6 +55,14 @@ impl EffectsObjectChange {
             },
         }
     }
+
+    pub fn new_from_accumulator_write(write: AccumulatorWriteV1) -> Self {
+        Self {
+            input_state: ObjectIn::NotExist,
+            output_state: ObjectOut::AccumulatorWriteV1(write),
+            id_operation: IDOperation::None,
+        }
+    }
 }
 
 /// If an object exists (at root-level) in the store prior to this transaction,
@@ -77,20 +85,30 @@ pub enum AccumulatorOperation {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AccumulatorValue {
-    // u64 should be sufficient for coin balance.
-    U64(u64),
+    Integer(u64),
+    IntegerTuple(u64, u64),
+}
+
+/// Accumulator objects are named by an address (can be an account address or a UID)
+/// and a type tag.
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccumulatorAddress {
+    pub address: SuiAddress,
+    pub ty: TypeTag,
+}
+
+impl AccumulatorAddress {
+    pub fn new(address: SuiAddress, ty: TypeTag) -> Self {
+        Self { address, ty }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccumulatorWriteV1 {
-    /// The recipient of the accumulator.
-    pub recipient: SuiAddress,
-    /// The type of the accumulator. It is used together with the recipient to
-    /// derive the dynamic field ID of the accumulator.
-    pub accumulator_type: StructTag,
+    pub address: AccumulatorAddress,
     /// The operation to be applied to the accumulator.
     pub operation: AccumulatorOperation,
-    /// The value to be applied to the accumulator.
+    /// The value to be merged into or split from the accumulator.
     pub value: AccumulatorValue,
 }
 

@@ -703,6 +703,7 @@ fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
         NT::Param(tp) => HB::Param(tp),
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
+        NT::Void => HB::Unreachable,
         NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
             context.add_diag(ice!((
                 loc,

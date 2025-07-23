@@ -5,21 +5,20 @@
 use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 
-use codespan_reporting::{
-    files::SimpleFiles,
-    term::{self, Config, termcolor::Buffer},
-};
 use move_package_alt::{
-    dependency::{self, DependencySet, UnpinnedDependencyInfo},
-    flavor::Vanilla,
-    package::{lockfile::Lockfile, manifest::Manifest},
+    dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
+    flavor::{
+        Vanilla,
+        vanilla::{self, default_environment},
+    },
+    package::{RootPackage, lockfile::Lockfiles, manifest::Manifest, paths::PackagePath},
 };
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
+use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 
 /// Resolve the package contained in the same directory as [path], and snapshot a value based
 /// on the extension of [path]:
-///  - ".parsed": the contents of the manifest
 ///  - ".locked": the contents of the lockfile
 ///  - ".pinned": the contents of the pinned dependencies
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
@@ -36,6 +35,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let kind = path.extension().unwrap().to_string_lossy();
     let toml_path = path.with_extension("toml");
     let test = Test::from_path_with_kind(&toml_path, &kind)?;
+
     test.run()
 }
 
@@ -68,58 +68,78 @@ impl Test<'_> {
     /// Return the value to be snapshotted, based on `self.kind`, as described in [run_test]
     fn output(&self) -> anyhow::Result<String> {
         Ok(match self.kind {
-            "parsed" => {
-                let manifest = Manifest::<Vanilla>::read_from_file(self.toml_path);
-                let contents = match manifest.as_ref() {
-                    Ok(m) => format!("{:#?}", m),
-                    Err(_) => {
-                        let mut mapped_files = SimpleFiles::new();
-                        mapped_files.add(
-                            self.toml_path.to_str().unwrap(),
-                            std::fs::read_to_string(self.toml_path).unwrap(),
-                        );
-
-                        if let Some(e) = manifest.as_ref().err() {
-                            let diagnostic = e.to_diagnostic();
-                            let mut writer = Buffer::no_color();
-                            term::emit(&mut writer, &Config::default(), &mapped_files, &diagnostic)
-                                .unwrap();
-                            let inner = writer.into_inner();
-                            String::from_utf8(inner).unwrap_or_default()
-                        } else {
-                            format!("{}", manifest.unwrap_err())
-                        }
-                    }
-                };
-                contents
-            }
+            "graph_to_lockfile" => match run_graph_to_lockfile_test_wrapper(self.toml_path) {
+                Ok(s) => s,
+                Err(e) => e.to_string(),
+            },
             "locked" => {
-                let lockfile = Lockfile::<Vanilla>::read_from_dir(self.toml_path.parent().unwrap());
+                // TODO: this needs to deal with ephemeral environments
+
+                info!(
+                    ".locked snapshot tests are deprecated; they should be migrated to schema::lockfile::test"
+                );
+                let dir = PackagePath::new(self.toml_path.parent().unwrap().to_path_buf()).unwrap();
+
+                let lockfile = Lockfiles::<Vanilla>::read_from_dir(&dir);
+
                 match lockfile {
-                    Ok(l) => l.render_as_toml().to_string(),
+                    Ok(l) => l.unwrap().render_main_lockfile().to_string(),
                     Err(e) => e.to_string(),
                 }
             }
-            "pinned" => run_pinning_wrapper(self.toml_path).unwrap(),
+            "pinned" => match run_pinning_wrapper(self.toml_path) {
+                Ok(s) => s,
+                Err(e) => e.to_string(),
+            },
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
     }
 }
 
-async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
-    let manifest = Manifest::<Vanilla>::read_from_file(input_path).unwrap();
+// TODO: it's not clear what this test is intended to be testing
+async fn run_graph_to_lockfile_test(
+    input_path: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let env = vanilla::default_environment();
 
-    let deps: DependencySet<UnpinnedDependencyInfo<Vanilla>> = manifest.dependencies();
+    let root = RootPackage::<Vanilla>::load(input_path.parent().unwrap(), env).await?;
+
+    Ok(root.lockfile_for_testing().render_as_toml())
+}
+
+fn run_graph_to_lockfile_test_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let rt = tokio::runtime::Runtime::new()?;
+    let data = rt.block_on(run_graph_to_lockfile_test(path))?;
+    Ok(data)
+}
+
+async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String> {
+    let manifest = Manifest::read_from_file(input_path).unwrap();
+    let env = default_environment();
+
+    let deps = CombinedDependency::combine_deps(
+        manifest.file_handle(),
+        &env,
+        manifest
+            .dep_replacements()
+            .get(env.name())
+            .unwrap_or(&BTreeMap::new()),
+        &manifest.dependencies(),
+        &BTreeMap::new(),
+    )?;
+    let mut output = DependencySet::<PinnedDependencyInfo>::new();
+    debug!("{deps:?}");
 
     add_bindir();
-    let pinned = dependency::pin(&Vanilla, deps, manifest.environments()).await;
 
-    let output = match pinned {
-        Ok(ref deps) => format!("{deps:?}"),
-        Err(ref err) => err.to_string(),
-    };
+    let pinned = dependency::pin::<Vanilla>(deps.clone(), env.id())
+        .await
+        .map_err(|e| e.to_string())?;
+    for (name, dep) in pinned {
+        output.insert(env.name().to_string(), name, dep);
+    }
 
-    Ok(output)
+    Ok(format!("{output:#?}"))
 }
 
 fn run_pinning_wrapper(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -149,7 +169,7 @@ fn add_bindir() {
 datatest_stable::harness!(
     run_test,
     "tests/data",
-    r".*\.parsed$",
+    r".*\.graph_to_lockfile$",
     run_test,
     "tests/data",
     r".*\.locked$",

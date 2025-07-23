@@ -6,6 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
+use crate::accumulators::create_accumulator_update_transactions;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -14,6 +15,7 @@ pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
+use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
@@ -25,8 +27,8 @@ use mysten_common::{assert_reachable, debug_fatal, fatal};
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
+use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
-use sui_macros::fail_point;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -41,10 +43,13 @@ use crate::consensus_handler::SequencedConsensusTransactionKey;
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
+use std::future::Future;
 use std::io::Write;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
@@ -65,7 +70,9 @@ use sui_types::messages_checkpoint::{CheckpointRequestV2, SignedCheckpointSummar
 use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
-use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
+use sui_types::transaction::{
+    TransactionDataAPI, TransactionKey, TransactionKind, VerifiedTransaction,
+};
 use tokio::{sync::Notify, task::JoinSet, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
@@ -207,30 +214,42 @@ impl CheckpointStoreTables {
     #[cfg(tidehunter)]
     pub fn new(path: &Path, metric_name: &'static str) -> Self {
         tracing::warn!("Checkpoint DB using tidehunter");
-        use typed_store::tidehunter_util::{default_cells_per_mutex, KeySpaceConfig, ThConfig};
-        const MUTEXES: usize = 1024;
-        let config_u64 = ThConfig::new(8, MUTEXES, default_cells_per_mutex());
-        let prefix_config = ThConfig::new_with_rm_prefix(
+        use typed_store::tidehunter_util::{
+            default_cells_per_mutex, KeySpaceConfig, KeyType, ThConfig,
+        };
+        const MUTEXES: usize = 4 * 1024;
+        let u64_sequence_key = KeyType::prefix_uniform(6, 0);
+        let override_dirty_keys_config = KeySpaceConfig::new()
+            .with_max_dirty_keys(64_000)
+            .with_value_cache_size(1000);
+        let config_u64 =
+            ThConfig::new_with_config(8, MUTEXES, u64_sequence_key, override_dirty_keys_config);
+        let digest_config = ThConfig::new_with_rm_prefix(
             32,
             MUTEXES,
-            default_cells_per_mutex(),
+            KeyType::uniform(default_cells_per_mutex()),
             KeySpaceConfig::default(),
             vec![0, 0, 0, 0, 0, 0, 0, 32],
         );
+        let watermarks_config = KeySpaceConfig::new()
+            .with_value_cache_size(10)
+            .disable_unload();
+        let lru_config = KeySpaceConfig::new().with_value_cache_size(1000);
+        let checkpoint_by_digest_config = digest_config.clone().with_config(lru_config.clone());
         let configs = vec![
-            ("checkpoint_content", prefix_config.clone()),
+            ("checkpoint_content", digest_config.clone()),
             (
                 "checkpoint_sequence_by_contents_digest",
-                prefix_config.clone(),
+                digest_config.clone(),
             ),
             ("full_checkpoint_content", config_u64.clone()),
             ("certified_checkpoints", config_u64.clone()),
-            ("checkpoint_by_digest", prefix_config.clone()),
+            ("checkpoint_by_digest", checkpoint_by_digest_config),
             ("locally_computed_checkpoints", config_u64.clone()),
             ("epoch_last_checkpoint_map", config_u64.clone()),
             (
                 "watermarks",
-                ThConfig::new(4, MUTEXES, default_cells_per_mutex()),
+                ThConfig::new_with_config(4, 1, KeyType::uniform(1), watermarks_config),
             ),
         ];
         Self::open_tables_read_write(
@@ -943,116 +962,6 @@ impl CheckpointStore {
         self.delete_highest_executed_checkpoint_test_only()?;
         Ok(())
     }
-
-    /// TODO: this is only needed while upgrading from non-dataquarantine to
-    /// dataquarantine. After that it can be deleted.
-    ///
-    /// Re-executes all transactions from all local, uncertified checkpoints for crash recovery.
-    /// All transactions thus re-executed are guaranteed to not have any missing dependencies,
-    /// because we start from the highest executed checkpoint, and proceed through checkpoints in
-    /// order.
-    #[instrument(level = "debug", skip_all)]
-    pub async fn reexecute_local_checkpoints(
-        &self,
-        state: &AuthorityState,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) {
-        let epoch = epoch_store.epoch();
-        let highest_executed = self
-            .get_highest_executed_checkpoint_seq_number()
-            .expect("get_highest_executed_checkpoint_seq_number should not fail")
-            .unwrap_or(0);
-
-        let Ok(Some(highest_built)) = self.get_latest_locally_computed_checkpoint() else {
-            info!("no locally built checkpoints to verify");
-            return;
-        };
-
-        info!(
-            "rexecuting locally computed checkpoints for crash recovery from {} to {}",
-            highest_executed, highest_built
-        );
-
-        for seq in highest_executed + 1..=*highest_built.sequence_number() {
-            info!(?seq, "Re-executing locally computed checkpoint");
-            let Some(checkpoint) = self
-                .get_locally_computed_checkpoint(seq)
-                .expect("get_locally_computed_checkpoint should not fail")
-            else {
-                panic!("locally computed checkpoint {:?} not found", seq);
-            };
-
-            let Some(contents) = self
-                .get_checkpoint_contents(&checkpoint.content_digest)
-                .expect("get_checkpoint_contents should not fail")
-            else {
-                panic!("checkpoint contents not found for locally computed checkpoint {:?} (digest: {:?})", seq, checkpoint.content_digest);
-            };
-
-            let cache = state.get_transaction_cache_reader();
-
-            let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
-            let fx_digests: Vec<_> = contents.iter().map(|digests| digests.effects).collect();
-            let txns = cache.multi_get_transaction_blocks(&tx_digests);
-
-            let txns: Vec<_> = itertools::izip!(txns, tx_digests, fx_digests)
-                .filter_map(|(tx, digest, fx)| {
-                    if let Some(tx) = tx {
-                        Some((tx, fx))
-                    } else {
-                        info!(
-                            "transaction {:?} not found during checkpoint re-execution",
-                            digest
-                        );
-                        None
-                    }
-                })
-                // end of epoch transaction can only be executed by CheckpointExecutor
-                .filter(|(tx, _)| !tx.data().transaction_data().is_end_of_epoch_tx())
-                .map(|(tx, fx)| {
-                    (
-                        VerifiedExecutableTransaction::new_from_checkpoint(
-                            (*tx).clone(),
-                            epoch,
-                            seq,
-                        ),
-                        fx,
-                    )
-                })
-                .collect();
-
-            let tx_digests: Vec<_> = txns.iter().map(|(tx, _)| *tx.digest()).collect();
-
-            info!(
-                ?seq,
-                ?tx_digests,
-                "Re-executing transactions for locally built checkpoint"
-            );
-            // this will panic if any re-execution diverges from the previously recorded effects digest
-            state.enqueue_with_expected_effects_digest(txns, epoch_store);
-
-            // a task that logs every so often until it is cancelled
-            // This should normally finish very quickly, so seeing this log more than once or twice is
-            // likely a sign of a problem.
-            let waiting_logger = tokio::task::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(1));
-                loop {
-                    interval.tick().await;
-                    warn!(?seq, "Still waiting for re-execution to complete");
-                }
-            });
-
-            cache
-                .notify_read_executed_effects_digests(&tx_digests)
-                .await;
-
-            waiting_logger.abort();
-            waiting_logger.await.ok();
-            info!(?seq, "Re-execution completed for locally built checkpoint");
-        }
-
-        info!("Re-execution of locally built checkpoints completed");
-    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -1099,6 +1008,23 @@ impl CheckpointStateHasher {
         }
     }
 }
+
+#[derive(Debug)]
+pub(crate) enum CheckpointBuilderError {
+    ChangeEpochTxAlreadyExecuted,
+    SystemPackagesMissing,
+    Retry(anyhow::Error),
+}
+
+impl<SuiError: std::error::Error + Send + Sync + 'static> From<SuiError>
+    for CheckpointBuilderError
+{
+    fn from(e: SuiError) -> Self {
+        Self::Retry(e.into())
+    }
+}
+
+pub(crate) type CheckpointBuilderResult<T = ()> = Result<T, CheckpointBuilderError>;
 
 pub struct CheckpointBuilder {
     state: Arc<AuthorityState>,
@@ -1173,16 +1099,44 @@ impl CheckpointBuilder {
         }
     }
 
-    async fn run(mut self) {
+    /// This function first waits for ConsensusCommitHandler to finish reprocessing
+    /// commits that have been processed before the last restart, if consensus_replay_waiter
+    /// is supplied. Then it starts building checkpoints in a loop.
+    ///
+    /// It is optional to pass in consensus_replay_waiter, to make it easier to attribute
+    /// if slow recovery of previously built checkpoints is due to consensus replay or
+    /// checkpoint building.
+    async fn run(mut self, consensus_replay_waiter: Option<ReplayWaiter>) {
+        if let Some(replay_waiter) = consensus_replay_waiter {
+            info!("Waiting for consensus commits to replay ...");
+            replay_waiter.wait_for_replay().await;
+            info!("Consensus commits finished replaying");
+        }
         info!("Starting CheckpointBuilder");
         loop {
-            self.maybe_build_checkpoints().await;
+            match self.maybe_build_checkpoints().await {
+                Ok(()) => {}
+                err @ Err(
+                    CheckpointBuilderError::ChangeEpochTxAlreadyExecuted
+                    | CheckpointBuilderError::SystemPackagesMissing,
+                ) => {
+                    info!("CheckpointBuilder stopping: {:?}", err);
+                    return;
+                }
+                Err(CheckpointBuilderError::Retry(inner)) => {
+                    let msg = format!("{:?}", inner);
+                    debug_fatal!("Error while making checkpoint, will retry in 1s: {}", msg);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    self.metrics.checkpoint_errors.inc();
+                    continue;
+                }
+            }
 
             self.notify.notified().await;
         }
     }
 
-    async fn maybe_build_checkpoints(&mut self) {
+    async fn maybe_build_checkpoints(&mut self) -> CheckpointBuilderResult {
         let _scope = monitored_scope("BuildCheckpoints");
 
         // Collect info about the most recently built checkpoint.
@@ -1236,32 +1190,29 @@ impl CheckpointBuilder {
             last_height = Some(height);
             last_timestamp = Some(current_timestamp);
             debug!(
-                checkpoint_commit_height = height,
-                "Making checkpoint at commit height"
+                checkpoint_commit_height_from = grouped_pending_checkpoints
+                    .first()
+                    .unwrap()
+                    .details()
+                    .checkpoint_height,
+                checkpoint_commit_height_to = last_height,
+                "Making checkpoint with commit height range"
             );
 
-            match self
+            let seq = self
                 .make_checkpoint(std::mem::take(&mut grouped_pending_checkpoints))
-                .await
-            {
-                Ok(seq) => {
-                    self.last_built.send_if_modified(|cur| {
-                        // when rebuilding checkpoints at startup, seq can be for an old checkpoint
-                        if seq > *cur {
-                            *cur = seq;
-                            true
-                        } else {
-                            false
-                        }
-                    });
+                .await?;
+
+            self.last_built.send_if_modified(|cur| {
+                // when rebuilding checkpoints at startup, seq can be for an old checkpoint
+                if seq > *cur {
+                    *cur = seq;
+                    true
+                } else {
+                    false
                 }
-                Err(e) => {
-                    error!("Error while making checkpoint, will retry in 1s: {:?}", e);
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    self.metrics.checkpoint_errors.inc();
-                    return;
-                }
-            }
+            });
+
             // ensure that the task can be cancelled at end of epoch, even if no other await yields
             // execution.
             tokio::task::yield_now().await;
@@ -1270,34 +1221,29 @@ impl CheckpointBuilder {
             "Waiting for more checkpoints from consensus after processing {last_height:?}; {} pending checkpoints left unprocessed until next interval",
             grouped_pending_checkpoints.len(),
         );
+
+        Ok(())
     }
 
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(
         &self,
         pendings: Vec<PendingCheckpointV2>,
-    ) -> anyhow::Result<CheckpointSequenceNumber> {
+    ) -> CheckpointBuilderResult<CheckpointSequenceNumber> {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
         let last_details = pendings.last().unwrap().details().clone();
 
-        // Keeps track of the effects that are already included in the current checkpoint.
-        // This is used when there are multiple pending checkpoints to create a single checkpoint
-        // because in such scenarios, dependencies of a transaction may in earlier created checkpoints,
-        // or in earlier pending checkpoints.
-        let mut effects_in_current_checkpoint = BTreeSet::new();
-
         // Stores the transactions that should be included in the checkpoint. Transactions will be recorded in the checkpoint
         // in this order.
-        let mut sorted_tx_effects_included_in_checkpoint = Vec::new();
-        let mut all_roots = HashSet::new();
-        for pending_checkpoint in pendings.into_iter() {
-            let pending = pending_checkpoint.into_v2();
-            let (root_digests, txn_in_checkpoint) = self
-                .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
-                .await?;
-            sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
-            all_roots.extend(root_digests);
-        }
+        let highest_executed_sequence = self
+            .store
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("db error")
+            .unwrap_or(0);
+
+        let (poll_count, result) = poll_count(self.resolve_checkpoint_transactions(pendings)).await;
+        let (sorted_tx_effects_included_in_checkpoint, all_roots) = result?;
+
         let new_checkpoints = self
             .create_checkpoints(
                 sorted_tx_effects_included_in_checkpoint,
@@ -1306,9 +1252,82 @@ impl CheckpointBuilder {
             )
             .await?;
         let highest_sequence = *new_checkpoints.last().0.sequence_number();
+        if highest_sequence <= highest_executed_sequence && poll_count > 1 {
+            debug_fatal!(
+                "resolve_checkpoint_transactions should be instantaneous when executed checkpoint is ahead of checkpoint builder"
+            );
+        }
+
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
             .await?;
         Ok(highest_sequence)
+    }
+
+    async fn construct_and_execute_settlement_transactions(
+        &self,
+        sorted_tx_effects_included_in_checkpoint: &[TransactionEffects],
+        checkpoint_height: CheckpointHeight,
+    ) -> (TransactionKey, Vec<TransactionDigest>) {
+        let _scope =
+            monitored_scope("CheckpointBuilder::construct_and_execute_settlement_transactions");
+
+        let tx_key =
+            TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
+
+        let settlement_txns: Vec<_> = create_accumulator_update_transactions(
+            &self.epoch_store,
+            checkpoint_height,
+            Some(self.effects_store.as_ref()),
+            sorted_tx_effects_included_in_checkpoint,
+        )
+        .into_iter()
+        .map(|tx| {
+            VerifiedExecutableTransaction::new_system(
+                VerifiedTransaction::new_system_transaction(tx),
+                self.epoch_store.epoch(),
+            )
+        })
+        .collect();
+
+        let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+
+        debug!(
+            ?settlement_digests,
+            ?tx_key,
+            "created settlement transactions"
+        );
+
+        self.epoch_store
+            .notify_settlement_transactions_ready(tx_key, settlement_txns);
+
+        let settlement_effects = loop {
+            match tokio::time::timeout(Duration::from_secs(5), async {
+                self.effects_store
+                    .notify_read_executed_effects(&settlement_digests)
+                    .await
+            })
+            .await
+            {
+                Ok(effects) => break effects,
+                Err(_) => {
+                    debug_fatal!(
+                        "Timeout waiting for settlement transactions to be executed {:?}, retrying...",
+                        tx_key
+                    );
+                }
+            }
+        };
+
+        for fx in settlement_effects.iter() {
+            assert!(
+                fx.status().is_ok(),
+                "settlement transaction cannot fail (digest: {:?}) {:#?}",
+                fx.transaction_digest(),
+                fx
+            );
+        }
+
+        (tx_key, settlement_digests)
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -1318,95 +1337,149 @@ impl CheckpointBuilder {
     #[instrument(level = "debug", skip_all)]
     async fn resolve_checkpoint_transactions(
         &self,
-        roots: Vec<TransactionKey>,
-        effects_in_current_checkpoint: &mut BTreeSet<TransactionDigest>,
-    ) -> SuiResult<(Vec<TransactionDigest>, Vec<TransactionEffects>)> {
+        pending_checkpoints: Vec<PendingCheckpointV2>,
+    ) -> SuiResult<(Vec<TransactionEffects>, HashSet<TransactionDigest>)> {
         let _scope = monitored_scope("CheckpointBuilder::resolve_checkpoint_transactions");
 
-        self.metrics
-            .checkpoint_roots_count
-            .inc_by(roots.len() as u64);
+        // Keeps track of the effects that are already included in the current checkpoint.
+        // This is used when there are multiple pending checkpoints to create a single checkpoint
+        // because in such scenarios, dependencies of a transaction may in earlier created checkpoints,
+        // or in earlier pending checkpoints.
+        let mut effects_in_current_checkpoint = BTreeSet::new();
 
-        let root_digests = self
-            .epoch_store
-            .notify_read_executed_digests(&roots)
-            .in_monitored_scope("CheckpointNotifyDigests")
-            .await?;
-        let root_effects = self
-            .effects_store
-            .notify_read_executed_effects(&root_digests)
-            .in_monitored_scope("CheckpointNotifyRead")
-            .await;
+        let mut tx_effects = Vec::new();
+        let mut tx_roots = HashSet::new();
 
-        let consensus_commit_prologue = if self
-            .epoch_store
-            .protocol_config()
-            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
-        {
-            // If the roots contains consensus commit prologue transaction, we want to extract it,
-            // and put it to the front of the checkpoint.
+        for pending_checkpoint in pending_checkpoints.into_iter() {
+            let mut pending = pending_checkpoint.into_v2();
+            debug!(
+                checkpoint_commit_height = pending.details.checkpoint_height,
+                "Resolving checkpoint transactions for pending checkpoint.",
+            );
 
-            let consensus_commit_prologue = self
-                .extract_consensus_commit_prologue(&root_digests, &root_effects)
+            trace!(
+                "roots for pending checkpoint {:?}: {:?}",
+                pending.details.checkpoint_height,
+                pending.roots,
+            );
+
+            let settlement_root = if self.epoch_store.accumulators_enabled() {
+                let Some(settlement_root @ TransactionKey::AccumulatorSettlement(..)) =
+                    pending.roots.pop()
+                else {
+                    fatal!("No settlement root found");
+                };
+                Some(settlement_root)
+            } else {
+                None
+            };
+
+            let roots = &pending.roots;
+
+            self.metrics
+                .checkpoint_roots_count
+                .inc_by(roots.len() as u64);
+
+            let root_digests = self
+                .epoch_store
+                .notify_read_tx_key_to_digest(roots)
+                .in_monitored_scope("CheckpointNotifyDigests")
                 .await?;
+            let root_effects = self
+                .effects_store
+                .notify_read_executed_effects(&root_digests)
+                .in_monitored_scope("CheckpointNotifyRead")
+                .await;
 
-            // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
-            // other dependencies that haven't been included in any previous checkpoints.
-            if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
-                let unsorted_ccp = self.complete_checkpoint_effects(
-                    vec![ccp_effects.clone()],
-                    effects_in_current_checkpoint,
-                )?;
+            let consensus_commit_prologue = if self
+                .epoch_store
+                .protocol_config()
+                .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+            {
+                // If the roots contains consensus commit prologue transaction, we want to extract it,
+                // and put it to the front of the checkpoint.
 
-                // No other dependencies of this consensus commit prologue that haven't been included
-                // in any previous checkpoint.
-                if unsorted_ccp.len() != 1 {
-                    fatal!(
-                        "Expected 1 consensus commit prologue, got {:?}",
-                        unsorted_ccp
-                            .iter()
-                            .map(|e| e.transaction_digest())
-                            .collect::<Vec<_>>()
-                    );
+                let consensus_commit_prologue =
+                    self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
+
+                // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
+                // other dependencies that haven't been included in any previous checkpoints.
+                if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
+                    let unsorted_ccp = self.complete_checkpoint_effects(
+                        vec![ccp_effects.clone()],
+                        &mut effects_in_current_checkpoint,
+                    )?;
+
+                    // No other dependencies of this consensus commit prologue that haven't been included
+                    // in any previous checkpoint.
+                    if unsorted_ccp.len() != 1 {
+                        fatal!(
+                            "Expected 1 consensus commit prologue, got {:?}",
+                            unsorted_ccp
+                                .iter()
+                                .map(|e| e.transaction_digest())
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                    assert_eq!(unsorted_ccp.len(), 1);
+                    assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
                 }
-                assert_eq!(unsorted_ccp.len(), 1);
-                assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
-            }
-            consensus_commit_prologue
-        } else {
-            None
-        };
+                consensus_commit_prologue
+            } else {
+                None
+            };
 
-        let unsorted =
-            self.complete_checkpoint_effects(root_effects, effects_in_current_checkpoint)?;
+            let unsorted =
+                self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
 
-        let _scope = monitored_scope("CheckpointBuilder::causal_sort");
-        let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
-        if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
-            if cfg!(debug_assertions) {
-                // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
-                for tx in unsorted.iter() {
-                    assert!(tx.transaction_digest() != &ccp_digest);
+            let _scope = monitored_scope("CheckpointBuilder::causal_sort");
+            let mut sorted: Vec<TransactionEffects> = Vec::with_capacity(unsorted.len() + 1);
+            if let Some((ccp_digest, ccp_effects)) = consensus_commit_prologue {
+                if cfg!(debug_assertions) {
+                    // When consensus_commit_prologue is extracted, it should not be included in the `unsorted`.
+                    for tx in unsorted.iter() {
+                        assert!(tx.transaction_digest() != &ccp_digest);
+                    }
                 }
+                sorted.push(ccp_effects);
             }
-            sorted.push(ccp_effects);
-        }
-        sorted.extend(CausalOrder::causal_sort(unsorted));
+            sorted.extend(CausalOrder::causal_sort(unsorted));
 
-        #[cfg(msim)]
-        {
-            // Check consensus commit prologue invariants in sim test.
-            self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
+            if let Some(settlement_root) = settlement_root {
+                let (tx_key, settlement_digests) = self
+                    .construct_and_execute_settlement_transactions(
+                        &sorted,
+                        pending.details.checkpoint_height,
+                    )
+                    .await;
+                debug!(?tx_key, "executed settlement transactions");
+
+                assert_eq!(settlement_root, tx_key);
+
+                // Replace the key with the actual settlement digests
+                pending
+                    .roots
+                    .extend(settlement_digests.into_iter().map(TransactionKey::Digest));
+            }
+
+            #[cfg(msim)]
+            {
+                // Check consensus commit prologue invariants in sim test.
+                self.expensive_consensus_commit_prologue_invariants_check(&root_digests, &sorted);
+            }
+
+            tx_effects.extend(sorted);
+            tx_roots.extend(root_digests);
         }
 
-        Ok((root_digests, sorted))
+        Ok((tx_effects, tx_roots))
     }
 
     // This function is used to extract the consensus commit prologue digest and effects from the root
     // transactions.
     // This function can only be used when prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
     // The consensus commit prologue is expected to be the first transaction in the roots.
-    async fn extract_consensus_commit_prologue(
+    fn extract_consensus_commit_prologue(
         &self,
         root_digests: &[TransactionDigest],
         root_effects: &[TransactionEffects],
@@ -1524,7 +1597,7 @@ impl CheckpointBuilder {
         &self,
         effects_and_transaction_sizes: Vec<(TransactionEffects, usize)>,
         signatures: Vec<Vec<GenericSignature>>,
-    ) -> anyhow::Result<Vec<Vec<(TransactionEffects, Vec<GenericSignature>)>>> {
+    ) -> CheckpointBuilderResult<Vec<Vec<(TransactionEffects, Vec<GenericSignature>)>>> {
         let _guard = monitored_scope("CheckpointBuilder::split_checkpoint_chunks");
         let mut chunks = Vec::new();
         let mut chunk = Vec::new();
@@ -1599,7 +1672,7 @@ impl CheckpointBuilder {
         all_effects: Vec<TransactionEffects>,
         details: &PendingCheckpointInfo,
         all_roots: &HashSet<TransactionDigest>,
-    ) -> anyhow::Result<NonEmpty<(CheckpointSummary, CheckpointContents)>> {
+    ) -> CheckpointBuilderResult<NonEmpty<(CheckpointSummary, CheckpointContents)>> {
         let _scope = monitored_scope("CheckpointBuilder::create_checkpoints");
 
         let total = all_effects.len();
@@ -1607,6 +1680,7 @@ impl CheckpointBuilder {
             Self::load_last_built_checkpoint_summary(&self.epoch_store, &self.store)?;
         let last_checkpoint_seq = last_checkpoint.as_ref().map(|(seq, _)| *seq);
         info!(
+            checkpoint_commit_height = details.checkpoint_height,
             next_checkpoint_seq = last_checkpoint_seq.unwrap_or_default() + 1,
             checkpoint_timestamp = details.timestamp_ms,
             "Creating checkpoint(s) for {} transactions",
@@ -1648,11 +1722,22 @@ impl CheckpointBuilder {
                         // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
                         // processed before we reach here.
                     }
+                    TransactionKind::ProgrammableSystemTransaction(_) => {
+                        // settlement transactions are added by checkpoint builder
+                    }
+                    TransactionKind::ChangeEpoch(_)
+                    | TransactionKind::Genesis(_)
+                    | TransactionKind::EndOfEpochTransaction(_) => {
+                        fatal!(
+                            "unexpected transaction in checkpoint effects: {:?}",
+                            transaction
+                        );
+                    }
                     TransactionKind::RandomnessStateUpdate(rsu) => {
                         randomness_rounds
                             .insert(*effects.transaction_digest(), rsu.randomness_round);
                     }
-                    _ => {
+                    TransactionKind::ProgrammableTransaction(_) => {
                         // Only transactions that are not roots should be included in the call to
                         // `consensus_messages_processed_notify`. roots come directly from the consensus
                         // commit and so are known to be processed already.
@@ -1675,7 +1760,7 @@ impl CheckpointBuilder {
 
         let signatures = self
             .epoch_store
-            .user_signatures_for_checkpoint(&transactions, &all_digests)?;
+            .user_signatures_for_checkpoint(&transactions, &all_digests);
         debug!(
             ?last_checkpoint_seq,
             "Received {} checkpoint user signatures from consensus",
@@ -1916,8 +2001,7 @@ impl CheckpointBuilder {
         // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
         // >1 checkpoint.
         last_checkpoint: CheckpointSequenceNumber,
-        // TODO: Check whether we must use anyhow::Result or can we use SuiResult.
-    ) -> anyhow::Result<SuiSystemState> {
+    ) -> CheckpointBuilderResult<SuiSystemState> {
         let (system_state, effects) = self
             .state
             .create_and_execute_advance_epoch_tx(
@@ -2335,9 +2419,9 @@ impl CheckpointSignatureAggregator {
                     format!("{:?} (total stake: {})", digest, total_stake)
                 })
                 .collect::<Vec<String>>();
-            error!(
-                checkpoint_seq = self.summary.sequence_number,
-                "Split brain detected in checkpoint signature aggregation! Remaining stake: {:?}, Digests by stake: {:?}",
+            debug_fatal!(
+                "Split brain detected in checkpoint signature aggregation for checkpoint {:?}. Remaining stake: {:?}, Digests by stake: {:?}",
+                self.summary.sequence_number,
                 self.signatures_by_digest.uncommitted_stake(),
                 digests_by_stake_messages,
             );
@@ -2533,8 +2617,6 @@ async fn diagnose_split_brain(
     let mut file = File::create(path).unwrap();
     write!(file, "{}", fork_logs_text).unwrap();
     debug!("{}", fork_logs_text);
-
-    fail_point!("split_brain_reached");
 }
 
 pub trait CheckpointServiceNotify {
@@ -2688,11 +2770,11 @@ impl CheckpointService {
     /// operation. Upon startup, we may have a number of consensus commits and resulting
     /// checkpoints that were built but not committed to disk. We want to reprocess the
     /// commits and rebuild the checkpoints before starting normal operation.
-    pub async fn spawn(&self) -> JoinSet<()> {
+    pub async fn spawn(&self, consensus_replay_waiter: Option<ReplayWaiter>) -> JoinSet<()> {
         let mut tasks = JoinSet::new();
 
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
-        tasks.spawn(monitored_future!(builder.run()));
+        tasks.spawn(monitored_future!(builder.run(consensus_replay_waiter)));
         tasks.spawn(monitored_future!(aggregator.run()));
         tasks.spawn(monitored_future!(state_hasher.run()));
 
@@ -2843,23 +2925,60 @@ impl From<PendingCheckpoint> for PendingCheckpointV2 {
     }
 }
 
+pin_project! {
+    pub struct PollCounter<Fut> {
+        #[pin]
+        future: Fut,
+        count: usize,
+    }
+}
+
+impl<Fut> PollCounter<Fut> {
+    pub fn new(future: Fut) -> Self {
+        Self { future, count: 0 }
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
+    }
+}
+
+impl<Fut: Future> Future for PollCounter<Fut> {
+    type Output = (usize, Fut::Output);
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        *this.count += 1;
+        match this.future.poll(cx) {
+            Poll::Ready(output) => Poll::Ready((*this.count, output)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+fn poll_count<Fut>(future: Fut) -> PollCounter<Fut> {
+    PollCounter::new(future)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::transaction_outputs::TransactionOutputs;
+    use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
     use futures::future::BoxFuture;
     use futures::FutureExt as _;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::HashMap;
     use std::ops::Deref;
     use sui_macros::sim_test;
     use sui_protocol_config::{Chain, ProtocolConfig};
-    use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
+    use sui_types::accumulator_event::AccumulatorEvent;
+    use sui_types::authenticator_state::ActiveJwk;
+    use sui_types::base_types::{SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
-    use sui_types::move_package::MovePackage;
-    use sui_types::object;
-    use sui_types::transaction::{GenesisObject, VerifiedTransaction};
+    use sui_types::transaction::VerifiedTransaction;
     use tokio::sync::mpsc;
 
     #[sim_test]
@@ -2874,24 +2993,36 @@ mod tests {
             .build()
             .await;
 
-        let dummy_tx = VerifiedTransaction::new_genesis_transaction(vec![]);
+        let dummy_tx = VerifiedTransaction::new_authenticator_state_update(
+            0,
+            0,
+            vec![],
+            SequenceNumber::new(),
+        );
+
+        let jwks = {
+            let mut jwks = Vec::new();
+            while bcs::to_bytes(&jwks).unwrap().len() < 40_000 {
+                jwks.push(ActiveJwk {
+                    jwk_id: JwkId::new(
+                        "https://accounts.google.com".to_string(),
+                        "1234567890".to_string(),
+                    ),
+                    jwk: JWK {
+                        kty: "RSA".to_string(),
+                        e: "AQAB".to_string(),
+                        n: "1234567890".to_string(),
+                        alg: "RS256".to_string(),
+                    },
+                    epoch: 0,
+                });
+            }
+            jwks
+        };
+
         let dummy_tx_with_data =
-            VerifiedTransaction::new_genesis_transaction(vec![GenesisObject::RawObject {
-                data: object::Data::Package(
-                    MovePackage::new(
-                        ObjectID::random(),
-                        SequenceNumber::new(),
-                        BTreeMap::from([(format!("{:0>40000}", "1"), Vec::new())]),
-                        100_000,
-                        // no modules so empty type_origin_table as no types are defined in this package
-                        Vec::new(),
-                        // no modules so empty linkage_table as no dependencies of this package exist
-                        BTreeMap::new(),
-                    )
-                    .unwrap(),
-                ),
-                owner: object::Owner::Immutable,
-            }]);
+            VerifiedTransaction::new_authenticator_state_update(0, 1, jwks, SequenceNumber::new());
+
         for i in 0..15 {
             state
                 .database_for_testing()
@@ -2989,7 +3120,7 @@ mod tests {
             3,
             100_000,
         );
-        let _tasks = checkpoint_service.spawn().await;
+        let _tasks = checkpoint_service.spawn(None).await;
 
         checkpoint_service
             .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4], 0))
@@ -3154,6 +3285,24 @@ mod tests {
         fn multi_get_events(&self, _: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
             unimplemented!()
         }
+
+        fn get_mysticeti_fastpath_outputs(
+            &self,
+            _: &TransactionDigest,
+        ) -> Option<Arc<TransactionOutputs>> {
+            unimplemented!()
+        }
+
+        fn notify_read_fastpath_transaction_outputs<'a>(
+            &'a self,
+            _: &'a [TransactionDigest],
+        ) -> BoxFuture<'a, Vec<Arc<crate::transaction_outputs::TransactionOutputs>>> {
+            unimplemented!()
+        }
+
+        fn take_accumulator_events(&self, _: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
+            unimplemented!()
+        }
     }
 
     #[async_trait::async_trait]
@@ -3223,8 +3372,6 @@ mod tests {
         let epoch_store = state.epoch_store_for_testing();
         let effects = e(digest, dependencies, gas_used);
         store.insert(digest, effects.clone());
-        epoch_store
-            .insert_tx_key(&TransactionKey::Digest(digest), &digest)
-            .expect("Inserting cert fx and sigs should not fail");
+        epoch_store.insert_executed_in_epoch(&digest);
     }
 }

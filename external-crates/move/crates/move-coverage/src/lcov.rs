@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use lcov::record::Record as LRecord;
-use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
+use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::file_format::FunctionDefinitionIndex;
+use move_bytecode_verifier::absint::VMControlFlowGraph;
 use move_compiler::{
     compiled_unit::CompiledUnit, shared::files::MappedFiles,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
@@ -352,7 +353,7 @@ impl FileRecordKeeper {
                     let loc = f_source_map.get_code_location(block_end).unwrap();
                     let line_no = file_mapping.start_position(&loc).line_offset() + 1;
                     block_id += 1;
-                    for &o in cfg.successors(cfg_block_id) {
+                    for o in cfg.successors(cfg_block_id) {
                         self.branches
                             .entry((index as u16, block_end))
                             .or_insert_with(|| BranchInfo::new(line_no, block_id - 1))

@@ -330,6 +330,7 @@ impl<'a> ModuleGenerator<'a> {
         };
         let current_module = ModuleDefinition {
             specified_version: None,
+            publishable: true,
             loc: Spanned::unsafe_no_loc(0).loc,
             identifier: ModuleIdent {
                 name: ModuleName(module_name.into()),

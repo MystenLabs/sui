@@ -186,6 +186,7 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     )
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct FullObjectRef(pub FullObjectID, pub SequenceNumber, pub ObjectDigest);
 
 impl FullObjectRef {
@@ -955,6 +956,11 @@ pub const RESOLVED_UTF8_STR: (&AccountAddress, &IdentStr, &IdentStr) = (
 
 pub const TX_CONTEXT_MODULE_NAME: &IdentStr = ident_str!("tx_context");
 pub const TX_CONTEXT_STRUCT_NAME: &IdentStr = ident_str!("TxContext");
+pub const RESOLVED_TX_CONTEXT: (&AccountAddress, &IdentStr, &IdentStr) = (
+    &SUI_FRAMEWORK_ADDRESS,
+    TX_CONTEXT_MODULE_NAME,
+    TX_CONTEXT_STRUCT_NAME,
+);
 
 pub fn move_ascii_str_layout() -> A::MoveStructLayout {
     A::MoveStructLayout {
@@ -1035,6 +1041,8 @@ pub struct TxContext {
     epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
+    // Reference gas price
+    rgp: u64,
     // gas price passed to transaction as input
     gas_price: u64,
     // gas budget passed to transaction as input
@@ -1046,7 +1054,7 @@ pub struct TxContext {
     is_native: bool,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TxContextKind {
     // No TxContext
     None,
@@ -1061,6 +1069,7 @@ impl TxContext {
         sender: &SuiAddress,
         digest: &TransactionDigest,
         epoch_data: &EpochData,
+        rgp: u64,
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<SuiAddress>,
@@ -1071,6 +1080,7 @@ impl TxContext {
             digest,
             &epoch_data.epoch_id(),
             epoch_data.epoch_start_timestamp(),
+            rgp,
             gas_price,
             gas_budget,
             sponsor,
@@ -1083,6 +1093,7 @@ impl TxContext {
         digest: &TransactionDigest,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        rgp: u64,
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<SuiAddress>,
@@ -1094,6 +1105,7 @@ impl TxContext {
             epoch: *epoch_id,
             epoch_timestamp_ms,
             ids_created: 0,
+            rgp,
             gas_price,
             gas_budget,
             sponsor: sponsor.map(|s| s.into()),
@@ -1114,15 +1126,19 @@ impl TxContext {
             return TxContextKind::None;
         };
 
-        let (module_addr, module_name, struct_name) = resolve_struct(view, *idx);
-        let is_tx_context_type = module_name == TX_CONTEXT_MODULE_NAME
-            && module_addr == &SUI_FRAMEWORK_ADDRESS
-            && struct_name == TX_CONTEXT_STRUCT_NAME;
-
-        if is_tx_context_type {
+        if resolve_struct(view, *idx) == RESOLVED_TX_CONTEXT {
             kind
         } else {
             TxContextKind::None
+        }
+    }
+
+    pub fn type_() -> StructTag {
+        StructTag {
+            address: SUI_FRAMEWORK_ADDRESS,
+            module: TX_CONTEXT_MODULE_NAME.to_owned(),
+            name: TX_CONTEXT_STRUCT_NAME.to_owned(),
+            type_params: vec![],
         }
     }
 
@@ -1145,6 +1161,10 @@ impl TxContext {
 
     pub fn sponsor(&self) -> Option<SuiAddress> {
         self.sponsor.map(SuiAddress::from)
+    }
+
+    pub fn rgp(&self) -> u64 {
+        self.rgp
     }
 
     pub fn gas_price(&self) -> u64 {
@@ -1175,6 +1195,7 @@ impl TxContext {
                 epoch: 0,
                 epoch_timestamp_ms: 0,
                 ids_created: 0,
+                rgp: 0,
                 gas_price: 0,
                 gas_budget: 0,
                 sponsor: None,
@@ -1221,6 +1242,7 @@ impl TxContext {
         epoch: u64,
         epoch_timestamp_ms: u64,
         ids_created: u64,
+        rgp: u64,
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<AccountAddress>,
@@ -1230,6 +1252,7 @@ impl TxContext {
         self.epoch = epoch;
         self.epoch_timestamp_ms = epoch_timestamp_ms;
         self.ids_created = ids_created;
+        self.rgp = rgp;
         self.gas_price = gas_price;
         self.gas_budget = gas_budget;
         self.sponsor = sponsor;

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::committee::extract_new_committee_info;
 use crate::config::Config;
 use crate::graphql::query_last_checkpoint_of_epoch;
 use crate::object_store::SuiObjectStore;
@@ -12,8 +13,6 @@ use std::{fs, io::Write};
 use sui_config::genesis::Genesis;
 use sui_data_ingestion_core::end_of_epoch_data;
 use sui_sdk::SuiClientBuilder;
-use sui_types::committee::Committee;
-use sui_types::messages_checkpoint::EndOfEpochData;
 use sui_types::{
     crypto::AuthorityQuorumSignInfo, message_envelope::Envelope,
     messages_checkpoint::CheckpointSummary,
@@ -277,19 +276,7 @@ pub async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
         );
 
         // Extract the new committee information
-        if let Some(EndOfEpochData {
-            next_epoch_committee,
-            ..
-        }) = &summary.end_of_epoch_data
-        {
-            let next_committee = next_epoch_committee.iter().cloned().collect();
-            prev_committee =
-                Committee::new(summary.epoch().checked_add(1).unwrap(), next_committee);
-        } else {
-            return Err(anyhow!(
-                "Expected all checkpoints to be end-of-epoch checkpoints"
-            ));
-        }
+        prev_committee = extract_new_committee_info(&summary)?;
     }
 
     Ok(())

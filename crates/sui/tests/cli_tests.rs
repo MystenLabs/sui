@@ -17,8 +17,8 @@ use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildCo
 use serde_json::json;
 use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
 use sui::client_ptb::ptb::PTB;
-use sui::key_identity::{get_identity_address, KeyIdentity};
 use sui::sui_commands::IndexerArgs;
+use sui_keys::key_identity::KeyIdentity;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -418,7 +418,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
     }
 
     // Print all addresses
@@ -438,11 +438,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-    let alias = context
-        .config
-        .keystore
-        .get_alias_by_address(&address)
-        .unwrap();
+    let alias = context.config.keystore.get_alias(&address).unwrap();
     // Print objects owned by `address`
     SuiClientCommands::Objects {
         address: Some(KeyIdentity::Address(address)),
@@ -714,11 +710,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-    let alias = context
-        .config
-        .keystore
-        .get_alias_by_address(&address)
-        .unwrap();
+    let alias = context.config.keystore.get_alias(&address).unwrap();
 
     let client = context.get_client().await?;
     let object_refs = client
@@ -2606,12 +2598,11 @@ async fn test_package_management_on_upgrade_command_conflict() -> Result<(), any
     let err_string = err_string.replace(&package.object_id().to_string(), "<elided-for-test>");
 
     let expect = expect![[r#"
-        Conflicting published package address: `Move.toml` contains published-at address 0x0000000000000000000000000000000000000000000000000000000000000bad but `Move.lock` file contains published-at address <elided-for-test>. You may want to:
-
-                         - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
-                         - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
-                         - check that your `sui active-env` (currently localnet) corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
-                         - contact the maintainer if this package is a dependency and request resolving the conflict."#]];
+Conflicting published package address: `Move.toml` contains published-at address 0x0000000000000000000000000000000000000000000000000000000000000bad but `Move.lock` file contains published-at address <elided-for-test>. You may want to:
+ - delete the published-at address in the `Move.toml` if the `Move.lock` address is correct; OR
+ - update the `Move.lock` address using the `sui manage-package` command to be the same as the `Move.toml`; OR
+ - check that your `sui active-env` (currently localnet) corresponds to the chain on which the package is published (i.e., devnet, testnet, mainnet); OR
+ - contact the maintainer if this package is a dependency and request resolving the conflict."#]];
     expect.assert_eq(&err_string);
     Ok(())
 }
@@ -2925,7 +2916,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .keys()
+            .entries()
             .iter()
             .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
             .count(),
@@ -2946,7 +2937,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .keys()
+            .entries()
             .iter()
             .filter(|k| k.flag() == Secp256k1SuiSignature::SCHEME.flag())
             .count(),
@@ -3020,11 +3011,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     );
 
     // switch back to addr1 by using its alias
-    let alias1 = context
-        .config
-        .keystore
-        .get_alias_by_address(&addr1)
-        .unwrap();
+    let alias1 = context.config.keystore.get_alias(&addr1).unwrap();
     let resp = SuiClientCommands::Switch {
         address: Some(KeyIdentity::Alias(alias1)),
         env: None,
@@ -3459,11 +3446,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
-    let alias1 = context
-        .config
-        .keystore
-        .get_alias_by_address(&address1)
-        .unwrap();
+    let alias1 = context.config.keystore.get_alias(&address1).unwrap();
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -3778,29 +3761,31 @@ async fn key_identity_test() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-    let alias = context
-        .config
-        .keystore
-        .get_alias_by_address(&address)
-        .unwrap();
+    let alias = context.config.keystore.get_alias(&address).unwrap();
 
     // by alias
     assert_eq!(
         address,
-        get_identity_address(Some(KeyIdentity::Alias(alias)), context).unwrap()
+        context
+            .get_identity_address(Some(KeyIdentity::Alias(alias)))
+            .unwrap()
     );
     // by address
     assert_eq!(
         address,
-        get_identity_address(Some(KeyIdentity::Address(address)), context).unwrap()
+        context
+            .get_identity_address(Some(KeyIdentity::Address(address)))
+            .unwrap()
     );
     // alias does not exist
-    assert!(get_identity_address(Some(KeyIdentity::Alias("alias".to_string())), context).is_err());
+    assert!(context
+        .get_identity_address(Some(KeyIdentity::Alias("alias".to_string())))
+        .is_err());
 
     // get active address instead when no alias/address is given
     assert_eq!(
         context.active_address().unwrap(),
-        get_identity_address(None, context).unwrap()
+        context.get_identity_address(None).unwrap()
     );
 }
 
@@ -4728,6 +4713,114 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     } else {
         panic!("TransferSui test failed");
     }
+    Ok(())
+}
+
+#[sim_test]
+async fn test_custom_sender() -> Result<(), anyhow::Error> {
+    let (mut cluster, client, rgp, o, _, a) = test_cluster_helper().await;
+
+    let custom_sender = cluster.wallet_mut().active_address().unwrap();
+    let context = &mut cluster.wallet;
+
+    // Build the transaction without running it.
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(a[1]),
+        object_id: o[0],
+        payment: PaymentArgs::default(),
+        gas_data: GasDataArgs::default(),
+        processing: TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            sender: Some(custom_sender),
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) = transfer else {
+        panic!("Expected SerializedUnsignedTransaction result");
+    };
+
+    let tx_bytes = Base64::encode(bcs::to_bytes(tx_data.kind())?);
+    let transfer_serialized = SuiClientCommands::SerializedTxKind {
+        tx_bytes,
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = transfer_serialized else {
+        panic!("Expected TransactionBlock result");
+    };
+
+    assert_eq!(response.transaction.unwrap().data.sender(), &custom_sender);
+
+    let Some(effects) = &response.effects else {
+        panic!("TransactionBlock response should contain effects");
+    };
+
+    assert!(effects.status().is_ok());
+    assert_eq!(effects.gas_object().object_id(), o[1]);
+
+    let a1_objs = client
+        .read_api()
+        .get_owned_objects(a[1], None, None, None)
+        .await?;
+
+    assert!(!a1_objs.has_next_page);
+
+    let page = a1_objs.data;
+    assert_eq!(page.len(), 1);
+    assert_eq!(page.first().unwrap().object().unwrap().object_id, o[0]);
+
+    // set sender to another address to which we don't have keys and it should fail
+
+    let custom_sender = SuiAddress::random_for_testing_only();
+
+    // Build the transaction without running it.
+    let transfer = SuiClientCommands::Transfer {
+        to: KeyIdentity::Address(a[1]),
+        object_id: o[0],
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            sender: Some(custom_sender),
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) = transfer else {
+        panic!("Expected SerializedUnsignedTransaction result");
+    };
+
+    let tx_bytes = Base64::encode(bcs::to_bytes(tx_data.kind())?);
+    let transfer_serialized = SuiClientCommands::SerializedTxKind {
+        tx_bytes,
+        payment: PaymentArgs { gas: vec![o[1]] },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await;
+
+    // wrong gas objects, not owned by custom sender
+    assert!(transfer_serialized.is_err());
+
     Ok(())
 }
 

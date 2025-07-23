@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, Registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry,
 };
 
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
@@ -30,6 +31,15 @@ const PAYLOAD_SIZE_BUCKETS: &[f64] = &[
 ];
 
 pub struct RpcMetrics {
+    // Metrics related to retention across various data sources.
+    pub watermark_epoch: IntGaugeVec,
+    pub watermark_checkpoint: IntGaugeVec,
+    pub watermark_transaction: IntGaugeVec,
+    pub watermark_timestamp_ms: IntGaugeVec,
+    pub watermark_reader_epoch_lo: IntGaugeVec,
+    pub watermark_reader_checkpoint_lo: IntGaugeVec,
+    pub watermark_reader_transaction_lo: IntGaugeVec,
+
     // Top-level metrics for all read requests (queries).
     pub query_latency: Histogram,
     pub queries_received: IntCounter,
@@ -57,6 +67,62 @@ pub struct RpcMetrics {
 impl RpcMetrics {
     pub(crate) fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
+            watermark_epoch: register_int_gauge_vec_with_registry!(
+                "watermark_epoch",
+                "The epoch that the RPC considers to be the latest, for this pipeline",
+                &["pipeline"],
+                registry
+            )
+            .unwrap(),
+
+            watermark_checkpoint: register_int_gauge_vec_with_registry!(
+                "watermark_checkpoint",
+                "The checkpoint sequence number that the RPC considers to be the latest, for this pipeline",
+                &["pipeline"],
+                registry
+            )
+            .unwrap(),
+
+            watermark_transaction: register_int_gauge_vec_with_registry!(
+                "watermark_transaction",
+                "This RPC's exclusive upper bound on transaction sequence numbers, for this pipeline",
+                &["pipeline"],
+                registry
+            )
+            .unwrap(),
+
+            watermark_timestamp_ms: register_int_gauge_vec_with_registry!(
+                "watermark_timestamp_ms",
+                "The timestamp in milliseconds of the checkpoint that the RPC considers to be the latest, for this pipeline",
+                &["pipeline"],
+                registry
+            )
+            .unwrap(),
+
+            watermark_reader_epoch_lo: register_int_gauge_vec_with_registry!(
+                "watermark_reader_epoch_lo",
+                "The earliest epoch that the RPC has data for, for this pipeline",
+                &["pipeline"],
+                registry
+            )
+            .unwrap(),
+
+            watermark_reader_checkpoint_lo: register_int_gauge_vec_with_registry!(
+                "watermark_reader_checkpoint_lo",
+                "The earliest checkpoint that the RPC has data for, for this pipeline",
+                &["pipeline"],
+                registry
+            )
+            .unwrap(),
+
+            watermark_reader_transaction_lo: register_int_gauge_vec_with_registry!(
+                "watermark_reader_transaction_lo",
+                "The earliest transaction that the RPC has data for, for this pipeline",
+                &["pipeline"],
+                registry
+            )
+            .unwrap(),
+
             query_latency: register_histogram_with_registry!(
                 "query_latency",
                 "Time taken to respond to read requests",

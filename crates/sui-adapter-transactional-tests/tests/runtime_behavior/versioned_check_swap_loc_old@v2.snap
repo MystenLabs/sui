@@ -1,0 +1,20 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 8-42:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4491600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 44:
+//# run test::m::t1 --args true
+Error: Transaction Effects Status: MOVE VM INVARIANT VIOLATION.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMInvariantViolation, source: Some(VMError { major_status: UNKNOWN_INVARIANT_VIOLATION_ERROR, sub_status: None, message: Some("moving container with dangling references"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(0), 13)] }), command: Some(0) } }
+
+task 3, line 46:
+//# run test::m::t2 --args true
+Error: Transaction Effects Status: MOVE VM INVARIANT VIOLATION.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMInvariantViolation, source: Some(VMError { major_status: UNKNOWN_INVARIANT_VIOLATION_ERROR, sub_status: None, message: Some("moving container with dangling references"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 12)] }), command: Some(0) } }

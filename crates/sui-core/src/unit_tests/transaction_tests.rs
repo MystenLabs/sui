@@ -3,7 +3,8 @@
 
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::mock_consensus::with_block_status;
-use consensus_core::{BlockRef, BlockStatus};
+use consensus_core::BlockStatus;
+use consensus_types::block::BlockRef;
 use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use move_core_types::ident_str;
@@ -491,13 +492,11 @@ async fn do_transaction_test_impl(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -552,7 +551,7 @@ async fn do_transaction_test_impl(
             err_check(&err);
 
             // Additionally, if the tx contains access to shared objects, check if Soft Bundle handler returns the same error.
-            if ct.contains_shared_object() {
+            if ct.is_consensus_tx() {
                 epoch_store.clear_signature_cache();
                 let err = client
                     .handle_soft_bundle_certificates_v3(
@@ -638,6 +637,10 @@ async fn test_zklogin_transfer_with_large_address_seed() {
 
 #[sim_test]
 async fn zklogin_test_caching_scenarios() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let (
         object_ids,
@@ -657,7 +660,7 @@ async fn zklogin_test_caching_scenarios() {
     let res = client
         .handle_transaction(transfer_transaction, Some(socket_addr))
         .await;
-    assert!(res.is_ok());
+    assert!(res.is_ok(), "{}", res.unwrap_err());
 
     assert_eq!(
         epoch_store
@@ -1054,7 +1057,7 @@ async fn setup_zklogin_network(
 
     let object_id = object_ids[0];
     let gas_object_id = gas_object_ids[0];
-    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch).unwrap();
+    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch, true).unwrap();
     let epoch_store = authority_state.epoch_store_for_testing();
     epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
         epoch: 0,
@@ -1089,13 +1092,11 @@ async fn setup_zklogin_network(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1223,7 +1224,7 @@ async fn zklogin_txn_fail_if_missing_jwk() {
         init_state_with_ids(objects.into_iter().chain(gas_objects).collect::<Vec<_>>()).await;
 
     // Initialize an authenticator state with a Google JWK.
-    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Google).unwrap();
+    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Google, true).unwrap();
     let epoch_store = authority_state.epoch_store_for_testing();
     epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
         epoch: 0,
@@ -1255,7 +1256,7 @@ async fn zklogin_txn_fail_if_missing_jwk() {
 
     // Initialize an authenticator state with Twitch's kid as "nosuckkey".
     pub const BAD_JWK_BYTES: &[u8] = r#"{"keys":[{"alg":"RS256","e":"AQAB","kid":"nosuchkey","kty":"RSA","n":"6lq9MQ-q6hcxr7kOUp-tHlHtdcDsVLwVIw13iXUCvuDOeCi0VSuxCCUY6UmMjy53dX00ih2E4Y4UvlrmmurK0eG26b-HMNNAvCGsVXHU3RcRhVoHDaOwHwU72j7bpHn9XbP3Q3jebX6KIfNbei2MiR0Wyb8RZHE-aZhRYO8_-k9G2GycTpvc-2GBsP8VHLUKKfAs2B6sW3q3ymU6M0L-cFXkZ9fHkn9ejs-sqZPhMJxtBPBxoUIUQFTgv4VXTSv914f_YkNw-EjuwbgwXMvpyr06EyfImxHoxsZkFYB-qBYHtaMxTnFsZBr6fn8Ha2JqT1hoP7Z5r5wxDu3GQhKkHw","use":"sig"}]}"#.as_bytes();
-    let jwks = parse_jwks(BAD_JWK_BYTES, &OIDCProvider::Twitch).unwrap();
+    let jwks = parse_jwks(BAD_JWK_BYTES, &OIDCProvider::Twitch, true).unwrap();
     epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
         epoch: 0,
         round: 0,
@@ -1458,13 +1459,11 @@ async fn do_test_aliased_address(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1509,7 +1508,7 @@ async fn zk_multisig_test() {
     let authority_state =
         init_state_with_ids(vec![(victim_addr, object_id), (victim_addr, gas_object_id)]).await;
 
-    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch).unwrap();
+    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch, true).unwrap();
     let epoch_store = authority_state.epoch_store_for_testing();
     epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
         epoch: 0,
@@ -1579,13 +1578,11 @@ async fn execute_transaction_assert_err(
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1636,13 +1633,11 @@ async fn test_oversized_txn() {
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1688,13 +1683,11 @@ async fn test_very_large_certificate() {
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1771,13 +1764,11 @@ async fn test_handle_certificate_errors() {
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(
-            authority_state
-                .config
-                .network_key_pair()
-                .public()
-                .to_owned(),
-        ),
+        authority_state
+            .config
+            .network_key_pair()
+            .public()
+            .to_owned(),
     )
     .await
     .unwrap();
@@ -1953,7 +1944,7 @@ async fn test_handle_soft_bundle_certificates() {
     let server_handle = server.spawn_for_test().await.unwrap();
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(authority.config.network_key_pair().public().to_owned()),
+        authority.config.network_key_pair().public().to_owned(),
     )
     .await
     .unwrap();
@@ -2107,7 +2098,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
     let server_handle = server.spawn_for_test().await.unwrap();
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
-        Some(authority.config.network_key_pair().public().to_owned()),
+        authority.config.network_key_pair().public().to_owned(),
     )
     .await
     .unwrap();

@@ -1,3 +1,10 @@
+type AccumulatorRootCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 type ActiveJwk {
 	"""
 	The string (Issuing Authority) that identifies the OIDC provider.
@@ -1039,7 +1046,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction | AccumulatorRootCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -3093,6 +3100,21 @@ type Parent {
 }
 
 """
+ProgrammableSystemTransactionBlock is identical to ProgrammableTransactionBlock, but graphql
+does not allow multiple variants with the same type.
+"""
+type ProgrammableSystemTransactionBlock {
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+}
+
+"""
 A single transaction, or command, in the programmable transaction block.
 """
 union ProgrammableTransaction = MoveCallTransaction | TransferObjectsTransaction | SplitCoinsTransaction | MergeCoinsTransaction | PublishTransaction | UpgradeTransaction | MakeMoveVecTransaction
@@ -4292,6 +4314,10 @@ type TransactionBlockEffects {
 	"""
 	errors: String
 	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	"""
+	abortCode: BigInt
+	"""
 	Transactions whose outputs this transaction depends upon.
 	"""
 	dependencies(first: Int, after: String, last: Int, before: String): DependencyConnection!
@@ -4390,7 +4416,7 @@ input TransactionBlockFilter {
 """
 The kind of transaction block, either a programmable transaction or a system transaction.
 """
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransactionBlock | AuthenticatorStateUpdateTransaction | RandomnessStateUpdateTransaction | EndOfEpochTransaction | ProgrammableSystemTransactionBlock
 
 """
 An input filter selecting for either system or programmable transactions.

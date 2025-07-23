@@ -144,13 +144,16 @@ impl<S: Serialize + ParquetSchema + Send + Sync + 'static> AnalyticsProcessor<S>
             name.clone(),
         ));
         let (max_checkpoint_sender, max_checkpoint_receiver) = oneshot::channel::<()>();
-        tokio::spawn(Self::setup_max_checkpoint_metrics_updates(
-            max_checkpoint_reader,
-            task_context.metrics.clone(),
-            max_checkpoint_receiver,
-            name,
-        ));
-
+        if task_context.config.report_bq_max_table_checkpoint
+            || task_context.config.report_sf_max_table_checkpoint
+        {
+            tokio::spawn(Self::setup_max_checkpoint_metrics_updates(
+                max_checkpoint_reader,
+                task_context.metrics.clone(),
+                max_checkpoint_receiver,
+                name,
+            ));
+        }
         let state = State {
             current_epoch: 0,
             current_checkpoint_range: next_checkpoint_seq_num..next_checkpoint_seq_num,

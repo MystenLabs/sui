@@ -7,7 +7,8 @@
 
 use std::{cmp::max, num::NonZeroU64};
 
-use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
+use crate::absint::FunctionContext;
+use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     CompiledModule,
@@ -155,12 +156,13 @@ pub(crate) fn verify<'env>(
 ) -> PartialVMResult<()> {
     let mut checker = TypeSafetyChecker::new(module, function_context, ability_cache);
     let verifier = &mut checker;
+    let jump_tables = &verifier.function_context.code().jump_tables;
 
     for block_id in function_context.cfg().blocks() {
-        for offset in function_context.cfg().instr_indexes(block_id) {
-            let code = &verifier.function_context.code();
-            let instr = &code.code[offset as usize];
-            let jump_tables = &code.jump_tables;
+        for (offset, instr) in function_context
+            .cfg()
+            .instructions(&function_context.code().code, block_id)
+        {
             verify_instr(verifier, instr, jump_tables, offset, meter)?
         }
     }

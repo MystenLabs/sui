@@ -1,0 +1,12 @@
+---
+source: crates/move-package/tests/test_renaming_computation.rs
+expression: writer
+---
+Package: C
+	local(A) -> root(CA)
+Package: D
+	local(A) -> root(DA)
+Package: test
+	local(A) -> root(A)
+	local(CA) -> root(CA)
+	local(DA) -> root(DA)

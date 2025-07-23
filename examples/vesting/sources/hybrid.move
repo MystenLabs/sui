@@ -10,7 +10,6 @@
 /// Functionality:
 /// - Defines a hybrid vesting schedule.
 /// ===========================================================================================
-#[allow(unused_const)]
 module vesting::hybrid;
 
 use sui::clock::Clock;

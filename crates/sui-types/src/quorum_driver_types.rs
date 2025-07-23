@@ -60,6 +60,10 @@ pub enum QuorumDriverError {
         errors: GroupedErrors,
         retry_after_secs: u64,
     },
+
+    // Wrapped error from Transaction Driver.
+    #[error("Transaction processing failed. Retriable with new attempts: {retriable}. Details: {details}")]
+    TransactionFailed { retriable: bool, details: String },
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;

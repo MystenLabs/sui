@@ -6,6 +6,7 @@ use std::{sync::Arc, time::SystemTime};
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 #[cfg(test)]
 use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
+use consensus_types::block::BlockTimestampMs;
 use sui_protocol_config::ProtocolConfig;
 #[cfg(test)]
 use tempfile::TempDir;
@@ -13,7 +14,7 @@ use tokio::time::Instant;
 
 #[cfg(test)]
 use crate::metrics::test_metrics;
-use crate::{block::BlockTimestampMs, metrics::Metrics};
+use crate::metrics::Metrics;
 
 /// Context contains per-epoch configuration and metrics shared by all components
 /// of this authority.

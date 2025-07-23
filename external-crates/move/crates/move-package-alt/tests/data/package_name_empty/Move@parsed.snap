@@ -1,8 +1,0 @@
----
-source: crates/move-package-alt/tests/test_runner.rs
----
-error: TOML parse error at line 2, column 8
-  |
-2 | name = ""
-  |        ^^
-Invalid identifier ''

@@ -157,6 +157,24 @@ impl Database {
         }
     }
 
+    /// Flush all memtables to SST files on disk.
+    pub fn flush(&self) -> Result<(), TypedStoreError> {
+        match &self.storage {
+            Storage::Rocks(rocks_db) => rocks_db.underlying.flush().map_err(|e| {
+                TypedStoreError::RocksDBError(format!("Failed to flush database: {}", e))
+            }),
+            Storage::InMemory(_) => {
+                // InMemory databases don't need flushing
+                Ok(())
+            }
+            #[cfg(tidehunter)]
+            Storage::TideHunter(_) => {
+                // TideHunter doesn't support an explicit flush.
+                Ok(())
+            }
+        }
+    }
+
     fn get<K: AsRef<[u8]>>(
         &self,
         cf: &ColumnFamily,
@@ -334,20 +352,31 @@ impl Database {
     }
 
     pub fn write(&self, batch: StorageWriteBatch) -> Result<(), TypedStoreError> {
+        self.write_opt(batch, &rocksdb::WriteOptions::default())
+    }
+
+    pub fn write_opt(
+        &self,
+        batch: StorageWriteBatch,
+        write_options: &rocksdb::WriteOptions,
+    ) -> Result<(), TypedStoreError> {
         fail_point!("batch-write-before");
         let ret = match (&self.storage, batch) {
             (Storage::Rocks(rocks), StorageWriteBatch::Rocks(batch)) => rocks
                 .underlying
-                .write(batch)
+                .write_opt(batch, write_options)
                 .map_err(typed_store_err_from_rocks_err),
             (Storage::InMemory(db), StorageWriteBatch::InMemory(batch)) => {
+                // InMemory doesn't support write options
                 db.write(batch);
                 Ok(())
             }
             #[cfg(tidehunter)]
-            (Storage::TideHunter(db), StorageWriteBatch::TideHunter(batch)) => db
-                .write_batch(batch)
-                .map_err(typed_store_error_from_th_error),
+            (Storage::TideHunter(db), StorageWriteBatch::TideHunter(batch)) => {
+                // TideHunter doesn't support write options
+                db.write_batch(batch)
+                    .map_err(typed_store_error_from_th_error)
+            }
             _ => Err(TypedStoreError::RocksDBError(
                 "using invalid batch type for the database".to_string(),
             )),
@@ -597,6 +626,10 @@ impl<K, V> DBMap<K, V> {
             &self.db_metrics,
             &self.write_sample_interval,
         )
+    }
+
+    pub fn flush(&self) -> Result<(), TypedStoreError> {
+        self.db.flush()
     }
 
     pub fn compact_range<J: Serialize>(&self, start: &J, end: &J) -> Result<(), TypedStoreError> {
@@ -1121,6 +1154,12 @@ impl DBBatch {
     /// Consume the batch and write its operations to the database
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
+        self.write_opt(&rocksdb::WriteOptions::default())
+    }
+
+    /// Consume the batch and write its operations to the database with custom write options
+    #[instrument(level = "trace", skip_all, err)]
+    pub fn write_opt(self, write_options: &rocksdb::WriteOptions) -> Result<(), TypedStoreError> {
         let db_name = self.database.db_name();
         let timer = self
             .db_metrics
@@ -1135,7 +1174,7 @@ impl DBBatch {
         } else {
             None
         };
-        self.database.write(self.batch)?;
+        self.database.write_opt(self.batch, write_options)?;
         self.db_metrics
             .op_metrics
             .rocksdb_batch_commit_bytes
@@ -1290,10 +1329,10 @@ impl DBBatch {
         Ok(self)
     }
 
-    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
+    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, U: Borrow<V>, V: Serialize>(
         &mut self,
         db: &DBMap<K, V>,
-        new_vals: impl IntoIterator<Item = (J, B)>,
+        new_vals: impl IntoIterator<Item = (J, U)>,
     ) -> Result<&mut Self, TypedStoreError> {
         if !Arc::ptr_eq(&db.db, &self.database) {
             return Err(TypedStoreError::CrossDBBatch);
@@ -1302,10 +1341,13 @@ impl DBBatch {
             .into_iter()
             .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
                 let k_buf = be_fix_int_ser(k.borrow());
+                let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
                 match &mut self.batch {
-                    StorageWriteBatch::Rocks(b) => {
-                        b.merge_cf(&rocks_cf_from_db(&self.database, db.cf_name())?, k_buf, v)
-                    }
+                    StorageWriteBatch::Rocks(b) => b.merge_cf(
+                        &rocks_cf_from_db(&self.database, db.cf_name())?,
+                        k_buf,
+                        v_buf,
+                    ),
                     _ => unimplemented!("merge operator is only implemented for RocksDB"),
                 }
                 Ok(())

@@ -63,6 +63,7 @@ use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
@@ -230,18 +231,37 @@ struct UncommittedData {
     // table as they are flushed to the db.
     pending_transaction_writes: DashMap<TransactionDigest, Arc<TransactionOutputs>>,
 
+    // Transactions outputs from Mysticeti fastpath certified transaction executions.
+    // These outputs are not written to pending_transaction_writes until we are sure
+    // that they will not get rejected by consensus. This ensures that no dependent
+    // transactions can sign using the outputs of a fastpath certified transaction.
+    // Otherwise it will be challenging to revert them.
+    // We use a cache because it is possible to have entries that are not finalized
+    // due to data races, i.e. a transaction is first fastpath certified, then
+    // rejected through consensus commit, but at the same time it was executed
+    // and outputs are written here. We won't have a chance to remove them anymore.
+    // So we rely on the cache to evict them eventually.
+    // It is also safe to evict a transaction that will eventually be finalized,
+    // as we will just re-execute it.
+    fastpath_transaction_outputs: MokaCache<TransactionDigest, Arc<TransactionOutputs>>,
+
     total_transaction_inserts: AtomicU64,
     total_transaction_commits: AtomicU64,
 }
 
 impl UncommittedData {
-    fn new() -> Self {
+    fn new(config: &ExecutionCacheConfig) -> Self {
         Self {
             objects: DashMap::with_shard_amount(2048),
             markers: DashMap::with_shard_amount(2048),
             transaction_effects: DashMap::with_shard_amount(2048),
             executed_effects_digests: DashMap::with_shard_amount(2048),
             pending_transaction_writes: DashMap::with_shard_amount(2048),
+            fastpath_transaction_outputs: MokaCache::builder(8)
+                .max_capacity(randomize_cache_capacity_in_tests(
+                    config.fastpath_transaction_outputs_cache_size(),
+                ))
+                .build(),
             transaction_events: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
@@ -254,6 +274,7 @@ impl UncommittedData {
         self.transaction_effects.clear();
         self.executed_effects_digests.clear();
         self.pending_transaction_writes.clear();
+        self.fastpath_transaction_outputs.invalidate_all();
         self.transaction_events.clear();
         self.total_transaction_inserts
             .store(0, std::sync::atomic::Ordering::Relaxed);
@@ -308,13 +329,6 @@ struct CachedCommittedData {
     // See module level comment for an explanation of caching strategy.
     object_cache: MokaCache<ObjectID, Arc<Mutex<CachedVersionMap<ObjectEntry>>>>,
 
-    // We separately cache the latest version of each object. Although this seems
-    // redundant, it is the only way to support populating the cache after a read.
-    // We cannot simply insert objects that we read off the disk into `object_cache`,
-    // since that may violate the no-missing-versions property.
-    // `object_by_id_cache` is also written to on writes so that it is always coherent.
-    object_by_id_cache: MonotonicCache<ObjectID, LatestObjectCacheEntry>,
-
     // See module level comment for an explanation of caching strategy.
     marker_cache: MokaCache<MarkerKey, Arc<Mutex<CachedVersionMap<MarkerValue>>>>,
 
@@ -367,9 +381,6 @@ impl CachedCommittedData {
 
         Self {
             object_cache,
-            object_by_id_cache: MonotonicCache::new(randomize_cache_capacity_in_tests(
-                config.object_by_id_cache_size(),
-            )),
             marker_cache,
             transactions,
             transaction_effects,
@@ -381,7 +392,6 @@ impl CachedCommittedData {
 
     fn clear_and_assert_empty(&self) {
         self.object_cache.invalidate_all();
-        self.object_by_id_cache.invalidate_all();
         self.marker_cache.invalidate_all();
         self.transactions.invalidate_all();
         self.transaction_effects.invalidate_all();
@@ -390,7 +400,6 @@ impl CachedCommittedData {
         self._transaction_objects.invalidate_all();
 
         assert_empty(&self.object_cache);
-        assert!(&self.object_by_id_cache.is_empty());
         assert_empty(&self.marker_cache);
         assert!(self.transactions.is_empty());
         assert!(self.transaction_effects.is_empty());
@@ -414,6 +423,14 @@ pub struct WritebackCache {
     dirty: UncommittedData,
     cached: CachedCommittedData,
 
+    // We separately cache the latest version of each object. Although this seems
+    // redundant, it is the only way to support populating the cache after a read.
+    // We cannot simply insert objects that we read off the disk into `object_cache`,
+    // since that may violate the no-missing-versions property.
+    // `object_by_id_cache` is also written to on writes so that it is always coherent.
+    // Hence it contains both committed and dirty object data.
+    object_by_id_cache: MonotonicCache<ObjectID, LatestObjectCacheEntry>,
+
     // The packages cache is treated separately from objects, because they are immutable and can be
     // used by any number of transactions. Additionally, many operations require loading large
     // numbers of packages (due to dependencies), so we want to try to keep all packages in memory.
@@ -430,6 +447,9 @@ pub struct WritebackCache {
 
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     object_notify_read: NotifyRead<InputKey, ()>,
+    fastpath_transaction_outputs_notify_read:
+        NotifyRead<TransactionDigest, Arc<TransactionOutputs>>,
+
     store: Arc<AuthorityStore>,
     backpressure_threshold: u64,
     backpressure_manager: Arc<BackpressureManager>,
@@ -486,12 +506,16 @@ impl WritebackCache {
             ))
             .build();
         Self {
-            dirty: UncommittedData::new(),
+            dirty: UncommittedData::new(config),
             cached: CachedCommittedData::new(config),
+            object_by_id_cache: MonotonicCache::new(randomize_cache_capacity_in_tests(
+                config.object_by_id_cache_size(),
+            )),
             packages,
             object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             object_notify_read: NotifyRead::new(),
+            fastpath_transaction_outputs_notify_read: NotifyRead::new(),
             store,
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
@@ -549,8 +573,7 @@ impl WritebackCache {
         //   the tx finalizer, plus checkpoint executor, consensus, and RPCs from fullnodes.
         let mut entry = self.dirty.objects.entry(*object_id).or_default();
 
-        self.cached
-            .object_by_id_cache
+        self.object_by_id_cache
             .insert(
                 object_id,
                 LatestObjectCacheEntry::Object(version, object.clone()),
@@ -686,7 +709,7 @@ impl WritebackCache {
     ) -> CacheResult<(SequenceNumber, ObjectEntry)> {
         self.metrics
             .record_cache_request(request_type, "object_by_id");
-        let entry = self.cached.object_by_id_cache.get(object_id);
+        let entry = self.object_by_id_cache.get(object_id);
 
         if cfg!(debug_assertions) {
             if let Some(entry) = &entry {
@@ -821,7 +844,7 @@ impl WritebackCache {
     }
 
     fn get_object_impl(&self, request_type: &'static str, id: &ObjectID) -> Option<Object> {
-        let ticket = self.cached.object_by_id_cache.get_ticket_for_read(id);
+        let ticket = self.object_by_id_cache.get_ticket_for_read(id);
         match self.get_object_entry_by_id_cache_only(request_type, id) {
             CacheResult::Hit((_, entry)) => match entry {
                 ObjectEntry::Object(object) => Some(object),
@@ -867,7 +890,10 @@ impl WritebackCache {
 
     #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
-        trace!(digest = ?tx_outputs.transaction.digest(), "writing transaction outputs to cache");
+        let tx_digest = *tx_outputs.transaction.digest();
+        trace!(?tx_digest, "writing transaction outputs to cache");
+
+        self.dirty.fastpath_transaction_outputs.remove(&tx_digest);
 
         let TransactionOutputs {
             transaction,
@@ -1222,7 +1248,6 @@ impl WritebackCache {
     ) {
         trace!("caching object by id: {:?} {:?}", object_id, object);
         if self
-            .cached
             .object_by_id_cache
             .insert(object_id, object, ticket)
             .is_ok()
@@ -1238,7 +1263,7 @@ impl WritebackCache {
         self.cache_latest_object_by_id(object_id, LatestObjectCacheEntry::NonExistent, ticket);
     }
 
-    fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
+    fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
         assert!(
             self.dirty.pending_transaction_writes.is_empty(),
@@ -1247,6 +1272,10 @@ impl WritebackCache {
         self.dirty.clear();
         info!("clearing old transaction locks");
         self.object_locks.clear();
+        info!("clearing object per epoch marker table");
+        self.store
+            .clear_object_per_epoch_marker_table(execution_guard)
+            .expect("db error");
     }
 
     fn revert_state_update_impl(&self, tx: &TransactionDigest) {
@@ -1271,12 +1300,12 @@ impl WritebackCache {
                 info!("removing non-finalized package from cache: {:?}", object_id);
                 self.packages.invalidate(object_id);
             }
-            self.cached.object_by_id_cache.invalidate(object_id);
+            self.object_by_id_cache.invalidate(object_id);
             self.cached.object_cache.invalidate(object_id);
         }
 
         for ObjectKey(object_id, _) in outputs.deleted.iter().chain(outputs.wrapped.iter()) {
-            self.cached.object_by_id_cache.invalidate(object_id);
+            self.object_by_id_cache.invalidate(object_id);
             self.cached.object_cache.invalidate(object_id);
         }
 
@@ -1289,12 +1318,12 @@ impl WritebackCache {
             .expect("db error");
         for obj in objects {
             self.cached.object_cache.invalidate(&obj.id());
-            self.cached.object_by_id_cache.invalidate(&obj.id());
+            self.object_by_id_cache.invalidate(&obj.id());
         }
     }
 
     fn insert_genesis_object_impl(&self, object: Object) {
-        self.cached.object_by_id_cache.invalidate(&object.id());
+        self.object_by_id_cache.invalidate(&object.id());
         self.cached.object_cache.invalidate(&object.id());
         self.store.insert_genesis_object(object).expect("db error");
     }
@@ -1302,6 +1331,8 @@ impl WritebackCache {
     pub fn clear_caches_and_assert_empty(&self) {
         info!("clearing caches");
         self.cached.clear_and_assert_empty();
+        self.object_by_id_cache.invalidate_all();
+        assert!(&self.object_by_id_cache.is_empty());
         self.packages.invalidate_all();
         assert_empty(&self.packages);
     }
@@ -1558,7 +1589,7 @@ impl ObjectCacheRead for WritebackCache {
         // if we have the latest version cached, and it is within the bound, we are done
         self.metrics
             .record_cache_request("object_lt_or_eq_version", "object_by_id");
-        let latest_cache_entry = self.cached.object_by_id_cache.get(&object_id);
+        let latest_cache_entry = self.object_by_id_cache.get(&object_id);
         if let Some(latest) = &latest_cache_entry {
             let latest = latest.lock();
             match &*latest {
@@ -1647,9 +1678,7 @@ impl ObjectCacheRead for WritebackCache {
                         LatestObjectCacheEntry::Object(obj_version, obj_entry.clone()),
                         // We can get a ticket at the last second, because we are holding the lock
                         // on dirty, so there cannot be any concurrent writes.
-                        self.cached
-                            .object_by_id_cache
-                            .get_ticket_for_read(&object_id),
+                        self.object_by_id_cache.get_ticket_for_read(&object_id),
                     );
 
                     if obj_version <= version_bound {
@@ -1682,9 +1711,7 @@ impl ObjectCacheRead for WritebackCache {
                     self.cache_object_not_found(
                         &object_id,
                         // okay to get ticket at last second - see above
-                        self.cached
-                            .object_by_id_cache
-                            .get_ticket_for_read(&object_id),
+                        self.object_by_id_cache.get_ticket_for_read(&object_id),
                     );
                     None
                 }
@@ -1823,10 +1850,10 @@ impl ObjectCacheRead for WritebackCache {
         &'a self,
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
-        epoch: &'a EpochId,
+        epoch: EpochId,
     ) -> BoxFuture<'a, ()> {
         self.object_notify_read
-            .read(input_and_receiving_keys, |keys| {
+            .read(input_and_receiving_keys, move |keys| {
                 self.multi_input_objects_available(keys, receiving_keys, epoch)
                     .into_iter()
                     .map(|available| if available { Some(()) } else { None })
@@ -2109,6 +2136,34 @@ impl TransactionCacheRead for WritebackCache {
             },
         )
     }
+
+    fn get_mysticeti_fastpath_outputs(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<Arc<TransactionOutputs>> {
+        self.dirty.fastpath_transaction_outputs.get(tx_digest)
+    }
+
+    fn notify_read_fastpath_transaction_outputs<'a>(
+        &'a self,
+        tx_digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, Vec<Arc<TransactionOutputs>>> {
+        self.fastpath_transaction_outputs_notify_read
+            .read(tx_digests, |tx_digests| {
+                tx_digests
+                    .iter()
+                    .map(|tx_digest| self.get_mysticeti_fastpath_outputs(tx_digest))
+                    .collect()
+            })
+            .boxed()
+    }
+
+    fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
+        self.dirty
+            .pending_transaction_writes
+            .get(digest)
+            .map(|transaction_output| transaction_output.take_accumulator_events())
+    }
 }
 
 impl ExecutionCacheWrite for WritebackCache {
@@ -2130,6 +2185,19 @@ impl ExecutionCacheWrite for WritebackCache {
 
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
+    }
+
+    fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>) {
+        let tx_digest = *tx_outputs.transaction.digest();
+        debug!(
+            ?tx_digest,
+            "writing mysticeti fastpath certified transaction outputs"
+        );
+        self.dirty
+            .fastpath_transaction_outputs
+            .insert(tx_digest, tx_outputs.clone());
+        self.fastpath_transaction_outputs_notify_read
+            .notify(&tx_digest, &tx_outputs);
     }
 
     #[cfg(test)]

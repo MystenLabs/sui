@@ -6,9 +6,11 @@ use super::Checkpoint;
 use super::CheckpointContents;
 use super::CheckpointSummary;
 use super::ExecutedTransaction;
-use crate::message::MessageMergeFrom;
-use crate::message::{MessageField, MessageFields, MessageMerge};
 use crate::proto::TryFromProtoError;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::MessageField;
+use sui_rpc::field::MessageFields;
+use sui_rpc::merge::Merge;
 use tap::Pipe;
 
 //
@@ -54,19 +56,17 @@ impl MessageFields for CheckpointSummary {
 impl From<sui_sdk_types::CheckpointSummary> for CheckpointSummary {
     fn from(summary: sui_sdk_types::CheckpointSummary) -> Self {
         let mut message = Self::default();
-        message.merge(summary, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(summary, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::CheckpointSummary> for CheckpointSummary {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::CheckpointSummary,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::CheckpointSummary> for CheckpointSummary {
+    fn merge(&mut self, source: sui_sdk_types::CheckpointSummary, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(Bcs::serialize(&source).unwrap());
+            let mut bcs = Bcs::serialize(&source).unwrap();
+            bcs.name = Some("CheckpointSummary".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
@@ -128,8 +128,8 @@ impl MessageMerge<sui_sdk_types::CheckpointSummary> for CheckpointSummary {
     }
 }
 
-impl MessageMerge<&CheckpointSummary> for CheckpointSummary {
-    fn merge(&mut self, source: &CheckpointSummary, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&CheckpointSummary> for CheckpointSummary {
+    fn merge(&mut self, source: &CheckpointSummary, mask: &FieldMaskTree) {
         let CheckpointSummary {
             bcs,
             digest,
@@ -491,19 +491,17 @@ impl MessageFields for CheckpointContents {
 impl From<sui_sdk_types::CheckpointContents> for CheckpointContents {
     fn from(value: sui_sdk_types::CheckpointContents) -> Self {
         let mut message = Self::default();
-        message.merge(value, &crate::field_mask::FieldMaskTree::new_wildcard());
+        message.merge(value, &FieldMaskTree::new_wildcard());
         message
     }
 }
 
-impl MessageMerge<sui_sdk_types::CheckpointContents> for CheckpointContents {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::CheckpointContents,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::CheckpointContents> for CheckpointContents {
+    fn merge(&mut self, source: sui_sdk_types::CheckpointContents, mask: &FieldMaskTree) {
         if mask.contains(Self::BCS_FIELD.name) {
-            self.bcs = Some(Bcs::serialize(&source).unwrap());
+            let mut bcs = Bcs::serialize(&source).unwrap();
+            bcs.name = Some("CheckpointContents".to_owned());
+            self.bcs = Some(bcs);
         }
 
         if mask.contains(Self::DIGEST_FIELD.name) {
@@ -520,8 +518,8 @@ impl MessageMerge<sui_sdk_types::CheckpointContents> for CheckpointContents {
     }
 }
 
-impl MessageMerge<&CheckpointContents> for CheckpointContents {
-    fn merge(&mut self, source: &CheckpointContents, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&CheckpointContents> for CheckpointContents {
+    fn merge(&mut self, source: &CheckpointContents, mask: &FieldMaskTree) {
         let CheckpointContents {
             bcs,
             digest,
@@ -595,12 +593,8 @@ impl MessageFields for Checkpoint {
     ];
 }
 
-impl MessageMerge<&sui_sdk_types::CheckpointSummary> for Checkpoint {
-    fn merge(
-        &mut self,
-        source: &sui_sdk_types::CheckpointSummary,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<&sui_sdk_types::CheckpointSummary> for Checkpoint {
+    fn merge(&mut self, source: &sui_sdk_types::CheckpointSummary, mask: &FieldMaskTree) {
         if mask.contains(Self::SEQUENCE_NUMBER_FIELD.name) {
             self.sequence_number = Some(source.sequence_number);
         }
@@ -615,32 +609,24 @@ impl MessageMerge<&sui_sdk_types::CheckpointSummary> for Checkpoint {
     }
 }
 
-impl MessageMerge<sui_sdk_types::ValidatorAggregatedSignature> for Checkpoint {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::ValidatorAggregatedSignature,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::ValidatorAggregatedSignature> for Checkpoint {
+    fn merge(&mut self, source: sui_sdk_types::ValidatorAggregatedSignature, mask: &FieldMaskTree) {
         if mask.contains(Self::SIGNATURE_FIELD.name) {
             self.signature = Some(source.into());
         }
     }
 }
 
-impl MessageMerge<sui_sdk_types::CheckpointContents> for Checkpoint {
-    fn merge(
-        &mut self,
-        source: sui_sdk_types::CheckpointContents,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
+impl Merge<sui_sdk_types::CheckpointContents> for Checkpoint {
+    fn merge(&mut self, source: sui_sdk_types::CheckpointContents, mask: &FieldMaskTree) {
         if let Some(submask) = mask.subtree(Self::CONTENTS_FIELD.name) {
             self.contents = Some(CheckpointContents::merge_from(source, &submask));
         }
     }
 }
 
-impl MessageMerge<&Checkpoint> for Checkpoint {
-    fn merge(&mut self, source: &Checkpoint, mask: &crate::field_mask::FieldMaskTree) {
+impl Merge<&Checkpoint> for Checkpoint {
+    fn merge(&mut self, source: &Checkpoint, mask: &FieldMaskTree) {
         let Checkpoint {
             sequence_number,
             digest,
