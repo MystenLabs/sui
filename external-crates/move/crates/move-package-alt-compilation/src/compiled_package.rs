@@ -5,7 +5,6 @@
 use move_package_alt::{
     flavor::MoveFlavor,
     package::{RootPackage, paths::PackagePath},
-    schema::PackageName,
 };
 
 use colored::Colorize;
@@ -18,8 +17,6 @@ use crate::layout::CompiledPackageLayout;
 
 use move_package_alt::schema::PublishedID;
 
-use move_core_types::account_address::AccountAddress;
-
 use anyhow::{Result, anyhow};
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::Modules;
@@ -28,7 +25,7 @@ use move_compiler::{
     Compiler, Flags,
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit},
     diagnostics::{Diagnostics, report_warnings, warning_filters::WarningFiltersBuilder},
-    editions::Flavor,
+    editions::{Edition, Flavor},
     linters::{self, LINT_WARNING_PREFIX},
     shared::{
         PackageConfig, PackagePaths, SaveFlag, SaveHook,
@@ -36,7 +33,7 @@ use move_compiler::{
     },
     sui_mode,
 };
-use move_core_types::parsing::address::NumericalAddress;
+use move_core_types::{account_address::AccountAddress, parsing::address::NumericalAddress};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
 use move_symbol_pool::Symbol;
@@ -45,8 +42,8 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
     path::{Path, PathBuf},
+    str::FromStr,
 };
-use tracing::debug;
 use vfs::VfsPath;
 
 /// References file for documentation generation
@@ -439,13 +436,13 @@ fn compiler_flags(build_config: &BuildConfig) -> Flags {
 pub fn build_all<W: Write, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
-    project_root: &Path,
     root_pkg: RootPackage<F>,
-    package_name: PackageName,
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
+    let project_root = root_pkg.path().as_ref().to_path_buf();
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
+    let package_name = Symbol::from(root_pkg.name().as_str());
     let (file_map, all_compiled_units) =
         build_for_driver(w, vfs_root, build_config, root_pkg, |compiler| {
             let compiler = compiler.add_save_hook(&program_info_hook);
@@ -509,7 +506,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
             DocgenFlags::default(), // TODO this should be configurable
             root_package_name,
             &model,
-            project_root,
+            &project_root,
             //TODO Fix this, it needs immediate dependencies for this pkg
             &[],
             // &immediate_dependencies,
@@ -550,6 +547,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
     Ok(compiled_package)
 }
 
+#[allow(unreachable_code)] // TODO
 pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
@@ -557,90 +555,50 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
     root_pkg: RootPackage<F>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
-    let deps = root_pkg.dependencies();
+    let packages = root_pkg.packages();
 
-    // TODO: this should go away up to see below
-    let names = BTreeMap::from([
-        ("Sui", "sui"),
-        ("SuiSystem", "sui_system"),
-        ("MoveStdlib", "std"),
-    ]);
+    let mut package_paths: Vec<PackagePaths> = vec![];
 
-    let mut named_address_map: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
+    for pkg in packages {
+        let name: Symbol = pkg.name().as_str().into();
 
-    for node in &deps {
-        println!("Node {:?}", node);
-        let addr = &node
-            .published_at()
-            .ok_or_else(|| anyhow!("Expected package to have a published addr"))?;
-        // published_ids.push(addr.clone());
-        let addr = NumericalAddress::new(
-            addr.0.into_bytes(),
-            move_compiler::shared::NumberFormat::Hex,
-        );
-        let pkg_name: Symbol = if names.contains_key(&node.name().as_str()) {
-            // return one of the standard aliases
-            (*names.get(node.name().as_str()).unwrap()).into()
-        } else {
-            node.name().as_str().into()
+        if !pkg.is_root() {
+            writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
+        }
+
+        let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
+        for (name, dep) in pkg.named_addresses() {
+            let name = name.as_str().into();
+
+            let addr = if dep.is_root() {
+                AccountAddress::ZERO
+            } else {
+                dep.published()
+                    .ok_or_else(|| anyhow!("Expected package {name} to be published"))?
+                    .original_id
+                    .0
+            };
+
+            let addr: NumericalAddress =
+                NumericalAddress::new(addr.into_bytes(), move_compiler::shared::NumberFormat::Hex);
+            addresses.insert(name, addr);
+        }
+
+        // TODO: better default handling for edition and flavor
+        let config = PackageConfig {
+            is_dependency: !pkg.is_root(),
+            edition: Edition::from_str(pkg.edition().unwrap_or("2024"))?,
+            flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
+            warning_filter: WarningFiltersBuilder::new_for_source(),
         };
 
-        named_address_map.insert(pkg_name, addr);
-    }
-
-    named_address_map.insert(
-        root_pkg.name().as_str().into(),
-        NumericalAddress::new(
-            AccountAddress::from_hex_literal("0x0")
-                .unwrap()
-                .into_bytes(),
-            move_compiler::shared::NumberFormat::Hex,
-        ),
-    );
-
-    // up to here
-
-    let mut dependencies_paths = vec![];
-
-    // Find the source paths for each dependency and build the PackagePaths
-    for node in &deps {
-        writeln!(
-            w,
-            "{} {}",
-            "INCLUDING DEPENDENCY".bold().green(),
-            node.name()
-        )?;
-        let sources = get_sources(node.path())?;
-        let is_dependency = node.name() != root_pkg.name();
-
-        debug!("Node: {:?}, is dependency: {is_dependency}", node.name());
-
-        // TODO: probably here we need to use a different type than Symbol
-        let source_package_paths: PackagePaths<Symbol, Symbol> = PackagePaths {
-            name: Some((
-                node.name().as_str().into(),
-                PackageConfig {
-                    is_dependency,
-                    warning_filter: WarningFiltersBuilder::new_for_source(),
-                    // TODO: we need to use this probably in the manifest for deserialization
-                    flavor: move_compiler::editions::Flavor::Sui,
-                    // TODO: we should add this to the type in the manifest.
-                    edition: move_compiler::editions::Edition {
-                        // TODO: we need edition in root pkg
-                        edition: Symbol::from(""), // root_pkg.edition().into(),
-                        // TODO: should we have this as a field?
-                        release: None,
-                    },
-                },
-            )),
-            // TODO: fixed named_address map for each package. It should contain the package
-            // and its direct deps
-            // named_address_map: BTreeMap::new(),
-            named_address_map: named_address_map.clone(),
-            paths: sources,
+        let paths = PackagePaths {
+            name: Some((name, config)),
+            paths: get_sources(pkg.path())?,
+            named_address_map: addresses,
         };
 
-        dependencies_paths.push(source_package_paths);
+        package_paths.push(paths);
     }
 
     writeln!(w, "{} {}", "BUILDING".bold().green(), root_pkg.name())?;
@@ -649,7 +607,7 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
     let sui_mode = build_config.default_flavor == Some(Flavor::Sui);
     let flags = compiler_flags(build_config);
 
-    let mut compiler = Compiler::from_package_paths(vfs_root, dependencies_paths, vec![])
+    let mut compiler = Compiler::from_package_paths(vfs_root, package_paths, vec![])
         .unwrap()
         .set_flags(flags);
     if sui_mode {

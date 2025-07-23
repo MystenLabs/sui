@@ -1,0 +1,48 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-29:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5137600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 32-35:
+//# programmable --dev-inspect
+// This should be allowed and should abort
+//> 0: test::m::pair_mut();
+//> test::m::increment(Result(0));
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("pair_mut") }, 0) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 0, instruction: 1, function_name: Some("pair_mut") }, 0) in command 0
+
+task 3, lines 37-43:
+//# programmable --dev-inspect
+// This should be allowed and should abort
+//> 0: test::m::box_mut();
+//> test::m::increment(NestedResult(0,0));
+//> test::m::increment(NestedResult(0,1));
+//> test::m::increment(NestedResult(0,0));
+//> test::m::swap_x(NestedResult(0,0), NestedResult(0,1));
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("box_mut") }, 1) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 1, instruction: 1, function_name: Some("box_mut") }, 1) in command 0
+
+task 4, lines 45-48:
+//# programmable --dev-inspect
+// This should be rejected by the borrow checker (in static PTBs)
+//> 0: test::m::pair_mut();
+//> test::m::swap_x(Result(0), Result(0));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1
+Execution Error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1
+
+task 5, lines 50-53:
+//# programmable --dev-inspect
+// This should be rejected by the borrow checker (in static PTBs)
+//> 0: test::m::box_mut();
+//> test::m::swap_x(NestedResult(0,0), NestedResult(0,0));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1
+Execution Error: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage } in command 1

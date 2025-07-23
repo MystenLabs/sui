@@ -72,6 +72,7 @@ macro_rules! debug_fatal {
             #[cfg(msim)]
             {
                 if let Some(cb) = $crate::logging::intercept_debug_fatal::get_callback() {
+                    tracing::error!($($arg)*);
                     let msg = format!($($arg)*);
                     if msg.contains(&cb.pattern) {
                         (cb.callback)();

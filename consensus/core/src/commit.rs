@@ -15,6 +15,7 @@ use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -404,16 +405,14 @@ impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CommittedSubDag(leader={}, ref={}, blocks=[",
-            self.leader, self.commit_ref
-        )?;
-        for (idx, block) in self.blocks.iter().enumerate() {
-            if idx > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", block.digest())?;
-        }
-        write!(f, "])")
+            "CommittedSubDag(leader={}, ref={}, blocks=[{}])",
+            self.leader,
+            self.commit_ref,
+            self.blocks
+                .iter()
+                .map(|b| b.reference().to_string())
+                .join(", ")
+        )
     }
 }
 

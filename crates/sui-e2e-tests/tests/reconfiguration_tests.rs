@@ -422,6 +422,9 @@ async fn test_create_advance_epoch_tx_race() {
     // proceeded with reconfiguration.
     sleep(Duration::from_secs(1)).await;
     reconfig_delay_tx.send(()).unwrap();
+
+    // wait for reconfiguration to complete
+    test_cluster.wait_for_epoch(None).await;
 }
 
 #[sim_test]

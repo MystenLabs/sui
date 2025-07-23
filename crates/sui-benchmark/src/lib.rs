@@ -18,7 +18,8 @@ use sui_core::{
         QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
     transaction_driver::{
-        SubmitTransactionOptions, SubmitTxRequest, TransactionDriver, TransactionDriverMetrics,
+        choose_transaction_driver_percentage, SubmitTransactionOptions, SubmitTxRequest,
+        TransactionDriver, TransactionDriverMetrics,
     },
 };
 use sui_json_rpc_types::{
@@ -279,18 +280,10 @@ impl LocalValidatorAggregatorProxy {
             .build_network_clients();
         let committee = genesis.committee().unwrap();
 
-        let td_percentage = 'td: {
-            if let Some(tx_driver_percentage) = transaction_driver_percentage {
-                break 'td tx_driver_percentage;
-            }
-            if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
-                if let Ok(tx_driver_percentage) = v.parse::<u8>() {
-                    if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                        break 'td tx_driver_percentage;
-                    }
-                }
-            }
-            0
+        let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
+            tx_driver_percentage
+        } else {
+            choose_transaction_driver_percentage()
         };
 
         Self::new_impl(

@@ -183,7 +183,7 @@ impl ExecutionScheduler {
             .inc();
         tokio::select! {
             _ = self.object_cache_read
-                .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, &epoch)
+                .notify_read_input_objects(&missing_input_keys, &receiving_object_keys, epoch)
                 => {
                     self.metrics
                         .transaction_manager_transaction_queue_age_s
@@ -290,9 +290,9 @@ impl ExecutionScheduler {
                             let env = env.with_sufficient_balance();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
-                        ScheduleStatus::AlreadyScheduled => {
+                        ScheduleStatus::AlreadyExecuted => {
                             let tx_digest = result.tx_digest;
-                            debug!(?tx_digest, "Withdraw already scheduled or executed");
+                            debug!(?tx_digest, "Withdraw already executed");
                         }
                     },
                     Err(e) => {

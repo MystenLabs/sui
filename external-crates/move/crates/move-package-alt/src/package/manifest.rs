@@ -217,3 +217,68 @@ impl std::fmt::Debug for Manifest {
         self.inner.fmt(f)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // TODO: comprehensive testing
+
+    use tempfile::TempDir;
+    use test_log::test;
+
+    use crate::{flavor::vanilla::default_environment, schema::PackageName};
+
+    use super::{Manifest, ManifestResult};
+
+    /// Create a file containing `contents` and pass it to `Manifest::read_from_file`
+    fn load_manifest(contents: impl AsRef<[u8]>) -> ManifestResult<Manifest> {
+        // TODO: we need a better implementation for this
+        let tempdir = TempDir::new().unwrap();
+        let manifest_path = tempdir.path().join("Move.toml");
+
+        std::fs::write(&manifest_path, contents).expect("write succeeds");
+
+        Manifest::read_from_file(manifest_path)
+    }
+
+    /// The `environments` table may be missing
+    #[test]
+    #[ignore] // TODO: this tests new behavior that isn't implemented yet
+    fn empty_environments_allowed() {
+        let manifest = load_manifest(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+            "#,
+        )
+        .unwrap();
+
+        let default_env = default_environment();
+        assert_eq!(
+            manifest.environments().get(default_env.name()),
+            Some(default_env.id())
+        );
+    }
+
+    /// Environment names in `dep-replacements` must be defined in `environments`
+    #[test]
+    #[ignore] // TODO: this tests new behavior that isn't implemented yet
+    fn dep_replacement_envs_are_declared() {
+        let manifest = load_manifest(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dep-replacements]
+            mainnet.foo = { local = "../foo" }
+            "#,
+        )
+        .unwrap();
+
+        let name = PackageName::new("foo").unwrap();
+        assert!(manifest.dependencies().contains_key(&name));
+        let default_env = default_environment();
+        assert!(!manifest.dep_replacements()[default_env.name()].contains_key(&name));
+    }
+}

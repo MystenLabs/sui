@@ -1263,7 +1263,7 @@ impl WritebackCache {
         self.cache_latest_object_by_id(object_id, LatestObjectCacheEntry::NonExistent, ticket);
     }
 
-    fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
+    fn clear_state_end_of_epoch_impl(&self, execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
         assert!(
             self.dirty.pending_transaction_writes.is_empty(),
@@ -1272,6 +1272,10 @@ impl WritebackCache {
         self.dirty.clear();
         info!("clearing old transaction locks");
         self.object_locks.clear();
+        info!("clearing object per epoch marker table");
+        self.store
+            .clear_object_per_epoch_marker_table(execution_guard)
+            .expect("db error");
     }
 
     fn revert_state_update_impl(&self, tx: &TransactionDigest) {
@@ -1846,10 +1850,10 @@ impl ObjectCacheRead for WritebackCache {
         &'a self,
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
-        epoch: &'a EpochId,
+        epoch: EpochId,
     ) -> BoxFuture<'a, ()> {
         self.object_notify_read
-            .read(input_and_receiving_keys, |keys| {
+            .read(input_and_receiving_keys, move |keys| {
                 self.multi_input_objects_available(keys, receiving_keys, epoch)
                     .into_iter()
                     .map(|available| if available { Some(()) } else { None })

@@ -192,6 +192,11 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 // TODO add a Retry-After header
                 RpcError::new(Code::Unavailable, "system is overloaded")
             }
+            TransactionDriverError(err) => RpcError::new(
+                // TODO(fastpath): Replace with a proper error code
+                Code::Unknown,
+                format!("[MFP] The transaction went through MFP which is in testing: {err}",),
+            ),
         }
     }
 }

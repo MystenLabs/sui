@@ -818,18 +818,6 @@ impl ConsensusOutputQuarantine {
             .any(|output| output.pending_checkpoint_exists(index))
     }
 
-    #[cfg(tidehunter)]
-    pub(super) fn get_new_jwks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        round: u64,
-    ) -> SuiResult<Vec<ActiveJwk>> {
-        // todo fix this for tidehunter
-        // active_jwks.safe_iter_with_bounds is not supported for hashed keys in tidehunter
-        Ok(vec![])
-    }
-
-    #[cfg(not(tidehunter))]
     pub(super) fn get_new_jwks(
         &self,
         epoch_store: &AuthorityPerEpochStore,

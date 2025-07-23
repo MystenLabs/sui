@@ -106,7 +106,7 @@ pub struct MoveCall {
     pub arguments: Vec<Argument>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum Location {
     TxContext,
     GasCoin,

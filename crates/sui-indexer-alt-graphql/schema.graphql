@@ -41,9 +41,25 @@ type Checkpoint {
 	"""
 	epoch: Epoch
 	"""
+	The total number of transactions in the network by the end of this checkpoint.
+	"""
+	networkTotalTransactions: UInt53
+	"""
 	The digest of the previous checkpoint's summary.
 	"""
 	previousCheckpointDigest: String
+	"""
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+	"""
+	rollingGasSummary: GasCostSummary
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's summary.
+	"""
+	summaryBcs: Base64
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's contents.
+	"""
+	contentBcs: Base64
 	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
@@ -113,9 +129,43 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
+	Validator-related properties, including the active validators.
+	"""
+	validatorSet: ValidatorSet
+	"""
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: UInt53
+	"""
+	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	totalTransactions: UInt53
+	"""
+	The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	totalGasFees: BigInt
+	"""
+	The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
+	"""
+	totalStakeRewards: BigInt
+	"""
+	The amount added to total gas fees to make up the total stake rewards.
+	"""
+	totalStakeSubsidies: BigInt
+}
+
+"""
+The execution status of this transaction: success or failure.
+"""
+enum ExecutionStatus {
+	"""
+	The transaction was successfully executed.
+	"""
+	SUCCESS
+	"""
+	The transaction could not be executed.
+	"""
+	FAILURE
 }
 
 """
@@ -132,6 +182,32 @@ type FeatureFlag {
 	value: Boolean!
 }
 
+
+"""
+Summary of charges from transactions.
+
+Storage is charged in three parts -- `storage_cost`, `-storage_rebate`, and `non_refundable_storage_fee` -- independently of `computation_cost`.
+
+The overall cost of a transaction, deducted from its gas coins, is its `computation_cost + storage_cost - storage_rebate`. `non_refundable_storage_fee` is collected from objects being mutated or deleted and accumulated by the system in storage funds, the remaining storage costs of previous object versions are what become the `storage_rebate`. The ratio between `non_refundable_storage_fee` and `storage_rebate` is set by the protocol.
+"""
+type GasCostSummary {
+	"""
+	The sum cost of computation/execution
+	"""
+	computationCost: UInt53
+	"""
+	Cost for storage at the time the transaction is executed, calculated as the size of the objects being mutated in bytes multiplied by a storage cost per byte (part of the protocol).
+	"""
+	storageCost: UInt53
+	"""
+	Amount the user gets back from the storage cost of the previous versions of objects being mutated or deleted.
+	"""
+	storageRebate: UInt53
+	"""
+	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
+	"""
+	nonRefundableStorageFee: UInt53
+}
 
 type GasInput {
 	"""
@@ -809,6 +885,14 @@ type TransactionEffects {
 	"""
 	checkpoint: Checkpoint
 	"""
+	Whether the transaction executed successfully or not.
+	"""
+	status: ExecutionStatus
+	"""
+	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+	"""
+	lamportVersion: UInt53
+	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
@@ -826,6 +910,55 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Representation of `0x3::validator_set::ValidatorSet`.
+"""
+type ValidatorSet {
+	"""
+	Total amount of stake for all active validators at the beginning of the epoch.
+	"""
+	totalStake: BigInt
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
+	pendingRemovals: [Int!]
+	"""
+	Object ID of the wrapped object `TableVec` storing the pending active validators.
+	"""
+	pendingActiveValidatorsId: SuiAddress
+	"""
+	Size of the pending active validators table.
+	"""
+	pendingActiveValidatorsSize: Int
+	"""
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+	of the corresponding validators. This is needed because a validator's address
+	can potentially change but the object ID of its pool will not.
+	"""
+	stakingPoolMappingsId: SuiAddress
+	"""
+	Size of the stake pool mappings `Table`.
+	"""
+	stakingPoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the inactive staking pools.
+	"""
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools `Table`.
+	"""
+	inactivePoolsSize: Int
+	"""
+	Object ID of the `Table` storing the validator candidates.
+	"""
+	validatorCandidatesId: SuiAddress
+	"""
+	Size of the validator candidates `Table`.
+	"""
+	validatorCandidatesSize: Int
+}
 
 """
 Filter for paginating the history of an Object or MovePackage.

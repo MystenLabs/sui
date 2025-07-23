@@ -2,15 +2,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
 use std::{collections::BTreeMap, fmt, path::Path};
 
+use colored::Colorize;
 use tracing::debug;
 
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
-use crate::package::Package;
-use crate::schema::{Environment, PackageName, Publication};
+use crate::graph::PackageInfo;
+use crate::schema::{Environment, OriginalID, PackageName, Publication};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
@@ -65,6 +65,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
         let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
+
         root_pkg.update_lockfile_digests();
 
         Ok(root_pkg)
@@ -120,6 +121,17 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
+
+        // warn if the root package has any direct deps with short shas
+        let pkg = graph.root_package();
+        if pkg.direct_deps().iter().any(|(_, p)| !p.has_full_sha()) {
+            let msg = "WARNING: found one or more short SHAs in the manifest's dependencies which \
+                    require to download the full git history.\n\nUse a full 40-characters sha if \
+                    possible."
+                .yellow();
+            println!("{}", msg);
+        }
+
         // check that there is a consistent linkage
 
         let _linkage = graph.linkage()?;
@@ -140,8 +152,27 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
     }
 
+    /// The name of the root package
     pub fn name(&self) -> &PackageName {
         self.graph.root_package().name()
+    }
+
+    /// The path to the root of the package
+    pub fn path(&self) -> &PackagePath {
+        &self.package_path
+    }
+
+    /// Return the list of all packages in the root package's package graph (including itself and all
+    /// transitive dependencies).
+    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+        self.graph.dependencies()
+    }
+
+    /// Return the linkage table for the root package. This contains an entry for each package that
+    /// this package depends on (transitively). Returns an error if any of the packages that this
+    /// package depends on is unpublished.
+    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+        todo!()
     }
 
     /// Output an updated lockfile containg the dependency graph represented by `self`. Note that
@@ -149,7 +180,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// changed (since no repinning was performed).
     pub fn save_to_disk(&self) -> PackageResult<()> {
         std::fs::write(
-            self.package_path().lockfile_path(),
+            self.graph.root_package().path().lockfile_path(),
             self.lockfile.render_as_toml(),
         )?;
         Ok(())
@@ -180,30 +211,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(toml_edit::de::from_str(file.source())?)
     }
 
-    /// Return the package graph for `env`
-    // TODO: what's the right API here?
-    pub fn package_graph(&self) -> &PackageGraph<F> {
-        &self.graph
-    }
-
     pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
         &self.lockfile
-    }
-    // *** PATHS RELATED FUNCTIONS ***
-
-    /// Return the package path wrapper
-    pub fn package_path(&self) -> &PackagePath {
-        &self.package_path
-    }
-
-    /// Return a list of sorted package names
-    pub fn sorted_deps(&self) -> Vec<PackageName> {
-        self.package_graph().sorted_deps()
-    }
-
-    /// Return the list of this root package's dependencies
-    pub fn dependencies(&self) -> Vec<Arc<Package<F>>> {
-        self.package_graph().dependencies()
     }
 }
 
