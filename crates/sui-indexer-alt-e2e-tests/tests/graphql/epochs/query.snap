@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-51:
+task 6, lines 16-54:
 //# run-graphql
 Response: {
   "data": {
@@ -44,7 +44,10 @@ Response: {
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0",
-      "fundSize": "0"
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0"
     },
     "e0": {
       "epochId": 0,
@@ -68,7 +71,10 @@ Response: {
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0",
-      "fundSize": "0"
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0"
     },
     "e1": {
       "epochId": 1,
@@ -92,7 +98,10 @@ Response: {
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0",
-      "fundSize": "0"
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0"
     },
     "e2": {
       "epochId": 2,
@@ -116,13 +125,16 @@ Response: {
       "totalGasFees": "0",
       "totalStakeRewards": "0",
       "totalStakeSubsidies": "0",
-      "fundSize": "0"
+      "fundSize": "0",
+      "netInflow": "0",
+      "fundInflow": "0",
+      "fundOutflow": "0"
     },
     "e3": null
   }
 }
 
-task 7, lines 53-89:
+task 7, lines 56-95:
 //# run-graphql
 Response: {
   "data": {
@@ -150,7 +162,10 @@ Response: {
           "totalGasFees": "0",
           "totalStakeRewards": "0",
           "totalStakeSubsidies": "0",
-          "fundSize": "0"
+          "fundSize": "0",
+          "netInflow": "0",
+          "fundInflow": "0",
+          "fundOutflow": "0"
         },
         "e0": {
           "epochId": 0,
@@ -174,7 +189,10 @@ Response: {
           "totalGasFees": "0",
           "totalStakeRewards": "0",
           "totalStakeSubsidies": "0",
-          "fundSize": "0"
+          "fundSize": "0",
+          "netInflow": "0",
+          "fundInflow": "0",
+          "fundOutflow": "0"
         },
         "e1": {
           "epochId": 1,
@@ -198,7 +216,10 @@ Response: {
           "totalGasFees": "0",
           "totalStakeRewards": "0",
           "totalStakeSubsidies": "0",
-          "fundSize": "0"
+          "fundSize": "0",
+          "netInflow": "0",
+          "fundInflow": "0",
+          "fundOutflow": "0"
         },
         "e2": null
       }
