@@ -708,7 +708,7 @@ impl IndexStore {
     pub fn index_tx(
         &self,
         sender: SuiAddress,
-        active_inputs: impl Iterator<Item = ObjectID>,
+        _active_inputs: impl Iterator<Item = ObjectID>,
         mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
         move_functions: impl Iterator<Item = (ObjectID, String, String)> + Clone,
         events: &TransactionEvents,
@@ -734,21 +734,6 @@ impl IndexStore {
             &self.tables.transactions_from_addr,
             std::iter::once(((sender, sequence), *digest)),
         )?;
-
-        #[allow(deprecated)]
-        if !self.remove_deprecated_tables {
-            batch.insert_batch(
-                &self.tables.transactions_by_input_object_id,
-                active_inputs.map(|id| ((id, sequence), *digest)),
-            )?;
-
-            batch.insert_batch(
-                &self.tables.transactions_by_mutated_object_id,
-                mutated_objects
-                    .clone()
-                    .map(|(obj_ref, _)| ((obj_ref.0, sequence), *digest)),
-            )?;
-        }
 
         batch.insert_batch(
             &self.tables.transactions_by_move_function,
