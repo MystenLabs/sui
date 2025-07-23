@@ -12,7 +12,7 @@ tokio-util.workspace = true
 anyhow.workspace = true
 sui-bridge.workspace = true
 sui-bridge-schema.workspace = true
-sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-framework = { workspace = true, features = ["postgres"] }
 sui-indexer-alt-metrics.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
