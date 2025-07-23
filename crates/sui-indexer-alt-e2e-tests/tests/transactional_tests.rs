@@ -161,6 +161,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
                     pruner: Some(pruner),
                     ..Default::default()
                 }),
+                tx_balance_changes: Some(ConcurrentLayer::default()),
                 ..Default::default()
             },
             ..Default::default()
