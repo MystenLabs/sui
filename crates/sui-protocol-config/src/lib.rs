@@ -251,6 +251,7 @@ const MAX_PROTOCOL_VERSION: u64 = 89;
 //             Ignore execution time observations after validator stops accepting certs.
 // Version 89: Standard library improvements.
 //             Enable `debug_fatal` on Move invariant violations.
+//             Enable passkey and passkey inside multisig for mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3865,6 +3866,8 @@ impl ProtocolConfig {
                     cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
+                    cfg.feature_flags.accept_passkey_in_multisig = true;
+                    cfg.feature_flags.passkey_auth = true;
                 }
                 // Use this template when making changes:
                 //
