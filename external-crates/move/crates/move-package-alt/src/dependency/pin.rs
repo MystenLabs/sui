@@ -197,11 +197,10 @@ impl LocalDepInfo {
         // 1. "Parent" is a git dependency, so we need to first make sure the dir is accessible due to sparse checkouts.
         // 2. "Parent" is not a git dependency, so we need to return an error as the local dep does not exist.
 
-        // For 1: We try to add the dir to the sparse-checkout list.
-
+        // (1.): We try to add the dir to the sparse-checkout list:
         git_cache_try_make_local_dir_accessible(parent_dir.to_path_buf(), path.to_path_buf()).await;
 
-        // If the local directory still does not exist, we return an error.
+        // (2.): If the local directory still does not exist, we return an error.
         if !path.exists() {
             return Err(PackageError::Generic(format!(
                 "Failed to fetch local dependency: {:?}",
