@@ -128,15 +128,16 @@ type Epoch {
 
 type Event {
 	"""
-	The Base64 encoded BCS serialized bytes of the entire event structure.
+	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
+	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
 	"""
 	eventBcs: Base64
 	"""
-	Address of the sender of the event.
+	Address of the sender of the transaction that emitted this event.
 	"""
 	sender: Address
 	"""
-	The position of the event among the events from the same transaction — useful for distinguishing between events with the same content that appeared from the same transaction.
+	The position of the event among the events from the same transaction.
 	"""
 	sequenceNumber: UInt53!
 	"""

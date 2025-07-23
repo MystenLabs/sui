@@ -32,13 +32,14 @@ pub(crate) struct Event {
 // TODO(DVX-1203): contents - MoveValue
 #[Object]
 impl Event {
-    /// The Base64 encoded BCS serialized bytes of the entire event structure.
+    /// The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
+    /// This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
     async fn event_bcs(&self) -> Result<Option<Base64>, RpcError> {
         let bcs_bytes = bcs::to_bytes(&self.native).context("Failed to serialize event")?;
         Ok(Some(Base64(bcs_bytes)))
     }
 
-    /// Address of the sender of the event.
+    /// Address of the sender of the transaction that emitted this event.
     async fn sender(&self) -> Option<Address> {
         if self.native.sender == NativeSuiAddress::ZERO {
             return None;
@@ -50,7 +51,7 @@ impl Event {
         ))
     }
 
-    /// The position of the event among the events from the same transaction — useful for distinguishing between events with the same content that appeared from the same transaction.
+    /// The position of the event among the events from the same transaction.
     async fn sequence_number(&self) -> UInt53 {
         UInt53::from(self.sequence_number)
     }
@@ -67,31 +68,5 @@ impl Event {
             self.scope.clone(),
             self.transaction_digest,
         ))
-    }
-}
-
-impl Event {
-    /// Create an Event from native Sui types with additional context.
-    ///
-    /// # Arguments
-    /// * `scope` - GraphQL query scope for data consistency
-    /// * `native` - The native Sui event structure
-    /// * `transaction_digest` - Digest of the transaction that emitted this event
-    /// * `sequence_number` - Position of this event in the transaction's events list
-    /// * `timestamp_ms` - Checkpoint timestamp when the transaction was finalized
-    pub(crate) fn from_native(
-        scope: Scope,
-        native: NativeEvent,
-        transaction_digest: TransactionDigest,
-        sequence_number: u64,
-        timestamp_ms: u64,
-    ) -> Self {
-        Self {
-            scope,
-            native,
-            transaction_digest,
-            sequence_number,
-            timestamp_ms,
-        }
     }
 }
