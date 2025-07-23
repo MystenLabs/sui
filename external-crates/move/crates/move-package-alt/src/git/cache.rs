@@ -372,6 +372,8 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
     // and not an error, which is why we manually cast an empty result into an error.
     // Results from `ls-remote` are expected in format `<hash> \t <name>`.
 
+    // TODO(manos): Figure out if doing both lookups at once works fine (and add appropriate tests)
+
     // Try to find a tag matching the `rev`:
     // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
     let tag = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/tags/{rev}")], None)
