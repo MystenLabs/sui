@@ -54,12 +54,14 @@ impl GasCostSummary {
 /// Effects related to gas (costs incurred and the identity of the smashed gas object returned).
 #[Object]
 impl GasEffects {
+    /// The gas object used to pay for this transaction, after being smashed.
     async fn gas_object(&self) -> Result<Option<Object>, RpcError> {
         let ((id, version, digest), _owner) = self.native.gas_object();
         let address = Address::with_address(self.scope.clone(), id.into());
         Ok(Some(Object::with_ref(address, version, digest)))
     }
 
+    /// Breakdown of the gas costs for this transaction.
     async fn gas_summary(&self) -> Option<GasCostSummary> {
         Some(GasCostSummary::from(self.native.gas_cost_summary()))
     }

@@ -111,7 +111,7 @@ impl EffectsContents {
         Ok(Some(UInt53::from(effects.lamport_version().value())))
     }
 
-    /// Effects to the gas object.
+    /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
     async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
         let Some(content) = &self.contents else {
             return Ok(None);
