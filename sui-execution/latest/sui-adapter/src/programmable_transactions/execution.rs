@@ -485,12 +485,10 @@ mod checked {
                 let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     context,
-                    &mut argument_updates,
                     modules,
                     dep_ids,
                     current_package_id,
                     upgrade_ticket,
-                    trace_builder_opt,
                 )?
             }
         };
@@ -703,12 +701,10 @@ mod checked {
     /// Upgrade a Move package.  Returns an `UpgradeReceipt` for the upgraded package on success.
     fn execute_move_upgrade<Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
-        _argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
         current_package_id: ObjectID,
         upgrade_ticket_arg: Arg,
-        _trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
@@ -838,8 +834,8 @@ mod checked {
                 ));
             }
         }
-        context.write_package(package);
 
+        context.write_package(package);
         Ok(vec![Value::Raw(
             RawValueType::Loaded {
                 ty: upgrade_receipt_type,

@@ -1,0 +1,1390 @@
+---
+AccountAddress:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+AccumulatorAddress:
+  STRUCT:
+    - address:
+        TYPENAME: SuiAddress
+    - ty:
+        TYPENAME: TypeTag
+AccumulatorOperation:
+  ENUM:
+    0:
+      Merge: UNIT
+    1:
+      Split: UNIT
+AccumulatorValue:
+  ENUM:
+    0:
+      Integer:
+        NEWTYPE: U64
+    1:
+      IntegerTuple:
+        TUPLE:
+          - U64
+          - U64
+AccumulatorWriteV1:
+  STRUCT:
+    - address:
+        TYPENAME: AccumulatorAddress
+    - operation:
+        TYPENAME: AccumulatorOperation
+    - value:
+        TYPENAME: AccumulatorValue
+ActiveJwk:
+  STRUCT:
+    - jwk_id:
+        TYPENAME: JwkId
+    - jwk:
+        TYPENAME: JWK
+    - epoch: U64
+AdditionalConsensusStateDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+Argument:
+  ENUM:
+    0:
+      GasCoin: UNIT
+    1:
+      Input:
+        NEWTYPE: U16
+    2:
+      Result:
+        NEWTYPE: U16
+    3:
+      NestedResult:
+        TUPLE:
+          - U16
+          - U16
+AuthenticatorStateExpire:
+  STRUCT:
+    - min_epoch: U64
+    - authenticator_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
+AuthenticatorStateUpdate:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - new_active_jwks:
+        SEQ:
+          TYPENAME: ActiveJwk
+    - authenticator_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
+AuthorityPublicKeyBytes:
+  NEWTYPESTRUCT: BYTES
+AuthorityQuorumSignInfo:
+  STRUCT:
+    - epoch: U64
+    - signature:
+        TUPLEARRAY:
+          CONTENT: U8
+          SIZE: 48
+    - signers_map: BYTES
+BalanceWithdrawArg:
+  STRUCT:
+    - reservation:
+        TYPENAME: Reservation
+    - type_param:
+        TYPENAME: WithdrawTypeParam
+    - withdraw_from:
+        TYPENAME: WithdrawFrom
+CallArg:
+  ENUM:
+    0:
+      Pure:
+        NEWTYPE:
+          SEQ: U8
+    1:
+      Object:
+        NEWTYPE:
+          TYPENAME: ObjectArg
+    2:
+      BalanceWithdraw:
+        NEWTYPE:
+          TYPENAME: BalanceWithdrawArg
+ChainIdentifier:
+  NEWTYPESTRUCT:
+    TYPENAME: CheckpointDigest
+ChangeEpoch:
+  STRUCT:
+    - epoch: U64
+    - protocol_version:
+        TYPENAME: ProtocolVersion
+    - storage_charge: U64
+    - computation_charge: U64
+    - storage_rebate: U64
+    - non_refundable_storage_fee: U64
+    - epoch_start_timestamp_ms: U64
+    - system_packages:
+        SEQ:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - SEQ:
+                SEQ: U8
+            - SEQ:
+                TYPENAME: ObjectID
+CheckpointCommitment:
+  ENUM:
+    0:
+      ECMHLiveObjectSetDigest:
+        NEWTYPE:
+          TYPENAME: ECMHLiveObjectSetDigest
+CheckpointContents:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: CheckpointContentsV1
+CheckpointContentsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+CheckpointContentsV1:
+  STRUCT:
+    - transactions:
+        SEQ:
+          TYPENAME: ExecutionDigests
+    - user_signatures:
+        SEQ:
+          SEQ:
+            TYPENAME: GenericSignature
+CheckpointData:
+  STRUCT:
+    - checkpoint_summary:
+        TYPENAME: "sui_types::message_envelope::Envelope<sui_types::messages_checkpoint::CheckpointSummary, sui_types::crypto::AuthorityQuorumSignInfo<true>>"
+    - checkpoint_contents:
+        TYPENAME: CheckpointContents
+    - transactions:
+        SEQ:
+          TYPENAME: CheckpointTransaction
+CheckpointDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+CheckpointSummary:
+  STRUCT:
+    - epoch: U64
+    - sequence_number: U64
+    - network_total_transactions: U64
+    - content_digest:
+        TYPENAME: CheckpointContentsDigest
+    - previous_digest:
+        OPTION:
+          TYPENAME: CheckpointDigest
+    - epoch_rolling_gas_cost_summary:
+        TYPENAME: GasCostSummary
+    - timestamp_ms: U64
+    - checkpoint_commitments:
+        SEQ:
+          TYPENAME: CheckpointCommitment
+    - end_of_epoch_data:
+        OPTION:
+          TYPENAME: EndOfEpochData
+    - version_specific_data:
+        SEQ: U8
+CheckpointTransaction:
+  STRUCT:
+    - transaction:
+        TYPENAME: "sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>"
+    - effects:
+        TYPENAME: TransactionEffects
+    - events:
+        OPTION:
+          TYPENAME: TransactionEvents
+    - input_objects:
+        SEQ:
+          TYPENAME: Object
+    - output_objects:
+        SEQ:
+          TYPENAME: Object
+Command:
+  ENUM:
+    0:
+      MoveCall:
+        NEWTYPE:
+          TYPENAME: ProgrammableMoveCall
+    1:
+      TransferObjects:
+        TUPLE:
+          - SEQ:
+              TYPENAME: Argument
+          - TYPENAME: Argument
+    2:
+      SplitCoins:
+        TUPLE:
+          - TYPENAME: Argument
+          - SEQ:
+              TYPENAME: Argument
+    3:
+      MergeCoins:
+        TUPLE:
+          - TYPENAME: Argument
+          - SEQ:
+              TYPENAME: Argument
+    4:
+      Publish:
+        TUPLE:
+          - SEQ:
+              SEQ: U8
+          - SEQ:
+              TYPENAME: ObjectID
+    5:
+      MakeMoveVec:
+        TUPLE:
+          - OPTION:
+              TYPENAME: TypeInput
+          - SEQ:
+              TYPENAME: Argument
+    6:
+      Upgrade:
+        TUPLE:
+          - SEQ:
+              SEQ: U8
+          - SEQ:
+              TYPENAME: ObjectID
+          - TYPENAME: ObjectID
+          - TYPENAME: Argument
+CommandArgumentError:
+  ENUM:
+    0:
+      TypeMismatch: UNIT
+    1:
+      InvalidBCSBytes: UNIT
+    2:
+      InvalidUsageOfPureArg: UNIT
+    3:
+      InvalidArgumentToPrivateEntryFunction: UNIT
+    4:
+      IndexOutOfBounds:
+        STRUCT:
+          - idx: U16
+    5:
+      SecondaryIndexOutOfBounds:
+        STRUCT:
+          - result_idx: U16
+          - secondary_idx: U16
+    6:
+      InvalidResultArity:
+        STRUCT:
+          - result_idx: U16
+    7:
+      InvalidGasCoinUsage: UNIT
+    8:
+      InvalidValueUsage: UNIT
+    9:
+      InvalidObjectByValue: UNIT
+    10:
+      InvalidObjectByMutRef: UNIT
+    11:
+      SharedObjectOperationNotAllowed: UNIT
+    12:
+      InvalidArgumentArity: UNIT
+    13:
+      InvalidTransferObject: UNIT
+    14:
+      InvalidMakeMoveVecNonObjectArgument: UNIT
+CompressedSignature:
+  ENUM:
+    0:
+      Ed25519:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 64
+    1:
+      Secp256k1:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 64
+    2:
+      Secp256r1:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 64
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: ZkLoginAuthenticatorAsBytes
+CongestedObjects:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: ObjectID
+ConsensusCommitDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+ConsensusCommitPrologue:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
+ConsensusCommitPrologueV2:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+ConsensusCommitPrologueV3:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - sub_dag_index:
+        OPTION: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+    - consensus_determined_version_assignments:
+        TYPENAME: ConsensusDeterminedVersionAssignments
+ConsensusCommitPrologueV4:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - sub_dag_index:
+        OPTION: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+    - consensus_determined_version_assignments:
+        TYPENAME: ConsensusDeterminedVersionAssignments
+    - additional_state_digest:
+        TYPENAME: AdditionalConsensusStateDigest
+ConsensusDeterminedVersionAssignments:
+  ENUM:
+    0:
+      CancelledTransactions:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: ObjectID
+                    - TYPENAME: SequenceNumber
+    1:
+      CancelledTransactionsV2:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TUPLE:
+                        - TYPENAME: ObjectID
+                        - TYPENAME: SequenceNumber
+                    - TYPENAME: SequenceNumber
+Data:
+  ENUM:
+    0:
+      Move:
+        NEWTYPE:
+          TYPENAME: MoveObject
+    1:
+      Package:
+        NEWTYPE:
+          TYPENAME: MovePackage
+DeleteKind:
+  ENUM:
+    0:
+      Normal: UNIT
+    1:
+      UnwrapThenDelete: UNIT
+    2:
+      Wrap: UNIT
+Digest:
+  NEWTYPESTRUCT: BYTES
+Duration:
+  STRUCT:
+    - secs: U64
+    - nanos: U32
+ECMHLiveObjectSetDigest:
+  STRUCT:
+    - digest:
+        TYPENAME: Digest
+EffectsAuxDataDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+EffectsObjectChange:
+  STRUCT:
+    - input_state:
+        TYPENAME: ObjectIn
+    - output_state:
+        TYPENAME: ObjectOut
+    - id_operation:
+        TYPENAME: IDOperation
+EmptySignInfo:
+  STRUCT: []
+EndOfEpochData:
+  STRUCT:
+    - nextEpochCommittee:
+        SEQ:
+          TUPLE:
+            - TYPENAME: AuthorityPublicKeyBytes
+            - U64
+    - nextEpochProtocolVersion:
+        TYPENAME: ProtocolVersion
+    - epochCommitments:
+        SEQ:
+          TYPENAME: CheckpointCommitment
+EndOfEpochTransactionKind:
+  ENUM:
+    0:
+      ChangeEpoch:
+        NEWTYPE:
+          TYPENAME: ChangeEpoch
+    1:
+      AuthenticatorStateCreate: UNIT
+    2:
+      AuthenticatorStateExpire:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateExpire
+    3:
+      RandomnessStateCreate: UNIT
+    4:
+      DenyListStateCreate: UNIT
+    5:
+      BridgeStateCreate:
+        NEWTYPE:
+          TYPENAME: ChainIdentifier
+    6:
+      BridgeCommitteeInit:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    7:
+      StoreExecutionTimeObservations:
+        NEWTYPE:
+          TYPENAME: StoredExecutionTimeObservations
+    8:
+      AccumulatorRootCreate: UNIT
+Event:
+  STRUCT:
+    - package_id:
+        TYPENAME: ObjectID
+    - transaction_module: STR
+    - sender:
+        TYPENAME: SuiAddress
+    - type_:
+        TYPENAME: StructTag
+    - contents: BYTES
+ExecutionData:
+  STRUCT:
+    - transaction:
+        TYPENAME: "sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>"
+    - effects:
+        TYPENAME: TransactionEffects
+ExecutionDigests:
+  STRUCT:
+    - transaction:
+        TYPENAME: TransactionDigest
+    - effects:
+        TYPENAME: TransactionEffectsDigest
+ExecutionFailureStatus:
+  ENUM:
+    0:
+      InsufficientGas: UNIT
+    1:
+      InvalidGasObject: UNIT
+    2:
+      InvariantViolation: UNIT
+    3:
+      FeatureNotYetSupported: UNIT
+    4:
+      MoveObjectTooBig:
+        STRUCT:
+          - object_size: U64
+          - max_object_size: U64
+    5:
+      MovePackageTooBig:
+        STRUCT:
+          - object_size: U64
+          - max_object_size: U64
+    6:
+      CircularObjectOwnership:
+        STRUCT:
+          - object:
+              TYPENAME: ObjectID
+    7:
+      InsufficientCoinBalance: UNIT
+    8:
+      CoinBalanceOverflow: UNIT
+    9:
+      PublishErrorNonZeroAddress: UNIT
+    10:
+      SuiMoveVerificationError: UNIT
+    11:
+      MovePrimitiveRuntimeError:
+        NEWTYPE:
+          TYPENAME: MoveLocationOpt
+    12:
+      MoveAbort:
+        TUPLE:
+          - TYPENAME: MoveLocation
+          - U64
+    13:
+      VMVerificationOrDeserializationError: UNIT
+    14:
+      VMInvariantViolation: UNIT
+    15:
+      FunctionNotFound: UNIT
+    16:
+      ArityMismatch: UNIT
+    17:
+      TypeArityMismatch: UNIT
+    18:
+      NonEntryFunctionInvoked: UNIT
+    19:
+      CommandArgumentError:
+        STRUCT:
+          - arg_idx: U16
+          - kind:
+              TYPENAME: CommandArgumentError
+    20:
+      TypeArgumentError:
+        STRUCT:
+          - argument_idx: U16
+          - kind:
+              TYPENAME: TypeArgumentError
+    21:
+      UnusedValueWithoutDrop:
+        STRUCT:
+          - result_idx: U16
+          - secondary_idx: U16
+    22:
+      InvalidPublicFunctionReturnType:
+        STRUCT:
+          - idx: U16
+    23:
+      InvalidTransferObject: UNIT
+    24:
+      EffectsTooLarge:
+        STRUCT:
+          - current_size: U64
+          - max_size: U64
+    25:
+      PublishUpgradeMissingDependency: UNIT
+    26:
+      PublishUpgradeDependencyDowngrade: UNIT
+    27:
+      PackageUpgradeError:
+        STRUCT:
+          - upgrade_error:
+              TYPENAME: PackageUpgradeError
+    28:
+      WrittenObjectsTooLarge:
+        STRUCT:
+          - current_size: U64
+          - max_size: U64
+    29:
+      CertificateDenied: UNIT
+    30:
+      SuiMoveVerificationTimedout: UNIT
+    31:
+      SharedObjectOperationNotAllowed: UNIT
+    32:
+      InputObjectDeleted: UNIT
+    33:
+      ExecutionCancelledDueToSharedObjectCongestion:
+        STRUCT:
+          - congested_objects:
+              TYPENAME: CongestedObjects
+    34:
+      AddressDeniedForCoin:
+        STRUCT:
+          - address:
+              TYPENAME: SuiAddress
+          - coin_type: STR
+    35:
+      CoinTypeGlobalPause:
+        STRUCT:
+          - coin_type: STR
+    36:
+      ExecutionCancelledDueToRandomnessUnavailable: UNIT
+    37:
+      MoveVectorElemTooBig:
+        STRUCT:
+          - value_size: U64
+          - max_scaled_size: U64
+    38:
+      MoveRawValueTooBig:
+        STRUCT:
+          - value_size: U64
+          - max_scaled_size: U64
+    39:
+      InvalidLinkage: UNIT
+    40:
+      InsufficientBalanceForWithdraw: UNIT
+ExecutionStatus:
+  ENUM:
+    0:
+      Success: UNIT
+    1:
+      Failure:
+        STRUCT:
+          - error:
+              TYPENAME: ExecutionFailureStatus
+          - command:
+              OPTION: U64
+ExecutionTimeObservationKey:
+  ENUM:
+    0:
+      MoveEntryPoint:
+        STRUCT:
+          - package:
+              TYPENAME: ObjectID
+          - module: STR
+          - function: STR
+          - type_arguments:
+              SEQ:
+                TYPENAME: TypeInput
+    1:
+      TransferObjects: UNIT
+    2:
+      SplitCoins: UNIT
+    3:
+      MergeCoins: UNIT
+    4:
+      Publish: UNIT
+    5:
+      MakeMoveVec: UNIT
+    6:
+      Upgrade: UNIT
+FullCheckpointContents:
+  STRUCT:
+    - transactions:
+        SEQ:
+          TYPENAME: ExecutionData
+    - user_signatures:
+        SEQ:
+          SEQ:
+            TYPENAME: GenericSignature
+GasCostSummary:
+  STRUCT:
+    - computationCost: U64
+    - storageCost: U64
+    - storageRebate: U64
+    - nonRefundableStorageFee: U64
+GasData:
+  STRUCT:
+    - payment:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - owner:
+        TYPENAME: SuiAddress
+    - price: U64
+    - budget: U64
+GenericSignature:
+  NEWTYPESTRUCT:
+    SEQ: U8
+GenesisObject:
+  ENUM:
+    0:
+      RawObject:
+        STRUCT:
+          - data:
+              TYPENAME: Data
+          - owner:
+              TYPENAME: Owner
+GenesisTransaction:
+  STRUCT:
+    - objects:
+        SEQ:
+          TYPENAME: GenesisObject
+IDOperation:
+  ENUM:
+    0:
+      None: UNIT
+    1:
+      Created: UNIT
+    2:
+      Deleted: UNIT
+Intent:
+  STRUCT:
+    - scope: U8
+    - version: U8
+    - app_id: U8
+IntentMessage:
+  STRUCT:
+    - intent:
+        TYPENAME: Intent
+    - value:
+        TYPENAME: TransactionData
+JWK:
+  STRUCT:
+    - kty: STR
+    - e: STR
+    - n: STR
+    - alg: STR
+JwkId:
+  STRUCT:
+    - iss: STR
+    - kid: STR
+ModuleId:
+  STRUCT:
+    - address:
+        TYPENAME: AccountAddress
+    - name: STR
+MoveLocation:
+  STRUCT:
+    - module:
+        TYPENAME: ModuleId
+    - function: U16
+    - instruction: U16
+    - function_name:
+        OPTION: STR
+MoveLocationOpt:
+  NEWTYPESTRUCT:
+    OPTION:
+      TYPENAME: MoveLocation
+MoveObject:
+  STRUCT:
+    - type_:
+        TYPENAME: MoveObjectType
+    - has_public_transfer: BOOL
+    - version:
+        TYPENAME: SequenceNumber
+    - contents: BYTES
+MoveObjectType:
+  NEWTYPESTRUCT:
+    TYPENAME: MoveObjectType_
+MoveObjectType_:
+  ENUM:
+    0:
+      Other:
+        NEWTYPE:
+          TYPENAME: StructTag
+    1:
+      GasCoin: UNIT
+    2:
+      StakedSui: UNIT
+    3:
+      Coin:
+        NEWTYPE:
+          TYPENAME: TypeTag
+MovePackage:
+  STRUCT:
+    - id:
+        TYPENAME: ObjectID
+    - version:
+        TYPENAME: SequenceNumber
+    - module_map:
+        MAP:
+          KEY: STR
+          VALUE: BYTES
+    - type_origin_table:
+        SEQ:
+          TYPENAME: TypeOrigin
+    - linkage_table:
+        MAP:
+          KEY:
+            TYPENAME: ObjectID
+          VALUE:
+            TYPENAME: UpgradeInfo
+MultiSig:
+  STRUCT:
+    - sigs:
+        SEQ:
+          TYPENAME: CompressedSignature
+    - bitmap: U16
+    - multisig_pk:
+        TYPENAME: MultiSigPublicKey
+MultiSigPublicKey:
+  STRUCT:
+    - pk_map:
+        SEQ:
+          TUPLE:
+            - TYPENAME: PublicKey
+            - U8
+    - threshold: U16
+Object:
+  STRUCT:
+    - data:
+        TYPENAME: Data
+    - owner:
+        TYPENAME: Owner
+    - previous_transaction:
+        TYPENAME: TransactionDigest
+    - storage_rebate: U64
+ObjectArg:
+  ENUM:
+    0:
+      ImmOrOwnedObject:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    1:
+      SharedObject:
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
+          - initial_shared_version:
+              TYPENAME: SequenceNumber
+          - mutable: BOOL
+    2:
+      Receiving:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+ObjectDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+ObjectID:
+  NEWTYPESTRUCT:
+    TYPENAME: AccountAddress
+ObjectIn:
+  ENUM:
+    0:
+      NotExist: UNIT
+    1:
+      Exist:
+        NEWTYPE:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+ObjectInfoRequestKind:
+  ENUM:
+    0:
+      LatestObjectInfo: UNIT
+    1:
+      PastObjectInfoDebug:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+ObjectOut:
+  ENUM:
+    0:
+      NotExist: UNIT
+    1:
+      ObjectWrite:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    2:
+      PackageWrite:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    3:
+      AccumulatorWriteV1:
+        NEWTYPE:
+          TYPENAME: AccumulatorWriteV1
+Owner:
+  ENUM:
+    0:
+      AddressOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
+    1:
+      ObjectOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
+    2:
+      Shared:
+        STRUCT:
+          - initial_shared_version:
+              TYPENAME: SequenceNumber
+    3:
+      Immutable: UNIT
+    4:
+      ConsensusAddressOwner:
+        STRUCT:
+          - start_version:
+              TYPENAME: SequenceNumber
+          - owner:
+              TYPENAME: SuiAddress
+PackageUpgradeError:
+  ENUM:
+    0:
+      UnableToFetchPackage:
+        STRUCT:
+          - package_id:
+              TYPENAME: ObjectID
+    1:
+      NotAPackage:
+        STRUCT:
+          - object_id:
+              TYPENAME: ObjectID
+    2:
+      IncompatibleUpgrade: UNIT
+    3:
+      DigestDoesNotMatch:
+        STRUCT:
+          - digest:
+              SEQ: U8
+    4:
+      UnknownUpgradePolicy:
+        STRUCT:
+          - policy: U8
+    5:
+      PackageIDDoesNotMatch:
+        STRUCT:
+          - package_id:
+              TYPENAME: ObjectID
+          - ticket_id:
+              TYPENAME: ObjectID
+ProgrammableMoveCall:
+  STRUCT:
+    - package:
+        TYPENAME: ObjectID
+    - module: STR
+    - function: STR
+    - type_arguments:
+        SEQ:
+          TYPENAME: TypeInput
+    - arguments:
+        SEQ:
+          TYPENAME: Argument
+ProgrammableTransaction:
+  STRUCT:
+    - inputs:
+        SEQ:
+          TYPENAME: CallArg
+    - commands:
+        SEQ:
+          TYPENAME: Command
+ProtocolVersion:
+  NEWTYPESTRUCT: U64
+PublicKey:
+  ENUM:
+    0:
+      Ed25519:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 32
+    1:
+      Secp256k1:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 33
+    2:
+      Secp256r1:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 33
+    3:
+      ZkLogin:
+        NEWTYPE:
+          TYPENAME: ZkLoginPublicIdentifier
+RandomnessRound:
+  NEWTYPESTRUCT: U64
+RandomnessStateUpdate:
+  STRUCT:
+    - epoch: U64
+    - randomness_round:
+        TYPENAME: RandomnessRound
+    - random_bytes:
+        SEQ: U8
+    - randomness_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
+Reservation:
+  ENUM:
+    0:
+      EntireBalance: UNIT
+    1:
+      MaxAmountU64:
+        NEWTYPE: U64
+SenderSignedData:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: SenderSignedTransaction
+SenderSignedTransaction:
+  STRUCT:
+    - intent_message:
+        TYPENAME: IntentMessage
+    - tx_signatures:
+        SEQ:
+          TYPENAME: GenericSignature
+SequenceNumber:
+  NEWTYPESTRUCT: U64
+StoredExecutionTimeObservations:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: ExecutionTimeObservationKey
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: AuthorityPublicKeyBytes
+                    - TYPENAME: Duration
+StructInput:
+  STRUCT:
+    - address:
+        TYPENAME: AccountAddress
+    - module: STR
+    - name: STR
+    - type_args:
+        SEQ:
+          TYPENAME: TypeInput
+StructTag:
+  STRUCT:
+    - address:
+        TYPENAME: AccountAddress
+    - module: STR
+    - name: STR
+    - type_args:
+        SEQ:
+          TYPENAME: TypeTag
+SuiAddress:
+  NEWTYPESTRUCT:
+    TUPLEARRAY:
+      CONTENT: U8
+      SIZE: 32
+TransactionData:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: TransactionDataV1
+TransactionDataV1:
+  STRUCT:
+    - kind:
+        TYPENAME: TransactionKind
+    - sender:
+        TYPENAME: SuiAddress
+    - gas_data:
+        TYPENAME: GasData
+    - expiration:
+        TYPENAME: TransactionExpiration
+TransactionDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+TransactionEffects:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          TYPENAME: TransactionEffectsV1
+    1:
+      V2:
+        NEWTYPE:
+          TYPENAME: TransactionEffectsV2
+TransactionEffectsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+TransactionEffectsV1:
+  STRUCT:
+    - status:
+        TYPENAME: ExecutionStatus
+    - executed_epoch: U64
+    - gas_used:
+        TYPENAME: GasCostSummary
+    - modified_at_versions:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+    - shared_objects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - transaction_digest:
+        TYPENAME: TransactionDigest
+    - created:
+        SEQ:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    - mutated:
+        SEQ:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    - unwrapped:
+        SEQ:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: ObjectID
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    - deleted:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - unwrapped_then_deleted:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - wrapped:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - gas_object:
+        TUPLE:
+          - TUPLE:
+              - TYPENAME: ObjectID
+              - TYPENAME: SequenceNumber
+              - TYPENAME: ObjectDigest
+          - TYPENAME: Owner
+    - events_digest:
+        OPTION:
+          TYPENAME: TransactionEventsDigest
+    - dependencies:
+        SEQ:
+          TYPENAME: TransactionDigest
+TransactionEffectsV2:
+  STRUCT:
+    - status:
+        TYPENAME: ExecutionStatus
+    - executed_epoch: U64
+    - gas_used:
+        TYPENAME: GasCostSummary
+    - transaction_digest:
+        TYPENAME: TransactionDigest
+    - gas_object_index:
+        OPTION: U32
+    - events_digest:
+        OPTION:
+          TYPENAME: TransactionEventsDigest
+    - dependencies:
+        SEQ:
+          TYPENAME: TransactionDigest
+    - lamport_version:
+        TYPENAME: SequenceNumber
+    - changed_objects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: EffectsObjectChange
+    - unchanged_shared_objects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: UnchangedSharedKind
+    - aux_data_digest:
+        OPTION:
+          TYPENAME: EffectsAuxDataDigest
+TransactionEvents:
+  STRUCT:
+    - data:
+        SEQ:
+          TYPENAME: Event
+TransactionEventsDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
+TransactionExpiration:
+  ENUM:
+    0:
+      None: UNIT
+    1:
+      Epoch:
+        NEWTYPE: U64
+TransactionKind:
+  ENUM:
+    0:
+      ProgrammableTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
+    1:
+      ChangeEpoch:
+        NEWTYPE:
+          TYPENAME: ChangeEpoch
+    2:
+      Genesis:
+        NEWTYPE:
+          TYPENAME: GenesisTransaction
+    3:
+      ConsensusCommitPrologue:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologue
+    4:
+      AuthenticatorStateUpdate:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateUpdate
+    5:
+      EndOfEpochTransaction:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EndOfEpochTransactionKind
+    6:
+      RandomnessStateUpdate:
+        NEWTYPE:
+          TYPENAME: RandomnessStateUpdate
+    7:
+      ConsensusCommitPrologueV2:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV2
+    8:
+      ConsensusCommitPrologueV3:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV3
+    9:
+      ConsensusCommitPrologueV4:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV4
+    10:
+      ProgrammableSystemTransaction:
+        NEWTYPE:
+          TYPENAME: ProgrammableTransaction
+TypeArgumentError:
+  ENUM:
+    0:
+      TypeNotFound: UNIT
+    1:
+      ConstraintNotSatisfied: UNIT
+TypeInput:
+  ENUM:
+    0:
+      bool: UNIT
+    1:
+      U8: UNIT
+    2:
+      U64: UNIT
+    3:
+      U128: UNIT
+    4:
+      Address: UNIT
+    5:
+      Signer: UNIT
+    6:
+      Vector:
+        NEWTYPE:
+          TYPENAME: TypeInput
+    7:
+      Struct:
+        NEWTYPE:
+          TYPENAME: StructInput
+    8:
+      U16: UNIT
+    9:
+      U32: UNIT
+    10:
+      U256: UNIT
+TypeOrigin:
+  STRUCT:
+    - module_name: STR
+    - datatype_name: STR
+    - package:
+        TYPENAME: ObjectID
+TypeTag:
+  ENUM:
+    0:
+      Bool: UNIT
+    1:
+      U8: UNIT
+    2:
+      U64: UNIT
+    3:
+      U128: UNIT
+    4:
+      Address: UNIT
+    5:
+      Signer: UNIT
+    6:
+      Vector:
+        NEWTYPE:
+          TYPENAME: TypeTag
+    7:
+      struct:
+        NEWTYPE:
+          TYPENAME: StructTag
+    8:
+      U16: UNIT
+    9:
+      U32: UNIT
+    10:
+      U256: UNIT
+TypedStoreError:
+  ENUM:
+    0:
+      RocksDBError:
+        NEWTYPE: STR
+    1:
+      SerializationError:
+        NEWTYPE: STR
+    2:
+      UnregisteredColumn:
+        NEWTYPE: STR
+    3:
+      CrossDBBatch: UNIT
+    4:
+      MetricsReporting: UNIT
+    5:
+      RetryableTransactionError: UNIT
+UnchangedSharedKind:
+  ENUM:
+    0:
+      ReadOnlyRoot:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    1:
+      MutateConsensusStreamEnded:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    2:
+      ReadConsensusStreamEnded:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    3:
+      Cancelled:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    4:
+      PerEpochConfig: UNIT
+UpgradeInfo:
+  STRUCT:
+    - upgraded_id:
+        TYPENAME: ObjectID
+    - upgraded_version:
+        TYPENAME: SequenceNumber
+WithdrawFrom:
+  ENUM:
+    0:
+      Sender: UNIT
+WithdrawTypeParam:
+  ENUM:
+    0:
+      Balance:
+        NEWTYPE:
+          TYPENAME: TypeInput
+ZkLoginAuthenticatorAsBytes:
+  NEWTYPESTRUCT:
+    SEQ: U8
+ZkLoginPublicIdentifier:
+  NEWTYPESTRUCT:
+    SEQ: U8
+"sui_types::message_envelope::Envelope<sui_types::messages_checkpoint::CheckpointSummary, sui_types::crypto::AuthorityQuorumSignInfo<true>>":
+  STRUCT:
+    - data:
+        TYPENAME: CheckpointSummary
+    - auth_signature:
+        TYPENAME: AuthorityQuorumSignInfo
+"sui_types::message_envelope::Envelope<sui_types::transaction::SenderSignedData, sui_types::crypto::EmptySignInfo>":
+  STRUCT:
+    - data:
+        TYPENAME: SenderSignedData
+    - auth_signature:
+        TYPENAME: EmptySignInfo
+
