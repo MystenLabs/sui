@@ -180,33 +180,18 @@ type Epoch {
 	storageFund: StorageFund
 }
 
-"""
-Represents execution error information for failed transactions.
-"""
-type ExecutionError {
-	"""
-	The error code of the Move abort, populated if this transaction failed with a Move abort.
-	
-	Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
-	"""
-	abortCode: BigInt
-	"""
-	The source line number for the abort. Only populated for clever errors.
-	"""
-	sourceLineNumber: Int
-}
-
 type Event {
 	"""
-	The Base64 encoded BCS serialized bytes of the entire event structure.
+	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
+	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
 	"""
 	eventBcs: Base64
 	"""
-	Address of the sender of the event.
+	Address of the sender of the transaction that emitted this event.
 	"""
 	sender: Address
 	"""
-	The position of the event among the events from the same transaction — useful for distinguishing between events with the same content that appeared from the same transaction.
+	The position of the event among the events from the same transaction.
 	"""
 	sequenceNumber: UInt53!
 	"""
@@ -247,6 +232,22 @@ type EventEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+Represents execution error information for failed transactions.
+"""
+type ExecutionError {
+	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	
+	Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
+	"""
+	abortCode: BigInt
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
 }
 
 """

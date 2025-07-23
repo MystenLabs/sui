@@ -184,13 +184,13 @@ impl EffectsContents {
         let timestamp_ms = content.timestamp_ms();
 
         for edge in cursors.edges {
-            let event = Event::from_native(
-                self.scope.clone(),
-                events[*edge.cursor].clone(),
+            let event = Event {
+                scope: self.scope.clone(),
+                native: events[*edge.cursor].clone(),
                 transaction_digest,
-                *edge.cursor as u64,
+                sequence_number: *edge.cursor as u64,
                 timestamp_ms,
-            );
+            };
 
             conn.edges
                 .push(Edge::new(edge.cursor.encode_cursor(), event));
