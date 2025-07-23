@@ -33,7 +33,7 @@ simple_visitor!(
         fdef: &T::Function,
     ) -> bool {
         let is_entry = fdef.entry.is_some();
-        let is_public = matches!(fdef.compiled_visibility, Visibility::Public(_));
+        let is_public = matches!(fdef.visibility, Visibility::Public(_));
 
         if is_entry && is_public {
             let mut d = diag!(
@@ -46,6 +46,7 @@ simple_visitor!(
 
             d.add_note("`public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.");
             self.add_diag(d);
+            return true;
         }
 
         false
