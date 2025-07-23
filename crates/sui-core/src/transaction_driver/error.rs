@@ -54,37 +54,137 @@ impl TransactionRequestError {
 /// Client facing errors on transaction processing via Transaction Driver.
 ///
 /// NOTE: every error should indicate if it is retriable.
-#[derive(Eq, PartialEq, Clone, Debug, Error)]
+#[derive(Eq, PartialEq, Clone)]
 pub enum TransactionDriverError {
-    #[error("Transaction is rejected by more than 1/3 of validators by stake: non-retriable errors: {submission_non_retriable_errors}, retriable errors: {submission_retriable_errors}")]
-    Rejected {
+    /// Transient failure during transaction processing that prevents the transaction from finalization.
+    /// Retriable with new transaction submission / call to TransactionDriver.
+    Aborted {
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
-        submission_retriable: bool,
+        observed_effects_digests: AggregatedEffectsDigests,
     },
-    #[error("Transaction execution observed forked outputs: {observed_effects_digests}, non-retriable errors: {submission_non_retriable_errors}, retriable errors: {submission_retriable_errors}")]
+    /// Over validity threshold of validators rejected the transaction as invalid.
+    /// Non-retriable.
+    InvalidTransaction {
+        submission_non_retriable_errors: AggregatedRequestErrors,
+        submission_retriable_errors: AggregatedRequestErrors,
+    },
+    /// Transaction execution observed multiple effects digests, and it is no longer possible to
+    /// certify any of them.
+    /// Non-retriable.
     ForkedExecution {
         observed_effects_digests: AggregatedEffectsDigests,
         submission_non_retriable_errors: AggregatedRequestErrors,
         submission_retriable_errors: AggregatedRequestErrors,
-        submission_retriable: bool,
     },
 }
 
 impl TransactionDriverError {
     pub fn is_retriable(&self) -> bool {
         match self {
-            TransactionDriverError::Rejected {
-                submission_retriable,
-                ..
-            } => *submission_retriable,
-            TransactionDriverError::ForkedExecution {
-                submission_retriable,
-                ..
-            } => *submission_retriable,
+            TransactionDriverError::Aborted { .. } => true,
+            TransactionDriverError::InvalidTransaction { .. } => false,
+            TransactionDriverError::ForkedExecution { .. } => false,
+        }
+    }
+
+    fn display_aborted(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TransactionDriverError::Aborted {
+            submission_non_retriable_errors,
+            submission_retriable_errors,
+            observed_effects_digests,
+        } = self
+        else {
+            return Ok(());
+        };
+        let mut msgs = vec![
+            "Transaction processing aborted (retriable with the same transaction).".to_string(),
+        ];
+        if submission_retriable_errors.total_stake > 0 {
+            msgs.push(format!(
+                "Retriable errors: [{submission_retriable_errors}]."
+            ));
+        }
+        if submission_non_retriable_errors.total_stake > 0 {
+            msgs.push(format!(
+                "Non-retriable errors: [{submission_non_retriable_errors}]."
+            ));
+        }
+        if !observed_effects_digests.digests.is_empty() {
+            msgs.push(format!(
+                "Observed effects digests: [{observed_effects_digests}]."
+            ));
+        }
+        write!(f, "{}", msgs.join(" "))
+    }
+
+    fn display_invalid_transaction(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TransactionDriverError::InvalidTransaction {
+            submission_non_retriable_errors,
+            submission_retriable_errors,
+        } = self
+        else {
+            return Ok(());
+        };
+        let mut msgs = vec!["Transaction is rejected as invalid by more than 1/3 of validators by stake (non-retriable).".to_string()];
+        msgs.push(format!(
+            "Non-retriable errors: [{submission_non_retriable_errors}]."
+        ));
+        if submission_retriable_errors.total_stake > 0 {
+            msgs.push(format!(
+                "Retriable errors: [{submission_retriable_errors}]."
+            ));
+        }
+        write!(f, "{}", msgs.join(" "))
+    }
+
+    fn display_forked_execution(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let TransactionDriverError::ForkedExecution {
+            observed_effects_digests,
+            submission_non_retriable_errors,
+            submission_retriable_errors,
+        } = self
+        else {
+            return Ok(());
+        };
+        let mut msgs =
+            vec!["Transaction execution observed forked outputs (non-retriable).".to_string()];
+        msgs.push(format!(
+            "Observed effects digests: [{observed_effects_digests}]."
+        ));
+        if submission_non_retriable_errors.total_stake > 0 {
+            msgs.push(format!(
+                "Non-retriable errors: [{submission_non_retriable_errors}]."
+            ));
+        }
+        if submission_retriable_errors.total_stake > 0 {
+            msgs.push(format!(
+                "Retriable errors: [{submission_retriable_errors}]."
+            ));
+        }
+        write!(f, "{}", msgs.join(" "))
+    }
+}
+
+impl std::fmt::Display for TransactionDriverError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransactionDriverError::Aborted { .. } => self.display_aborted(f),
+            TransactionDriverError::InvalidTransaction { .. } => {
+                self.display_invalid_transaction(f)
+            }
+            TransactionDriverError::ForkedExecution { .. } => self.display_forked_execution(f),
         }
     }
 }
+
+impl std::fmt::Debug for TransactionDriverError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl std::error::Error for TransactionDriverError {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct AggregatedRequestErrors {

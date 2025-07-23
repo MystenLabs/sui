@@ -4,17 +4,19 @@
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
-use rand::Rng as _;
+use mysten_common::debug_fatal;
 use sui_types::{
     base_types::AuthorityName,
     committee::StakeUnit,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffectsAPI as _,
+    error::SuiError,
     messages_consensus::ConsensusPosition,
     messages_grpc::RawWaitForEffectsRequest,
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::instrument;
 
 use crate::{
@@ -222,7 +224,13 @@ impl EffectsCertifier {
             let name = *name;
             let raw_request = raw_request.clone();
             let future = async move {
-                loop {
+                // This loop can only retry RPC errors, timeouts, and other errors retriable
+                // without new submission.
+                let backoff = ExponentialBackoff::from_millis(100)
+                    .max_delay(Duration::from_secs(2))
+                    .map(jitter)
+                    .take(5);
+                for (attempt, delay) in backoff.enumerate() {
                     let result = timeout(
                         WAIT_FOR_EFFECTS_TIMEOUT,
                         client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
@@ -230,22 +238,28 @@ impl EffectsCertifier {
                     .await;
                     match result {
                         Ok(Ok(response)) => {
-                            return (name, response);
+                            return (name, Ok(response));
                         }
                         Ok(Err(e)) => {
+                            if !matches!(e, SuiError::RpcError(_, _)) {
+                                return (name, Err(e));
+                            }
                             tracing::trace!(
                                 ?name,
-                                "Wait for effects acknowledgement: error: {:?}",
+                                "Wait for effects acknowledgement (attempt {attempt}): rpc error: {:?}",
                                 e
                             );
                         }
                         Err(_) => {
-                            tracing::trace!(?name, "Wait for effects acknowledgement: timeout");
+                            tracing::trace!(
+                                ?name,
+                                "Wait for effects acknowledgement (attempt {attempt}): timeout"
+                            );
                         }
                     };
-                    let delay_ms = rand::thread_rng().gen_range(1000..2000);
-                    sleep(Duration::from_millis(delay_ms)).await;
+                    sleep(delay).await;
                 }
+                (name, Err(SuiError::TimeoutError))
             };
 
             futures.push(future);
@@ -255,18 +269,20 @@ impl EffectsCertifier {
             TransactionEffectsDigest,
             StatusAggregator<()>,
         > = BTreeMap::new();
+        // Collect errors non-retriable even with new transaction submission.
         let mut non_retriable_errors_aggregator =
             StatusAggregator::<TransactionRequestError>::new(committee.clone());
+        // Collect errors retriable with new transaction submission.
         let mut retriable_errors_aggregator =
             StatusAggregator::<TransactionRequestError>::new(committee.clone());
 
         // Every validator returns at most one WaitForEffectsResponse.
         while let Some((name, response)) = futures.next().await {
             match response {
-                WaitForEffectsResponse::Executed {
+                Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details: _,
-                } => {
+                }) => {
                     let aggregator = effects_digest_aggregators
                         .entry(effects_digest)
                         .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
@@ -286,7 +302,7 @@ impl EffectsCertifier {
                         return Ok(effects_digest);
                     }
                 }
-                WaitForEffectsResponse::Rejected { error } => {
+                Ok(WaitForEffectsResponse::Rejected { error }) => {
                     let error = TransactionRequestError::RejectedAtValidator(error);
                     if error.is_submission_retriable() {
                         retriable_errors_aggregator.insert(name, error);
@@ -295,11 +311,19 @@ impl EffectsCertifier {
                     }
                     self.metrics.rejection_acks.inc();
                 }
-                WaitForEffectsResponse::Expired { epoch, round } => {
+                Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
                     let error = TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0));
                     // Expired status is submission retriable.
                     retriable_errors_aggregator.insert(name, error);
                     self.metrics.expiration_acks.inc();
+                }
+                Err(error) => {
+                    let error = TransactionRequestError::Aborted(error);
+                    if error.is_submission_retriable() {
+                        retriable_errors_aggregator.insert(name, error);
+                    } else {
+                        non_retriable_errors_aggregator.insert(name, error);
+                    }
                 }
             };
 
@@ -318,16 +342,37 @@ impl EffectsCertifier {
             if total_weight >= committee.quorum_threshold()
                 && non_retriable_weight + retriable_weight >= committee.validity_threshold()
             {
-                return Err(TransactionDriverError::Rejected {
-                    submission_non_retriable_errors: aggregate_request_errors(
-                        non_retriable_errors_aggregator.status_by_authority(),
-                    ),
-                    submission_retriable_errors: aggregate_request_errors(
-                        retriable_errors_aggregator.status_by_authority(),
-                    ),
-                    submission_retriable: !non_retriable_errors_aggregator
-                        .reached_validity_threshold(),
-                });
+                if non_retriable_errors_aggregator.reached_validity_threshold() {
+                    return Err(TransactionDriverError::InvalidTransaction {
+                        submission_non_retriable_errors: aggregate_request_errors(
+                            non_retriable_errors_aggregator.status_by_authority(),
+                        ),
+                        submission_retriable_errors: aggregate_request_errors(
+                            retriable_errors_aggregator.status_by_authority(),
+                        ),
+                    });
+                } else {
+                    let mut observed_effects_digests =
+                        Vec::<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>::new();
+                    for (effects_digest, aggregator) in effects_digest_aggregators {
+                        observed_effects_digests.push((
+                            effects_digest,
+                            aggregator.authorities(),
+                            aggregator.total_votes(),
+                        ));
+                    }
+                    return Err(TransactionDriverError::Aborted {
+                        submission_non_retriable_errors: aggregate_request_errors(
+                            non_retriable_errors_aggregator.status_by_authority(),
+                        ),
+                        submission_retriable_errors: aggregate_request_errors(
+                            retriable_errors_aggregator.status_by_authority(),
+                        ),
+                        observed_effects_digests: AggregatedEffectsDigests {
+                            digests: observed_effects_digests,
+                        },
+                    });
+                }
             }
         }
 
@@ -338,7 +383,7 @@ impl EffectsCertifier {
             Vec::<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>::new();
         let mut submission_retriable = false;
         for (effects_digest, aggregator) in effects_digest_aggregators {
-            // An effects digest can still get certified.
+            // An effects digest can still get certified, so the transaction is retriable.
             if aggregator.total_votes() + retriable_weight >= committee.quorum_threshold() {
                 submission_retriable = true;
             }
@@ -348,19 +393,37 @@ impl EffectsCertifier {
                 aggregator.total_votes(),
             ));
         }
-
-        Err(TransactionDriverError::ForkedExecution {
-            observed_effects_digests: AggregatedEffectsDigests {
-                digests: observed_effects_digests,
-            },
-            submission_non_retriable_errors: aggregate_request_errors(
-                non_retriable_errors_aggregator.status_by_authority(),
-            ),
-            submission_retriable_errors: aggregate_request_errors(
-                retriable_errors_aggregator.status_by_authority(),
-            ),
-            submission_retriable,
-        })
+        if observed_effects_digests.len() <= 1 {
+            debug_fatal!(
+                "Expect at least 2 effects digests, but got {:?}",
+                observed_effects_digests
+            );
+        }
+        if submission_retriable {
+            Err(TransactionDriverError::Aborted {
+                submission_non_retriable_errors: aggregate_request_errors(
+                    non_retriable_errors_aggregator.status_by_authority(),
+                ),
+                submission_retriable_errors: aggregate_request_errors(
+                    retriable_errors_aggregator.status_by_authority(),
+                ),
+                observed_effects_digests: AggregatedEffectsDigests {
+                    digests: observed_effects_digests,
+                },
+            })
+        } else {
+            Err(TransactionDriverError::ForkedExecution {
+                observed_effects_digests: AggregatedEffectsDigests {
+                    digests: observed_effects_digests,
+                },
+                submission_non_retriable_errors: aggregate_request_errors(
+                    non_retriable_errors_aggregator.status_by_authority(),
+                ),
+                submission_retriable_errors: aggregate_request_errors(
+                    retriable_errors_aggregator.status_by_authority(),
+                ),
+            })
+        }
     }
 
     /// Creates the final full response.

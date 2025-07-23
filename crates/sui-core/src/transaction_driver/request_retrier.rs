@@ -11,7 +11,8 @@ use crate::{
     safe_client::SafeClient,
     status_aggregator::StatusAggregator,
     transaction_driver::error::{
-        aggregate_request_errors, TransactionDriverError, TransactionRequestError,
+        aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
+        TransactionRequestError,
     },
 };
 
@@ -55,17 +56,31 @@ impl<A: Clone> RequestRetrier<A> {
             return Ok((name, client));
         };
 
-        Err(TransactionDriverError::Rejected {
-            submission_non_retriable_errors: aggregate_request_errors(
-                self.non_retriable_errors_aggregator.status_by_authority(),
-            ),
-            submission_retriable_errors: aggregate_request_errors(
-                self.retriable_errors_aggregator.status_by_authority(),
-            ),
-            submission_retriable: !self
-                .non_retriable_errors_aggregator
-                .reached_validity_threshold(),
-        })
+        if self
+            .non_retriable_errors_aggregator
+            .reached_validity_threshold()
+        {
+            Err(TransactionDriverError::InvalidTransaction {
+                submission_non_retriable_errors: aggregate_request_errors(
+                    self.non_retriable_errors_aggregator.status_by_authority(),
+                ),
+                submission_retriable_errors: aggregate_request_errors(
+                    self.retriable_errors_aggregator.status_by_authority(),
+                ),
+            })
+        } else {
+            Err(TransactionDriverError::Aborted {
+                submission_non_retriable_errors: aggregate_request_errors(
+                    self.non_retriable_errors_aggregator.status_by_authority(),
+                ),
+                submission_retriable_errors: aggregate_request_errors(
+                    self.retriable_errors_aggregator.status_by_authority(),
+                ),
+                observed_effects_digests: AggregatedEffectsDigests {
+                    digests: Vec::new(),
+                },
+            })
+        }
     }
 
     // Adds an error associated with the operation against the authority.
@@ -86,14 +101,13 @@ impl<A: Clone> RequestRetrier<A> {
                 .non_retriable_errors_aggregator
                 .reached_validity_threshold()
             {
-                return Err(TransactionDriverError::Rejected {
+                return Err(TransactionDriverError::InvalidTransaction {
                     submission_non_retriable_errors: aggregate_request_errors(
                         self.non_retriable_errors_aggregator.status_by_authority(),
                     ),
                     submission_retriable_errors: aggregate_request_errors(
                         self.retriable_errors_aggregator.status_by_authority(),
                     ),
-                    submission_retriable: false,
                 });
             }
         }
