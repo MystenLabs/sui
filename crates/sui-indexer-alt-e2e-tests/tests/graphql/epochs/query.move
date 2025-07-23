@@ -48,6 +48,9 @@ fragment E on Epoch {
   totalStakeRewards
   totalStakeSubsidies
   fundSize
+  netInflow
+  fundInflow
+  fundOutflow
 }
 
 //# run-graphql
@@ -86,4 +89,7 @@ fragment E on Epoch {
   totalStakeRewards
   totalStakeSubsidies
   fundSize
+  netInflow
+  fundInflow
+  fundOutflow
 }

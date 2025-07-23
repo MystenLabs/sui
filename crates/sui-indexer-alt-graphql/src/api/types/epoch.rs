@@ -213,7 +213,7 @@ impl Epoch {
         Ok(total_stake_rewards_distributed.map(BigInt::from))
     }
 
-    /// The amount added to total gas fees to make up the total stake rewards.
+    /// The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
     async fn total_stake_subsidies(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
         let Some(StoredEpochEnd {
             stake_subsidy_amount,
@@ -226,9 +226,8 @@ impl Epoch {
         Ok(stake_subsidy_amount.map(BigInt::from))
     }
 
-    /// The storage fund available in this epoch.
-    /// This fund is used to redistribute storage fees from past transactions
-    /// to future validators.
+    /// The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+    /// This fund is used to redistribute storage fees from past transactions to future validators.
     async fn fund_size(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
         let Some(StoredEpochEnd {
             storage_fund_balance,
@@ -239,6 +238,38 @@ impl Epoch {
         };
 
         Ok(storage_fund_balance.map(BigInt::from))
+    }
+
+    /// The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+    async fn net_inflow(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd {
+            storage_charge: Some(storage_charge),
+            storage_rebate: Some(storage_rebate),
+            ..
+        }) = self.end(ctx).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(BigInt::from(storage_charge - storage_rebate)))
+    }
+
+    /// The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+    async fn fund_inflow(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd { storage_charge, .. }) = self.end(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(storage_charge.map(BigInt::from))
+    }
+
+    /// The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+    async fn fund_outflow(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd { storage_rebate, .. }) = self.end(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(storage_rebate.map(BigInt::from))
     }
 }
 

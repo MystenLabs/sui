@@ -157,15 +157,26 @@ type Epoch {
 	"""
 	totalStakeRewards: BigInt
 	"""
-	The amount added to total gas fees to make up the total stake rewards.
+	The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
 	"""
 	totalStakeSubsidies: BigInt
 	"""
-	The storage fund available in this epoch.
-	This fund is used to redistribute storage fees from past transactions
-	to future validators.
+	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+	This fund is used to redistribute storage fees from past transactions to future validators.
 	"""
 	fundSize: BigInt
+	"""
+	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	netInflow: BigInt
+	"""
+	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+	"""
+	fundOutflow: BigInt
 }
 
 """
