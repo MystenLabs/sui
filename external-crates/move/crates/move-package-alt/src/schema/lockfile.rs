@@ -83,6 +83,15 @@ pub enum LockfileDependencyInfo {
     Git(LockfileGitDepInfo),
 }
 
+impl LockfileDependencyInfo {
+    pub fn is_root(&self) -> bool {
+        match self {
+            LockfileDependencyInfo::Local(dep) => dep.local == PathBuf::from("."),
+            _ => false,
+        }
+    }
+}
+
 /// A serialized lockfile dependency of the form `{git = "...", rev = "...", subdir = "..."}`
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct LockfileGitDepInfo {

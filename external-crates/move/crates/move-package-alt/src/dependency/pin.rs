@@ -12,9 +12,9 @@ use tracing::debug;
 
 use crate::{
     dependency::ResolvedDependency,
-    errors::{FileHandle, PackageResult},
+    errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
-    git::{GitCache, GitTree},
+    git::{GitCache, GitTree, git_cache_try_make_local_dir_accessible},
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
         ManifestGitDependency, OnChainDepInfo, PackageName, Pin, ResolverDependencyInfo,
@@ -78,7 +78,7 @@ impl PinnedDependencyInfo {
         // TODO: need to actually fetch local dep
         match &self.0.dep_info {
             Pinned::Git(dep) => Ok(dep.fetch().await?),
-            Pinned::Local(dep) => Ok(dep.absolute_path(self.0.containing_file.path())),
+            Pinned::Local(dep) => Ok(dep.fetch(self.0.containing_file.path()).await?),
             Pinned::OnChain(_) => todo!(),
         }
     }
@@ -180,6 +180,39 @@ pub async fn pin<F: MoveFlavor>(
 }
 
 impl LocalDepInfo {
+    pub async fn fetch(&self, containing_file: impl AsRef<Path>) -> PackageResult<PathBuf> {
+        let path = self.absolute_path(containing_file.as_ref());
+
+        eprintln!("path: {:?}", path);
+
+        // If the path is already accessibel, we can return it.
+        if path.exists() {
+            return Ok(path);
+        }
+
+        let parent_dir = containing_file
+            .as_ref()
+            .parent()
+            .expect("non-directory files have parents");
+
+        // If the local directory does not exist, that means two things:
+        // 1. "Parent" is a git dependency, so we need to first make sure the dir is accessible due to sparse checkouts.
+        // 2. "Parent" is not a git dependency, so we need to return an error as the local dep does not exist.
+
+        // For 1: We try to add the dir to the sparse-checkout list.
+        let _ = git_cache_try_make_local_dir_accessible(parent_dir.to_path_buf(), path.to_path_buf()).await;
+
+        // If the local directory still does not exist, we return an error.
+        if !path.exists() {
+            return Err(PackageError::Generic(format!(
+                "Failed to fetch local dependency: {:?}",
+                path
+            )));
+        }
+
+        Ok(path)
+    }
+
     /// Retrieve the absolute path to [`LocalDependency`] without actually fetching it.
     pub fn absolute_path(&self, containing_file: impl AsRef<Path>) -> PathBuf {
         // TODO: handle panic with a proper error.

@@ -204,9 +204,7 @@ impl<F: MoveFlavor> Package<F> {
     /// to hold for exactly one package for a valid package graph (see [Self::dep_for_self] for
     /// more information)
     pub fn is_root(&self) -> bool {
-        let result = (self.dep_for_self()
-            == &LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }));
-        result
+        self.dep_for_self().is_root()
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`

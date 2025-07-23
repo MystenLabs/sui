@@ -399,6 +399,40 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
     Ok(branch.try_into().expect("git returns valid shas"))
 }
 
+/// Given a parent's directory (which (should) be a git dep!),
+/// and an "expected" child directory, make sure the directory
+/// is added to the `sparse-checkout` listed directories.
+pub async fn git_cache_try_make_local_dir_accessible(
+    parent: PathBuf,
+    child: PathBuf,
+) -> anyhow::Result<()> {
+    // Find root of the requested repository:
+    // git -C <parent_dir> rev-parse --show-toplevel
+    let root_dir = run_git_cmd_with_args(&["rev-parse", "--show-toplevel"], Some(&parent))
+        .await?
+        .trim()
+        .to_string();
+
+    let root_path = PathBuf::from(&root_dir);
+
+    // Extract the `relative` path of the requested dir (child_dir), starting from the repository root.
+    let Ok(relative_path) = child.strip_prefix(&root_path) else {
+        anyhow::bail!("Failed to strip prefix");
+    };
+
+    // Adding this relative path to `sparse-checkout`.
+    // git sparce-checkout add <child_relative_path>
+    // NOTE: this needs to run from the root of the repository, otherwise git won't fetch
+    // the requested subdirectories.
+    let res = run_git_cmd_with_args(
+        &vec!["sparse-checkout", "add", &relative_path.to_string_lossy()],
+        Some(&root_path),
+    )
+    .await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
