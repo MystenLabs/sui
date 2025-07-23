@@ -2,9 +2,9 @@ const path = require('path');
 let action = (runtime) => {
     const filePath = path.join(
         __dirname,
-        'CNiT7vcohmcLhCLKTTwLfiNDLsKLJCk2deCXph835fsf',
+        '35fsf',
         'bytecode',
-        '0x1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d',
+        'f2c3d',
         'global_assign_ref.mvb'
     );
     console.log(filePath);
