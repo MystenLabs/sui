@@ -157,23 +157,24 @@ impl GitTree {
         // create repo if necessary
         if !self.path_to_repo.exists() {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
-            run_git_cmd_with_args(
-                &[
-                    "-c",
-                    "advice.detachedHead=false",
-                    "clone",
-                    "--quiet",
-                    "--sparse",
-                    "--filter=blob:none",
-                    "--no-checkout",
-                    "--depth",
-                    "1",
-                    &self.repo,
-                    &self.path_to_repo.to_string_lossy(),
-                ],
-                None,
-            )
-            .await?;
+            let mut args = vec![
+                "-c",
+                "advice.detachedHead=false",
+                "clone",
+                "--quiet",
+                "--sparse",
+                "--filter=blob:none",
+                "--no-checkout",
+            ];
+
+            if self.sha().is_full_sha() {
+                args.extend(["--depth", "1"])
+            }
+
+            let path = self.path_to_repo.to_string_lossy();
+            args.extend([self.repo.as_str(), &path]);
+
+            run_git_cmd_with_args(&args, None).await?;
 
             fresh = true;
         }
@@ -379,6 +380,8 @@ fn display_cmd(cmd: &Command) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::flavor::Vanilla;
+    use crate::package::RootPackage;
     use crate::test_utils::basic_manifest;
     use crate::test_utils::git;
     use std::collections::BTreeSet;
@@ -705,5 +708,49 @@ mod tests {
 
         // fetch again - subtree should still be clean so it should succeed
         let result = git_tree.fetch().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_short_full_sha_checkout() {
+        let env = crate::flavor::vanilla::default_environment();
+        let project_with_git = git::new("pkg_git", |project| {
+            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
+        });
+
+        let commits = project_with_git.commits();
+        let short_sha = commits.first().unwrap()[..7].to_string();
+
+        let path = project_with_git.root();
+
+        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
+            project.file(
+                "Move.toml",
+                &format!(
+                    r#"[package]
+name = "pkg_dep_on_git"
+edition = "2025"
+license = "Apache-2.0"
+authors = ["Move Team"]
+version = "0.0.1"
+
+[dependencies]
+pkg_git = {{ git = "{}", rev = "{short_sha}" }}
+
+[environments]
+{} = "{}"
+"#,
+                    path.to_string_lossy(),
+                    env.name(),
+                    env.id(),
+                ),
+            )
+        });
+
+        // check that we can checkout from short sha
+        assert!(
+            RootPackage::<Vanilla>::load(pkg_dep_on_git.root(), env)
+                .await
+                .is_ok()
+        )
     }
 }
