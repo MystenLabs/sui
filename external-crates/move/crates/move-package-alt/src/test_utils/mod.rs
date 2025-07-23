@@ -223,6 +223,12 @@ impl Project {
         let contents = self.read_file("Move.toml").replace("#", "");
         fs::write(self.root().join("Move.toml"), contents).unwrap();
     }
+
+    pub fn add_tag(&self, name: &str) {
+        let repo = git2::Repository::open(self.root.clone())
+            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()));
+        git::tag(&repo, name);
+    }
 }
 
 /// Generates a project layout, see [`ProjectBuilder`]
