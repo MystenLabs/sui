@@ -279,20 +279,8 @@ async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
         // letter), then we have a different set of arguments than if there is no revision. In no
         // revision case, we need to find the default branch of that remote.
 
-        // we have a branch or tag
-        // git ls-remote https://github.com/user/repo.git refs/heads/main
-        let stdout =
-            run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{r}")], None).await?;
-
-        let sha = stdout
-            .split_whitespace()
-            .next()
-            .ok_or(GitError::no_sha(repo, r))?
-            .to_string()
-            .try_into()
-            .expect("git returns valid shas");
-
-        Ok(sha)
+        // we have a branch or tag so we need to look up its Sha.
+        find_branch_or_tag_sha(repo, r).await
     } else {
         // nothing specified, so we need to find the default branch
         find_default_branch_and_get_sha(repo).await
@@ -375,6 +363,41 @@ fn display_cmd(cmd: &Command) -> String {
         result.push_str(arg.to_string_lossy().as_ref());
     }
     result
+}
+
+/// Tries to convert a "branch" or "tag" into a full SHA, using `ls-remote`.
+/// It first tries to find a tag, and if that fails, it fallbacks into a branch lookup.
+async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
+    // Note: a "no results" search for tags or branches returns an empty result (`Ok("")`)
+    // and not an error, which is why we manually cast an empty result into an error.
+    // Results from `ls-remote` are expected in format `<hash> \t <name>`.
+
+    // TODO(manos): Figure out if doing both lookups at once works fine (and add appropriate tests)
+
+    // Try to find a tag matching the `rev`:
+    // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
+    let tag = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/tags/{rev}")], None)
+        .await?
+        .split_whitespace()
+        .next()
+        .map(|s| s.to_string())
+        .ok_or(GitError::no_sha(repo, rev));
+
+    // return early if `rev` maps to a valid tag.
+    if let Ok(tag_sha) = tag {
+        return Ok(tag_sha.try_into().expect("git returns valid shas"));
+    }
+
+    // Try to find a branch matching the `rev`:
+    // git ls-remote https://github.com/user/repo.git refs/heads/<branch_name>
+    let branch = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{rev}")], None)
+        .await?
+        .split_whitespace()
+        .next()
+        .map(|s| s.to_string())
+        .ok_or(GitError::no_sha(repo, rev))?;
+
+    Ok(branch.try_into().expect("git returns valid shas"))
 }
 
 #[cfg(test)]
@@ -752,5 +775,42 @@ pkg_git = {{ git = "{}", rev = "{short_sha}" }}
                 .await
                 .is_ok()
         )
+    }
+
+    #[tokio::test]
+    async fn test_tag_checkout() {
+        let tag = "releases/1";
+
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
+
+        project.add_tag(tag);
+
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+
+        let git_tree = cache
+            .resolve_to_tree(project.root_path_str(), &Some(tag.to_string()), None)
+            .await
+            .unwrap();
+
+        let result = git_tree.fetch().await;
+        assert!(result.is_ok());
+
+        let another_tag = "releases/2";
+        project.add_tag(another_tag);
+
+        let git_tree = cache
+            .resolve_to_tree(
+                project.root_path_str(),
+                &Some(another_tag.to_string()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let result = git_tree.fetch().await;
+        assert!(result.is_ok());
     }
 }
