@@ -3,7 +3,12 @@
 
 import React from "react";
 
-export default function TabbedResults({ activeTab, onChange, tabs }) {
+export default function TabbedResults({
+  activeTab,
+  onChange,
+  tabs,
+  showTooltips = true,
+}) {
   const suitooltip = "Search results from the official Sui Docs";
   const suinstooltip = "Search results from Sui Name Service";
   const movetooltip = "Search results from The Move Book";
@@ -20,22 +25,24 @@ export default function TabbedResults({ activeTab, onChange, tabs }) {
           >
             {label}{" "}
             <span
-              className={`dark:text-sui-gray-90 text-xs rounded-full ml-1 py-1 px-2 ${activeTab === indexName ? "dark:!text-sui-gray-45 bg-transparent border border-solid" : "bg-sui-gray-45"}`}
+              className={`dark:text-sui-gray-90 text-xs rounded-full ml-1 py-1 px-2 border border-solid ${activeTab === indexName ? "dark:!text-sui-gray-45 bg-transparent border-sui-gray-3s" : "bg-sui-gray-45 border-transparent"}`}
             >
               {count}
             </span>
           </button>
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs px-2 py-1 text-sm text-white bg-gray-800 rounded tooltip-delay">
-            {label === "Sui"
-              ? suitooltip
-              : label === "SuiNS"
-                ? suinstooltip
-                : label === "The Move Book"
-                  ? movetooltip
-                  : label === "SDKs"
-                    ? dapptooltip
-                    : walrustooltip}
-          </div>
+          {showTooltips && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs px-2 py-1 text-sm text-white bg-gray-800 rounded tooltip-delay">
+              {label === "Sui"
+                ? suitooltip
+                : label === "SuiNS"
+                  ? suinstooltip
+                  : label === "The Move Book"
+                    ? movetooltip
+                    : label === "SDKs"
+                      ? dapptooltip
+                      : walrustooltip}
+            </div>
+          )}
         </div>
       ))}
     </div>

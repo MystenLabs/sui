@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useThemeConfig, ErrorCauseBoundary } from "@docusaurus/theme-common";
 import {
   splitNavbarItems,
@@ -13,11 +13,13 @@ import NavbarMobileSidebarToggle from "@theme/Navbar/MobileSidebar/Toggle";
 import NavbarLogo from "@theme/Navbar/Logo";
 import NavbarSearch from "@theme/Navbar/Search";
 import GetStartedLink from "@site/src/components/GetStartedLink";
+import SearchModal from "@site/src/components/Search/SearchModal";
 
 function useNavbarItems() {
   // TODO temporary casting until ThemeConfig type is improved
   return useThemeConfig().navbar.items;
 }
+
 function NavbarItems({ items }) {
   return (
     <div className="flex flex-[8_1_0%] items-center justify-start gap-8 min-[1100px]:gap-16">
@@ -39,6 +41,7 @@ ${JSON.stringify(item, null, 2)}`,
     </div>
   );
 }
+
 function NavbarContentLayout({ left, right }) {
   return (
     <div className="navbar__inner">
@@ -47,6 +50,19 @@ function NavbarContentLayout({ left, right }) {
     </div>
   );
 }
+
+function SearchLauncher() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Search 🔍</button>
+      <SearchModal isOpen={open} onClose={() => setOpen(false)} />
+      <SearchBar />
+    </>
+  );
+}
+
 export default function NavbarContent() {
   const mobileSidebar = useNavbarMobileSidebar();
   const items = useNavbarItems();
@@ -71,7 +87,7 @@ export default function NavbarContent() {
           <ThemeToggle />
           {!searchBarItem && (
             <NavbarSearch>
-              <SearchBar />
+              <SearchLauncher />
               <GetStartedLink />
             </NavbarSearch>
           )}
