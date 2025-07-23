@@ -251,7 +251,7 @@ const MAX_PROTOCOL_VERSION: u64 = 89;
 //             Ignore execution time observations after validator stops accepting certs.
 // Version 89: Standard library improvements.
 //             Enable `debug_fatal` on Move invariant violations.
-//             Enable passkey and passkey inside multisig for mainnet. 
+//             Enable passkey and passkey inside multisig for mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
