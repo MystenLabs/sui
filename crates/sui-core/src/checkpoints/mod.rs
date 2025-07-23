@@ -90,6 +90,76 @@ pub struct EpochStats {
     pub total_gas_reward: u64,
 }
 
+/// Information about a detected checkpoint fork
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointForkInfo {
+    pub checkpoint_seq: CheckpointSequenceNumber,
+    pub checkpoint_digest: CheckpointDigest,
+    pub detected_at: u64, // Unix timestamp
+}
+
+/// Crash mode handler that keeps the node running but in a failed state,
+/// emitting metrics and logs instead of constantly crashing
+pub struct CheckpointCrashMode {
+    fork_info: CheckpointForkInfo,
+    metrics: Arc<CheckpointMetrics>,
+}
+
+impl CheckpointCrashMode {
+    pub fn new(fork_info: CheckpointForkInfo, metrics: Arc<CheckpointMetrics>) -> Self {
+        Self { fork_info, metrics }
+    }
+
+    /// Run in crash mode - emit metrics and logs but don't perform normal operations
+    pub async fn run(&self) {
+        info!(
+            checkpoint_seq = self.fork_info.checkpoint_seq,
+            checkpoint_digest = ?self.fork_info.checkpoint_digest,
+            detected_at = self.fork_info.detected_at,
+            "Node running in crash mode due to previously detected checkpoint fork"
+        );
+
+        // Set the crash mode metric with detailed labels
+        let digest_str = format!("{:?}", self.fork_info.checkpoint_digest);
+        let digest_prefix = if digest_str.len() >= 5 {
+            &digest_str[0..5]
+        } else {
+            &digest_str
+        };
+
+        self.metrics
+            .checkpoint_fork_crash_mode
+            .with_label_values(&[
+                &self.fork_info.checkpoint_seq.to_string(),
+                &self.fork_info.detected_at.to_string(),
+                digest_prefix,
+            ])
+            .set(1);
+
+        // Emit periodic logs and metrics to indicate the node is in crash mode
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+
+            error!(
+                checkpoint_seq = self.fork_info.checkpoint_seq,
+                checkpoint_digest = ?self.fork_info.checkpoint_digest,
+                "Node remains in crash mode due to checkpoint fork - manual intervention required"
+            );
+
+            // Keep the crash mode metric active (set to 1)
+            self.metrics
+                .checkpoint_fork_crash_mode
+                .with_label_values(&[
+                    &self.fork_info.checkpoint_seq.to_string(),
+                    &self.fork_info.detected_at.to_string(),
+                    digest_prefix,
+                ])
+                .set(1);
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PendingCheckpointInfo {
     pub timestamp_ms: CheckpointTimestamp,
@@ -622,6 +692,15 @@ impl CheckpointStore {
                 ?local_contents,
                 "Local checkpoint fork detected!",
             );
+
+            // Record the fork in the database before crashing
+            if let Err(e) = self.record_checkpoint_fork_detected(
+                *local_checkpoint.sequence_number(),
+                local_checkpoint.digest(),
+            ) {
+                error!("Failed to record checkpoint fork in database: {:?}", e);
+            }
+
             fatal!(
                 "Local checkpoint fork detected for sequence number: {}",
                 local_checkpoint.sequence_number()
@@ -962,6 +1041,36 @@ impl CheckpointStore {
         self.delete_highest_executed_checkpoint_test_only()?;
         Ok(())
     }
+
+    pub fn record_checkpoint_fork_detected(
+        &self,
+        checkpoint_seq: CheckpointSequenceNumber,
+        checkpoint_digest: CheckpointDigest,
+    ) -> Result<(), TypedStoreError> {
+        info!(
+            checkpoint_seq = checkpoint_seq,
+            checkpoint_digest = ?checkpoint_digest,
+            "Recording checkpoint fork detection in database"
+        );
+        self.tables.watermarks.insert(
+            &CheckpointWatermark::CheckpointForkDetected,
+            &(checkpoint_seq, checkpoint_digest),
+        )
+    }
+
+    pub fn get_checkpoint_fork_detected(
+        &self,
+    ) -> Result<Option<(CheckpointSequenceNumber, CheckpointDigest)>, TypedStoreError> {
+        self.tables
+            .watermarks
+            .get(&CheckpointWatermark::CheckpointForkDetected)
+    }
+
+    pub fn clear_checkpoint_fork_detected(&self) -> Result<(), TypedStoreError> {
+        self.tables
+            .watermarks
+            .remove(&CheckpointWatermark::CheckpointForkDetected)
+    }
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
@@ -970,6 +1079,7 @@ pub enum CheckpointWatermark {
     HighestSynced,
     HighestExecuted,
     HighestPruned,
+    CheckpointForkDetected,
 }
 
 struct CheckpointStateHasher {
@@ -2759,15 +2869,62 @@ impl CheckpointService {
         })
     }
 
+    /// Check if there's a previously detected checkpoint fork and handle it accordingly
+    pub async fn check_and_handle_fork_state(&self) -> SuiResult<Option<CheckpointForkInfo>> {
+        match self.tables.get_checkpoint_fork_detected()? {
+            Some((checkpoint_seq, checkpoint_digest)) => {
+                let fork_info = CheckpointForkInfo {
+                    checkpoint_seq,
+                    checkpoint_digest,
+                    detected_at: SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                };
+
+                warn!(
+                    checkpoint_seq = checkpoint_seq,
+                    checkpoint_digest = ?checkpoint_digest,
+                    "Detected previous checkpoint fork on startup - will enter crash mode"
+                );
+
+                Ok(Some(fork_info))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Starts the CheckpointService.
     ///
-    /// This function blocks until the CheckpointBuilder re-builds all checkpoints that had
+    /// This function first checks for any previously detected checkpoint forks.
+    /// If a fork was detected, it runs in crash mode instead of normal operation.
+    /// Otherwise, it blocks until the CheckpointBuilder re-builds all checkpoints that had
     /// been built before the most recent restart. You can think of this as a WAL replay
     /// operation. Upon startup, we may have a number of consensus commits and resulting
     /// checkpoints that were built but not committed to disk. We want to reprocess the
     /// commits and rebuild the checkpoints before starting normal operation.
     pub async fn spawn(&self, consensus_replay_waiter: Option<ReplayWaiter>) -> JoinSet<()> {
         let mut tasks = JoinSet::new();
+
+        // Check for previously detected fork state
+        match self.check_and_handle_fork_state().await {
+            Ok(Some(fork_info)) => {
+                let crash_mode = CheckpointCrashMode::new(fork_info, self.metrics.clone());
+                tasks.spawn(monitored_future!(crash_mode.run()));
+                info!("Started checkpoint service in crash mode due to previously detected fork");
+                return tasks;
+            }
+            Ok(None) => {
+                info!("No previous checkpoint fork detected - starting normal checkpoint service");
+            }
+            Err(e) => {
+                error!(
+                    "Failed to check for previous checkpoint fork state: {:?}",
+                    e
+                );
+                // Continue with normal startup despite the error
+            }
+        }
 
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
         tasks.spawn(monitored_future!(builder.run(consensus_replay_waiter)));
@@ -2976,6 +3133,28 @@ mod tests {
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::transaction::VerifiedTransaction;
     use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_checkpoint_fork_detection_storage() {
+        let store = CheckpointStore::new_for_tests();
+        let seq_num = 42;
+        let digest = CheckpointDigest::random();
+
+        assert!(store.get_checkpoint_fork_detected().unwrap().is_none());
+
+        store
+            .record_checkpoint_fork_detected(seq_num, digest)
+            .unwrap();
+
+        let retrieved = store.get_checkpoint_fork_detected().unwrap();
+        assert!(retrieved.is_some());
+        let (retrieved_seq, retrieved_digest) = retrieved.unwrap();
+        assert_eq!(retrieved_seq, seq_num);
+        assert_eq!(retrieved_digest, digest);
+
+        store.clear_checkpoint_fork_detected().unwrap();
+        assert!(store.get_checkpoint_fork_detected().unwrap().is_none());
+    }
 
     #[sim_test]
     pub async fn checkpoint_builder_test() {
