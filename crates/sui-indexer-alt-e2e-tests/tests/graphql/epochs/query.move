@@ -43,6 +43,7 @@ fragment E on Epoch {
     validatorCandidatesSize
   }
   totalCheckpoints
+  totalTransactions
   totalGasFees
   totalStakeRewards
   totalStakeSubsidies
@@ -79,6 +80,7 @@ fragment E on Epoch {
     validatorCandidatesSize
   }
   totalCheckpoints
+  totalTransactions
   totalGasFees
   totalStakeRewards
   totalStakeSubsidies
