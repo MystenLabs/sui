@@ -8,6 +8,7 @@ use std::{
     process::Stdio,
 };
 
+use path_clean::PathClean;
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -404,16 +405,24 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
 /// is added to the `sparse-checkout` listed directories.
 pub async fn git_cache_try_make_local_dir_accessible(
     parent: PathBuf,
-    child: PathBuf,
+    child_relative_path: PathBuf,
 ) -> anyhow::Result<()> {
+    // Canonicalize to make sure `show-toplevel` will match the actual path.
+    let canonical_parent = parent
+        .canonicalize()
+        .expect("Parent has to exist and be canonicalized");
+
+    let child = canonical_parent.join(child_relative_path).clean();
+
     // Find root of the requested repository:
     // git -C <parent_dir> rev-parse --show-toplevel
-    let root_dir = run_git_cmd_with_args(&["rev-parse", "--show-toplevel"], Some(&parent))
-        .await?
-        .trim()
-        .to_string();
+    let root_dir =
+        run_git_cmd_with_args(&["rev-parse", "--show-toplevel"], Some(&canonical_parent))
+            .await?
+            .trim()
+            .to_string();
 
-    let root_path = PathBuf::from(&root_dir);
+    let root_path = PathBuf::from(root_dir).clean();
 
     // Extract the `relative` path of the requested dir (child_dir), starting from the repository root.
     let Ok(relative_path) = child.strip_prefix(&root_path) else {
@@ -426,7 +435,7 @@ pub async fn git_cache_try_make_local_dir_accessible(
     // the requested subdirectories.
     run_git_cmd_with_args(
         &["sparse-checkout", "add", &relative_path.to_string_lossy()],
-        Some(&root_path),
+        Some(&root_path.to_path_buf()),
     )
     .await?;
 
@@ -845,5 +854,44 @@ pkg_git = {{ git = "{}", rev = "{short_sha}" }}
 
         let result = git_tree.fetch().await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_transitive_sparse_checkout_access_accessibility() {
+        let tag = "releases/1";
+        let project = git::new("git_repo", |project| {
+            project
+                .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+                .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
+        });
+
+        project.add_tag(tag);
+
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+
+        let git_tree = cache
+            .resolve_to_tree(
+                project.root_path_str(),
+                &Some(tag.to_string()),
+                Some(PathBuf::from("packages/pkg_a")),
+            )
+            .await
+            .unwrap();
+
+        let _ = git_tree.checkout_repo(false).await;
+
+        assert!(git_tree.path_to_repo.join("packages/pkg_a").exists());
+        assert!(!git_tree.path_to_repo.join("packages/pkg_b").exists());
+
+        // try to transitively fetch the pkg_b dir.
+        let _ = git_cache_try_make_local_dir_accessible(
+            git_tree.path_to_tree(),
+            // Add the relative pat
+            PathBuf::from("../pkg_b"),
+        )
+        .await;
+
+        assert!(git_tree.path_to_repo.join("packages/pkg_b").exists());
     }
 }

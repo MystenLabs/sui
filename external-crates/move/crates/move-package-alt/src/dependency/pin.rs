@@ -198,7 +198,8 @@ impl LocalDepInfo {
         // 2. "Parent" is not a git dependency, so we need to return an error as the local dep does not exist.
 
         // (1.): We try to add the dir to the sparse-checkout list:
-        git_cache_try_make_local_dir_accessible(parent_dir.to_path_buf(), path.to_path_buf()).await;
+        git_cache_try_make_local_dir_accessible(parent_dir.to_path_buf(), self.local.to_path_buf())
+            .await;
 
         // (2.): If the local directory still does not exist, we return an error.
         if !path.exists() {
