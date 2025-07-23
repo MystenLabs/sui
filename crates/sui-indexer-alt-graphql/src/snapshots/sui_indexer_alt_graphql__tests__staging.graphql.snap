@@ -68,6 +68,10 @@ type Checkpoint {
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
+	"""
+	The aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
+	validatorSignatures: ValidatorAggregatedSignature
 }
 
 """
@@ -920,6 +924,21 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+type ValidatorAggregatedSignature {
+	"""
+	The epoch when this aggregate signature was produced.
+	"""
+	epoch: Epoch
+	"""
+	The Base64 encoded BLS12381 aggregated signature.
+	"""
+	signature: Base64
+	"""
+	The indexes of validators that contributed to this signature.
+	"""
+	signersMap: [Int!]!
+}
 
 """
 Representation of `0x3::validator_set::ValidatorSet`.

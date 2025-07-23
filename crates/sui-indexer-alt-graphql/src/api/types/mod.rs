@@ -14,4 +14,5 @@ pub(crate) mod protocol_configs;
 pub(crate) mod service_config;
 pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
+pub(crate) mod validator_aggregated_signature;
 pub(crate) mod validator_set;
