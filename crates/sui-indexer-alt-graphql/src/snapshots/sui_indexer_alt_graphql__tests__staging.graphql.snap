@@ -248,7 +248,25 @@ type GasCostSummary {
 	"""
 	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
 	"""
+<<<<<<< HEAD
 	nonRefundableStorageFee: UInt53
+=======
+	nonRefundableStorageFee: BigInt
+}
+
+"""
+Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+"""
+type GasEffects {
+	"""
+	The gas object used to pay for this transaction, after being smashed.
+	"""
+	gasObject: Object
+	"""
+	Breakdown of the gas costs for this transaction.
+	"""
+	gasSummary: GasCostSummary
+>>>>>>> ea696eac10 (update comment)
 }
 
 type GasInput {
@@ -954,7 +972,11 @@ type TransactionEffects {
 	"""
 	lamportVersion: UInt53
 	"""
+<<<<<<< HEAD
 	Rich execution error information for failed transactions.
+=======
+	Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+>>>>>>> ea696eac10 (update comment)
 	"""
 	executionError: ExecutionError
 	"""

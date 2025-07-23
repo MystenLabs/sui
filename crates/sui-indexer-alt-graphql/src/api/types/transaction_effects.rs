@@ -111,8 +111,13 @@ impl EffectsContents {
         Ok(Some(UInt53::from(effects.lamport_version().value())))
     }
 
+<<<<<<< HEAD
     /// Rich execution error information for failed transactions.
     async fn execution_error(&self, ctx: &Context<'_>) -> Result<Option<ExecutionError>, RpcError> {
+=======
+    /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+    async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
+>>>>>>> ea696eac10 (update comment)
         let Some(content) = &self.contents else {
             return Ok(None);
         };
