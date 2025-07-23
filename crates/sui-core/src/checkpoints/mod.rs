@@ -29,6 +29,7 @@ use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
+use sui_macros::fail_point_arg;
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -622,6 +623,27 @@ impl CheckpointStore {
                 ?local_contents,
                 "Local checkpoint fork detected!",
             );
+
+            fail_point_arg!(
+                "kill_checkpoint_fork_node",
+                |forked_checkpoint_seq: std::sync::Arc<
+                    std::sync::Mutex<Option<CheckpointSequenceNumber>>,
+                >| {
+                    #[cfg(msim)]
+                    {
+                        if let Ok(mut seq) = forked_checkpoint_seq.lock() {
+                            *seq = Some(local_checkpoint.sequence_number);
+                        }
+                        tracing::error!(
+                        fatal = true,
+                        "Fork recovery test: killing node due to checkpoint fork for sequence number: {}",
+                        local_checkpoint.sequence_number()
+                    );
+                        sui_simulator::task::kill_current_node(None);
+                    }
+                }
+            );
+
             fatal!(
                 "Local checkpoint fork detected for sequence number: {}",
                 local_checkpoint.sequence_number()
@@ -1040,6 +1062,7 @@ pub struct CheckpointBuilder {
     metrics: Arc<CheckpointMetrics>,
     max_transactions_per_checkpoint: usize,
     max_checkpoint_size_bytes: usize,
+    rebuilt_checkpoint_digests: std::collections::HashSet<CheckpointDigest>,
 }
 
 pub struct CheckpointAggregator {
@@ -1096,6 +1119,7 @@ impl CheckpointBuilder {
             metrics,
             max_transactions_per_checkpoint,
             max_checkpoint_size_bytes,
+            rebuilt_checkpoint_digests: std::collections::HashSet::new(),
         }
     }
 
@@ -1227,7 +1251,7 @@ impl CheckpointBuilder {
 
     #[instrument(level = "debug", skip_all, fields(last_height = pendings.last().unwrap().details().checkpoint_height))]
     async fn make_checkpoint(
-        &self,
+        &mut self,
         pendings: Vec<PendingCheckpointV2>,
     ) -> CheckpointBuilderResult<CheckpointSequenceNumber> {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
@@ -1516,7 +1540,7 @@ impl CheckpointBuilder {
 
     #[instrument(level = "debug", skip_all)]
     async fn write_checkpoints(
-        &self,
+        &mut self,
         height: CheckpointHeight,
         new_checkpoints: NonEmpty<(CheckpointSummary, CheckpointContents)>,
     ) -> SuiResult {
@@ -1540,13 +1564,54 @@ impl CheckpointBuilder {
                 .get(&summary.sequence_number)?
             {
                 if previously_computed_summary != *summary {
-                    // Panic so that we don't send out an equivocating checkpoint sig.
-                    fatal!(
-                        "Checkpoint {} was previously built with a different result: {:?} vs {:?}",
-                        summary.sequence_number,
-                        previously_computed_summary,
-                        summary
-                    );
+                    let override_digest =
+                        if let Some(fork_recovery) = self.state.get_fork_recovery_state() {
+                            fork_recovery
+                                .get_checkpoint_override(&summary.sequence_number)
+                                .await
+                        } else {
+                            None
+                        };
+
+                    // Also allow if we rebuilt the previous checkpoint of the previously computed summary
+                    let rebuilt_previous = previously_computed_summary
+                        .previous_digest
+                        .map(|digest| self.rebuilt_checkpoint_digests.contains(&digest))
+                        .unwrap_or(false);
+
+                    if let Some(expected_digest) = override_digest {
+                        if summary.digest() == expected_digest {
+                            info!(
+                                checkpoint_seq = summary.sequence_number,
+                                "Fork recovery: Using checkpoint override, new summary matches expected digest {:?}",
+                                expected_digest
+                            );
+                            self.rebuilt_checkpoint_digests
+                                .insert(previously_computed_summary.digest());
+                        } else {
+                            fatal!(
+                                "Fork recovery: Checkpoint {} override configured with digest {:?}, but newly built checkpoint has digest {:?}",
+                                summary.sequence_number,
+                                expected_digest,
+                                summary.digest()
+                            );
+                        }
+                    } else if rebuilt_previous {
+                        info!(
+                            checkpoint_seq = summary.sequence_number,
+                            "Fork recovery: Allowing checkpoint rebuild because previous digest {:?} is bad",
+                            summary.previous_digest
+                        );
+                        self.rebuilt_checkpoint_digests
+                            .insert(previously_computed_summary.digest());
+                    } else {
+                        fatal!(
+                            "Checkpoint {} was previously built with a different result: {:?} vs {:?}",
+                            summary.sequence_number,
+                            previously_computed_summary,
+                            summary
+                        );
+                    }
                 }
             }
 
