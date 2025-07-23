@@ -247,6 +247,7 @@ pub struct SuiNode {
     transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
     metrics: Arc<SuiNodeMetrics>,
+    checkpoint_metrics: Arc<CheckpointMetrics>,
 
     _discovery: discovery::Handle,
     _connection_monitor_handle: consensus_core::ConnectionMonitorHandle,
@@ -261,6 +262,8 @@ pub struct SuiNode {
 
     /// Broadcast channel to notify state-sync for new validator peers.
     trusted_peer_change_tx: watch::Sender<TrustedPeerChangeEvent>,
+
+    checkpoint_fork_cleared_notification: broadcast::Sender<()>,
 
     backpressure_manager: Arc<BackpressureManager>,
 
@@ -483,6 +486,18 @@ impl SuiNode {
             None,
         ));
 
+        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+
+        let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
+        let (checkpoint_fork_cleared_notification, _) = broadcast::channel(1);
+
+        Self::check_and_handle_checkpoint_fork(
+            &checkpoint_store,
+            &checkpoint_metrics,
+            &checkpoint_fork_cleared_notification,
+        )
+        .await?;
+
         let mut pruner_db = None;
         if config
             .authority_store_pruning_config
@@ -510,7 +525,6 @@ impl SuiNode {
             .database_is_empty()
             .expect("Database read should not fail at init.");
 
-        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
@@ -864,6 +878,7 @@ impl SuiNode {
                     connection_monitor_status.clone(),
                     &registry_service,
                     sui_node_metrics.clone(),
+                    checkpoint_metrics.clone(),
                 ),
                 Self::reexecute_pending_consensus_certs(&epoch_store, &state,)
             );
@@ -890,6 +905,7 @@ impl SuiNode {
             transaction_orchestrator,
             registry_service,
             metrics: sui_node_metrics,
+            checkpoint_metrics,
 
             _discovery: discovery_handle,
             _connection_monitor_handle: connection_monitor_handle,
@@ -900,6 +916,7 @@ impl SuiNode {
             end_of_epoch_channel,
             connection_monitor_status,
             trusted_peer_change_tx,
+            checkpoint_fork_cleared_notification,
             backpressure_manager,
 
             _db_checkpoint_handle: db_checkpoint_handle,
@@ -1222,6 +1239,7 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
+        checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1255,7 +1273,6 @@ impl SuiNode {
             &registry_service.default_registry(),
         );
 
-        let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
@@ -1990,6 +2007,7 @@ impl SuiNode {
                         self.connection_monitor_status.clone(),
                         &self.registry_service,
                         self.metrics.clone(),
+                        self.checkpoint_metrics.clone(),
                     )
                     .await?;
 
@@ -2096,6 +2114,75 @@ impl SuiNode {
 
     pub fn randomness_handle(&self) -> randomness::Handle {
         self.randomness_handle.clone()
+    }
+
+    /// Check for previously detected checkpoint fork and handle it accordingly.
+    /// If a fork is detected, this function will halt startup until the fork is cleared via admin API.
+    async fn check_and_handle_checkpoint_fork(
+        checkpoint_store: &CheckpointStore,
+        checkpoint_metrics: &CheckpointMetrics,
+        checkpoint_fork_cleared_notification: &broadcast::Sender<()>,
+    ) -> Result<()> {
+        if let Some((checkpoint_seq, checkpoint_digest)) = checkpoint_store
+            .get_checkpoint_fork_detected()
+            .map_err(|e| {
+                error!("Failed to check for checkpoint fork: {:?}", e);
+                e
+            })?
+        {
+            error!(
+                checkpoint_seq = checkpoint_seq,
+                checkpoint_digest = ?checkpoint_digest,
+                "Checkpoint fork detected! Node startup halted."
+            );
+
+            // Set the crash mode metric with detailed labels
+            let digest_str = format!("{:?}", checkpoint_digest);
+            let digest_prefix = if digest_str.len() >= 5 {
+                &digest_str[0..5]
+            } else {
+                &digest_str
+            };
+
+            let detected_at = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            checkpoint_metrics
+                .checkpoint_fork_crash_mode
+                .with_label_values(&[
+                    &checkpoint_seq.to_string(),
+                    &detected_at.to_string(),
+                    digest_prefix,
+                ])
+                .set(1);
+
+            // Keep the node running but in a halted state to allow admin API access
+            // Wait for notification from admin API that fork has been cleared
+            let mut fork_cleared_rx = checkpoint_fork_cleared_notification.subscribe();
+            tokio::select! {
+                _ = fork_cleared_rx.recv() => {
+                    info!("Checkpoint fork cleared via admin API - resuming startup");
+
+                    // Clear the crash mode metric
+                    checkpoint_metrics
+                        .checkpoint_fork_crash_mode
+                        .with_label_values(&[
+                            &checkpoint_seq.to_string(),
+                            &detected_at.to_string(),
+                            digest_prefix,
+                        ])
+                        .set(0);
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    info!("Received shutdown signal while waiting for fork clearance");
+                    return Err(anyhow!("Node shutdown requested while in fork detection state"));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
