@@ -4845,7 +4845,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=4073d174a1b9756d5a32830f4e09160a0dde0315#4073d174a1b9756d5a32830f4e09160a0dde0315"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=07fbca68709d313b120cb820f1f5561959fced94#07fbca68709d313b120cb820f1f5561959fced94"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4901,7 +4901,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=4073d174a1b9756d5a32830f4e09160a0dde0315#4073d174a1b9756d5a32830f4e09160a0dde0315"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=07fbca68709d313b120cb820f1f5561959fced94#07fbca68709d313b120cb820f1f5561959fced94"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -4910,7 +4910,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=4073d174a1b9756d5a32830f4e09160a0dde0315#4073d174a1b9756d5a32830f4e09160a0dde0315"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=07fbca68709d313b120cb820f1f5561959fced94#07fbca68709d313b120cb820f1f5561959fced94"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4929,7 +4929,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=4073d174a1b9756d5a32830f4e09160a0dde0315#4073d174a1b9756d5a32830f4e09160a0dde0315"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=07fbca68709d313b120cb820f1f5561959fced94#07fbca68709d313b120cb820f1f5561959fced94"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -4946,7 +4946,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=4073d174a1b9756d5a32830f4e09160a0dde0315#4073d174a1b9756d5a32830f4e09160a0dde0315"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=07fbca68709d313b120cb820f1f5561959fced94#07fbca68709d313b120cb820f1f5561959fced94"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -5588,6 +5588,7 @@ name = "grpc-reader"
 version = "1.53.0"
 dependencies = [
  "anyhow",
+ "base64ct",
  "bcs",
  "fastcrypto",
  "hex",
@@ -15025,6 +15026,7 @@ dependencies = [
  "bytes",
  "clap",
  "env_logger",
+ "fastcrypto",
  "log",
  "move-binary-format",
  "move-core-types",

@@ -130,7 +130,6 @@ impl Default for ECMHLiveObjectSetDigest {
 pub struct ObjectCheckpointState {
     pub id: ObjectID,
     pub digest: Option<ObjectDigest>,
-    // TODO: Should we add object type here?
 }
 
 impl ObjectCheckpointState {
