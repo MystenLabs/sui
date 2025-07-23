@@ -65,7 +65,7 @@ of the type.
 Each of the display properties should support patterns outside
 of the system, making it simpler to customize Display based
 on the property values of an Object.
-```
+```move
 // Example of a display object
 Display<0x...::capy::Capy> {
 fields:
