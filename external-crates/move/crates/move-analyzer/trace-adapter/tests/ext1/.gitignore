@@ -1,6 +1,6 @@
 # ignore emacs temps
 *~
-#ignore kiosk and crypto files to save space
+# ignore kiosk and crypto files to save space
 **/kiosk.*
 **/kiosk_extension.*
 **/transfer_policy.*
@@ -39,5 +39,6 @@
 **/vec_map.*
 **/vec_set.*
 **/versioned.*
-
-
+# ignore other files not relevant for runinng tests
+**/transaction_effects.json
+**/transaction_gas_report.json
