@@ -8,7 +8,7 @@ object system. The <code><a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> stru
 keys and values.
 Note that this means that <code><a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> values with exactly the same key-value mapping will not be
 equal, with <code>==</code>, at runtime. For example
-```
+```move
 let bag1 = bag::new();
 let bag2 = bag::new();
 bag::add(&mut bag1, 0, false);
