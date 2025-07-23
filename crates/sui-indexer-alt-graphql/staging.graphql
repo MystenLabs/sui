@@ -129,6 +129,10 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
+	Validator-related properties, including the active validators.
+	"""
+	validatorSet: ValidatorSet
+	"""
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: UInt53
@@ -902,6 +906,55 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Representation of `0x3::validator_set::ValidatorSet`.
+"""
+type ValidatorSet {
+	"""
+	Total amount of stake for all active validators at the beginning of the epoch.
+	"""
+	totalStake: BigInt
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
+	pendingRemovals: [Int!]
+	"""
+	Object ID of the wrapped object `TableVec` storing the pending active validators.
+	"""
+	pendingActiveValidatorsId: SuiAddress
+	"""
+	Size of the pending active validators table.
+	"""
+	pendingActiveValidatorsSize: Int
+	"""
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+	of the corresponding validators. This is needed because a validator's address
+	can potentially change but the object ID of its pool will not.
+	"""
+	stakingPoolMappingsId: SuiAddress
+	"""
+	Size of the stake pool mappings `Table`.
+	"""
+	stakingPoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the inactive staking pools.
+	"""
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools `Table`.
+	"""
+	inactivePoolsSize: Int
+	"""
+	Object ID of the `Table` storing the validator candidates.
+	"""
+	validatorCandidatesId: SuiAddress
+	"""
+	Size of the validator candidates `Table`.
+	"""
+	validatorCandidatesSize: Int
+}
 
 """
 Filter for paginating the history of an Object or MovePackage.
