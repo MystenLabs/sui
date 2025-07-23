@@ -326,6 +326,7 @@ div[role="tabpanel"] {
 .DocSearch-Button-Container {
   width: 100%;
   justify-content: space-between;
+  z-index: calc(var(--ifm-z-index-fixed) + 1);
 }
 
 .DocSearch-Button {
@@ -340,7 +341,16 @@ div[role="tabpanel"] {
   letter-spacing: -0.01em;
   background: linear-gradient(0deg, rgba(247, 247, 248, 0.1), rgba(247, 247, 248, 0.1)),
   linear-gradient(0deg, rgba(247, 247, 248, 0.05), rgba(247, 247, 248, 0.05)) !important;
+  margin: 0;
+  transition: all var(--ifm-transition-fast)
+    var(--ifm-transition-timing-default);
 }
+
+.DocSearch-Button:hover, .DocSearch-Button:focus, .DocSearch-Button:active {
+  box-shadow: inset 0 0 0 2px #4ca2ff;
+  outline: 0;
+}
+
 
 @media screen and (max-width: 599px) {
   .DocSearch-Button {
@@ -351,10 +361,16 @@ div[role="tabpanel"] {
 .DocSearch-Search-Icon {
   order: 2;
   margin-left: auto;
+  stroke-width: 1.6;
 }
 
 .DocSearch-Search-Icon path {
   stroke: var(--sui-white);
+}
+
+.DocSearch-Button-Placeholder {
+  font-size: 1rem;
+  padding: 0 12px 0 6px;
 }
 
 .DocSearch-Button-Keys {

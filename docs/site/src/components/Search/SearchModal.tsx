@@ -18,13 +18,6 @@ const baseSearchClient = algoliasearch(
   "826134b026a63bb35692f08f1dc85d1c",
 );
 
-try {
-  window.initCookbook();
-} catch (e) {
-  // Gracefully ignore errors if something goes wrong
-  console.error("Error initializing Ask Cookbook", e);
-}
-
 const searchClient = {
   ...baseSearchClient,
   search(requests: any[]) {
@@ -77,7 +70,7 @@ function HitItem({ hit }: { hit: any }) {
         className="text-sm text-gray-600"
         dangerouslySetInnerHTML={{
           __html: hit.content
-            ? truncateAtWord(hit._highlightResult.content.value, 51)
+            ? truncateAtWord(hit._highlightResult.content.value, 100)
             : "",
         }}
       ></p>
@@ -124,13 +117,21 @@ function EmptyState({ label }: { label: string }) {
   return null;
 }
 
-function ResultsUpdater({ indexName, onUpdate }: { indexName: string; onUpdate: (index: string, count: number) => void }) {
+function ResultsUpdater({
+  indexName,
+  onUpdate,
+}: {
+  indexName: string;
+  onUpdate: (index: string, count: number) => void;
+}) {
   const { results } = useInstantSearch();
+  const previousHitsRef = React.useRef<number | null>(null);
   useEffect(() => {
-    if (results) {
+    if (results && results.nbHits !== previousHitsRef.current) {
+      previousHitsRef.current = results.nbHits;
       onUpdate(indexName, results.nbHits);
     }
-  }, [results, indexName, onUpdate]);
+  }, [results?.nbHits, indexName, onUpdate]);
   return null;
 }
 
@@ -176,7 +177,7 @@ export default function MultiIndexSearchModal({
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <InstantSearch searchClient={searchClient} indexName={activeIndex}>
             <div className="bg-white rounded-t sticky top-0 z-10">
-              <div className="bg-white h-6 flex justify-end">
+              <div className="bg-white h-8 flex justify-end">
                 <button
                   onClick={onClose}
                   className="bg-transparent border-none outline-none text-sm underline cursor-pointer"
@@ -191,7 +192,7 @@ export default function MultiIndexSearchModal({
               />
               {query.length < 3 && (
                 <p className="text-sm text-gray-500 mb-2 -mt-6">
-                  Type at least three characters to start your search...
+                  Three characters starts search...
                 </p>
               )}
               <TabbedResults
