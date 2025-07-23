@@ -18,7 +18,7 @@ use sui_indexer_alt_reader::{
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::BcsCursor, digest::Digest},
+    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
     error::RpcError,
     pagination::Page,
     scope::Scope,
@@ -64,7 +64,7 @@ pub(crate) struct TransactionCursor {
     pub tx_sequence_number: u64,
 }
 
-pub(crate) type CTransaction = BcsCursor<TransactionCursor>;
+pub(crate) type CTransaction = JsonCursor<TransactionCursor>;
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -262,7 +262,7 @@ impl Transaction {
             .context("Failed to read from database")?;
 
         let (prev, next, results) = page.paginate_results(results, |t| {
-            BcsCursor::new(TransactionCursor {
+            JsonCursor::new(TransactionCursor {
                 tx_sequence_number: t.tx_sequence_number as u64,
             })
         });
