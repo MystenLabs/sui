@@ -183,9 +183,7 @@ impl LocalDepInfo {
     pub async fn fetch(&self, containing_file: impl AsRef<Path>) -> PackageResult<PathBuf> {
         let path = self.absolute_path(containing_file.as_ref());
 
-        eprintln!("path: {:?}", path);
-
-        // If the path is already accessibel, we can return it.
+        // If the path is already accessible, we can return early.
         if path.exists() {
             return Ok(path);
         }
@@ -200,7 +198,8 @@ impl LocalDepInfo {
         // 2. "Parent" is not a git dependency, so we need to return an error as the local dep does not exist.
 
         // For 1: We try to add the dir to the sparse-checkout list.
-        let _ = git_cache_try_make_local_dir_accessible(parent_dir.to_path_buf(), path.to_path_buf()).await;
+
+        git_cache_try_make_local_dir_accessible(parent_dir.to_path_buf(), path.to_path_buf()).await;
 
         // If the local directory still does not exist, we return an error.
         if !path.exists() {
