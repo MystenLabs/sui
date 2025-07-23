@@ -660,11 +660,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let ty_args = ty_args
             .iter()
             .enumerate()
-            .map(|(idx, ty)| {
-                self.env
-                    .load_vm_type_argument_from_adapter_type(idx, ty)
-                    .map(|(vm_ty, _)| vm_ty)
-            })
+            .map(|(idx, ty)| self.env.load_vm_type_argument_from_adapter_type(idx, ty))
             .collect::<Result<_, _>>()?;
         let gas_status = self.gas_charger.move_gas_status_mut();
         let mut data_store = LinkedDataStore::new(linkage, self.env.linkable_store);
