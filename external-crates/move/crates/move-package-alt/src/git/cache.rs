@@ -367,12 +367,11 @@ fn display_cmd(cmd: &Command) -> String {
 
 /// Tries to convert a "branch" or "tag" into a full SHA, using `ls-remote`.
 /// It first tries to find a tag, and if that fails, it fallbacks into a branch lookup.
-///
-/// Note: a "no results" search for tags or branches returns an empty result (`Ok("")`)
-/// and not an error, which is why we manually cast an empty result into an error.
-///
-/// Results from `ls-remote` are expected in format `<hash> \t <name>`.
 async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
+    // Note: a "no results" search for tags or branches returns an empty result (`Ok("")`)
+    // and not an error, which is why we manually cast an empty result into an error.
+    // Results from `ls-remote` are expected in format `<hash> \t <name>`.
+
     // Try to find a tag matching the `rev`:
     // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
     let tag = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/tags/{rev}")], None)
