@@ -1471,10 +1471,55 @@ has_child_object
 has_child_object_with_ty
 	public(package) fun
 	0x2::dynamic_field
+Bag
+	public struct
+	0x2::bag
+new
+	public fun
+	0x2::bag
+add
+	public fun
+	0x2::bag
+borrow
+	public fun
+	0x2::bag
+borrow_mut
+	public fun
+	0x2::bag
+remove
+	public fun
+	0x2::bag
+contains
+	public fun
+	0x2::bag
+contains_with_type
+	public fun
+	0x2::bag
+length
+	public fun
+	0x2::bag
+is_empty
+	public fun
+	0x2::bag
+destroy_empty
+	public fun
+	0x2::bag
 AccumulatorRoot
 	public struct
 	0x2::accumulator
 Key
+	public struct
+	0x2::accumulator
+OwnerKey
+	public struct
+	0x2::accumulator
+Owner
+	public struct
+	0x2::accumulator
+MetadataKey
+	public struct
+	0x2::accumulator
+Metadata
 	public struct
 	0x2::accumulator
 U128
@@ -1496,6 +1541,33 @@ root_borrow_accumulator_mut
 	fun
 	0x2::accumulator
 root_remove_accumulator
+	fun
+	0x2::accumulator
+accumulator_root_owner_exists
+	fun
+	0x2::accumulator
+accumulator_root_borrow_owner_mut
+	fun
+	0x2::accumulator
+accumulator_root_attach_owner
+	fun
+	0x2::accumulator
+accumulator_root_detach_owner
+	fun
+	0x2::accumulator
+create_accumulator_metadata
+	fun
+	0x2::accumulator
+accumulator_metadata_remove
+	fun
+	0x2::accumulator
+accumulator_owner_attach_metadata
+	fun
+	0x2::accumulator
+accumulator_owner_detach_metadata
+	fun
+	0x2::accumulator
+accumulator_owner_destroy
 	fun
 	0x2::accumulator
 settlement_prologue
@@ -1564,39 +1636,6 @@ expire_jwks
 get_active_jwks
 	fun
 	0x2::authenticator_state
-Bag
-	public struct
-	0x2::bag
-new
-	public fun
-	0x2::bag
-add
-	public fun
-	0x2::bag
-borrow
-	public fun
-	0x2::bag
-borrow_mut
-	public fun
-	0x2::bag
-remove
-	public fun
-	0x2::bag
-contains
-	public fun
-	0x2::bag
-contains_with_type
-	public fun
-	0x2::bag
-length
-	public fun
-	0x2::bag
-is_empty
-	public fun
-	0x2::bag
-destroy_empty
-	public fun
-	0x2::bag
 Supply
 	public struct
 	0x2::balance

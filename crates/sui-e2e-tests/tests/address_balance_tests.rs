@@ -8,8 +8,12 @@ use sui_macros::*;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
+    accumulator_root::{AccumulatorOwner, AccumulatorValue, U128},
+    balance::Balance,
     base_types::{ObjectRef, SuiAddress},
+    gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
+    storage::ObjectStore,
     transaction::{Argument, Command, TransactionData, TransactionKind},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -50,16 +54,52 @@ async fn test_deposits() -> Result<(), anyhow::Error> {
 
     let (sender, gas) = get_sender_and_gas(context).await;
 
-    let random_address = SuiAddress::random_for_testing_only();
+    let recipient = SuiAddress::random_for_testing_only();
 
-    let tx = make_send_to_account_tx(1000, random_address, sender, gas, rgp);
+    let tx = make_send_to_account_tx(1000, recipient, sender, gas, rgp);
 
     test_cluster.sign_and_execute_transaction(&tx).await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let object_store = state.get_object_store().as_ref();
+        verify_accumulator_exists(object_store, recipient);
+    });
 
     Ok(())
 }
 
-#[ignore(reason = "currently panics")]
+fn verify_accumulator_exists(object_store: &dyn ObjectStore, owner: SuiAddress) {
+    let sui_coin_type = Balance::type_tag(GAS::type_tag());
+
+    assert!(
+        AccumulatorValue::exists(object_store, owner, &sui_coin_type).unwrap(),
+        "Accumulator value should have been created"
+    );
+
+    let accumulator_value = AccumulatorValue::load(object_store, owner, &sui_coin_type).unwrap();
+
+    assert_eq!(
+        accumulator_value,
+        AccumulatorValue::U128(U128 { value: 1000 }),
+        "Accumulator value should be 1000"
+    );
+
+    assert!(
+        AccumulatorOwner::exists(object_store, owner).unwrap(),
+        "Owner object should have been created"
+    );
+
+    let owner = AccumulatorOwner::load(object_store, owner).unwrap();
+
+    assert!(
+        owner.metadata_exists(object_store, &sui_coin_type).unwrap(),
+        "Metadata object should have been created"
+    );
+
+    let _metadata = owner.load_metadata(object_store, &sui_coin_type).unwrap();
+}
+
 #[sim_test]
 async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
@@ -75,10 +115,32 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
 
     let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
     let res = test_cluster.sign_and_execute_transaction(&tx).await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let object_store = state.get_object_store().as_ref();
+        verify_accumulator_exists(object_store, sender);
+    });
+
     let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
 
     let tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
     test_cluster.sign_and_execute_transaction(&tx).await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let object_store = state.get_object_store().as_ref();
+        let sui_coin_type = Balance::type_tag(GAS::type_tag());
+
+        assert!(
+            !AccumulatorValue::exists(object_store, sender, &sui_coin_type).unwrap(),
+            "Accumulator value should have been removed"
+        );
+        assert!(
+            !AccumulatorOwner::exists(object_store, sender).unwrap(),
+            "Owner object should have been removed"
+        );
+    });
 
     Ok(())
 }

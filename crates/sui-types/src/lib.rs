@@ -239,6 +239,10 @@ impl<T: MoveTypeTagTrait> MoveTypeTagTrait for Vec<T> {
     }
 }
 
+pub trait MoveTypeTagTraitGeneric {
+    fn get_type_tag(type_params: &[TypeTag]) -> TypeTag;
+}
+
 pub fn is_primitive(
     view: &CompiledModule,
     function_type_args: &[AbilitySet],
