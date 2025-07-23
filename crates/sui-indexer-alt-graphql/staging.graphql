@@ -185,15 +185,9 @@ Represents execution error information for failed transactions.
 """
 type ExecutionError {
 	"""
-	Human-readable error message explaining why the transaction failed.
-	For Move aborts, attempts to resolve to human-readable form using clever errors,
-	otherwise falls back to displaying the abort code and location.
-	"""
-	message: String
-	"""
 	The error code of the Move abort, populated if this transaction failed with a Move abort.
 	"""
-	moveAbortCode: BigInt
+	abortCode: BigInt
 }
 
 """
