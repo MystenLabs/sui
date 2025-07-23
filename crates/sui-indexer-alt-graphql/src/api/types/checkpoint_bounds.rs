@@ -4,6 +4,8 @@
 use crate::api::types::transaction_filter::TransactionFilter;
 use crate::error::{bad_user_input, RpcError};
 
+/// Bounds on Checkpoint sequence number, imposed by checkpoint TransactionFilters.
+/// The outermost bounds are determined by the checkpoint filters.
 pub(crate) struct CheckpointBounds {
     cp_lo: u64,
     cp_hi: u64,

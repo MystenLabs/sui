@@ -224,17 +224,9 @@ impl Transaction {
             CheckpointBounds::from_transaction_filter(&filter, scope.checkpoint_viewed_at())
                 .unwrap();
 
-        let pg_reader: &PgReader = ctx.data()?;
-        let mut c = pg_reader
-            .connect()
-            .await
-            .context("Failed to connect to database")?;
-
-        let kv_loader: &KvLoader = ctx.data()?;
         // TODO: Unsafe unwrap, handle errors?
         let transaction_bounds =
-            TransactionBounds::fetch_transaction_bounds(&mut c, kv_loader, checkpoint_bounds)
-                .await?;
+            TransactionBounds::fetch_transaction_bounds(ctx, checkpoint_bounds).await?;
 
         let mut pagination = dig::tx_digests
             .filter(dig::tx_sequence_number.ge(transaction_bounds.lower() as i64))
@@ -257,6 +249,8 @@ impl Transaction {
         } else {
             pagination.order_by(dig::tx_sequence_number.desc())
         };
+
+        let pg_reader: &PgReader = ctx.data()?;
         let mut c = pg_reader
             .connect()
             .await
