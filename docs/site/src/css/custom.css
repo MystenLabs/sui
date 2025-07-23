@@ -415,6 +415,10 @@ div[role="tabpanel"] {
   @apply bg-sui-blue-bright/40;
 }
 
+.modal-result mark {
+  @apply bg-sui-steel-dark;
+}
+
 /** Globals **/
 .button-cta {
   @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out

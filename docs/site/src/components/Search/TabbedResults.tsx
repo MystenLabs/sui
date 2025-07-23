@@ -16,7 +16,7 @@ export default function TabbedResults({
   const walrustooltip =
     "Search results from the Walrus decentralized storage platform";
   return (
-    <div className="mb-4 flex justify-start border-2 border-solid border-white dark:border-sui-black border-b-sui-gray-50 dark:border-b-sui-gray-80">
+    <div className="mb-4 flex justify-start border-2 border-solid border-white rounded-t-lg dark:bg-black dark:border-sui-black border-b-sui-gray-50 dark:border-b-sui-gray-80">
       {tabs.map(({ label, indexName, count }) => (
         <div className="relative group inline-block" key={indexName}>
           <button
@@ -25,7 +25,7 @@ export default function TabbedResults({
           >
             {label}{" "}
             <span
-              className={`dark:text-sui-gray-90 text-xs rounded-full ml-1 py-1 px-2 border border-solid ${activeTab === indexName ? "dark:!text-sui-gray-45 bg-transparent border-sui-gray-3s" : "bg-sui-gray-45 border-transparent"}`}
+              className={`dark:text-sui-gray-90 text-xs rounded-full ml-1 py-1 px-2 border border-solid ${activeTab === indexName ? "dark:!text-sui-gray-45 bg-transparent border-sui-gray-3s dark:border-sui-gray-50" : "bg-sui-gray-45 border-transparent"}`}
             >
               {count}
             </span>

@@ -49,7 +49,7 @@ export default function ControlledSearchBox({
       {searchSvg}
       <input
         type="search"
-        className="cursor-pointer w-full py-2 pr-4 h-[40px] text-lg border-transparent bg-transparent focus-visible:outline-none"
+        className="cursor-pointer w-full py-2 pr-4 h-[40px] text-lg border-transparent bg-transparent focus-visible:outline-none dark:text-sui-gray-50 dark:placeholder-sui-gray-50"
         placeholder={placeholder}
         value={query}
         onChange={(e) => onChange(e.currentTarget.value)}

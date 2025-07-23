@@ -54,20 +54,23 @@ function HitItem({ hit }: { hit: any }) {
     sectionTitle = hit.hierarchy?.[level] || level;
   }
   return (
-    <div className="border-b">
-      <a href={hit.url} className="text-blue-600 font-medium">
+    <div className="modal-result">
+      <a
+        href={hit.url}
+        className="text-blue-600 dark:text-sui-blue dark:hover:text-sui-blue-light font-medium"
+      >
         {hit.title}
       </a>
       <a
         href={hit.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-base text-blue-600 underline pb-2"
+        className="text-base text-blue-600 dark:text-sui-blue dark:hover:text-sui-blue-light underline pb-2"
       >
         {sectionTitle}
       </a>
       <p
-        className="text-sm text-gray-600"
+        className="text-sm text-gray-600 dark:text-sui-gray-50"
         dangerouslySetInnerHTML={{
           __html: hit.content
             ? truncateAtWord(hit._highlightResult.content.value, 100)
@@ -112,7 +115,11 @@ function HitsList({
 function EmptyState({ label }: { label: string }) {
   const { results } = useInstantSearch();
   if (results?.hits?.length === 0) {
-    return <p className="text-sm text-gray-500">No results in {label}</p>;
+    return (
+      <p className="text-sm text-sui-gray-5s dark:text-sui-gray-50">
+        No results in {label}
+      </p>
+    );
   }
   return null;
 }
@@ -173,11 +180,11 @@ export default function MultiIndexSearchModal({
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex justify-center p-4">
-      <div className="bg-white w-full max-w-3xl px-6 rounded-lg shadow-md h-3xl flex flex-col">
+      <div className="bg-white dark:bg-sui-gray-90 w-full max-w-3xl px-6 rounded-lg shadow-md max-h-xl flex flex-col">
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <InstantSearch searchClient={searchClient} indexName={activeIndex}>
-            <div className="bg-white rounded-t sticky top-0 z-10">
-              <div className="bg-white h-8 flex justify-end">
+            <div className="bg-white dark:bg-sui-gray-90 rounded-t sticky top-0 z-10">
+              <div className="bg-white dark:bg-sui-gray-90 h-8 flex justify-end">
                 <button
                   onClick={onClose}
                   className="bg-transparent border-none outline-none text-sm underline cursor-pointer"
@@ -191,8 +198,8 @@ export default function MultiIndexSearchModal({
                 onChange={setQuery}
               />
               {query.length < 3 && (
-                <p className="text-sm text-gray-500 mb-2 -mt-6">
-                  Three characters starts search...
+                <p className="text-sm text-sui-gray-5s dark:text-sui-gray-50 pl-4 mb-2 -mt-6">
+                  Three characters initiates search...
                 </p>
               )}
               <TabbedResults
@@ -223,10 +230,10 @@ export default function MultiIndexSearchModal({
             ))}
           </InstantSearch>
         </div>
-        <div className="h-14 bg-white flex items-center justify-between text-sm border-t border-solid border-sui-gray-50 border-b-transparent border-l-transparent border-r-transparent">
+        <div className="h-14 bg-white dark:bg-sui-gray-90 flex items-center justify-between text-sm border-t border-solid border-sui-gray-50 border-b-transparent border-l-transparent border-r-transparent">
           <a
             href={`/search?q=${encodeURIComponent(query)}`}
-            className="text-blue-600 underline"
+            className="text-blue-600 dark:text-sui-blue dark:hover:text-sui-blue-light underline"
           >
             Go to full search page
           </a>
@@ -235,7 +242,7 @@ export default function MultiIndexSearchModal({
               href={activeMeta.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 underline"
+              className="text-blue-600 dark:text-sui-blue dark:hover:text-sui-blue-light underline"
             >
               Visit {activeMeta.label} →
             </a>
