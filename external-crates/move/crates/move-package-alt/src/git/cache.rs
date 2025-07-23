@@ -371,7 +371,7 @@ fn display_cmd(cmd: &Command) -> String {
 /// Note: a "no results" search for tags or branches returns an empty result (`Ok("")`)
 /// and not an error, which is why we manually cast an empty result into an error.
 ///
-/// Results from `ls-remote` are in the format of `<hash> \t <name>`, which is why we parse
+/// Results from `ls-remote` are expected in format `<hash> \t <name>`.
 async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
     // Try to find a tag matching the `rev`:
     // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
