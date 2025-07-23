@@ -424,8 +424,8 @@ pub async fn git_cache_try_make_local_dir_accessible(
     // git sparce-checkout add <child_relative_path>
     // NOTE: this needs to run from the root of the repository, otherwise git won't fetch
     // the requested subdirectories.
-    let res = run_git_cmd_with_args(
-        &vec!["sparse-checkout", "add", &relative_path.to_string_lossy()],
+    run_git_cmd_with_args(
+        &["sparse-checkout", "add", &relative_path.to_string_lossy()],
         Some(&root_path),
     )
     .await?;
