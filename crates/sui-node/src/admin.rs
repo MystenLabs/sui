@@ -25,7 +25,7 @@ use sui_types::{
 };
 use telemetry_subscribers::TracingHandle;
 use tokio::sync::oneshot;
-use tracing::info;
+use tracing::{error, info};
 
 // Example commands:
 //
@@ -92,6 +92,7 @@ const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
 const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
 const TRAFFIC_CONTROL: &str = "/traffic-control";
+const CLEAR_CHECKPOINT_FORK_ROUTE: &str = "/clear-checkpoint-fork";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -137,6 +138,7 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
             get(dump_consensus_tx_cost_estimates),
         )
         .route(TRAFFIC_CONTROL, post(traffic_control))
+        .route(CLEAR_CHECKPOINT_FORK_ROUTE, post(clear_checkpoint_fork))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -520,6 +522,30 @@ async fn traffic_control(
                 updated_state.error_threshold, updated_state.spam_threshold, updated_state.dry_run
             ),
         ),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+    }
+}
+
+async fn clear_checkpoint_fork(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    match state.node.checkpoint_store.clear_checkpoint_fork_detected() {
+        Ok(()) => {
+            // Send notification to resume node startup
+            if let Err(e) = state.node.checkpoint_fork_cleared_notification.send(()) {
+                error!(
+                    "Failed to send checkpoint fork cleared notification: {:?}",
+                    e
+                );
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Fork cleared but failed to notify waiting processes".to_string(),
+                );
+            }
+
+            (
+                StatusCode::OK,
+                "Checkpoint fork state cleared successfully. Node startup will resume automatically.\n".to_string(),
+            )
+        }
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }
