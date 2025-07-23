@@ -28,6 +28,7 @@ use crate::{
 
 use super::{
     checkpoint::Checkpoint,
+    epoch::Epoch,
     gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
@@ -130,6 +131,19 @@ impl EffectsContents {
         };
 
         Ok(Some(DateTime::from_ms(content.timestamp_ms() as i64)?))
+    }
+
+    /// The epoch this transaction was finalized in.
+    async fn epoch(&self) -> Result<Option<Epoch>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(Epoch::with_id(
+            self.scope.clone(),
+            effects.executed_epoch(),
+        )))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
