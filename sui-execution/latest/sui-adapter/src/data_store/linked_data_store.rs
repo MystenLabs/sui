@@ -141,4 +141,31 @@ impl ModuleResolver for LinkedDataStore<'_> {
 
 impl LinkageResolver for LinkedDataStore<'_> {
     type Error = SuiError;
+
+    fn link_context(&self) -> AccountAddress {
+        // TODO should we propagate the error
+        DataStore::link_context(self).unwrap()
+    }
+
+    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
+        DataStore::relocate(self, module_id).map_err(|err| {
+            make_invariant_violation!("Error relocating {}: {:?}", module_id, err).into()
+        })
+    }
+
+    fn defining_module(
+        &self,
+        runtime_id: &ModuleId,
+        struct_: &IdentStr,
+    ) -> Result<ModuleId, Self::Error> {
+        DataStore::defining_module(self, runtime_id, struct_).map_err(|err| {
+            make_invariant_violation!(
+                "Error finding defining module for {}::{}: {:?}",
+                runtime_id,
+                struct_,
+                err
+            )
+            .into()
+        })
+    }
 }
