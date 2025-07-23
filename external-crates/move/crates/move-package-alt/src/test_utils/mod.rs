@@ -174,8 +174,7 @@ impl Project {
     /// Try to get the git commits in the project, but it will panic if this is not a git
     /// repository.
     pub fn commits(&self) -> Vec<String> {
-        let repo = git2::Repository::open(self.root.clone())
-            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()));
+        let repo = self._open();
         git::commits(&repo)
             .into_iter()
             .map(|c| c.id().to_string())
@@ -225,9 +224,13 @@ impl Project {
     }
 
     pub fn add_tag(&self, name: &str) {
-        let repo = git2::Repository::open(self.root.clone())
-            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()));
+        let repo = self._open();
         git::tag(&repo, name);
+    }
+
+    fn _open(&self) -> git2::Repository {
+        git2::Repository::open(self.root.clone())
+            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()))
     }
 }
 
