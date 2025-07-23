@@ -18,7 +18,9 @@ use sui_types::{
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, uint53::UInt53},
+    api::scalars::{
+        base64::Base64, cursor::JsonCursor, date_time::DateTime, digest::Digest, uint53::UInt53,
+    },
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -119,6 +121,15 @@ impl EffectsContents {
 
         let effects = content.effects()?;
         Ok(Some(GasEffects::from(self.scope.clone(), effects)))
+    }
+
+    /// Timestamp corresponding to the checkpoint this transaction was finalized in.
+    async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        Ok(Some(DateTime::from_ms(content.timestamp_ms() as i64)?))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.

@@ -1,0 +1,43 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 100 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 10-12:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 15:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 5, lines 17-22:
+//# run-graphql
+Response: {
+  "data": {
+    "transferTransaction": {
+      "timestamp": "1970-01-01T00:00:00Z"
+    }
+  }
+}
+
+task 6, lines 24-29:
+//# run-graphql
+Response: {
+  "data": {
+    "systemTransaction": {
+      "timestamp": "1970-01-01T00:00:00.001Z"
+    }
+  }
+}
