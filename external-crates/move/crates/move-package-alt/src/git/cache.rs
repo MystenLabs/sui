@@ -858,33 +858,33 @@ pkg_git = {{ git = "{}", rev = "{short_sha}" }}
 
     #[tokio::test]
     async fn test_transitive_sparse_checkout_access_accessibility() {
-        let tag = "releases/1";
         let project = git::new("git_repo", |project| {
             project
                 .file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
                 .file("packages/pkg_b/Move.toml", &basic_manifest("b", "0.0.1"))
         });
 
-        project.add_tag(tag);
-
         let cache_dir = tempdir().unwrap();
         let cache = GitCache::new_from_dir(cache_dir.path());
 
+        // We generate a git tree for `packages/pkg_a`.
         let git_tree = cache
             .resolve_to_tree(
                 project.root_path_str(),
-                &Some(tag.to_string()),
+                &None,
                 Some(PathBuf::from("packages/pkg_a")),
             )
             .await
             .unwrap();
 
+        // We checkout the repo (which should mkae `packages/pkg_a` accessible, but not `packages/pkg_b`).
         let _ = git_tree.checkout_repo(false).await;
 
+        // Verify the assumptions.
         assert!(git_tree.path_to_repo.join("packages/pkg_a").exists());
         assert!(!git_tree.path_to_repo.join("packages/pkg_b").exists());
 
-        // try to transitively fetch the pkg_b dir.
+        // Now we try to transitively fetch a "local" dep being `../pkg_b` from `packages/pkg_a`.
         let _ = git_cache_try_make_local_dir_accessible(
             git_tree.path_to_tree(),
             // Add the relative pat
@@ -892,6 +892,7 @@ pkg_git = {{ git = "{}", rev = "{short_sha}" }}
         )
         .await;
 
+        // Verify that `pkg_b` folder is now accessible
         assert!(git_tree.path_to_repo.join("packages/pkg_b").exists());
     }
 }
