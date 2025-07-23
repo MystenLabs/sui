@@ -148,16 +148,16 @@ impl Epoch {
             return Ok(None);
         };
 
-        let validator_set: ValidatorSet =
-            match bcs::from_bytes::<SuiSystemState>(&start.system_state) {
-                Ok(SuiSystemState::V1(inner)) => inner.validators.into(),
-                Ok(SuiSystemState::V2(inner)) => inner.validators.into(),
-                #[cfg(msim)]
-                Ok(SuiSystemState::SimTestV1(_))
-                | Ok(SuiSystemState::SimTestShallowV2(_))
-                | Ok(SuiSystemState::SimTestDeepV2(_)) => return Ok(None),
-                Err(e) => return Err(RpcError::InternalError(Arc::new(e.into()))),
-            };
+        let validator_set = match bcs::from_bytes::<SuiSystemState>(&start.system_state)
+            .context("Failed to deserialize system state")?
+        {
+            SuiSystemState::V1(inner) => inner.validators.into(),
+            SuiSystemState::V2(inner) => inner.validators.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
 
         Ok(Some(validator_set))
     }
