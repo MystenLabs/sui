@@ -49,12 +49,11 @@ pub struct ObjectInclusionProof {
 
 impl ObjectInclusionProof {
     pub fn verify(&self, root: &CheckpointArtifactsDigest) -> FastCryptoResult<()> {
-        self.merkle_proof
-            .verify_proof_with_unserialized_leaf(
-                &Node::from(root.digest.into_inner()),
-                &self.object_state,
-                self.leaf_index,
-            )
+        self.merkle_proof.verify_proof_with_unserialized_leaf(
+            &Node::from(root.digest.into_inner()),
+            &self.object_state,
+            self.leaf_index,
+        )
     }
 }
 
@@ -65,7 +64,10 @@ impl ModifiedObjectTree {
         for (i, object_state) in artifacts.latest_object_states.contents.iter().enumerate() {
             // A sanity check to ensure the object IDs are in increasing order.
             if object_state.id <= prev_obj_id {
-                panic!("Object ID {} is not greater than previous object ID {}", object_state.id, prev_obj_id);
+                panic!(
+                    "Object ID {} is not greater than previous object ID {}",
+                    object_state.id, prev_obj_id
+                );
             } else {
                 prev_obj_id = object_state.id;
             }
