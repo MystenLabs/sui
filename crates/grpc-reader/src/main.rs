@@ -1,6 +1,7 @@
 use anyhow::Result;
+use fastcrypto::error::FastCryptoResult;
 use fastcrypto::hash::Blake2b256;
-use fastcrypto::merkle::{MerkleAuth, MerkleNonInclusionProof, MerkleProof, MerkleTree, Node};
+use fastcrypto::merkle::{MerkleNonInclusionProof, MerkleProof, MerkleTree, Node};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -47,14 +48,13 @@ pub struct ObjectInclusionProof {
 }
 
 impl ObjectInclusionProof {
-    pub fn verify(&self, root: &CheckpointArtifactsDigest) -> bool {
+    pub fn verify(&self, root: &CheckpointArtifactsDigest) -> FastCryptoResult<()> {
         self.merkle_proof
             .verify_proof_with_unserialized_leaf(
                 &Node::from(root.digest.into_inner()),
                 &self.object_state,
                 self.leaf_index,
             )
-            .expect("Failed to verify proof")
     }
 }
 
@@ -123,7 +123,7 @@ pub struct ObjectNonInclusionProof {
 }
 
 impl ObjectNonInclusionProof {
-    pub fn verify(&self, root: &CheckpointArtifactsDigest) -> bool {
+    pub fn verify(&self, root: &CheckpointArtifactsDigest) -> FastCryptoResult<()> {
         self.non_inclusion_proof.verify_proof(
             &Node::from(root.digest.into_inner()),
             &ObjectCheckpointState::new(self.id, None),
@@ -246,7 +246,7 @@ mod tests {
         }
         let proof = object_tree.get_inclusion_proof(object_id).unwrap();
         println!("Proof: {:?}", proof);
-        assert!(proof.verify(&artifacts.digest().unwrap()));
+        assert!(proof.verify(&artifacts.digest().unwrap()).is_ok());
     }
 
     #[test]
@@ -268,7 +268,7 @@ mod tests {
             } else {
                 println!("Proof: {:?}", proof);
                 let proof = proof.unwrap();
-                assert!(proof.verify(&artifacts.digest().unwrap()));
+                assert!(proof.verify(&artifacts.digest().unwrap()).is_ok());
             }
         }
     }

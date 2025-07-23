@@ -1,19 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::ObjectID;
 use crate::base_types::{
     random_object_ref, ExecutionData, ExecutionDigests, VerifiedExecutionData,
 };
-use crate::base_types::{ObjectID, SequenceNumber};
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
 use crate::digests::{Digest, ObjectDigest};
-use crate::effects::{
-    ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI,
-};
+use crate::effects::{ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::full_checkpoint_content::CheckpointData;
 use crate::gas::GasCostSummary;
@@ -28,6 +26,7 @@ use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
 use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
+use fastcrypto::merkle::MerkleTree;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
 use prometheus::Histogram;
@@ -35,7 +34,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentScope};
-use fastcrypto::merkle::merkle_root;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
@@ -136,14 +134,8 @@ pub struct ObjectCheckpointState {
 }
 
 impl ObjectCheckpointState {
-    pub fn new(
-        id: ObjectID,
-        digest: Option<ObjectDigest>,
-    ) -> Self {
-        Self {
-            id,
-            digest,
-        }
+    pub fn new(id: ObjectID, digest: Option<ObjectDigest>) -> Self {
+        Self { id, digest }
     }
 }
 
@@ -176,14 +168,33 @@ impl Ord for ObjectCheckpointState {
     }
 }
 
+/// A sorted list of object checkpoint states (by object ID).
 #[derive(Debug)]
 pub struct ObjectCheckpointStates {
     pub contents: Vec<ObjectCheckpointState>,
 }
 
 impl ObjectCheckpointStates {
-    pub fn digest(&self) -> Result<ObjectCheckpointStatesDigest, anyhow::Error> {
-        let root = merkle_root::<Blake2b256, _>(self.contents.iter())?;
+    /// Check if the object checkpoint states are sorted by object ID.
+    fn is_sorted(&self) -> bool {
+        self.contents.windows(2).all(|w| w[0] < w[1])
+    }
+
+    /// Compute the Merkle root of the object checkpoint states.
+    pub fn digest(&self) -> SuiResult<ObjectCheckpointStatesDigest> {
+        // First check if the object checkpoint states are sorted.
+        if !self.is_sorted() {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Object checkpoint states are not sorted".to_string(),
+            });
+        }
+
+        // Build the Merkle tree from the object checkpoint states.
+        let tree = MerkleTree::<Blake2b256>::build_from_unserialized(self.contents.iter())
+            .map_err(|e| SuiError::GenericAuthorityError {
+                error: format!("Failed to build Merkle tree: {}", e),
+            })?;
+        let root = tree.root().bytes();
         Ok(ObjectCheckpointStatesDigest::from(root))
     }
 }
@@ -208,11 +219,13 @@ pub struct CheckpointArtifacts {
 }
 
 impl CheckpointArtifacts {
-    pub fn digest(&self) -> Result<CheckpointArtifactsDigest, anyhow::Error> {
+    pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
         let latest_object_states_digest = self.latest_object_states.digest()?;
 
         // When there are more artifacts, we can hash them all into a single digest.
-        Ok(CheckpointArtifactsDigest::from(latest_object_states_digest.digest.into_inner()))
+        Ok(CheckpointArtifactsDigest::from(
+            latest_object_states_digest.digest.into_inner(),
+        ))
     }
 }
 
@@ -238,9 +251,11 @@ impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
             }
         }
 
-        let latest_object_states = ObjectCheckpointStates {
+        let mut latest_object_states = ObjectCheckpointStates {
             contents: latest_object_states.into_values().collect::<Vec<_>>(),
         };
+
+        latest_object_states.contents.sort();
 
         Self {
             latest_object_states,
@@ -462,7 +477,9 @@ impl CheckpointSummary {
             _ => None,
         });
         if digest.is_none() {
-            return Err(anyhow!("Checkpoint artifacts digest not found in checkpoint commitments"));
+            return Err(anyhow::anyhow!(
+                "Checkpoint artifacts digest not found in checkpoint commitments"
+            ));
         }
         Ok(digest.unwrap())
     }
