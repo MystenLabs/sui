@@ -6,6 +6,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use sui_light_client::{
+    base::ProofContentsVerifier,
     ocs::{OCSInclusionProof, OCSNonInclusionProof},
     proof::{
         base::{ProofBuilder, ProofContents, ProofTarget},
@@ -16,7 +17,7 @@ use sui_light_client::{
 use sui_types::{
     base_types::ObjectID,
     full_checkpoint_content::CheckpointData,
-    messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment},
+    messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment, VerifiedCheckpoint},
 };
 
 // Note: Once checkpoint artifacts are live, we can just read an actual checkpoint file.
@@ -64,40 +65,19 @@ fn test_get_object_inclusion_proof() {
         panic!("Object ID {} not found in checkpoint", object_id);
     }
 
-    // Test the direct proof from ModifiedObjectTree
-    let direct_proof = object_tree.get_inclusion_proof(object_id).unwrap();
-    println!("Direct inclusion proof: {:?}", direct_proof);
-
     // Get the actual object state from the tree to use its digest
     let object_state = &object_tree.contents[*object_tree.object_map.get(&object_id).unwrap()];
 
-    // Test using the light client proof system
     let target = OCSTarget::new(object_id, object_state.digest, OCSTargetType::Inclusion).unwrap();
     let light_client_proof = target.construct(&checkpoint).unwrap();
 
-    // Extract the OCSProof from the proof contents
+    // Extract the OCSProof from the proof contents (we only test the inner OCSProof)
     if let ProofContents::ObjectCheckpointStateProof(ocs_proof) = light_client_proof.proof_contents
     {
-        // Create a mock verified checkpoint for testing
-        let artifacts_digest = artifacts.digest().unwrap();
-
-        // Test that the proof verifies correctly
-        let target_ref =
-            if let ProofTarget::ObjectCheckpointState(target) = &light_client_proof.targets {
-                target
-            } else {
-                panic!("Expected ObjectCheckpointState target");
-            };
-
-        // For this test, we'll verify the proof directly using the individual proof methods
-        if let OCSProof::Inclusion(inclusion_proof) = ocs_proof {
-            assert!(inclusion_proof
-                .verify(target_ref, &artifacts_digest)
-                .is_ok());
-            println!("Light client inclusion proof verified successfully!");
-        } else {
-            panic!("Expected inclusion proof");
-        }
+        let verified_summary = VerifiedCheckpoint::new_from_verified(checkpoint.checkpoint_summary);
+        assert!(ocs_proof
+            .verify(&light_client_proof.targets, &verified_summary)
+            .is_ok());
     } else {
         panic!("Expected ObjectCheckpointStateProof");
     }
@@ -109,11 +89,14 @@ fn test_get_object_non_inclusion_proof() {
     let artifacts = CheckpointArtifacts::from(&checkpoint);
     let object_tree = ModifiedObjectTree::new(&artifacts);
     let artifacts_digest = artifacts.digest().unwrap();
+    let verified_summary =
+        VerifiedCheckpoint::new_from_verified(checkpoint.checkpoint_summary.clone());
 
     let obj_test_cases = [
         "0x1",
         "0x456",
         "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "0x7", // included object
     ]
     .map(|id| ObjectID::from_hex_literal(id).unwrap());
 
@@ -121,15 +104,12 @@ fn test_get_object_non_inclusion_proof() {
         if object_tree.is_object_in_checkpoint(*key) {
             // Should fail to get non-inclusion proof for objects that are in the checkpoint
             let proof = object_tree.get_non_inclusion_proof(*key);
-            assert!(proof.is_err());
+            assert!(
+                proof.is_err(),
+                "Should not be able to get non-inclusion proof for included object"
+            );
         } else {
             println!("Testing non-inclusion proof for object {}", key);
-
-            // Test the direct proof from ModifiedObjectTree
-            let direct_proof = object_tree.get_non_inclusion_proof(*key).unwrap();
-            println!("Direct non-inclusion proof for {}: {:?}", key, direct_proof);
-
-            // Test using the light client proof system
             let target = OCSTarget::new(*key, None, OCSTargetType::NonInclusion).unwrap();
             let light_client_proof = target.construct(&checkpoint).unwrap();
 
@@ -137,40 +117,13 @@ fn test_get_object_non_inclusion_proof() {
             if let ProofContents::ObjectCheckpointStateProof(ocs_proof) =
                 light_client_proof.proof_contents
             {
-                let target_ref = if let ProofTarget::ObjectCheckpointState(target) =
-                    &light_client_proof.targets
-                {
-                    target
-                } else {
-                    panic!("Expected ObjectCheckpointState target");
-                };
-
-                // Test that the proof verifies correctly
-                if let OCSProof::NonInclusion(non_inclusion_proof) = ocs_proof {
-                    assert!(non_inclusion_proof
-                        .verify(target_ref, &artifacts_digest)
-                        .is_ok());
-                    println!(
-                        "Light client non-inclusion proof verified successfully for {}!",
-                        key
-                    );
-                } else {
-                    panic!("Expected non-inclusion proof");
-                }
+                assert!(ocs_proof
+                    .verify(&light_client_proof.targets, &verified_summary)
+                    .is_ok());
             } else {
                 panic!("Expected ObjectCheckpointStateProof");
             }
         }
-    }
-
-    // Also test the object that IS in the checkpoint (0x7) - should be included
-    let included_object_id = ObjectID::from_hex_literal("0x7").unwrap();
-    if object_tree.is_object_in_checkpoint(included_object_id) {
-        let proof_result = object_tree.get_non_inclusion_proof(included_object_id);
-        assert!(
-            proof_result.is_err(),
-            "Should not be able to get non-inclusion proof for included object"
-        );
     }
 }
 

@@ -168,7 +168,7 @@ impl OCSNonInclusionProof {
         }
         if target.digest.is_some() {
             return Err(ProofError::GeneralError(
-                "Target digest is not none for non-inclusion proof".to_string()
+                "Target digest is not none for non-inclusion proof".to_string(),
             ));
         }
 
