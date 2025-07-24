@@ -291,7 +291,7 @@ mod tests {
 
     fn setup_test() -> (IngestionClient, Arc<MockIngestionClient>) {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
         let client = IngestionClient::new_impl(mock_client.clone(), metrics);
         (client, mock_client)

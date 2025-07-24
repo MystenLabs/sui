@@ -4,7 +4,7 @@
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::{self as framework, pipeline::CommitterConfig};
 
-use crate::DbConfig;
+use crate::{rpc::pagination::PaginationConfig, DbConfig};
 
 #[DefaultConfig]
 #[derive(Default)]
@@ -25,6 +25,9 @@ pub struct ServiceConfig {
 
     /// Per-pipeline configuration.
     pub pipeline: PipelineLayer,
+
+    /// Configuration for the read side of the service.
+    pub rpc: RpcConfig,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be
@@ -65,6 +68,14 @@ pub struct CommitterLayer {
     pub watermark_interval_ms: Option<u64>,
 }
 
+#[DefaultConfig]
+#[derive(Default)]
+#[serde(deny_unknown_fields)]
+pub struct RpcConfig {
+    /// Configuration for paginated endpoints in the RPC service.
+    pub pagination: PaginationConfig,
+}
+
 impl ServiceConfig {
     /// Generate an example configuration, suitable for demonstrating the fields available to
     /// configure.
@@ -75,6 +86,22 @@ impl ServiceConfig {
         example.pipeline = PipelineLayer::example();
 
         example
+    }
+
+    /// Generate a configuration suitable for testing. This is the same as the example
+    /// configuration, but with reduced concurrency and faster polling intervals so tests spend
+    /// less time waiting.
+    pub fn for_test() -> Self {
+        let mut for_test = Self::example();
+
+        for_test.ingestion.retry_interval_ms = 10;
+        for_test.ingestion.ingest_concurrency = 1;
+
+        for_test.committer.collect_interval_ms = Some(50);
+        for_test.committer.watermark_interval_ms = Some(50);
+        for_test.committer.write_concurrency = Some(1);
+
+        for_test
     }
 }
 

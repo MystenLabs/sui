@@ -56,11 +56,13 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
             cancel.child_token(),
         );
 
+        let metrics_prefix = Some("consistent_indexer");
         let indexer = framework::Indexer::new(
             store,
             indexer_args,
             client_args,
             ingestion_config,
+            metrics_prefix,
             registry,
             cancel.child_token(),
         )
@@ -68,6 +70,10 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
         .context("Failed to create indexer")?;
 
         Ok(Self { indexer, sync })
+    }
+
+    pub(crate) fn store(&self) -> &Store<S> {
+        self.indexer.store()
     }
 
     /// Adds a new sequential pipeline to the indexer and starts it up. See

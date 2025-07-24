@@ -4,7 +4,7 @@
 
 use std::marker::PhantomData;
 
-use bincode::{Decode, Encode};
+use bincode::Decode;
 use serde::de::DeserializeOwned;
 
 use super::{error::Error, key};
@@ -30,12 +30,28 @@ impl<'d, K, V> FwdIter<'d, K, V> {
     }
 
     /// Move the iterator's cursor so that it will yield the first key greater than or equal to
-    /// `probe`. The probe type `J` can differ from the key type `K`, to allow for seeking
-    /// prefixes.
-    pub(crate) fn seek<J: Encode>(&mut self, probe: &J) {
+    /// `probe`. The probe is a byte slice which does not have to be generated from the key type,
+    /// `K` (e.g. it could be generated from a prefix).
+    pub(crate) fn seek(&mut self, probe: impl AsRef<[u8]>) {
         if let Some(inner) = &mut self.inner {
-            inner.seek(key::encode(probe));
+            inner.seek(probe);
         }
+    }
+
+    /// Returns the raw bytes for the next key the iterator will yield, if any.
+    pub(crate) fn raw_key(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.key())
+    }
+
+    /// Returns the raw bytes for the next value the iterator will yield, if any.
+    pub(crate) fn raw_value(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.value())
+    }
+
+    /// Returns whether the underlying raw iterator is valid (i.e. will produce a next value) or
+    /// not.
+    pub(crate) fn valid(&self) -> bool {
+        self.inner.as_ref().is_some_and(|iter| iter.valid())
     }
 }
 
@@ -48,12 +64,28 @@ impl<'d, K, V> RevIter<'d, K, V> {
     }
 
     /// Move the iterator's cursor so that it will yield the first key less than or equal to
-    /// `probe`. The probe type `J` can differ from the key type `K`, to allow for seeking
-    /// prefixes.
-    pub(crate) fn seek<J: Encode>(&mut self, probe: &J) {
+    /// `probe`. The probe is a byte slice which does not have to be generated from the key type,
+    /// `K` (e.g. it could be generated from a prefix).
+    pub(crate) fn seek(&mut self, probe: impl AsRef<[u8]>) {
         if let Some(inner) = &mut self.inner {
-            inner.seek_for_prev(key::encode(probe));
+            inner.seek_for_prev(probe);
         }
+    }
+
+    /// Returns the raw bytes for the next key the iterator will yield, if any.
+    pub(crate) fn raw_key(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.key())
+    }
+
+    /// Returns the raw bytes for the next value the iterator will yield, if any.
+    pub(crate) fn raw_value(&self) -> Option<&[u8]> {
+        self.inner.as_ref().and_then(|iter| iter.value())
+    }
+
+    /// Returns whether the underlying raw iterator is valid (i.e. will produce a next value) or
+    /// not.
+    pub(crate) fn valid(&self) -> bool {
+        self.inner.as_ref().is_some_and(|iter| iter.valid())
     }
 }
 

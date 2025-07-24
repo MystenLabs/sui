@@ -18,8 +18,8 @@ use sui_indexer_alt_framework::store::CommitterWatermark;
 use self::error::Error;
 
 pub(crate) mod config;
-mod error;
-mod iter;
+pub(crate) mod error;
+pub(crate) mod iter;
 pub(crate) mod key;
 pub(crate) mod map;
 
@@ -274,7 +274,19 @@ impl Db {
     where
         J: Encode,
     {
-        let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
+        let lo = match range.start_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(start) => Bound::Included(key::encode(start)),
+            Bound::Excluded(start) => Bound::Excluded(key::encode(start)),
+        };
+
+        let hi = match range.end_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(end) => Bound::Included(key::encode(end)),
+            Bound::Excluded(end) => Bound::Excluded(key::encode(end)),
+        };
+
+        let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
             return Ok(iter::FwdIter::new(None));
         };
 
@@ -301,7 +313,91 @@ impl Db {
     where
         J: Encode,
     {
-        let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, range)? else {
+        let lo = match range.start_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(start) => Bound::Included(key::encode(start)),
+            Bound::Excluded(start) => Bound::Excluded(key::encode(start)),
+        };
+
+        let hi = match range.end_bound() {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(end) => Bound::Included(key::encode(end)),
+            Bound::Excluded(end) => Bound::Excluded(key::encode(end)),
+        };
+
+        let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
+            return Ok(iter::RevIter::new(None));
+        };
+
+        if let Some(hi) = &hi {
+            inner.seek_for_prev(hi);
+        } else {
+            inner.seek_to_last();
+        }
+
+        Ok(iter::RevIter::new(Some(inner)))
+    }
+
+    /// Create a forward iterator over the values in column family `cf` at the given `checkpoint`,
+    /// where all the keys start with the given `prefix`. A forward iterator yields keys in
+    /// ascending bincoded lexicographic order, and the predicate is applied on the bincoded key
+    /// and the bincoded prefix.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn prefix<J, K, V>(
+        &self,
+        checkpoint: u64,
+        cf: &impl AsColumnFamilyRef,
+        prefix: &J,
+    ) -> Result<iter::FwdIter<'_, K, V>, Error>
+    where
+        J: Encode,
+    {
+        let mut key = key::encode(prefix);
+        let lo = Bound::Included(key.clone());
+        let hi = if !key::next(&mut key) {
+            Bound::Unbounded
+        } else {
+            Bound::Excluded(key)
+        };
+
+        let IterBounds(lo, _, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
+            return Ok(iter::FwdIter::new(None));
+        };
+
+        if let Some(lo) = &lo {
+            inner.seek(lo);
+        } else {
+            inner.seek_to_first();
+        }
+
+        Ok(iter::FwdIter::new(Some(inner)))
+    }
+
+    /// Create a reverse iterator over the values in column family `cf` at the given `checkpoint`,
+    /// where all the keys start with the gven `prefix`. A reverse iterator yields keys in
+    /// descending bincoded lexicographic order, and the predicate is applied on the bincoded key
+    /// and the bincoded prefix.
+    ///
+    /// This operation can fail if the database does not have a snapshot at `checkpoint`.
+    pub(crate) fn prefix_rev<J, K, V>(
+        &self,
+        checkpoint: u64,
+        cf: &impl AsColumnFamilyRef,
+        prefix: &J,
+    ) -> Result<iter::RevIter<'_, K, V>, Error>
+    where
+        J: Encode,
+    {
+        let mut key = key::encode(prefix);
+        let lo = Bound::Included(key.clone());
+        let hi = if !key::next(&mut key) {
+            Bound::Unbounded
+        } else {
+            Bound::Excluded(key)
+        };
+
+        let IterBounds(_, hi, Some(mut inner)) = self.iter_raw(checkpoint, cf, lo, hi)? else {
             return Ok(iter::RevIter::new(None));
         };
 
@@ -332,22 +428,19 @@ impl Db {
         })
     }
 
-    fn iter_raw<J>(
+    fn iter_raw(
         &self,
         checkpoint: u64,
         cf: &impl AsColumnFamilyRef,
-        range: impl RangeBounds<J>,
-    ) -> Result<IterBounds<'_>, Error>
-    where
-        J: Encode,
-    {
+        lo: Bound<Vec<u8>>,
+        hi: Bound<Vec<u8>>,
+    ) -> Result<IterBounds<'_>, Error> {
         let s = self.at_snapshot(checkpoint)?;
 
-        let lo = match range.start_bound() {
+        let lo = match lo {
             Bound::Unbounded => None,
-            Bound::Included(start) => Some(key::encode(start)),
-            Bound::Excluded(start) => {
-                let mut start = key::encode(start);
+            Bound::Included(start) => Some(start),
+            Bound::Excluded(mut start) => {
                 if !key::next(&mut start) {
                     return Ok(IterBounds::default());
                 }
@@ -355,14 +448,10 @@ impl Db {
             }
         };
 
-        let hi = match range.end_bound() {
+        let hi = match hi {
             Bound::Unbounded => None,
-            Bound::Included(end) => {
-                let mut end = key::encode(end);
-                key::next(&mut end).then_some(end)
-            }
+            Bound::Included(mut end) => key::next(&mut end).then_some(end),
             Bound::Excluded(end) => {
-                let end = key::encode(end);
                 if end.iter().all(|&b| b == 0) {
                     return Ok(IterBounds::default());
                 }
@@ -831,6 +920,17 @@ pub(crate) mod tests {
             vec![(0, 1), (2, 3)],
             "bounded above and below"
         );
+
+        // Raw values
+        let mut iter = db.iter(0, &cf, (U::<u64>, U)).unwrap();
+        for i in (0u64..=8).step_by(2) {
+            let k = key::encode(&i);
+            let v = bcs::to_bytes(&(i + 1)).unwrap();
+
+            assert_eq!(iter.raw_key(), Some(k.as_ref()), "key {i}");
+            assert_eq!(iter.raw_value(), Some(v.as_ref()), "value {}", i + 1);
+            assert_eq!(iter.next().unwrap().unwrap(), (i, i + 1));
+        }
     }
 
     #[test]
@@ -850,31 +950,31 @@ pub(crate) mod tests {
         db.snapshot(0);
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&4u64);
+        iter.seek(key::encode(&4u64));
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "exact seek");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&3u64);
+        iter.seek(key::encode(&3u64));
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "inexact seek");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
-        iter.seek(&2u64);
+        iter.seek(key::encode(&2u64));
         assert_eq!(iter.next().unwrap().unwrap(), (2, 3), "rewind");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(0, 1), (2, 3), (4, 5)], "take 3");
-        iter.seek(&7u64);
+        iter.seek(key::encode(&7u64));
         assert_eq!(iter.next().unwrap().unwrap(), (8, 9), "fast forward");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4u64..8).unwrap();
-        iter.seek(&1u64);
+        iter.seek(key::encode(&1u64));
         assert_eq!(iter.next().unwrap().unwrap(), (4, 5), "underflow");
 
         let mut iter: iter::FwdIter<u64, u64> = db.iter(0, &cf, 4u64..8).unwrap();
-        iter.seek(&8u64);
+        iter.seek(key::encode(&8u64));
         assert!(iter.next().is_none(), "overflow");
     }
 
@@ -1121,6 +1221,17 @@ pub(crate) mod tests {
             vec![(3, 2), (1, 0)],
             "bounded above and below"
         );
+
+        // Raw values
+        let mut iter = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
+        for i in (1u64..=9).rev().step_by(2) {
+            let k = key::encode(&i);
+            let v = bcs::to_bytes(&(i - 1)).unwrap();
+
+            assert_eq!(iter.raw_key(), Some(k.as_ref()), "key {i}");
+            assert_eq!(iter.raw_value(), Some(v.as_ref()), "value {}", i - 1);
+            assert_eq!(iter.next().unwrap().unwrap(), (i, i - 1));
+        }
     }
 
     #[test]
@@ -1140,31 +1251,31 @@ pub(crate) mod tests {
         db.snapshot(0);
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&5u64);
+        iter.seek(key::encode(&5u64));
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "exact seek");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
-        iter.seek(&6u64);
+        iter.seek(key::encode(&6u64));
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "inexact seek");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
-        iter.seek(&7u64);
+        iter.seek(key::encode(&7u64));
         assert_eq!(iter.next().unwrap().unwrap(), (7, 6), "rewind");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, (U::<u64>, U)).unwrap();
         let prefix: Result<Vec<(u64, u64)>, Error> = (&mut iter).take(3).collect();
         assert_eq!(prefix.unwrap(), vec![(9, 8), (7, 6), (5, 4)], "take 3");
-        iter.seek(&1u64);
+        iter.seek(key::encode(&1u64));
         assert_eq!(iter.next().unwrap().unwrap(), (1, 0), "fast forward");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3u64..7).unwrap();
-        iter.seek(&9u64);
+        iter.seek(key::encode(&9u64));
         assert_eq!(iter.next().unwrap().unwrap(), (5, 4), "underflow");
 
         let mut iter: iter::RevIter<u64, u64> = db.iter_rev(0, &cf, 3u64..7).unwrap();
-        iter.seek(&1u64);
+        iter.seek(key::encode(&1u64));
         assert!(iter.next().is_none(), "overflow");
     }
 }
