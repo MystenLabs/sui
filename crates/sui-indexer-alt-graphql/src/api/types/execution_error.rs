@@ -126,6 +126,23 @@ impl ExecutionError {
             ErrorConstants::Raw { identifier, .. } => Some(identifier.clone()),
         })
     }
+
+    /// An associated constant for the error. Only populated for clever errors.
+    async fn constant(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        use sui_package_resolver::ErrorConstants;
+
+        let Some(clever_error) = self.clever_error(ctx).await? else {
+            return Ok(None);
+        };
+
+        let constant = match &clever_error.error_info {
+            ErrorConstants::None => None,
+            ErrorConstants::Rendered { constant, .. } => Some(constant.clone()),
+            ErrorConstants::Raw { .. } => None, // Raw bytes are not human-readable constants
+        };
+
+        Ok(constant)
+    }
 }
 
 impl ExecutionError {

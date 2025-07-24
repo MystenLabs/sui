@@ -260,6 +260,10 @@ type ExecutionError {
 	The error's name. Only populated for clever errors.
 	"""
 	identifier: String
+	"""
+	An associated constant for the error. Only populated for clever errors.
+	"""
+	constant: String
 }
 
 """
