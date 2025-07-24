@@ -1395,7 +1395,7 @@ async fn test_handle_transaction_response() {
         .unwrap();
     matches!(cert, ProcessTransactionResult::Certified { .. });
 
-    println!("Case 9 - Non-Retryable Transaction (>=2f+1 ObjectNotFound Error)");
+    println!("Case 9 - Retryable Transaction (>=2f+1 ObjectNotFound Error)");
     // >= 2f+1 object not found errors
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
     for (name, _) in authority_keys.iter().skip(1) {
@@ -1411,14 +1411,14 @@ async fn test_handle_transaction_response() {
         |e| {
             matches!(
                 e,
-                AggregatorProcessTransactionError::FatalTransaction { .. }
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
         |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
     )
     .await;
 
-    println!("Case 9.1 - Non-Retryable Transaction (>=2f+1 PackageNotFound Error)");
+    println!("Case 9.1 - Retryable Transaction (>=2f+1 PackageNotFound Error)");
     // >= 2f+1 package not found errors
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
     for (name, _) in authority_keys.iter().skip(1) {
@@ -1434,14 +1434,14 @@ async fn test_handle_transaction_response() {
         |e| {
             matches!(
                 e,
-                AggregatorProcessTransactionError::FatalTransaction { .. }
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
         |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),
     )
     .await;
 
-    println!("Case 9.2 - Non-Retryable Transaction (>=2f+1 ObjectNotFound+PackageNotFound Error)");
+    println!("Case 9.2 - Retryable Transaction (>=2f+1 ObjectNotFound+PackageNotFound Error)");
     // < 2f+1 object + package not found errors
     clients
         .get_mut(&authority_keys[1].0)
@@ -1462,7 +1462,7 @@ async fn test_handle_transaction_response() {
         |e| {
             matches!(
                 e,
-                AggregatorProcessTransactionError::FatalTransaction { .. }
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
             )
         },
         |e| matches!(e, SuiError::UserInputError { .. } | SuiError::RpcError(..)),

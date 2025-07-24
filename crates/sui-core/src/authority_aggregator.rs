@@ -1122,8 +1122,9 @@ where
                         }
 
                         // TODO: add more comments to explain each condition.
+                        let object_or_package_not_found_condition = state.object_or_package_not_found_stake >= quorum_threshold && std::env::var("NOT_RETRY_OBJECT_PACKAGE_NOT_FOUND").is_ok();
                         if state.non_retryable_stake >= validity_threshold
-                            || state.object_or_package_not_found_stake >= quorum_threshold // In normal case, object/package not found should be more than f+1
+                            || object_or_package_not_found_condition // In normal case, object/package not found should be more than f+1
                             || state.overloaded_stake >= quorum_threshold {
                             // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found or overload,
                             // so we no longer consider the transaction state as retryable.

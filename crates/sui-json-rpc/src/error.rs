@@ -271,11 +271,15 @@ impl From<Error> for ErrorObjectOwned {
                     | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
                         ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
                     }
-                    QuorumDriverError::TransactionDriverError(err) => {
+                    QuorumDriverError::TransactionFailed { retriable, details } => {
                         // TODO(fastpath): Replace with a proper error code
                         ErrorObject::owned(
-                            jsonrpsee::types::error::UNKNOWN_ERROR_CODE,
-                            format!("[MFP] The transaction went through MFP which is in testing: {err}"),
+                            if retriable {
+                                TRANSIENT_ERROR_CODE
+                            } else {
+                                TRANSACTION_EXECUTION_CLIENT_ERROR_CODE
+                            },
+                            format!("[MFP experimental]: {details}"),
                             None::<()>,
                         )
                     }

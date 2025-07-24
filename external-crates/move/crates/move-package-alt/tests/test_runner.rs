@@ -6,7 +6,7 @@ use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 
 use move_package_alt::{
-    dependency::{self, CombinedDependency, DependencySet, PinnedDependencyInfo},
+    dependency::{CombinedDependency, DependencySet, PinnedDependencyInfo},
     flavor::{
         Vanilla,
         vanilla::{self, default_environment},
@@ -132,7 +132,7 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
 
     add_bindir();
 
-    let pinned = dependency::pin::<Vanilla>(deps.clone(), env.id())
+    let pinned = PinnedDependencyInfo::pin::<Vanilla>(deps.clone(), env.id())
         .await
         .map_err(|e| e.to_string())?;
     for (name, dep) in pinned {

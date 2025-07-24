@@ -1,0 +1,41 @@
+---
+title: Best Practices
+---
+
+{@include: ../../snippets/suiplay.mdx}
+
+There are some best practices to consider when developing for SuiPlay0X1. 
+
+## Handling transactions
+
+Avoid frequent micro-transactions: If players are using their self-custody wallets and transactions require explicit player signatures, then you should avoid frequent micro-transactions, particularly during gameplay. Signing a transaction requires popping up an on-device visual element or an off-device browser dialog to approve, breaking the gameplay flow. This is not a concern if you are managing custodial wallets on behalf of the player. See [Wallet Integration Options](./wallet-integration.mdx) for more information on available wallet integrations.
+
+Many on-chain actions do not require explicit user approval. For example, dropping rewards to a user, incrementing their currency, and so on. The game can be handle these whenever appropriate, even silently in the background during gameplay.
+
+## Managing gas
+
+If using a third-party wallet service ([Beamable](https://beamable.com/), [Shinami](https://www.shinami.com/)), leverage gas sponsorship for custodial implementations to abstract from users. Consider tradeoffs between aggregated and individual wallets and batch transactions whenever possible to reduce gas costs.
+
+## Data management
+
+Proper data management design can augment the user experience.
+
+### On-chain versus off-chain storage
+
+Consider where best to store your data:
+
+- **On chain:** Assets and currencies that can be traded or sold.  
+- **Off chain:** Game state, progress, and so on using traditional game servers.
+
+While you can store any information on chain, consider whether it’s important to your game for that data to exist there. If not, leverage traditional game server backends, which makes data syncing and updating easier.
+
+### Session start protocol
+
+Always check wallet state at session beginning and don't cache wallet data between sessions as assets can change externally.
+
+## Related links
+
+- [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
+- [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
+- [SuiPlay0x1 Discord](https://discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
+- [Wallet Integration Options](./wallet-integration.mdx): Details about the available wallet integrations. 

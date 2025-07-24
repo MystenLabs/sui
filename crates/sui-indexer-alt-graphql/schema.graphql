@@ -64,6 +64,10 @@ type Checkpoint {
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
+	"""
+	The aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
+	validatorSignatures: ValidatorAggregatedSignature
 }
 
 """
@@ -149,9 +153,26 @@ type Epoch {
 	"""
 	totalStakeRewards: BigInt
 	"""
-	The amount added to total gas fees to make up the total stake rewards.
+	The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
 	"""
 	totalStakeSubsidies: BigInt
+	"""
+	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+	This fund is used to redistribute storage fees from past transactions to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	netInflow: BigInt
+	"""
+	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+	"""
+	fundOutflow: BigInt
 }
 
 """
@@ -910,6 +931,21 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+type ValidatorAggregatedSignature {
+	"""
+	The epoch when this aggregate signature was produced.
+	"""
+	epoch: Epoch
+	"""
+	The Base64 encoded BLS12381 aggregated signature.
+	"""
+	signature: Base64
+	"""
+	The indexes of validators that contributed to this signature.
+	"""
+	signersMap: [Int!]!
+}
 
 """
 Representation of `0x3::validator_set::ValidatorSet`.

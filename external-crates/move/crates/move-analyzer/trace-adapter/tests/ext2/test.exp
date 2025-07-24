@@ -1,0 +1,74 @@
+current event stack:
+  summary frame (line 2): 
+    MoveCall
+    MoveCall
+  current frame stack:
+    function: foo (global_assign_ref.mvb:24)
+      scope 0 :
+        Arg0 : (1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::OuterStruct) {
+          field : (1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::SomeStruct) {
+            field : 42
+          }
+        }
+        type: &mut 1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::OuterStruct
+
+        Arg1 : 7
+        type: u64
+
+        loc0 : 42
+        type: u64
+
+    function: bar (global_assign_ref.mvb:46)
+      scope 0 :
+        Arg0 : (1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::SomeStruct) {
+          field : 42
+        }
+        type: &mut 1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::SomeStruct
+
+        Arg2 : 7
+        type: u64
+
+        loc0 : 49
+        type: u64
+
+line breakpoints
+    global_assign_ref.mvb
+      46
+      48
+current event stack:
+  summary frame (line 2): 
+    MoveCall
+    MoveCall
+  current frame stack:
+    function: foo (global_assign_ref.mvb:24)
+      scope 0 :
+        Arg0 : (1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::OuterStruct) {
+          field : (1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::SomeStruct) {
+            field : 49
+          }
+        }
+        type: &mut 1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::OuterStruct
+
+        Arg1 : 7
+        type: u64
+
+        loc0 : 42
+        type: u64
+
+    function: bar (global_assign_ref.mvb:48)
+      scope 0 :
+        Arg0 : (1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::SomeStruct) {
+          field : 49
+        }
+        type: &mut 1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d::global_assign_ref::SomeStruct
+
+        Arg2 : 7
+        type: u64
+
+        loc0 : 49
+        type: u64
+
+line breakpoints
+    global_assign_ref.mvb
+      46
+      48

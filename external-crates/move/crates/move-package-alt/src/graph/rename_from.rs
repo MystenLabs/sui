@@ -21,16 +21,16 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// given to it in the depending package, unless `rename-from` is specified.
     pub fn check_rename_from(&self) -> RenameResult<()> {
         for edge in self.inner.edge_references() {
-            let dep = self.dep_for_edge(edge.id());
+            let dep = &edge.weight().dep;
 
-            let expected_name = dep.rename_from().as_ref().unwrap_or(edge.weight());
-            let actual_name = self.inner[edge.target()].package.name();
+            let expected_name = dep.rename_from().as_ref().unwrap_or(&edge.weight().name);
+            let actual_name = self.inner[edge.target()].name();
 
             if expected_name != actual_name {
                 return Err(RenameError::new(
-                    &self.inner[edge.source()].package,
-                    &self.inner[edge.target()].package,
-                    edge.weight(),
+                    &self.inner[edge.source()],
+                    &self.inner[edge.target()],
+                    &edge.weight().name,
                     dep,
                 ));
             }
