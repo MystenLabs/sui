@@ -4,6 +4,8 @@
 use crate::api::scalars::uint53::UInt53;
 use async_graphql::SimpleObject;
 use sui_types::gas::GasCostSummary as NativeGasCostSummary;
+use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
+use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 
 /// Summary of charges from transactions.
 ///
@@ -32,6 +34,28 @@ impl From<NativeGasCostSummary> for GasCostSummary {
             storage_cost: Some(native.storage_cost.into()),
             storage_rebate: Some(native.storage_rebate.into()),
             non_refundable_storage_fee: Some(native.non_refundable_storage_fee.into()),
+        }
+    }
+}
+
+impl From<SuiSystemStateInnerV1> for GasCostSummary {
+    fn from(value: SuiSystemStateInnerV1) -> Self {
+        Self {
+            computation_cost: Some(value.safe_mode_computation_rewards.value().into()),
+            storage_cost: Some(value.safe_mode_storage_rewards.value().into()),
+            storage_rebate: Some(value.safe_mode_storage_rebates.into()),
+            non_refundable_storage_fee: Some(value.safe_mode_non_refundable_storage_fee.into()),
+        }
+    }
+}
+
+impl From<SuiSystemStateInnerV2> for GasCostSummary {
+    fn from(value: SuiSystemStateInnerV2) -> Self {
+        Self {
+            computation_cost: Some(value.safe_mode_computation_rewards.value().into()),
+            storage_cost: Some(value.safe_mode_storage_rewards.value().into()),
+            storage_rebate: Some(value.safe_mode_storage_rebates.into()),
+            non_refundable_storage_fee: Some(value.safe_mode_non_refundable_storage_fee.into()),
         }
     }
 }

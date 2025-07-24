@@ -6,6 +6,7 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
+use crate::api::types::safe_mode::SafeMode;
 use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
 use crate::api::types::storage_fund::StorageFund;
 use crate::api::types::system_parameters::{
@@ -286,6 +287,24 @@ impl Epoch {
         let storage_fund = match system_state {
             SuiSystemState::V1(inner) => inner.storage_fund.into(),
             SuiSystemState::V2(inner) => inner.storage_fund.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(storage_fund))
+    }
+
+    /// Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+    async fn safe_mode(&self, ctx: &Context<'_>) -> Result<Option<SafeMode>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let storage_fund = match system_state {
+            SuiSystemState::V1(inner) => inner.into(),
+            SuiSystemState::V2(inner) => inner.into(),
             #[cfg(msim)]
             SuiSystemState::SimTestV1(_)
             | SuiSystemState::SimTestShallowV2(_)

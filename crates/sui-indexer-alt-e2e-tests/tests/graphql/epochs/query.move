@@ -55,6 +55,15 @@ fragment E on Epoch {
     totalObjectStorageRebates
     nonRefundableBalance
   }
+  safeMode {
+    enabled
+    gasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+  }
   systemStateVersion
   systemParameters {
     durationMs
@@ -117,6 +126,15 @@ fragment E on Epoch {
   storageFund {
     totalObjectStorageRebates
     nonRefundableBalance
+  }
+  safeMode {
+    enabled
+    gasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
   }
   systemStateVersion
   systemParameters {
