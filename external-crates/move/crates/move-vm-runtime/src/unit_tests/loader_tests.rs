@@ -21,7 +21,7 @@ use crate::{
         gas::UnmeteredGasMeter,
         linkage_context::LinkageContext,
         serialization::SerializedReturnValues,
-        types::{PackageStorageId, RuntimePackageId},
+        types::{OriginalId, VersionId},
     },
 };
 use move_binary_format::{
@@ -135,8 +135,8 @@ impl Adapter {
 
     fn with_linkage(
         &self,
-        linkage: BTreeMap<RuntimePackageId, PackageStorageId>,
-        type_origin: Vec<((&IdentStr, &IdentStr), PackageStorageId)>,
+        linkage: BTreeMap<OriginalId, VersionId>,
+        type_origin: Vec<((&IdentStr, &IdentStr), VersionId)>,
     ) -> Self {
         Self {
             store: {
@@ -167,7 +167,7 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.runtime_id;
+        let runtime_id = pkg.original_id;
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
@@ -181,7 +181,7 @@ impl Adapter {
         if !self.store.type_origin.is_empty() {
             pkg.type_origin_table = self.store.type_origin.clone();
         }
-        let runtime_id = pkg.runtime_id;
+        let runtime_id = pkg.original_id;
         self.runtime_adapter
             .write()
             .publish_package(runtime_id, pkg.into_serialized_package())
@@ -316,8 +316,8 @@ fn get_depth_tests_modules() -> StoredPackage {
 }
 
 fn get_relinker_tests_modules_with_deps<'s>(
-    runtime_addr: RuntimePackageId,
-    storage_addr: PackageStorageId,
+    original_id: OriginalId,
+    version_id: VersionId,
     module: &'s str,
     deps: impl IntoIterator<Item = &'s str>,
 ) -> anyhow::Result<StoredPackage> {
@@ -334,9 +334,9 @@ fn get_relinker_tests_modules_with_deps<'s>(
     .build_and_report()?;
 
     let modules = expect_modules(units)
-        .filter(|m| *m.self_id().address() == runtime_addr)
+        .filter(|m| *m.self_id().address() == original_id)
         .collect();
-    Ok(StoredPackage::from_modules_for_testing(storage_addr, modules).unwrap())
+    Ok(StoredPackage::from_modules_for_testing(version_id, modules).unwrap())
 }
 
 #[test]
@@ -1300,9 +1300,9 @@ fn dependency_tree(width: u64, height: u64, modules: &mut Vec<CompiledModule>) {
 
 // Create a module that uses (depends on) the list of given modules
 fn empty_module_with_dependencies(
-    address: PackageStorageId,
+    address: VersionId,
     name: String,
-    deps: (PackageStorageId, Vec<String>),
+    deps: (VersionId, Vec<String>),
 ) -> CompiledModule {
     let mut module = empty_module();
     module.address_identifiers[0] = address;

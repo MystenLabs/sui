@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::shared::types::{PackageStorageId, RuntimePackageId};
+use crate::shared::types::{DefiningTypeId, OriginalId};
 
 use move_binary_format::CompiledModule;
 use move_core_types::{
@@ -10,13 +10,13 @@ use move_core_types::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct Package {
-    pub(crate) runtime_id: RuntimePackageId,
-    pub(crate) storage_id: PackageStorageId,
+    pub(crate) original_id: OriginalId,
+    pub(crate) version_id: DefiningTypeId,
     pub(crate) modules: BTreeMap<ModuleId, CompiledModule>,
     #[allow(dead_code)]
     pub(crate) type_origin_table: Vec<TypeOrigin>,
     #[allow(dead_code)]
-    pub(crate) linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
+    pub(crate) linkage_table: BTreeMap<OriginalId, DefiningTypeId>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -25,14 +25,14 @@ pub(crate) struct Package {
 
 impl Package {
     pub fn new(
-        runtime_id: RuntimePackageId,
+        original_id: OriginalId,
         modules: Vec<CompiledModule>,
         pkg: SerializedPackage,
     ) -> Self {
         Self {
-            runtime_id,
+            original_id,
             modules: modules.into_iter().map(|m| (m.self_id(), m)).collect(),
-            storage_id: pkg.storage_id,
+            version_id: pkg.storage_id,
             type_origin_table: pkg.type_origin_table,
             linkage_table: pkg.linkage_table,
         }
