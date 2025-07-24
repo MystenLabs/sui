@@ -26,6 +26,9 @@ pub enum GitError {
         #[source]
         kind: CommandErrorKind,
     },
+
+    #[error(transparent)]
+    TempDirectory(#[from] std::io::Error),
 }
 
 #[derive(Error, Debug)]

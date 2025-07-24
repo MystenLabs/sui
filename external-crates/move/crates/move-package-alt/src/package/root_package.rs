@@ -4,7 +4,6 @@
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
-use colored::Colorize;
 use tracing::debug;
 
 use super::paths::PackagePath;
@@ -122,18 +121,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ) -> PackageResult<Self> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
 
-        // warn if the root package has any direct deps with short shas
-        let pkg = graph.root_package();
-        if pkg.direct_deps().iter().any(|(_, p)| !p.has_full_sha()) {
-            let msg = "WARNING: found one or more short SHAs in the manifest's dependencies which \
-                    require to download the full git history.\n\nUse a full 40-characters sha if \
-                    possible."
-                .yellow();
-            println!("{}", msg);
-        }
-
         // check that there is a consistent linkage
-
         let _linkage = graph.linkage()?;
         graph.check_rename_from()?;
 

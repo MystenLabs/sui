@@ -118,16 +118,6 @@ impl PinnedDependencyInfo {
         self.0.rename_from()
     }
 
-    /// For pinned git dependencies checks if it has a full sha or not.
-    pub(crate) fn has_full_sha(&self) -> bool {
-        match self.0.dep_info {
-            Pinned::Git(ref pinned_git_dependency) => {
-                pinned_git_dependency.inner.sha().is_full_sha()
-            }
-            _ => true,
-        }
-    }
-
     pub fn with_rename_from(mut self, name: PackageName) -> Self {
         self.0.rename_from = Some(name);
         self
