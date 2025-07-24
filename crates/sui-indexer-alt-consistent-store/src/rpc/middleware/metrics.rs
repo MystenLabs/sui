@@ -4,7 +4,7 @@
 use std::{borrow::Cow, sync::Arc};
 
 use axum::extract::MatchedPath;
-use http::header::CONTENT_TYPE;
+use http::{header::CONTENT_TYPE, StatusCode};
 use mysten_network::callback::{MakeCallbackHandler, ResponseHandler};
 use prometheus::HistogramTimer;
 use tonic::{metadata::GRPC_CONTENT_TYPE, Code};
@@ -70,7 +70,7 @@ impl ResponseHandler for Handler {
     fn on_response(&mut self, response: &http::response::Parts) {
         const GRPC_STATUS: http::HeaderName = http::HeaderName::from_static("grpc-status");
 
-        let status = if response
+        let (success, status) = if response
             .headers
             .get(&CONTENT_TYPE)
             .is_some_and(|content_type| {
@@ -89,14 +89,14 @@ impl ResponseHandler for Handler {
                 .map(Code::from_bytes)
                 .unwrap_or(Code::Ok);
 
-            code_as_str(code)
+            (code == Code::Ok, code_as_str(code))
         } else {
-            response.status.as_str()
+            (response.status == StatusCode::OK, response.status.as_str())
         };
 
         self.timer.take().map(HistogramTimer::stop_and_record);
 
-        if status == "ok" {
+        if success {
             self.metrics
                 .requests_succeeded
                 .with_label_values(&[self.path.as_ref(), status])
@@ -110,10 +110,7 @@ impl ResponseHandler for Handler {
     }
 
     fn on_error<E>(&mut self, _error: &E) {
-        // Do nothing if the whole service errored
-        //
-        // in Axum this isn't possible since all services are required to have an error type of
-        // Infallible
+        unreachable!("all axum services are required to have an error type of Infallible");
     }
 }
 
