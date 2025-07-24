@@ -6,22 +6,23 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use sui_light_client::{
-    base::ProofContentsVerifier,
-    ocs::{OCSInclusionProof, OCSNonInclusionProof},
+    base::{Proof, ProofContentsVerifier},
     proof::{
-        base::{ProofBuilder, ProofContents, ProofTarget},
-        ocs::{ModifiedObjectTree, OCSProof, OCSTarget, OCSTargetType},
+        base::{ProofBuilder, ProofContents},
+        ocs::{ModifiedObjectTree, OCSTarget, OCSTargetType},
     },
 };
 
 use sui_types::{
     base_types::ObjectID,
     full_checkpoint_content::CheckpointData,
-    messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment, VerifiedCheckpoint},
+    messages_checkpoint::{
+        CheckpointArtifacts, CheckpointCommitment, VerifiedCheckpoint,
+    },
 };
 
 // Note: Once checkpoint artifacts are live, we can just read an actual checkpoint file.
-// Until then, we use the artifacts.chk file. It is generated on a localnet with the checkpoint artifacts enabled.
+// Until then, we use the artifacts.chk file (generated on a localnet with artifacts enabled).
 const CHECKPOINT_FILE: &str = "test_files/artifacts.chk";
 
 fn load_checkpoint(file_path: &str) -> CheckpointData {
@@ -32,6 +33,10 @@ fn load_checkpoint(file_path: &str) -> CheckpointData {
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer).unwrap();
     bcs::from_bytes(&buffer).unwrap()
+}
+
+fn get_all_modified_objects(checkpoint: &CheckpointData) -> ModifiedObjectTree {
+    ModifiedObjectTree::new(&CheckpointArtifacts::from(checkpoint))
 }
 
 #[test]
@@ -57,27 +62,19 @@ fn test_derive_artifacts() {
 #[test]
 fn test_get_object_inclusion_proof() {
     let checkpoint = load_checkpoint(CHECKPOINT_FILE);
-    let artifacts = CheckpointArtifacts::from(&checkpoint);
-    let object_tree = ModifiedObjectTree::new(&artifacts);
+    let verified_summary =
+        VerifiedCheckpoint::new_from_verified(checkpoint.checkpoint_summary.clone());
+    let all_objects = get_all_modified_objects(&checkpoint);
+
     let object_id = ObjectID::from_hex_literal("0x7").unwrap();
+    let object_state = all_objects.get_object_state(object_id).unwrap();
 
-    if !object_tree.is_object_in_checkpoint(object_id) {
-        panic!("Object ID {} not found in checkpoint", object_id);
-    }
-
-    // Get the actual object state from the tree to use its digest
-    let object_state = &object_tree.contents[*object_tree.object_map.get(&object_id).unwrap()];
-
-    let target = OCSTarget::new(object_id, object_state.digest, OCSTargetType::Inclusion).unwrap();
-    let light_client_proof = target.construct(&checkpoint).unwrap();
+    let target = OCSTarget::new_inclusion_target(object_state);
+    let proof = target.construct(&checkpoint).unwrap();
 
     // Extract the OCSProof from the proof contents (we only test the inner OCSProof)
-    if let ProofContents::ObjectCheckpointStateProof(ocs_proof) = light_client_proof.proof_contents
-    {
-        let verified_summary = VerifiedCheckpoint::new_from_verified(checkpoint.checkpoint_summary);
-        assert!(ocs_proof
-            .verify(&light_client_proof.targets, &verified_summary)
-            .is_ok());
+    if let ProofContents::ObjectCheckpointStateProof(ocs_proof) = proof.proof_contents {
+        assert!(ocs_proof.verify(&proof.targets, &verified_summary).is_ok());
     } else {
         panic!("Expected ObjectCheckpointStateProof");
     }
@@ -86,11 +83,9 @@ fn test_get_object_inclusion_proof() {
 #[test]
 fn test_get_object_non_inclusion_proof() {
     let checkpoint = load_checkpoint(CHECKPOINT_FILE);
-    let artifacts = CheckpointArtifacts::from(&checkpoint);
-    let object_tree = ModifiedObjectTree::new(&artifacts);
-    let artifacts_digest = artifacts.digest().unwrap();
     let verified_summary =
         VerifiedCheckpoint::new_from_verified(checkpoint.checkpoint_summary.clone());
+    let all_objects = get_all_modified_objects(&checkpoint);
 
     let obj_test_cases = [
         "0x1",
@@ -101,25 +96,19 @@ fn test_get_object_non_inclusion_proof() {
     .map(|id| ObjectID::from_hex_literal(id).unwrap());
 
     for key in obj_test_cases.iter() {
-        if object_tree.is_object_in_checkpoint(*key) {
+        let target = OCSTarget::new_non_inclusion_target(*key);
+        let proof = target.construct(&checkpoint);
+        if all_objects.is_object_in_checkpoint(*key) {
             // Should fail to get non-inclusion proof for objects that are in the checkpoint
-            let proof = object_tree.get_non_inclusion_proof(*key);
             assert!(
                 proof.is_err(),
                 "Should not be able to get non-inclusion proof for included object"
             );
         } else {
-            println!("Testing non-inclusion proof for object {}", key);
-            let target = OCSTarget::new(*key, None, OCSTargetType::NonInclusion).unwrap();
-            let light_client_proof = target.construct(&checkpoint).unwrap();
-
+            let proof = proof.expect("Should be able to get non-inclusion proof");
             // Extract the OCSProof from the proof contents
-            if let ProofContents::ObjectCheckpointStateProof(ocs_proof) =
-                light_client_proof.proof_contents
-            {
-                assert!(ocs_proof
-                    .verify(&light_client_proof.targets, &verified_summary)
-                    .is_ok());
+            if let ProofContents::ObjectCheckpointStateProof(ocs_proof) = proof.proof_contents {
+                assert!(ocs_proof.verify(&proof.targets, &verified_summary).is_ok());
             } else {
                 panic!("Expected ObjectCheckpointStateProof");
             }
@@ -185,45 +174,46 @@ fn test_modified_object_tree_properties() {
 #[test]
 fn test_serialization_roundtrip() {
     let checkpoint = load_checkpoint(CHECKPOINT_FILE);
-    let artifacts = CheckpointArtifacts::from(&checkpoint);
-    let object_tree = ModifiedObjectTree::new(&artifacts);
+    let all_objects = get_all_modified_objects(&checkpoint);
 
     // Test inclusion proof serialization
-    if let Some((&object_id, _)) = object_tree.object_map.iter().next() {
-        let inclusion_proof = object_tree.get_inclusion_proof(object_id).unwrap();
+    if let Some(object_state) = all_objects.contents.iter().next() {
+        let target = OCSTarget::new_inclusion_target(object_state);
+        let proof = target.construct(&checkpoint).unwrap();
 
         // Test JSON serialization
-        let serialized = serde_json::to_string(&inclusion_proof).expect("Should serialize");
-        let _deserialized: OCSInclusionProof =
-            serde_json::from_str(&serialized).expect("Should deserialize");
+        let serialized = serde_json::to_string(&proof).expect("Should serialize");
+        let _deserialized: Proof = serde_json::from_str(&serialized).expect("Should deserialize");
 
         println!(
             "Inclusion proof JSON serialization successful for object {}",
-            object_id
+            object_state.id
         );
 
         // Test BCS serialization
-        let bcs_serialized = bcs::to_bytes(&inclusion_proof).expect("Should serialize with BCS");
-        let _bcs_deserialized: OCSInclusionProof =
+        let bcs_serialized = bcs::to_bytes(&proof).expect("Should serialize with BCS");
+        let _bcs_deserialized: Proof =
             bcs::from_bytes(&bcs_serialized).expect("Should deserialize with BCS");
 
         println!(
             "Inclusion proof BCS serialization successful for object {}",
-            object_id
+            object_state.id
         );
+    } else {
+        panic!("No object state found in the checkpoint");
     }
 
     // Test non-inclusion proof serialization
     let non_existent_id = ObjectID::from_hex_literal("0x999999").unwrap();
-    if !object_tree.is_object_in_checkpoint(non_existent_id) {
-        let non_inclusion_proof = object_tree
-            .get_non_inclusion_proof(non_existent_id)
-            .unwrap();
+    if !all_objects.is_object_in_checkpoint(non_existent_id) {
+        let target = OCSTarget::new_non_inclusion_target(non_existent_id);
+        let proof = target
+            .construct(&checkpoint)
+            .expect("Should be able to get non-inclusion proof");
 
         // Test JSON serialization
-        let serialized = serde_json::to_string(&non_inclusion_proof).expect("Should serialize");
-        let _deserialized: OCSNonInclusionProof =
-            serde_json::from_str(&serialized).expect("Should deserialize");
+        let serialized = serde_json::to_string(&proof).expect("Should serialize");
+        let _deserialized: Proof = serde_json::from_str(&serialized).expect("Should deserialize");
 
         println!(
             "Non-inclusion proof JSON serialization successful for object {}",
@@ -231,9 +221,8 @@ fn test_serialization_roundtrip() {
         );
 
         // Test BCS serialization
-        let bcs_serialized =
-            bcs::to_bytes(&non_inclusion_proof).expect("Should serialize with BCS");
-        let _bcs_deserialized: OCSNonInclusionProof =
+        let bcs_serialized = bcs::to_bytes(&proof).expect("Should serialize with BCS");
+        let _bcs_deserialized: Proof =
             bcs::from_bytes(&bcs_serialized).expect("Should deserialize with BCS");
 
         println!(

@@ -20,12 +20,20 @@ use crate::proof::{
 };
 
 /// A target for a proof about the state of an object w.r.t a checkpoint.
-/// OCS -> ObjectCheckpointState
+/// OCS stands for ObjectCheckpointState
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OCSTarget {
     pub id: ObjectID,
     pub digest: Option<ObjectDigest>,
     pub target_type: OCSTargetType,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum OCSTargetType {
+    /// A proof that state of an object o is d at checkpoint c. For cases where o is updated in c.
+    Inclusion,
+    /// A proof that o was not updated in c. For cases where o is not updated in c.
+    NonInclusion,
 }
 
 impl OCSTarget {
@@ -46,14 +54,22 @@ impl OCSTarget {
             target_type: proof_type,
         })
     }
-}
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum OCSTargetType {
-    /// A proof that state of an object o is d at checkpoint c. For cases where o is updated in c.
-    Inclusion,
-    /// A proof that o was not updated in c. For cases where o is not updated in c.
-    NonInclusion,
+    pub fn new_non_inclusion_target(id: ObjectID) -> Self {
+        Self {
+            id,
+            digest: None,
+            target_type: OCSTargetType::NonInclusion,
+        }
+    }
+
+    pub fn new_inclusion_target(object_state: &ObjectCheckpointState) -> Self {
+        Self {
+            id: object_state.id,
+            digest: object_state.digest,
+            target_type: OCSTargetType::Inclusion,
+        }
+    }
 }
 
 /// The tree of all objects updated in the checkpoint along with their latest state.
@@ -91,6 +107,10 @@ impl ModifiedObjectTree {
             object_map,
             tree,
         }
+    }
+
+    pub fn get_object_state(&self, id: ObjectID) -> Option<&ObjectCheckpointState> {
+        self.object_map.get(&id).map(|i| &self.contents[*i])
     }
 
     pub fn is_object_in_checkpoint(&self, id: ObjectID) -> bool {
