@@ -82,8 +82,11 @@ impl EffectsCertifier {
             },
         };
 
-        let mut retrier = RequestRetrier::new(authority_aggregator);
+        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
 
+        // Setting this to None at first because if the full effects are already provided,
+        // we do not need to record the latency.
+        let mut full_effects_start_time = None;
         let (acknowledgments_result, mut full_effects_result) = join!(
             self.wait_for_acknowledgments(
                 authority_aggregator,
@@ -104,6 +107,7 @@ impl EffectsCertifier {
                     .next_target()
                     .expect("there should be at least 1 target");
                 current_target = name;
+                full_effects_start_time = Some(Instant::now());
                 self.get_full_effects(client, tx_digest, consensus_position, options)
                     .await
             },
@@ -127,7 +131,23 @@ impl EffectsCertifier {
                             effects_digest,
                             certified_digest
                         );
+                        // This validator is byzantine, record the error.
+                        client_monitor.record_interaction_result(OperationFeedback {
+                            validator: current_target,
+                            operation: OperationType::Effects,
+                            latency: None,
+                            success: false,
+                        });
                     } else {
+                        if let Some(start_time) = full_effects_start_time {
+                            let latency = start_time.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: current_target,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: true,
+                            });
+                        }
                         return Ok(
                             self.get_quorum_transaction_response(effects_digest, executed_data)
                         );
@@ -135,6 +155,17 @@ impl EffectsCertifier {
                 }
                 Err(e) => {
                     tracing::debug!(?current_target, "Failed to get full effects: {e}");
+                    if matches!(
+                        e,
+                        TransactionRequestError::TimedOutGettingFullEffectsAtValidator
+                    ) {
+                        client_monitor.record_interaction_result(OperationFeedback {
+                            validator: current_target,
+                            operation: OperationType::Effects,
+                            latency: None,
+                            success: false,
+                        });
+                    }
                     // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
                     // but the error should not happen after effects certification unless there are software bugs
                     // or > f malicious validators.
@@ -149,6 +180,7 @@ impl EffectsCertifier {
             // This emits an error when retrier has no targets available.
             let (name, client) = retrier.next_target()?;
             current_target = name;
+            full_effects_start_time = Some(Instant::now());
             full_effects_result = self
                 .get_full_effects(client, tx_digest, consensus_position, options)
                 .await;

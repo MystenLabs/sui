@@ -71,6 +71,17 @@ where
         monitor
     }
 
+    #[cfg(test)]
+    pub fn new_for_test(authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>) -> Arc<Self> {
+        use prometheus::Registry;
+
+        Self::new(
+            ValidatorClientMonitorConfig::default(),
+            Arc::new(ValidatorClientMetrics::new(&Registry::default())),
+            authority_aggregator,
+        )
+    }
+
     /// Background task that runs periodic health checks on all validators.
     ///
     /// Sends health check requests to all validators in parallel and records
@@ -146,6 +157,7 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// from the client's perspective. Updates both Prometheus metrics and
     /// internal client statistics. This is the primary interface for the
     /// TransactionDriver to report client-observed validator interactions.
+    /// TODO: Consider adding a byzantine flag to the feedback.
     pub fn record_interaction_result(&self, feedback: OperationFeedback) {
         let validator_str = feedback.validator.concise().to_string();
         let operation_str = match feedback.operation {

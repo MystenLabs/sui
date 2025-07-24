@@ -3,7 +3,6 @@
 
 use std::{collections::VecDeque, sync::Arc};
 
-use rand::seq::SliceRandom as _;
 use sui_types::base_types::AuthorityName;
 
 use crate::{
@@ -164,7 +163,8 @@ mod tests {
     #[tokio::test]
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
-        let mut retrier = RequestRetrier::new(&auth_agg);
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
 
         for _ in 0..4 {
             retrier.next_target().unwrap();

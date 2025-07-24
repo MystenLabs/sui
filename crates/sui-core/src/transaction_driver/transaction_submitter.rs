@@ -7,7 +7,9 @@ use std::{
 };
 
 use sui_types::{
-    base_types::AuthorityName, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
+    base_types::{AuthorityName, ConciseableName},
+    digests::TransactionDigest,
+    messages_grpc::RawSubmitTxRequest,
 };
 use tokio::time::timeout;
 use tracing::instrument;
@@ -52,6 +54,10 @@ impl TransactionSubmitter {
         // or all feasible targets returned errors or timed out.
         loop {
             let (name, client) = retrier.next_target()?;
+            self.metrics
+                .validator_selections
+                .with_label_values(&[&name.concise().to_string()])
+                .inc();
             match self
                 .submit_transaction_once(client, &raw_request, options, client_monitor, name)
                 .await
