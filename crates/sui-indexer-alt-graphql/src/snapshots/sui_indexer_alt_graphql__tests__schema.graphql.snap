@@ -182,6 +182,10 @@ type Epoch {
 	This is also used for storage rebates.
 	"""
 	storageFund: StorageFund
+	"""
+	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+	"""
+	safeMode: SafeMode
 }
 
 """
@@ -757,6 +761,21 @@ type Query {
 	Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
 	"""
 	transactionEffects(digest: String!): TransactionEffects
+}
+
+"""
+Information about whether epoch changes are using safe mode.
+"""
+type SafeMode {
+	"""
+	Whether safe mode was used for the last epoch change.
+	The system will retry a full epoch change on every epoch boundary and automatically reset this flag if so.
+	"""
+	enabled: Boolean
+	"""
+	Accumulated fees for computation and cost that have not been added to the various reward pools, because the full epoch change did not happen.
+	"""
+	gasSummary: GasCostSummary
 }
 
 type ServiceConfig {
