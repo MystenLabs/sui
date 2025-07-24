@@ -314,7 +314,7 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("test").unwrap();
+        sync.register_pipeline("test").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         write(&store, "test", 0, |s, b| {
@@ -355,8 +355,8 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("a").unwrap();
-        sync.add_pipeline("b").unwrap();
+        sync.register_pipeline("a").unwrap();
+        sync.register_pipeline("b").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         write(&store, "a", 0, |s, b| {
@@ -431,7 +431,7 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("b").unwrap();
+        sync.register_pipeline("b").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
@@ -489,8 +489,8 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("a").unwrap();
-        sync.add_pipeline("b").unwrap();
+        sync.register_pipeline("a").unwrap();
+        sync.register_pipeline("b").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
@@ -543,8 +543,8 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("a").unwrap();
-        sync.add_pipeline("b").unwrap();
+        sync.register_pipeline("a").unwrap();
+        sync.register_pipeline("b").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         // The pipelines are not in sync to begin with, so the synchronizer is waiting for the
@@ -650,7 +650,7 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("test").unwrap();
+        sync.register_pipeline("test").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         write(&store, "test", 100, |s, b| {
@@ -701,7 +701,7 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("test").unwrap();
+        sync.register_pipeline("test").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         // Write a run of checkpoints.
@@ -755,7 +755,7 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("test").unwrap();
+        sync.register_pipeline("test").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         let err = store
@@ -799,7 +799,7 @@ mod tests {
             cancel.clone(),
         );
 
-        sync.add_pipeline("test").unwrap();
+        sync.register_pipeline("test").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         write(&store, "test", 0, |s, b| {

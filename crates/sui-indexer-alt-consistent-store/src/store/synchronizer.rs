@@ -17,7 +17,7 @@ use crate::db::{Db, Watermark};
 
 /// The synchronizer will emit a message if it has been waiting to synchronize with other tasks for
 /// this long without making progress.
-const SLOW_SYNC_WARNING: Duration = Duration::from_secs(60);
+const SLOW_SYNC_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 
 /// A service that coordinates writes to a database from various registered pipelines, with
 /// generating snapshots for that database. The synchronizer ensures that all pipelines have made
@@ -74,9 +74,13 @@ impl Synchronizer {
         }
     }
 
-    /// Register a new pipeline with the synchronizer service. Fails if the database fails to
-    /// return the pipeline's watermark -- registering a brand new pipeline is not an error.
-    pub(crate) fn add_pipeline(&mut self, pipeline: &'static str) -> anyhow::Result<()> {
+    /// Register a new pipeline with the synchronizer service. The synchronizer will spin up a task
+    /// for each pipeline, and make a channel available to send writes to that task, when it is
+    /// started using [`Self::run`].
+    ///
+    /// Fails if the database fails to return the pipeline's watermark -- registering a brand new
+    /// pipeline is not an error.
+    pub(crate) fn register_pipeline(&mut self, pipeline: &'static str) -> anyhow::Result<()> {
         let watermark = self
             .db
             .watermark(pipeline)
@@ -100,14 +104,14 @@ impl Synchronizer {
 
         // All tasks will arrange to take a snapshot before writing the next checkpoint that is new
         // to all pipelines (allowing all pipelines to catch up with each other).
-        let mut next_snapshot = 0;
+        let mut next_snapshot_checkpoint = 0;
         for (pipeline, last_checkpoint) in self.last_checkpoints {
             let (tx, rx) = mpsc::channel(self.buffer_size);
             let next_checkpoint = last_checkpoint
                 .map(|v| v + 1)
                 .unwrap_or(self.first_checkpoint);
 
-            next_snapshot = next_snapshot.max(next_checkpoint);
+            next_snapshot_checkpoint = next_snapshot_checkpoint.max(next_checkpoint);
 
             queue.insert(pipeline, tx);
             tasks.push(synchronizer(
@@ -115,7 +119,7 @@ impl Synchronizer {
                 rx,
                 pipeline,
                 self.stride,
-                next_snapshot,
+                next_snapshot_checkpoint,
                 next_checkpoint,
                 pre_snap.clone(),
                 post_snap.clone(),
@@ -134,7 +138,7 @@ impl Synchronizer {
 
 /// The synchronizer task is responsible for landing writes to the database for a given `pipeline`.
 /// It also coordinates with other synchronizers to take snapshots of the database every `stride`
-/// checkpoints, starting from before the write of the `next_snapshot` checkpoint.
+/// checkpoints, starting from before the write of the `next_snapshot_checkpoint`.
 ///
 /// Data arrives as a batch-per-checkpoint on `rx`, and must arrive in checkpoint sequence number
 /// order (the synchronizer will report an error and stop if it detects an out-of-order batch).
@@ -151,20 +155,20 @@ fn synchronizer(
     mut rx: mpsc::Receiver<(Watermark, rocksdb::WriteBatch)>,
     pipeline: &'static str,
     stride: u64,
-    mut next_snapshot: u64,
+    mut next_snapshot_checkpoint: u64,
     mut next_checkpoint: u64,
     pre_snap: Arc<Barrier>,
     post_snap: Arc<Barrier>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    if next_snapshot == 0 {
+    if next_snapshot_checkpoint == 0 {
         // Ignore a snapshot before checkpoint zero.
-        next_snapshot += stride;
+        next_snapshot_checkpoint += stride;
     }
 
     tokio::spawn(async move {
         loop {
-            match next_snapshot.cmp(&next_checkpoint) {
+            match next_snapshot_checkpoint.cmp(&next_checkpoint) {
                 // The next checkpoint should be included in the next snapshot, so allow it to be
                 // written.
                 Ordering::Greater => {}
@@ -172,7 +176,10 @@ fn synchronizer(
                 // If the next checkpoint is more than one checkpoint ahead of the next snapshot,
                 // something has gone wrong.
                 Ordering::Less => {
-                    error!(pipeline, next_snapshot, next_checkpoint, "Missed snapshot");
+                    error!(
+                        pipeline,
+                        next_snapshot_checkpoint, next_checkpoint, "Missed snapshot"
+                    );
                     break;
                 }
 
@@ -183,10 +190,10 @@ fn synchronizer(
                 // just bump their own synchronization point and wait.
                 Ordering::Equal => {
                     tokio::select! {
-                        w = with_slow_future_monitor(pre_snap.wait(), SLOW_SYNC_WARNING, || {
+                        w = with_slow_future_monitor(pre_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
                             warn!(pipeline, "Synchronizer stuck, pre-snapshot")
                         }) => if w.is_leader() {
-                            db.snapshot(next_snapshot - 1);
+                            db.snapshot(next_snapshot_checkpoint - 1);
                         },
 
                         _ = cancel.cancelled() => {
@@ -195,9 +202,9 @@ fn synchronizer(
                         }
                     }
 
-                    next_snapshot += stride;
+                    next_snapshot_checkpoint += stride;
                     tokio::select! {
-                        _ = with_slow_future_monitor(post_snap.wait(), SLOW_SYNC_WARNING, || {
+                        _ = with_slow_future_monitor(post_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
                             warn!(pipeline, "Synchronizer stuck, post-snapshot")
                         }) => {}
                         _ = cancel.cancelled() => {
@@ -231,6 +238,9 @@ fn synchronizer(
             }
         }
 
-        info!(pipeline, next_snapshot, next_checkpoint, "Stopping sync");
+        info!(
+            pipeline,
+            next_snapshot_checkpoint, next_checkpoint, "Stopping sync"
+        );
     })
 }

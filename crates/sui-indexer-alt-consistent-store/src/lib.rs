@@ -1,6 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! # Consistent Store Indexer and RPC
+//!
+//! This crate defines a service that combines a [`sui_indexer_alt_framework`] indexer, with a gRPC
+//! service serving queries about live data, consistent with some recent (measured in minutes or
+//! hours) checkpoint.
+//!
+//! Supported queries include fetching objects by owner or by type, and fetching an address'
+//! balance (across coin-like objects it owns).
+//!
+//! The service's indexer writes to a RocksDB database which it interacts through a `db`
+//! abstraction, which exposes a type-safe abstraction over the underlying bytes-to-bytes ordered
+//! map offered by [`rocksdb`].
+//!
+//! The database abstraction is also responsible for taking and exposing snapshots of the database,
+//! which is what allows the RPC to serve a query at some checkpoint in the recent past. Snapshots
+//! preserve access to the state of the database at a point in time, they are ephemeral (stored in
+//! memory), and database-wide (not per-column-family).
+//!
+//! It is the `Indexer`'s responsibility to coordinate writes across pipelines, to arrange for the
+//! database to contain a consistent view of the data at checkpoints it should take a snapshot of.
+//! To this end, the indexer only supports sequential pipelines (pipelines also update keys
+//! in-place, which precludes out-of-order writes), but writes are buffered, post-commit to allow
+//! pipelines to make progress on later while checkpoints while waiting for lagging pipelines to
+//! reach the snapshot checkpoint.
+//!
+//! The indexer and RPC agree on a `Schema` which describes the key types, value types and options
+//! for all column families to be set-up in the database.
+
 use std::path::Path;
 
 use config::{PipelineLayer, ServiceConfig};
