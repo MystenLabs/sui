@@ -1683,6 +1683,7 @@ impl AuthorityPerEpochStore {
         tables
             .transaction_key_to_digest
             .insert(&tx_key, &tx_digest)?;
+        info!("Inserting digest {tx_key:?}");
         self.executed_digests_notify_read
             .notify(&tx_key, &tx_digest);
         Ok(())
@@ -2521,6 +2522,21 @@ impl AuthorityPerEpochStore {
         &self,
         keys: &[TransactionKey],
     ) -> SuiResult<Vec<TransactionDigest>> {
+        async fn stuck_monitor<F: Future>(f: F, c: impl Fn()->()) -> F::Output {
+            tokio::pin!(f);
+            loop {
+                tokio::select! {
+                    result = &mut f => {
+                        // Future completed before timeout
+                        return result;
+                    }
+                    _ = tokio::time::sleep(Duration::from_secs(60)) => {
+                        c();
+                    }
+                }
+
+            }
+        }
         let non_digest_keys: Vec<_> = keys
             .iter()
             .filter_map(|key| {
@@ -2542,10 +2558,11 @@ impl AuthorityPerEpochStore {
         let futures = executed_digests
             .into_iter()
             .zip(registrations)
-            .map(|(d, r)| match d {
+            .zip(non_digest_keys.iter())
+            .map(|((d, r), k)| match d {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
+                None => Either::Right(stuck_monitor(r, move ||error!("Stuck reading transaction {k:?}"))),
             });
         let mut results = VecDeque::from(join_all(futures).await);
 
