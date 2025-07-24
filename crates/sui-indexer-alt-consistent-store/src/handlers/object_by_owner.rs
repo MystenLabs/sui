@@ -9,8 +9,8 @@ use sui_indexer_alt_framework::{
     types::{base_types::VersionDigest, full_checkpoint_content::CheckpointData},
 };
 
-use crate::{schema::object_by_owner::Key, store::Store};
-use crate::{schema::Schema, store::Connection};
+use crate::schema::{object_by_owner::Key, Schema};
+use crate::store::{Connection, Store};
 
 use super::{checkpoint_input_objects, checkpoint_output_objects};
 
@@ -33,20 +33,27 @@ impl Processor for ObjectByOwner {
 
         // Objects that are in the inputs but not the outputs have been deleted.
         for (id, &(input, _)) in &input_objects {
-            let key_in = Key::from_object(input);
+            let Some(key_in) = Key::from_object(input) else {
+                continue;
+            };
+
             if !output_objects.contains_key(id) {
                 values.push(Value::Del(key_in));
             }
         }
 
         for (id, (output, digest)) in output_objects {
-            let key_out = Key::from_object(output);
+            let Some(key_out) = Key::from_object(output) else {
+                continue;
+            };
 
             // If the ID is in the input objects with a different key, it needs to be deleted at
             // that location.
-            if let Some((input, _)) = input_objects.get(&id) {
-                let key_in = Key::from_object(input);
-                if key_out != key_in {
+            if let Some(key_in) = input_objects
+                .get(&id)
+                .and_then(|(input, _)| Key::from_object(input))
+            {
+                if key_in != key_out {
                     values.push(Value::Del(key_in));
                 }
             }
