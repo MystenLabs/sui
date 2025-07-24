@@ -96,7 +96,7 @@ pub(super) fn list_owned_objects(
 
     let index = &state.store.schema().object_by_owner;
     let resp = if let Some(type_) = type_ {
-        page.paginate_prefix(index, checkpoint, &(kind, Some(type_)))?
+        page.paginate_prefix(index, checkpoint, &(kind, type_))?
     } else {
         page.paginate_prefix(index, checkpoint, &kind)?
     };
