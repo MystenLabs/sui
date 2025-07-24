@@ -184,10 +184,11 @@ impl GitTree {
             fresh = true;
         }
 
-        // Checkout directory if it does not exist already or if it exists but it has not been
-        // checked out yet
         if !tree_path.exists() || fresh {
+            // Checkout directory if it does not exist already or if it exists but it has not been
+            // checked out yet
             // git sparse-checkout add <path>
+
             let path_in_repo = self.path_in_repo().to_string_lossy();
 
             self.run_git(&["sparse-checkout", "add", &path_in_repo])
@@ -195,6 +196,13 @@ impl GitTree {
 
             // git checkout
             self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
+                .await?;
+        }
+
+        if tree_path.exists() && !allow_dirty {
+            let path_in_repo = self.path_in_repo().to_string_lossy();
+
+            self.run_git(&["sparse-checkout", "add", &path_in_repo])
                 .await?;
         }
 

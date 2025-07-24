@@ -409,13 +409,13 @@ pkg_git = {{ git = "../pkg_git", rev = "main" }}
 
         let root_pkg_path = pkg_dep_on_git.root();
         let commits = pkg_git.commits();
-        let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
 
-        // we need to replace this relative path with the actual git repository path, because find_sha
+        // we need to replace this relative path ../pkg_git with the actual git repository path, because find_sha
         // function does not take a cwd, so this `git ls-remote` would be called from the cwd and not from the
         // repo path.
+        let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
         root_pkg_manifest = root_pkg_manifest.replace("../pkg_git", pkg_git.root_path_str());
-        fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
+        pkg_dep_on_git.change_file("Move.toml", &root_pkg_manifest);
 
         let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
             .await
