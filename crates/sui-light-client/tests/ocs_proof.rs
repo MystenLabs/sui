@@ -175,7 +175,7 @@ fn test_serialization_roundtrip() {
     let all_objects = get_all_modified_objects(&checkpoint);
 
     // Test inclusion proof serialization
-    if let Some(object_state) = all_objects.contents.iter().next() {
+    if let Some(object_state) = all_objects.contents.first() {
         let target = OCSTarget::new_inclusion_target(object_state);
         let proof = target.construct(&checkpoint).unwrap();
 

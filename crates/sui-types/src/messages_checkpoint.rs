@@ -174,21 +174,15 @@ pub struct ObjectCheckpointStates {
 }
 
 impl ObjectCheckpointStates {
-    /// Check if the object checkpoint states are sorted by object ID.
-    fn is_sorted(&self) -> bool {
-        self.contents.windows(2).all(|w| w[0] < w[1])
+    pub fn new(contents: Vec<ObjectCheckpointState>) -> Self {
+        let mut contents = contents;
+        contents.sort();
+        Self { contents }
     }
 
     /// Compute the Merkle root of the object checkpoint states.
+    /// Assumes that the object checkpoint states are sorted by object ID.
     pub fn digest(&self) -> SuiResult<ObjectCheckpointStatesDigest> {
-        // First check if the object checkpoint states are sorted.
-        if !self.is_sorted() {
-            return Err(SuiError::GenericAuthorityError {
-                error: "Object checkpoint states are not sorted".to_string(),
-            });
-        }
-
-        // Build the Merkle tree from the object checkpoint states.
         let tree = MerkleTree::<Blake2b256>::build_from_unserialized(self.contents.iter())
             .map_err(|e| SuiError::GenericAuthorityError {
                 error: format!("Failed to build Merkle tree: {}", e),
@@ -228,8 +222,8 @@ impl CheckpointArtifacts {
     }
 }
 
-impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
-    fn from(effects: &Vec<TransactionEffects>) -> Self {
+impl From<&[&TransactionEffects]> for CheckpointArtifacts {
+    fn from(effects: &[&TransactionEffects]) -> Self {
         let all_object_changes = effects
             .iter()
             .map(|e| e.object_changes())
@@ -250,15 +244,19 @@ impl From<&Vec<TransactionEffects>> for CheckpointArtifacts {
             }
         }
 
-        let mut latest_object_states = ObjectCheckpointStates {
-            contents: latest_object_states.into_values().collect::<Vec<_>>(),
-        };
-
-        latest_object_states.contents.sort();
+        let latest_object_states =
+            ObjectCheckpointStates::new(latest_object_states.into_values().collect::<Vec<_>>());
 
         Self {
             latest_object_states,
         }
+    }
+}
+
+impl From<&[TransactionEffects]> for CheckpointArtifacts {
+    fn from(effects: &[TransactionEffects]) -> Self {
+        let effect_refs: Vec<&TransactionEffects> = effects.iter().collect();
+        Self::from(effect_refs.as_slice())
     }
 }
 
@@ -267,10 +265,10 @@ impl From<&CheckpointData> for CheckpointArtifacts {
         let effects = checkpoint_data
             .transactions
             .iter()
-            .map(|tx| tx.effects.clone())
+            .map(|tx| &tx.effects)
             .collect::<Vec<_>>();
 
-        Self::from(&effects)
+        Self::from(effects.as_slice())
     }
 }
 
@@ -940,7 +938,6 @@ pub struct CheckpointVersionSpecificDataV1 {
 
 #[cfg(test)]
 mod tests {
-    use crate::base_types::SequenceNumber;
     use crate::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEffectsDigest};
     use crate::messages_consensus::ConsensusDeterminedVersionAssignments;
     use crate::transaction::VerifiedTransaction;

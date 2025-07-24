@@ -1929,7 +1929,7 @@ impl CheckpointBuilder {
                 .copied()
                 .collect();
 
-            let artifacts = CheckpointArtifacts::from(&effects);
+            let artifacts = CheckpointArtifacts::from(effects.as_slice());
             let artifacts_digest = CheckpointCommitment::from(artifacts.digest()?);
 
             let summary = CheckpointSummary::new(
