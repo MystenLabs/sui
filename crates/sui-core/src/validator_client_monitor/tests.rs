@@ -579,11 +579,13 @@ mod client_stats_tests {
 #[cfg(test)]
 mod client_monitor_tests {
     use super::*;
+    use std::collections::HashSet;
     use sui_config::validator_client_monitor_config::SelectionStrategy;
     use sui_types::committee::Committee;
 
     /// Simple mock for testing validator selection without full AuthorityAggregator setup
     struct MockValidatorClientMonitor {
+        #[allow(dead_code)]
         config: ValidatorClientMonitorConfig,
         #[allow(dead_code)]
         metrics: Arc<MetricsModule>,
@@ -606,7 +608,7 @@ mod client_monitor_tests {
             stats.record_interaction_result(feedback);
         }
 
-        fn select_preferred_validators(
+        fn select_shuffled_preferred_validators(
             &self,
             committee: &Committee,
             k: usize,
@@ -621,38 +623,42 @@ mod client_monitor_tests {
             // Sort by score (highest first)
             available_validators.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-            let mut selected_validators = Vec::with_capacity(k);
+            // Split into top k and rest
+            let (top_k_with_scores, rest_with_scores) =
+                available_validators.split_at(k.min(available_validators.len()));
 
-            // Add top-scoring validators up to k
-            for (validator, _score) in available_validators.iter().take(k) {
-                selected_validators.push(*validator);
-            }
+            // Extract validator names from top k and shuffle them
+            let mut top_k_validators: Vec<_> = top_k_with_scores
+                .iter()
+                .map(|(validator, _)| *validator)
+                .collect();
+            use rand::seq::SliceRandom;
+            let mut rng = rand::thread_rng();
+            top_k_validators.shuffle(&mut rng);
 
-            // If we don't have enough validators with scores, fill with random validators
-            if selected_validators.len() < k {
-                let selected_set: std::collections::HashSet<_> =
-                    selected_validators.iter().cloned().collect();
-                let remaining_count = k - selected_validators.len();
+            // Extract rest validators (already sorted by score)
+            let rest_validators: Vec<_> = rest_with_scores
+                .iter()
+                .map(|(validator, _)| *validator)
+                .collect();
 
-                let unselected: Vec<_> = committee
-                    .members()
-                    .filter(|(validator, _)| !selected_set.contains(validator))
-                    .map(|(validator, _)| *validator)
-                    .collect();
+            // Combine shuffled top k with sorted rest
+            let mut result = top_k_validators;
+            result.extend(rest_validators);
 
-                if !unselected.is_empty() {
-                    use rand::seq::SliceRandom;
-                    let mut rng = rand::thread_rng();
-                    let mut shuffled = unselected;
-                    shuffled.shuffle(&mut rng);
+            // If we don't have enough validators with scores, fill with random validators from committee
+            let result_set: std::collections::HashSet<_> = result.iter().cloned().collect();
+            let mut unscored_validators: Vec<_> = committee
+                .members()
+                .filter(|(validator, _)| !result_set.contains(validator))
+                .map(|(validator, _)| *validator)
+                .collect();
 
-                    for validator in shuffled.into_iter().take(remaining_count) {
-                        selected_validators.push(validator);
-                    }
-                }
-            }
+            // Shuffle unscored validators and append
+            unscored_validators.shuffle(&mut rng);
+            result.extend(unscored_validators);
 
-            selected_validators
+            result
         }
     }
 
@@ -696,12 +702,16 @@ mod client_monitor_tests {
         }
 
         // Select validators with k=2
-        let selected = monitor.select_preferred_validators(&committee, 2);
-        assert_eq!(selected.len(), 2);
+        let selected = monitor.select_shuffled_preferred_validators(&committee, 2);
+        assert_eq!(selected.len(), 3); // Should return all 3 validators
 
-        // The best two validators should be selected
-        assert!(selected.contains(&validators[0])); // Best performer
-        assert!(selected.contains(&validators[1])); // Second best
+        // The first 2 positions should contain the best two validators (but shuffled)
+        let top_2_positions: HashSet<_> = selected.iter().take(2).cloned().collect();
+        assert!(top_2_positions.contains(&validators[0])); // Best performer
+        assert!(top_2_positions.contains(&validators[1])); // Second best
+
+        // The third position should be the worst performer
+        assert_eq!(selected[2], validators[2]);
     }
 
     #[tokio::test]
@@ -744,15 +754,20 @@ mod client_monitor_tests {
         }
 
         // Select validators with k=3
-        let selected = monitor.select_preferred_validators(&committee, 3);
+        let selected = monitor.select_shuffled_preferred_validators(&committee, 3);
 
-        // Should select the 2 successful validators
-        assert_eq!(selected.len(), 3);
-        assert!(selected.contains(&validators[0]));
-        assert!(selected.contains(&validators[1]));
+        // Should return all 5 validators
+        assert_eq!(selected.len(), 5);
 
-        // And one failed validator (the best of the failed ones)
-        assert!(selected.contains(&validators[2]));
+        // The first 3 positions should contain the best 3 validators (shuffled)
+        let top_3_positions: HashSet<_> = selected.iter().take(3).cloned().collect();
+        assert!(top_3_positions.contains(&validators[0])); // Best performer
+        assert!(top_3_positions.contains(&validators[1])); // Second best
+        assert!(top_3_positions.contains(&validators[2])); // Third best
+
+        // The last 2 positions should have validators[3] and validators[4] in score order
+        assert_eq!(selected[3], validators[3]);
+        assert_eq!(selected[4], validators[4]);
     }
 
     #[tokio::test]
@@ -798,8 +813,8 @@ mod client_monitor_tests {
         }
 
         // Should still select validators from the provided committee
-        let selected = monitor.select_preferred_validators(&other_committee, 2);
-        assert_eq!(selected.len(), 2);
+        let selected = monitor.select_shuffled_preferred_validators(&other_committee, 2);
+        assert_eq!(selected.len(), 3); // Should return all 3 validators from other_committee
         for validator in &selected {
             assert!(other_committee.authority_exists(validator));
         }
@@ -841,7 +856,7 @@ mod client_monitor_tests {
         }
 
         // Request more validators than available
-        let selected = monitor.select_preferred_validators(&committee, 5);
+        let selected = monitor.select_shuffled_preferred_validators(&committee, 5);
         // Should return all available validators
         assert_eq!(selected.len(), 2);
         assert!(selected.contains(&validators[0]));

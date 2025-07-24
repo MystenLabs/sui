@@ -35,8 +35,10 @@ impl<A: Clone> RequestRetrier<A> {
         auth_agg: &Arc<AuthorityAggregator<A>>,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
     ) -> Self {
-        let selected_validators = client_monitor
-            .select_preferred_validators(&auth_agg.committee, auth_agg.committee.num_members() / 3);
+        let selected_validators = client_monitor.select_shuffled_preferred_validators(
+            &auth_agg.committee,
+            auth_agg.committee.num_members() / 3,
+        );
         let remaining_clients = selected_validators
             .into_iter()
             .map(|name| (name, auth_agg.authority_clients[&name].clone()))
@@ -120,6 +122,7 @@ impl<A: Clone> RequestRetrier<A> {
 
 #[cfg(test)]
 mod tests {
+    use arc_swap::ArcSwap;
     use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 
     use fastcrypto::traits::KeyPair as _;
@@ -163,7 +166,8 @@ mod tests {
     #[tokio::test]
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
-        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg.clone()));
+        let auth_agg_swap = Arc::new(ArcSwap::new(auth_agg.clone()));
+        let client_monitor = Arc::new(ValidatorClientMonitor::new_for_test(auth_agg_swap));
         let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
 
         for _ in 0..4 {
@@ -179,11 +183,14 @@ mod tests {
     #[tokio::test]
     async fn test_add_error() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
+        let auth_agg_swap = Arc::new(ArcSwap::new(auth_agg.clone()));
         let authorities: Vec<_> = auth_agg.committee.names().copied().collect();
 
         // Add retriable errors.
         {
-            let mut retrier = RequestRetrier::new(&auth_agg);
+            let client_monitor =
+                Arc::new(ValidatorClientMonitor::new_for_test(auth_agg_swap.clone()));
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
 
             // 25% stake.
             retrier
@@ -218,7 +225,9 @@ mod tests {
 
         // Add mix of retriable and non-retriable errors.
         {
-            let mut retrier = RequestRetrier::new(&auth_agg);
+            let client_monitor =
+                Arc::new(ValidatorClientMonitor::new_for_test(auth_agg_swap.clone()));
+            let mut retrier = RequestRetrier::new(&auth_agg, &client_monitor);
 
             // 25% stake retriable error.
             retrier

@@ -72,7 +72,9 @@ where
     }
 
     #[cfg(test)]
-    pub fn new_for_test(authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>) -> Arc<Self> {
+    pub fn new_for_test(
+        authority_aggregator: Arc<ArcSwap<crate::authority_aggregator::AuthorityAggregator<A>>>,
+    ) -> Arc<Self> {
         use prometheus::Registry;
 
         Self::new(
@@ -209,10 +211,10 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         client_stats.refresh_validator_set(&current_validators);
     }
 
-    /// Select multiple validators based on client-observed performance.
+    /// Select validators based on client-observed performance with shuffled top k.
     ///
-    /// Uses the TopK selection strategy to choose up to `k` validators from the
-    /// provided committee. The selection considers:
+    /// First selects the top `k` validators by performance score, shuffles them,
+    /// then appends the remaining validators ordered by score. The selection considers:
     /// - Current client-observed scores (reliability + latency)
     /// - Exclusion status (temporarily excluded validators are filtered out)
     /// - Committee membership (only selects from the provided committee)
@@ -222,11 +224,13 @@ impl<A: Clone> ValidatorClientMonitor<A> {
     /// is called, and we need to maintain an invariant that the selected
     /// validators are always in the committee passed in.
     ///
-    /// Returns a vector of up to `k` validators. If fewer than `k` validators
-    /// have performance data, it fills the remainder with random validators
-    /// from the committee.
-    /// TODO: Always return the full set.
-    pub fn select_preferred_validators(
+    /// We shuffle the top k validators to avoid the same validator being selected
+    /// too many times in a row and getting overloaded.
+    ///
+    /// Returns a vector containing:
+    /// 1. The top `k` validators by score (shuffled)
+    /// 2. The remaining validators ordered by score (not shuffled)
+    pub fn select_shuffled_preferred_validators(
         &self,
         committee: &Committee,
         k: usize,
@@ -256,31 +260,40 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         // Sort by score (highest first)
         available_validators.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
-        // Take the top k validators by score.
-        let mut selected_validators: Vec<_> = available_validators
-            .into_iter()
-            .map(|(validator, _)| validator)
-            .take(k)
+        // Split into top k and rest
+        let (top_k_with_scores, rest_with_scores) =
+            available_validators.split_at(k.min(available_validators.len()));
+
+        // Extract validator names from top k and shuffle them
+        let mut top_k_validators: Vec<_> = top_k_with_scores
+            .iter()
+            .map(|(validator, _)| *validator)
+            .collect();
+        let mut rng = rand::thread_rng();
+        top_k_validators.shuffle(&mut rng);
+
+        // Extract rest validators (already sorted by score)
+        let rest_validators: Vec<_> = rest_with_scores
+            .iter()
+            .map(|(validator, _)| *validator)
             .collect();
 
-        // If we don't have enough validators with scores, fill with random validators
-        if selected_validators.len() < k {
-            let selected_set: HashSet<_> = selected_validators.iter().cloned().collect();
-            let remaining_count = k - selected_validators.len();
+        // Combine shuffled top k with sorted rest
+        let mut result = top_k_validators;
+        result.extend(rest_validators);
 
-            // Get all committee members not already selected
-            let mut unselected: Vec<_> = committee
-                .members()
-                .filter(|(validator, _)| !selected_set.contains(validator))
-                .map(|(validator, _)| *validator)
-                .collect();
+        // If we don't have enough validators with scores, fill with random validators from committee
+        let result_set: HashSet<_> = result.iter().cloned().collect();
+        let mut unscored_validators: Vec<_> = committee
+            .members()
+            .filter(|(validator, _)| !result_set.contains(validator))
+            .map(|(validator, _)| *validator)
+            .collect();
 
-            // Shuffle the unselected validators.
-            let mut rng = rand::thread_rng();
-            unselected.shuffle(&mut rng);
-            selected_validators.extend(unselected.into_iter().take(remaining_count));
-        }
+        // Shuffle unscored validators and append
+        unscored_validators.shuffle(&mut rng);
+        result.extend(unscored_validators);
 
-        selected_validators
+        result
     }
 }
