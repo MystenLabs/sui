@@ -1108,9 +1108,12 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             E::InvalidArgumentArity => CommandArgumentErrorKind::InvalidArgumentArity,
 
             //TODO
-            E::InvalidTransferObject => CommandArgumentErrorKind::Unknown,
-            //TODO
-            E::InvalidMakeMoveVecNonObjectArgument => CommandArgumentErrorKind::Unknown,
+            E::InvalidTransferObject
+            | E::InvalidMakeMoveVecNonObjectArgument
+            | E::ArgumentWithoutValue
+            | E::CannotMoveBorrowedValue
+            | E::CannotWriteToExtendedReference
+            | E::InvalidReferenceArgument => CommandArgumentErrorKind::Unknown,
         };
 
         message.set_kind(kind);

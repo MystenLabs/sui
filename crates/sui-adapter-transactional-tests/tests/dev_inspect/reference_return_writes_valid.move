@@ -117,7 +117,7 @@ module test::m {
 // borrow parent, write to child, read child, read parent
 //> 0: test::m::pair();
 //> 1: test::m::borrow_mut<test::m::Pair>(Result(0));
-//> 2: test::m::borrow_x_y_mut(Result(1));
+//> 2: test::m::borrow_x_mut_y_imm(Result(1));
 //> 3: test::m::write_u64(NestedResult(2,0));
 //> 4: test::m::use_ref<u64>(NestedResult(2,1));
 //> 5: test::m::write_u64(NestedResult(2,0));

@@ -368,13 +368,13 @@ fn move_value(
     if context.is_location_borrowed(l)? {
         // TODO more specific error
         return Err(command_argument_error(
-            CommandArgumentError::InvalidValueUsage,
+            CommandArgumentError::CannotMoveBorrowedValue,
             arg_idx as usize,
         ));
     }
     let Some(value) = context.location(l).take() else {
         return Err(command_argument_error(
-            CommandArgumentError::InvalidValueUsage,
+            CommandArgumentError::ArgumentWithoutValue,
             arg_idx as usize,
         ));
     };
@@ -395,7 +395,7 @@ fn copy_value(
     let Some(value) = context.location(l) else {
         // TODO more specific error
         return Err(command_argument_error(
-            CommandArgumentError::InvalidValueUsage,
+            CommandArgumentError::ArgumentWithoutValue,
             arg_idx as usize,
         ));
     };
@@ -420,7 +420,7 @@ fn borrow_location(
     let Some(value) = context.location(l) else {
         // TODO more specific error
         return Err(command_argument_error(
-            CommandArgumentError::InvalidValueUsage,
+            CommandArgumentError::ArgumentWithoutValue,
             arg_idx as usize,
         ));
     };
@@ -467,7 +467,7 @@ fn write_ref(context: &mut Context, arg_idx: usize, value: Value) -> Result<(), 
     if !context.is_writable(r)? {
         // TODO more specific error
         return Err(command_argument_error(
-            CommandArgumentError::InvalidValueUsage,
+            CommandArgumentError::CannotWriteToExtendedReference,
             arg_idx,
         ));
     }
@@ -495,7 +495,7 @@ fn call(
             invariant_violation!("non transferrable value was not found in arguments");
         };
         return Err(command_argument_error(
-            CommandArgumentError::InvalidValueUsage,
+            CommandArgumentError::InvalidReferenceArgument,
             idx,
         ));
     }
