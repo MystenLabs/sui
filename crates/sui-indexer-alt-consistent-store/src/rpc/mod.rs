@@ -27,6 +27,7 @@ mod metrics;
 mod middleware;
 pub(crate) mod pagination;
 pub(crate) mod state;
+mod type_filter;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct RpcArgs {
