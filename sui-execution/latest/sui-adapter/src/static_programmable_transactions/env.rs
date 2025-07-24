@@ -21,14 +21,12 @@ use crate::{
         },
     },
 };
-use indexmap::IndexSet;
 use move_binary_format::{
     CompiledModule,
     errors::{Location, PartialVMError, VMError},
     file_format::{AbilitySet, TypeParameterIndex},
 };
 use move_core_types::{
-    account_address::AccountAddress,
     annotated_value,
     language_storage::{ModuleId, StructTag},
     runtime_value::{self, MoveTypeLayout},
@@ -378,7 +376,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                 module,
                 name,
                 type_params,
-            } = &*struct_tag;
+            } = struct_tag;
 
             let tag_linkage = type_linkage(&[(*address).into()], env.linkable_store)?;
             let linkage = RootedLinkage::new(*address, tag_linkage);
@@ -621,28 +619,10 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 }
 
-#[allow(unused)]
 fn to_identifier(name: String) -> Result<Identifier, ExecutionError> {
     Identifier::new(name).map_err(|e| {
         ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e.to_string())
     })
-}
-
-/// Given a `TypeTag` returns the set of addresses (IDs) within the type, and the link context for
-/// the type.
-///
-/// The Link context for a type is the first address encountered in the type tag in a pre-order
-/// traversal. If no address is encountered in the type tag that we can use, we default to using
-/// the `AccountAddress::ZERO` link context.
-fn link_info_for_type_tag(
-    tag: &TypeTag,
-) -> Result<(IndexSet<AccountAddress>, AccountAddress), ExecutionError> {
-    let addresses = tag.all_addresses();
-    // The link context is the first address encountered in the type tag.
-    // If no address is encountered in the type tag that we can use, we default to
-    // AccountAddress::ZERO.
-    let link_context = addresses.first().cloned().unwrap_or(AccountAddress::ZERO);
-    Ok((addresses, link_context))
 }
 
 fn convert_vm_error(
