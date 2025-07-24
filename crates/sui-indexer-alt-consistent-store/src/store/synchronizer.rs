@@ -1,18 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use futures::future;
+use sui_indexer_alt_framework::task::with_slow_future_monitor;
 use tokio::{
     sync::{mpsc, Barrier},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::db::{Db, Watermark};
+
+/// The synchronizer will emit a message if it has been waiting to synchronize with other tasks for
+/// this long without making progress.
+const SLOW_SYNC_WARNING: Duration = Duration::from_secs(60);
 
 /// A service that coordinates writes to a database from various registered pipelines, with
 /// generating snapshots for that database. The synchronizer ensures that all pipelines have made
@@ -178,16 +183,23 @@ fn synchronizer(
                 // just bump their own synchronization point and wait.
                 Ordering::Equal => {
                     tokio::select! {
-                        w = pre_snap.wait() => if w.is_leader() { db.snapshot(next_snapshot - 1); },
+                        w = with_slow_future_monitor(pre_snap.wait(), SLOW_SYNC_WARNING, || {
+                            warn!(pipeline, "Synchronizer stuck, pre-snapshot")
+                        }) => if w.is_leader() {
+                            db.snapshot(next_snapshot - 1);
+                        },
+
                         _ = cancel.cancelled() => {
                             info!(pipeline, "Shutdown received before pre-snapshot barrier");
                             break;
                         }
-                    };
+                    }
 
                     next_snapshot += stride;
                     tokio::select! {
-                        _ = post_snap.wait() => {}
+                        _ = with_slow_future_monitor(post_snap.wait(), SLOW_SYNC_WARNING, || {
+                            warn!(pipeline, "Synchronizer stuck, post-snapshot")
+                        }) => {}
                         _ = cancel.cancelled() => {
                             info!(pipeline, "Shutdown received before post-snapshot barrier");
                             break;
