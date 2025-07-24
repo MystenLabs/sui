@@ -52,7 +52,6 @@ pub(super) struct CFGIRDebugFlags {
 
 struct Context<'env> {
     env: &'env CompilationEnv,
-    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
     info: &'env TypingProgramInfo,
     reporter: DiagnosticReporter<'env>,
     current_package: Option<Symbol>,
@@ -64,15 +63,10 @@ struct Context<'env> {
 }
 
 impl<'env> Context<'env> {
-    pub fn new(
-        env: &'env CompilationEnv,
-        pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
-        info: &'env TypingProgramInfo,
-    ) -> Self {
+    pub fn new(env: &'env CompilationEnv, info: &'env TypingProgramInfo) -> Self {
         let reporter = env.diagnostic_reporter_at_top_level();
         Context {
             env,
-            pre_compiled_program,
             reporter,
             info,
             current_package: None,
@@ -161,7 +155,7 @@ impl<'env> Context<'env> {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
+    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
     prog: H::Program,
 ) -> G::Program {
     let H::Program {
@@ -170,7 +164,7 @@ pub fn program(
         info,
     } = prog;
 
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &info);
+    let mut context = Context::new(compilation_env, &info);
 
     let modules = modules(&mut context, hmodules);
     set_constant_value_types(&info, &modules);
@@ -180,7 +174,7 @@ pub fn program(
         warning_filters_table,
         info: info.clone(),
     };
-    visit_program(&mut context, &mut program);
+    visit_program(&mut context, pre_compiled_program, &mut program);
     program
 }
 
@@ -533,7 +527,7 @@ fn constant_(
     let fake_infinite_loop_starts = BTreeSet::new();
     let function_context = super::CFGContext {
         env: context.env,
-        pre_compiled_program: context.pre_compiled_program.clone(),
+        pre_compiled_program: None,
         reporter: &context.reporter,
         info: context.info,
         package: context.current_package,
@@ -708,7 +702,7 @@ fn function_body(
 
             let function_context = super::CFGContext {
                 env: context.env,
-                pre_compiled_program: context.pre_compiled_program.clone(),
+                pre_compiled_program: None,
                 reporter: &context.reporter,
                 info: context.info,
                 package: context.current_package,
@@ -1053,19 +1047,23 @@ fn destructure_tuple<T, U>((fst, snd): &(T, U)) -> (&T, &U) {
 // Visitors
 //**************************************************************************************************
 
-fn visit_program(context: &mut Context, prog: &mut G::Program) {
+fn visit_program(
+    context: &mut Context,
+    pre_compiled_program: Option<Arc<PreCompiledProgramInfo>>,
+    prog: &mut G::Program,
+) {
     if context.env.visitors().abs_int.is_empty() && context.env.visitors().cfgir.is_empty() {
         return;
     }
 
-    AbsintVisitor.visit(context.env, context.pre_compiled_program.clone(), prog);
+    AbsintVisitor.visit(context.env, pre_compiled_program.clone(), prog);
 
     context
         .env
         .visitors()
         .cfgir
         .par_iter()
-        .for_each(|v| v.visit(context.env, context.pre_compiled_program.clone(), prog));
+        .for_each(|v| v.visit(context.env, pre_compiled_program.clone(), prog));
 }
 
 struct AbsintVisitor;

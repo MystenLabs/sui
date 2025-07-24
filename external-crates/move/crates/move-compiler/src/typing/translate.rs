@@ -152,6 +152,9 @@ fn extract_macros(
         |(mident, mod_use_funs, functions)| {
             let mut macro_functions = UniqueMap::new();
             let macro_bodies = functions.ref_filter_map(|name, f| {
+                if f.macro_.is_none() {
+                    return None;
+                }
                 let _macro_loc = f.macro_?;
                 // unwrap should never fail as we are iternating over another UniqueMap
                 macro_functions.add(name, f.clone()).unwrap();
