@@ -434,18 +434,16 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
 
 fn function_signature(context: &mut Context, sig: N::FunctionSignature) -> H::FunctionSignature {
     let type_parameters = sig.type_parameters;
-    let mut diags = Diagnostics::new();
     let parameters = sig
         .parameters
         .into_iter()
         .map(|(mut_, v, tty)| {
-            let ty = single_type(&mut diags, tty);
+            let ty = single_type(&context.reporter, tty);
             context.bind_local(mut_, v, ty.clone());
             (mut_, translate_var(v), ty)
         })
         .collect();
-    let return_type = type_(&mut diags, sig.return_type);
-    context.add_diags(diags);
+    let return_type = type_(&context.reporter, sig.return_type);
     H::FunctionSignature {
         type_parameters,
         parameters,
@@ -528,9 +526,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         value: tvalue,
     } = cdef;
     context.push_warning_filter_scope(warning_filter);
-    let mut diags = Diagnostics::new();
-    let signature = base_type(&mut diags, tsignature);
-    context.add_diags(diags);
+    let signature = base_type(&context.reporter, tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
         let mut v = VecDeque::new();
@@ -591,13 +587,11 @@ fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFi
         N::StructFields::Native(loc) => return H::StructFields::Native(loc),
         N::StructFields::Defined(_, m) => m,
     };
-    let mut diags = Diagnostics::new();
     let mut indexed_fields = tfields_map
         .into_iter()
-        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&mut diags, t))))
+        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&context.reporter, t))))
         .collect::<Vec<_>>();
     indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
-    context.add_diags(diags);
     H::StructFields::Defined(indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect())
 }
 
@@ -642,12 +636,10 @@ fn variant_fields(context: &mut Context, tfields: N::VariantFields) -> Vec<(Fiel
         N::VariantFields::Empty => return vec![],
         N::VariantFields::Defined(_, m) => m,
     };
-    let mut diags = Diagnostics::new();
     let mut indexed_fields = tfields_map
         .into_iter()
-        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&mut diags, t))))
+        .map(|(f, (idx, (_doc, t)))| (idx, (f, base_type(&context.reporter, t))))
         .collect::<Vec<_>>();
-    context.add_diags(diags);
     indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect()
 }
@@ -673,18 +665,18 @@ fn type_name(sp!(loc, ntn_): N::TypeName) -> H::TypeName {
 }
 
 fn base_types<R: std::iter::FromIterator<H::BaseType>>(
-    diags: &mut Diagnostics,
+    reporter: &DiagnosticReporter,
     tys: impl IntoIterator<Item = N::Type>,
 ) -> R {
-    tys.into_iter().map(|t| base_type(diags, t)).collect()
+    tys.into_iter().map(|t| base_type(reporter, t)).collect()
 }
 
-fn base_type(diags: &mut Diagnostics, sp!(loc, nb_): N::Type) -> H::BaseType {
+fn base_type(reporter: &DiagnosticReporter, sp!(loc, nb_): N::Type) -> H::BaseType {
     use H::BaseType_ as HB;
     use N::Type_ as NT;
     let b_ = match nb_ {
         NT::Var(_) => {
-            diags.add(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!(
                     "ICE type inf. var not expanded: {}",
@@ -694,19 +686,19 @@ fn base_type(diags: &mut Diagnostics, sp!(loc, nb_): N::Type) -> H::BaseType {
             return error_base_type(loc);
         }
         NT::Apply(None, _, _) => {
-            diags.add(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!("ICE kind not expanded: {}", debug_display_verbose!(nb_))
             )));
             return error_base_type(loc);
         }
-        NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(n), base_types(diags, nbs)),
+        NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(n), base_types(reporter, nbs)),
         NT::Param(tp) => HB::Param(tp),
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
         NT::Void => HB::Unreachable,
         NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
-            diags.add(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!(
                     "ICE base type constraint failed: {}",
@@ -719,7 +711,7 @@ fn base_type(diags: &mut Diagnostics, sp!(loc, nb_): N::Type) -> H::BaseType {
     sp(loc, b_)
 }
 
-fn expected_types(diags: &mut Diagnostics, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
+fn expected_types(reporter: &DiagnosticReporter, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
     let any = || {
         sp(
             loc,
@@ -728,39 +720,39 @@ fn expected_types(diags: &mut Diagnostics, loc: Loc, nss: Vec<Option<N::Type>>) 
     };
     let ss = nss
         .into_iter()
-        .map(|sopt| sopt.map(|s| single_type(diags, s)).unwrap_or_else(any))
+        .map(|sopt| sopt.map(|s| single_type(reporter, s)).unwrap_or_else(any))
         .collect::<Vec<_>>();
     H::Type_::from_vec(loc, ss)
 }
 
-fn single_types(diags: &mut Diagnostics, ss: Vec<N::Type>) -> Vec<H::SingleType> {
-    ss.into_iter().map(|s| single_type(diags, s)).collect()
+fn single_types(reporter: &DiagnosticReporter, ss: Vec<N::Type>) -> Vec<H::SingleType> {
+    ss.into_iter().map(|s| single_type(reporter, s)).collect()
 }
 
-pub(crate) fn single_type(diags: &mut Diagnostics, sp!(loc, ty_): N::Type) -> H::SingleType {
+pub(crate) fn single_type(reporter: &DiagnosticReporter, sp!(loc, ty_): N::Type) -> H::SingleType {
     use H::SingleType_ as HS;
     use N::Type_ as NT;
     let s_ = match ty_ {
-        NT::Ref(mut_, nb) => HS::Ref(mut_, base_type(diags, *nb)),
-        _ => HS::Base(base_type(diags, sp(loc, ty_))),
+        NT::Ref(mut_, nb) => HS::Ref(mut_, base_type(reporter, *nb)),
+        _ => HS::Base(base_type(reporter, sp(loc, ty_))),
     };
     sp(loc, s_)
 }
 
-pub(crate) fn type_(diags: &mut Diagnostics, sp!(loc, ty_): N::Type) -> H::Type {
+pub(crate) fn type_(reporter: &DiagnosticReporter, sp!(loc, ty_): N::Type) -> H::Type {
     use H::Type_ as HT;
     use N::{Type_ as NT, TypeName_ as TN};
     let t_ = match ty_ {
         NT::Unit => HT::Unit,
         NT::Apply(None, _, _) => {
-            diags.add(ice!((
+            reporter.add_diag(ice!((
                 loc,
                 format!("ICE kind not expanded: {}", debug_display_verbose!(ty_))
             )));
             return error_type(loc);
         }
-        NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(diags, ss)),
-        _ => HT::Single(single_type(diags, sp(loc, ty_))),
+        NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(reporter, ss)),
+        _ => HT::Single(single_type(reporter, sp(loc, ty_))),
     };
     sp(loc, t_)
 }
@@ -824,9 +816,7 @@ fn tail(
         ty: ref in_type,
         exp: sp!(eloc, e_),
     } = e;
-    let mut diags = Diagnostics::new();
-    let out_type = type_(&mut diags, in_type.clone());
-    context.add_diags(diags);
+    let out_type = type_(&context.reporter, in_type.clone());
 
     match e_ {
         // -----------------------------------------------------------------------------------------
@@ -1057,25 +1047,24 @@ fn value(
 ) -> H::Exp {
     use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
     use T::UnannotatedExp_ as E;
-    let mut diags = Diagnostics::new();
     // we pull outthese cases because it's easier to process them without destructuring `e` first.
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
             unit_exp(e.exp.loc)
         } else {
             H::exp(
-                type_(&mut diags, e.ty.clone()),
+                type_(&context.reporter, e.ty.clone()),
                 sp(e.exp.loc, HE::Unreachable),
             )
         };
         statement(context, block, e);
         return result;
     } else if is_binop(&e) {
-        let out_type = type_(&mut diags, e.ty.clone());
+        let out_type = type_(&context.reporter, e.ty.clone());
         let out_exp = process_binops(context, block, out_type, e);
         return maybe_freeze(context, block, expected_type.cloned(), out_exp);
     } else if is_exp_list(&e) {
-        let out_type = type_(&mut diags, e.ty.clone());
+        let out_type = type_(&context.reporter, e.ty.clone());
         let eloc = e.exp.loc;
         let out_vec = value_list(context, block, Some(&out_type), e);
         return maybe_freeze(
@@ -1090,7 +1079,7 @@ fn value(
         ty: ref in_type,
         exp: sp!(eloc, e_),
     } = e;
-    let out_type = type_(&mut diags, in_type.clone());
+    let out_type = type_(&context.reporter, in_type.clone());
     let make_exp = |exp| H::exp(out_type.clone(), sp(eloc, exp));
 
     let preresult: H::Exp = match e_ {
@@ -1220,8 +1209,7 @@ fn value(
         }
 
         E::VariantMatch(subject, (_module, enum_name), arms) => {
-            let subject_out_type = type_(&mut diags, subject.ty.clone());
-            context.add_diags(diags);
+            let subject_out_type = type_(&context.reporter, subject.ty.clone());
             let subject = Box::new(value(context, block, Some(&subject_out_type), *subject));
 
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
@@ -1325,9 +1313,9 @@ fn value(
                 parameter_types,
                 method_name: _,
             } = *call;
-            let htys = base_types(&mut diags, type_arguments);
-            let expected_type = H::Type_::from_vec(eloc, single_types(&mut diags, parameter_types));
-            context.add_diags(diags);
+            let htys = base_types(&context.reporter, type_arguments);
+            let expected_type =
+                H::Type_::from_vec(eloc, single_types(&context.reporter, parameter_types));
             let arguments = value_list(context, block, Some(&expected_type), *arguments);
             let call = H::ModuleCall {
                 module,
@@ -1344,9 +1332,12 @@ fn value(
         // -----------------------------------------------------------------------------------------
         E::Vector(vec_loc, size, vty, args) => {
             let values = value_list(context, block, None, *args);
-            let bt = Box::new(base_type(&mut diags, *vty));
-            context.add_diags(diags);
-            make_exp(HE::Vector(vec_loc, size, bt, values))
+            make_exp(HE::Vector(
+                vec_loc,
+                size,
+                Box::new(base_type(&context.reporter, *vty)),
+                values,
+            ))
         }
         E::Dereference(ev) => {
             let value = value(context, block, None, *ev);
@@ -1365,10 +1356,7 @@ fn value(
                 .or_default()
                 .extend(fields.iter().map(|(_, name, _)| *name));
 
-            let base_types = base_types(&mut diags, arg_types);
-            // diags potentially added by base_types call above
-            // are added below to accomodate all additions within
-            // the larger block handling E::Pack
+            let base_types = base_types(&context.reporter, arg_types);
 
             let decl_fields = context.info.struct_fields(&module_ident, &struct_name);
 
@@ -1399,15 +1387,12 @@ fn value(
                 let field_exps = texp_fields
                     .into_iter()
                     .map(|(_, f, _, bt, te)| {
-                        let bt = base_type(&mut diags, bt);
+                        let bt = base_type(&context.reporter, bt);
                         fields.push((f, bt.clone()));
                         let t = H::Type_::base(bt);
                         (te, Some(t))
                     })
                     .collect();
-                // diags potentially added by base_type call above
-                // are added below to accomodate all additions within
-                // the larger block handling E::Pack
                 let field_exps = value_evaluation_order(context, block, field_exps);
                 assert!(
                     fields.len() == field_exps.len(),
@@ -1427,10 +1412,7 @@ fn value(
                         debug_assert!(context.env.has_errors());
                         break;
                     }
-                    let base_ty = base_type(&mut diags, bt);
-                    // diags potentially added by base_type call above
-                    // are added below to accomodate all additions within
-                    // the larger block handling E::Pack
+                    let base_ty = base_type(&context.reporter, bt);
                     let t = H::Type_::base(base_ty.clone());
                     let field_expr = value(context, block, Some(&t), tf);
                     assert!(fields.get(decl_idx).unwrap().is_none());
@@ -1447,15 +1429,11 @@ fn value(
                     })
                     .collect()
             };
-            context.add_diags(diags);
             make_exp(HE::Pack(struct_name, base_types, fields))
         }
 
         E::PackVariant(module_ident, enum_name, variant_name, arg_types, fields) => {
-            let base_types = base_types(&mut diags, arg_types);
-            // diags potentially added by base_types call above
-            // are added below to accomodate all additions within
-            // the larger block handling E::PackVariant
+            let base_types = base_types(&context.reporter, arg_types);
 
             let decl_fields =
                 context
@@ -1489,15 +1467,12 @@ fn value(
                 let field_exps = texp_fields
                     .into_iter()
                     .map(|(_, f, _, bt, te)| {
-                        let bt = base_type(&mut diags, bt);
+                        let bt = base_type(&context.reporter, bt);
                         fields.push((f, bt.clone()));
                         let t = H::Type_::base(bt);
                         (te, Some(t))
                     })
                     .collect();
-                // diags potentially added by base_type call above
-                // are added below to accomodate all additions within
-                // the larger block handling E::PackVariant
                 let field_exps = value_evaluation_order(context, block, field_exps);
                 assert!(
                     fields.len() == field_exps.len(),
@@ -1517,10 +1492,7 @@ fn value(
                         debug_assert!(context.env.has_errors());
                         break;
                     }
-                    let base_ty = base_type(&mut diags, bt);
-                    // diags potentially added by base_type call above
-                    // are added below to accomodate all additions within
-                    // the larger block handling E::PackVariant
+                    let base_ty = base_type(&context.reporter, bt);
                     let t = H::Type_::base(base_ty.clone());
                     let field_expr = value(context, block, Some(&t), tf);
                     debug_assert!(fields.get(decl_idx).unwrap().is_none());
@@ -1537,7 +1509,6 @@ fn value(
                     })
                     .collect()
             };
-            context.add_diags(diags);
             make_exp(HE::PackVariant(enum_name, variant_name, base_types, fields))
         }
 
@@ -1599,8 +1570,7 @@ fn value(
             make_exp(HE::Cast(Box::new(new_base), bt))
         }
         E::Annotate(base, rhs_ty) => {
-            let annotated_type = type_(&mut diags, *rhs_ty);
-            context.add_diags(diags);
+            let annotated_type = type_(&context.reporter, *rhs_ty);
             value(context, block, Some(&annotated_type), *base)
         }
 
@@ -1731,18 +1701,16 @@ fn value_list_items_to_vec(
     let mut tys = vec![];
     let mut tes = vec![];
 
-    let mut diags = Diagnostics::new();
     for item in items.into_iter() {
         match item {
             T::ExpListItem::Single(te, ts) => {
-                let t = single_type(&mut diags, *ts);
+                let t = single_type(&context.reporter, *ts);
                 tys.push(t.clone());
                 tes.push((te, Some(sp(t.loc, HT::Single(t)))));
             }
             T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
         }
     }
-    context.add_diags(diags);
 
     let es = value_evaluation_order(context, result, tes);
     assert!(
@@ -1804,18 +1772,16 @@ fn value_list_opt(
         } else {
             items.iter().map(|_| None).collect()
         };
-        let mut diags = Diagnostics::new();
         for (item, expected_ty) in items.into_iter().zip(expected_tys) {
             match item {
                 T::ExpListItem::Single(te, ts) => {
-                    let t = single_type(&mut diags, *ts);
+                    let t = single_type(&context.reporter, *ts);
                     tys.push(t);
                     item_exprs.push((te, expected_ty));
                 }
                 T::ExpListItem::Splat(_, _, _) => panic!("ICE splat is unsupported."),
             }
         }
-        context.add_diags(diags);
         let exprs = value_evaluation_order(context, block, item_exprs);
         assert!(
             exprs.len() == tys.len(),
@@ -1854,7 +1820,6 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         ty: ty.clone(),
         exp: sp(eloc, e_),
     };
-    let mut diags = Diagnostics::new();
     match e_ {
         // -----------------------------------------------------------------------------------------
         // control flow statements
@@ -1926,8 +1891,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         }
         E::Loop { name, body, .. } => {
             let name = translate_block_label(name);
-            let out_type = type_(&mut diags, ty.clone());
-            context.add_diags(diags);
+            let out_type = type_(&context.reporter, ty.clone());
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
             context.enter_named_block(name, binders, out_type);
             let (loop_body, has_break) = process_loop_body(context, &name, *body);
@@ -1979,8 +1943,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         //  statements with effects
         // -----------------------------------------------------------------------------------------
         E::Assign(assigns, lvalue_ty, rhs) => {
-            let expected_type = expected_types(&mut diags, eloc, lvalue_ty);
-            context.add_diags(diags);
+            let expected_type = expected_types(&context.reporter, eloc, lvalue_ty);
             let exp = value(context, block, Some(&expected_type), *rhs);
             make_assignments(context, block, eloc, H::AssignCase::Update, assigns, exp);
         }
@@ -2047,9 +2010,7 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
                 declare_bind_list(context, &bindings);
             }
             S::Bind(bindings, ty, expr) => {
-                let mut diags = Diagnostics::new();
-                let expected_tys = expected_types(&mut diags, sloc, ty);
-                context.add_diags(diags);
+                let expected_tys = expected_types(&context.reporter, sloc, ty);
                 let rhs_exp = value(context, block, Some(&expected_tys), *expr);
                 declare_bind_list(context, &bindings);
                 make_assignments(context, block, sloc, H::AssignCase::Let, bindings, rhs_exp);
@@ -2236,9 +2197,7 @@ fn declare_bind(context: &mut Context, sp!(_, bind_): &T::LValue) {
         L::Var {
             var: v, ty, mut_, ..
         } => {
-            let mut diags = Diagnostics::new();
-            let st = single_type(&mut diags, *ty.clone());
-            context.add_diags(diags);
+            let st = single_type(&context.reporter, *ty.clone());
             context.bind_local(mut_.unwrap(), *v, st)
         }
         L::Unpack(_, _, _, fields) | L::BorrowUnpack(_, _, _, _, fields) => fields
@@ -2286,9 +2245,6 @@ fn assign(
     use H::{LValue_ as L, UnannotatedExp_ as E};
     use T::LValue_ as A;
     let mut after = Block::new();
-    // all diags collected within this function are added to the context
-    // at the end of the function
-    let mut diags = Diagnostics::new();
     let l_ = match ta_ {
         A::Ignore => L::Ignore,
         A::Var {
@@ -2298,7 +2254,7 @@ fn assign(
             ..
         } => L::Var {
             var: translate_var(v),
-            ty: Box::new(single_type(&mut diags, *st)),
+            ty: Box::new(single_type(&context.reporter, *st)),
             unused_assignment: unused_binding,
         },
         A::Unpack(m, s, tbs, tfields) => {
@@ -2309,7 +2265,7 @@ fn assign(
                 .or_default()
                 .extend(tfields.iter().map(|(_, s, _)| *s));
 
-            let bs = base_types(&mut diags, tbs);
+            let bs = base_types(&context.reporter, tbs);
 
             let mut fields = vec![];
             for (decl_idx, f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
@@ -2358,7 +2314,7 @@ fn assign(
             }
         }
         A::UnpackVariant(m, e, v, tbs, tfields) => {
-            let bs = base_types(&mut diags, tbs);
+            let bs = base_types(&context.reporter, tbs);
 
             let mut fields = vec![];
             for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
@@ -2371,7 +2327,7 @@ fn assign(
             L::UnpackVariant(e, v, UnpackType::ByValue, loc, bs, fields)
         }
         A::BorrowUnpackVariant(mut_, m, e, v, tbs, tfields) => {
-            let bs = base_types(&mut diags, tbs);
+            let bs = base_types(&context.reporter, tbs);
 
             let unpack = if mut_ {
                 UnpackType::ByMutRef
@@ -2390,7 +2346,6 @@ fn assign(
             L::UnpackVariant(e, v, unpack, loc, bs, fields)
         }
     };
-    context.add_diags(diags);
     (sp(loc, l_), after)
 }
 
@@ -2401,13 +2356,12 @@ fn assign_struct_fields(
     tfields: Fields<(N::Type, T::LValue)>,
 ) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
     let decl_fields = context.info.struct_fields(m, s);
-    let mut diags = Diagnostics::new();
     let mut tfields_vec: Vec<_> = match decl_fields {
         Some(m) => tfields
             .into_iter()
             .map(|(f, (_idx, (tbt, tfa)))| {
                 let field = *m.get(&f).unwrap();
-                let base_ty = base_type(&mut diags, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (field, f, base_ty, tfa)
             })
             .collect(),
@@ -2415,12 +2369,11 @@ fn assign_struct_fields(
             .into_iter()
             .enumerate()
             .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
-                let base_ty = base_type(&mut diags, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (ndx, f, base_ty, tfa)
             })
             .collect(),
     };
-    context.add_diags(diags);
     tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
     tfields_vec
 }
@@ -2433,13 +2386,12 @@ fn assign_variant_fields(
     tfields: Fields<(N::Type, T::LValue)>,
 ) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
     let decl_fields = context.info.enum_variant_fields(m, e, v);
-    let mut diags = Diagnostics::new();
     let mut tfields_vec: Vec<_> = match decl_fields {
         Some(m) => tfields
             .into_iter()
             .map(|(f, (_idx, (tbt, tfa)))| {
                 let field = *m.get(&f).unwrap();
-                let base_ty = base_type(&mut diags, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (field, f, base_ty, tfa)
             })
             .collect(),
@@ -2447,12 +2399,11 @@ fn assign_variant_fields(
             .into_iter()
             .enumerate()
             .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
-                let base_ty = base_type(&mut diags, tbt);
+                let base_ty = base_type(&context.reporter, tbt);
                 (ndx, f, base_ty, tfa)
             })
             .collect(),
     };
-    context.add_diags(diags);
     tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
     tfields_vec
 }
@@ -2847,9 +2798,7 @@ fn process_binops(
                 op_type,
                 rhs,
             } => {
-                let mut diags = Diagnostics::new();
-                let op_type = freeze_ty(type_(&mut diags, *op_type));
-                context.add_diags(diags);
+                let op_type = freeze_ty(type_(&context.reporter, *op_type));
                 let mut lhs_block = make_block!();
                 let mut lhs_exp = build_binop(context, &mut lhs_block, op_type.clone(), *lhs);
                 let mut rhs_block = make_block!();
@@ -3004,7 +2953,7 @@ fn needs_freeze(
                         format!("Expected type: {}", debug_display_verbose!(_expected))
                     ),
                 );
-                context.add_diag(diag);
+                context.reporter.add_diag(diag);
             }
             Freeze::NotNeeded
         }
