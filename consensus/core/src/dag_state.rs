@@ -904,7 +904,8 @@ impl DagState {
     pub(crate) fn ensure_commits_to_write_is_empty(&self) {
         assert!(
             self.commits_to_write.is_empty(),
-            "Commits to write should be empty"
+            "Commits to write should be empty. {:?}",
+            self.commits_to_write,
         );
     }
 

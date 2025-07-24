@@ -11,7 +11,7 @@ use anyhow::Result;
 use arc_swap::ArcSwapOption;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{
-    to_socket_addr, Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag,
+    to_socket_addr, Clock, CommitConsumerArgs, CommitConsumerMonitor, CommittedSubDag,
     ConsensusAuthority, TransactionClient, TransactionVerifier,
 };
 use consensus_types::block::BlockTimestampMs;
@@ -289,7 +289,7 @@ pub(crate) async fn make_authority(
     let protocol_keypair = keypairs[authority_index].1.clone();
     let network_keypair = keypairs[authority_index].0.clone();
 
-    let (commit_consumer, commit_receiver, _) = CommitConsumer::new(0);
+    let (commit_consumer, commit_receiver, _) = CommitConsumerArgs::new(0, 0);
     let commit_consumer_monitor = commit_consumer.monitor();
 
     let authority = ConsensusAuthority::start(

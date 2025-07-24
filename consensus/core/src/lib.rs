@@ -59,7 +59,7 @@ pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};
 /// Exported API for testing.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
 pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, CommittedSubDag};
-pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
+pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor};
 pub use context::Clock;
 pub use network::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus},
