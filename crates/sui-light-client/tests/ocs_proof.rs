@@ -16,9 +16,7 @@ use sui_light_client::{
 use sui_types::{
     base_types::ObjectID,
     full_checkpoint_content::CheckpointData,
-    messages_checkpoint::{
-        CheckpointArtifacts, CheckpointCommitment, VerifiedCheckpoint,
-    },
+    messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment, VerifiedCheckpoint},
 };
 
 // Note: Once checkpoint artifacts are live, we can just read an actual checkpoint file.
