@@ -754,6 +754,10 @@ struct FeatureFlags {
     // If true, include indirect state in the additional consensus digest.
     #[serde(skip_serializing_if = "is_false")]
     additional_consensus_digest_indirect_state: bool,
+
+    // Check for `init` for new modules to a package on upgrade.
+    #[serde(skip_serializing_if = "is_false")]
+    check_for_init_during_upgrade: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2135,6 +2139,10 @@ impl ProtocolConfig {
     pub fn additional_consensus_digest_indirect_state(&self) -> bool {
         self.feature_flags
             .additional_consensus_digest_indirect_state
+    }
+
+    pub fn check_for_init_during_upgrade(&self) -> bool {
+        self.feature_flags.check_for_init_during_upgrade
     }
 }
 
@@ -3868,6 +3876,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
                     cfg.feature_flags.accept_passkey_in_multisig = true;
                     cfg.feature_flags.passkey_auth = true;
+                    cfg.feature_flags.check_for_init_during_upgrade = true;
 
                     // Enable Mysticeti fastpath handlers on testnet.
                     if chain != Chain::Mainnet {

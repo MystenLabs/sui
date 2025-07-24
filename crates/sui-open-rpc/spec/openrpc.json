@@ -1309,6 +1309,7 @@
                 "ban_entry_init": false,
                 "better_adapter_type_resolution_errors": false,
                 "bridge": false,
+                "check_for_init_during_upgrade": false,
                 "commit_root_state_digest": false,
                 "consensus_batched_block_sync": false,
                 "consensus_distributed_vote_scoring_strategy": false,
