@@ -1017,6 +1017,7 @@ impl IndexStore {
         limit: Option<usize>,
         reverse: bool,
     ) -> SuiResult<Vec<TransactionDigest>> {
+        // TODO: flask
         if self.remove_deprecated_tables {
             return Ok(vec![]);
         }
