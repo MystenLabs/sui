@@ -7,11 +7,10 @@ use crate::RpcService;
 use dynamic_field::{DOFWrapper, Field};
 use sui_rpc::proto::sui::rpc::v2beta2::CoinMetadata;
 use sui_rpc::proto::sui::rpc::v2beta2::CoinTreasury;
-use sui_rpc::proto::sui::rpc::v2beta2::ExtraField;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
-use sui_rpc::proto::sui::rpc::v2beta2::SupplyState;
+use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
 use sui_types::coin_registry::COIN_DATA_KEY_STRUCT_NAME;
@@ -187,14 +186,6 @@ fn get_coin_info_from_registry(
         metadata_cap_id: coin_data
             .metadata_cap_id
             .map(|id| ObjectId::from(id).to_string()),
-        extra_fields: coin_data
-            .extra_fields
-            .into_iter()
-            .map(|(key, field)| ExtraField {
-                key,
-                value: field.value.into(),
-            })
-            .collect(),
     });
 
     let treasury = if sui_types::gas_coin::GAS::is_gas(core_coin_type) {
@@ -277,7 +268,6 @@ fn get_coin_info_from_index(
                 description: Some(value.description),
                 icon_url: value.icon_url,
                 metadata_cap_id: None,
-                extra_fields: vec![],
             })
     } else {
         None

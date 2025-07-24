@@ -8,6 +8,7 @@ use sui_macros::sim_test;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
 use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     ExecutedTransaction, GetCoinInfoRequest, GetCoinInfoResponse,
 };
@@ -60,7 +61,6 @@ async fn get_coin_info_sui() {
     assert_eq!(metadata.description, Some("".to_string()));
     assert!(metadata.icon_url.is_some());
     assert!(metadata.metadata_cap_id.is_none());
-    assert!(metadata.extra_fields.is_empty());
 
     let treasury = treasury.unwrap();
     assert!(treasury.id.is_none());
@@ -70,7 +70,7 @@ async fn get_coin_info_sui() {
     );
     assert_eq!(
         treasury.supply_state,
-        Some(sui_rpc::proto::sui::rpc::v2beta2::SupplyState::Fixed as i32),
+        Some(SupplyState::Fixed as i32),
         "SUI should have Fixed supply state"
     );
 
@@ -178,7 +178,6 @@ async fn test_get_coin_info_registry_coin() {
         "metadata.metadata_cap_id should be a valid ObjectID"
     );
     assert_eq!(metadata.metadata_cap_id.unwrap(), metadata_cap.to_string());
-    assert!(metadata.extra_fields.is_empty());
     assert!(response.treasury.is_some());
     let treasury = response.treasury.unwrap();
     assert!(
@@ -189,7 +188,7 @@ async fn test_get_coin_info_registry_coin() {
     assert_eq!(treasury.total_supply.unwrap(), 5_000_000);
     assert_eq!(
         treasury.supply_state,
-        Some(sui_rpc::proto::sui::rpc::v2beta2::SupplyState::Unknown as i32),
+        Some(SupplyState::Unknown as i32),
         "Treasury cap not owned by 0x0 should have Unknown supply state"
     );
 
@@ -265,7 +264,7 @@ async fn test_get_coin_info_registry_coin() {
     );
     assert_eq!(
         treasury_after.supply_state,
-        Some(sui_rpc::proto::sui::rpc::v2beta2::SupplyState::Fixed as i32),
+        Some(SupplyState::Fixed as i32),
         "After register_supply, the supply state should be Fixed"
     );
 }
@@ -310,7 +309,6 @@ async fn test_regulated_coin_info() {
     );
     assert!(ObjectID::from_str(metadata.metadata_cap_id.as_ref().unwrap()).is_ok(),);
     assert_eq!(metadata.metadata_cap_id.unwrap(), metadata_cap.to_string());
-    assert!(metadata.extra_fields.is_empty());
     assert!(response.treasury.is_some());
     let treasury = response.treasury.unwrap();
     assert!(ObjectID::from_str(treasury.id.as_ref().unwrap()).is_ok(),);
@@ -318,7 +316,7 @@ async fn test_regulated_coin_info() {
     assert_eq!(treasury.total_supply.unwrap(), 0);
     assert_eq!(
         treasury.supply_state,
-        Some(sui_rpc::proto::sui::rpc::v2beta2::SupplyState::Unknown as i32),
+        Some(SupplyState::Unknown as i32),
     );
 
     assert!(response.regulated_metadata.is_some());
@@ -401,7 +399,6 @@ async fn test_legacy_coin_from_registry() {
         Some("https://example.com/legacy.png".to_string())
     );
     assert!(metadata.metadata_cap_id.is_none());
-    assert!(metadata.extra_fields.is_empty());
 
     assert!(response.treasury.is_some());
     let treasury = response.treasury.unwrap();
@@ -417,7 +414,7 @@ async fn test_legacy_coin_from_registry() {
     );
     assert_eq!(
         treasury.supply_state,
-        Some(sui_rpc::proto::sui::rpc::v2beta2::SupplyState::Unknown as i32),
+        Some(SupplyState::Unknown as i32),
         "Legacy coin treasury cap not owned by 0x0 should have Unknown supply state"
     );
 
@@ -474,7 +471,7 @@ async fn test_legacy_coin_from_registry() {
 
     assert_eq!(
         treasury_after.supply_state,
-        Some(sui_rpc::proto::sui::rpc::v2beta2::SupplyState::Fixed as i32),
+        Some(SupplyState::Fixed as i32),
         "After transferring treasury cap to 0x0, the supply state should be Fixed"
     );
 
