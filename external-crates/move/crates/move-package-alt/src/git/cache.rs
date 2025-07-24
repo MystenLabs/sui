@@ -260,7 +260,7 @@ impl GitTree {
 }
 
 /// Transform a repository URL into a directory name
-pub(crate) fn url_to_file_name(url: &str) -> String {
+fn url_to_file_name(url: &str) -> String {
     regex::Regex::new(r"/|:|\.|@")
         .unwrap()
         .replace_all(url, "_")
@@ -406,7 +406,7 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
     Ok(branch.try_into().expect("git returns valid shas"))
 }
 
-/// Temporary clones a repository to get the full sha and returns it
+/// If the given rev is a short sha, clone the repository to a temp dir and return the full sha.
 async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
     if rev.len() < 7
         && !rev
