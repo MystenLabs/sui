@@ -37,9 +37,9 @@ This tool only supports pending validators and active validators at the moment.
     1. If this is the first time running this program, it will ask you to provide a Sui Fullnode Server URL and a meaningful environment alias. It will also generate a random key pair in `sui.keystore` and a config `client.yaml`. Swap in your validator account key if you already have one.
 
     2. If you already set it up, simply make sure 
-      a. `rpc` is correct in `client.yaml`. 
-      b. `active_address` is correct in `client.yaml`.
-      b. `sui.keystore` contains your account key pair.
+      - `rpc` is correct in `client.yaml`. 
+      - `active_address` is correct in `client.yaml`.
+      - `sui.keystore` contains your account key pair.
 
         If at this point you can't find where `client.yaml` or `sui.keystore` is or have other questions, read [Sui Client CLI tutorial](/references/cli/client.mdx).
 
@@ -106,9 +106,9 @@ $ sui validator update-metadata --help
 
 #### Operation cap
 
-Operation Cap allows a validator to authorizer another account to perform certain actions on behalf of this validator. Read about [Operation Cap here](./validator-tasks.mdx#operation-cap).
+Operation Cap allows a validator to authorize another account to perform certain actions on behalf of this validator. Read about [Operation Cap here](./validator-tasks.mdx#operation-cap).
 
-The Operation Cap holder (either the valdiator itself or the delegatee) updates its Gas Price and reports validator peers with the Operation Cap.
+The Operation Cap holder (either the validator itself or the delegatee) updates its Gas Price and reports validator peers with the Operation Cap.
 
 #### Update gas price
 
@@ -134,7 +134,7 @@ To report validators peers, run
 $ sui validator report-validator <reportee-address>
 ```
 
-Add `--undo-report false` if it intents to undo an existing report.
+Add `--undo-report false` if it intends to undo an existing report.
 
 Similarly, if the account is a delegatee, add `--operation-cap-id <operation-cap-id>` option to the command.
 
@@ -156,7 +156,7 @@ $ sui validator make-validator-info <name> <description> <image-url> <project-ur
 ```
 
 This will generate a `validator.info` file and key pair files. The output of this command includes:
-  1. Four key pair files (Read [more here](./validator-tasks.mdx#key-management)). ==Set their permissions with the minimal visibility (chmod 600, for example) and store them securely==. They are needed when running the validator node as covered below.
+  1. Four key pair files (Read [more here](./validator-tasks.mdx#key-management)). **Set their permissions with the minimal visibility (chmod 600, for example) and store them securely**. They are needed when running the validator node as covered below.
     a. If you follow this guide thoroughly, this key pair is actually copied from your `sui.keystore` file.
   2. `validator.info` file that contains your validator info. **Double check all information is correct**.
 
