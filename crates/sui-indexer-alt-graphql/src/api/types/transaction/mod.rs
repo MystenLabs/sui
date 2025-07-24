@@ -174,28 +174,6 @@ impl Transaction {
     }
 
     /// Cursor based pagination through transactions based on filters.
-    /// Steps:
-    /// 1. Determines the effective checkpoint range by:
-    ///    - Converting filter parameters to checkpoint sequence numbers
-    ///    - Computing the lower bound (cp_lo) as the maximum of after_checkpoint + 1 or at_checkpoint
-    ///    - Computing the upper bound (cp_hi) as the minimum of`before_checkpoint - 1, at_checkpoint,
-    ///      or the current checkpoint_viewed_at
-    ///
-    /// 2. Transaction Range Calculation: Maps checkpoint boundaries to transaction sequence numbers:
-    ///    - Queries the cp_sequence_numbers table to find the first transaction (tx_lo) in the lower checkpoint
-    ///    - Uses the `network_total_transactions` from the upper checkpoint to determine the exclusive upper bound
-    ///
-    /// 3. Database Query Construction: Builds a paginated query on the tx_digests table:
-    ///    - Filters by transaction sequence number range
-    ///    - Applies cursor-based pagination filters (after/before)
-    ///    - Orders results by transaction sequence number (ascending or descending)
-    ///    - Limits results to `page.limit() + 2` to determine pagination boundaries
-    ///
-    /// 4. Result Processing: Converts database results to GraphQL connection format:
-    ///    - Maps stored transaction digests to Transaction objects
-    ///    - Creates cursor objects for pagination
-    ///    - Determines has_previous_page and has_next_page flags
-    ///
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
@@ -208,6 +186,7 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         }
 
+        // Determine the effective checkpoint range and query tx_sequence_numbers for the effective checkpoint range and filters
         let tx_sequence_numbers = match filter.checkpoint_bounds(scope.checkpoint_viewed_at()) {
             Some(cp_bounds) => {
                 Self::tx_sequence_numbers_by_checkpoint(ctx, cp_bounds, &page).await?
@@ -215,6 +194,7 @@ impl Transaction {
             None => return Ok(Connection::new(false, false)),
         };
 
+        // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination
         let (prev, next, results) =
             page.paginate_results(tx_sequence_numbers, |&t| JsonCursor::new(t));
 
@@ -223,12 +203,14 @@ impl Transaction {
         let tx_digest_keys: Vec<TxDigestKey> =
             results.iter().map(|(_, seq)| TxDigestKey(*seq)).collect();
 
+        // Load the transaction digests for the paginated tx_sequence_numbers
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let digest_map = pg_loader
             .load_many(tx_digest_keys)
             .await
             .context("Failed to load transaction digests")?;
 
+        // Convert the transaction digests to Transaction objects
         for (cursor, tx_sequence_number) in results {
             let key = TxDigestKey(tx_sequence_number);
             if let Some(stored) = digest_map.get(&key) {
@@ -245,13 +227,14 @@ impl Transaction {
         Ok(conn)
     }
 
+    /// Maps a range of checkpoints to the corresponding tx_sequence_numbers, applying cursors inclusively.
+    /// Limits the results to `page.limit() + 2` to enable pagination to determine has_previous_page and has_next_page.
     async fn tx_sequence_numbers_by_checkpoint(
         ctx: &Context<'_>,
         cp_bounds: RangeInclusive<u64>,
         page: &Page<CTransaction>,
     ) -> Result<Vec<u64>, RpcError> {
-        let transaction_bounds =
-            TransactionBounds::fetch_transaction_bounds(ctx, cp_bounds).await?;
+        let transaction_bounds = TransactionBounds::fetch(ctx, cp_bounds).await?;
 
         let tx_lo = transaction_bounds.lo();
         let tx_hi = transaction_bounds.hi();
@@ -260,9 +243,6 @@ impl Transaction {
             .before()
             .map(|sq| sq.saturating_add(1))
             .map_or(tx_hi, |sq| sq.min(tx_hi));
-
-        println!("Debug: txn lo numbers: {:?}", pg_lo);
-        println!("Debug: txn hi numbers: {:?}", pg_hi);
 
         Ok(if page.is_from_front() {
             (pg_lo..pg_hi).take(page.limit() + 2).collect()

@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{dataloader::DataLoader, Context};
+use async_graphql::Context;
 use std::ops::RangeInclusive;
-use std::sync::Arc;
 
-use sui_indexer_alt_reader::{
-    cp_sequence_numbers::CpSequenceNumberKey, kv_loader::KvLoader, pg_reader::PgReader,
-};
+use sui_indexer_alt_reader::kv_loader::KvLoader;
 
 use crate::error::RpcError;
 use anyhow::Context as _;
@@ -23,37 +20,33 @@ pub(crate) struct TransactionBounds {
 
 impl TransactionBounds {
     /// Constructs TransactionBounds using checkpoint boundaries to map transaction sequence numbers:
-    ///  - Queries the cp_sequence_numbers table to find the first transaction (tx_lo) in the lower checkpoint
-    ///  - Queries the KV store for the upper checkpoint to determine the exclusive upper bound using the `network_total_transactions` field
+    ///  - Loads the lower and upper checkpoint from the KV store
+    ///  - Calculates the tx_lo (exclusive) by using the upper checkpoint's network_total_transactions
     ///
-    pub(crate) async fn fetch_transaction_bounds(
+    pub(crate) async fn fetch(
         ctx: &Context<'_>,
         cp_bounds: RangeInclusive<u64>,
     ) -> Result<TransactionBounds, RpcError> {
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let kv_loader: &KvLoader = ctx.data()?;
 
-        // Load the lower checkpoint sequence number data
-        let cp_sequence_lo: Option<_> = pg_loader
-            .load_one(CpSequenceNumberKey(*cp_bounds.start()))
-            .await
-            .context("Failed to query checkpoint bounds")?;
+        // TODO: Should we make a load_many for checkpoints?
+        let (cp_sequence_lo, cp_sequence_hi) = tokio::try_join!(
+            kv_loader.load_one_checkpoint(*cp_bounds.start()),
+            kv_loader.load_one_checkpoint(*cp_bounds.end())
+        )
+        .context("Failed to load checkpoint bounds")?;
 
         let tx_lo = match cp_sequence_lo {
-            Some(stored_cp) => stored_cp.tx_lo as u64,
+            Some((summary, contents, _)) => {
+                summary.network_total_transactions - contents.inner().len() as u64
+            }
             None => return Err(anyhow::anyhow!("No valid lower checkpoint bound found").into()),
         };
 
-        let kv_loader: &KvLoader = ctx.data()?;
-        let contents = kv_loader
-            .load_one_checkpoint(*cp_bounds.end())
-            .await
-            .context("Failed to load checkpoint contents")?;
-
         // tx_hi_exclusive is the network_total_transactions of the highest checkpoint bound.
-        let tx_hi = if let Some((summary, _, _)) = contents.as_ref() {
-            summary.network_total_transactions as u64
-        } else {
-            return Err(anyhow::anyhow!("No valid upper tx upper bound found").into());
+        let tx_hi = match cp_sequence_hi {
+            Some((summary, _, _)) => summary.network_total_transactions as u64,
+            None => return Err(anyhow::anyhow!("No valid upper checkpoint bound found").into()),
         };
 
         Ok(Self { tx_lo, tx_hi })
