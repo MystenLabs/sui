@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{ops::RangeInclusive, sync::Arc};
 
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
+    dataloader::DataLoader,
     Context, Object,
 };
 
-use diesel::{ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
-use serde::{Deserialize, Serialize};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
     pg_reader::PgReader,
+    tx_digests::TxDigestKey,
 };
 
 use crate::{
@@ -26,22 +26,22 @@ use crate::{
 
 use super::{
     address::Address,
-    checkpoint_bounds::CheckpointBounds,
     epoch::Epoch,
     gas_input::GasInput,
-    transaction_bounds::TransactionBounds,
     transaction_effects::{EffectsContents, TransactionEffects},
-    transaction_filter::TransactionFilter,
     user_signature::UserSignature,
 };
 
-use sui_indexer_alt_schema::schema::tx_digests;
-use sui_indexer_alt_schema::transactions::StoredTxDigest;
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
     digests::TransactionDigest,
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
+
+mod filter;
+pub(crate) use filter::TransactionFilter;
+mod bounds;
+pub(crate) use bounds::TransactionBounds;
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -55,16 +55,7 @@ pub(crate) struct TransactionContents {
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
 
-/// The cursor returned for each `TransactionBlock` in a connection's page of results. The
-/// `checkpoint_viewed_at` will set the consistent upper bound for subsequent queries made on this
-/// cursor.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub(crate) struct TransactionCursor {
-    #[serde(rename = "t")]
-    pub tx_sequence_number: u64,
-}
-
-pub(crate) type CTransaction = JsonCursor<TransactionCursor>;
+pub(crate) type CTransaction = JsonCursor<u64>;
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -211,73 +202,73 @@ impl Transaction {
         page: Page<CTransaction>,
         filter: TransactionFilter,
     ) -> Result<Connection<String, Transaction>, RpcError> {
-        use tx_digests::dsl as dig;
-
         let mut conn = Connection::new(false, false);
 
-        if filter.is_empty() || page.limit() == 0 {
+        if page.limit() == 0 {
             return Ok(Connection::new(false, false));
         }
 
-        // TODO: Unsafe unwrap, handle errors?
-        let checkpoint_bounds =
-            CheckpointBounds::from_transaction_filter(&filter, scope.checkpoint_viewed_at())
-                .unwrap();
-
-        // TODO: Unsafe unwrap, handle errors?
-        let transaction_bounds =
-            TransactionBounds::fetch_transaction_bounds(ctx, checkpoint_bounds).await?;
-
-        let mut pagination = dig::tx_digests
-            .filter(dig::tx_sequence_number.ge(transaction_bounds.lower() as i64))
-            .filter(dig::tx_sequence_number.lt(transaction_bounds.upper_exclusive() as i64))
-            .limit(page.limit() as i64 + 2)
-            .into_boxed();
-
-        if let Some(after) = page.after() {
-            pagination =
-                pagination.filter(dig::tx_sequence_number.ge(after.tx_sequence_number as i64));
-        }
-
-        if let Some(before) = page.before() {
-            pagination =
-                pagination.filter(dig::tx_sequence_number.lt(before.tx_sequence_number as i64));
-        }
-
-        pagination = if page.is_from_front() {
-            pagination.order_by(dig::tx_sequence_number)
-        } else {
-            pagination.order_by(dig::tx_sequence_number.desc())
+        let tx_sequence_numbers = match filter.checkpoint_bounds(scope.checkpoint_viewed_at()) {
+            Some(cp_bounds) => {
+                Self::tx_sequence_numbers_by_checkpoint(ctx, cp_bounds, &page).await?
+            }
+            None => return Ok(Connection::new(false, false)),
         };
 
-        let pg_reader: &PgReader = ctx.data()?;
-        let mut c = pg_reader
-            .connect()
+        let (prev, next, results) =
+            page.paginate_results(tx_sequence_numbers, |&t| JsonCursor::new(t));
+
+        let results: Vec<_> = results.collect();
+        // Convert sequence numbers to TxDigestKeys
+        let tx_digest_keys: Vec<TxDigestKey> =
+            results.iter().map(|(_, seq)| TxDigestKey(*seq)).collect();
+
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let digest_map = pg_loader
+            .load_many(tx_digest_keys)
             .await
-            .context("Failed to connect to database")?;
+            .context("Failed to load transaction digests")?;
 
-        let results: Vec<StoredTxDigest> = c
-            .results(pagination)
-            .await
-            .context("Failed to read from database")?;
-
-        let (prev, next, results) = page.paginate_results(results, |t| {
-            JsonCursor::new(TransactionCursor {
-                tx_sequence_number: t.tx_sequence_number as u64,
-            })
-        });
-
-        for (cursor, stored) in results {
-            let transaction_digest = TransactionDigest::try_from(stored.tx_digest.clone())
-                .context("Failed to deserialize transaction digest")?;
-            let object = Self::with_id(scope.clone(), transaction_digest);
-            conn.edges.push(Edge::new(cursor.encode_cursor(), object));
+        for (cursor, tx_sequence_number) in results {
+            let key = TxDigestKey(tx_sequence_number);
+            if let Some(stored) = digest_map.get(&key) {
+                let transaction_digest = TransactionDigest::try_from(stored.tx_digest.clone())
+                    .context("Failed to deserialize transaction digest")?;
+                let object = Self::with_id(scope.clone(), transaction_digest);
+                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
+            }
         }
 
         conn.has_previous_page = prev;
         conn.has_next_page = next;
 
         Ok(conn)
+    }
+
+    async fn tx_sequence_numbers_by_checkpoint(
+        ctx: &Context<'_>,
+        cp_bounds: RangeInclusive<u64>,
+        page: &Page<CTransaction>,
+    ) -> Result<Vec<u64>, RpcError> {
+        let transaction_bounds =
+            TransactionBounds::fetch_transaction_bounds(ctx, cp_bounds).await?;
+
+        let tx_lo = transaction_bounds.lo();
+        let tx_hi = transaction_bounds.hi();
+        let pg_lo = page.after().map_or(tx_lo, |sq| sq.max(tx_lo));
+        let pg_hi = page
+            .before()
+            .map(|sq| sq.saturating_add(1))
+            .map_or(tx_hi, |sq| sq.min(tx_hi));
+
+        println!("Debug: txn lo numbers: {:?}", pg_lo);
+        println!("Debug: txn hi numbers: {:?}", pg_hi);
+
+        Ok(if page.is_from_front() {
+            (pg_lo..pg_hi).take(page.limit() + 2).collect()
+        } else {
+            (pg_lo..pg_hi).rev().take(page.limit() + 2).collect()
+        })
     }
 }
 

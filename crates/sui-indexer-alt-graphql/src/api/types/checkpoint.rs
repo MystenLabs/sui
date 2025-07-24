@@ -16,8 +16,7 @@ use crate::{
         query::Query,
         scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
         types::{
-            transaction::{CTransaction, Transaction},
-            transaction_filter::TransactionFilter,
+            transaction::{CTransaction, Transaction, TransactionFilter},
             validator_aggregated_signature::ValidatorAggregatedSignature,
         },
     },

@@ -18,8 +18,9 @@ use anyhow::Context as _;
 use async_graphql::{connection::Connection, dataloader::DataLoader, Context, Error, Object};
 use futures::try_join;
 use std::sync::Arc;
-use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
+
 use sui_indexer_alt_reader::{
+    cp_sequence_numbers::CpSequenceNumberKey,
     epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
     pg_reader::PgReader,
 };

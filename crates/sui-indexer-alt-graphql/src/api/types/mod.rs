@@ -3,7 +3,6 @@
 
 pub(crate) mod address;
 pub(crate) mod checkpoint;
-pub(crate) mod checkpoint_bounds;
 pub(crate) mod epoch;
 pub(crate) mod event;
 pub(crate) mod execution_error;
@@ -17,9 +16,7 @@ pub(crate) mod protocol_configs;
 pub(crate) mod service_config;
 pub(crate) mod storage_fund;
 pub(crate) mod transaction;
-pub(crate) mod transaction_bounds;
 pub(crate) mod transaction_effects;
-pub(crate) mod transaction_filter;
 pub(crate) mod user_signature;
 pub(crate) mod validator_aggregated_signature;
 pub(crate) mod validator_set;
