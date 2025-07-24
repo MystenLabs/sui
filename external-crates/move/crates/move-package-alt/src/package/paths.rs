@@ -11,6 +11,7 @@ use std::{
 };
 
 use thiserror::Error;
+use tracing::debug;
 
 use super::EnvironmentName;
 
@@ -35,19 +36,28 @@ impl PackagePath {
     /// directory at `dir` and that it contains a valid Move package, i.e., it has a `Move.toml`
     /// file.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
+        debug!("creating package path for {dir:?}");
+        if dir.as_os_str() == "." {
+            panic!()
+        }
         let path = dir
             .canonicalize()
             .map_err(|e| PackagePathError::InvalidDirectory { path: dir.clone() })?;
 
+        debug!("package path: {path:?}");
         if !dir.is_dir() {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
         }
 
-        if !dir.join("Move.toml").exists() {
-            return Err(PackagePathError::InvalidPackage { path: dir.clone() });
+        let result = Self(path);
+
+        if !result.manifest_path().exists() {
+            return Err(PackagePathError::InvalidPackage {
+                path: result.manifest_path(),
+            });
         }
 
-        Ok(Self(path))
+        Ok(result)
     }
 
     pub fn path(&self) -> &Path {

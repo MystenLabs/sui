@@ -9,8 +9,9 @@ DependencySet {
             ): PinnedDependencyInfo(
                 Dependency {
                     dep_info: Local(
-                        LocalDepInfo {
-                            local: "for-res-1",
+                        PinnedLocalDependency {
+                            absolute_path_to_package: "tests/data/external_multiple_resolvers/for-res-1",
+                            relative_path_from_root_package: "for-res-1",
                         },
                     ),
                     use_environment: "_test_env",
@@ -25,8 +26,9 @@ DependencySet {
             ): PinnedDependencyInfo(
                 Dependency {
                     dep_info: Local(
-                        LocalDepInfo {
-                            local: "for-res-2",
+                        PinnedLocalDependency {
+                            absolute_path_to_package: "tests/data/external_multiple_resolvers/for-res-2",
+                            relative_path_from_root_package: "for-res-2",
                         },
                     ),
                     use_environment: "_test_env",

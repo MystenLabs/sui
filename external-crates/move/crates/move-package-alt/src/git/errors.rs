@@ -29,6 +29,9 @@ pub enum GitError {
 
     #[error(transparent)]
     TempDirectory(#[from] std::io::Error),
+
+    #[error("relative path `{path}` is not contained in the repository")]
+    BadPath { path: PathBuf },
 }
 
 #[derive(Error, Debug)]

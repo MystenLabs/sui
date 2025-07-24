@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::{FetchedDependency, PinnedDependencyInfo},
+    dependency::PinnedDependencyInfo,
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
@@ -99,7 +99,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
-            let dep = PinnedDependencyInfo::from_pin(lockfile.file(), env.name(), pin);
+            let dep = PinnedDependencyInfo::from_lockfile(lockfile.file(), env.name(), pin)?;
             let package = self.cache.fetch(&dep, env).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
@@ -280,7 +280,7 @@ impl<F: MoveFlavor> PackageCache<F> {
             .cache
             .lock()
             .expect("unpoisoned")
-            .entry(FetchedDependency::unfetched_path(dep))
+            .entry(dep.unfetched_path())
             .or_default()
             .clone();
 
@@ -300,7 +300,7 @@ impl<F: MoveFlavor> PackageCache<F> {
             }
             Err(e) => Err(PackageError::Generic(format!(
                 "Failed to load package from {}: {}",
-                FetchedDependency::unfetched_path(dep).display(),
+                dep.unfetched_path().display(),
                 e
             ))),
         }

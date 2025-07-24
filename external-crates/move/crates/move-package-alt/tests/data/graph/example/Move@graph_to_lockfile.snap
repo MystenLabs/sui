@@ -21,7 +21,7 @@ manifest_digest = "cab3"
 deps = { bar = "bar" }
 
 [pinned.mainnet.example]
-source = { local = "." }
+source = { root = true }
 manifest_digest = "cb4a8948faa586ccc1694d80e25941a5227d8b9e"
 deps = { baz = "baz" }
 
