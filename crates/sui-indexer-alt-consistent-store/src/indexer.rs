@@ -21,7 +21,25 @@ use crate::{
     store::{synchronizer::Synchronizer, Schema, Store},
 };
 
-/// An indexer specialised for writing to a RocksDB store via a schema, `S`.
+/// An indexer specialised for writing to a RocksDB store via a schema, `S`, composed of three main
+/// components:
+///
+/// - A [`framework::Indexer`], from the indexing framework. Only sequential pipelines are exposed
+///   because the synchronizer requires writes to come in checkpoint order, and to be associated
+///   with their checkpoint, so that it can line up all pipelines at the same checkpoint before
+///   taking a snapshot.
+///
+/// - Access to RocksDB via a [`Store<S>`]. Its type parameter, `S`, describes the type-safe schema
+///   of the database (the types of keys and values in each column family). Pipelines use maps in
+///   the schema described by `S` to serialize data into writes for the database.
+///
+/// - A [`Synchronizer`], which coordinates taking database-wide snapshots with writes coming in
+///   from the various pipelines.
+///
+/// When a pipeline performs a write for a checkpoint, the data for that checkpoint is bundled with
+/// a watermark update, into an atomic write for the database. This write is sent down a channel to
+/// a synchronizer task which decides whether to perform the write immediately, or wait because it
+/// belongs in the next snapshot.
 pub(crate) struct Indexer<S: Schema + Send + Sync + 'static> {
     indexer: framework::Indexer<Store<S>>,
 
@@ -72,9 +90,6 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
 
     /// Adds a new sequential pipeline to the indexer and starts it up. See
     /// [`framework::Indexer::sequential_pipeline`] for details.
-    ///
-    /// Unlike the generic indexer, this indexer only supports sequential pipelines, because the
-    /// underlying store only works with transactional writes, and does not support pruning.
     pub(crate) async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
@@ -84,13 +99,19 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
         H: sequential::Handler<Store = Store<S>> + Send + Sync + 'static,
     {
         self.sync
-            .add_pipeline(H::NAME)
+            .register_pipeline(H::NAME)
             .context("Failed to add pipeline to synchronizer")?;
         self.indexer.sequential_pipeline(handler, config).await
     }
 
-    /// Start ingesting checkpoints. See [`framework::Indexer::run`] for details.
+    /// Start ingesting checkpoints, consuming the indexer in the process.
+    ///
+    /// See [`framework::Indexer::run`] for details.
     pub(crate) async fn run(self) -> anyhow::Result<JoinHandle<()>> {
+        // Associate the indexer's store with the synchronizer. This spins up a separate task for
+        // each pipeline that was registered, and installs the write queues that talk to those
+        // tasks into the store, so that when a write arrives to the store for a particular
+        // pipeline, it can make its way to the right task.
         let h_sync = self.indexer.store().sync(self.sync)?;
         let h_indexer = self.indexer.run();
         Ok(tokio::spawn(async move {

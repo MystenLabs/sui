@@ -27,11 +27,17 @@ pub struct DbConfig {
 
 impl Default for DbConfig {
     fn default() -> Self {
+        // The default values are chosen to increase resource usage compared to the default RocksDB
+        // settings.
         Self {
+            // Increase write buffer and WAL sizes to prepare for high write throughput.
             write_buffer_size_mb: 4 * 1024,
             max_wal_size_mb: 4 * 1024,
+            // Increase block size and and cache size to handle a mix of point lookup and scan
+            // workloads.
             block_size_kb: 32,
             block_cache_slots: 8192,
+            // Increase parallelism to allow more concurrent flushes and compactions.
             db_parallelism: 8,
         }
     }
