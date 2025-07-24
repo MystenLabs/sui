@@ -919,7 +919,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
         if self.env.protocol_config.check_for_init_during_upgrade() {
             // find newly added modules to the package,
-            // and run their init functions (if applicable)
+            // and error if they have init functions
             let current_module_names: BTreeSet<&str> = current_package
                 .move_package()
                 .serialized_module_map()
