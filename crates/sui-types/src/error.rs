@@ -934,6 +934,10 @@ impl SuiError {
                     _ => false,
                 }
             }
+
+            // TODO(unlock): make this error retriable after auto-unlock after enough retry delay.
+            SuiError::ObjectLockConflict { .. } => true,
+
             // Other variants are assumed to be retriable.
             _ => true,
         }
