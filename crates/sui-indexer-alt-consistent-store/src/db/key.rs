@@ -12,7 +12,6 @@
 //! - Collections are first ordered by size, then by their elements in lexicographic order.
 use bincode::{error::DecodeError, Decode, Encode};
 
-#[inline]
 pub(crate) fn encode<T: Encode>(x: &T) -> Vec<u8> {
     let config = bincode::config::standard()
         .with_big_endian()
@@ -22,7 +21,6 @@ pub(crate) fn encode<T: Encode>(x: &T) -> Vec<u8> {
 }
 
 #[allow(dead_code)]
-#[inline]
 pub(crate) fn decode<T: Decode<()>>(b: &[u8]) -> Result<T, DecodeError> {
     let config = bincode::config::standard()
         .with_big_endian()
@@ -36,7 +34,6 @@ pub(crate) fn decode<T: Decode<()>>(b: &[u8]) -> Result<T, DecodeError> {
 /// Returns a boolean indicating whether the increment succeeded without overflow or not. If the
 /// increment did result in an overflow, the key is reset to all zeros.
 #[allow(dead_code)]
-#[inline]
 pub(crate) fn next(bs: &mut [u8]) -> bool {
     for b in bs.iter_mut().rev() {
         *b = b.wrapping_add(1);
