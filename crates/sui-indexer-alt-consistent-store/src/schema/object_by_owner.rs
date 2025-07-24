@@ -25,7 +25,8 @@ pub(crate) struct Key {
     pub(crate) type_: Option<StructTag>,
 
     /// If the object is coin-like (has a balance), this field stores the bitwise negation (one's
-    /// complement) of the balance.
+    /// complement) of the balance. This ensures coin-like objects are ordered in descending order
+    /// of balance.
     pub(crate) balance: Option<u64>,
 
     /// The ID of the object.
