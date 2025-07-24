@@ -14,3 +14,6 @@ move-core-types.workspace = true
 
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
