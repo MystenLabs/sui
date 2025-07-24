@@ -5584,24 +5584,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "grpc-reader"
-version = "1.53.0"
-dependencies = [
- "anyhow",
- "base64ct",
- "bcs",
- "fastcrypto",
- "hex",
- "rand 0.8.5",
- "shared-crypto",
- "sui-json-rpc-types",
- "sui-rpc-api",
- "sui-sdk",
- "sui-types",
- "tokio",
-]
-
-[[package]]
 name = "guppy"
 version = "0.17.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -80,7 +80,7 @@ members = [
   "consensus/simtests",
   "consensus/types",
   "crates/anemo-benchmark",
-  "crates/bin-version", "crates/grpc-reader",
+  "crates/bin-version",
   "crates/mysten-common",
   "crates/mysten-metrics",
   "crates/mysten-network",
