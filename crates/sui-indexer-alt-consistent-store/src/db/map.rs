@@ -150,7 +150,6 @@ where
         Ok(())
     }
 
-    #[inline]
     fn cf(&self) -> Result<Arc<rocksdb::BoundColumnFamily>, Error> {
         self.db
             .cf(&self.cf)
