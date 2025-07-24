@@ -7,7 +7,6 @@ pub(crate) mod epoch;
 
 pub(crate) mod gas;
 pub(crate) mod gas_input;
-pub(crate) mod intersect;
 pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;
