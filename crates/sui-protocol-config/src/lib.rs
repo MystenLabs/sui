@@ -3868,6 +3868,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
                     cfg.feature_flags.accept_passkey_in_multisig = true;
                     cfg.feature_flags.passkey_auth = true;
+
+                    // Enable Mysticeti fastpath handlers on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.mysticeti_fastpath = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
