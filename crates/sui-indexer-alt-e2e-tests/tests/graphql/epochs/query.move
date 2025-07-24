@@ -55,6 +55,15 @@ fragment E on Epoch {
     totalObjectStorageRebates
     nonRefundableBalance
   }
+  safeMode {
+    enabled
+    gasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+  }
 }
 
 //# run-graphql
@@ -99,5 +108,14 @@ fragment E on Epoch {
   storageFund {
     totalObjectStorageRebates
     nonRefundableBalance
+  }
+  safeMode {
+    enabled
+    gasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
   }
 }
