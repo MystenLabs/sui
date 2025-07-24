@@ -419,7 +419,6 @@ div[role="tabpanel"] {
   @apply bg-sui-steel-dark;
 }
 
-<<<<<<< HEAD
 .ais-Pagination-list {
   @apply pl-0 list-none flex justify-center;
 }
@@ -453,11 +452,9 @@ div[role="tabpanel"] {
   transition-delay: 700ms; 
 }
 
-=======
->>>>>>> 537176dec5 (Dark styles)
 /** Globals **/
 .button-cta {
-  @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out
+  @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out;
 }
 
 .button-cta:hover {
