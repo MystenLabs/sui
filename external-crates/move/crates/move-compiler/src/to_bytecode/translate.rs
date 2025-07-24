@@ -8,7 +8,7 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::{DiagnosticReporter, Diagnostics},
+    diagnostics::{DiagnosticReporter, Diagnostics, warning_filters::WarningFiltersScope},
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
@@ -23,7 +23,8 @@ use crate::{
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
     shared::{
-        known_attributes::AttributeKind_, program_info::ModuleInfo, unique_map::UniqueMap, *,
+        ide::IDEInfo, known_attributes::AttributeKind_, program_info::ModuleInfo,
+        unique_map::UniqueMap, *,
     },
 };
 use move_binary_format::file_format as F;
@@ -35,7 +36,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     convert::TryInto,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
@@ -153,19 +154,34 @@ fn pre_compiled_decls(
 ) {
     fn hlir_function_signature(sig: N::FunctionSignature) -> H::FunctionSignature {
         let type_parameters = sig.type_parameters;
-        let mut diags = Diagnostics::new();
+        let empty_flags = Flags::empty();
+        let empty_known_filter_names = BTreeMap::new();
+        let empty_diags = RwLock::new(Diagnostics::new());
+        let empty_ide_info = RwLock::new(IDEInfo::new());
+        let empty_warning_filters_scope = WarningFiltersScope::root(None);
+        // create an empty reporter to collect all diagnostics,
+        // and report ICE if any exist as in here there shouldn't be any
+        // (we are effectively re-doing part of an earlier pass here that
+        // succeeded in the past)
+        let empty_reporter = DiagnosticReporter::new(
+            &empty_flags,
+            &empty_known_filter_names,
+            &empty_diags,
+            &empty_ide_info,
+            empty_warning_filters_scope,
+        );
         let parameters = sig
             .parameters
             .into_iter()
             .map(|(mut_, v, tty)| {
-                let ty = hlir_single_type(&mut diags, tty);
+                let ty = hlir_single_type(&empty_reporter, tty);
                 (mut_, translate_var(v), ty)
             })
             .collect();
-        if !diags.is_empty() {
+        if !empty_reporter.is_empty() {
             panic!("ICE There should be no errors when translating pre-compiled type");
         }
-        let return_type = type_(&mut diags, sig.return_type);
+        let return_type = type_(&empty_reporter, sig.return_type);
         H::FunctionSignature {
             type_parameters,
             parameters,
