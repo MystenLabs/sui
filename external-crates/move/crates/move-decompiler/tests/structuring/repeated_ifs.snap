@@ -1,0 +1,14 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+if (0) {
+    { 1 }
+} else {
+    { 2 }
+}
+if (3) {
+    { 4 }
+} else {
+    { 5 }
+}
+{ 6 }

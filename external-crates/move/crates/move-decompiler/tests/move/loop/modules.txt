@@ -1,0 +1,2 @@
+loop
+infinite_loop
