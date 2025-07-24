@@ -8,7 +8,6 @@ pub(crate) mod event;
 pub(crate) mod execution_error;
 pub(crate) mod gas;
 pub(crate) mod gas_input;
-pub(crate) mod intersect;
 pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;

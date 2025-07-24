@@ -5,7 +5,7 @@ use async_graphql::InputObject;
 use std::ops::RangeInclusive;
 
 use crate::api::scalars::uint53::UInt53;
-use crate::api::types::intersect;
+use crate::intersect;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionFilter {
