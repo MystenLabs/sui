@@ -301,15 +301,19 @@ fn module<'env>(
         syntax_methods,
         use_funs,
         friends,
+        stdlib_definitions,
         structs: nstructs,
         enums: nenums,
         functions: nfunctions,
         constants: nconstants,
     } = mdef;
+
     context.current_module = Some(ident);
     context.current_package = package_name;
     context.push_warning_filter_scope(warning_filter);
     context.add_use_funs_scope(use_funs);
+    context.add_stdlib_definitions(stdlib_definitions);
+
     process_module_attributes(&mut context, &attributes);
     let structs = Mutex::new(UniqueMap::new());
     let enums = Mutex::new(UniqueMap::new());

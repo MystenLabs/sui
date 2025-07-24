@@ -1719,6 +1719,7 @@ fn module(
         target_kind,
         use_funs: euse_funs,
         friends: efriends,
+        stdlib_definitions: estdlib_definitions,
         structs: estructs,
         enums: eenums,
         functions: efunctions,
@@ -1729,6 +1730,7 @@ fn module(
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
+    let stdlib_definitions = resolve_stdlib_definitions(context, estdlib_definitions);
     let struct_names = estructs
         .key_cloned_iter()
         .map(|(k, _)| k)
@@ -1792,6 +1794,7 @@ fn module(
         use_funs,
         syntax_methods,
         friends,
+        stdlib_definitions,
         structs,
         enums,
         constants,
@@ -2045,6 +2048,72 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
     } else {
         assert!(context.env.has_errors());
         None
+    }
+}
+
+//**************************************************************************************************
+// Std Library Definitions
+//**************************************************************************************************
+
+fn resolve_stdlib_definitions(
+    context: &mut Context,
+    estdlib_definitions: E::StdlibDefinitions,
+) -> N::StdlibDefinitions {
+    let cur_diag_reporter = std::mem::replace(
+        &mut context.reporter,
+        context.env.dummy_diagnostic_reporter(),
+    );
+
+    let E::StdlibDefinitions { functions, types } = estdlib_definitions;
+
+    let functions = functions
+        .into_iter()
+        .filter_map(|(name, path)| resolve_stdlib_function(context, path).map(|fun| (name, fun)))
+        .collect::<BTreeMap<_, _>>();
+
+    let types = types
+        .into_iter()
+        .filter_map(|(name, path)| resolve_stdlib_type(context, path).map(|ty| (name, ty)))
+        .collect::<BTreeMap<_, _>>();
+
+    let _ = std::mem::replace(&mut context.reporter, cur_diag_reporter);
+
+    N::StdlibDefinitions { functions, types }
+}
+
+fn resolve_stdlib_function(
+    context: &mut Context,
+    ma: E::ModuleAccess_,
+) -> Option<(ModuleIdent, FunctionName)> {
+    use ResolvedCallSubject as RC;
+    match context.resolve_call_subject(sp(Loc::invalid(), ma)) {
+        RC::Builtin(_) | RC::Constructor(_) | RC::Var(_) | RC::Unbound => None,
+        RC::Function(fun) => Some((fun.mident, fun.name)),
+    }
+}
+
+fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N::Type> {
+    use N::{Type_ as NT, TypeName_ as NN};
+    use ResolvedType as RT;
+    match context.resolve_type(sp(Loc::invalid(), ma)) {
+        RT::Unbound | RT::Hole | RT::BuiltinType(..) | RT::TParam(..) => None,
+        RT::ModuleType(mt) => {
+            let (decl_loc, tn, arity) = match mt {
+                ResolvedDatatype::Struct(stype) => {
+                    let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident, stype.name));
+                    let arity = stype.tyarg_arity;
+                    (stype.decl_loc, tn, arity)
+                }
+                ResolvedDatatype::Enum(etype) => {
+                    let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident, etype.name));
+                    let arity = etype.tyarg_arity;
+                    (etype.decl_loc, tn, arity)
+                }
+            };
+            assert!(arity == 0, "Cannot resolve stdlib types with arguments");
+            let tys = vec![];
+            Some(sp(decl_loc, NT::Apply(None, tn, tys)))
+        }
     }
 }
 

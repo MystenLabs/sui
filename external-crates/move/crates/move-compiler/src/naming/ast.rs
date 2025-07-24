@@ -15,7 +15,7 @@ use crate::{
     },
     shared::{
         ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
-        unique_map::UniqueMap, *,
+        stdlib_definitions::StdlibName, unique_map::UniqueMap, *,
     },
 };
 use move_ir_types::location::*;
@@ -135,6 +135,16 @@ pub struct SyntaxMethodEntry {
 pub type SyntaxMethods = BTreeMap<TypeName, SyntaxMethodEntry>;
 
 //**************************************************************************************************
+// Std Library Definitions
+//**************************************************************************************************
+
+#[derive(Debug, Clone)]
+pub struct StdlibDefinitions {
+    pub functions: BTreeMap<StdlibName, (ModuleIdent, FunctionName)>,
+    pub types: BTreeMap<StdlibName, Type>,
+}
+
+//**************************************************************************************************
 // Modules
 //**************************************************************************************************
 
@@ -152,6 +162,7 @@ pub struct ModuleDefinition {
     pub use_funs: UseFuns,
     pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Friend>,
+    pub stdlib_definitions: StdlibDefinitions,
     pub structs: UniqueMap<DatatypeName, StructDefinition>,
     pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
@@ -862,6 +873,10 @@ impl Type_ {
         Self::builtin(loc, sp(loc, BuiltinTypeName_::Vector), vec![elem])
     }
 
+    pub fn bytearray(loc: Loc) -> Type {
+        Type_::vector(loc, Type_::u8(loc))
+    }
+
     pub fn multiple(loc: Loc, tys: Vec<Type>) -> Type {
         sp(loc, Self::multiple_(loc, tys))
     }
@@ -1217,6 +1232,20 @@ impl AstDebug for SyntaxMethods {
     }
 }
 
+impl AstDebug for StdlibDefinitions {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.writeln("stdlib definitions: ");
+        for (key, (mident, name)) in &self.functions {
+            w.writeln(format!("  {} -> {}::{}", key, mident, name));
+        }
+        for (key, ty) in &self.types {
+            w.write(format!("  {} -> ", key));
+            ty.ast_debug(w);
+            w.new_line();
+        }
+    }
+}
+
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
@@ -1230,6 +1259,7 @@ impl AstDebug for ModuleDefinition {
             use_funs,
             syntax_methods,
             friends,
+            stdlib_definitions,
             structs,
             enums,
             constants,
@@ -1244,6 +1274,7 @@ impl AstDebug for ModuleDefinition {
         target_kind.ast_debug(w);
         use_funs.ast_debug(w);
         syntax_methods.ast_debug(w);
+        stdlib_definitions.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(format!("friend {};", mident));
             w.new_line();

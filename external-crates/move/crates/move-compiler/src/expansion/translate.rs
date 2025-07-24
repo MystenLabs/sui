@@ -40,6 +40,7 @@ use crate::{
         VariantName,
     },
     shared::{
+        self,
         ide::{IDEAnnotation, IDEInfo},
         known_attributes::{AttributeKind_, AttributePosition},
         program_info::ModuleInfo,
@@ -58,6 +59,8 @@ use std::{
     iter::IntoIterator,
     sync::{Arc, Mutex},
 };
+
+use super::ast::StdlibDefinitions;
 
 //**************************************************************************************************
 // Context
@@ -525,7 +528,8 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
     }
     // Unused loc since these will not conflict and are implicit so no warnings are given
     let loc = Loc::invalid();
-    let std_address = maybe_make_well_known_address(context, loc, symbol!("std"));
+    let std_address =
+        maybe_make_well_known_address(context, loc, stdlib_definitions::STDLIB_ADDRESS_NAME);
     let sui_address = maybe_make_well_known_address(context, loc, symbol!("sui"));
     let mut modules: Vec<(Address, Symbol)> = vec![];
     let mut members: Vec<(Address, Symbol, Symbol, ModuleMemberKind)> = vec![];
@@ -1200,6 +1204,8 @@ fn module_(
     let mut use_funs = use_funs(context, use_funs_builder);
     check_visibility_modifiers(context, &functions, &friends, package_name);
 
+    let stdlib_definitions = stdlib_definitions(context, loc);
+
     context.pop_alias_scope(Some(&mut use_funs));
 
     let named_address_map = context.defn_context.named_address_mapping.clone().unwrap();
@@ -1213,6 +1219,7 @@ fn module_(
         use_funs,
         target_kind,
         friends,
+        stdlib_definitions,
         structs,
         enums,
         constants,
@@ -1355,6 +1362,48 @@ fn extension_attributes(context: &mut Context<'_>, attributes: Vec<Spanned<P::At
             }
         }
     }
+}
+
+fn stdlib_definitions(context: &mut Context, mloc: Loc) -> StdlibDefinitions {
+    if maybe_make_well_known_address(context, mloc, stdlib_definitions::STDLIB_ADDRESS_NAME)
+        .is_none()
+    {
+        return StdlibDefinitions {
+            functions: BTreeMap::new(),
+            types: BTreeMap::new(),
+        };
+    }
+
+    // We don't want to report errors here if we can't find the thing.
+    let cur_diag_reporter = std::mem::replace(
+        &mut context.defn_context.reporter,
+        context.defn_context.env.dummy_diagnostic_reporter(),
+    );
+
+    let stdlib_functions = shared::stdlib_definitions::stdlib_function_definition(mloc);
+    let stdlib_types = shared::stdlib_definitions::stdlib_type_definition(mloc);
+
+    let functions = stdlib_functions
+        .into_iter()
+        .filter_map(|(key, name)| {
+            context
+                .name_access_chain_to_module_access(Access::ApplyPositional, name)
+                .map(|name| (key, name.access.value))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let types = stdlib_types
+        .into_iter()
+        .filter_map(|(key, name)| {
+            context
+                .name_access_chain_to_module_access(Access::Type, name)
+                .map(|name| (key, name.access.value))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let _ = std::mem::replace(&mut context.defn_context.reporter, cur_diag_reporter);
+
+    StdlibDefinitions { functions, types }
 }
 
 // -------------------------------------------------------------------------------------------------

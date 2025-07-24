@@ -268,6 +268,7 @@ codes!(
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
         DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
+        InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

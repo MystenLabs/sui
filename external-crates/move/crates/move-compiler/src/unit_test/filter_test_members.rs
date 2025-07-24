@@ -10,12 +10,13 @@ use crate::{
     diagnostics::DiagnosticReporter,
     expansion::ast::Address,
     parser::{
-        ast::{self as P, DocComment, NamePath, PathEntry},
+        ast::{self as P, DocComment},
         filter::{FilterContext, filter_program},
     },
     shared::{
         CompilationEnv,
         known_attributes::{self, AttributeKind_},
+        stdlib_definitions::{has_unit_test_module, unit_test_poision},
     },
     sui_mode::STD_ADDR_VALUE,
 };
@@ -88,8 +89,6 @@ impl FilterContext for Context<'_> {
 // Filtering of test-annotated module members
 //***************************************************************************
 
-const UNIT_TEST_MODULE_NAME: Symbol = symbol!("unit_test");
-const STDLIB_ADDRESS_NAME: Symbol = symbol!("std");
 pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 
 // This filters out all test, and test-only annotated module member from `prog` if the `test` flag
@@ -111,18 +110,19 @@ pub fn program(
 }
 
 fn stdlib_unit_test_module_in_program(prog: &P::Program) -> bool {
+    use crate::shared::stdlib_definitions as SD;
     prog.lib_definitions
         .iter()
         .chain(prog.source_definitions.iter())
         .any(|pkg| match &pkg.def {
             P::Definition::Module(mdef) => {
-                mdef.name.0.value == UNIT_TEST_MODULE_NAME
+                mdef.name.0.value == SD::UNIT_TEST_MODULE_NAME
                     && mdef.address.is_some()
                     && match &mdef.address.as_ref().unwrap().value {
                         // TODO: remove once named addresses have landed in the stdlib
-                        P::LeadingNameAccess_::Name(name) => name.value == STDLIB_ADDRESS_NAME,
+                        P::LeadingNameAccess_::Name(name) => name.value == SD::STDLIB_ADDRESS_NAME,
                         P::LeadingNameAccess_::GlobalAddress(name) => {
-                            name.value == STDLIB_ADDRESS_NAME
+                            name.value == SD::STDLIB_ADDRESS_NAME
                         }
                         P::LeadingNameAccess_::AnonymousAddress(_) => false,
                     }
@@ -134,9 +134,10 @@ fn stdlib_unit_test_module_in_program(prog: &P::Program) -> bool {
 fn stdlib_unit_test_module_in_pre_compiled_lib(
     pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
 ) -> bool {
+    use crate::shared::stdlib_definitions as SD;
     pre_compiled_lib.is_some_and(|module_info| {
         module_info.iter().any(|(sp!(_, mident), _)| {
-            mident.module.0.value == UNIT_TEST_MODULE_NAME
+            mident.module.0.value == SD::UNIT_TEST_MODULE_NAME
                 && match mident.address {
                     Address::Numerical {
                         value: sp!(_, addr),
@@ -195,37 +196,8 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         return_type: sp(mloc, P::Type_::Unit),
     };
 
-    let leading_name_access = sp(
-        mloc,
-        P::LeadingNameAccess_::Name(sp(mloc, STDLIB_ADDRESS_NAME)),
-    );
-
-    let mod_name = sp(mloc, UNIT_TEST_MODULE_NAME);
-    let fn_name = sp(mloc, symbol!("poison"));
-    let name_path = NamePath {
-        root: P::RootPathEntry {
-            name: leading_name_access,
-            tyargs: None,
-            is_macro: None,
-        },
-        entries: vec![
-            PathEntry {
-                name: mod_name,
-                tyargs: None,
-                is_macro: None,
-            },
-            PathEntry {
-                name: fn_name,
-                tyargs: None,
-                is_macro: None,
-            },
-        ],
-        is_incomplete: false,
-    };
-    let nop_call = P::Exp_::Call(
-        sp(mloc, P::NameAccessChain_::Path(name_path)),
-        sp(mloc, vec![]),
-    );
+    let unit_test_poison_name = unit_test_poision(mloc);
+    let nop_call = P::Exp_::Call(unit_test_poison_name, sp(mloc, vec![]));
 
     // fun unit_test_poison() { 0x1::UnitTest::poison(0); () }
     P::ModuleMember::Function(P::Function {

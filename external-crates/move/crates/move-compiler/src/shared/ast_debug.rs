@@ -142,6 +142,17 @@ impl AstWriter {
         self.new_line();
     }
 
+    pub fn opt<T>(&mut self, opt: &Option<T>)
+    where
+        T: AstDebug,
+    {
+        if let Some(value) = opt {
+            value.ast_debug(self);
+        } else {
+            self.write("None");
+        }
+    }
+
     pub fn indent<F: FnOnce(&mut AstWriter)>(&mut self, inc: usize, f: F) {
         self.new_line();
         self.margin += inc;
