@@ -5,12 +5,12 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use dynamic_field::{DOFWrapper, Field};
+use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_rpc::proto::sui::rpc::v2beta2::CoinMetadata;
 use sui_rpc::proto::sui::rpc::v2beta2::CoinTreasury;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
-use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
 use sui_types::coin_registry::CoinDataKey;
@@ -23,6 +23,11 @@ use sui_types::dynamic_field::{self};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
 
+const SUI_COIN_TREASURY: CoinTreasury = CoinTreasury {
+    id: None,
+    total_supply: Some(sui_types::gas_coin::TOTAL_SUPPLY_MIST),
+    supply_state: Some(SupplyState::Fixed as i32),
+};
 
 #[derive(Debug)]
 pub struct CoinNotFoundError(StructTag);
@@ -195,7 +200,7 @@ fn get_coin_info_from_registry(
     });
 
     let treasury = if sui_types::gas_coin::GAS::is_gas(core_coin_type) {
-        Some(get_sui_coin_treasury())
+        Some(SUI_COIN_TREASURY)
     } else {
         match &coin_data.supply {
             Some(coin_registry::SupplyState::Fixed(supply)) => Some(CoinTreasury {
@@ -282,7 +287,7 @@ fn get_coin_info_from_index(
     let treasury = if let Some(treasury_object_id) = coin_info.treasury_object_id {
         get_treasury_cap_info(service, treasury_object_id)
     } else if sui_types::gas_coin::GAS::is_gas(core_coin_type) {
-        Some(get_sui_coin_treasury())
+        Some(SUI_COIN_TREASURY)
     } else {
         None
     };
@@ -322,14 +327,6 @@ fn get_coin_info_from_index(
         treasury,
         regulated_metadata,
     }))
-}
-
-fn get_sui_coin_treasury() -> CoinTreasury {
-    CoinTreasury {
-        id: None,
-        total_supply: Some(sui_types::gas_coin::TOTAL_SUPPLY_MIST),
-        supply_state: Some(SupplyState::Fixed.into()),
-    }
 }
 
 fn get_treasury_cap_info(
