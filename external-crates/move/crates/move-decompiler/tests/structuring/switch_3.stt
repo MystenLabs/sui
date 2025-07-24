@@ -1,0 +1,10 @@
+// if 0 { switch 1 { a => 2, b => 3 } } else { 4 }
+// 5
+
+cond,0,1,4
+variants,1,2,3
+code,2,5
+code,3,5
+code,4,5
+code,5
+
