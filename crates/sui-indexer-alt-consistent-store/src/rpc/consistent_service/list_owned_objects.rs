@@ -28,6 +28,9 @@ pub(super) enum Error {
     #[error("Missing 'owner'")]
     MissingOwner,
 
+    #[error("Missing 'object_type' filter for kind '{}'", .0.as_str_name())]
+    MissingType(grpc::owner::OwnerKind),
+
     #[error("Unexpected 'address' for kind '{}'", .0.as_str_name())]
     UnexpectedAddress(grpc::owner::OwnerKind),
 }
@@ -39,6 +42,7 @@ impl StatusCode for Error {
             | Error::InvalidAddress(_)
             | Error::MissingAddress(_)
             | Error::MissingOwner
+            | Error::MissingType(_)
             | Error::UnexpectedAddress(_) => tonic::Code::InvalidArgument,
         }
     }
@@ -72,9 +76,9 @@ pub(super) fn list_owned_objects(
         }
     };
 
-    // Only support address filters for now.
-    if matches!(kind, SK::Immutable | SK::Shared) {
-        return Err(RpcError::Unimplemented);
+    // Looking up immutable or shared objects requires some sort of type filter.
+    if matches!(kind, SK::Immutable | SK::Shared) && request.object_type().is_empty() {
+        return Err(Error::MissingType(owner.kind()).into());
     }
 
     let type_: Option<TypeFilter> = (!request.object_type().is_empty())

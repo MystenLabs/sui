@@ -8,13 +8,16 @@ use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, owner::OwnerKind, ListOwnedObjectsRequest,
     Owner,
 };
-use sui_indexer_alt_e2e_tests::{find_address_mutated, find_address_owned, FullCluster};
+use sui_indexer_alt_e2e_tests::{
+    find_address_mutated, find_address_owned, find_immutable, find_shared, FullCluster,
+};
 use sui_types::{
     base_types::{FullObjectRef, ObjectRef, SuiAddress},
     crypto::{get_account_key_pair, Signature, Signer},
     effects::{TransactionEffects, TransactionEffectsAPI},
+    gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
+    transaction::{Argument, Command, Transaction, TransactionData},
     TypeTag, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
@@ -454,49 +457,86 @@ async fn test_type_filters() {
 }
 
 #[tokio::test]
-async fn test_unsupported_shared_filters() {
+async fn test_shared_immutable_filters() {
     let mut cluster = FullCluster::new().await.unwrap();
-    let mut client = ConsistentServiceClient::connect(cluster.consistent_store_url().to_string())
-        .await
-        .expect("Failed to connect to Consistent Store");
+
+    // Helper to list owned objects with type filter
+    async fn list_owned_objects(
+        cluster: &FullCluster,
+        kind: OwnerKind,
+        address: Option<SuiAddress>,
+        object_type: &str,
+        after_token: Option<Vec<u8>>,
+        page_size: Option<u32>,
+    ) -> Result<(Vec<(String, u64, String)>, Option<Vec<u8>>), tonic::Status> {
+        let mut client =
+            ConsistentServiceClient::connect(cluster.consistent_store_url().to_string())
+                .await
+                .expect("Failed to connect to Consistent Store");
+
+        let response = client
+            .list_owned_objects(ListOwnedObjectsRequest {
+                owner: Some(Owner {
+                    kind: Some(kind.into()),
+                    address: address.map(|a| a.to_string()),
+                }),
+                object_type: Some(object_type.to_string()),
+                page_size,
+                after_token: after_token.map(Into::into),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        let after_token = response
+            .has_next_page()
+            .then(|| response.objects.last().map(|o| o.page_token().to_owned()))
+            .flatten();
+
+        let objects = response
+            .objects
+            .into_iter()
+            .map(|o| (o.object_id().to_owned(), o.version(), o.digest().to_owned()))
+            .collect();
+
+        Ok((objects, after_token))
+    }
+
+    // Create coins with various different ownership kinds
+    let shared: BTreeMap<_, _> = (0..4).map(|i| (i, share_coin(&mut cluster, i))).collect();
+    let frozen: BTreeMap<_, _> = (0..4).map(|i| (i, freeze_coin(&mut cluster, i))).collect();
 
     cluster.create_checkpoint().await;
 
-    // Test with SHARED owner (not supported yet)
-    let response = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(Owner {
-                kind: Some(OwnerKind::Shared.into()),
-                address: None,
-            }),
-            ..Default::default()
-        })
-        .await;
-
-    assert_eq!(response.unwrap_err().code(), tonic::Code::Unimplemented,);
-}
-
-#[tokio::test]
-async fn test_unsupported_immutable_filters() {
-    let mut cluster = FullCluster::new().await.unwrap();
-    let mut client = ConsistentServiceClient::connect(cluster.consistent_store_url().to_string())
+    // Fetching all the shared coins objects, filtering by package, and module name.
+    assert_eq!(
+        list_owned_objects(
+            &cluster,
+            OwnerKind::Shared,
+            None,
+            "0x2::coin",
+            None,
+            Some(20)
+        )
         .await
-        .expect("Failed to connect to Consistent Store");
+        .unwrap(),
+        (shared.values().rev().map(repr).collect(), None),
+    );
 
-    cluster.create_checkpoint().await;
-
-    // Test with IMMUTABLE owner (not supported yet)
-    let response = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(Owner {
-                kind: Some(OwnerKind::Immutable.into()),
-                address: None,
-            }),
-            ..Default::default()
-        })
-        .await;
-
-    assert_eq!(response.unwrap_err().code(), tonic::Code::Unimplemented,);
+    // Fetching all the frozen coins, filtering by package, module and type name.
+    assert_eq!(
+        list_owned_objects(
+            &cluster,
+            OwnerKind::Immutable,
+            None,
+            "0x2::coin::Coin",
+            None,
+            Some(20)
+        )
+        .await
+        .unwrap(),
+        (frozen.values().rev().map(repr).collect(), None),
+    );
 }
 
 fn repr((i, v, d): &ObjectRef) -> (String, u64, String) {
@@ -515,7 +555,6 @@ fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> Obj
         .expect("Failed to fund account");
 
     let mut builder = ProgrammableTransactionBuilder::new();
-
     builder.transfer_sui(owner, Some(amount));
 
     let data = TransactionData::new_programmable(
@@ -532,6 +571,72 @@ fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> Obj
 
     assert!(fx.status().is_ok(), "create coin transaction failed");
     find_address_owned(&fx).expect("Failed to find created coin")
+}
+
+fn share_coin(cluster: &mut FullCluster, amount: u64) -> ObjectRef {
+    let (sender, kp, gas) = cluster
+        .funded_account(DEFAULT_GAS_BUDGET + amount)
+        .expect("Failed to fund account");
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(amount).unwrap();
+    let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
+
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("transfer").to_owned(),
+        ident_str!("public_share_object").to_owned(),
+        vec![GasCoin::type_().into()],
+        vec![coin],
+    );
+
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+
+    let (fx, _) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("Failed to execute transaction");
+
+    assert!(fx.status().is_ok(), "share coin transaction failed");
+    find_shared(&fx).expect("Failed to find shared coin")
+}
+
+fn freeze_coin(cluster: &mut FullCluster, amount: u64) -> ObjectRef {
+    let (sender, kp, gas) = cluster
+        .funded_account(DEFAULT_GAS_BUDGET + amount)
+        .expect("Failed to fund account");
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let amount = builder.pure(amount).unwrap();
+    let coin = builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount]));
+
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("transfer").to_owned(),
+        ident_str!("public_freeze_object").to_owned(),
+        vec![GasCoin::type_().into()],
+        vec![coin],
+    );
+
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+
+    let (fx, _) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("Failed to execute transaction");
+
+    assert!(fx.status().is_ok(), "share coin transaction failed");
+    find_immutable(&fx).expect("Failed to find frozen coin")
 }
 
 /// Run a transaction on `cluster` signed by a fresh funded account that creates a `Bag`
