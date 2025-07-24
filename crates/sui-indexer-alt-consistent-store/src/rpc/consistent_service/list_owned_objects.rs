@@ -9,32 +9,37 @@ use sui_indexer_alt_framework::types::base_types::SuiAddress;
 
 use crate::rpc::error::{RpcError, StatusCode};
 use crate::rpc::pagination::Page;
+use crate::rpc::type_filter::{self, TypeFilter};
 use crate::schema;
 
 use super::State;
 
 #[derive(thiserror::Error, Debug)]
 pub(super) enum Error {
-    #[error("Missing 'owner'")]
-    MissingOwner,
+    #[error("Bad 'object_type' filter, expected: {0}")]
+    BadTypeFilter(#[from] type_filter::Error),
+
+    #[error("Invalid 'address': {0:?}")]
+    InvalidAddress(String),
 
     #[error("Missing 'address' for kind '{}'", .0.as_str_name())]
     MissingAddress(grpc::owner::OwnerKind),
 
+    #[error("Missing 'owner'")]
+    MissingOwner,
+
     #[error("Unexpected 'address' for kind '{}'", .0.as_str_name())]
     UnexpectedAddress(grpc::owner::OwnerKind),
-
-    #[error("Invalid 'address': {0:?}")]
-    InvalidAddress(String),
 }
 
 impl StatusCode for Error {
     fn code(&self) -> tonic::Code {
         match self {
-            Error::MissingOwner
+            Error::BadTypeFilter(_)
+            | Error::InvalidAddress(_)
             | Error::MissingAddress(_)
-            | Error::UnexpectedAddress(_)
-            | Error::InvalidAddress(_) => tonic::Code::InvalidArgument,
+            | Error::MissingOwner
+            | Error::UnexpectedAddress(_) => tonic::Code::InvalidArgument,
         }
     }
 }
@@ -72,10 +77,10 @@ pub(super) fn list_owned_objects(
         return Err(RpcError::Unimplemented);
     }
 
-    // Type filters not supported yet.
-    if !request.object_type().is_empty() {
-        return Err(RpcError::Unimplemented);
-    }
+    let type_: Option<TypeFilter> = (!request.object_type().is_empty())
+        .then(|| request.object_type().parse())
+        .transpose()
+        .map_err(Error::from)?;
 
     let page = Page::from_request(
         &state.config.pagination,
@@ -86,7 +91,11 @@ pub(super) fn list_owned_objects(
     );
 
     let index = &state.store.schema().object_by_owner;
-    let resp = page.paginate_prefix(index, checkpoint, &kind)?;
+    let resp = if let Some(type_) = type_ {
+        page.paginate_prefix(index, checkpoint, &(kind, Some(type_)))?
+    } else {
+        page.paginate_prefix(index, checkpoint, &kind)?
+    };
 
     Ok(grpc::ListOwnedObjectsResponse {
         has_previous_page: Some(resp.has_prev),

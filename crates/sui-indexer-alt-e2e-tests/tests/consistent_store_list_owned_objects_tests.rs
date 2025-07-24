@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, iter};
 
-use move_core_types::ident_str;
+use move_core_types::{ident_str, u256::U256};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, owner::OwnerKind, ListOwnedObjectsRequest,
     Owner,
@@ -73,14 +73,6 @@ async fn test_address_owner() {
         Ok((objects, after_token))
     }
 
-    fn repr((i, v, d): &ObjectRef) -> (String, u64, String) {
-        (
-            i.to_canonical_string(/* with_prefix */ true),
-            v.value(),
-            d.base58_encode(),
-        )
-    }
-
     // In the first checkpoint, A owns coins, B owns bags, C owns nothing.
     let coins: BTreeMap<_, _> = (0..4)
         .map(|i| (i, create_coin(&mut cluster, a, i)))
@@ -88,7 +80,7 @@ async fn test_address_owner() {
 
     let bags: BTreeMap<_, _> = (0..4)
         .map(|i| {
-            let bag = create_bag(&mut cluster, b, i + 1);
+            let bag = create_bag(&mut cluster, b, TypeTag::U64, i + 1);
             (bag.0, bag)
         })
         .collect();
@@ -322,29 +314,143 @@ async fn test_unexpected_address() {
 }
 
 #[tokio::test]
-async fn test_unsupported_type_filters() {
+async fn test_type_filters() {
     let mut cluster = FullCluster::new().await.unwrap();
-    let mut client = ConsistentServiceClient::connect(cluster.consistent_store_url().to_string())
-        .await
-        .expect("Failed to connect to Consistent Store");
-
     let (a, _) = get_account_key_pair();
+
+    // Helper to list owned objects with type filter
+    async fn list_owned_objects(
+        cluster: &FullCluster,
+        owner: SuiAddress,
+        object_type: &str,
+        after_token: Option<Vec<u8>>,
+        page_size: Option<u32>,
+    ) -> Result<(Vec<(String, u64, String)>, Option<Vec<u8>>), tonic::Status> {
+        let mut client =
+            ConsistentServiceClient::connect(cluster.consistent_store_url().to_string())
+                .await
+                .expect("Failed to connect to Consistent Store");
+
+        let response = client
+            .list_owned_objects(ListOwnedObjectsRequest {
+                owner: Some(Owner {
+                    kind: Some(OwnerKind::Address.into()),
+                    address: Some(owner.to_string()),
+                }),
+                object_type: Some(object_type.to_string()),
+                page_size,
+                after_token: after_token.map(Into::into),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        let after_token = response
+            .has_next_page()
+            .then(|| response.objects.last().map(|o| o.page_token().to_owned()))
+            .flatten();
+
+        let objects = response
+            .objects
+            .into_iter()
+            .map(|o| (o.object_id().to_owned(), o.version(), o.digest().to_owned()))
+            .collect();
+
+        Ok((objects, after_token))
+    }
+
+    // Create different types of objects owned by A
+    let coins: BTreeMap<_, _> = (0..4)
+        .map(|i| (i, create_coin(&mut cluster, a, i)))
+        .collect();
+
+    let bags: BTreeMap<_, _> = (0..4)
+        .flat_map(|i| {
+            let bu64 = create_bag(&mut cluster, a, TypeTag::U64, i + 1);
+            let bu8 = create_bag(&mut cluster, a, TypeTag::U8, i + 1);
+            [(bu64.0, bu64), (bu8.0, bu8)]
+        })
+        .collect();
+
+    let tu64s: BTreeMap<_, _> = (0..4)
+        .map(|i| {
+            let table = create_table(&mut cluster, a, TypeTag::U64, i + 1);
+            (table.0, table)
+        })
+        .collect();
+
+    let tu8s: BTreeMap<_, _> = (0..4)
+        .map(|i| {
+            let table = create_table(&mut cluster, a, TypeTag::U8, i + 1);
+            (table.0, table)
+        })
+        .collect();
 
     cluster.create_checkpoint().await;
 
-    // Test with object_type filter (not supported yet)
-    let response = client
-        .list_owned_objects(ListOwnedObjectsRequest {
-            owner: Some(Owner {
-                kind: Some(OwnerKind::Address.into()),
-                address: Some(a.to_string()),
-            }),
-            object_type: Some("0x2::coin::Coin<0x2::sui::SUI>".to_string()),
-            ..Default::default()
-        })
-        .await;
+    // Fetch all the objects owned by A, filtering on package (all A's objects have a type from
+    // `0x2`). Results are ordered by type, then by ID, unless they are coins, in which case they
+    // are ordered by balance, and then by ID.
+    assert_eq!(
+        list_owned_objects(&cluster, a, "0x2", None, Some(20))
+            .await
+            .unwrap(),
+        (
+            bags.values()
+                .chain(coins.values().rev())
+                .chain(tu8s.values())
+                .chain(tu64s.values())
+                .map(repr)
+                .collect(),
+            None
+        )
+    );
 
-    assert_eq!(response.unwrap_err().code(), tonic::Code::Unimplemented,);
+    // Fetch all bags using a package and module filter
+    assert_eq!(
+        list_owned_objects(&cluster, a, "0x2::bag", None, Some(20))
+            .await
+            .unwrap(),
+        (bags.values().map(repr).collect(), None)
+    );
+
+    // Fetch all tables using an unqualified type filter (no type parameters).
+    assert_eq!(
+        list_owned_objects(&cluster, a, "0x2::table::Table", None, Some(20))
+            .await
+            .unwrap(),
+        (
+            tu8s.values().chain(tu64s.values()).map(repr).collect(),
+            None
+        )
+    );
+
+    // Fetch all Table<u64, u64>s using a fully qualified type filter.
+    assert_eq!(
+        list_owned_objects(&cluster, a, "0x2::table::Table<u64, u64>", None, Some(20))
+            .await
+            .unwrap(),
+        (tu64s.values().map(repr).collect(), None)
+    );
+
+    // Fetch a type that we don't have any of, like `0x2::clock::Clock`.
+    assert_eq!(
+        list_owned_objects(&cluster, a, "0x2::clock::Clock", None, Some(20))
+            .await
+            .unwrap(),
+        (vec![], None)
+    );
+
+    // Pass in a bad type filter (malformed).
+    let err = list_owned_objects(&cluster, a, "not::a::valid::type<>", None, Some(20))
+        .await
+        .unwrap_err();
+
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert_eq!(
+        err.message(),
+        "Bad 'object_type' filter, expected: package[::module[::name[<type, ...>]]]"
+    );
 }
 
 #[tokio::test]
@@ -393,6 +499,14 @@ async fn test_unsupported_immutable_filters() {
     assert_eq!(response.unwrap_err().code(), tonic::Code::Unimplemented,);
 }
 
+fn repr((i, v, d): &ObjectRef) -> (String, u64, String) {
+    (
+        i.to_canonical_string(/* with_prefix */ true),
+        v.value(),
+        d.base58_encode(),
+    )
+}
+
 /// Run a transaction on `cluster` signed by a fresh funded account that sends a coin with value
 /// `amount` to `owner`.
 fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> ObjectRef {
@@ -420,10 +534,10 @@ fn create_coin(cluster: &mut FullCluster, owner: SuiAddress, amount: u64) -> Obj
     find_address_owned(&fx).expect("Failed to find created coin")
 }
 
-/// Run a transaction on `cluster` signed by a fresh funded account that creates a `Bag<u64, u64>`
+/// Run a transaction on `cluster` signed by a fresh funded account that creates a `Bag`
 /// owned by `owner` with `size` many elements. The purpose of this is to create an object that
-/// isn't a coin.
-fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, size: u64) -> ObjectRef {
+/// isn't a coin. `ty` can be any numeric Move type.
+fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, ty: TypeTag, size: u64) -> ObjectRef {
     let (sender, kp, gas) = cluster
         .funded_account(DEFAULT_GAS_BUDGET)
         .expect("Failed to fund account");
@@ -439,12 +553,22 @@ fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, size: u64) -> Object
     );
 
     for i in 0..size {
-        let kv = builder.pure(i).expect("Failed to create pure value");
+        let kv = match &ty {
+            TypeTag::U8 => builder.pure(i as u8),
+            TypeTag::U16 => builder.pure(i as u16),
+            TypeTag::U32 => builder.pure(i as u32),
+            TypeTag::U64 => builder.pure(i),
+            TypeTag::U128 => builder.pure(i as u128),
+            TypeTag::U256 => builder.pure(U256::from(i)),
+            _ => panic!("Unsupported type for bag: {ty}"),
+        }
+        .expect("Failed to create pure value");
+
         builder.programmable_move_call(
             SUI_FRAMEWORK_PACKAGE_ID,
             ident_str!("bag").to_owned(),
             ident_str!("add").to_owned(),
-            vec![TypeTag::U64, TypeTag::U64],
+            vec![ty.clone(), ty.clone()],
             vec![bag, kv, kv],
         );
     }
@@ -465,6 +589,63 @@ fn create_bag(cluster: &mut FullCluster, owner: SuiAddress, size: u64) -> Object
 
     assert!(fx.status().is_ok(), "create bag transaction failed");
     find_address_owned(&fx).expect("Failed to find created bag")
+}
+
+/// Run a transaction on `cluster` signed by a fresh funded account that creates a `Table<ty, ty>`
+/// owned by `owner` with `size` many elements. The purpose of this is to create an object that
+/// isn't a coin. `ty` can be any numeric Move type.
+fn create_table(cluster: &mut FullCluster, owner: SuiAddress, ty: TypeTag, size: u64) -> ObjectRef {
+    let (sender, kp, gas) = cluster
+        .funded_account(DEFAULT_GAS_BUDGET)
+        .expect("Failed to fund account");
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+
+    let table = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ident_str!("table").to_owned(),
+        ident_str!("new").to_owned(),
+        vec![ty.clone(), ty.clone()],
+        vec![],
+    );
+
+    for i in 0..size {
+        let kv = match &ty {
+            TypeTag::U8 => builder.pure(i as u8),
+            TypeTag::U16 => builder.pure(i as u16),
+            TypeTag::U32 => builder.pure(i as u32),
+            TypeTag::U64 => builder.pure(i),
+            TypeTag::U128 => builder.pure(i as u128),
+            TypeTag::U256 => builder.pure(U256::from(i)),
+            _ => panic!("Unsupported type for table: {ty}"),
+        }
+        .expect("Failed to create pure value");
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ident_str!("table").to_owned(),
+            ident_str!("add").to_owned(),
+            vec![ty.clone(), ty.clone()],
+            vec![table, kv, kv],
+        );
+    }
+
+    builder.transfer_arg(owner, table);
+
+    let data = TransactionData::new_programmable(
+        sender,
+        vec![gas],
+        builder.finish(),
+        DEFAULT_GAS_BUDGET,
+        cluster.reference_gas_price(),
+    );
+
+    let (fx, _) = cluster
+        .execute_transaction(Transaction::from_data_and_signer(data, vec![&kp]))
+        .expect("Failed to execute transaction");
+
+    assert!(fx.status().is_ok(), "create table transaction failed");
+    find_address_owned(&fx).expect("Failed to find created table")
 }
 
 fn transfer_object(
