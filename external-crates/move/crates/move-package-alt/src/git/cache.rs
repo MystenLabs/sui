@@ -58,6 +58,12 @@ pub struct GitTree {
     path_to_repo: PathBuf,
 }
 
+impl Default for GitCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GitCache {
     pub fn new() -> Self {
         Self {

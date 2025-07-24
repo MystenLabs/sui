@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::{FetchedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{EnvironmentName, Package, lockfile::Lockfiles, paths::PackagePath},
-    schema::{Environment, PackageName},
+    schema::Environment,
 };
 
 use std::{
@@ -19,13 +19,14 @@ use std::{
 use petgraph::graph::{DiGraph, NodeIndex};
 use tokio::sync::OnceCell;
 
-use super::{PackageGraph, PackageNode};
+use super::{PackageGraph, PackageGraphEdge};
 
 struct PackageCache<F: MoveFlavor> {
     // TODO: better errors; I'm using Option for now because PackageResult doesn't have clone, but
     // it's too much effort to add clone everywhere; we should do this when we update the error
     // infra
     // TODO: would dashmap simplify this?
+    #[allow(clippy::type_complexity)]
     cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
 }
 
@@ -89,8 +90,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         };
 
         let mut inner = DiGraph::new();
-
         let mut package_nodes = BTreeMap::new();
+        let mut root_index = None;
 
         let Some(pins) = lockfile.pins_for_env(env.name()) else {
             return Ok(None);
@@ -104,33 +105,57 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             if check_digests && package_manifest_digest != &pin.manifest_digest {
                 return Ok(None);
             }
-            let index = inner.add_node(PackageNode {
-                package,
-                use_env: pin.use_environment.clone().unwrap_or(env.name().clone()),
-            });
+            let index = inner.add_node(package.clone());
             package_nodes.insert(pkg_id.clone(), index);
-        }
-
-        // Second pass: add edges based on dependencies
-        for (pkg_id, dep_info) in pins.iter() {
-            let from_index = package_nodes.get(pkg_id).unwrap();
-            for (dep_name, dep_id) in dep_info.deps.iter() {
-                if let Some(to_index) = package_nodes.get(dep_id) {
-                    inner.add_edge(*from_index, *to_index, dep_name.clone());
+            if package.is_root() {
+                let old_root = root_index.replace(index);
+                if old_root.is_some() {
+                    return Err(PackageError::Generic(format!(
+                        "Invalid lockfile: there are multiple root nodes in environment {}",
+                        env.name()
+                    )));
                 }
             }
         }
 
-        // TODO(manos): Add a proper error message here -- nothing to expect.
-        let root_idx = inner
-            .node_indices()
-            .find(|pkg| {
-                let node = &inner[*pkg];
-                node.package.is_root()
-            })
-            .expect("A lockfile needs to have a root package");
+        let root_index = root_index.ok_or(PackageError::Generic(
+            "Invalid lockfile: there is no root node".into(),
+        ))?;
 
-        Ok(Some(PackageGraph { inner, root_idx }))
+        // Second pass: add edges based on dependencies
+        for (source_id, source_pin) in pins.iter() {
+            let source_index = package_nodes.get(source_id).unwrap();
+
+            for (name, target_id) in source_pin.deps.iter() {
+                let target_index = package_nodes
+                    .get(target_id)
+                    .ok_or(PackageError::Generic(format!(
+                        "Invalid lockfile: package depends on a package with undefined ID `{target_id}`"
+                    )))?;
+
+                let target = &inner[*target_index];
+
+                // we assume that the override and rename-from checks have already been performed,
+                // so we go ahead an update the override and rename-from fields to values that we
+                // know will pass the rename-from checks
+                let dep = target
+                    .dep_for_self()
+                    .clone()
+                    .with_rename_from(target.name().clone())
+                    .with_override(true);
+
+                inner.add_edge(
+                    *source_index,
+                    *target_index,
+                    PackageGraphEdge {
+                        name: name.clone(),
+                        dep,
+                    },
+                );
+            }
+        }
+
+        Ok(Some(PackageGraph { inner, root_index }))
     }
 
     /// Construct a new package graph for `env` by recursively fetching and reading manifest files
@@ -150,17 +175,18 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             .add_transitive_manifest_deps(root, env, graph.clone(), visited)
             .await?;
 
-        let graph = graph.lock().expect("unpoisoned").map(
-            |_, node| {
-                node.clone()
-                    .expect("add_transitive_packages removes all `None`s before returning")
-            },
-            |_, e| e.clone(),
-        );
+        let graph: DiGraph<Arc<Package<F>>, PackageGraphEdge> =
+            graph.lock().expect("unpoisoned").map(
+                |_, node| {
+                    node.clone()
+                        .expect("add_transitive_packages removes all `None`s before returning")
+                },
+                |_, e| e.clone(),
+            );
 
         Ok(PackageGraph {
             inner: graph,
-            root_idx,
+            root_index: root_idx,
         })
     }
 
@@ -170,11 +196,12 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
     ///
     /// `visited` is used to short-circuit refetching - if a node is in `visited` then neither it nor its
     /// dependencies will be readded.
+    #[allow(clippy::type_complexity)] // TODO
     pub async fn add_transitive_manifest_deps(
         &self,
         package: Arc<Package<F>>,
         env: &Environment,
-        graph: Arc<Mutex<DiGraph<Option<PackageNode<F>>, PackageName>>>,
+        graph: Arc<Mutex<DiGraph<Option<Arc<Package<F>>>, PackageGraphEdge>>>,
         visited: Arc<Mutex<BTreeMap<(EnvironmentName, PathBuf), NodeIndex>>>,
     ) -> PackageResult<NodeIndex> {
         // return early if node is cached; add empty node to graph and visited list otherwise
@@ -214,10 +241,14 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
                 name
             };
 
-            graph
-                .lock()
-                .expect("unpoisoned")
-                .add_edge(index, dep_index, edge_name.clone());
+            graph.lock().expect("unpoisoned").add_edge(
+                index,
+                dep_index,
+                PackageGraphEdge {
+                    name: edge_name.clone(),
+                    dep: dep.clone(),
+                },
+            );
         }
 
         graph
@@ -225,10 +256,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             .expect("unpoisoned")
             .node_weight_mut(index)
             .expect("node was added above")
-            .replace(PackageNode {
-                package,
-                use_env: env.name().clone(),
-            });
+            .replace(package);
 
         Ok(index)
     }
@@ -252,7 +280,7 @@ impl<F: MoveFlavor> PackageCache<F> {
             .cache
             .lock()
             .expect("unpoisoned")
-            .entry(dep.unfetched_path())
+            .entry(FetchedDependency::unfetched_path(dep))
             .or_default()
             .clone();
 
@@ -272,7 +300,7 @@ impl<F: MoveFlavor> PackageCache<F> {
             }
             Err(e) => Err(PackageError::Generic(format!(
                 "Failed to load package from {}: {}",
-                dep.unfetched_path().display(),
+                FetchedDependency::unfetched_path(dep).display(),
                 e
             ))),
         }

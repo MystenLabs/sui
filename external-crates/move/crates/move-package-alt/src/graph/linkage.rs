@@ -110,7 +110,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             }
 
             // if this node is published, add it to its linkage
-            if let Some(oid) = package_node.package.original_id() {
+            if let Some(oid) = package_node.original_id() {
                 let old_entry = linkage.insert(oid, *node);
                 if old_entry.is_some() {
                     // this means a package depends on another package that has the same original
@@ -134,14 +134,14 @@ impl<F: MoveFlavor> PackageGraph<F> {
         let mut result: BTreeMap<OriginalID, NodeIndex> = BTreeMap::new();
 
         for edge in self.inner.edges(node_id) {
-            let dep = self.dep_for_edge(edge.id());
+            let dep = &edge.weight().dep;
 
             if !dep.is_override() {
                 continue;
             }
 
             let target = &self.inner[edge.target()];
-            let Some(oid) = target.package.original_id() else {
+            let Some(oid) = target.original_id() else {
                 continue;
             };
 
