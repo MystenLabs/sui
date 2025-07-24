@@ -163,24 +163,23 @@ impl GitTree {
         // create repo if necessary
         if !self.path_to_repo.exists() {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
-            let mut args = vec![
-                "-c",
-                "advice.detachedHead=false",
-                "clone",
-                "--quiet",
-                "--sparse",
-                "--filter=blob:none",
-                "--no-checkout",
-            ];
-
-            if self.sha().is_full_sha() {
-                args.extend(["--depth", "1"])
-            }
-
-            let path = self.path_to_repo.to_string_lossy();
-            args.extend([self.repo.as_str(), &path]);
-
-            run_git_cmd_with_args(&args, None).await?;
+            run_git_cmd_with_args(
+                &[
+                    "-c",
+                    "advice.detachedHead=false",
+                    "clone",
+                    "--quiet",
+                    "--sparse",
+                    "--filter=blob:none",
+                    "--no-checkout",
+                    "--depth",
+                    "1",
+                    &self.repo,
+                    &self.path_to_repo.to_string_lossy(),
+                ],
+                None,
+            )
+            .await?;
 
             fresh = true;
         }
@@ -197,11 +196,6 @@ impl GitTree {
             // git checkout
             self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
                 .await?;
-            let cmd = Command::new("ls")
-                .arg(&self.path_to_repo)
-                .output()
-                .await
-                .unwrap();
         }
 
         // check for dirt
@@ -279,6 +273,12 @@ async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
     if let Some(r) = rev {
         if let Ok(sha) = GitSha::try_from(r.to_string()) {
             return Ok(sha);
+        }
+
+        // if the sha is a short sha, then the repo will be cloned to a temp directory and full
+        // history will be downloaded to retrieve the full sha
+        if let Ok(Some(full_sha)) = try_find_full_sha(repo, r).await {
+            return Ok(full_sha);
         }
 
         // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
@@ -406,11 +406,52 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
     Ok(branch.try_into().expect("git returns valid shas"))
 }
 
+/// If the given rev is a short sha, clone the repository to a temp dir and return the full sha.
+async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
+    if rev.len() < 7
+        && !rev
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
+        return Ok(None);
+    }
+
+    let temp_dir = tempfile::tempdir().map_err(GitError::TempDirectory)?;
+    let path_to_clone = temp_dir.path().to_path_buf().join(url_to_file_name(repo));
+    let path_to_clone_str = path_to_clone.to_string_lossy();
+    debug!(
+        "downloading temporary git repo with full history to {}",
+        path_to_clone_str
+    );
+    let mut args = vec![
+        "-c",
+        "advice.detachedHead=false",
+        "clone",
+        "--quiet",
+        "--sparse",
+        "--filter=blob:none",
+        "--no-checkout",
+        repo,
+        &path_to_clone_str,
+    ];
+
+    run_git_cmd_with_args(&args, None).await?;
+
+    let full_sha = run_git_cmd_with_args(&["rev-parse", rev], Some(&path_to_clone))
+        .await?
+        .trim()
+        .replace("\n", "");
+
+    debug!("Found full sha {full_sha} for temp git repo {path_to_clone_str}");
+
+    Ok(Some(
+        GitSha::try_from(full_sha).expect("Git should return correctly formatted shas"),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::flavor::Vanilla;
-    use crate::package::RootPackage;
     use crate::test_utils::basic_manifest;
     use crate::test_utils::git;
     use std::collections::BTreeSet;
@@ -740,50 +781,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_short_full_sha_checkout() {
-        let env = crate::flavor::vanilla::default_environment();
-        let project_with_git = git::new("pkg_git", |project| {
-            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
-        });
-
-        let commits = project_with_git.commits();
-        let short_sha = commits.first().unwrap()[..7].to_string();
-
-        let path = project_with_git.root();
-
-        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
-            project.file(
-                "Move.toml",
-                &format!(
-                    r#"[package]
-name = "pkg_dep_on_git"
-edition = "2025"
-license = "Apache-2.0"
-authors = ["Move Team"]
-version = "0.0.1"
-
-[dependencies]
-pkg_git = {{ git = "{}", rev = "{short_sha}" }}
-
-[environments]
-{} = "{}"
-"#,
-                    path.to_string_lossy(),
-                    env.name(),
-                    env.id(),
-                ),
-            )
-        });
-
-        // check that we can checkout from short sha
-        assert!(
-            RootPackage::<Vanilla>::load(pkg_dep_on_git.root(), env)
-                .await
-                .is_ok()
-        )
-    }
-
-    #[tokio::test]
     async fn test_tag_checkout() {
         let tag = "releases/1";
 
@@ -818,5 +815,25 @@ pkg_git = {{ git = "{}", rev = "{short_sha}" }}
 
         let result = git_tree.fetch().await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_try_find_full_sha() {
+        let project_with_git = git::new("pkg_git", |project| {
+            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
+        });
+
+        let commits = project_with_git.commits();
+        let commit = commits.first().unwrap();
+        let short_sha = commit[..7].to_string();
+
+        assert_eq!(
+            &try_find_full_sha(project_with_git.root_path_str(), &short_sha)
+                .await
+                .unwrap()
+                .unwrap()
+                .to_string(),
+            commit
+        );
     }
 }

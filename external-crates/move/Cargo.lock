@@ -2562,7 +2562,6 @@ dependencies = [
  "append-only-vec",
  "clap 4.5.28",
  "codespan-reporting",
- "colored",
  "datatest-stable",
  "derive-where",
  "futures",
