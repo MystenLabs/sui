@@ -13,6 +13,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
 use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
+use sui_types::coin_registry::CoinDataKey;
 use sui_types::coin_registry::COIN_DATA_KEY_STRUCT_NAME;
 use sui_types::coin_registry::COIN_REGISTRY_MODULE_NAME;
 use sui_types::coin_registry::{self};
@@ -22,8 +23,6 @@ use sui_types::dynamic_field::{self};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
 
-/// Move serialization of an empty struct (CoinDataKey)
-const MOVE_EMPTY_STRUCT_BYTES: &[u8] = &[0x00];
 
 #[derive(Debug)]
 pub struct CoinNotFoundError(StructTag);
@@ -101,10 +100,17 @@ fn get_coin_info_from_registry(
             type_params: vec![TypeTag::Struct(Box::new(coin_data_key_type))],
         }));
 
+    let coin_data_key_bytes = bcs::to_bytes(&CoinDataKey::new()).map_err(|e| {
+        RpcError::new(
+            tonic::Code::Internal,
+            format!("Failed to serialize CoinDataKey: {}", e),
+        )
+    })?;
+
     let field_id = dynamic_field::derive_dynamic_field_id(
         SUI_COIN_REGISTRY_OBJECT_ID,
         &wrapper_type_tag,
-        MOVE_EMPTY_STRUCT_BYTES,
+        &coin_data_key_bytes,
     )
     .map_err(|e| {
         RpcError::new(

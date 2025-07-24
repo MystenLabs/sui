@@ -17,6 +17,21 @@ pub const COIN_REGISTRY_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
 pub const COIN_DATA_STRUCT_NAME: &IdentStr = ident_str!("CoinData");
 pub const COIN_DATA_KEY_STRUCT_NAME: &IdentStr = ident_str!("CoinDataKey");
 
+/// The empty struct used as a key to access coin metadata hung off the CoinRegistry
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CoinDataKey {
+    /// Move serializes empty structs as [0x00] while Rust serde serializes them as []. This field
+    /// is a workaround to bridge the difference.
+    dummy: bool,
+}
+
+impl CoinDataKey {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self { dummy: false }
+    }
+}
+
 pub fn get_coin_registry_obj_initial_shared_version(
     object_store: &dyn ObjectStore,
 ) -> SuiResult<Option<SequenceNumber>> {
