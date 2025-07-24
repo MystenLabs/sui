@@ -124,6 +124,7 @@ pub struct ExecutedData {
     pub output_objects: Vec<Object>,
 }
 
+#[derive(Clone)]
 pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
