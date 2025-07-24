@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::InputObject;
+use std::ops::RangeInclusive;
 
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::intersect;
@@ -37,20 +38,38 @@ impl TransactionFilter {
         })
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.before_checkpoint == Some(UInt53::from(0))
-            || matches!(
-                (self.after_checkpoint, self.before_checkpoint),
-                (Some(after), Some(before)) if after >= before
-            )
-            || matches!(
-                (self.after_checkpoint, self.at_checkpoint),
-                (Some(after), Some(at)) if after >= at
-            )
-            || matches!(
-                (self.at_checkpoint, self.before_checkpoint),
-                (Some(at), Some(before)) if at >= before
-            )
-        // If SystemTx, sender if specified must be 0x0. Conversely, if sender is 0x0, kind must be SystemTx.
+    pub(crate) fn checkpoint_bounds(
+        &self,
+        checkpoint_viewed_at: u64,
+    ) -> Option<RangeInclusive<u64>> {
+        let cp_after = self.after_checkpoint.map(u64::from);
+        let cp_at = self.at_checkpoint.map(u64::from);
+        let cp_before = self.before_checkpoint.map(u64::from);
+
+        // Calculate the lower bound checkpoint
+        let cp_lo = max_option([cp_after.map(|x| x.saturating_add(1)), cp_at])?;
+
+        // Handle the before_checkpoint filter
+        let cp_before_exclusive = match cp_before {
+            // There are no results strictly before checkpoint 0.
+            Some(0) => return None,
+            Some(x) => Some(x - 1),
+            None => None,
+        };
+
+        // Calculate the upper bound checkpoint
+        let cp_hi = min_option([cp_before_exclusive, cp_at, Some(checkpoint_viewed_at)])?;
+
+        Some(RangeInclusive::new(cp_lo, cp_hi))
     }
+}
+
+/// Determines the maximum value in an arbitrary number of Option<impl Ord>.
+fn max_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
+    xs.into_iter().flatten().max()
+}
+
+/// Determines the minimum value in an arbitrary number of Option<impl Ord>.
+fn min_option<T: Ord>(xs: impl IntoIterator<Item = Option<T>>) -> Option<T> {
+    xs.into_iter().flatten().min()
 }

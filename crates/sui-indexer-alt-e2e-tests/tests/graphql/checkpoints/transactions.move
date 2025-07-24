@@ -24,7 +24,7 @@
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
 
-//# programmable --sender A --inputs 42 @A
+//# programmable --sender A --inputs 43 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
 
@@ -32,24 +32,15 @@
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 
-//# create-checkpoint
+//# programmable --sender A --inputs 2
+//> SplitCoins(Gas, [Input(0)]);
+//> MergeCoins(Gas, [Result(0)])
 
-//# run-graphql
-{ # Fetch a checkpoint
-  checkpoint(sequenceNumber: 1) {
-    sequenceNumber
-    digest
-    transactions(first: 5) {
-      pageInfo {
-        hasPreviousPage
-        hasNextPage
-        startCursor
-        endCursor
-      }
-      edges { cursor node { digest, sender { address } } }
-    }
-  }
-}
+//# programmable --sender A --inputs 3
+//> SplitCoins(Gas, [Input(0)]);
+//> MergeCoins(Gas, [Result(0)])
+
+//# create-checkpoint
 
 //# programmable --sender A --inputs 1
 //> SplitCoins(Gas, [Input(0)]);
@@ -58,7 +49,7 @@
 //# create-checkpoint
 
 //# run-graphql
-{ # Fetch a checkpoint
+{ # Fetch a checkpoint's transactions, should have [1,2,3,4,5]
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
     digest
@@ -74,12 +65,12 @@
   }
 }
 
-//# run-graphql --cursors {"t":1}
-{ # Fetch a checkpoint, offset at the front and fetch from the front
+//# run-graphql --cursors 1
+{ # Fetch a checkpoint's transactions, offset at the front such that the first page is not full
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
     digest
-    transactions(first: 2, after: "@{cursor_0}") {
+    transactions( after: "@{cursor_0}") {
       pageInfo {
         hasPreviousPage
         hasNextPage
@@ -91,12 +82,12 @@
   }
 }
 
-//# run-graphql --cursors {"t":1}
-{ # Fetch a checkpoint, and transactions before tx_sequence_number 1 and fetch from the back, should be empty
+//# run-graphql --cursors 2 6
+{ # Fetch a checkpoint's transactions, offset at the back such that the first page is not full
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
     digest
-    transactions(last: 2, before: "@{cursor_0}") {
+    transactions( after: "@{cursor_0}", before: "@{cursor_1}", first: 3) {
       pageInfo {
         hasPreviousPage
         hasNextPage
@@ -104,40 +95,6 @@
         endCursor
       }
       edges { cursor node { digest, sender { address } } }
-    }
-  }
-}
-
-//# run-graphql --cursors {"t":1} {"t":3}
-{ # Fetch a checkpoint, and transactions after tx_sequence_number 1 and before 3 and fetch from the front
-  checkpoint(sequenceNumber: 1) {
-    sequenceNumber
-    digest
-    transactions(first: 3, after: "@{cursor_0}", before: "@{cursor_1}") {
-      pageInfo {
-        hasPreviousPage
-        hasNextPage
-        startCursor
-        endCursor
-      }
-      edges { cursor node { digest, sender { address } } }
-    }
-  }
-}
-
-//# run-graphql
-{ # Fetch a non-existent checkpoint
-  checkpoint(sequenceNumber: 3) {
-    sequenceNumber
-    digest
-    transactions(first: 5) {
-      pageInfo {
-        hasPreviousPage
-        hasNextPage
-        startCursor
-        endCursor
-      }
-      edges { cursor node { digest } }
     }
   }
 }
