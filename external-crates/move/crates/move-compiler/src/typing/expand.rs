@@ -204,8 +204,8 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             }
         }
         E::Value(sp!(vloc, Value_::InferredString(v))) => {
-            if let Some(value) = inferred_string_value(context, e.exp.loc, v.clone(), &e.ty) {
-                e.exp.value = E::Value(sp(*vloc, value));
+            if let Some(exp) = inferred_string_value(context, e.exp.loc, *vloc, v.clone(), &e.ty) {
+                *e = exp
             } else {
                 e.exp.value = E::UnresolvedError
             }
@@ -376,19 +376,76 @@ fn inferred_numerical_value(
 }
 
 fn inferred_string_value(
-    _context: &mut Context,
+    context: &mut Context,
     _eloc: Loc,
+    value_loc: Loc,
     value: Vec<u8>,
     ty: &Type,
-) -> Option<Value_> {
+) -> Option<T::Exp> {
+    use T::UnannotatedExp_ as E;
+    let diag_note =
+        || "String literals must be linked against the standard library to be constructed";
+
     match &ty.value {
         Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args)
             if bt.is_vector() && args.len() == 1 && core::is_u8_type(&args[0]) =>
         {
-            Some(Value_::Bytearray(value))
+            Some(T::exp(
+                ty.clone(),
+                sp(value_loc, E::Value(sp(value_loc, Value_::Bytearray(value)))),
+            ))
         }
-        // TODO: look at other types we accept, possibly building the appropriate construction call.
-        // If the type requires such a call, validate it is defined, etc., too.
+        Type_::Apply(_, sp!(_, name), args) if args.is_empty() => {
+            let possibles = context.outer.get_stdlib_string_info();
+            println!("ty: {ty:#?}");
+            println!("possibles: {possibles:#?}");
+
+            for (mut str_ty, str_ctor) in possibles {
+                // Expand our type first, because unification inisits they are the same.
+                type_(context, &mut str_ty);
+                if core::subtype_check(&str_ty, ty) {
+                    let Some((module, ctor)) = str_ctor else {
+                        let msg = format!("Could not find constructor for type '{}'", name);
+                        let mut diag = diag!(TypeSafety::InvalidString, (value_loc, msg));
+                        diag.add_note(diag_note());
+                        context.add_diag(diag);
+                        return None;
+                    };
+
+                    // Create the value for the call
+                    let value_ = Value_::Bytearray(value);
+                    let Some(mut bytearray_ty) = value_.type_(value_loc) else {
+                        context.add_diag(ice!((value_loc, "Could not get bytearray type")));
+                        return None;
+                    };
+                    type_(context, &mut bytearray_ty); // Expand the vector type
+                    let value = sp(value_loc, E::Value(sp(value_loc, value_)));
+                    let value_exp = T::Exp {
+                        ty: bytearray_ty.clone(),
+                        exp: value,
+                    };
+
+                    // Create the call itself
+                    let module_call = T::ModuleCall {
+                        module,
+                        name: ctor,
+                        type_arguments: vec![],
+                        arguments: Box::new(value_exp),
+                        parameter_types: vec![bytearray_ty],
+                        method_name: None,
+                    };
+                    let call = T::UnannotatedExp_::ModuleCall(Box::new(module_call));
+                    let exp = T::exp(ty.clone(), sp(value_loc, call));
+                    return Some(exp);
+                }
+            }
+
+            let msg = format!("Could not find library definition for type '{}'", name);
+            let mut diag = diag!(TypeSafety::InvalidString, (value_loc, msg));
+            diag.add_note(diag_note());
+            context.add_diag(diag);
+            None
+        }
         _ => panic!("ICE inferred string failed {:?}", &ty.value),
     }
 }

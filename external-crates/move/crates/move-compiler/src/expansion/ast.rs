@@ -12,6 +12,7 @@ use crate::{
     shared::{
         ast_debug::*,
         known_attributes::{AttributeKind, KnownAttribute, ModeAttribute},
+        stdlib_definitions::StdlibName,
         unique_map::UniqueMap,
         unique_set::UniqueSet,
         *,
@@ -19,7 +20,12 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{collections::VecDeque, fmt, hash::Hash, sync::Arc};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    fmt,
+    hash::Hash,
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Program
@@ -107,6 +113,7 @@ pub struct ModuleDefinition {
     pub target_kind: P::TargetKind,
     pub use_funs: UseFuns,
     pub friends: UniqueMap<ModuleIdent, Friend>,
+    pub stdlib_definitions: StdlibDefinitions,
     pub structs: UniqueMap<DatatypeName, StructDefinition>,
     pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub functions: UniqueMap<FunctionName, Function>,
@@ -124,6 +131,16 @@ pub struct Friend {
     // discards the overall attribute spans, but we need them to comment full attribute forms out.
     pub attr_locs: Vec<Loc>,
     pub loc: Loc,
+}
+
+//**************************************************************************************************
+// Std Library Definitions
+//**************************************************************************************************
+
+#[derive(Debug, Clone)]
+pub struct StdlibDefinitions {
+    pub functions: BTreeMap<StdlibName, ModuleAccess_>,
+    pub types: BTreeMap<StdlibName, ModuleAccess_>,
 }
 
 //**************************************************************************************************
@@ -1006,6 +1023,7 @@ impl AstDebug for ModuleDefinition {
             target_kind,
             use_funs,
             friends,
+            stdlib_definitions,
             structs,
             enums,
             functions,
@@ -1020,6 +1038,7 @@ impl AstDebug for ModuleDefinition {
         attributes.ast_debug(w);
         target_kind.ast_debug(w);
         use_funs.ast_debug(w);
+        stdlib_definitions.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(format!("friend {};", mident));
             w.new_line();
@@ -1039,6 +1058,18 @@ impl AstDebug for ModuleDefinition {
         for fdef in functions.key_cloned_iter() {
             fdef.ast_debug(w);
             w.new_line();
+        }
+    }
+}
+
+impl AstDebug for StdlibDefinitions {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.writeln("stdlib definitions: ");
+        for (key, value) in &self.functions {
+            w.writeln(format!("  {} -> {}", key, value));
+        }
+        for (key, value) in &self.types {
+            w.writeln(format!("  {} -> {}", key, value));
         }
     }
 }

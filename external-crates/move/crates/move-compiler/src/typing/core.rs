@@ -26,6 +26,7 @@ use crate::{
         known_attributes::{ModeAttribute, TestingAttribute},
         matching::{MatchContext, new_match_var_name},
         program_info::*,
+        stdlib_definitions::StdlibName,
         string_utils::{debug_print, format_oxford_list},
         unique_map::UniqueMap,
         *,
@@ -129,6 +130,10 @@ pub struct ModuleContext<'env> {
     /// collects all used module members (functions and constants) but it's a superset of these in
     /// that it may contain other identifiers that do not in fact represent a function or a constant
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+
+    /// Standard Library Bindings for resolving built-ins
+    pub stdlib_functions: BTreeMap<StdlibName, (ModuleIdent, FunctionName)>,
+    pub stdlib_types: BTreeMap<StdlibName, Type>,
 }
 
 pub struct Context<'env, 'outer> {
@@ -426,6 +431,8 @@ impl<'env> ModuleContext<'env> {
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
             deprecations,
+            stdlib_functions: BTreeMap::new(),
+            stdlib_types: BTreeMap::new(),
         })
     }
 
@@ -455,6 +462,12 @@ impl<'env> ModuleContext<'env> {
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
         add_use_funs_scope!(self, new_scope)
+    }
+
+    pub fn add_stdlib_definitions(&mut self, stdlib_definitions: N::StdlibDefinitions) {
+        let N::StdlibDefinitions { functions, types } = stdlib_definitions;
+        self.stdlib_functions = functions;
+        self.stdlib_types = types;
     }
 
     pub fn finish_use_funs_scope(
@@ -664,6 +677,29 @@ impl<'env> ModuleContext<'env> {
         };
         debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields_info; dbg));
         fields_info
+    }
+
+    pub fn get_stdlib_string_info(&self) -> Vec<(N::Type, Option<(ModuleIdent, FunctionName)>)> {
+        use stdlib_definitions as SD;
+        let mut possibles: Vec<(N::Type, Option<(ModuleIdent, FunctionName)>)> = vec![];
+
+        let (ascii_string_ty, ascii_string_ctor) = (
+            self.stdlib_types.get(&SD::ASCII_STRING_TYPE),
+            self.stdlib_functions.get(&SD::ASCII_STRING_CTOR),
+        );
+        if let Some(ty) = ascii_string_ty {
+            possibles.push((ty.clone(), ascii_string_ctor.copied()))
+        }
+
+        let (string_string_ty, string_string_ctor) = (
+            self.stdlib_types.get(&SD::STRING_STRING_TYPE),
+            self.stdlib_functions.get(&SD::STRING_STRING_CTOR),
+        );
+        if let Some(ty) = string_string_ty {
+            possibles.push((ty.clone(), string_string_ctor.copied()))
+        }
+
+        possibles
     }
 }
 
@@ -1615,6 +1651,26 @@ pub fn is_u8_type(ty: &Type) -> bool {
     match &ty.value {
         Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), _) => bt.is_u8(),
         _ => false,
+    }
+}
+
+pub fn is_inferred_string_type(name: &N::TypeName) -> bool {
+    use stdlib_definitions as SD;
+    match name.value {
+        TypeName_::Multiple(_) | TypeName_::Builtin(_) => false,
+        TypeName_::ModuleType(mident, datatype) => {
+            let ModuleIdent_ { address, module } = mident.value;
+            let pkg_valid = match address {
+                crate::expansion::ast::Address::Numerical { name, .. } => {
+                    let Some(name) = name else { return false };
+                    name.value == SD::STDLIB_ADDRESS_NAME
+                }
+                crate::expansion::ast::Address::NamedUnassigned(name) => {
+                    name.value == SD::STDLIB_ADDRESS_NAME
+                }
+            };
+            pkg_valid && SD::valid_string_type(module.value(), datatype.value())
+        }
     }
 }
 
@@ -2981,6 +3037,12 @@ enum TypingCase {
     Subtype,
 }
 
+pub fn subtype_check(lhs: &Type, rhs: &Type) -> bool {
+    let mut counter = TVarCounter::new();
+    let subst = Subst::empty();
+    join_impl(&mut counter, subst, TypingCase::Subtype, lhs, rhs).is_ok()
+}
+
 pub fn subtype(
     counter: &mut TVarCounter,
     subst: Subst,
@@ -3330,6 +3392,7 @@ fn check_string_tvar_(subst: &Subst, ty: &Type) -> bool {
         Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args) => {
             bt.is_vector() && args.len() == 1 && is_u8_type(&args[0])
         }
+        Apply(_, ty_name, args) if args.is_empty() => is_inferred_string_type(ty_name),
         Var(v) => {
             let last_tvar = forward_tvar(subst, *v);
             match subst.get(last_tvar) {
