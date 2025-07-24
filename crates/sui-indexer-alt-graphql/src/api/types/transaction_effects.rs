@@ -38,6 +38,7 @@ use super::{
     gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
+    unchanged_shared_object::UnchangedSharedObject,
 };
 
 /// The execution status of this transaction: success or failure.
@@ -64,6 +65,7 @@ pub(crate) struct EffectsContents {
 type CObjectChange = JsonCursor<usize>;
 type CEvent = JsonCursor<usize>;
 type CBalanceChange = JsonCursor<usize>;
+type CUnchangedSharedObject = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -291,6 +293,40 @@ impl EffectsContents {
             };
 
             conn.edges.push(Edge::new(edge.cursor, object_change))
+        }
+
+        Ok(Some(conn))
+    }
+
+    /// The unchanged shared objects that were referenced by this transaction.
+    async fn unchanged_shared_objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CUnchangedSharedObject>,
+        last: Option<u64>,
+        before: Option<CUnchangedSharedObject>,
+    ) -> Result<Option<Connection<CUnchangedSharedObject, UnchangedSharedObject>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "unchangedSharedObjects");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let unchanged_shared_objects = content.effects()?.unchanged_shared_objects();
+        let cursors = page.paginate_indices(unchanged_shared_objects.len());
+
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        for edge in cursors.edges {
+            let unchanged_shared_object = UnchangedSharedObject::from_native(
+                self.scope.clone(),
+                unchanged_shared_objects[*edge.cursor].clone(),
+            );
+
+            conn.edges
+                .push(Edge::new(edge.cursor, unchanged_shared_object))
         }
 
         Ok(Some(conn))
