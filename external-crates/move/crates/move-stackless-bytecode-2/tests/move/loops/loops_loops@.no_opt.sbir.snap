@@ -1,0 +1,143 @@
+---
+source: crates/move-stackless-bytecode-2/tests/from_source.rs
+---
+  Module: loops
+    Function: loop_test (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_0 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Move(lcl_0)
+        reg_2 : u64 = Immediate(U64(1))
+        reg_3 : u64 = Add(reg_2 : u64, reg_1 : u64)
+        lcl_0 = reg_3 : u64
+        reg_4 : u64 = Copy(lcl_0)
+        reg_5 : u64 = Immediate(U64(10))
+        reg_6 : u64 = GreaterThanOrEqual(reg_5 : u64, reg_4 : u64)
+        JumpIf(reg_6 : u64, LBL_10, LBL_2)
+
+      Label LBL_10:
+        Jump(LBL_11)
+
+      Label LBL_11:
+        Return()
+
+
+    Function: loop_test_2 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_0 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Move(lcl_0)
+        reg_2 : u64 = Immediate(U64(1))
+        reg_3 : u64 = Add(reg_2 : u64, reg_1 : u64)
+        lcl_0 = reg_3 : u64
+        reg_4 : u64 = Copy(lcl_0)
+        reg_5 : u64 = Immediate(U64(2))
+        reg_6 : u64 = Modulo(reg_4 : u64, reg_5 : u64)
+        reg_7 : u64 = Immediate(U64(1))
+        reg_8 : u64 = Equal(reg_7 : u64, reg_6 : u64)
+        JumpIf(reg_8 : u64, LBL_12, LBL_13)
+
+      Label LBL_12:
+        Jump(LBL_2)
+
+      Label LBL_13:
+        reg_9 : u64 = Copy(lcl_0)
+        reg_10 : u64 = Immediate(U64(10))
+        reg_11 : u64 = Equal(reg_10 : u64, reg_9 : u64)
+        JumpIf(reg_11 : u64, LBL_17, LBL_2)
+
+      Label LBL_17:
+        Return()
+
+
+    Function: loop_test_3 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_0 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Copy(lcl_0)
+        reg_2 : u64 = Immediate(U64(10))
+        reg_3 : u64 = GreaterThanOrEqual(reg_2 : u64, reg_1 : u64)
+        JumpIf(reg_3 : u64, LBL_6, LBL_7)
+
+      Label LBL_6:
+        Jump(LBL_12)
+
+      Label LBL_7:
+        reg_4 : u64 = Move(lcl_0)
+        reg_5 : u64 = Immediate(U64(1))
+        reg_6 : u64 = Add(reg_5 : u64, reg_4 : u64)
+        lcl_0 = reg_6 : u64
+        Jump(LBL_2)
+
+      Label LBL_12:
+        Return()
+
+
+    Function: loop_test_4 (entry: LBL_0)
+      Label LBL_0:
+        Jump(LBL_0)
+
+
+    Function: loop_test_5 (entry: LBL_0)
+      Label LBL_0:
+        Jump(LBL_0)
+
+
+    Function: loop_test_6 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_1 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Copy(lcl_0)
+        reg_2 : u64 = Immediate(U64(10))
+        reg_3 : u64 = GreaterThan(reg_2 : u64, reg_1 : u64)
+        JumpIf(reg_3 : u64, LBL_6, LBL_16)
+
+      Label LBL_6:
+        Jump(LBL_7)
+
+      Label LBL_7:
+        reg_4 : u64 = Move(lcl_1)
+        reg_5 : u64 = Immediate(U64(1))
+        reg_6 : u64 = Add(reg_5 : u64, reg_4 : u64)
+        lcl_1 = reg_6 : u64
+        reg_7 : u64 = Move(lcl_0)
+        reg_8 : u64 = Immediate(U64(1))
+        reg_9 : u64 = Subtract(reg_7 : u64, reg_8 : u64)
+        lcl_0 = reg_9 : u64
+        Jump(LBL_2)
+
+      Label LBL_16:
+        Return()
+
+
+    Function: while_test (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_0 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Copy(lcl_0)
+        reg_2 : u64 = Immediate(U64(10))
+        reg_3 : u64 = LessThan(reg_2 : u64, reg_1 : u64)
+        JumpIf(reg_3 : u64, LBL_6, LBL_12)
+
+      Label LBL_6:
+        Jump(LBL_7)
+
+      Label LBL_7:
+        reg_4 : u64 = Move(lcl_0)
+        reg_5 : u64 = Immediate(U64(1))
+        reg_6 : u64 = Add(reg_5 : u64, reg_4 : u64)
+        lcl_0 = reg_6 : u64
+        Jump(LBL_2)
+
+      Label LBL_12:
+        Return()
