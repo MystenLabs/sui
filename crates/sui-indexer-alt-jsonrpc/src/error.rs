@@ -132,3 +132,7 @@ pub(crate) fn client_error_to_error_object(
         _ => ErrorObject::owned(INTERNAL_ERROR_CODE, error.to_string(), None::<()>),
     }
 }
+
+pub(crate) fn internal_error_object(err: String) -> ErrorObject<'static> {
+    ErrorObject::owned(INTERNAL_ERROR_CODE, err, None::<()>)
+}

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base64;
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -12,7 +12,7 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
 use crate::{
     config::NodeConfig,
-    error::{client_error_to_error_object, invalid_params},
+    error::{client_error_to_error_object, internal_error_object, invalid_params},
 };
 
 use super::rpc_module::RpcModule;
@@ -45,7 +45,10 @@ pub trait WriteApi {
     ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
 
-pub(crate) struct Write(pub HttpClient);
+pub(crate) struct Write {
+    config: NodeConfig,
+    fullnode_rpc_url: url::Url,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -54,9 +57,11 @@ pub enum Error {
 }
 
 impl Write {
-    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
-        let client = config.client(fullnode_rpc_url)?;
-        Ok(Self(client))
+    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> Self {
+        Self {
+            config,
+            fullnode_rpc_url,
+        }
     }
 }
 
@@ -72,7 +77,13 @@ impl WriteApiServer for Write {
         if let Some(ExecuteTransactionRequestType::WaitForLocalExecution) = request_type {
             return Err(invalid_params(Error::DeprecatedWaitForLocalExecution).into());
         }
-        self.0
+
+        let client = self
+            .config
+            .client(self.fullnode_rpc_url.clone())
+            .map_err(|e| internal_error_object(format!("Failed to create client: {e}")))?;
+
+        client
             .execute_transaction_block(tx_bytes, signatures, options, request_type)
             .await
             .map_err(client_error_to_error_object)
@@ -82,7 +93,12 @@ impl WriteApiServer for Write {
         &self,
         tx_bytes: Base64,
     ) -> RpcResult<DryRunTransactionBlockResponse> {
-        self.0
+        let client = self
+            .config
+            .client(self.fullnode_rpc_url.clone())
+            .map_err(|e| internal_error_object(format!("Failed to create client: {e}")))?;
+
+        client
             .dry_run_transaction_block(tx_bytes)
             .await
             .map_err(client_error_to_error_object)

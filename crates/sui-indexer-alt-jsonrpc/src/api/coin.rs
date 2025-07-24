@@ -7,7 +7,7 @@ use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use futures::future;
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_reader::coin_metadata::CoinMetadataKey;
@@ -23,6 +23,7 @@ use sui_types::{
     gas_coin::GAS,
 };
 
+use crate::error::internal_error_object;
 use crate::{
     config::NodeConfig,
     context::Context,
@@ -87,7 +88,10 @@ trait DelegationCoinsApi {
 }
 
 pub(crate) struct Coins(pub Context);
-pub(crate) struct DelegationCoins(HttpClient);
+pub(crate) struct DelegationCoins {
+    config: NodeConfig,
+    fullnode_rpc_url: url::Url,
+}
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
@@ -109,9 +113,11 @@ struct BalanceCursor {
 type Cursor = BcsCursor<BalanceCursor>;
 
 impl DelegationCoins {
-    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
-        let client = config.client(fullnode_rpc_url)?;
-        Ok(Self(client))
+    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> Self {
+        Self {
+            config,
+            fullnode_rpc_url,
+        }
     }
 }
 
@@ -173,7 +179,10 @@ impl CoinsApiServer for Coins {
 #[async_trait::async_trait]
 impl DelegationCoinsApiServer for DelegationCoins {
     async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let Self(client) = self;
+        let client = self
+            .config
+            .client(self.fullnode_rpc_url.clone())
+            .map_err(|e| internal_error_object(format!("Failed to create client: {e}")))?;
 
         client
             .get_all_balances(owner)
@@ -186,7 +195,10 @@ impl DelegationCoinsApiServer for DelegationCoins {
         owner: SuiAddress,
         coin_type: Option<String>,
     ) -> RpcResult<Balance> {
-        let Self(client) = self;
+        let client = self
+            .config
+            .client(self.fullnode_rpc_url.clone())
+            .map_err(|e| internal_error_object(format!("Failed to create client: {e}")))?;
 
         client
             .get_balance(owner, coin_type)

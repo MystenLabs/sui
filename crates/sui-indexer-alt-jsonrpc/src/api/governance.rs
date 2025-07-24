@@ -4,7 +4,7 @@
 use anyhow::Context as _;
 use diesel::{ExpressionMethods, QueryDsl};
 
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
 use sui_json_rpc_api::GovernanceReadApiClient;
 use sui_json_rpc_types::{DelegatedStake, ValidatorApys};
@@ -27,7 +27,7 @@ use crate::{
     config::NodeConfig,
     context::Context,
     data::load_live_deserialized,
-    error::{client_error_to_error_object, rpc_bail, RpcError},
+    error::{client_error_to_error_object, internal_error_object, rpc_bail, RpcError},
 };
 
 use super::rpc_module::RpcModule;
@@ -64,12 +64,17 @@ trait DelegationGovernanceApi {
 }
 
 pub(crate) struct Governance(pub Context);
-pub(crate) struct DelegationGovernance(HttpClient);
+pub(crate) struct DelegationGovernance {
+    config: NodeConfig,
+    fullnode_rpc_url: url::Url,
+}
 
 impl DelegationGovernance {
-    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
-        let client = config.client(fullnode_rpc_url)?;
-        Ok(Self(client))
+    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> Self {
+        Self {
+            config,
+            fullnode_rpc_url,
+        }
     }
 }
 
@@ -90,7 +95,10 @@ impl DelegationGovernanceApiServer for DelegationGovernance {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        let Self(client) = self;
+        let client = self
+            .config
+            .client(self.fullnode_rpc_url.clone())
+            .map_err(|e| internal_error_object(format!("Failed to create client: {e}")))?;
 
         client
             .get_stakes_by_ids(staked_sui_ids)
@@ -99,7 +107,10 @@ impl DelegationGovernanceApiServer for DelegationGovernance {
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        let Self(client) = self;
+        let client = self
+            .config
+            .client(self.fullnode_rpc_url.clone())
+            .map_err(|e| internal_error_object(format!("Failed to create client: {e}")))?;
 
         client
             .get_stakes(owner)
@@ -108,7 +119,10 @@ impl DelegationGovernanceApiServer for DelegationGovernance {
     }
 
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
-        let Self(client) = self;
+        let client = self
+            .config
+            .client(self.fullnode_rpc_url.clone())
+            .map_err(|e| internal_error_object(format!("Failed to create client: {e}")))?;
 
         client
             .get_validators_apy()
