@@ -10,6 +10,7 @@ use sui_indexer_alt_framework::types::{
 };
 
 pub(crate) mod object_by_owner;
+pub(crate) mod object_by_type;
 
 /// Returns the first appearance of all objects that were used as inputs to the transactions in the
 /// checkpoint. These are objects that existed prior to the checkpoint, and excludes objects that
