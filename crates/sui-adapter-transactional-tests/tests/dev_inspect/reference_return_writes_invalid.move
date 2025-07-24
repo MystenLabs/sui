@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests writing to mult
+// tests invalid transfers/writes of mut references
 
 //# init --addresses test=0x0 --accounts A
 
