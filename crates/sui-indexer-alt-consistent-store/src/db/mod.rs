@@ -314,7 +314,6 @@ impl Db {
         Ok(iter::RevIter::new(Some(inner)))
     }
 
-    #[inline]
     fn at_snapshot(&self, checkpoint: u64) -> Result<Arc<rocksdb::Snapshot<'_>>, Error> {
         self.0.read().expect("poisoned").with(|f| {
             let Some(snapshot) = f.snapshots.get(&checkpoint).cloned() else {
@@ -333,7 +332,6 @@ impl Db {
         })
     }
 
-    #[inline]
     fn iter_raw<J>(
         &self,
         checkpoint: u64,

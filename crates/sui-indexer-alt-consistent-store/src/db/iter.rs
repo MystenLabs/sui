@@ -101,7 +101,6 @@ where
     }
 }
 
-#[inline]
 fn decode_item<K, V>(iter: &rocksdb::DBRawIterator<'_>) -> Option<Result<(K, V), Error>>
 where
     K: Decode<()>,
