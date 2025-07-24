@@ -223,6 +223,16 @@ pub(crate) struct TransactionContext {
     pub(crate) non_retriable_errors: StatusAggregator<TransactionRequestError>,
 }
 
+impl TransactionContext {
+    #[cfg(test)]
+    pub(crate) fn new_for_test(committee: Arc<sui_types::committee::Committee>) -> Self {
+        Self {
+            options: SubmitTransactionOptions::default(),
+            non_retriable_errors: StatusAggregator::new(committee),
+        }
+    }
+}
+
 // Inner state of TransactionDriver.
 struct State {
     tasks: JoinSet<()>,

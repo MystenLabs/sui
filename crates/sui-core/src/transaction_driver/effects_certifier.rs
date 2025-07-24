@@ -77,13 +77,13 @@ impl EffectsCertifier {
         };
 
         let mut retrier = RequestRetrier::new(authority_aggregator);
-
+        let options = txn_context.options.clone();
         let (acknowledgments_result, mut full_effects_result) = join!(
             self.wait_for_acknowledgments(
                 authority_aggregator,
                 tx_digest,
                 consensus_position,
-                &txn_context.options,
+                &options,
             ),
             async {
                 // No need to send a full effects request if it is already provided.
@@ -94,7 +94,7 @@ impl EffectsCertifier {
                     return Ok(full_effects);
                 }
                 let (name, client) = retrier
-                    .next_target(&mut txn_context.non_retriable_errors)
+                    .next_target(txn_context)
                     .expect("there should be at least 1 target");
                 current_target = name;
                 self.get_full_effects(client, tx_digest, consensus_position, &txn_context.options)
@@ -131,7 +131,7 @@ impl EffectsCertifier {
                     // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
                     // but the error should not happen after effects certification unless there are software bugs
                     // or > f malicious validators.
-                    retrier.add_error(&mut txn_context.non_retriable_errors, current_target, e)?;
+                    retrier.add_error(txn_context, current_target, e)?;
                 }
             };
 
@@ -140,7 +140,7 @@ impl EffectsCertifier {
             // Retry getting full effects from the next target.
 
             // This emits an error when retrier has no targets available.
-            let (name, client) = retrier.next_target(&mut txn_context.non_retriable_errors)?;
+            let (name, client) = retrier.next_target(txn_context)?;
             current_target = name;
             full_effects_result = self
                 .get_full_effects(client, tx_digest, consensus_position, &txn_context.options)
@@ -184,7 +184,11 @@ impl EffectsCertifier {
                     }
                 }
                 WaitForEffectsResponse::Rejected { error } => {
-                    Err(TransactionRequestError::RejectedAtValidator(error))
+                    if let Some(error) = error {
+                        Err(TransactionRequestError::Rejected(error))
+                    } else {
+                        Err(TransactionRequestError::RejectedWithoutReason)
+                    }
                 }
                 WaitForEffectsResponse::Expired { epoch, round } => Err(
                     TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0)),
@@ -303,7 +307,11 @@ impl EffectsCertifier {
                     }
                 }
                 Ok(WaitForEffectsResponse::Rejected { error }) => {
-                    let error = TransactionRequestError::RejectedAtValidator(error);
+                    let error = if let Some(error) = error {
+                        TransactionRequestError::Rejected(error)
+                    } else {
+                        TransactionRequestError::RejectedWithoutReason
+                    };
                     if error.is_submission_retriable() {
                         retriable_errors_aggregator.insert(name, error);
                     } else {

@@ -131,7 +131,7 @@ pub enum WaitForEffectsResponse {
     },
     Rejected {
         // The rejection status known locally.
-        error: SuiError,
+        error: Option<SuiError>,
     },
     // The transaction position is expired, with the local epoch and committed round.
     // When round is None, the expiration is due to lagging epoch in the request.
@@ -247,23 +247,29 @@ fn try_from_raw_executed_status(
     Ok((effects_digest, details))
 }
 
-fn try_from_raw_rejected_status(rejected: RawRejectedStatus) -> Result<SuiError, SuiError> {
-    let error =
-        bcs::from_bytes(&rejected.error).map_err(|err| SuiError::GrpcMessageDeserializeError {
-            type_info: "RawWaitForEffectsResponse.rejected.reason".to_string(),
-            error: err.to_string(),
-        })?;
-    Ok(error)
+fn try_from_raw_rejected_status(rejected: RawRejectedStatus) -> Result<Option<SuiError>, SuiError> {
+    rejected
+        .error
+        .map(|error| {
+            bcs::from_bytes(&error).map_err(|err| SuiError::GrpcMessageDeserializeError {
+                type_info: "RawWaitForEffectsResponse.rejected.reason".to_string(),
+                error: err.to_string(),
+            })
+        })
+        .transpose()
 }
 
-fn try_from_response_rejected(error: SuiError) -> Result<RawRejectedStatus, SuiError> {
+fn try_from_response_rejected(error: Option<SuiError>) -> Result<RawRejectedStatus, SuiError> {
+    let Some(error) = error else {
+        return Ok(RawRejectedStatus { error: None });
+    };
     let error = bcs::to_bytes(&error)
         .map_err(|err| SuiError::GrpcMessageSerializeError {
             type_info: "RawRejectedStatus.error".to_string(),
             error: err.to_string(),
         })?
         .into();
-    Ok(RawRejectedStatus { error })
+    Ok(RawRejectedStatus { error: Some(error) })
 }
 
 impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {

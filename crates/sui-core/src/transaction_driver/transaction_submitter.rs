@@ -46,7 +46,7 @@ impl TransactionSubmitter {
         // This loop terminates when there are enough (f+1) non-retriable errors when submitting the transaction,
         // or all feasible targets returned errors or timed out.
         loop {
-            let (name, client) = retrier.next_target(&mut txn_context.non_retriable_errors)?;
+            let (name, client) = retrier.next_target(txn_context)?;
             match self
                 .submit_transaction_once(client, &raw_request, &txn_context.options)
                 .await
@@ -57,7 +57,7 @@ impl TransactionSubmitter {
                 }
                 Err(e) => {
                     self.metrics.submit_transaction_error.inc();
-                    retrier.add_error(&mut txn_context.non_retriable_errors, name, e)?;
+                    retrier.add_error(txn_context, name, e)?;
                 }
             };
             tokio::task::yield_now().await;
@@ -80,7 +80,7 @@ impl TransactionSubmitter {
         )
         .await
         .map_err(|_| TransactionRequestError::TimedOutSubmittingTransaction)?
-        .map_err(TransactionRequestError::RejectedAtValidator)?;
+        .map_err(TransactionRequestError::Rejected)?;
         Ok(resp)
     }
 }

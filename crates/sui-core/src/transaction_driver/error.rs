@@ -30,10 +30,14 @@ pub(crate) enum TransactionRequestError {
 
     // Rejected by the validator when voting on the transaction.
     #[error("{0}")]
-    RejectedAtValidator(SuiError),
+    Rejected(SuiError),
+    #[error("Transaction is rejected with voting, but this validator either accepted the transaction or the reason has expired")]
+    RejectedWithoutReason,
+
     // Transaction status has been dropped from cache at the validator.
     #[error("Transaction status expired")]
     StatusExpired(EpochId, u32),
+
     // Request to submit transaction or get full effects failed.
     #[error("{0}")]
     Aborted(SuiError),
@@ -42,9 +46,7 @@ pub(crate) enum TransactionRequestError {
 impl TransactionRequestError {
     pub fn is_submission_retriable(&self) -> bool {
         match self {
-            TransactionRequestError::RejectedAtValidator(error) => {
-                error.is_transaction_submission_retriable()
-            }
+            TransactionRequestError::Rejected(error) => error.is_transaction_submission_retriable(),
             TransactionRequestError::Aborted(error) => error.is_transaction_submission_retriable(),
             _ => true,
         }

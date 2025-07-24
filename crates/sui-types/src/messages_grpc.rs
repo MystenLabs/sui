@@ -303,8 +303,8 @@ pub struct RawExecutedData {
 
 #[derive(Clone, prost::Message)]
 pub struct RawRejectedStatus {
-    #[prost(bytes = "bytes", tag = "1")]
-    pub error: Bytes,
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub error: Option<Bytes>,
 }
 
 #[derive(Clone, prost::Message)]
