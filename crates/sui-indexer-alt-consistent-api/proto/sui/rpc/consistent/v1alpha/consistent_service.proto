@@ -8,8 +8,9 @@ package sui.rpc.consistent.v1alpha;
 service ConsistentService {
   rpc AvailableRange(AvailableRangeRequest) returns (AvailableRangeResponse);
 
-  rpc ListOwnedObjects(ListOwnedObjectsRequest)
-      returns (ListOwnedObjectsResponse);
+  rpc ListObjectsByType(ListObjectsByTypeRequest) returns (ListObjectsResponse);
+
+  rpc ListOwnedObjects(ListOwnedObjectsRequest) returns (ListObjectsResponse);
 
   rpc ServiceConfig(ServiceConfigRequest) returns (ServiceConfigResponse);
 }
@@ -24,6 +25,38 @@ message AvailableRangeResponse {
   // The (inclusive) maximum checkpoint sequence number that the service can
   // answer questions for.
   optional uint64 max_checkpoint = 2;
+}
+
+message ListObjectsByTypeRequest {
+  // Required. Type filter to limit the types of objects listed.
+  //
+  // Accepts filters by the type's package, module, fully-qualified name, or a
+  // type instantiation:
+  //
+  //  - `0x2`
+  //  - `0x2::coin`
+  //  - `0x2::coin::Coin`
+  //  - `0x2::coin::Coin<0x2::sui::SUI>`
+  optional string object_type = 1;
+
+  // The maximum number of entries to return. The service may return fewer than
+  // this value.
+  //
+  // Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+  // page sizes.
+  optional uint32 page_size = 100;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the next page.
+  optional bytes after_token = 101;
+
+  // A page token, received from a previous `ListOwnedObjects` call.
+  // Provide this to retrieve the previous page.
+  optional bytes before_token = 102;
+
+  // Whether to fetch the next page from the front or back of the filtered
+  // range.
+  optional End end = 103;
 }
 
 message ListOwnedObjectsRequest {
@@ -46,22 +79,22 @@ message ListOwnedObjectsRequest {
   //
   // Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
   // page sizes.
-  optional uint32 page_size = 3;
+  optional uint32 page_size = 100;
 
   // A page token, received from a previous `ListOwnedObjects` call.
   // Provide this to retrieve the next page.
-  optional bytes after_token = 4;
+  optional bytes after_token = 101;
 
   // A page token, received from a previous `ListOwnedObjects` call.
   // Provide this to retrieve the previous page.
-  optional bytes before_token = 5;
+  optional bytes before_token = 102;
 
   // Whether to fetch the next page from the front or back of the filtered
   // range.
-  optional End end = 6;
+  optional End end = 103;
 }
 
-message ListOwnedObjectsResponse {
+message ListObjectsResponse {
   // Whether there are more pages before this one.
   optional bool has_previous_page = 1;
 

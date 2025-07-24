@@ -57,6 +57,7 @@ pub struct ConsistencyConfig {
 #[derive(Default)]
 pub struct PipelineLayer {
     pub object_by_owner: Option<CommitterLayer>,
+    pub object_by_type: Option<CommitterLayer>,
 }
 
 #[DefaultConfig]
@@ -111,6 +112,7 @@ impl PipelineLayer {
     pub fn example() -> Self {
         Self {
             object_by_owner: Some(Default::default()),
+            object_by_type: Some(Default::default()),
         }
     }
 }

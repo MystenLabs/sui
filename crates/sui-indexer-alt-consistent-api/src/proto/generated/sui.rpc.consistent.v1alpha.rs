@@ -13,6 +13,39 @@ pub struct AvailableRangeResponse {
     pub max_checkpoint: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListObjectsByTypeRequest {
+    /// Required. Type filter to limit the types of objects listed.
+    ///
+    /// Accepts filters by the type's package, module, fully-qualified name, or a
+    /// type instantiation:
+    ///
+    ///   - `0x2`
+    ///   - `0x2::coin`
+    ///   - `0x2::coin::Coin`
+    ///   - `0x2::coin::Coin<0x2::sui::SUI>`
+    #[prost(string, optional, tag = "1")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// The maximum number of entries to return. The service may return fewer than
+    /// this value.
+    ///
+    /// Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+    /// page sizes.
+    #[prost(uint32, optional, tag = "100")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListOwnedObjects` call.
+    /// Provide this to retrieve the next page.
+    #[prost(bytes = "bytes", optional, tag = "101")]
+    pub after_token: ::core::option::Option<::prost::bytes::Bytes>,
+    /// A page token, received from a previous `ListOwnedObjects` call.
+    /// Provide this to retrieve the previous page.
+    #[prost(bytes = "bytes", optional, tag = "102")]
+    pub before_token: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Whether to fetch the next page from the front or back of the filtered
+    /// range.
+    #[prost(enumeration = "End", optional, tag = "103")]
+    pub end: ::core::option::Option<i32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListOwnedObjectsRequest {
     /// Required. The owner kind and address.
     #[prost(message, optional, tag = "1")]
@@ -33,23 +66,23 @@ pub struct ListOwnedObjectsRequest {
     ///
     /// Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
     /// page sizes.
-    #[prost(uint32, optional, tag = "3")]
+    #[prost(uint32, optional, tag = "100")]
     pub page_size: ::core::option::Option<u32>,
     /// A page token, received from a previous `ListOwnedObjects` call.
     /// Provide this to retrieve the next page.
-    #[prost(bytes = "bytes", optional, tag = "4")]
+    #[prost(bytes = "bytes", optional, tag = "101")]
     pub after_token: ::core::option::Option<::prost::bytes::Bytes>,
     /// A page token, received from a previous `ListOwnedObjects` call.
     /// Provide this to retrieve the previous page.
-    #[prost(bytes = "bytes", optional, tag = "5")]
+    #[prost(bytes = "bytes", optional, tag = "102")]
     pub before_token: ::core::option::Option<::prost::bytes::Bytes>,
     /// Whether to fetch the next page from the front or back of the filtered
     /// range.
-    #[prost(enumeration = "End", optional, tag = "6")]
+    #[prost(enumeration = "End", optional, tag = "103")]
     pub end: ::core::option::Option<i32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ListOwnedObjectsResponse {
+pub struct ListObjectsResponse {
     /// Whether there are more pages before this one.
     #[prost(bool, optional, tag = "1")]
     pub has_previous_page: ::core::option::Option<bool>,
@@ -291,11 +324,40 @@ pub mod consistent_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn list_objects_by_type(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListObjectsByTypeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListObjectsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ListObjectsByType",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.consistent.v1alpha.ConsistentService",
+                        "ListObjectsByType",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn list_owned_objects(
             &mut self,
             request: impl tonic::IntoRequest<super::ListOwnedObjectsRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ListOwnedObjectsResponse>,
+            tonic::Response<super::ListObjectsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -371,11 +433,18 @@ pub mod consistent_service_server {
             tonic::Response<super::AvailableRangeResponse>,
             tonic::Status,
         >;
+        async fn list_objects_by_type(
+            &self,
+            request: tonic::Request<super::ListObjectsByTypeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListObjectsResponse>,
+            tonic::Status,
+        >;
         async fn list_owned_objects(
             &self,
             request: tonic::Request<super::ListOwnedObjectsRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ListOwnedObjectsResponse>,
+            tonic::Response<super::ListObjectsResponse>,
             tonic::Status,
         >;
         async fn service_config(
@@ -508,6 +577,55 @@ pub mod consistent_service_server {
                     };
                     Box::pin(fut)
                 }
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ListObjectsByType" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListObjectsByTypeSvc<T: ConsistentService>(pub Arc<T>);
+                    impl<
+                        T: ConsistentService,
+                    > tonic::server::UnaryService<super::ListObjectsByTypeRequest>
+                    for ListObjectsByTypeSvc<T> {
+                        type Response = super::ListObjectsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListObjectsByTypeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ConsistentService>::list_objects_by_type(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListObjectsByTypeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
                 "/sui.rpc.consistent.v1alpha.ConsistentService/ListOwnedObjects" => {
                     #[allow(non_camel_case_types)]
                     struct ListOwnedObjectsSvc<T: ConsistentService>(pub Arc<T>);
@@ -515,7 +633,7 @@ pub mod consistent_service_server {
                         T: ConsistentService,
                     > tonic::server::UnaryService<super::ListOwnedObjectsRequest>
                     for ListOwnedObjectsSvc<T> {
-                        type Response = super::ListOwnedObjectsResponse;
+                        type Response = super::ListObjectsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,

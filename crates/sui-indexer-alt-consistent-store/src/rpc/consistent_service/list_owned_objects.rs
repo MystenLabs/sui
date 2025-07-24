@@ -52,7 +52,7 @@ pub(super) fn list_owned_objects(
     state: &State,
     checkpoint: u64,
     request: grpc::ListOwnedObjectsRequest,
-) -> Result<grpc::ListOwnedObjectsResponse, RpcError<Error>> {
+) -> Result<grpc::ListObjectsResponse, RpcError<Error>> {
     let owner = request.owner.as_ref().ok_or(Error::MissingOwner)?;
 
     use grpc::owner::OwnerKind as GK;
@@ -101,7 +101,7 @@ pub(super) fn list_owned_objects(
         page.paginate_prefix(index, checkpoint, &kind)?
     };
 
-    Ok(grpc::ListOwnedObjectsResponse {
+    Ok(grpc::ListObjectsResponse {
         has_previous_page: Some(resp.has_prev),
         has_next_page: Some(resp.has_next),
         objects: resp
