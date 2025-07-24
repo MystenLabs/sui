@@ -1236,6 +1236,65 @@ type ServiceConfig {
 }
 
 """
+Access to a cancelled shared object.
+"""
+type SharedObjectCancelled {
+	"""
+	The ID of the shared object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the cancellation.
+	"""
+	sequenceNumber: UInt53
+}
+
+"""
+Access to a shared object whose mutable consensus stream has ended.
+"""
+type SharedObjectMutateStreamEnded {
+	"""
+	The ID of the shared object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
+"""
+Access to a per-epoch configuration object.
+"""
+type SharedObjectPerEpochConfig {
+	"""
+	The ID of the per-epoch configuration object.
+	"""
+	address: SuiAddress
+}
+
+type SharedObjectRead {
+	"""
+	The shared object that was accessed read-only.
+	"""
+	object: Object
+}
+
+"""
+Access to a shared object whose read-only consensus stream has ended.
+"""
+type SharedObjectReadStreamEnded {
+	"""
+	The ID of the shared object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
+"""
 Parameters that control the distribution of the stake subsidy.
 """
 type StakeSubsidy {
@@ -1450,6 +1509,10 @@ type TransactionEffects {
 	Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
 	"""
 	gasEffects: GasEffects
+	"""
+	The unchanged shared objects that were referenced by this transaction.
+	"""
+	unchangedSharedObjects(first: Int, after: String, last: Int, before: String): UnchangedSharedObjectConnection
 }
 
 input TransactionFilter {
@@ -1476,6 +1539,40 @@ union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction 
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Details pertaining to shared objects that are referenced by but not changed by a transaction.
+"""
+union UnchangedSharedObject = SharedObjectRead | SharedObjectMutateStreamEnded | SharedObjectReadStreamEnded | SharedObjectCancelled | SharedObjectPerEpochConfig
+
+type UnchangedSharedObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [UnchangedSharedObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [UnchangedSharedObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type UnchangedSharedObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: UnchangedSharedObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 type UserSignature {
 	"""
