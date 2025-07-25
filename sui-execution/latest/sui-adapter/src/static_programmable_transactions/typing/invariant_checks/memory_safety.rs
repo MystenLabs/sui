@@ -482,7 +482,7 @@ impl Context {
     /// Excludes `Aliases` if `ignore_aliases` is true.
     fn any_extends(&self, paths: &PathSet, ignore_aliases: bool) -> bool {
         self.all_references()
-            .any(|other| other.extends(&paths, ignore_aliases))
+            .any(|other| other.extends(paths, ignore_aliases))
     }
 }
 
@@ -607,10 +607,6 @@ fn call(
                 is_mut: true,
                 paths,
             } => {
-                if context.any_extends(&paths, /* ignore alias */ true) {
-                    paths.print();
-                    context.print();
-                }
                 // Allow alias conflicts with references not passed as arguments
                 anyhow::ensure!(
                     !context.any_extends(&paths, /* ignore alias */ true),
@@ -669,7 +665,13 @@ fn call(
     Ok(())
 }
 
+//**************************************************************************************************
+// impl
+//**************************************************************************************************
+
 impl Path {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
     fn print(&self) {
         print!("{:?}", self.root);
         for ext in &self.extensions {
@@ -681,6 +683,8 @@ impl Path {
 }
 
 impl PathSet {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
     fn print(&self) {
         println!("{{");
         for path in &self.0 {
@@ -691,6 +695,8 @@ impl PathSet {
 }
 
 impl Value {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
     fn print(&self) {
         match self {
             Value::NonRef => print!("NonRef"),
@@ -707,6 +713,8 @@ impl Value {
 }
 
 impl Location {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
     fn print(&self) {
         print!("{{ self_path: ");
         self.self_path.print();
@@ -721,6 +729,8 @@ impl Location {
 }
 
 impl Context {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
     fn print(&self) {
         println!("Context {{");
         println!("  tx_context: ");
