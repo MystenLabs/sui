@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 15 tasks
+processed 17 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -102,19 +102,49 @@ Response: {
         },
         "edges": [
           {
-            "cursor": "MQ=="
+            "cursor": "MQ==",
+            "node": {
+              "digest": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           },
           {
-            "cursor": "Mg=="
+            "cursor": "Mg==",
+            "node": {
+              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           },
           {
-            "cursor": "Mw=="
+            "cursor": "Mw==",
+            "node": {
+              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           },
           {
-            "cursor": "NA=="
+            "cursor": "NA==",
+            "node": {
+              "digest": "HjDMuwdowb7MZH6FeKAusxr1o3cusmK9n4oVcioZLVrH",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           },
           {
-            "cursor": "NQ=="
+            "cursor": "NQ==",
+            "node": {
+              "digest": "5PrgQrQuNzy4uVD4km6ybJ5pMKURTn3HjdtoA2c5NJBU",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           }
         ]
       }
@@ -122,37 +152,27 @@ Response: {
   }
 }
 
-task 11, lines 68-83:
+task 11, lines 68-80:
 //# run-graphql --cursors 1
 Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 1,
-      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": true,
-          "hasNextPage": true,
-          "startCursor": "Mg==",
-          "endCursor": "NA=="
-        },
-        "edges": [
-          {
-            "cursor": "Mg=="
-          },
-          {
-            "cursor": "Mw=="
-          },
-          {
-            "cursor": "NA=="
-          }
-        ]
+  "data": null,
+  "errors": [
+    {
+      "message": "Unknown fragment: \"PageInfoFields\"",
+      "locations": [
+        {
+          "line": 7,
+          "column": 9
+        }
+      ],
+      "extensions": {
+        "code": "GRAPHQL_VALIDATION_FAILED"
       }
     }
-  }
+  ]
 }
 
-task 12, lines 85-100:
+task 12, lines 82-97:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
@@ -168,10 +188,22 @@ Response: {
         },
         "edges": [
           {
-            "cursor": "Mg=="
+            "cursor": "Mg==",
+            "node": {
+              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           },
           {
-            "cursor": "Mw=="
+            "cursor": "Mw==",
+            "node": {
+              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           }
         ]
       }
@@ -179,7 +211,7 @@ Response: {
   }
 }
 
-task 13, lines 102-117:
+task 13, lines 99-114:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
@@ -195,10 +227,22 @@ Response: {
         },
         "edges": [
           {
-            "cursor": "Mw=="
+            "cursor": "Mw==",
+            "node": {
+              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           },
           {
-            "cursor": "NA=="
+            "cursor": "NA==",
+            "node": {
+              "digest": "HjDMuwdowb7MZH6FeKAusxr1o3cusmK9n4oVcioZLVrH",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           }
         ]
       }
@@ -206,7 +250,7 @@ Response: {
   }
 }
 
-task 14, lines 119-134:
+task 14, lines 116-131:
 //# run-graphql --cursors 3
 Response: {
   "data": {
@@ -222,13 +266,53 @@ Response: {
         },
         "edges": [
           {
-            "cursor": "MQ=="
+            "cursor": "MQ==",
+            "node": {
+              "digest": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           },
           {
-            "cursor": "Mg=="
+            "cursor": "Mg==",
+            "node": {
+              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
           }
         ]
       }
     }
+  }
+}
+
+task 15, lines 133-148:
+//# run-graphql --cursors 5
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 1,
+      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "transactions": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": false,
+          "startCursor": null,
+          "endCursor": null
+        },
+        "edges": []
+      }
+    }
+  }
+}
+
+task 16, lines 150-165:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": null
   }
 }
