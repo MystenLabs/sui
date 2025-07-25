@@ -186,22 +186,25 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         }
 
-        // Determine the effective checkpoint range and query tx_sequence_numbers for the effective checkpoint range and filters
-        let tx_sequence_numbers = match filter.checkpoint_bounds(scope.checkpoint_viewed_at()) {
+        let mut tx_digest_keys = match filter.checkpoint_bounds(scope.checkpoint_viewed_at()) {
+            // Determine tx_sequence_numbers if we have checkpoint bounds.
             Some(cp_bounds) => {
                 Self::tx_sequence_numbers_by_checkpoint(ctx, cp_bounds, &page).await?
             }
             None => return Ok(Connection::new(false, false)),
         };
 
-        // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination
-        let (prev, next, results) =
-            page.paginate_results(tx_sequence_numbers, |&t| JsonCursor::new(t));
+        // Undo any sorting that was applied to the results for consistency.
+        if !page.is_from_front() {
+            tx_digest_keys.reverse();
+        }
+
+        // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
+        let (prev, next, results) = page.paginate_results(tx_digest_keys, |&t| JsonCursor::new(t));
 
         let results: Vec<_> = results.collect();
-        // Convert sequence numbers to TxDigestKeys
         let tx_digest_keys: Vec<TxDigestKey> =
-            results.iter().map(|(_, seq)| TxDigestKey(*seq)).collect();
+            results.iter().map(|(_, sq)| TxDigestKey(*sq)).collect();
 
         // Load the transaction digests for the paginated tx_sequence_numbers
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;

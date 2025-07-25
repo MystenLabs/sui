@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 13 tasks
+processed 15 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -102,49 +102,19 @@ Response: {
         },
         "edges": [
           {
-            "cursor": "MQ==",
-            "node": {
-              "digest": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "MQ=="
           },
           {
-            "cursor": "Mg==",
-            "node": {
-              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "Mg=="
           },
           {
-            "cursor": "Mw==",
-            "node": {
-              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "Mw=="
           },
           {
-            "cursor": "NA==",
-            "node": {
-              "digest": "HjDMuwdowb7MZH6FeKAusxr1o3cusmK9n4oVcioZLVrH",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "NA=="
           },
           {
-            "cursor": "NQ==",
-            "node": {
-              "digest": "5PrgQrQuNzy4uVD4km6ybJ5pMKURTn3HjdtoA2c5NJBU",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "NQ=="
           }
         ]
       }
@@ -162,46 +132,19 @@ Response: {
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
-          "hasNextPage": false,
+          "hasNextPage": true,
           "startCursor": "Mg==",
-          "endCursor": "NQ=="
+          "endCursor": "NA=="
         },
         "edges": [
           {
-            "cursor": "Mg==",
-            "node": {
-              "digest": "y67xoUfKZCTcSd8jfjv6c5ijXCNBmgLmA2t5iqKW4xM",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "Mg=="
           },
           {
-            "cursor": "Mw==",
-            "node": {
-              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "Mw=="
           },
           {
-            "cursor": "NA==",
-            "node": {
-              "digest": "HjDMuwdowb7MZH6FeKAusxr1o3cusmK9n4oVcioZLVrH",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
-          },
-          {
-            "cursor": "NQ==",
-            "node": {
-              "digest": "5PrgQrQuNzy4uVD4km6ybJ5pMKURTn3HjdtoA2c5NJBU",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "NA=="
           }
         ]
       }
@@ -210,7 +153,7 @@ Response: {
 }
 
 task 12, lines 85-100:
-//# run-graphql --cursors 2 6
+//# run-graphql --cursors 1 5
 Response: {
   "data": {
     "checkpoint": {
@@ -219,37 +162,70 @@ Response: {
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
-          "hasNextPage": false,
-          "startCursor": "Mw==",
-          "endCursor": "NQ=="
+          "hasNextPage": true,
+          "startCursor": "Mg==",
+          "endCursor": "Mw=="
         },
         "edges": [
           {
-            "cursor": "Mw==",
-            "node": {
-              "digest": "5p4kXkBEgZCpj1XTmfzz6KRhWZ6DRjf5DcD9hTg4YUYy",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "Mg=="
           },
           {
-            "cursor": "NA==",
-            "node": {
-              "digest": "HjDMuwdowb7MZH6FeKAusxr1o3cusmK9n4oVcioZLVrH",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "Mw=="
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 13, lines 102-117:
+//# run-graphql --cursors 1 5
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 1,
+      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "transactions": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true,
+          "startCursor": "Mw==",
+          "endCursor": "NA=="
+        },
+        "edges": [
+          {
+            "cursor": "Mw=="
           },
           {
-            "cursor": "NQ==",
-            "node": {
-              "digest": "5PrgQrQuNzy4uVD4km6ybJ5pMKURTn3HjdtoA2c5NJBU",
-              "sender": {
-                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-              }
-            }
+            "cursor": "NA=="
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 14, lines 119-134:
+//# run-graphql --cursors 3
+Response: {
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 1,
+      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "transactions": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": true,
+          "startCursor": "MQ==",
+          "endCursor": "Mg=="
+        },
+        "edges": [
+          {
+            "cursor": "MQ=="
+          },
+          {
+            "cursor": "Mg=="
           }
         ]
       }
