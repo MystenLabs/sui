@@ -1585,9 +1585,9 @@ impl ValidatorService {
 
         // Get last committed leader round from epoch store
         let last_committed_leader_round = epoch_store
-            .get_last_consensus_stats()
-            .ok()
-            .map(|stats| stats.index.last_committed_round)
+            .consensus_tx_status_cache
+            .as_ref()
+            .and_then(|cache| cache.get_last_committed_leader_round())
             .unwrap_or(0);
 
         // Get last locally built checkpoint sequence

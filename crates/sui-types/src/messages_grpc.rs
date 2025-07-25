@@ -389,7 +389,7 @@ pub struct ValidatorHealthResponse {
     /// Last locally built checkpoint sequence number
     pub last_locally_built_checkpoint: u64,
     /// Last committed leader round from Mysticeti consensus
-    pub last_committed_leader_round: u64,
+    pub last_committed_leader_round: u32,
 }
 
 impl TryFrom<ValidatorHealthRequest> for RawValidatorHealthRequest {
@@ -419,7 +419,7 @@ impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
         Ok(Self {
             pending_certificates: Some(value.num_inflight_execution_transactions),
             inflight_consensus_messages: Some(value.num_inflight_consensus_transactions),
-            consensus_round: Some(value.last_committed_leader_round),
+            consensus_round: Some(value.last_committed_leader_round as u64),
             checkpoint_sequence: Some(value.last_locally_built_checkpoint),
         })
     }
@@ -433,7 +433,7 @@ impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
             num_inflight_consensus_transactions: value.inflight_consensus_messages.unwrap_or(0),
             num_inflight_execution_transactions: value.pending_certificates.unwrap_or(0),
             last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
-            last_committed_leader_round: value.consensus_round.unwrap_or(0),
+            last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
         })
     }
 }
