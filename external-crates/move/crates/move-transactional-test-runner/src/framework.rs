@@ -679,13 +679,7 @@ pub fn compile_source_units(
     match units_or_diags {
         Err((_pass, diags)) => {
             if let Some(pre_compiled_module_info) = state.pre_compiled_program_info_opt.clone() {
-                for (_, module_info) in pre_compiled_module_info.iter() {
-                    files.add(
-                        module_info.info.defined_loc.file_hash(),
-                        module_info.file_name,
-                        module_info.file_content.clone(),
-                    );
-                }
+                files.extend(pre_compiled_module_info.files());
             }
             Err(anyhow!(rendered_diags(&files, diags).unwrap()))
         }
