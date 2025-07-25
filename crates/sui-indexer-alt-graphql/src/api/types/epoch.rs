@@ -8,6 +8,7 @@ use super::{
 };
 use crate::api::types::safe_mode::SafeMode;
 use crate::api::types::storage_fund::StorageFund;
+use crate::api::types::system_parameters::SystemParameters;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     api::types::validator_set::ValidatorSet,
@@ -326,6 +327,27 @@ impl Epoch {
         };
 
         Ok(Some(system_state_version.into()))
+    }
+
+    /// Details of the system that are decided during genesis.
+    async fn system_parameters(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<SystemParameters>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let system_parameters = match system_state {
+            SuiSystemState::V1(inner) => inner.parameters.into(),
+            SuiSystemState::V2(inner) => inner.parameters.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(system_parameters))
     }
 }
 

@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-68:
+task 6, lines 16-78:
 //# run-graphql
 Response: {
   "data": {
@@ -61,7 +61,17 @@ Response: {
           "nonRefundableStorageFee": 0
         }
       },
-      "systemStateVersion": 2
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      }
     },
     "e0": {
       "epochId": 0,
@@ -102,7 +112,17 @@ Response: {
           "nonRefundableStorageFee": 0
         }
       },
-      "systemStateVersion": 1
+      "systemStateVersion": 1,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      }
     },
     "e1": {
       "epochId": 1,
@@ -143,7 +163,17 @@ Response: {
           "nonRefundableStorageFee": 0
         }
       },
-      "systemStateVersion": 2
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      }
     },
     "e2": {
       "epochId": 2,
@@ -184,13 +214,23 @@ Response: {
           "nonRefundableStorageFee": 0
         }
       },
-      "systemStateVersion": 2
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      }
     },
     "e3": null
   }
 }
 
-task 7, lines 70-123:
+task 7, lines 80-143:
 //# run-graphql
 Response: {
   "data": {
@@ -235,7 +275,17 @@ Response: {
               "nonRefundableStorageFee": 0
             }
           },
-          "systemStateVersion": 2
+          "systemStateVersion": 2,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          }
         },
         "e0": {
           "epochId": 0,
@@ -276,7 +326,17 @@ Response: {
               "nonRefundableStorageFee": 0
             }
           },
-          "systemStateVersion": 1
+          "systemStateVersion": 1,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          }
         },
         "e1": {
           "epochId": 1,
@@ -317,7 +377,17 @@ Response: {
               "nonRefundableStorageFee": 0
             }
           },
-          "systemStateVersion": 2
+          "systemStateVersion": 2,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          }
         },
         "e2": null
       }

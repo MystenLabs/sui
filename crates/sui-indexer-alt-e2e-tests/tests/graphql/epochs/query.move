@@ -65,6 +65,16 @@ fragment E on Epoch {
     }
   }
   systemStateVersion
+  systemParameters {
+    durationMs
+    stakeSubsidyStartEpoch
+    minValidatorCount
+    maxValidatorCount
+    minValidatorJoiningStake
+    validatorLowStakeThreshold
+    validatorVeryLowStakeThreshold
+    validatorLowStakeGracePeriod
+  }
 }
 
 //# run-graphql
@@ -120,4 +130,14 @@ fragment E on Epoch {
     }
   }
   systemStateVersion
+  systemParameters {
+    durationMs
+    stakeSubsidyStartEpoch
+    minValidatorCount
+    maxValidatorCount
+    minValidatorJoiningStake
+    validatorLowStakeThreshold
+    validatorVeryLowStakeThreshold
+    validatorLowStakeGracePeriod
+  }
 }
