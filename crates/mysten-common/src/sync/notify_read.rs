@@ -29,6 +29,9 @@ type Registrations<V> = Vec<oneshot::Sender<V>>;
 /// Interval duration for logging waiting keys when reads take too long
 const LONG_WAIT_LOG_INTERVAL_SECS: u64 = 10;
 
+pub const CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME: &str =
+    "CheckpointBuilder::notify_read_executed_effects";
+
 pub struct NotifyRead<K, V> {
     pending: Vec<Mutex<HashMap<K, Registrations<V>>>>,
     count_pending: AtomicUsize,
@@ -183,10 +186,8 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
                         keys_vec
                     );
 
-                    if task_name == "CheckpointBuilder::resolve_checkpoint_transactions"
-                        && elapsed_secs >= 60
-                    {
-                        debug_fatal!("CheckpointBuilder::resolve_checkpoint_transactions is stuck");
+                    if task_name == CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME && elapsed_secs >= 60 {
+                        debug_fatal!("{} is stuck", task_name);
                     }
                 }
             }))

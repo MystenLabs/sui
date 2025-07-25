@@ -22,7 +22,7 @@ use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
-use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::sync::notify_read::{NotifyRead, CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME};
 use mysten_common::{assert_reachable, debug_fatal, fatal};
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
@@ -1391,7 +1391,7 @@ impl CheckpointBuilder {
             let root_effects = self
                 .effects_store
                 .notify_read_executed_effects(
-                    "CheckpointBuilder::notify_read_executed_effects",
+                    CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME,
                     &root_digests,
                 )
                 .in_monitored_scope("CheckpointNotifyRead")
