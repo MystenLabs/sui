@@ -26,6 +26,7 @@ use sui_indexer_alt_reader::{
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
 use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
 use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use tokio::sync::OnceCell;
 
@@ -288,6 +289,16 @@ impl Epoch {
         };
 
         Ok(Some(storage_fund))
+    }
+
+    /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+    /// This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+    async fn system_state_version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(system_state.system_state_version().into()))
     }
 }
 

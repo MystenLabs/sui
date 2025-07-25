@@ -178,6 +178,11 @@ type Epoch {
 	This is also used for storage rebates.
 	"""
 	storageFund: StorageFund
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+	"""
+	systemStateVersion: UInt53
 }
 
 """

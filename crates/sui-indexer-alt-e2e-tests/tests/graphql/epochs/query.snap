@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-58:
+task 6, lines 16-59:
 //# run-graphql
 Response: {
   "data": {
@@ -51,7 +51,8 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
-      }
+      },
+      "systemStateVersion": 2
     },
     "e0": {
       "epochId": 0,
@@ -82,7 +83,8 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
-      }
+      },
+      "systemStateVersion": 1
     },
     "e1": {
       "epochId": 1,
@@ -113,7 +115,8 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
-      }
+      },
+      "systemStateVersion": 2
     },
     "e2": {
       "epochId": 2,
@@ -144,13 +147,14 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
-      }
+      },
+      "systemStateVersion": 2
     },
     "e3": null
   }
 }
 
-task 7, lines 60-103:
+task 7, lines 61-105:
 //# run-graphql
 Response: {
   "data": {
@@ -185,7 +189,8 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
-          }
+          },
+          "systemStateVersion": 2
         },
         "e0": {
           "epochId": 0,
@@ -216,7 +221,8 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
-          }
+          },
+          "systemStateVersion": 1
         },
         "e1": {
           "epochId": 1,
@@ -247,7 +253,8 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
-          }
+          },
+          "systemStateVersion": 2
         },
         "e2": null
       }

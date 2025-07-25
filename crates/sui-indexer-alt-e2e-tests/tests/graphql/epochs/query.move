@@ -55,6 +55,7 @@ fragment E on Epoch {
     totalObjectStorageRebates
     nonRefundableBalance
   }
+  systemStateVersion
 }
 
 //# run-graphql
@@ -100,4 +101,5 @@ fragment E on Epoch {
     totalObjectStorageRebates
     nonRefundableBalance
   }
+  systemStateVersion
 }
