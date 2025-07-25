@@ -26,6 +26,27 @@ use tracing::warn;
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
 
+/// Wrapper that ensures a spawned task is aborted when dropped
+struct TaskAbortOnDrop {
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl TaskAbortOnDrop {
+    fn new(handle: tokio::task::JoinHandle<()>) -> Self {
+        Self {
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for TaskAbortOnDrop {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}
+
 /// Interval duration for logging waiting keys when reads take too long
 const LONG_WAIT_LOG_INTERVAL_SECS: u64 = 10;
 
@@ -156,12 +177,12 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
         let waiting_keys = Arc::new(Mutex::new(waiting_keys));
 
         // Spawn logging task if there are waiting keys
-        let log_handle = if has_waiting_keys {
+        let _log_handle_guard = if has_waiting_keys {
             let waiting_keys_clone = waiting_keys.clone();
             let start_time = Instant::now();
             let task_name = task_name.to_string();
 
-            Some(spawn_monitored_task!(async move {
+            let handle = spawn_monitored_task!(async move {
                 // Only start logging after the first interval.
                 let start = Instant::now() + Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS);
                 let mut interval =
@@ -190,7 +211,8 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
                         debug_fatal!("{} is stuck", task_name);
                     }
                 }
-            }))
+            });
+            Some(TaskAbortOnDrop::new(handle))
         } else {
             None
         };
@@ -215,14 +237,9 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
                     }
                 });
 
-        let resolved_values = join_all(results).await;
+        // The logging task will be automatically aborted when _log_handle_guard is dropped
 
-        // Cancel the logging task
-        if let Some(handle) = log_handle {
-            handle.abort();
-        }
-
-        resolved_values
+        join_all(results).await
     }
 }
 
@@ -270,6 +287,8 @@ impl<K: Eq + Hash + Clone, V: Clone> Default for NotifyRead<K, V> {
 mod tests {
     use super::*;
     use futures::future::join_all;
+    use std::sync::Arc;
+    use tokio::time::timeout;
 
     #[tokio::test]
     pub async fn test_notify_read() {
@@ -284,6 +303,36 @@ mod tests {
         assert_eq!(0, notify_read.count_pending.load(Ordering::Relaxed));
         assert_eq!(reads, vec![1, 2]);
         // ensure cleanup is done correctly
+        for pending in &notify_read.pending {
+            assert!(pending.lock().is_empty());
+        }
+    }
+
+    #[tokio::test]
+    pub async fn test_notify_read_cancellation() {
+        let notify_read = Arc::new(NotifyRead::<u64, u64>::new());
+
+        // Start a read that will wait indefinitely
+        let read_future = notify_read.read(
+            "test_task",
+            &[1, 2, 3],
+            |_keys| vec![None, None, None], // All keys will wait
+        );
+
+        // Use timeout to cancel the read after a short duration
+        let result = timeout(Duration::from_millis(100), read_future).await;
+
+        // Verify the read was cancelled
+        assert!(result.is_err());
+
+        // Give some time for cleanup to complete
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // When the read is cancelled, the registrations are cleaned up
+        // so the pending count should be 0
+        assert_eq!(0, notify_read.count_pending.load(Ordering::Relaxed));
+
+        // Verify all pending maps are empty (cleanup was performed)
         for pending in &notify_read.pending {
             assert!(pending.lock().is_empty());
         }
