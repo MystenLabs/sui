@@ -58,7 +58,15 @@ fn extract_decls(
             module_info
                 .iter()
                 .filter(|(mident, _)| !prog.modules.contains_key(mident))
-                .map(|(mident, minfo)| (*mident, minfo.info.dependency_order.unwrap()))
+                .map(|(mident, minfo)| {
+                    (
+                        *mident,
+                        minfo
+                            .info
+                            .dependency_order
+                            .expect("ICE typing module info with no dependency order"),
+                    )
+                })
         })
     };
 

@@ -162,6 +162,11 @@ impl TypingProgramInfo {
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
+        /// Identity function for cloning typing module info to be used in program_info macro
+        /// to create typing program info from pre-compiled module info.
+        fn typing_module_info_clone(minfo: &ModuleInfo) -> ModuleInfo {
+            minfo.clone()
+        }
         /// Used to populate `dependency_order` field in `ModuleInfo`
         fn typing_dependency_order(mdef: &T::ModuleDefinition) -> Option<usize> {
             Some(mdef.dependency_order)
@@ -325,12 +330,6 @@ impl NamingProgramInfo {
         let syntax_methods_ref = &mut self.modules.get_mut(&mident).unwrap().syntax_methods;
         *syntax_methods_ref = syntax_methods;
     }
-}
-
-/// Identity function for cloning typing module info to be used in program_info macro
-/// to create typing program info from pre-compiled module info.
-fn typing_module_info_clone(minfo: &ModuleInfo) -> ModuleInfo {
-    minfo.clone()
 }
 
 impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {

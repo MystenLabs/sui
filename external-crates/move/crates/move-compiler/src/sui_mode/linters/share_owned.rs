@@ -323,20 +323,32 @@ impl ShareOwnedVerifierAI<'_> {
         context.add_diag(d)
     }
 
-    /// Checks if the package's ProgramInfo or ProgramInfo from precompiled lib
-    /// contain a module (with a given `mident`) whose datatype (with a given
-    /// `datatype_name`) holds a UID.
-    fn holds_uid(&self, mident: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+    /// Gets SUI info from either the current program or precompiled library
+    fn get_sui_info(&self, mident: &ModuleIdent) -> &crate::sui_mode::info::SuiModInfo {
         self.info
             .modules
             .get(mident)
             .or_else(|| {
                 self.pre_compiled_program
-                    .as_ref()
-                    .and_then(|program_info| program_info.module_info(mident))
+                .as_ref()
+                .expect(
+                    "ICE if module not found in a program, pre-compiled program expected to exist",
+                )
+                .module_info(mident)
             })
-            .and_then(|minfo| minfo.sui_info.as_ref())
-            .is_some_and(|sui_info| sui_info.uid_holders.contains_key(datatype_name))
+            .expect("ICE module expected in a user program or in a precompiled one")
+            .sui_info
+            .as_ref()
+            .expect("ICE typing module info expected to contain Sui info")
+    }
+
+    /// Checks if the package's ProgramInfo or ProgramInfo from precompiled lib
+    /// contain a module (with a given `mident`) whose datatype (with a given
+    /// `datatype_name`) holds a UID.
+    fn holds_uid(&self, mident: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+        self.get_sui_info(mident)
+            .uid_holders
+            .contains_key(datatype_name)
     }
 
     /// Checks if the package's ProgramInfo or ProgramInfo from precompiled lib
@@ -347,16 +359,7 @@ impl ShareOwnedVerifierAI<'_> {
         mident: &ModuleIdent,
         datatype_name: &DatatypeName,
     ) -> Option<&TransferKind> {
-        self.info
-            .modules
-            .get(mident)
-            .or_else(|| {
-                self.pre_compiled_program
-                    .as_ref()
-                    .and_then(|program_info| program_info.module_info(mident))
-            })
-            .and_then(|minfo| minfo.sui_info.as_ref())
-            .and_then(|sui_info| sui_info.transferred.get(datatype_name))
+        self.get_sui_info(mident).transferred.get(datatype_name)
     }
 }
 
