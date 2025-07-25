@@ -21,7 +21,8 @@ pub(crate) struct TransactionBounds {
 impl TransactionBounds {
     /// Constructs TransactionBounds using checkpoint boundaries to map transaction sequence numbers:
     ///  - Loads the lower and upper checkpoint from the KV store
-    ///  - Calculates the tx_lo (exclusive) by using the upper checkpoint's network_total_transactions
+    ///  - Calculates the tx_lo (inclusive) from network_total_transactions - number of txns in that checkpoint
+    ///  - Gets the tx_hi (exclusive) by using the upper checkpoint's network_total_transactions
     ///
     pub(crate) async fn fetch(
         ctx: &Context<'_>,
