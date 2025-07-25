@@ -13,6 +13,43 @@ pub struct AvailableRangeResponse {
     pub max_checkpoint: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListBalancesRequest {
+    /// Required. The address of the owner whose balances are being requested.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// The maximum number of entries to return. The service may return fewer than
+    /// this value.
+    ///
+    /// Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+    /// page sizes.
+    #[prost(uint32, optional, tag = "100")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListOwnedObjects` call.
+    /// Provide this to retrieve the next page.
+    #[prost(bytes = "bytes", optional, tag = "101")]
+    pub after_token: ::core::option::Option<::prost::bytes::Bytes>,
+    /// A page token, received from a previous `ListOwnedObjects` call.
+    /// Provide this to retrieve the previous page.
+    #[prost(bytes = "bytes", optional, tag = "102")]
+    pub before_token: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Whether to fetch the next page from the front or back of the filtered
+    /// range.
+    #[prost(enumeration = "End", optional, tag = "103")]
+    pub end: ::core::option::Option<i32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListBalancesResponse {
+    /// Whether there are more pages before this one.
+    #[prost(bool, optional, tag = "1")]
+    pub has_previous_page: ::core::option::Option<bool>,
+    /// Whether there are more pages after this one.
+    #[prost(bool, optional, tag = "2")]
+    pub has_next_page: ::core::option::Option<bool>,
+    /// Page of balances owned by the specified owner.
+    #[prost(message, repeated, tag = "3")]
+    pub balances: ::prost::alloc::vec::Vec<Balance>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListObjectsByTypeRequest {
     /// Required. Type filter to limit the types of objects listed.
     ///
@@ -164,6 +201,21 @@ pub mod owner {
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Balance {
+    /// The marker type for the coins being aggregated into this balance, e.g.
+    /// `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`.
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// / The total balance for coins of this type, owned by one address,
+    /// denominated in its smallest unit.
+    #[prost(uint64, optional, tag = "2")]
+    pub balance: ::core::option::Option<u64>,
+    /// Pagination cursor pointing to this balance entry, if this Balance is part
+    /// of a paginated response.
+    #[prost(bytes = "bytes", optional, tag = "100")]
+    pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Object {
     #[prost(string, optional, tag = "1")]
     pub object_id: ::core::option::Option<::prost::alloc::string::String>,
@@ -171,7 +223,7 @@ pub struct Object {
     pub version: ::core::option::Option<u64>,
     #[prost(string, optional, tag = "3")]
     pub digest: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(bytes = "bytes", optional, tag = "4")]
+    #[prost(bytes = "bytes", optional, tag = "100")]
     pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// The side of the filtered range to fetch the next page from.
@@ -324,6 +376,35 @@ pub mod consistent_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn list_balances(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListBalancesResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ListBalances",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.consistent.v1alpha.ConsistentService",
+                        "ListBalances",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn list_objects_by_type(
             &mut self,
             request: impl tonic::IntoRequest<super::ListObjectsByTypeRequest>,
@@ -431,6 +512,13 @@ pub mod consistent_service_server {
             request: tonic::Request<super::AvailableRangeRequest>,
         ) -> std::result::Result<
             tonic::Response<super::AvailableRangeResponse>,
+            tonic::Status,
+        >;
+        async fn list_balances(
+            &self,
+            request: tonic::Request<super::ListBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListBalancesResponse>,
             tonic::Status,
         >;
         async fn list_objects_by_type(
@@ -562,6 +650,52 @@ pub mod consistent_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = AvailableRangeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ListBalances" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListBalancesSvc<T: ConsistentService>(pub Arc<T>);
+                    impl<
+                        T: ConsistentService,
+                    > tonic::server::UnaryService<super::ListBalancesRequest>
+                    for ListBalancesSvc<T> {
+                        type Response = super::ListBalancesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListBalancesRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ConsistentService>::list_balances(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListBalancesSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
