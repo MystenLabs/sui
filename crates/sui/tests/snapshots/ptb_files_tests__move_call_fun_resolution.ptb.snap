@@ -2,7 +2,7 @@
 source: crates/sui/tests/ptb_files_tests.rs
 expression: "results.join(\"\\n\")"
 ---
- === PREVIEW === 
+ === PREVIEW ===
 ╭────────────────────────────────────────────────────╮
 │ PTB Preview                                        │
 ├───────────┬────────────────────────────────────────┤
@@ -19,7 +19,7 @@ expression: "results.join(\"\\n\")"
 │ move-call │ sui::coin::destroy_zero @0x1           │
 │ move-call │ std::option::is_none<u64, bool> a      │
 ╰───────────┴────────────────────────────────────────╯
- === BUILDING PTB ERRORS === 
+ === BUILDING PTB ERRORS ===
   × Error when processing PTB
    ╭─[1:13]
  1 │ --move-call zero_x_zero::option::is_none<u64> none
@@ -36,7 +36,7 @@ expression: "results.join(\"\\n\")"
  3 │ --assign zero_x_zero @0x0
  4 │ --move-call zero_x_zero::option::is_none<u64> a
    ·             ─────┬─────
-   ·                  ╰── Object 0x0000000000000000000000000000000000000000000000000000000000000000 does not exist
+   ·                  ╰── Object 0x0 does not exist
  5 │ --move-call std::Option::is_none<u64> a
    ╰────
 
@@ -84,6 +84,5 @@ expression: "results.join(\"\\n\")"
   9 │ --move-call sui::coin::destroy_zero @0x1
     ·                                     ──┬─
     ·                                       ╰── Not enough type parameters supplied for Move call
- 10 │ --move-call std::option::is_none<u64, bool> a 
+ 10 │ --move-call std::option::is_none<u64, bool> a
     ╰────
-
