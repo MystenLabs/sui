@@ -187,6 +187,10 @@ type Epoch {
 	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
 	"""
 	systemStateVersion: UInt53
+	"""
+	Details of the system that are decided during genesis.
+	"""
+	systemParameters: SystemParameters
 }
 
 """
@@ -885,6 +889,44 @@ type StorageFund {
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Details of the system that are decided during genesis.
+"""
+type SystemParameters {
+	"""
+	Target duration of an epoch, in milliseconds.
+	"""
+	durationMs: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
+	stakeSubsidyStartEpoch: UInt53
+	"""
+	The minimum number of active validators that the system supports.
+	"""
+	minValidatorCount: Int
+	"""
+	The maximum number of active validators that the system supports.
+	"""
+	maxValidatorCount: Int
+	"""
+	Minimum stake needed to become a new validator.
+	"""
+	minValidatorJoiningStake: BigInt
+	"""
+	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
+	"""
+	validatorLowStakeThreshold: BigInt
+	"""
+	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
+	"""
+	validatorVeryLowStakeThreshold: BigInt
+	"""
+	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
+	"""
+	validatorLowStakeGracePeriod: BigInt
+}
 
 """
 Description of a transaction, the unit of activity on Sui.

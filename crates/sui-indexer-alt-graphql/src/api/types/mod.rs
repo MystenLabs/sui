@@ -13,6 +13,7 @@ pub(crate) mod object_change;
 pub(crate) mod protocol_configs;
 pub(crate) mod service_config;
 pub(crate) mod storage_fund;
+pub(crate) mod system_parameters;
 pub(crate) mod transaction;
 pub(crate) mod transaction_effects;
 pub(crate) mod validator_aggregated_signature;
