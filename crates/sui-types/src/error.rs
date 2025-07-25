@@ -934,7 +934,6 @@ impl SuiError {
                     _ => false,
                 }
             }
-            SuiError::Unknown(..) => false,
             // Other variants are assumed to be retriable.
             _ => true,
         }
