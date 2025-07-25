@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-67:
+task 6, lines 16-68:
 //# run-graphql
 Response: {
   "data": {
@@ -60,7 +60,8 @@ Response: {
           "storageRebate": 0,
           "nonRefundableStorageFee": 0
         }
-      }
+      },
+      "systemStateVersion": 2
     },
     "e0": {
       "epochId": 0,
@@ -100,7 +101,8 @@ Response: {
           "storageRebate": 0,
           "nonRefundableStorageFee": 0
         }
-      }
+      },
+      "systemStateVersion": 1
     },
     "e1": {
       "epochId": 1,
@@ -140,7 +142,8 @@ Response: {
           "storageRebate": 0,
           "nonRefundableStorageFee": 0
         }
-      }
+      },
+      "systemStateVersion": 2
     },
     "e2": {
       "epochId": 2,
@@ -180,13 +183,14 @@ Response: {
           "storageRebate": 0,
           "nonRefundableStorageFee": 0
         }
-      }
+      },
+      "systemStateVersion": 2
     },
     "e3": null
   }
 }
 
-task 7, lines 69-121:
+task 7, lines 70-123:
 //# run-graphql
 Response: {
   "data": {
@@ -230,7 +234,8 @@ Response: {
               "storageRebate": 0,
               "nonRefundableStorageFee": 0
             }
-          }
+          },
+          "systemStateVersion": 2
         },
         "e0": {
           "epochId": 0,
@@ -270,7 +275,8 @@ Response: {
               "storageRebate": 0,
               "nonRefundableStorageFee": 0
             }
-          }
+          },
+          "systemStateVersion": 1
         },
         "e1": {
           "epochId": 1,
@@ -310,7 +316,8 @@ Response: {
               "storageRebate": 0,
               "nonRefundableStorageFee": 0
             }
-          }
+          },
+          "systemStateVersion": 2
         },
         "e2": null
       }

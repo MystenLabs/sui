@@ -64,6 +64,7 @@ fragment E on Epoch {
       nonRefundableStorageFee
     }
   }
+  systemStateVersion
 }
 
 //# run-graphql
@@ -118,4 +119,5 @@ fragment E on Epoch {
       nonRefundableStorageFee
     }
   }
+  systemStateVersion
 }

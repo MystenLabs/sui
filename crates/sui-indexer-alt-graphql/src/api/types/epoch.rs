@@ -308,6 +308,25 @@ impl Epoch {
 
         Ok(Some(storage_fund))
     }
+
+    /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+    /// This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+    async fn system_state_version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let system_state_version = match system_state {
+            SuiSystemState::V1(inner) => inner.system_state_version,
+            SuiSystemState::V2(inner) => inner.system_state_version,
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(system_state_version.into()))
+    }
 }
 
 impl Epoch {
