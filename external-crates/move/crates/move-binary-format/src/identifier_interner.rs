@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use crate::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     identifier::{IdentStr, Identifier},
     vm_status::StatusCode,
@@ -111,10 +111,9 @@ impl IdentifierInterner {
 
     // [SAFETY] The unsafe code is creating an identifier without checking its vailidity, but it
     // was added as a valid identifier to the interner in the first place.
-    #[allow(unsafe_code)]
     fn resolve_ident(&self, key: &IdentifierKey, key_type: &str) -> PartialVMResult<Identifier> {
         if let Some(result) = self.0.try_resolve(&key.0) {
-            unsafe { Ok(Identifier::new_unchecked(result)) }
+            Ok(Identifier::new(result).unwrap())
         } else {
             Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

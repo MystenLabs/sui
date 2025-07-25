@@ -16,6 +16,7 @@ pub mod constant;
 pub mod deserializer;
 pub mod file_format;
 pub mod file_format_common;
+pub mod identifier_interner;
 pub mod internals;
 pub mod normalized;
 #[cfg(any(test, feature = "fuzzing"))]

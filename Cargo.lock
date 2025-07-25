@@ -7450,8 +7450,10 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "enum-compat-util",
+ "lasso",
  "move-core-types",
  "move-proc-macros",
+ "once_cell",
  "ref-cast",
  "serde",
  "variant_count",
@@ -8053,7 +8055,6 @@ dependencies = [
  "bumpalo",
  "fail",
  "hex",
- "lasso",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-verifier",

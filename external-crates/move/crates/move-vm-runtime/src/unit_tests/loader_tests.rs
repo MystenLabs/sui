@@ -6,7 +6,6 @@
 #![allow(clippy::redundant_clone)]
 
 use crate::{
-    cache::identifier_interner::intern_ident_str,
     dev_utils::{
         compilation_utils::{compile_packages_in_file, expect_modules},
         in_memory_test_adapter::InMemoryTestAdapter,
@@ -29,6 +28,7 @@ use move_binary_format::{
     file_format::{
         empty_module, AddressIdentifierIndex, IdentifierIndex, ModuleHandle, TableIndex,
     },
+    identifier_interner::intern_ident_str,
     CompiledModule,
 };
 use move_compiler::Compiler;

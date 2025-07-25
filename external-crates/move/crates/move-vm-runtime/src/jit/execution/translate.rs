@@ -3,13 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{
-        arena::{Arena, ArenaBox, ArenaVec},
-        identifier_interner::{
-            intern_ident_str, intern_identifier, intern_identifier_with_msg, resolve_interned,
-            IdentifierKey,
-        },
-    },
+    cache::arena::{Arena, ArenaBox, ArenaVec},
     dbg_println,
     execution::{
         dispatch_tables::{DefinitionMap, IntraPackageKey, PackageVirtualTable, VirtualTableKey},
@@ -29,6 +23,10 @@ use move_binary_format::{
     file_format::{
         self as FF, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,
         FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
+    },
+    identifier_interner::{
+        intern_ident_str, intern_identifier, intern_identifier_with_msg, resolve_interned,
+        IdentifierKey,
     },
 };
 use move_core_types::{identifier::Identifier, vm_status::StatusCode};
