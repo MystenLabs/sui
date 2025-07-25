@@ -668,7 +668,7 @@ fn definition(
                 );
                 sp(addr.loc, address)
             });
-            module(context, module_map, package_name, module_addr, m);
+            module(context, module_map, package_name, module_addr, m)
         }
         P::Definition::Address(a) => {
             let addr = top_level_address(
@@ -988,14 +988,16 @@ fn module_(
 
     context.pop_alias_scope(Some(&mut use_funs));
 
+    let named_address_map = context.defn_context.named_address_mapping.clone().unwrap();
+    let target_kind = context.defn_context.target_kind;
     let def = E::ModuleDefinition {
-        named_address_map: context.defn_context.named_address_mapping.clone().unwrap(),
+        named_address_map,
         doc,
         package_name,
         attributes,
         loc,
         use_funs,
-        target_kind: context.defn_context.target_kind,
+        target_kind,
         friends,
         structs,
         enums,
@@ -1340,30 +1342,30 @@ fn pre_compiled_member_kinds(
 ) -> BTreeMap<Name, ModuleMemberKind> {
     let mut member_kinds = BTreeMap::new();
     for (loc, name, _) in &pre_compiled_module_info.structs {
-        let val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Struct);
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Struct);
         assert!(
-            val.is_none(),
+            prev_val.is_none(),
             "ICE a struct with the same name as another module member in pre-compiled info"
         );
     }
     for (loc, name, _) in &pre_compiled_module_info.enums {
-        let val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Enum);
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Enum);
         assert!(
-            val.is_none(),
+            prev_val.is_none(),
             "ICE an enum with the same name as another module member in pre-compiled info"
         );
     }
     for (loc, name, _) in &pre_compiled_module_info.functions {
-        let val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Function);
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Function);
         assert!(
-            val.is_none(),
+            prev_val.is_none(),
             "ICE a function with the same name as another module member in pre-compiled info"
         );
     }
     for (loc, name, _) in &pre_compiled_module_info.constants {
-        let val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Constant);
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Constant);
         assert!(
-            val.is_none(),
+            prev_val.is_none(),
             "ICE a constant with the same name as another module member in pre-compiled info"
         );
     }
