@@ -229,8 +229,12 @@ impl<F: MoveFlavor> Package<F> {
         &self.deps
     }
 
+    /// Tries to get the `published addresses` information for the given package,
     pub fn publication(&self) -> Option<&PublishAddresses> {
-        self.publish_data.as_ref().map(|data| &data.addresses)
+        self.legacy_data
+            .as_ref()
+            .and_then(|data| data.publication(self.environment_name()))
+            .or_else(|| self.publish_data.as_ref().map(|data| &data.addresses))
     }
 
     /// Tries to get the `published-at` entry for the given package,
