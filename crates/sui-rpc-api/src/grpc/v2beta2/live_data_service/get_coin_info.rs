@@ -4,7 +4,6 @@
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
-use dynamic_field::{DOFWrapper, Field};
 use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_rpc::proto::sui::rpc::v2beta2::CoinMetadata;
 use sui_rpc::proto::sui::rpc::v2beta2::CoinTreasury;
@@ -13,15 +12,9 @@ use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
 use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::base_types::{ObjectID as SuiObjectID, SuiAddress};
-use sui_types::coin_registry::CoinDataKey;
-use sui_types::coin_registry::COIN_DATA_KEY_STRUCT_NAME;
-use sui_types::coin_registry::COIN_REGISTRY_MODULE_NAME;
 use sui_types::coin_registry::{self};
-use sui_types::dynamic_field::DYNAMIC_OBJECT_FIELD_MODULE_NAME;
-use sui_types::dynamic_field::DYNAMIC_OBJECT_FIELD_WRAPPER_STRUCT_NAME;
-use sui_types::dynamic_field::{self};
+use sui_types::dynamic_field::{DOFWrapper, Field};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
-use sui_types::{TypeTag, SUI_COIN_REGISTRY_OBJECT_ID};
 
 const SUI_COIN_TREASURY: CoinTreasury = CoinTreasury {
     id: None,
@@ -80,44 +73,7 @@ fn get_coin_info_from_registry(
     coin_type: &StructTag,
     core_coin_type: &move_core_types::language_storage::StructTag,
 ) -> Result<Option<GetCoinInfoResponse>> {
-    // For dynamic object fields, the key type is Wrapper<CoinDataKey<T>>
-    let coin_data_key_type = move_core_types::language_storage::StructTag {
-        address: move_core_types::account_address::AccountAddress::from_hex_literal("0x2").unwrap(),
-        module: move_core_types::identifier::Identifier::new(COIN_REGISTRY_MODULE_NAME.as_str())
-            .unwrap(),
-        name: move_core_types::identifier::Identifier::new(COIN_DATA_KEY_STRUCT_NAME.as_str())
-            .unwrap(),
-        type_params: vec![TypeTag::Struct(Box::new(core_coin_type.clone()))],
-    };
-
-    let wrapper_type_tag =
-        TypeTag::Struct(Box::new(move_core_types::language_storage::StructTag {
-            address: move_core_types::account_address::AccountAddress::from_hex_literal("0x2")
-                .unwrap(),
-            module: move_core_types::identifier::Identifier::new(
-                DYNAMIC_OBJECT_FIELD_MODULE_NAME.as_str(),
-            )
-            .unwrap(),
-            name: move_core_types::identifier::Identifier::new(
-                DYNAMIC_OBJECT_FIELD_WRAPPER_STRUCT_NAME.as_str(),
-            )
-            .unwrap(),
-            type_params: vec![TypeTag::Struct(Box::new(coin_data_key_type))],
-        }));
-
-    let coin_data_key_bytes = bcs::to_bytes(&CoinDataKey::new()).map_err(|e| {
-        RpcError::new(
-            tonic::Code::Internal,
-            format!("Failed to serialize CoinDataKey: {}", e),
-        )
-    })?;
-
-    let field_id = dynamic_field::derive_dynamic_field_id(
-        SUI_COIN_REGISTRY_OBJECT_ID,
-        &wrapper_type_tag,
-        &coin_data_key_bytes,
-    )
-    .map_err(|e| {
+    let field_id = coin_registry::derive_dynamic_field_object_id(core_coin_type).map_err(|e| {
         RpcError::new(
             tonic::Code::Internal,
             format!(
