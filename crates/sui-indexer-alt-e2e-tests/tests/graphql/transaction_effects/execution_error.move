@@ -99,6 +99,7 @@ module test::execution_error_tests {
   successTransaction: transactionEffects(digest: "@{digest_2}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
 }
@@ -109,12 +110,14 @@ module test::execution_error_tests {
   abort42: transactionEffects(digest: "@{digest_3}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
   
   abort255: transactionEffects(digest: "@{digest_4}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
 }
@@ -125,48 +128,56 @@ module test::execution_error_tests {
   cleverU8: transactionEffects(digest: "@{digest_5}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
   
   cleverU16: transactionEffects(digest: "@{digest_6}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
   
   cleverU64: transactionEffects(digest: "@{digest_7}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
   
   cleverAddress: transactionEffects(digest: "@{digest_8}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
   
   cleverString: transactionEffects(digest: "@{digest_9}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
   
   cleverWithCode: transactionEffects(digest: "@{digest_10}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
   
   assertFailure: transactionEffects(digest: "@{digest_11}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
 
   nonExistentFunction: transactionEffects(digest: "@{digest_12}") {
     executionError {
       abortCode
+      sourceLineNumber
     }
   }
 } 

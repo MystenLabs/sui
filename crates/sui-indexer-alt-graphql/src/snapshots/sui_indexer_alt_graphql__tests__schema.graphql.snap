@@ -194,6 +194,10 @@ type ExecutionError {
 	Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
 	"""
 	abortCode: BigInt
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
 }
 
 """

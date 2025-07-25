@@ -91,6 +91,15 @@ impl ExecutionError {
                 .map_or(*raw_code, |code| code as u64),
         )))
     }
+
+    /// The source line number for the abort. Only populated for clever errors.
+    async fn source_line_number(&self, ctx: &Context<'_>) -> Result<Option<u64>, RpcError> {
+        let Some(clever_error) = self.clever_error(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(clever_error.source_line_number as u64))
+    }
 }
 
 impl ExecutionError {
