@@ -49,7 +49,7 @@
 //# create-checkpoint
 
 //# run-graphql
-{ # Fetch a checkpoint's transactions, should have [1,2,3,4,5]
+{ # Fetch a checkpoint's transactions, should have sequence numbers 1,2,3,4,5
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
     digest
@@ -60,41 +60,75 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } }
+      edges { cursor }
     }
   }
 }
 
 //# run-graphql --cursors 1
-{ # Fetch a checkpoint's transactions, offset at the front such that the first page is not full
+{ # Fetch a checkpoint's transactions, offset at the front
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
     digest
-    transactions( after: "@{cursor_0}") {
+    transactions( after: "@{cursor_0}", first: 3) {
       pageInfo {
         hasPreviousPage
         hasNextPage
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } }
+      edges { cursor }
     }
   }
 }
 
-//# run-graphql --cursors 2 6
-{ # Fetch a checkpoint's transactions, offset at the back such that the first page is not full
+//# run-graphql --cursors 1 5
+{ # Fetch a checkpoint's transactions, offset from both ends and pick from the front
   checkpoint(sequenceNumber: 1) {
     sequenceNumber
     digest
-    transactions( after: "@{cursor_0}", before: "@{cursor_1}", first: 3) {
+    transactions( after: "@{cursor_0}", before: "@{cursor_1}", first: 2) {
       pageInfo {
         hasPreviousPage
         hasNextPage
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } }
+      edges { cursor }
+    }
+  }
+}
+
+//# run-graphql --cursors 1 5
+{ # Fetch a checkpoint's transactions, offset from both ends and pick from the back
+  checkpoint(sequenceNumber: 1) {
+    sequenceNumber
+    digest
+    transactions( after: "@{cursor_0}", before: "@{cursor_1}", last: 2) {
+      pageInfo {
+        hasPreviousPage
+        hasNextPage
+        startCursor
+        endCursor
+      }
+      edges { cursor }
+    }
+  }
+}
+
+//# run-graphql --cursors 3
+{ # Fetch a checkpoint's transactions, offset from the end and pick from the back
+  checkpoint(sequenceNumber: 1) {
+    sequenceNumber
+    digest
+    transactions( before: "@{cursor_0}", last: 2) {
+      pageInfo {
+        hasPreviousPage
+        hasNextPage
+        startCursor
+        endCursor
+      }
+      edges { cursor }
     }
   }
 }
