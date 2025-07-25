@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::identifier_interner::{intern_ident_str, intern_identifier},
     dbg_println,
     execution::{
         dispatch_tables::VMDispatchTables,
@@ -20,6 +19,7 @@ use crate::{
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+    identifier_interner::{intern_ident_str, intern_identifier},
 };
 use move_core_types::{
     annotated_value,

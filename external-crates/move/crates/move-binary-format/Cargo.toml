@@ -20,6 +20,8 @@ serde.workspace = true
 arbitrary = { workspace = true, optional = true, features = ["derive"] }
 enum-compat-util.workspace = true
 move-proc-macros.workspace = true
+lasso.workspace = true
+once_cell.workspace = true
 
 # wasm support (requires js feature of getrandom)
 getrandom = { workspace = true, features = ["js"], optional = true }
@@ -34,3 +36,6 @@ serde_json.workspace = true
 default = []
 fuzzing = ["proptest", "proptest-derive", "arbitrary", "move-core-types/fuzzing"]
 wasm = ["getrandom"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(msim)'] }

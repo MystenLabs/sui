@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cache::{
-        arena::{Arena, ArenaBox, ArenaVec},
-        identifier_interner::{resolve_interned, IdentifierKey},
-    },
+    cache::arena::{Arena, ArenaBox, ArenaVec},
     execution::{
         dispatch_tables::{IntraPackageKey, PackageVirtualTable, VirtualTableKey},
         values::ConstantValue,
@@ -25,6 +22,7 @@ use move_binary_format::{
         SignatureToken, VariantTag, Visibility,
     },
     file_format_common::Opcodes,
+    identifier_interner::{resolve_interned, IdentifierKey},
 };
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,

@@ -8,7 +8,6 @@
 // in the transitive closure of the root package.
 
 use crate::{
-    cache::identifier_interner::{intern_identifier, resolve_interned, IdentifierKey},
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
@@ -24,6 +23,7 @@ use crate::{
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, TypeParameterIndex},
+    identifier_interner::{intern_identifier, resolve_interned, IdentifierKey},
 };
 use move_core_types::{
     annotated_value,
