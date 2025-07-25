@@ -72,7 +72,7 @@ use crate::{
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_driver::{
-        ExecutedData, RejectReason, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
+        ExecutedData, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     transaction_outputs::TransactionOutputs,
 };
@@ -1175,7 +1175,10 @@ impl ValidatorService {
             let mut effects = self
                 .state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects(&tx_digests)
+                .notify_read_executed_effects(
+                    "AuthorityServer::notify_read_executed_effects_finalized",
+                    &tx_digests,
+                )
                 .await;
             let effects = effects.pop().unwrap();
             let effects_digest = effects.digest();
@@ -1233,8 +1236,8 @@ impl ValidatorService {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
                 ConsensusTxStatus::Rejected => {
                     let response = WaitForEffectsResponse::Rejected {
-                        // TODO(fastpath): Add reject reason.
-                        reason: RejectReason::None,
+                        // TODO(fastpath): cache reject reason during voting and return it here.
+                        error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
                     };
                     return Ok(response);
                 }
@@ -1263,7 +1266,10 @@ impl ValidatorService {
                     match second_status {
                         NotifyReadConsensusTxStatusResult::Status(status) => {
                             if status == ConsensusTxStatus::Rejected {
-                                return Ok(WaitForEffectsResponse::Rejected { reason: RejectReason::None });
+                                // TODO(fastpath): cache reject reason during voting and return it here.
+                                return Ok(WaitForEffectsResponse::Rejected {
+                                    error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
+                                });
                             }
                             assert_eq!(status, ConsensusTxStatus::Finalized);
                             // Update the current status so that notify_read_transaction_status will no
@@ -1281,7 +1287,10 @@ impl ValidatorService {
                 },
                 mut effects = self.state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&tx_digests) => {
+                    .notify_read_executed_effects("AuthorityServer::notify_read_executed_effects", &tx_digests) => {
+
+                    // unwrap is safe because notify_read_executed_effects is expected
+                    // to return the same amount of effects as the provided transactions.
                     let effects = effects.pop().unwrap();
                     let effects_digest = effects.digest();
                     debug!(
@@ -1289,8 +1298,6 @@ impl ValidatorService {
                         ?effects_digest,
                         "Observed executed effects",
                     );
-                    // unwrap is safe because notify_read_executed_effects is expected
-                    // to return the same amount of effects as the provided transactions.
                     break (effects, None);
                 },
                 mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(&tx_digests) => {

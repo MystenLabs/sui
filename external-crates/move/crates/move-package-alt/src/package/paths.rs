@@ -35,6 +35,9 @@ impl PackagePath {
     /// directory at `dir` and that it contains a valid Move package, i.e., it has a `Move.toml`
     /// file.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
+        if dir.as_os_str() == "." {
+            panic!()
+        }
         let path = dir
             .canonicalize()
             .map_err(|e| PackagePathError::InvalidDirectory { path: dir.clone() })?;
@@ -43,11 +46,15 @@ impl PackagePath {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
         }
 
-        if !dir.join("Move.toml").exists() {
-            return Err(PackagePathError::InvalidPackage { path: dir.clone() });
+        let result = Self(path);
+
+        if !result.manifest_path().exists() {
+            return Err(PackagePathError::InvalidPackage {
+                path: result.manifest_path(),
+            });
         }
 
-        Ok(Self(path))
+        Ok(result)
     }
 
     pub fn path(&self) -> &Path {

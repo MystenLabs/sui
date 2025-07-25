@@ -1898,12 +1898,16 @@ impl AuthorityPerEpochStore {
         let tables = self.tables()?;
         Ok(self
             .checkpoint_state_notify_read
-            .read(checkpoints, |checkpoints| {
-                tables
-                    .state_hash_by_checkpoint
-                    .multi_get(checkpoints)
-                    .expect("db error")
-            })
+            .read(
+                "notify_read_checkpoint_state_hasher",
+                checkpoints,
+                |checkpoints| {
+                    tables
+                        .state_hash_by_checkpoint
+                        .multi_get(checkpoints)
+                        .expect("db error")
+                },
+            )
             .await)
     }
 

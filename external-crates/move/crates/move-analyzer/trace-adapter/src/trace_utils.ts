@@ -158,13 +158,13 @@ type JSONTraceLocation = JSONTraceLocalLocation | JSONTraceIndexedLocation | JSO
 
 interface JSONTraceWriteEffect {
     location: JSONTraceLocation;
-    root_value_after_write: JSONTraceRuntimeValue;
+    root_value_after_write: JSONTraceValue;
 }
 
 interface JSONTraceReadEffect {
     location: JSONTraceLocation;
     moved: boolean;
-    root_value_read: JSONTraceRuntimeValue;
+    root_value_read: JSONTraceValue;
 }
 
 interface JSONTracePushEffect {
@@ -730,17 +730,30 @@ export async function readTrace(
                     : (effect.Read
                         ? effect.Read.location
                         : effect.DataLoad!.location);
-                const loc = processJSONLocation(location, [], localLifetimeEnds);
+                const runtimeLoc = processJSONLocation(location, [], localLifetimeEnds);
                 if (effect.Write) {
                     // DataLoad is essentially a form of a write
                     const value = 'RuntimeValue' in effect.Write.root_value_after_write
                         ? traceRuntimeValueFromJSON(effect.Write.root_value_after_write.RuntimeValue.value)
-                        : traceRefValueFromJSON(effect.Write.root_value_after_write);
+                        : 'globalIndex' in runtimeLoc.loc
+                            // We are writing to a global value here. Global values are
+                            // effectively references that appear "out of thin air" (e.g.,
+                            // are passed as parameters to top level functions). Unlike regular
+                            // references, for the global ones there isn't a natural end to the
+                            // the reference chain ending in a "regular" value - we need to
+                            // create one. When processing the trace, when writing to a global,
+                            // we need the actual value, so that the runtime has a chance to
+                            // store (and update) it accordingly. Failing to do so may result
+                            // in infinite recursion when trying to assign a global (reference)
+                            // to (potentially indexed) self.
+                            ? derefTraceRefValueFromJSON(effect.Write.root_value_after_write)
+                            : traceRefValueFromJSON(effect.Write.root_value_after_write);
+
                     events.push({
                         type: TraceEventKind.Effect,
                         effect: {
                             type: TraceEffectKind.Write,
-                            indexedLoc: loc,
+                            indexedLoc: runtimeLoc,
                             value
                         }
                     });
@@ -751,7 +764,7 @@ export async function readTrace(
                         type: TraceEventKind.Effect,
                         effect: {
                             type: TraceEffectKind.Write,
-                            indexedLoc: loc,
+                            indexedLoc: runtimeLoc,
                             value
                         }
                     });
@@ -1197,7 +1210,7 @@ function processJSONLocation(
  * @returns runtime value.
  * @throws Error with a descriptive error message if conversion has failed.
  */
-function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
+function traceRefValueFromJSON(value: JSONTraceRefValue): IRuntimeRefValue {
     if ('MutRef' in value) {
         const loc = processJSONLocation(value.MutRef.location, []);
         if (!loc) {
@@ -1212,6 +1225,22 @@ function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
         }
         const ret: IRuntimeRefValue = { mutable: false, indexedLoc: loc };
         return ret;
+    }
+}
+
+/**
+ * Converts a JSON trace reference value to a runtime value
+ * representing the value this reference value is referring to.
+ *
+ * @param value JSON trace reference value.
+ * @returns runtime value representing the value this reference value is referring to.
+ * @throws Error with a descriptive error message if conversion has failed.
+ */
+function derefTraceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
+    if ('MutRef' in value) {
+        return traceRuntimeValueFromJSON(value.MutRef.snapshot);
+    } else {
+        return traceRuntimeValueFromJSON(value.ImmRef.snapshot);
     }
 }
 

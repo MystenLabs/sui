@@ -217,7 +217,7 @@ fn commit(repo: &git2::Repository) -> git2::Oid {
 }
 
 /// *(`git2`)* Create a new tag in the git repository
-fn tag(repo: &git2::Repository, name: &str) {
+pub fn tag(repo: &git2::Repository, name: &str) {
     let head = repo.head().unwrap().target().unwrap();
     t!(repo.tag(
         name,

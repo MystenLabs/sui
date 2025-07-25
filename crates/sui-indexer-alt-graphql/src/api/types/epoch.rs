@@ -6,6 +6,7 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
+use crate::api::types::storage_fund::StorageFund;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     api::types::validator_set::ValidatorSet,
@@ -144,20 +145,18 @@ impl Epoch {
 
     /// Validator-related properties, including the active validators.
     async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>, RpcError> {
-        let Some(start) = self.start(ctx).await? else {
+        let Some(system_state) = self.system_state(ctx).await? else {
             return Ok(None);
         };
 
-        let validator_set: ValidatorSet =
-            match bcs::from_bytes::<SuiSystemState>(&start.system_state) {
-                Ok(SuiSystemState::V1(inner)) => inner.validators.into(),
-                Ok(SuiSystemState::V2(inner)) => inner.validators.into(),
-                #[cfg(msim)]
-                Ok(SuiSystemState::SimTestV1(_))
-                | Ok(SuiSystemState::SimTestShallowV2(_))
-                | Ok(SuiSystemState::SimTestDeepV2(_)) => return Ok(None),
-                Err(e) => return Err(RpcError::InternalError(Arc::new(e.into()))),
-            };
+        let validator_set = match system_state {
+            SuiSystemState::V1(inner) => inner.validators.into(),
+            SuiSystemState::V2(inner) => inner.validators.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
 
         Ok(Some(validator_set))
     }
@@ -213,7 +212,7 @@ impl Epoch {
         Ok(total_stake_rewards_distributed.map(BigInt::from))
     }
 
-    /// The amount added to total gas fees to make up the total stake rewards.
+    /// The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
     async fn total_stake_subsidies(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
         let Some(StoredEpochEnd {
             stake_subsidy_amount,
@@ -224,6 +223,71 @@ impl Epoch {
         };
 
         Ok(stake_subsidy_amount.map(BigInt::from))
+    }
+
+    /// The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+    /// This fund is used to redistribute storage fees from past transactions to future validators.
+    async fn fund_size(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd {
+            storage_fund_balance,
+            ..
+        }) = self.end(ctx).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(storage_fund_balance.map(BigInt::from))
+    }
+
+    /// The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+    async fn net_inflow(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd {
+            storage_charge: Some(storage_charge),
+            storage_rebate: Some(storage_rebate),
+            ..
+        }) = self.end(ctx).await?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(BigInt::from(storage_charge - storage_rebate)))
+    }
+
+    /// The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+    async fn fund_inflow(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd { storage_charge, .. }) = self.end(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(storage_charge.map(BigInt::from))
+    }
+
+    /// The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+    async fn fund_outflow(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
+        let Some(StoredEpochEnd { storage_rebate, .. }) = self.end(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(storage_rebate.map(BigInt::from))
+    }
+
+    /// SUI set aside to account for objects stored on-chain, at the start of the epoch.
+    /// This is also used for storage rebates.
+    async fn storage_fund(&self, ctx: &Context<'_>) -> Result<Option<StorageFund>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let storage_fund = match system_state {
+            SuiSystemState::V1(inner) => inner.storage_fund.into(),
+            SuiSystemState::V2(inner) => inner.storage_fund.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(storage_fund))
     }
 }
 
@@ -290,6 +354,17 @@ impl Epoch {
                 Ok(stored)
             })
             .await
+    }
+
+    async fn system_state(&self, ctx: &Context<'_>) -> Result<Option<SuiSystemState>, RpcError> {
+        let Some(start) = self.start(ctx).await? else {
+            return Ok(None);
+        };
+
+        let system_state = bcs::from_bytes::<SuiSystemState>(&start.system_state)
+            .context("Failed to deserialize system state")?;
+
+        Ok(Some(system_state))
     }
 
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty

@@ -303,25 +303,8 @@ pub struct RawExecutedData {
 
 #[derive(Clone, prost::Message)]
 pub struct RawRejectedStatus {
-    #[prost(enumeration = "RawRejectReason", tag = "1")]
-    pub reason: i32,
-    #[prost(string, optional, tag = "2")]
-    pub message: Option<String>, // Only for string-carrying variants
-}
-
-#[derive(Clone, Debug, prost::Enumeration)]
-#[repr(i32)]
-pub enum RawRejectReason {
-    // Transaction is not voted to be rejected locally.
-    None = 0,
-    // Rejected due to lock conflict.
-    LockConflict = 1,
-    // Rejected due to package verification.
-    PackageVerification = 2,
-    // Rejected due to overload.
-    Overload = 3,
-    // Rejected due to coin deny list.
-    CoinDenyList = 4,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub error: Bytes,
 }
 
 #[derive(Clone, prost::Message)]

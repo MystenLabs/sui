@@ -32,6 +32,7 @@ impl<F: MoveFlavor> Lockfiles<F> {
         debug!("reading lockfiles from {:?}", path);
         let lockfile_name = path.lockfile_path();
         if !lockfile_name.exists() {
+            debug!("no lockfile found");
             return Ok(None);
         };
 

@@ -4,6 +4,7 @@
 
 use move_package_alt::{
     flavor::MoveFlavor,
+    graph::NamedAddress,
     package::{RootPackage, paths::PackagePath},
 };
 
@@ -17,7 +18,7 @@ use crate::layout::CompiledPackageLayout;
 
 use move_package_alt::schema::PublishedID;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{extension_equals, find_filenames, find_move_filenames};
@@ -567,16 +568,25 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
         }
 
         let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
-        for (name, dep) in pkg.named_addresses() {
-            let name = name.as_str().into();
+        let mut dummy_addr = 0x1000;
+        for (dep_name, dep) in pkg.named_addresses() {
+            let name = dep_name.as_str().into();
 
-            let addr = if dep.is_root() {
-                AccountAddress::ZERO
-            } else {
-                dep.published()
-                    .ok_or_else(|| anyhow!("Expected package {name} to be published"))?
-                    .original_id
-                    .0
+            let addr = match dep {
+                NamedAddress::RootPackage(_) => AccountAddress::ZERO,
+                NamedAddress::Unpublished => {
+                    dummy_addr += 1;
+                    let addr = AccountAddress::from_suffix(dummy_addr);
+                    writeln!(
+                        w,
+                        "{} Using address 0x{} for unpublished dependency `{name}` in package `{}`",
+                        "NOTE".bold().yellow(),
+                        addr.short_str_lossless(),
+                        pkg.name()
+                    )?;
+                    addr
+                }
+                NamedAddress::Published(original_id) => original_id.0,
             };
 
             let addr: NumericalAddress =

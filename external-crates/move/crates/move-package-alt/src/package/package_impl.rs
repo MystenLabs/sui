@@ -4,22 +4,26 @@
 
 use std::{collections::BTreeMap, path::Path};
 
+use tracing::debug;
+
 use super::manifest::Manifest;
 use super::paths::PackagePath;
 use crate::compatibility::legacy_parser::ParsedLegacyPackage;
+use crate::dependency::FetchedDependency;
+use crate::errors::FileHandle;
 use crate::schema::{ImplicitDepMode, ReplacementDependency};
 use crate::{
     compatibility::{
         legacy::LegacyData,
         legacy_parser::{is_legacy_like, parse_legacy_manifest_from_file},
     },
-    dependency::{CombinedDependency, PinnedDependencyInfo, pin},
+    dependency::{CombinedDependency, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::{lockfile::Lockfiles, manifest::Digest},
     schema::{
-        Environment, LocalDepInfo, LockfileDependencyInfo, OriginalID, PackageMetadata,
-        PackageName, Publication, PublishAddresses, PublishedID,
+        Environment, OriginalID, PackageMetadata, PackageName, Publication, PublishAddresses,
+        PublishedID,
     },
 };
 
@@ -47,7 +51,7 @@ pub struct Package<F: MoveFlavor> {
     /// The way this package should be serialized to the lockfile. Note that this is a dependency
     /// relative to the root package (in particular, the root package is the only package with
     /// `source = {local = "."}`
-    source: LockfileDependencyInfo,
+    dep_for_self: PinnedDependencyInfo,
 
     /// Optional legacy information for a supplied package.
     /// TODO(manos): Make `LegacyData` single environment too, or use multiple types for this.
@@ -65,7 +69,8 @@ impl<F: MoveFlavor> Package<F> {
     /// Fails if [path] does not exist, or if it doesn't contain a manifest
     pub async fn load_root(path: impl AsRef<Path>, env: &Environment) -> PackageResult<Self> {
         let path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let source = LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() });
+        let root_manifest = FileHandle::new(path.manifest_path())?;
+        let source = PinnedDependencyInfo::root_dependency(root_manifest, env.name().clone());
 
         Self::load_internal(path, source, env).await
     }
@@ -73,15 +78,15 @@ impl<F: MoveFlavor> Package<F> {
     /// Fetch [dep] and load a package from the fetched source
     /// Makes a best effort to translate old-style packages into the current format,
     pub async fn load(dep: PinnedDependencyInfo, env: &Environment) -> PackageResult<Self> {
-        let path = PackagePath::new(dep.fetch().await?)?;
+        let path = FetchedDependency::fetch(&dep).await?.into();
 
-        Self::load_internal(path, dep.into(), env).await
+        Self::load_internal(path, dep, env).await
     }
 
     /// Loads a package internally, doing a "best" effort to translate an old-style package into the new one.
     async fn load_internal(
         path: PackagePath,
-        source: LockfileDependencyInfo,
+        source: PinnedDependencyInfo,
         env: &Environment,
     ) -> PackageResult<Self> {
         let manifest = Manifest::read_from_file(path.manifest_path());
@@ -95,10 +100,12 @@ impl<F: MoveFlavor> Package<F> {
 
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
 
+            debug!("adding implicit dependencies");
             let implicit_deps =
                 Self::implicit_deps(env, manifest.parsed().package.implicit_deps, None);
 
             // TODO: We should error if there environment is not supported!
+            debug!("combining [dependencies] with [dep-replacements] for {env:?}");
             let combined_deps = CombinedDependency::combine_deps(
                 manifest.file_handle(),
                 env,
@@ -110,15 +117,17 @@ impl<F: MoveFlavor> Package<F> {
                 &implicit_deps,
             )?;
 
-            let deps = pin::<F>(combined_deps, env.id()).await?;
+            debug!("pinning dependencies");
+            let deps = PinnedDependencyInfo::pin::<F>(&source, combined_deps, env.id()).await?;
 
+            debug!("package loaded from {:?}", path.as_ref());
             return Ok(Self {
                 env: env.name().clone(),
                 digest: manifest.digest().to_string(),
                 metadata: manifest.metadata(),
                 path,
                 publish_data: publish_data.get(env.name()).cloned(),
-                source,
+                dep_for_self: source,
                 legacy_data: None,
                 deps,
             });
@@ -142,7 +151,7 @@ impl<F: MoveFlavor> Package<F> {
             &implicit_deps,
         )?;
 
-        let deps = pin::<F>(combined_deps, env.id()).await?;
+        let deps = PinnedDependencyInfo::pin::<F>(&source, combined_deps, env.id()).await?;
 
         Ok(Self {
             env: env.name().clone(),
@@ -151,7 +160,7 @@ impl<F: MoveFlavor> Package<F> {
             metadata: legacy_manifest.metadata,
             path,
             publish_data: Default::default(),
-            source,
+            dep_for_self: source,
             legacy_data: Some(legacy_manifest.legacy_data),
             deps,
         })
@@ -163,6 +172,7 @@ impl<F: MoveFlavor> Package<F> {
     ) -> PackageResult<BTreeMap<EnvironmentName, Publication<F>>> {
         let lockfile = Lockfiles::<F>::read_from_dir(path)?;
 
+        debug!("lockfiles loaded");
         let publish_data = lockfile
             .map(|l| l.published().clone())
             .map(|x| {
@@ -171,6 +181,8 @@ impl<F: MoveFlavor> Package<F> {
                     .collect()
             })
             .unwrap_or_default();
+
+        debug!("extracted publication data");
 
         Ok(publish_data)
     }
@@ -189,11 +201,15 @@ impl<F: MoveFlavor> Package<F> {
         &self.digest
     }
 
+    pub fn environment_name(&self) -> &EnvironmentName {
+        &self.env
+    }
+
     /// The way this package should be serialized to the root package's lockfile. Note that this is
     /// a dependency relative to the root package (in particular, the root package is the only
     /// package where `dep_for_self()` returns `{local = "."}`
-    pub fn dep_for_self(&self) -> &LockfileDependencyInfo {
-        &self.source
+    pub fn dep_for_self(&self) -> &PinnedDependencyInfo {
+        &self.dep_for_self
     }
 
     pub fn is_legacy(&self) -> bool {
@@ -204,9 +220,7 @@ impl<F: MoveFlavor> Package<F> {
     /// to hold for exactly one package for a valid package graph (see [Self::dep_for_self] for
     /// more information)
     pub fn is_root(&self) -> bool {
-        let result = (self.dep_for_self()
-            == &LockfileDependencyInfo::Local(LocalDepInfo { local: ".".into() }));
-        result
+        self.dep_for_self().is_root()
     }
 
     /// The resolved and pinned dependencies from the manifest for environment `env`

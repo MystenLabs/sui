@@ -1,21 +1,57 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::debug_fatal;
+
 use futures::future::{join_all, Either};
+use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use tokio::sync::oneshot;
+use tokio::time::interval_at;
+use tokio::time::Instant;
+use tracing::warn;
 
 type Registrations<V> = Vec<oneshot::Sender<V>>;
+
+/// Wrapper that ensures a spawned task is aborted when dropped
+struct TaskAbortOnDrop {
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl TaskAbortOnDrop {
+    fn new(handle: tokio::task::JoinHandle<()>) -> Self {
+        Self {
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for TaskAbortOnDrop {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+/// Interval duration for logging waiting keys when reads take too long
+const LONG_WAIT_LOG_INTERVAL_SECS: u64 = 10;
+
+pub const CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME: &str =
+    "CheckpointBuilder::notify_read_executed_effects";
 
 pub struct NotifyRead<K, V> {
     pending: Vec<Mutex<HashMap<K, Registrations<V>>>>,
@@ -116,20 +152,92 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     }
 }
 
-impl<K: Eq + Hash + Clone + Unpin, V: Clone + Unpin> NotifyRead<K, V> {
-    pub async fn read(&self, keys: &[K], fetch: impl FnOnce(&[K]) -> Vec<Option<V>>) -> Vec<V> {
+impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: Clone + Unpin>
+    NotifyRead<K, V>
+{
+    pub async fn read(
+        &self,
+        task_name: &'static str,
+        keys: &[K],
+        fetch: impl FnOnce(&[K]) -> Vec<Option<V>>,
+    ) -> Vec<V> {
+        let _metrics_scope = mysten_metrics::monitored_scope(task_name);
         let registrations = self.register_all(keys);
 
         let results = fetch(keys);
 
-        let results = results
-            .into_iter()
-            .zip(registrations)
-            .map(|(a, r)| match a {
-                // Note that Some() clause also drops registration that is already fulfilled
-                Some(ready) => Either::Left(futures::future::ready(ready)),
-                None => Either::Right(r),
+        // Track which keys are still waiting
+        let waiting_keys: HashSet<K> = keys
+            .iter()
+            .zip(results.iter())
+            .filter(|&(_key, result)| result.is_none())
+            .map(|(key, _result)| key.clone())
+            .collect();
+        let has_waiting_keys = !waiting_keys.is_empty();
+        let waiting_keys = Arc::new(Mutex::new(waiting_keys));
+
+        // Spawn logging task if there are waiting keys
+        let _log_handle_guard = if has_waiting_keys {
+            let waiting_keys_clone = waiting_keys.clone();
+            let start_time = Instant::now();
+            let task_name = task_name.to_string();
+
+            let handle = spawn_monitored_task!(async move {
+                // Only start logging after the first interval.
+                let start = Instant::now() + Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS);
+                let mut interval =
+                    interval_at(start, Duration::from_secs(LONG_WAIT_LOG_INTERVAL_SECS));
+
+                loop {
+                    interval.tick().await;
+                    let current_waiting = waiting_keys_clone.lock();
+                    if current_waiting.is_empty() {
+                        break;
+                    }
+                    let keys_vec: Vec<_> = current_waiting.iter().cloned().collect();
+                    drop(current_waiting); // Release lock before logging
+
+                    let elapsed_secs = start_time.elapsed().as_secs();
+
+                    warn!(
+                        "[{}] Still waiting for {}s for {} keys: {:?}",
+                        task_name,
+                        elapsed_secs,
+                        keys_vec.len(),
+                        keys_vec
+                    );
+
+                    if task_name == CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME && elapsed_secs >= 60 {
+                        debug_fatal!("{} is stuck", task_name);
+                    }
+                }
             });
+            Some(TaskAbortOnDrop::new(handle))
+        } else {
+            None
+        };
+
+        let results =
+            results
+                .into_iter()
+                .zip(registrations)
+                .zip(keys.iter())
+                .map(|((a, r), key)| match a {
+                    // Note that Some() clause also drops registration that is already fulfilled
+                    Some(ready) => Either::Left(futures::future::ready(ready)),
+                    None => {
+                        let waiting_keys = waiting_keys.clone();
+                        let key = key.clone();
+                        Either::Right(async move {
+                            let result = r.await;
+                            // Remove this key from the waiting set
+                            waiting_keys.lock().remove(&key);
+                            result
+                        })
+                    }
+                });
+
+        // The logging task will be automatically aborted when _log_handle_guard is dropped
 
         join_all(results).await
     }
@@ -179,6 +287,8 @@ impl<K: Eq + Hash + Clone, V: Clone> Default for NotifyRead<K, V> {
 mod tests {
     use super::*;
     use futures::future::join_all;
+    use std::sync::Arc;
+    use tokio::time::timeout;
 
     #[tokio::test]
     pub async fn test_notify_read() {
@@ -193,6 +303,36 @@ mod tests {
         assert_eq!(0, notify_read.count_pending.load(Ordering::Relaxed));
         assert_eq!(reads, vec![1, 2]);
         // ensure cleanup is done correctly
+        for pending in &notify_read.pending {
+            assert!(pending.lock().is_empty());
+        }
+    }
+
+    #[tokio::test]
+    pub async fn test_notify_read_cancellation() {
+        let notify_read = Arc::new(NotifyRead::<u64, u64>::new());
+
+        // Start a read that will wait indefinitely
+        let read_future = notify_read.read(
+            "test_task",
+            &[1, 2, 3],
+            |_keys| vec![None, None, None], // All keys will wait
+        );
+
+        // Use timeout to cancel the read after a short duration
+        let result = timeout(Duration::from_millis(100), read_future).await;
+
+        // Verify the read was cancelled
+        assert!(result.is_err());
+
+        // Give some time for cleanup to complete
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // When the read is cancelled, the registrations are cleaned up
+        // so the pending count should be 0
+        assert_eq!(0, notify_read.count_pending.load(Ordering::Relaxed));
+
+        // Verify all pending maps are empty (cleanup was performed)
         for pending in &notify_read.pending {
             assert!(pending.lock().is_empty());
         }

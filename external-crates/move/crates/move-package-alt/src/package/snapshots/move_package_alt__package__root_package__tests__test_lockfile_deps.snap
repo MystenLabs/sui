@@ -12,7 +12,7 @@ manifest_digest = "CF50A4AC7C6E92B28547E1268F7541B45808BA19313B9A01420CFC0055029
 deps = { pkg_a = "pkg_a", pkg_b = "pkg_b" }
 
 [pinned._test_env.graph]
-source = { local = "." }
+source = { root = true }
 use_environment = "_test_env"
 manifest_digest = "9480B8140638CDD3A654FCB1B81E8CBD43A18085BEFA23D22C5D1B72F090F679"
 deps = { depends_a_b = "depends_a_b", nodeps = "nodeps" }

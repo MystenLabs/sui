@@ -9,7 +9,7 @@ use sui_types::{
     error::SuiError,
     messages_consensus::ConsensusPosition,
     messages_grpc::{
-        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectReason, RawRejectedStatus,
+        RawExecutedData, RawExecutedStatus, RawExpiredStatus, RawRejectedStatus,
         RawSubmitTxRequest, RawSubmitTxResponse, RawValidatorSubmitStatus,
         RawValidatorTransactionStatus, RawWaitForEffectsRequest, RawWaitForEffectsResponse,
     },
@@ -124,42 +124,14 @@ pub struct ExecutedData {
     pub output_objects: Vec<Object>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RejectReason {
-    // Transaction is not voted to be rejected locally.
-    None,
-    // Rejected due to lock conflict.
-    LockConflict(String),
-    // Rejected due to package verification.
-    PackageVerification(String),
-    // Rejected due to overload.
-    Overload(String),
-    // Rejected due to coin deny list.
-    CoinDenyList,
-}
-
-impl std::fmt::Display for RejectReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RejectReason::None => write!(f, "Rejected with no reason"),
-            RejectReason::LockConflict(msg) => write!(f, "Lock conflict: {}", msg),
-            RejectReason::PackageVerification(msg) => {
-                write!(f, "Package verification failed: {}", msg)
-            }
-            RejectReason::Overload(msg) => write!(f, "Overload: {}", msg),
-            RejectReason::CoinDenyList => write!(f, "Coin deny list"),
-        }
-    }
-}
-
 pub enum WaitForEffectsResponse {
     Executed {
         effects_digest: TransactionEffectsDigest,
         details: Option<Box<ExecutedData>>,
     },
     Rejected {
-        // The rejection reason known locally.
-        reason: RejectReason,
+        // The rejection status known locally.
+        error: SuiError,
     },
     // The transaction position is expired, with the local epoch and committed round.
     // When round is None, the expiration is due to lagging epoch in the request.
@@ -204,8 +176,8 @@ impl TryFrom<RawWaitForEffectsResponse> for WaitForEffectsResponse {
                 })
             }
             Some(RawValidatorTransactionStatus::Rejected(rejected)) => {
-                let reason = try_from_raw_rejected_status(rejected)?;
-                Ok(Self::Rejected { reason })
+                let error = try_from_raw_rejected_status(rejected)?;
+                Ok(Self::Rejected { error })
             }
             Some(RawValidatorTransactionStatus::Expired(expired)) => Ok(Self::Expired {
                 epoch: expired.epoch,
@@ -275,25 +247,23 @@ fn try_from_raw_executed_status(
     Ok((effects_digest, details))
 }
 
-fn try_from_raw_rejected_status(rejected: RawRejectedStatus) -> Result<RejectReason, SuiError> {
-    let raw_reason = RawRejectReason::try_from(rejected.reason).map_err(|err| {
-        SuiError::GrpcMessageDeserializeError {
+fn try_from_raw_rejected_status(rejected: RawRejectedStatus) -> Result<SuiError, SuiError> {
+    let error =
+        bcs::from_bytes(&rejected.error).map_err(|err| SuiError::GrpcMessageDeserializeError {
             type_info: "RawWaitForEffectsResponse.rejected.reason".to_string(),
             error: err.to_string(),
-        }
-    })?;
-    let reason = match raw_reason {
-        RawRejectReason::None => RejectReason::None,
-        RawRejectReason::LockConflict => {
-            RejectReason::LockConflict(rejected.message.unwrap_or_default())
-        }
-        RawRejectReason::PackageVerification => {
-            RejectReason::PackageVerification(rejected.message.unwrap_or_default())
-        }
-        RawRejectReason::Overload => RejectReason::Overload(rejected.message.unwrap_or_default()),
-        RawRejectReason::CoinDenyList => RejectReason::CoinDenyList,
-    };
-    Ok(reason)
+        })?;
+    Ok(error)
+}
+
+fn try_from_response_rejected(error: SuiError) -> Result<RawRejectedStatus, SuiError> {
+    let error = bcs::to_bytes(&error)
+        .map_err(|err| SuiError::GrpcMessageSerializeError {
+            type_info: "RawRejectedStatus.error".to_string(),
+            error: err.to_string(),
+        })?
+        .into();
+    Ok(RawRejectedStatus { error })
 }
 
 impl TryFrom<WaitForEffectsRequest> for RawWaitForEffectsRequest {
@@ -330,8 +300,8 @@ impl TryFrom<WaitForEffectsResponse> for RawWaitForEffectsResponse {
                 let raw_executed = try_from_response_executed(effects_digest, details)?;
                 RawValidatorTransactionStatus::Executed(raw_executed)
             }
-            WaitForEffectsResponse::Rejected { reason } => {
-                let raw_rejected = try_from_response_rejected(reason)?;
+            WaitForEffectsResponse::Rejected { error } => {
+                let raw_rejected = try_from_response_rejected(error)?;
                 RawValidatorTransactionStatus::Rejected(raw_rejected)
             }
             WaitForEffectsResponse::Expired { epoch, round } => {
@@ -405,21 +375,5 @@ fn try_from_response_executed(
     Ok(RawExecutedStatus {
         effects_digest,
         details,
-    })
-}
-
-fn try_from_response_rejected(reason: RejectReason) -> Result<RawRejectedStatus, SuiError> {
-    let (reason, message) = match reason {
-        RejectReason::None => (RawRejectReason::None, None),
-        RejectReason::LockConflict(message) => (RawRejectReason::LockConflict, Some(message)),
-        RejectReason::PackageVerification(message) => {
-            (RawRejectReason::PackageVerification, Some(message))
-        }
-        RejectReason::Overload(message) => (RawRejectReason::Overload, Some(message)),
-        RejectReason::CoinDenyList => (RawRejectReason::CoinDenyList, None),
-    };
-    Ok(RawRejectedStatus {
-        reason: reason.into(),
-        message,
     })
 }

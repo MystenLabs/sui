@@ -47,6 +47,14 @@ fragment E on Epoch {
   totalGasFees
   totalStakeRewards
   totalStakeSubsidies
+  fundSize
+  netInflow
+  fundInflow
+  fundOutflow
+  storageFund {
+    totalObjectStorageRebates
+    nonRefundableBalance
+  }
 }
 
 //# run-graphql
@@ -84,4 +92,12 @@ fragment E on Epoch {
   totalGasFees
   totalStakeRewards
   totalStakeSubsidies
+  fundSize
+  netInflow
+  fundInflow
+  fundOutflow
+  storageFund {
+    totalObjectStorageRebates
+    nonRefundableBalance
+  }
 }

@@ -6,7 +6,7 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use consensus_core::{
-    Clock, CommitConsumer, CommitConsumerMonitor, CommitIndex, ConsensusAuthority,
+    Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority,
 };
 use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
@@ -154,10 +154,10 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let num_prior_commits = protocol_config.consensus_num_requested_prior_commits_at_startup();
         let last_processed_commit = consensus_handler.last_processed_subdag_index() as CommitIndex;
-        let starting_commit = last_processed_commit.saturating_sub(num_prior_commits);
+        let restart_after_commit = last_processed_commit.saturating_sub(num_prior_commits);
 
         let (commit_consumer, commit_receiver, block_receiver) =
-            CommitConsumer::new(starting_commit);
+            CommitConsumerArgs::new(restart_after_commit, last_processed_commit);
         let monitor = commit_consumer.monitor();
 
         // Spin up the new mysticeti consensus handler to listen for committed sub dags, before starting authority.
