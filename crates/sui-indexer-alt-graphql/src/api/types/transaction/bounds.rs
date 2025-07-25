@@ -30,23 +30,31 @@ impl TransactionBounds {
         let kv_loader: &KvLoader = ctx.data()?;
 
         // TODO: Should we make a load_many for checkpoints?
-        let (cp_sequence_lo, cp_sequence_hi) = tokio::try_join!(
+        let (cp_lo, cp_hi) = tokio::try_join!(
             kv_loader.load_one_checkpoint(*cp_bounds.start()),
             kv_loader.load_one_checkpoint(*cp_bounds.end())
         )
-        .context("Failed to load checkpoint bounds")?;
+        .context("Failed to load checkpoint bounds.")?;
 
-        let tx_lo = match cp_sequence_lo {
+        let tx_lo = match cp_lo {
             Some((summary, contents, _)) => {
                 summary.network_total_transactions - contents.inner().len() as u64
             }
-            None => return Err(anyhow::anyhow!("No valid lower checkpoint bound found").into()),
+            None => {
+                return Err(RpcError::from(anyhow::anyhow!(
+                    "No valid lower checkpoint bound found."
+                )))
+            }
         };
 
         // tx_hi_exclusive is the network_total_transactions of the highest checkpoint bound.
-        let tx_hi = match cp_sequence_hi {
-            Some((summary, _, _)) => summary.network_total_transactions as u64,
-            None => return Err(anyhow::anyhow!("No valid upper checkpoint bound found").into()),
+        let tx_hi = match cp_hi {
+            Some((summary, _, _)) => summary.network_total_transactions,
+            None => {
+                return Err(RpcError::from(anyhow::anyhow!(
+                    "No valid upper checkpoint bound found."
+                )))
+            }
         };
 
         Ok(Self { tx_lo, tx_hi })

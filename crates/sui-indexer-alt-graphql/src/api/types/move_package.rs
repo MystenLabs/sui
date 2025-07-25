@@ -80,7 +80,7 @@ pub(crate) struct CheckpointFilter {
 }
 
 /// Inner struct for the cursor produced while iterating over all package publishes.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub(crate) struct PackageCursor {
     pub original_id: Vec<u8>,
     pub cp_sequence_number: u64,
