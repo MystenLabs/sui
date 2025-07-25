@@ -42,6 +42,7 @@ pub enum TransferKind {
     PrivateTransfer(Loc),
 }
 
+/// Sui info for the entire program (mostly used during translation ).
 #[derive(Debug, Clone)]
 pub struct SuiInfo {
     /// All types that contain a UID, directly or indirectly
@@ -51,7 +52,7 @@ pub struct SuiInfo {
     pub transferred: BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>>,
 }
 
-/// Same as `SuiInfo` but for a given module
+/// Same as `SuiInfo` but for a given module (store per-module in `ProgramInfo`).
 #[derive(Debug, Clone)]
 pub struct SuiModInfo {
     pub uid_holders: BTreeMap<DatatypeName, UIDHolder>,
