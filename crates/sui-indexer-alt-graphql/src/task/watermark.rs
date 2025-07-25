@@ -223,6 +223,13 @@ impl Watermarks {
         &self.global_hi
     }
 
+    /// The low watermark across all pipelines. Returned as an inclusive checkpoint number,
+    pub(crate) fn low_watermark(&self) -> Option<&Watermark> {
+        self.pipeline_lo
+            .values()
+            .min_by_key(|watermark| watermark.checkpoint())
+    }
+
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
     /// (should not happen under normal operation).
     pub(crate) fn timestamp_hi(&self) -> Option<DateTime<Utc>> {
