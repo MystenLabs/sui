@@ -88,6 +88,9 @@ module test::execution_error_tests {
 
 //# run test::execution_error_tests::assert_failure --sender B
 
+//# programmable --sender A --inputs @test
+//> test::execution_error_tests::nonexistent_function()
+
 //# create-checkpoint
 
 //# run-graphql
@@ -156,6 +159,12 @@ module test::execution_error_tests {
   }
   
   assertFailure: transactionEffects(digest: "@{digest_11}") {
+    executionError {
+      abortCode
+    }
+  }
+
+  nonExistentFunction: transactionEffects(digest: "@{digest_12}") {
     executionError {
       abortCode
     }
