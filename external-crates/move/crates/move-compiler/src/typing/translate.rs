@@ -167,8 +167,8 @@ fn extract_macros(
         .map(|(mident, mdef)| (mident, &mdef.use_funs, &mdef.functions))
         .chain(pre_compiled_macro_definitions());
 
-    let extracted_macros = UniqueMap::maybe_from_iter(all_macro_definitions.map(
-        |(mident, mod_use_funs, functions)| {
+    UniqueMap::maybe_from_iter(
+        all_macro_definitions.map(|(mident, mod_use_funs, functions)| {
             let macro_bodies = functions.ref_filter_map(|_, f| {
                 if f.macro_.is_none() {
                     return None;
@@ -181,11 +181,9 @@ fn extract_macros(
                 }
             });
             (mident, macro_bodies)
-        },
-    ))
-    .unwrap();
-
-    extracted_macros
+        }),
+    )
+    .unwrap()
 }
 
 fn modules(
