@@ -6,6 +6,7 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
+use crate::api::types::storage_fund::StorageFund;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     api::types::validator_set::ValidatorSet,
@@ -144,13 +145,11 @@ impl Epoch {
 
     /// Validator-related properties, including the active validators.
     async fn validator_set(&self, ctx: &Context<'_>) -> Result<Option<ValidatorSet>, RpcError> {
-        let Some(start) = self.start(ctx).await? else {
+        let Some(system_state) = self.system_state(ctx).await? else {
             return Ok(None);
         };
 
-        let validator_set = match bcs::from_bytes::<SuiSystemState>(&start.system_state)
-            .context("Failed to deserialize system state")?
-        {
+        let validator_set = match system_state {
             SuiSystemState::V1(inner) => inner.validators.into(),
             SuiSystemState::V2(inner) => inner.validators.into(),
             #[cfg(msim)]
@@ -271,6 +270,25 @@ impl Epoch {
 
         Ok(storage_rebate.map(BigInt::from))
     }
+
+    /// SUI set aside to account for objects stored on-chain, at the start of the epoch.
+    /// This is also used for storage rebates.
+    async fn storage_fund(&self, ctx: &Context<'_>) -> Result<Option<StorageFund>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let storage_fund = match system_state {
+            SuiSystemState::V1(inner) => inner.storage_fund.into(),
+            SuiSystemState::V2(inner) => inner.storage_fund.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(storage_fund))
+    }
 }
 
 impl Epoch {
@@ -336,6 +354,17 @@ impl Epoch {
                 Ok(stored)
             })
             .await
+    }
+
+    async fn system_state(&self, ctx: &Context<'_>) -> Result<Option<SuiSystemState>, RpcError> {
+        let Some(start) = self.start(ctx).await? else {
+            return Ok(None);
+        };
+
+        let system_state = bcs::from_bytes::<SuiSystemState>(&start.system_state)
+            .context("Failed to deserialize system state")?;
+
+        Ok(Some(system_state))
     }
 
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty

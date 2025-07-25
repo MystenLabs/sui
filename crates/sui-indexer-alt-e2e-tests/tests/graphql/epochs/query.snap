@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-54:
+task 6, lines 16-58:
 //# run-graphql
 Response: {
   "data": {
@@ -47,7 +47,11 @@ Response: {
       "fundSize": "0",
       "netInflow": "0",
       "fundInflow": "0",
-      "fundOutflow": "0"
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      }
     },
     "e0": {
       "epochId": 0,
@@ -74,7 +78,11 @@ Response: {
       "fundSize": "0",
       "netInflow": "0",
       "fundInflow": "0",
-      "fundOutflow": "0"
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      }
     },
     "e1": {
       "epochId": 1,
@@ -101,7 +109,11 @@ Response: {
       "fundSize": "0",
       "netInflow": "0",
       "fundInflow": "0",
-      "fundOutflow": "0"
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      }
     },
     "e2": {
       "epochId": 2,
@@ -128,13 +140,17 @@ Response: {
       "fundSize": "0",
       "netInflow": "0",
       "fundInflow": "0",
-      "fundOutflow": "0"
+      "fundOutflow": "0",
+      "storageFund": {
+        "totalObjectStorageRebates": "0",
+        "nonRefundableBalance": "0"
+      }
     },
     "e3": null
   }
 }
 
-task 7, lines 56-95:
+task 7, lines 60-103:
 //# run-graphql
 Response: {
   "data": {
@@ -165,7 +181,11 @@ Response: {
           "fundSize": "0",
           "netInflow": "0",
           "fundInflow": "0",
-          "fundOutflow": "0"
+          "fundOutflow": "0",
+          "storageFund": {
+            "totalObjectStorageRebates": "0",
+            "nonRefundableBalance": "0"
+          }
         },
         "e0": {
           "epochId": 0,
@@ -192,7 +212,11 @@ Response: {
           "fundSize": "0",
           "netInflow": "0",
           "fundInflow": "0",
-          "fundOutflow": "0"
+          "fundOutflow": "0",
+          "storageFund": {
+            "totalObjectStorageRebates": "0",
+            "nonRefundableBalance": "0"
+          }
         },
         "e1": {
           "epochId": 1,
@@ -219,7 +243,11 @@ Response: {
           "fundSize": "0",
           "netInflow": "0",
           "fundInflow": "0",
-          "fundOutflow": "0"
+          "fundOutflow": "0",
+          "storageFund": {
+            "totalObjectStorageRebates": "0",
+            "nonRefundableBalance": "0"
+          }
         },
         "e2": null
       }
