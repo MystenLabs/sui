@@ -24,6 +24,9 @@ module test::execution_error_tests {
     #[error(code=15)]
     const ECleverWithCode: vector<u8> = b"Error with explicit code";
 
+    #[error]
+    const ECleverRaw: vector<address> = vector[@0x1, @0x2, @0x3];
+
     /// Function that succeeds (for testing successful transactions)
     public entry fun success_function(_x: u64) {
         // Does nothing, just succeeds
@@ -61,6 +64,10 @@ module test::execution_error_tests {
 
     public entry fun abort_with_clever_code() {
         abort ECleverWithCode
+    }
+
+    public entry fun abort_with_clever_raw() {
+        abort ECleverRaw
     }
 
     public entry fun assert_failure() {
@@ -107,6 +114,8 @@ module test::execution_error_tests {
 
 //# run test::execution_error_tests::abort_with_clever_code --sender A
 
+//# run test::execution_error_tests::abort_with_clever_raw --sender B
+
 //# run test::execution_error_tests::assert_failure --sender B
 
 //# programmable --sender A --inputs @test
@@ -130,6 +139,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
 }
@@ -142,6 +152,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
@@ -150,6 +161,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
 }
@@ -162,6 +174,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
@@ -170,6 +183,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
@@ -178,6 +192,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
@@ -186,6 +201,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
@@ -194,6 +210,7 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
@@ -202,22 +219,34 @@ module test::execution_error_tests {
       abortCode
       sourceLineNumber
       instructionOffset
-    }
-  }
-  
-  assertFailure: transactionEffects(digest: "@{digest_11}") {
-    executionError {
-      abortCode
-      sourceLineNumber
-      instructionOffset
+      identifier
     }
   }
 
-  nonExistentFunction: transactionEffects(digest: "@{digest_12}") {
+  cleverRaw: transactionEffects(digest: "@{digest_11}") {
     executionError {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
+    }
+  }
+  
+  assertFailure: transactionEffects(digest: "@{digest_12}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+    }
+  }
+
+  nonExistentFunction: transactionEffects(digest: "@{digest_13}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
     }
   }
 }
@@ -225,35 +254,39 @@ module test::execution_error_tests {
 //# run-graphql
 {
   # Test MovePrimitiveRuntimeError cases
-  arithmeticUnderflow: transactionEffects(digest: "@{digest_13}") {
+  arithmeticUnderflow: transactionEffects(digest: "@{digest_14}") {
     executionError {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
-  arithmeticOverflow: transactionEffects(digest: "@{digest_14}") {
+  arithmeticOverflow: transactionEffects(digest: "@{digest_15}") {
     executionError {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
-  divisionByZero: transactionEffects(digest: "@{digest_15}") {
+  divisionByZero: transactionEffects(digest: "@{digest_16}") {
     executionError {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
   
-  vectorOutOfBounds: transactionEffects(digest: "@{digest_16}") {
+  vectorOutOfBounds: transactionEffects(digest: "@{digest_17}") {
     executionError {
       abortCode
       sourceLineNumber
       instructionOffset
+      identifier
     }
   }
 }

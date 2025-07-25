@@ -111,6 +111,23 @@ impl ExecutionError {
             _ => Ok(None),
         }
     }
+
+    /// The error's name. Only populated for clever errors.
+    async fn identifier(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        use sui_package_resolver::ErrorConstants;
+
+        let Some(clever_error) = self.clever_error(ctx).await? else {
+            return Ok(None);
+        };
+
+        let identifier = match &clever_error.error_info {
+            ErrorConstants::None => None,
+            ErrorConstants::Rendered { identifier, .. } => Some(identifier.clone()),
+            ErrorConstants::Raw { identifier, .. } => Some(identifier.clone()),
+        };
+
+        Ok(identifier)
+    }
 }
 
 impl ExecutionError {
