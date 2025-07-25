@@ -63,7 +63,6 @@ impl SuiInfo {
         modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         info: &TypingProgramInfo,
     ) -> Self {
-        assert!(info.sui_flavor_info.is_none());
         let uid_holders = all_uid_holders(info);
         let transferred = all_transferred(modules, info);
         Self {
