@@ -1529,7 +1529,12 @@ impl fmt::Display for ObjectID {
 
 impl fmt::Debug for ObjectID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "0x{}", Hex::encode(self.0))
+        // Remove all leading 0s from the hex encoding (but keep at least one digit)
+        // This reduces noise in the debug output.
+        let hex = Hex::encode(self.0);
+        let trimmed = hex.trim_start_matches('0');
+        let output = if trimmed.is_empty() { "0" } else { trimmed };
+        write!(f, "0x{}", output)
     }
 }
 
