@@ -183,8 +183,27 @@ impl NativeFunctions {
         addr: &AccountAddress,
         module_name: &str,
         func_name: &str,
-    ) -> Option<NativeFunction> {
-        self.0.get(addr)?.get(module_name)?.get(func_name).cloned()
+    ) -> PartialVMResult<NativeFunction> {
+        // Resolve a native function by its address, module name, and function name.
+        match self.0.get(addr) {
+            None => Err(PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE)
+                .with_message(format!("Cannot find AccountAddress {:?}", addr,))),
+            Some(modules) => {
+                if let Some(funcs) = modules.get(module_name) {
+                    if let Some(func) = funcs.get(func_name) {
+                        return Ok(func.clone());
+                    }
+                }
+                Err(
+                    PartialVMError::new(StatusCode::FUNCTION_RESOLUTION_FAILURE).with_message(
+                        format!(
+                            "Cannot find {}::{} in AccountAddress {:?}",
+                            module_name, func_name, addr,
+                        ),
+                    ),
+                )
+            }
+        }
     }
 
     pub fn empty_for_testing() -> PartialVMResult<Self> {

@@ -88,7 +88,7 @@ fn check_natives(context: &Context, in_module: &CompiledModule) -> VMResult<()> 
                     module.identifier_at(mh.name).as_str(),
                     module.identifier_at(fh.name).as_str(),
                 )
-                .ok_or_else(|| {
+                .map_err(|_| {
                     verification_error(
                         StatusCode::MISSING_DEPENDENCY,
                         IndexKind::FunctionHandle,
