@@ -70,7 +70,6 @@ pub struct ModuleInfo {
 #[derive(Debug, Clone)]
 pub struct ProgramInfo<const AFTER_TYPING: bool> {
     pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
-    pub sui_flavor_info: Option<SuiInfo>,
 }
 pub type NamingProgramInfo = ProgramInfo<false>;
 pub type TypingProgramInfo = ProgramInfo<true>;
@@ -148,10 +147,7 @@ macro_rules! program_info {
                 }
             }
         }
-        ProgramInfo {
-            modules,
-            sui_flavor_info: None,
-        }
+        ProgramInfo { modules }
     }};
 }
 
@@ -191,9 +187,7 @@ impl TypingProgramInfo {
             .any(|(_, config)| config.flavor == Flavor::Sui)
         {
             let mut sui_flavor_info = SuiInfo::new(modules, &info);
-            info.sui_flavor_info = Some(sui_flavor_info.clone());
-            for (loc, mident, module_info) in info.modules.iter_mut() {
-                let mident = sp(loc, *mident);
+            for (mident, module_info) in info.modules.key_cloned_iter_mut() {
                 let uid_holders = sui_flavor_info
                     .uid_holders
                     .remove(&mident)
