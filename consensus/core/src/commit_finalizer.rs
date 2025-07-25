@@ -27,7 +27,7 @@ use crate::{
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
 /// commits and T is still not finalized, T is rejected.
 /// NOTE: 3 round is the minimum depth possible for indirect finalization and rejection.
-const INDIRECT_REJECT_DEPTH: Round = 3;
+pub(crate) const INDIRECT_REJECT_DEPTH: Round = 3;
 
 /// Handle to CommitFinalizer, for sending CommittedSubDag.
 pub(crate) struct CommitFinalizerHandle {
@@ -116,11 +116,21 @@ impl CommitFinalizer {
                 vec![committed_sub_dag]
             };
             if !finalized_commits.is_empty() {
+                let mut dag_state = self.dag_state.write();
+                if self.context.protocol_config.mysticeti_fastpath() {
+                    // Records commits that have been finalized and their rejected transactions.
+                    for commit in &finalized_commits {
+                        dag_state.add_finalized_commit(
+                            commit.commit_ref,
+                            commit.rejected_transactions_by_block.clone(),
+                        );
+                    }
+                }
                 // Commits and committed blocks must be persisted to storage before sending them to Sui
                 // to execute their finalized transactions.
                 // Commit metadata and uncommitted blocks can be persisted more lazily because they are recoverable.
                 // But for simplicity, all unpersisted commits and blocks are flushed to storage.
-                self.dag_state.write().flush();
+                dag_state.flush();
             }
             for commit in finalized_commits {
                 if let Err(e) = self.commit_sender.send(commit) {
@@ -177,7 +187,7 @@ impl CommitFinalizer {
             // -  This commit is remote.
             // -  And the latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
             // In this case, this commit's leader certificate is not guaranteed to be in local DAG.
-            if !commit_state.commit.local {
+            if !commit_state.commit.local_dag_has_finalization_blocks {
                 let last_commit_state = self.pending_commits.back().unwrap();
                 if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
                     > last_commit_state.commit.leader.round
@@ -1115,7 +1125,7 @@ mod tests {
                 let mut committed_sub_dags = fixture.linearizer.handle_commit(vec![leader]);
                 assert_eq!(committed_sub_dags.len(), 1);
                 let mut remote_commit = committed_sub_dags.pop().unwrap();
-                remote_commit.local = local;
+                remote_commit.local_dag_has_finalization_blocks = local;
                 // Process the remote commit.
                 fixture
                     .commit_finalizer

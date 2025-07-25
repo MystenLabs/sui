@@ -5,7 +5,7 @@ mod effects_certifier;
 mod error;
 mod message_types;
 mod metrics;
-mod transaction_retrier;
+mod request_retrier;
 mod transaction_submitter;
 
 /// Exports
@@ -73,7 +73,7 @@ where
         driver
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
     pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
@@ -84,13 +84,12 @@ where
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
-        // TODO(fastpath): do not limit the number of attempts after correctly categorizing
-        // permanent errors.
-        let backoff = ExponentialBackoff::from_millis(100)
-            .max_delay(Duration::from_secs(10))
-            .map(jitter)
-            .take(10);
-        for (attempts, delay) in backoff.enumerate() {
+        const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
+        let mut backoff = ExponentialBackoff::from_millis(100)
+            .max_delay(MAX_RETRY_DELAY)
+            .map(jitter);
+        let mut attempts = 0;
+        loop {
             // TODO(fastpath): Check local state before submitting transaction
             match self
                 .drive_transaction_once(tx_digest, raw_request.clone(), &options)
@@ -109,22 +108,23 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
-                    // TODO(fastpath): Break when the error is non‑retriable.
-                    tracing::warn!(
-                        "Failed to finalize transaction {tx_digest} (attempt {}): {}",
+                    if !e.is_retriable() {
+                        return Err(e);
+                    }
+                    tracing::info!(
+                        "Failed to finalize transaction (attempt {}): {}. Retrying ...",
                         attempts,
                         e
                     );
                 }
             }
 
-            sleep(delay).await;
+            sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+            attempts += 1;
         }
-
-        Err(TransactionDriverError::TransactionDriverFailure)
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
     async fn drive_transaction_once(
         &self,
         tx_digest: &TransactionDigest,

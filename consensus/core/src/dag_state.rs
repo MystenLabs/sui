@@ -12,7 +12,7 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round};
+use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use itertools::Itertools as _;
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace};
@@ -85,14 +85,18 @@ pub(crate) struct DagState {
     // TODO: recover unproposed pending commit votes at startup.
     pending_commit_votes: VecDeque<CommitVote>,
 
-    // Data to be flushed to storage.
+    // Blocks and commits must be buffered for persistence before they can be
+    // inserted into the local DAG or sent to output.
     blocks_to_write: Vec<VerifiedBlock>,
     commits_to_write: Vec<TrustedCommit>,
 
-    // Buffer the reputation scores & last_committed_rounds to be flushed with the
-    // next dag state flush. This is okay because we can recover reputation scores
+    // Buffers the reputation scores & last_committed_rounds to be flushed with the
+    // next dag state flush. Not writing eagerly is okay because we can recover reputation scores
     // & last_committed_rounds from the commits as needed.
     commit_info_to_write: Vec<(CommitRef, CommitInfo)>,
+
+    // Buffers finalized commits and their rejected transactions to be written to storage.
+    finalized_commits_to_write: Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -172,6 +176,7 @@ impl DagState {
             blocks_to_write: vec![],
             commits_to_write: vec![],
             commit_info_to_write: vec![],
+            finalized_commits_to_write: vec![],
             scoring_subdag,
             store: store.clone(),
             cached_rounds,
@@ -904,7 +909,8 @@ impl DagState {
     pub(crate) fn ensure_commits_to_write_is_empty(&self) {
         assert!(
             self.commits_to_write.is_empty(),
-            "Commits to write should be empty"
+            "Commits to write should be empty. {:?}",
+            self.commits_to_write,
         );
     }
 
@@ -924,6 +930,15 @@ impl DagState {
             .expect("Last commit should already be set.");
         self.commit_info_to_write
             .push((last_commit.reference(), commit_info));
+    }
+
+    pub(crate) fn add_finalized_commit(
+        &mut self,
+        commit_ref: CommitRef,
+        rejected_transactions: BTreeMap<BlockRef, Vec<TransactionIndex>>,
+    ) {
+        self.finalized_commits_to_write
+            .push((commit_ref, rejected_transactions));
     }
 
     pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitVote> {
@@ -1020,13 +1035,17 @@ impl DagState {
         let pending_blocks = std::mem::take(&mut self.blocks_to_write);
         let pending_commits = std::mem::take(&mut self.commits_to_write);
         let pending_commit_info = std::mem::take(&mut self.commit_info_to_write);
-        if pending_blocks.is_empty() && pending_commits.is_empty() && pending_commit_info.is_empty()
+        let pending_finalized_commits = std::mem::take(&mut self.finalized_commits_to_write);
+        if pending_blocks.is_empty()
+            && pending_commits.is_empty()
+            && pending_commit_info.is_empty()
+            && pending_finalized_commits.is_empty()
         {
             return;
         }
 
         debug!(
-            "Flushing {} blocks ({}), {} commits ({}) and {} commit infos ({}) to storage.",
+            "Flushing {} blocks ({}), {} commits ({}), {} commit infos ({}), {} finalized commits ({}) to storage.",
             pending_blocks.len(),
             pending_blocks
                 .iter()
@@ -1042,12 +1061,18 @@ impl DagState {
                 .iter()
                 .map(|(commit_ref, _)| commit_ref.to_string())
                 .join(","),
+            pending_finalized_commits.len(),
+            pending_finalized_commits
+                .iter()
+                .map(|(commit_ref, _)| commit_ref.to_string())
+                .join(","),
         );
         self.store
             .write(WriteBatch::new(
                 pending_blocks,
                 pending_commits,
                 pending_commit_info,
+                pending_finalized_commits,
             ))
             .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
         self.context
@@ -1208,6 +1233,7 @@ mod test {
         storage::{mem_store::MemStore, WriteBatch},
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
+        CommitRange,
     };
 
     #[tokio::test]
@@ -2530,5 +2556,37 @@ mod test {
 
         // Try to accept the block - it should not panic
         dag_state.accept_block(block);
+    }
+
+    #[tokio::test]
+    async fn test_last_finalized_commit() {
+        // GIVEN
+        let (context, _) = Context::new_for_test(4);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // WHEN adding a finalized commit
+        let commit_ref = CommitRef::new(1, CommitDigest::MIN);
+        let rejected_transactions = BTreeMap::new();
+        dag_state.add_finalized_commit(commit_ref, rejected_transactions.clone());
+
+        // THEN the commit should be added to the buffer
+        assert_eq!(dag_state.finalized_commits_to_write.len(), 1);
+        assert_eq!(
+            dag_state.finalized_commits_to_write[0],
+            (commit_ref, rejected_transactions.clone())
+        );
+
+        // WHEN flushing the DAG state
+        dag_state.flush();
+
+        // THEN the commit and rejected transactions should be written to storage
+        let last_finalized_commit = store.read_last_finalized_commit().unwrap();
+        assert_eq!(last_finalized_commit, Some(commit_ref));
+        let commits = store
+            .scan_finalized_commits(CommitRange::new(1..=1))
+            .unwrap();
+        assert_eq!(commits, vec![(commit_ref, rejected_transactions.clone())]);
     }
 }

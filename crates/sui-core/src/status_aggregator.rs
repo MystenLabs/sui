@@ -45,9 +45,34 @@ impl<T> StatusAggregator<T> {
         self.total_votes
     }
 
+    /// Returns all authorities that have inserted statuses.
+    pub(crate) fn authorities(&self) -> Vec<AuthorityName> {
+        self.statuses.keys().copied().collect()
+    }
+
     /// Returns the status of each authority.
+    #[cfg(test)]
     pub(crate) fn statuses(&self) -> &BTreeMap<AuthorityName, T> {
         &self.statuses
+    }
+
+    /// Returns the status of each authority.
+    pub(crate) fn status_by_authority(&self) -> Vec<(AuthorityName, StakeUnit, T)>
+    where
+        T: Clone,
+    {
+        self.statuses
+            .iter()
+            .map(|(name, status)| {
+                (
+                    *name,
+                    self.committee
+                        .stake_by_index(self.committee.authority_index(name).unwrap())
+                        .unwrap(),
+                    status.clone(),
+                )
+            })
+            .collect()
     }
 
     pub(crate) fn reached_validity_threshold(&self) -> bool {

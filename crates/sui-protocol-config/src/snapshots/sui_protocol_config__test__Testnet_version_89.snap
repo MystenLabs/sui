@@ -78,6 +78,7 @@ feature_flags:
   consensus_round_prober: true
   validate_identifier_inputs: true
   disallow_self_identifier: true
+  mysticeti_fastpath: true
   relocate_event_module: true
   uncompressed_g1_group_elements: true
   disallow_new_modules_in_deps_only_packages: true
@@ -105,6 +106,7 @@ feature_flags:
   ignore_execution_time_observations_after_certs_closed: true
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
+  check_for_init_during_upgrade: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
