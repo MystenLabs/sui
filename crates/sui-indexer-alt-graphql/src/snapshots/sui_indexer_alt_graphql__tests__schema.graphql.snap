@@ -252,6 +252,10 @@ type ExecutionError {
 	The source line number for the abort. Only populated for clever errors.
 	"""
 	sourceLineNumber: Int
+	"""
+	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+	"""
+	instructionOffset: Int
 }
 
 """
