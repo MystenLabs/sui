@@ -60,7 +60,7 @@
         startCursor
         endCursor
       }
-      edges { cursor }
+      edges { cursor node { digest, sender { address } } } 
     }
   }
 }
@@ -72,10 +72,7 @@
     digest
     transactions( after: "@{cursor_0}", first: 3) {
       pageInfo {
-        hasPreviousPage
-        hasNextPage
-        startCursor
-        endCursor
+        ...PageInfoFields
       }
       edges { cursor }
     }
@@ -94,7 +91,7 @@
         startCursor
         endCursor
       }
-      edges { cursor }
+      edges { cursor node { digest, sender { address } } } 
     }
   }
 }
@@ -111,7 +108,7 @@
         startCursor
         endCursor
       }
-      edges { cursor }
+      edges { cursor node { digest, sender { address } } } 
     }
   }
 }
@@ -128,7 +125,41 @@
         startCursor
         endCursor
       }
-      edges { cursor }
+      edges { cursor node { digest, sender { address } } } 
+    }
+  }
+}
+
+//# run-graphql --cursors 5
+{ # Offset to a non-existent cursor
+  checkpoint(sequenceNumber: 1) {
+    sequenceNumber
+    digest
+    transactions( after: "@{cursor_0}") {
+      pageInfo {
+        hasPreviousPage
+        hasNextPage
+        startCursor
+        endCursor
+      }
+      edges { cursor node { digest, sender { address } } } 
+    }
+  }
+}
+
+//# run-graphql
+{ # Fetch noOffset to a non-existent cursor
+  checkpoint(sequenceNumber: 6) {
+    sequenceNumber
+    digest
+    transactions(first: 1) {
+      pageInfo {
+        hasPreviousPage
+        hasNextPage
+        startCursor
+        endCursor
+      }
+      edges { cursor node { digest, sender { address } } } 
     }
   }
 }
