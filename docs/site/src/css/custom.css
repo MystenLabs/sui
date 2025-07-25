@@ -419,9 +419,42 @@ div[role="tabpanel"] {
   @apply bg-sui-steel-dark;
 }
 
+.ais-Pagination-list {
+  @apply pl-0 list-none flex justify-center;
+}
+
+.ais-Pagination-item {
+  @apply border border-solid border-sui-gray-50 dark:border-sui-gray-80 p-1 mx-2 w-12 flex items-center justify-center;
+}
+
+.ais-SearchBox-submitIcon {
+  @apply !w-[20px];
+}
+
+.ais-Pagination-item--disabled {
+  @apply cursor-default;
+}
+
+.ais-Pagination-item--selected {
+  @apply cursor-default;
+}
+.ais-Pagination-item--selected a {
+  @apply text-sui-white cursor-default no-underline;
+}
+
+.tooltip-delay {
+  @apply opacity-0 transition-opacity duration-200;
+  transition-delay: 0ms;
+}
+
+.group:hover .tooltip-delay {
+  @apply opacity-100;
+  transition-delay: 700ms; 
+}
+
 /** Globals **/
 .button-cta {
-  @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out
+  @apply bg-sui-blue-primary font-sans text-sui-white -tracking-[.3px] cursor-pointer border-none rounded-[2.25rem] py-3 px-[1.125rem] text-base font-medium leading-[1.125rem] inline-block transition-colors duration-300 ease-in-out;
 }
 
 .button-cta:hover {
