@@ -33,7 +33,7 @@ use std::{path::Path, sync::Arc};
 
 use config::{PipelineLayer, ServiceConfig};
 use db::config::DbConfig;
-use handlers::{object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
+use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
 use indexer::Indexer;
 use prometheus::Registry;
 use rpc::{state::State, RpcArgs, RpcService};
@@ -82,10 +82,12 @@ pub async fn start_service(
         consistency,
         rocksdb,
         committer,
-        pipeline: PipelineLayer {
-            object_by_owner,
-            object_by_type,
-        },
+        pipeline:
+            PipelineLayer {
+                balances,
+                object_by_owner,
+                object_by_type,
+            },
         rpc,
     } = config;
 
@@ -128,6 +130,7 @@ pub async fn start_service(
         };
     }
 
+    add_sequential!(Balances, balances);
     add_sequential!(ObjectByOwner, object_by_owner);
     add_sequential!(ObjectByType, object_by_type);
 

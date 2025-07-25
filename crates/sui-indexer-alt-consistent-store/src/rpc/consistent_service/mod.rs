@@ -3,18 +3,21 @@
 
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentService;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    AvailableRangeRequest, AvailableRangeResponse, ListObjectsByTypeRequest, ListObjectsResponse,
-    ListOwnedObjectsRequest, ServiceConfigRequest, ServiceConfigResponse,
+    AvailableRangeRequest, AvailableRangeResponse, ListBalancesRequest, ListBalancesResponse,
+    ListObjectsByTypeRequest, ListObjectsResponse, ListOwnedObjectsRequest, ServiceConfigRequest,
+    ServiceConfigResponse,
 };
 
 use super::state::{checkpointed_response, State};
 
 use self::available_range::available_range;
+use self::list_balances::list_balances;
 use self::list_objects_by_type::list_objects_by_type;
 use self::list_owned_objects::list_owned_objects;
 use self::service_config::service_config;
 
 mod available_range;
+mod list_balances;
 mod list_objects_by_type;
 mod list_owned_objects;
 mod service_config;
@@ -28,6 +31,15 @@ impl ConsistentService for State {
         available_range(self, request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
+    }
+
+    async fn list_balances(
+        &self,
+        request: tonic::Request<ListBalancesRequest>,
+    ) -> Result<tonic::Response<ListBalancesResponse>, tonic::Status> {
+        let checkpoint = self.checkpoint(&request)?;
+        let response = list_balances(self, checkpoint, request.into_inner())?;
+        Ok(checkpointed_response(checkpoint, response)?)
     }
 
     async fn list_objects_by_type(

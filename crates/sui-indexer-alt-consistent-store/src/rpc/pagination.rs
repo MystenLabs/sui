@@ -80,32 +80,56 @@ impl<'r> Page<'r> {
         K: Encode + Decode<()>,
         V: Serialize + DeserializeOwned,
     {
+        self.paginate_filtered(map, checkpoint, prefix, |_, _, _| true)
+    }
+
+    /// Paginate over the key-value pairs in `map` that share a `prefix`, and match a predicate
+    /// `pred`, at the given `checkpoint`.
+    pub(super) fn paginate_filtered<J, K, V, E>(
+        &self,
+        map: &DbMap<K, V>,
+        checkpoint: u64,
+        prefix: &J,
+        pred: impl FnMut(&[u8], &K, &V) -> bool,
+    ) -> Result<Response<K, V>, RpcError<E>>
+    where
+        J: Encode,
+        K: Encode + Decode<()>,
+        V: Serialize + DeserializeOwned,
+    {
         if self.is_from_front {
-            self.paginate_from_front(map.prefix(checkpoint, prefix).map_err(|e| {
-                if let db::error::Error::NotInRange { checkpoint } = e {
-                    RpcError::NotInRange(checkpoint)
-                } else {
-                    anyhow!(e)
-                        .context("failed to create forward iterator")
-                        .into()
-                }
-            })?)
+            self.paginate_from_front(
+                map.prefix(checkpoint, prefix).map_err(|e| {
+                    if let db::error::Error::NotInRange { checkpoint } = e {
+                        RpcError::NotInRange(checkpoint)
+                    } else {
+                        anyhow!(e)
+                            .context("failed to create forward iterator")
+                            .into()
+                    }
+                })?,
+                pred,
+            )
         } else {
-            self.paginate_from_back(map.prefix_rev(checkpoint, prefix).map_err(|e| {
-                if let db::error::Error::NotInRange { checkpoint } = e {
-                    RpcError::NotInRange(checkpoint)
-                } else {
-                    anyhow!(e)
-                        .context("failed to create reverse iterator")
-                        .into()
-                }
-            })?)
+            self.paginate_from_back(
+                map.prefix_rev(checkpoint, prefix).map_err(|e| {
+                    if let db::error::Error::NotInRange { checkpoint } = e {
+                        RpcError::NotInRange(checkpoint)
+                    } else {
+                        anyhow!(e)
+                            .context("failed to create reverse iterator")
+                            .into()
+                    }
+                })?,
+                pred,
+            )
         }
     }
 
     fn paginate_from_front<K, V, E>(
         &self,
         mut iter: FwdIter<'_, K, V>,
+        mut pred: impl FnMut(&[u8], &K, &V) -> bool,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -144,7 +168,10 @@ impl<'r> Page<'r> {
             // SAFETY: If there is a raw key, there must be a next entry.
             let cursor = cursor.to_owned();
             let (key, value) = iter.next().unwrap().context("iteration failed")?;
-            results.push((cursor, key, value))
+
+            if pred(&cursor, &key, &value) {
+                results.push((cursor, key, value))
+            }
         }
 
         Ok(Response {
@@ -157,6 +184,7 @@ impl<'r> Page<'r> {
     fn paginate_from_back<K, V, E>(
         &self,
         mut iter: RevIter<'_, K, V>,
+        mut pred: impl FnMut(&[u8], &K, &V) -> bool,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -196,7 +224,10 @@ impl<'r> Page<'r> {
             // SAFETY: If there is a raw key, there must be a next entry.
             let cursor = cursor.to_owned();
             let (key, value) = iter.next().unwrap().context("iteration failed")?;
-            results.push((cursor, key, value))
+
+            if pred(&cursor, &key, &value) {
+                results.push((cursor, key, value))
+            }
         }
 
         results.reverse();
