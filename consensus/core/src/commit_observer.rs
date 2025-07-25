@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
-    commit::{load_committed_subdag_from_store, CommitAPI, CommitIndex},
+    commit::{load_committed_subdag_from_store, CommitAPI},
     commit_finalizer::{CommitFinalizer, CommitFinalizerHandle},
     context::Context,
     dag_state::DagState,
@@ -18,7 +18,7 @@ use crate::{
     linearizer::Linearizer,
     storage::Store,
     transaction_certifier::TransactionCertifier,
-    CommitConsumer, CommittedSubDag,
+    CommitConsumerArgs, CommittedSubDag,
 };
 
 /// Role of CommitObserver
@@ -48,7 +48,7 @@ pub(crate) struct CommitObserver {
 impl CommitObserver {
     pub(crate) async fn new(
         context: Arc<Context>,
-        commit_consumer: CommitConsumer,
+        commit_consumer: CommitConsumerArgs,
         dag_state: Arc<RwLock<DagState>>,
         transaction_certifier: TransactionCertifier,
         leader_schedule: Arc<LeaderSchedule>,
@@ -59,7 +59,7 @@ impl CommitObserver {
             context.clone(),
             dag_state.clone(),
             transaction_certifier,
-            commit_consumer.commit_sender,
+            commit_consumer.commit_sender.clone(),
         );
         let mut observer = Self {
             context,
@@ -70,9 +70,7 @@ impl CommitObserver {
             commit_finalizer_handle,
         };
 
-        observer
-            .recover_and_send_commits(commit_consumer.last_processed_commit_index)
-            .await;
+        observer.recover_and_send_commits(&commit_consumer).await;
         observer
     }
 
@@ -98,7 +96,7 @@ impl CommitObserver {
 
         // Set if the commit is produced from local DAG, or received through commit sync.
         for subdag in committed_sub_dags.iter_mut() {
-            subdag.local = local;
+            subdag.local_dag_has_finalization_blocks = local;
         }
 
         // Send scores as part of the first sub dag, if the leader schedule has been updated.
@@ -133,45 +131,57 @@ impl CommitObserver {
         Ok(committed_sub_dags)
     }
 
-    async fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
+    async fn recover_and_send_commits(&mut self, commit_consumer: &CommitConsumerArgs) {
         let now = Instant::now();
 
-        // TODO: remove this check, to allow consensus to regenerate commits?
+        let replay_after_commit_index = commit_consumer.replay_after_commit_index;
+
         let last_commit = self
             .store
             .read_last_commit()
             .expect("Reading the last commit should not fail");
         let Some(last_commit) = &last_commit else {
             assert_eq!(
-                last_processed_commit_index, 0,
-                "Last processed commit index should be 0 if last commit is not found"
+                replay_after_commit_index, 0,
+                "Commit replay should start at the beginning if there is no commit history"
             );
-            info!("Nothing to recover for commit observer as last processed index and commit index == 0");
+            info!("Nothing to recover for commit observer - starting new epoch");
             return;
         };
 
         let last_commit_index = last_commit.index();
-        assert!(last_commit_index >= last_processed_commit_index);
-        if last_commit_index == last_processed_commit_index {
-            info!("Nothing to recover for commit observer as commit index {last_commit_index} = {last_processed_commit_index} last processed index");
+        if last_commit_index == replay_after_commit_index {
+            info!("Nothing to recover for commit observer - replay is requested immediately after last commit index {last_commit_index}");
             return;
         }
+        assert!(last_commit_index > replay_after_commit_index);
 
         info!(
             "Recovering commit observer in the range [{}..={last_commit_index}]",
-            last_processed_commit_index + 1
+            replay_after_commit_index + 1,
         );
+
+        // Retrieves the last finalized commit index for commit recovery.
+        let last_finalized_commit_index = if self.context.protocol_config.mysticeti_fastpath() {
+            self.store
+                .read_last_finalized_commit()
+                .unwrap()
+                .map(|commit_ref| commit_ref.index)
+                .unwrap_or(0)
+        } else {
+            last_commit_index
+        };
 
         // To avoid scanning too many commits at once and load in memory,
         // we limit the batch size to 250 and iterate over.
         const COMMIT_RECOVERY_BATCH_SIZE: u32 = if cfg!(test) { 3 } else { 250 };
 
-        let mut last_sent_commit_index = last_processed_commit_index;
+        let mut last_sent_commit_index = replay_after_commit_index;
 
         // Make sure that there is no pending commits to be written to the store.
         self.dag_state.read().ensure_commits_to_write_is_empty();
 
-        for start_index in (last_processed_commit_index + 1..=last_commit_index)
+        for start_index in (replay_after_commit_index + 1..=last_commit_index)
             .step_by(COMMIT_RECOVERY_BATCH_SIZE as usize)
         {
             let end_index = start_index
@@ -182,11 +192,12 @@ impl CommitObserver {
                 .store
                 .scan_commits((start_index..=end_index).into())
                 .expect("Scanning commits should not fail");
-
-            // If there are no unsent commits, then break, there is nothing more to recover.
-            if unsent_commits.is_empty() {
-                break;
-            }
+            assert_eq!(
+                unsent_commits.len() as u32,
+                end_index.checked_sub(start_index).unwrap() + 1,
+                "Gap in scanned commits: start index: {start_index}, end index: {end_index}, commits: {:?}",
+                unsent_commits,
+            );
 
             // Buffered unsent commits in DAG state which is required to contain them when they are flushed
             // by CommitFinalizer.
@@ -219,14 +230,14 @@ impl CommitObserver {
                     vec![]
                 };
 
-                let committed_sub_dag = load_committed_subdag_from_store(
+                let mut committed_sub_dag = load_committed_subdag_from_store(
                     self.store.as_ref(),
                     commit,
                     reputation_scores,
                 );
-                // committed_sub_dag has the `local` field set to true, and will be treated as from
-                // local committer. This is fine even if the commit is originally from commit sync,
-                // because only finalized commits are persisted and can be recovered.
+                // Do not assume the commit has finalization blocks locally, when it has not been finalized before.
+                committed_sub_dag.local_dag_has_finalization_blocks =
+                    committed_sub_dag.commit_ref.index <= last_finalized_commit_index;
                 self.commit_finalizer_handle
                     .send(committed_sub_dag)
                     .unwrap();
@@ -239,11 +250,6 @@ impl CommitObserver {
 
                 tokio::task::yield_now().await;
             }
-
-            // If we have reached the last commit, then break, there is nothing more to recover.
-            if end_index == last_commit_index {
-                break;
-            }
         }
 
         assert_eq!(
@@ -253,7 +259,9 @@ impl CommitObserver {
         );
 
         info!(
-            "Commit observer recovery completed, took {:?}",
+            "Commit observer recovery [{}..={}] completed, took {:?}",
+            replay_after_commit_index + 1,
+            last_commit_index,
             now.elapsed()
         );
     }
@@ -310,7 +318,7 @@ mod tests {
     use super::*;
     use crate::{
         context::Context, dag_state::DagState, linearizer::median_timestamp_by_stake,
-        storage::mem_store::MemStore, test_dag_builder::DagBuilder,
+        storage::mem_store::MemStore, test_dag_builder::DagBuilder, CommitIndex,
     };
 
     #[rstest]
@@ -330,7 +338,7 @@ mod tests {
         )));
         let last_processed_commit_index = 0;
         let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-            CommitConsumer::new(last_processed_commit_index);
+            CommitConsumerArgs::new(0, last_processed_commit_index);
         let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
@@ -481,7 +489,7 @@ mod tests {
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let last_processed_commit_index = 0;
         let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-            CommitConsumer::new(last_processed_commit_index);
+            CommitConsumerArgs::new(0, last_processed_commit_index);
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
@@ -559,6 +567,7 @@ mod tests {
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
+            assert!(subdag.local_dag_has_finalization_blocks);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_sent_index {
@@ -575,130 +584,169 @@ mod tests {
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
         assert_eq!(last_commit.index(), expected_last_sent_index as CommitIndex);
 
-        // Re-create commit observer starting from index 2 which represents the
-        // last processed index from the consumer over consensus output channel
-        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-            CommitConsumer::new(expected_last_processed_index as CommitIndex);
-        let _observer = CommitObserver::new(
-            context.clone(),
-            commit_consumer,
-            dag_state.clone(),
-            transaction_certifier.clone(),
-            leader_schedule,
-        )
-        .await;
+        // Replay commits after index 2. And use last processed index by consumer at 10, which is the last persisted commit.
+        {
+            let replay_after_commit_index = 2;
+            let consumer_last_processed_commit_index = 10;
+            let dag_state = Arc::new(RwLock::new(DagState::new(
+                context.clone(),
+                mem_store.clone(),
+            )));
+            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+                CommitConsumerArgs::new(
+                    replay_after_commit_index,
+                    consumer_last_processed_commit_index,
+                );
+            let _observer = CommitObserver::new(
+                context.clone(),
+                commit_consumer,
+                dag_state.clone(),
+                transaction_certifier.clone(),
+                leader_schedule.clone(),
+            )
+            .await;
 
-        // Check commits sent over consensus output channel is accurate starting
-        // from last processed index of 2 and finishing at last sent index of 3.
-        processed_subdag_index = expected_last_processed_index;
-        while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
-            tracing::info!("Processed {subdag} on resubmission");
-            assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_ref.index as usize;
-            if processed_subdag_index == expected_last_sent_index {
-                break;
+            let mut processed_subdag_index = replay_after_commit_index;
+            while let Ok(Some(subdag)) =
+                timeout(Duration::from_secs(1), commit_receiver.recv()).await
+            {
+                tracing::info!("Processed {subdag} on resubmission");
+                assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
+                assert_eq!(subdag, commits[processed_subdag_index as usize]);
+                assert!(subdag.local_dag_has_finalization_blocks);
+                assert_eq!(subdag.reputation_scores_desc, vec![]);
+                processed_subdag_index = subdag.commit_ref.index;
+                if processed_subdag_index == consumer_last_processed_commit_index {
+                    break;
+                }
             }
+            assert_eq!(processed_subdag_index, consumer_last_processed_commit_index);
+
+            verify_channel_empty(&mut commit_receiver).await;
         }
-        assert_eq!(processed_subdag_index, expected_last_sent_index);
 
-        verify_channel_empty(&mut commit_receiver).await;
-    }
+        // Replay commits from index 10, which is the last persisted commit.
+        {
+            let replay_after_commit_index = 10;
+            let consumer_last_processed_commit_index = 10;
+            let dag_state = Arc::new(RwLock::new(DagState::new(
+                context.clone(),
+                mem_store.clone(),
+            )));
+            // Re-create commit observer starting after index 10 which represents the
+            // last processed index from the consumer over consensus output channel
+            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+                CommitConsumerArgs::new(
+                    replay_after_commit_index,
+                    consumer_last_processed_commit_index,
+                );
+            let _observer = CommitObserver::new(
+                context.clone(),
+                commit_consumer,
+                dag_state.clone(),
+                transaction_certifier.clone(),
+                leader_schedule.clone(),
+            )
+            .await;
 
-    #[tokio::test]
-    async fn test_send_no_missing_commits() {
-        telemetry_subscribers::init_for_testing();
-        let num_authorities = 4;
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
-        let mem_store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            mem_store.clone(),
-        )));
-        let last_processed_commit_index = 0;
-        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-            CommitConsumer::new(last_processed_commit_index);
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
+            // No commits should be resubmitted as consensus store's last commit index
+            // is equal to replay after index by consumer
+            verify_channel_empty(&mut commit_receiver).await;
+        }
 
-        let mut observer = CommitObserver::new(
-            context.clone(),
-            commit_consumer,
-            dag_state.clone(),
-            transaction_certifier.clone(),
-            leader_schedule.clone(),
-        )
-        .await;
+        // Replay commits after index 2. And use last processed index by consumer at 4, less than the last persisted commit.
+        {
+            let replay_after_commit_index = 2;
+            let consumer_last_processed_commit_index = 4;
+            let dag_state = Arc::new(RwLock::new(DagState::new(
+                context.clone(),
+                mem_store.clone(),
+            )));
+            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+                CommitConsumerArgs::new(
+                    replay_after_commit_index,
+                    consumer_last_processed_commit_index,
+                );
+            let _observer = CommitObserver::new(
+                context.clone(),
+                commit_consumer,
+                dag_state.clone(),
+                transaction_certifier.clone(),
+                leader_schedule.clone(),
+            )
+            .await;
 
-        // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
-        let num_rounds = 10;
-        let mut builder = DagBuilder::new(context.clone());
-        builder
-            .layers(1..=num_rounds)
-            .build()
-            .persist_layers(dag_state.clone());
-        transaction_certifier.add_voted_blocks(
-            builder
-                .all_blocks()
-                .iter()
-                .map(|b| (b.clone(), vec![]))
-                .collect(),
-        );
-
-        let leaders = builder
-            .leader_blocks(1..=num_rounds)
-            .into_iter()
-            .map(Option::unwrap)
-            .collect::<Vec<_>>();
-
-        // Commit all of the leaders and "receive" the subdags as the consumer of
-        // the consensus output channel.
-        let expected_last_processed_index: usize = 10;
-        let commits = observer.handle_commit(leaders.clone(), true).unwrap();
-
-        // Check commits sent over consensus output channel is accurate
-        let mut processed_subdag_index = 0;
-        while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
-            tracing::info!("Processed {subdag}");
-            assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores_desc, vec![]);
-            processed_subdag_index = subdag.commit_ref.index as usize;
-            if processed_subdag_index == expected_last_processed_index {
-                break;
+            // Checks that commits up to expected_last_sent_index are recovered as finalized.
+            // The fact that they are finalized and have been recorded in the store.
+            let mut processed_subdag_index = replay_after_commit_index;
+            while let Ok(Some(subdag)) =
+                timeout(Duration::from_secs(1), commit_receiver.recv()).await
+            {
+                tracing::info!("Processed {subdag} on resubmission");
+                assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
+                assert!(subdag.local_dag_has_finalization_blocks);
+                assert_eq!(subdag.reputation_scores_desc, vec![]);
+                processed_subdag_index = subdag.commit_ref.index;
+                if processed_subdag_index == expected_last_sent_index as CommitIndex {
+                    break;
+                }
             }
+            assert_eq!(
+                processed_subdag_index,
+                expected_last_sent_index as CommitIndex
+            );
+
+            verify_channel_empty(&mut commit_receiver).await;
         }
-        assert_eq!(processed_subdag_index, expected_last_processed_index);
 
-        verify_channel_empty(&mut commit_receiver).await;
+        // Replay commits after index 2. And use last processed index by consumer at 20,
+        // which is greater than the last persisted commit.
+        // This allows removing from the store a suffix of commits which have not been part of certified checkpoints.
+        {
+            let replay_after_commit_index = 2;
+            let consumer_last_processed_commit_index = 20;
+            let dag_state = Arc::new(RwLock::new(DagState::new(
+                context.clone(),
+                mem_store.clone(),
+            )));
+            let (commit_consumer, mut commit_receiver, _transaction_receiver) =
+                CommitConsumerArgs::new(
+                    replay_after_commit_index,
+                    consumer_last_processed_commit_index,
+                );
+            let _observer = CommitObserver::new(
+                context.clone(),
+                commit_consumer,
+                dag_state.clone(),
+                transaction_certifier.clone(),
+                leader_schedule.clone(),
+            )
+            .await;
 
-        // Check last stored commit is correct
-        let last_commit = mem_store.read_last_commit().unwrap().unwrap();
-        assert_eq!(
-            last_commit.index(),
-            expected_last_processed_index as CommitIndex
-        );
+            // Check commits sent over consensus output channel is accurate starting
+            // from last processed index of 2 and finishing at last sent index of 10.
+            let mut processed_subdag_index = replay_after_commit_index;
+            while let Ok(Some(subdag)) =
+                timeout(Duration::from_secs(1), commit_receiver.recv()).await
+            {
+                tracing::info!("Processed {subdag} on resubmission");
+                assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
+                assert_eq!(subdag, commits[processed_subdag_index as usize]);
+                assert!(subdag.local_dag_has_finalization_blocks);
+                assert_eq!(subdag.reputation_scores_desc, vec![]);
+                processed_subdag_index = subdag.commit_ref.index;
+                if processed_subdag_index == expected_last_sent_index as CommitIndex {
+                    break;
+                }
+            }
+            assert_eq!(
+                processed_subdag_index,
+                expected_last_sent_index as CommitIndex
+            );
+            assert_eq!(10, expected_last_sent_index);
 
-        // Re-create commit observer starting from index 3 which represents the
-        // last processed index from the consumer over consensus output channel
-        let (commit_consumer, mut commit_receiver, _transaction_receiver) =
-            CommitConsumer::new(expected_last_processed_index as CommitIndex);
-        let _observer = CommitObserver::new(
-            context.clone(),
-            commit_consumer,
-            dag_state.clone(),
-            transaction_certifier.clone(),
-            leader_schedule,
-        )
-        .await;
-
-        // No commits should be resubmitted as consensus store's last commit index
-        // is equal to last processed index by consumer
-        verify_channel_empty(&mut commit_receiver).await;
+            verify_channel_empty(&mut commit_receiver).await;
+        }
     }
 
     /// After receiving all expected subdags, ensure channel is empty

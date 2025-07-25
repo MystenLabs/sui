@@ -106,7 +106,7 @@ impl ConsensusTxStatusCache {
         };
 
         // All code paths leading to here should have set the status.
-        debug!("Transaction status is set for {:?}: {:?}", pos, status);
+        debug!("Transaction status is set for {}: {:?}", pos, status);
         self.status_notify_read.notify(&pos, &status);
     }
 

@@ -9,7 +9,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockDigest, BlockRef, Round};
+use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use sui_macros::fail_point;
 use typed_store::{
     metrics::SamplingInterval,
@@ -40,6 +40,9 @@ pub struct RocksDBStore {
     commit_votes: DBMap<(CommitIndex, CommitDigest, BlockRef), ()>,
     /// Stores info related to Commit that helps recovery.
     commit_info: DBMap<(CommitIndex, CommitDigest), CommitInfo>,
+    /// Maps finalized commits to the transactions rejected in the commit.
+    finalized_commits:
+        DBMap<(CommitIndex, CommitDigest), BTreeMap<BlockRef, Vec<TransactionIndex>>>,
 }
 
 impl RocksDBStore {
@@ -48,6 +51,7 @@ impl RocksDBStore {
     const COMMITS_CF: &'static str = "commits";
     const COMMIT_VOTES_CF: &'static str = "commit_votes";
     const COMMIT_INFO_CF: &'static str = "commit_info";
+    const FINALIZED_COMMITS_CF: &'static str = "finalized_commits";
 
     /// Creates a new instance of RocksDB storage.
     #[cfg(not(tidehunter))]
@@ -73,6 +77,7 @@ impl RocksDBStore {
             (Self::COMMITS_CF.to_string(), cf_options.clone()),
             (Self::COMMIT_VOTES_CF.to_string(), cf_options.clone()),
             (Self::COMMIT_INFO_CF.to_string(), cf_options.clone()),
+            (Self::FINALIZED_COMMITS_CF.to_string(), cf_options.clone()),
         ]));
         Self::open_tables_read_write(
             path.into(),
@@ -127,6 +132,10 @@ impl RocksDBStore {
             ),
             (
                 Self::COMMIT_INFO_CF.to_string(),
+                ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
+            ),
+            (
+                Self::FINALIZED_COMMITS_CF.to_string(),
                 ThConfig::new_with_indexing(index_digest_key.clone(), MUTEXES, u32_prefix.clone()),
             ),
         ];
@@ -185,6 +194,15 @@ impl Store for RocksDBStore {
                 .insert_batch(
                     &self.commit_info,
                     [((commit_ref.index, commit_ref.digest), commit_info)],
+                )
+                .map_err(ConsensusError::RocksDBFailure)?;
+        }
+
+        for (commit_ref, rejected_transactions) in write_batch.finalized_commits {
+            batch
+                .insert_batch(
+                    &self.finalized_commits,
+                    [((commit_ref.index, commit_ref.digest), rejected_transactions)],
                 )
                 .map_err(ConsensusError::RocksDBFailure)?;
         }
@@ -337,5 +355,33 @@ impl Store for RocksDBStore {
         };
         let (key, commit_info) = result.map_err(ConsensusError::RocksDBFailure)?;
         Ok(Some((CommitRef::new(key.0, key.1), commit_info)))
+    }
+
+    fn read_last_finalized_commit(&self) -> ConsensusResult<Option<CommitRef>> {
+        let Some(result) = self
+            .finalized_commits
+            .reversed_safe_iter_with_bounds(None, None)?
+            .next()
+        else {
+            return Ok(None);
+        };
+        let ((index, digest), _) = result.map_err(ConsensusError::RocksDBFailure)?;
+        Ok(Some(CommitRef::new(index, digest)))
+    }
+
+    fn scan_finalized_commits(
+        &self,
+        range: CommitRange,
+    ) -> ConsensusResult<Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>> {
+        let mut finalized_commits = vec![];
+        for result in self.finalized_commits.safe_range_iter((
+            Included((range.start(), CommitDigest::MIN)),
+            Included((range.end(), CommitDigest::MAX)),
+        )) {
+            let ((index, digest), rejected_transactions) =
+                result.map_err(ConsensusError::RocksDBFailure)?;
+            finalized_commits.push((CommitRef::new(index, digest), rejected_transactions));
+        }
+        Ok(finalized_commits)
     }
 }

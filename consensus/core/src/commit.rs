@@ -358,9 +358,12 @@ pub struct CommittedSubDag {
 
     /// Set by CommitObserver.
     ///
-    /// Whether the commit is produced from local DAG, or received through commit sync.
-    /// In the 2nd case, this commit may not have blocks in the local DAG to finalize it.
-    pub local: bool,
+    /// Whether the local DAG has the blocks to commit the leader.
+    /// This must be true when the commit is produced from local DAG,
+    /// and is false when the commit is received through commit sync.
+    /// When this is false, CommitFinalizer will not assume there are enough blocks
+    /// to optimistically finalize transactions in the commit.
+    pub local_dag_has_finalization_blocks: bool,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
@@ -384,7 +387,7 @@ impl CommittedSubDag {
             blocks,
             timestamp_ms,
             commit_ref,
-            local: true,
+            local_dag_has_finalization_blocks: true,
             reputation_scores_desc: vec![],
             rejected_transactions_by_block: BTreeMap::new(),
         }
@@ -431,7 +434,7 @@ impl fmt::Debug for CommittedSubDag {
 }
 
 // Recovers the full CommittedSubDag from block store, based on Commit.
-pub fn load_committed_subdag_from_store(
+pub(crate) fn load_committed_subdag_from_store(
     store: &dyn Store,
     commit: TrustedCommit,
     reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
