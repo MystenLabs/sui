@@ -34,7 +34,7 @@ use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map},
     sync::Arc,
 };
 
@@ -640,10 +640,10 @@ pub fn build_member_map(
         // Apply error checking for duplicate names (functions and constants are shadowed by datatypes)
         let mut checked_members = BTreeMap::new();
         for (name, member) in members {
-            if checked_members.contains_key(&name) {
-                assert!(env.has_errors());
+            if let btree_map::Entry::Vacant(e) = checked_members.entry(name) {
+                e.insert(member);
             } else {
-                checked_members.insert(name, member);
+                assert!(env.has_errors());
             }
         }
         assert!(all_members.insert(mident, checked_members).is_none());
