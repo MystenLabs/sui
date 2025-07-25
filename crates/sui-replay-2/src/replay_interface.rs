@@ -13,6 +13,7 @@
 //!
 //! A `DataStore` with reasonable defaults is provided for convenience (`data_store.rs`).
 
+use sui_protocol_config::Chain;
 use sui_types::{
     base_types::ObjectID, effects::TransactionEffects, object::Object,
     supported_protocol_versions::ProtocolConfig, transaction::TransactionData,
@@ -39,6 +40,7 @@ pub struct EpochData {
     pub protocol_version: u64,
     pub rgp: u64,
     pub start_timestamp: u64,
+    pub chain: Chain,
 }
 
 /// An `EpochStore` retrieves the epoch data and protocol configuration
