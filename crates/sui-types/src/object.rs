@@ -1305,7 +1305,10 @@ mod tests {
         );
 
         let objref = format!("{:?}", o.compute_object_reference());
-        assert_eq!(objref, "(0x0000000000000000000000000000000000000000000000000000000000000000, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)");
+        assert_eq!(
+            objref,
+            "(0x0, SequenceNumber(1), o#59tZq65HVqZjUyNtD7BCGLTD87N5cpayYwEFrtwR4aMz)"
+        );
     }
 
     #[test]
