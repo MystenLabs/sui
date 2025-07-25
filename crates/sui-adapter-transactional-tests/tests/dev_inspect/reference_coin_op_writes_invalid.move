@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests valid writes of mut references using coin operations
+// tests invalid writes of mut references using coin operations
 
 //# init --addresses test=0x0 --accounts A
 
