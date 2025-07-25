@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use sui_macros::sim_test;
 use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
 use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
-use sui_rpc::proto::sui::rpc::v2beta2::coin_treasury::SupplyState;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     ExecutedTransaction, GetCoinInfoRequest, GetCoinInfoResponse,
 };
@@ -314,10 +314,7 @@ async fn test_regulated_coin_info() {
     assert!(ObjectID::from_str(treasury.id.as_ref().unwrap()).is_ok(),);
     assert_eq!(treasury.id.unwrap(), treasury_cap.to_string());
     assert_eq!(treasury.total_supply.unwrap(), 0);
-    assert_eq!(
-        treasury.supply_state,
-        Some(SupplyState::Unknown as i32),
-    );
+    assert_eq!(treasury.supply_state, Some(SupplyState::Unknown as i32),);
 
     assert!(response.regulated_metadata.is_some());
     let regulated = response.regulated_metadata.unwrap();
