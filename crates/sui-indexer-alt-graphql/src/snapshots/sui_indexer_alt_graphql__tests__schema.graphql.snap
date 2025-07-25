@@ -134,6 +134,10 @@ type ExecutionError {
 	The error code of the Move abort, populated if this transaction failed with a Move abort.
 	"""
 	abortCode: BigInt
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
 }
 
 """

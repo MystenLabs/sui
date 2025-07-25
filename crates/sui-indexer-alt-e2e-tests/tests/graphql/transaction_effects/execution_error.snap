@@ -72,7 +72,7 @@ task 13, line 94:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 14, lines 96-104:
+task 14, lines 96-105:
 //# run-graphql
 Response: {
   "data": {
@@ -82,65 +82,75 @@ Response: {
   }
 }
 
-task 15, lines 106-120:
+task 15, lines 107-123:
 //# run-graphql
 Response: {
   "data": {
     "abort42": {
       "executionError": {
-        "abortCode": "42"
+        "abortCode": "42",
+        "sourceLineNumber": null
       }
     },
     "abort255": {
       "executionError": {
-        "abortCode": "255"
+        "abortCode": "255",
+        "sourceLineNumber": null
       }
     }
   }
 }
 
-task 16, lines 122-172:
+task 16, lines 125-183:
 //# run-graphql
 Response: {
   "data": {
     "cleverU8": {
       "executionError": {
-        "abortCode": "13906834320372269057"
+        "abortCode": "13906834320372269057",
+        "sourceLineNumber": 34
       }
     },
     "cleverU16": {
       "executionError": {
-        "abortCode": "13906834333257302019"
+        "abortCode": "13906834333257302019",
+        "sourceLineNumber": 37
       }
     },
     "cleverU64": {
       "executionError": {
-        "abortCode": "13906834346142334981"
+        "abortCode": "13906834346142334981",
+        "sourceLineNumber": 40
       }
     },
     "cleverAddress": {
       "executionError": {
-        "abortCode": "13906834359027367943"
+        "abortCode": "13906834359027367943",
+        "sourceLineNumber": 43
       }
     },
     "cleverString": {
       "executionError": {
-        "abortCode": "13906834371912400905"
+        "abortCode": "13906834371912400905",
+        "sourceLineNumber": 46
       }
     },
     "cleverWithCode": {
       "executionError": {
-        "abortCode": "15"
+        "abortCode": "15",
+        "sourceLineNumber": 49
       }
     },
     "assertFailure": {
       "executionError": {
-        "abortCode": "13906834401976647679"
+        "abortCode": "13906834401976647679",
+        "sourceLineNumber": 52
       }
     },
     "nonExistentFunction": {
       "executionError": {
-        "abortCode": null
+        "abortCode": null,
+        "sourceLineNumber": null
       }
     }
   }
