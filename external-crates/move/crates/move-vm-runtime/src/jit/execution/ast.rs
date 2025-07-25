@@ -141,7 +141,7 @@ pub struct Function {
     pub(crate) return_: ArenaVec<ArenaType>,
     pub(crate) type_parameters: ArenaVec<AbilitySet>,
     // TODO(vm-rewrite): This field probably leaks
-    pub native: Option<NativeFunction>,
+    pub native: PartialVMResult<NativeFunction>,
     pub def_is_native: bool,
     pub name: VirtualTableKey,
     pub locals_len: usize,
@@ -890,7 +890,7 @@ impl Function {
         if cfg!(feature = "lazy_natives") {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
             // checking those at module loading time.
-            self.native.as_deref().ok_or_else(|| {
+            self.native.as_deref().map_err(|_| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
                     "Missing Native Function `{}`",
                     self.name.member_name().unwrap()
@@ -898,7 +898,7 @@ impl Function {
             })
         } else {
             // Otherwise this error should not happen, hence UNREACHABLE
-            self.native.as_deref().ok_or_else(|| {
+            self.native.as_deref().map_err(|_| {
                 PartialVMError::new(StatusCode::UNREACHABLE)
                     .with_message("Missing Native Function".to_string())
             })

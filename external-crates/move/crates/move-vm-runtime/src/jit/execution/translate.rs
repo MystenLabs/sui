@@ -924,7 +924,12 @@ fn alloc_function(
             true,
         )
     } else {
-        (None, false)
+        (
+            Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )),
+            false,
+        )
     };
     let name = {
         let module_name = *module_name;
