@@ -51,6 +51,10 @@ fragment E on Epoch {
   netInflow
   fundInflow
   fundOutflow
+  storageFund {
+    totalObjectStorageRebates
+    nonRefundableBalance
+  }
 }
 
 //# run-graphql
@@ -92,4 +96,8 @@ fragment E on Epoch {
   netInflow
   fundInflow
   fundOutflow
+  storageFund {
+    totalObjectStorageRebates
+    nonRefundableBalance
+  }
 }

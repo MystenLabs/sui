@@ -173,6 +173,11 @@ type Epoch {
 	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
 	"""
 	fundOutflow: BigInt
+	"""
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	This is also used for storage rebates.
+	"""
+	storageFund: StorageFund
 }
 
 """
@@ -849,6 +854,21 @@ type ServiceConfig {
 	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
 	"""
 	maxMoveValueDepth: Int
+}
+
+"""
+SUI set aside to account for objects stored on-chain.
+"""
+type StorageFund {
+	"""
+	Sum of storage rebates of live objects on chain.
+	"""
+	totalObjectStorageRebates: BigInt
+	"""
+	The portion of the storage fund that will never be refunded through storage rebates.
+	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
+	"""
+	nonRefundableBalance: BigInt
 }
 
 
