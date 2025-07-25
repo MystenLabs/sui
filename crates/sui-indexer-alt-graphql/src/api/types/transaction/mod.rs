@@ -22,6 +22,7 @@ use crate::{
     error::RpcError,
     pagination::Page,
     scope::Scope,
+    task::watermark::Watermarks,
 };
 
 use super::{
@@ -186,13 +187,24 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         }
 
-        let mut tx_digest_keys = match filter.checkpoint_bounds(scope.checkpoint_viewed_at()) {
-            // Determine tx_sequence_numbers if we have checkpoint bounds.
-            Some(cp_bounds) => {
-                Self::tx_sequence_numbers_by_checkpoint(ctx, cp_bounds, &page).await?
-            }
-            None => return Ok(Connection::new(false, false)),
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+
+        // TODO: Is this a valid way to access the lowest cp available? What is the behavior when we prune while we are paginating?
+        let Some(global_cp_lo) = watermarks
+            .low_watermark()
+            .map(|watermark| watermark.checkpoint())
+        else {
+            return Ok(Connection::new(false, false));
         };
+
+        let mut tx_digest_keys =
+            match filter.checkpoint_bounds(scope.checkpoint_viewed_at(), global_cp_lo) {
+                // Determine tx_sequence_numbers if we have checkpoint bounds.
+                Some(cp_bounds) => {
+                    Self::tx_sequence_numbers_by_checkpoint(ctx, cp_bounds, &page).await?
+                }
+                None => return Ok(Connection::new(false, false)),
+            };
 
         // Undo any sorting that was applied to the results for consistency.
         if !page.is_from_front() {
@@ -241,6 +253,8 @@ impl Transaction {
 
         let tx_lo = transaction_bounds.lo();
         let tx_hi = transaction_bounds.hi();
+
+        // Inclusive cursor bounds
         let pg_lo = page.after().map_or(tx_lo, |sq| sq.max(tx_lo));
         let pg_hi = page
             .before()

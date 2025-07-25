@@ -41,13 +41,15 @@ impl TransactionFilter {
     pub(crate) fn checkpoint_bounds(
         &self,
         checkpoint_viewed_at: u64,
+        global_cp_lo: u64,
     ) -> Option<RangeInclusive<u64>> {
         let cp_after = self.after_checkpoint.map(u64::from);
         let cp_at = self.at_checkpoint.map(u64::from);
         let cp_before = self.before_checkpoint.map(u64::from);
 
         // Calculate the lower bound checkpoint
-        let cp_lo = max_option([cp_after.map(|x| x.saturating_add(1)), cp_at])?;
+        let cp_lo =
+            max_option([cp_after.map(|x| x.saturating_add(1)), cp_at]).unwrap_or(global_cp_lo);
 
         // Handle the before_checkpoint filter
         let cp_before_exclusive = match cp_before {
