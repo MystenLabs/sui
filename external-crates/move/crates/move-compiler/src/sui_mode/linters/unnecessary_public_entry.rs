@@ -40,7 +40,7 @@ simple_visitor!(
                 PUBLIC_ENTRY_DIAG,
                 (
                     fdef.entry.unwrap(),
-                    "`entry` on `public` functions limits composability as it adds additional restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios."
+                    "`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios."
                 )
             );
 
