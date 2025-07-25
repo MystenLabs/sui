@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-78:
+task 6, lines 16-76:
 //# run-graphql
 Response: {
   "data": {
@@ -52,15 +52,6 @@ Response: {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
       },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
       "systemStateVersion": 2,
       "systemParameters": {
         "durationMs": "86400000",
@@ -71,6 +62,13 @@ Response: {
         "validatorLowStakeThreshold": "20000000000000000",
         "validatorVeryLowStakeThreshold": "15000000000000000",
         "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e0": {
@@ -103,15 +101,6 @@ Response: {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
       },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
       "systemStateVersion": 1,
       "systemParameters": {
         "durationMs": "86400000",
@@ -122,6 +111,13 @@ Response: {
         "validatorLowStakeThreshold": "20000000000000000",
         "validatorVeryLowStakeThreshold": "15000000000000000",
         "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e1": {
@@ -154,15 +150,6 @@ Response: {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
       },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
       "systemStateVersion": 2,
       "systemParameters": {
         "durationMs": "86400000",
@@ -173,6 +160,13 @@ Response: {
         "validatorLowStakeThreshold": "20000000000000000",
         "validatorVeryLowStakeThreshold": "15000000000000000",
         "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e2": {
@@ -205,15 +199,6 @@ Response: {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
       },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
       "systemStateVersion": 2,
       "systemParameters": {
         "durationMs": "86400000",
@@ -224,13 +209,20 @@ Response: {
         "validatorLowStakeThreshold": "20000000000000000",
         "validatorVeryLowStakeThreshold": "15000000000000000",
         "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e3": null
   }
 }
 
-task 7, lines 80-143:
+task 7, lines 78-139:
 //# run-graphql
 Response: {
   "data": {
@@ -266,15 +258,6 @@ Response: {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
           },
-          "safeMode": {
-            "enabled": false,
-            "gasSummary": {
-              "computationCost": 0,
-              "storageCost": 0,
-              "storageRebate": 0,
-              "nonRefundableStorageFee": 0
-            }
-          },
           "systemStateVersion": 2,
           "systemParameters": {
             "durationMs": "86400000",
@@ -285,6 +268,13 @@ Response: {
             "validatorLowStakeThreshold": "20000000000000000",
             "validatorVeryLowStakeThreshold": "15000000000000000",
             "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
           }
         },
         "e0": {
@@ -317,15 +307,6 @@ Response: {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
           },
-          "safeMode": {
-            "enabled": false,
-            "gasSummary": {
-              "computationCost": 0,
-              "storageCost": 0,
-              "storageRebate": 0,
-              "nonRefundableStorageFee": 0
-            }
-          },
           "systemStateVersion": 1,
           "systemParameters": {
             "durationMs": "86400000",
@@ -336,6 +317,13 @@ Response: {
             "validatorLowStakeThreshold": "20000000000000000",
             "validatorVeryLowStakeThreshold": "15000000000000000",
             "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
           }
         },
         "e1": {
@@ -368,15 +356,6 @@ Response: {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
           },
-          "safeMode": {
-            "enabled": false,
-            "gasSummary": {
-              "computationCost": 0,
-              "storageCost": 0,
-              "storageRebate": 0,
-              "nonRefundableStorageFee": 0
-            }
-          },
           "systemStateVersion": 2,
           "systemParameters": {
             "durationMs": "86400000",
@@ -387,6 +366,13 @@ Response: {
             "validatorLowStakeThreshold": "20000000000000000",
             "validatorVeryLowStakeThreshold": "15000000000000000",
             "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
           }
         },
         "e2": null

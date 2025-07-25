@@ -66,6 +66,13 @@ fragment E on Epoch {
     validatorVeryLowStakeThreshold
     validatorLowStakeGracePeriod
   }
+  systemStakeSubsidy {
+      balance
+      distributionCounter
+      currentDistributionAmount
+      periodLength
+      decreaseRate
+  }
 }
 
 //# run-graphql
@@ -121,5 +128,12 @@ fragment E on Epoch {
     validatorLowStakeThreshold
     validatorVeryLowStakeThreshold
     validatorLowStakeGracePeriod
+  }
+  systemStakeSubsidy {
+      balance
+      distributionCounter
+      currentDistributionAmount
+      periodLength
+      decreaseRate
   }
 }

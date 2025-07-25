@@ -6,6 +6,7 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
+use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
 use crate::api::types::storage_fund::StorageFund;
 use crate::api::types::system_parameters::{
     from_system_parameters_v1, from_system_parameters_v2, SystemParameters,
@@ -323,6 +324,27 @@ impl Epoch {
         };
 
         Ok(Some(system_parameters))
+    }
+
+    /// Parameters related to the subsidy that supplements staking rewards
+    async fn system_stake_subsidy(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<StakeSubsidy>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let stake_subsidy = match system_state {
+            SuiSystemState::V1(inner) => from_stake_subsidy_v1(inner.stake_subsidy),
+            SuiSystemState::V2(inner) => from_stake_subsidy_v1(inner.stake_subsidy),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(stake_subsidy))
     }
 }
 

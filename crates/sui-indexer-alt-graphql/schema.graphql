@@ -187,6 +187,10 @@ type Epoch {
 	Details of the system that are decided during genesis.
 	"""
 	systemParameters: SystemParameters
+	"""
+	Parameters related to the subsidy that supplements staking rewards
+	"""
+	systemStakeSubsidy: StakeSubsidy
 }
 
 """
@@ -863,6 +867,33 @@ type ServiceConfig {
 	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
 	"""
 	maxMoveValueDepth: Int
+}
+
+"""
+Parameters that control the distribution of the stake subsidy.
+"""
+type StakeSubsidy {
+	"""
+	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over time.
+	"""
+	balance: BigInt
+	"""
+	Number of times stake subsidies have been distributed.
+	Subsidies are distributed with other staking rewards, at the end of the epoch.
+	"""
+	distributionCounter: Int
+	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
+	currentDistributionAmount: BigInt
+	"""
+	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
+	"""
+	periodLength: Int
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
+	"""
+	decreaseRate: Int
 }
 
 """
