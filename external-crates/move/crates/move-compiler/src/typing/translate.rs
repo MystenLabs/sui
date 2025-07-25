@@ -124,6 +124,27 @@ fn extract_macros(
         macro_use_funs
     }
 
+    //
+    let mut macro_definitions: BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> =
+        BTreeMap::new();
+    modules.key_cloned_iter().for_each(|(mident, mdef)| {
+        let macro_functions =
+            UniqueMap::maybe_from_iter(mdef.functions.key_cloned_iter().filter_map(|(name, f)| {
+                if f.macro_.is_some() {
+                    Some((name, f.clone()))
+                } else {
+                    None
+                }
+            }))
+            .unwrap();
+        if !macro_functions.is_empty() {
+            macro_definitions
+                .entry(mident)
+                .or_insert_with(|| (mdef.use_funs.clone(), macro_functions));
+        }
+    });
+    compilation_env.save_macro_definitions(&macro_definitions);
+
     // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
     // should have already produced that error. To avoid unnecessary error handling, we simply
     // prefer the non-precompiled definitions.
@@ -142,22 +163,16 @@ fn extract_macros(
     };
 
     let all_macro_definitions = modules
-        .iter()
-        .map(|(loc, mident, mdef)| (sp(loc, *mident), &mdef.use_funs, &mdef.functions))
+        .key_cloned_iter()
+        .map(|(mident, mdef)| (mident, &mdef.use_funs, &mdef.functions))
         .chain(pre_compiled_macro_definitions());
 
-    let mut macro_definitions: BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> =
-        BTreeMap::new();
     let extracted_macros = UniqueMap::maybe_from_iter(all_macro_definitions.map(
         |(mident, mod_use_funs, functions)| {
-            let mut macro_functions = UniqueMap::new();
-            let macro_bodies = functions.ref_filter_map(|name, f| {
+            let macro_bodies = functions.ref_filter_map(|_, f| {
                 if f.macro_.is_none() {
                     return None;
                 }
-                let _macro_loc = f.macro_?;
-                // unwrap should never fail as we are iternating over another UniqueMap
-                macro_functions.add(name, f.clone()).unwrap();
                 if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
                     let use_funs = merge_use_funs(mod_use_funs, use_funs.clone());
                     Some((use_funs, body.clone()))
@@ -165,17 +180,11 @@ fn extract_macros(
                     None
                 }
             });
-            // even if there are no macro functions, create an entry to be saved
-            // in the precompiled modules
-            macro_definitions
-                .entry(mident)
-                .or_insert_with(|| (mod_use_funs.clone(), macro_functions));
             (mident, macro_bodies)
         },
     ))
     .unwrap();
 
-    compilation_env.save_macro_definitions(&macro_definitions);
     extracted_macros
 }
 

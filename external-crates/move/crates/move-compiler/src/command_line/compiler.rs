@@ -655,6 +655,18 @@ impl PreCompiledProgramInfo {
     pub fn module_info(&self, mident: &E::ModuleIdent) -> Option<&ModuleInfo> {
         self.0.get(mident).map(|info| &info.info)
     }
+
+    pub fn files(&self) -> MappedFiles {
+        let mut mapped_files = MappedFiles::empty();
+        for module_info in self.0.values() {
+            mapped_files.add(
+                module_info.info.defined_loc.file_hash(),
+                module_info.file_name,
+                module_info.file_content.clone(),
+            );
+        }
+        mapped_files
+    }
 }
 
 // Implement IntoIterator for references to PreCompiledProgramInfo
@@ -714,7 +726,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         Err((_pass, errors)) => Ok(Err((files, errors))),
         Ok(PassResult::Compilation(compiled, _)) => {
             let program_info = hook.take_typing_info();
-            let mut macro_infos = hook.take_macro_definitions();
+            let mut macro_definitions = hook.take_macro_definitions();
 
             let mut compiled_units_by_module = compiled
                 .into_iter()
@@ -731,7 +743,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                         return Err(anyhow::anyhow!("file name not found for module: {:?}", mod_ident));
                      };
 
-                     let macro_infos = macro_infos.remove(&mod_ident);
+                     let macro_definitions = macro_definitions.remove(&mod_ident);
 
                      let compiled_unit = compiled_units_by_module
                         .remove(&mod_ident)
@@ -742,7 +754,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
                          Arc::new(PreCompiledModuleInfo {
                              file_name,
                              file_content,
-                             macro_definitions: macro_infos,
+                             macro_definitions,
                              info: typing_module_info.clone(),
                              compiled_unit,
                          }),
