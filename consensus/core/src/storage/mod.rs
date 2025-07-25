@@ -8,8 +8,10 @@ pub mod rocksdb_store;
 #[cfg(test)]
 mod store_tests;
 
+use std::collections::BTreeMap;
+
 use consensus_config::AuthorityIndex;
-use consensus_types::block::{BlockRef, Round};
+use consensus_types::block::{BlockRef, Round, TransactionIndex};
 
 use crate::{
     block::VerifiedBlock,
@@ -57,6 +59,15 @@ pub trait Store: Send + Sync {
 
     /// Reads the last commit info, written atomically with the last commit.
     fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>>;
+
+    /// Reads the last finalized commit.
+    fn read_last_finalized_commit(&self) -> ConsensusResult<Option<CommitRef>>;
+
+    // Scans finalized commits with their rejected transactions.
+    fn scan_finalized_commits(
+        &self,
+        range: CommitRange,
+    ) -> ConsensusResult<Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>>;
 }
 
 /// Represents data to be written to the store together atomically.
@@ -65,6 +76,7 @@ pub struct WriteBatch {
     pub blocks: Vec<VerifiedBlock>,
     pub commits: Vec<TrustedCommit>,
     pub commit_info: Vec<(CommitRef, CommitInfo)>,
+    pub finalized_commits: Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>,
 }
 
 impl WriteBatch {
@@ -72,11 +84,13 @@ impl WriteBatch {
         blocks: Vec<VerifiedBlock>,
         commits: Vec<TrustedCommit>,
         commit_info: Vec<(CommitRef, CommitInfo)>,
+        finalized_commits: Vec<(CommitRef, BTreeMap<BlockRef, Vec<TransactionIndex>>)>,
     ) -> Self {
         WriteBatch {
             blocks,
             commits,
             commit_info,
+            finalized_commits,
         }
     }
 

@@ -116,11 +116,21 @@ impl CommitFinalizer {
                 vec![committed_sub_dag]
             };
             if !finalized_commits.is_empty() {
+                let mut dag_state = self.dag_state.write();
+                if self.context.protocol_config.mysticeti_fastpath() {
+                    // Records commits that have been finalized and their rejected transactions.
+                    for commit in &finalized_commits {
+                        dag_state.add_finalized_commit(
+                            commit.commit_ref,
+                            commit.rejected_transactions_by_block.clone(),
+                        );
+                    }
+                }
                 // Commits and committed blocks must be persisted to storage before sending them to Sui
                 // to execute their finalized transactions.
                 // Commit metadata and uncommitted blocks can be persisted more lazily because they are recoverable.
                 // But for simplicity, all unpersisted commits and blocks are flushed to storage.
-                self.dag_state.write().flush();
+                dag_state.flush();
             }
             for commit in finalized_commits {
                 if let Err(e) = self.commit_sender.send(commit) {

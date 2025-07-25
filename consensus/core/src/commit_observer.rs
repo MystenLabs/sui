@@ -161,6 +161,17 @@ impl CommitObserver {
             replay_after_commit_index + 1,
         );
 
+        // Retrieves the last finalized commit index for commit recovery.
+        let last_finalized_commit_index = if self.context.protocol_config.mysticeti_fastpath() {
+            self.store
+                .read_last_finalized_commit()
+                .unwrap()
+                .map(|commit_ref| commit_ref.index)
+                .unwrap_or(0)
+        } else {
+            last_commit_index
+        };
+
         // To avoid scanning too many commits at once and load in memory,
         // we limit the batch size to 250 and iterate over.
         const COMMIT_RECOVERY_BATCH_SIZE: u32 = if cfg!(test) { 3 } else { 250 };
@@ -224,12 +235,9 @@ impl CommitObserver {
                     commit,
                     reputation_scores,
                 );
-                // Do not assume the commit has finalization info locally, when it has not been finalized before.
-                if committed_sub_dag.commit_ref.index
-                    > commit_consumer.consumer_last_processed_commit_index
-                {
-                    committed_sub_dag.local_dag_has_finalization_blocks = false;
-                }
+                // Do not assume the commit has finalization blocks locally, when it has not been finalized before.
+                committed_sub_dag.local_dag_has_finalization_blocks =
+                    committed_sub_dag.commit_ref.index <= last_finalized_commit_index;
                 self.commit_finalizer_handle
                     .send(committed_sub_dag)
                     .unwrap();
@@ -241,11 +249,6 @@ impl CommitObserver {
                     .set(last_sent_commit_index as i64);
 
                 tokio::task::yield_now().await;
-            }
-
-            // If we have reached the last commit, then break, there is nothing more to recover.
-            if end_index == last_commit_index {
-                break;
             }
         }
 
@@ -673,29 +676,24 @@ mod tests {
             )
             .await;
 
-            // Checks that commits up to index 7 are recovered. Later commits cannot be finalized yet.
-            // The INDIRECT_REJECT_DEPTH is 3 rounds, and there is one commit in each round.
-            let expected_last_recovered_index = expected_last_sent_index - 3;
+            // Checks that commits up to expected_last_sent_index are recovered as finalized.
+            // The fact that they are finalized and have been recorded in the store.
             let mut processed_subdag_index = replay_after_commit_index;
             while let Ok(Some(subdag)) =
                 timeout(Duration::from_secs(1), commit_receiver.recv()).await
             {
                 tracing::info!("Processed {subdag} on resubmission");
                 assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
-                if subdag.commit_ref.index <= consumer_last_processed_commit_index {
-                    assert!(subdag.local_dag_has_finalization_blocks);
-                } else {
-                    assert!(!subdag.local_dag_has_finalization_blocks);
-                }
+                assert!(subdag.local_dag_has_finalization_blocks);
                 assert_eq!(subdag.reputation_scores_desc, vec![]);
                 processed_subdag_index = subdag.commit_ref.index;
-                if processed_subdag_index == expected_last_recovered_index as CommitIndex {
+                if processed_subdag_index == expected_last_sent_index as CommitIndex {
                     break;
                 }
             }
             assert_eq!(
                 processed_subdag_index,
-                expected_last_recovered_index as CommitIndex
+                expected_last_sent_index as CommitIndex
             );
 
             verify_channel_empty(&mut commit_receiver).await;
