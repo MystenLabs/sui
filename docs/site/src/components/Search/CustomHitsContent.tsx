@@ -80,7 +80,7 @@ export default function CustomHitsContent({ name }) {
                     {isInternal ? (
                       <button
                         onClick={() => history.push(new URL(hit.url).pathname)}
-                        className="text-base text-blue-600 underline text-left pb-2"
+                        className="text-base text-blue-600 underline text-left pb-2 bg-transparent border-0 pl-0"
                       >
                         {sectionTitle}
                       </button>
