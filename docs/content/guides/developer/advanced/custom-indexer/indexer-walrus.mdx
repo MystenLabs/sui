@@ -24,7 +24,7 @@ To support these features, you can use the custom indexer framework to build an 
 
 You can fulfill the remaining requirements with two tables. The `walrus_blob` table has checkpoint granularity, so if multiple modifications occur within a single checkpoint, the latest entry persists. On the other hand, the append-only `walrus_blob_historical` table records all modifications at version, and uses the lamport version of the transaction it was deleted with or wrapped in.
 
-When you delete metadata on chain, the `walrus_blob` table records this transaction by updating the existing entry’s `cp_sequence_number` value and setting `deleted = TRUE`. Conversly, the `walrus_blob_historical` table writes a new record with most of the fields set to `NULL`. These records serve as tombstone rows that the pruner deletes.
+When you delete metadata on chain, the `walrus_blob` table records this transaction by updating the existing entry’s `cp_sequence_number` value and setting `deleted = TRUE`. Conversely, the `walrus_blob_historical` table writes a new record with most of the fields set to `NULL`. These records serve as tombstone rows that the pruner deletes.
 
 Table and index creation looks like the following:
 
