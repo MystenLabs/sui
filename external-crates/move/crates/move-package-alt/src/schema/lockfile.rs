@@ -79,7 +79,7 @@ pub struct Pin {
 }
 
 /// A serialized pinned dependency in a lockfile
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum LockfileDependencyInfo {
     Local(LocalDepInfo),
@@ -88,9 +88,9 @@ pub enum LockfileDependencyInfo {
     Root(RootDepInfo),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RootDepInfo {
-    root: bool,
+    pub root: bool,
 }
 
 /// A serialized lockfile dependency of the form `{git = "...", rev = "...", subdir = "..."}`

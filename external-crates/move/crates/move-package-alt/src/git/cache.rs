@@ -44,7 +44,7 @@ pub struct GitCache {
 
 /// A subdirectory within a particular commit of a git repository. The files may or may not have
 /// been downloaded, but you can ensure that they have by calling `fetch()`
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct GitTree {
     /// Repository URL
     repo: String,
@@ -289,7 +289,7 @@ fn url_to_file_name(url: &str) -> String {
 }
 
 /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
-/// `repo` to a 40 commit SHA. This will make a remote call so network is required.
+/// `repo` to a 40-character commit SHA. This will make a remote call so network is required.
 async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
     if let Some(r) = rev {
         if let Ok(sha) = GitSha::try_from(r.to_string()) {

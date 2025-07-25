@@ -49,7 +49,6 @@ impl<F: MoveFlavor> Lockfiles<F> {
             ephemeral.insert(env.clone(), metadata);
         }
 
-        debug!("returning lockfiles");
         Ok(Some(Lockfiles {
             main,
             ephemeral,

@@ -166,10 +166,13 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         path: &PackagePath,
         env: &Environment,
     ) -> PackageResult<PackageGraph<F>> {
-        // TODO: this is wrong - it is ignoring `path`
         let graph = Arc::new(Mutex::new(DiGraph::new()));
-        let visited = Arc::new(Mutex::new(BTreeMap::new()));
         let root = Arc::new(Package::<F>::load_root(path, env).await?);
+
+        // TODO: should we add `root` to `visited`? we may have a problem if there is a cyclic
+        // dependency involving the root
+
+        let visited = Arc::new(Mutex::new(BTreeMap::new()));
 
         let root_idx = self
             .add_transitive_manifest_deps(root, env, graph.clone(), visited)
@@ -305,4 +308,9 @@ impl<F: MoveFlavor> PackageCache<F> {
             ))),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO: add a tests with a cyclic dependency involving the root
 }
