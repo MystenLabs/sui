@@ -25,7 +25,7 @@ use sui_types::{
 };
 use telemetry_subscribers::TracingHandle;
 use tokio::sync::oneshot;
-use tracing::info;
+use tracing::{error, info};
 
 // Example commands:
 //
@@ -528,10 +528,24 @@ async fn traffic_control(
 
 async fn clear_checkpoint_fork(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
     match state.node.checkpoint_store.clear_checkpoint_fork_detected() {
-        Ok(()) => (
-            StatusCode::OK,
-            "Checkpoint fork state cleared successfully. Node restart required to resume normal operation.\n".to_string(),
-        ),
+        Ok(()) => {
+            // Send notification to resume node startup
+            if let Err(e) = state.node.checkpoint_fork_cleared_notification.send(()) {
+                error!(
+                    "Failed to send checkpoint fork cleared notification: {:?}",
+                    e
+                );
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Fork cleared but failed to notify waiting processes".to_string(),
+                );
+            }
+
+            (
+                StatusCode::OK,
+                "Checkpoint fork state cleared successfully. Node startup will resume automatically.\n".to_string(),
+            )
+        }
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
 }
