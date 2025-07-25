@@ -109,8 +109,7 @@ fun test_split_and_transfer() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = balance::ENotEnough)]
+#[test, expected_failure(abort_code = balance::ENotEnough)]
 fun test_split_and_transfer_fail() {
     let mut scenario = test_scenario::begin(TEST_SENDER_ADDR);
     let ctx = scenario.ctx();
