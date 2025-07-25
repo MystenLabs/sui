@@ -23,6 +23,10 @@ module Test3::M1 {
     public fun f1() { 
         abort 0
     }
+
+    public fun f2() {
+        abort 0
+    }
 }
 
 //# run Test1::M1::f1
@@ -32,3 +36,5 @@ module Test3::M1 {
 
 // Location will show up as Test3::M1::f1 as the runtime module ID  is resolved to the upgraded version
 //# run Test3::M1::f1
+
+//# run Test3::M1::f2
