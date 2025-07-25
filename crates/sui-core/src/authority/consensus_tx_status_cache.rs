@@ -7,6 +7,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages_consensus::ConsensusPosition,
 };
+
 use tokio::sync::watch;
 use tracing::debug;
 
