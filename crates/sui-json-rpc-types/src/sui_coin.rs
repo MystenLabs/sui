@@ -12,6 +12,7 @@ use sui_types::base_types::{
     EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, TransactionDigest,
 };
 use sui_types::coin::CoinMetadata;
+use sui_types::coin_registry;
 use sui_types::error::SuiError;
 use sui_types::object::Object;
 use sui_types::sui_serde::BigInt;
@@ -104,5 +105,18 @@ impl TryFrom<Object> for SuiCoinMetadata {
             description,
             icon_url,
         })
+    }
+}
+
+impl From<coin_registry::CoinData> for SuiCoinMetadata {
+    fn from(coin_data: coin_registry::CoinData) -> Self {
+        Self {
+            id: Some(coin_data.id.id.bytes),
+            decimals: coin_data.decimals,
+            name: coin_data.name,
+            symbol: coin_data.symbol,
+            description: coin_data.description,
+            icon_url: Some(coin_data.icon_url),
+        }
     }
 }
