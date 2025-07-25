@@ -152,27 +152,37 @@ Response: {
   }
 }
 
-task 11, lines 68-80:
+task 11, lines 68-83:
 //# run-graphql --cursors 1
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Unknown fragment: \"PageInfoFields\"",
-      "locations": [
-        {
-          "line": 7,
-          "column": 9
-        }
-      ],
-      "extensions": {
-        "code": "GRAPHQL_VALIDATION_FAILED"
+  "data": {
+    "checkpoint": {
+      "sequenceNumber": 1,
+      "digest": "6z4RV8K4rmdXUF5y2ag8mSmqZVkRtGjFj8kz7zofmJn1",
+      "transactions": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true,
+          "startCursor": "Mg==",
+          "endCursor": "NA=="
+        },
+        "edges": [
+          {
+            "cursor": "Mg=="
+          },
+          {
+            "cursor": "Mw=="
+          },
+          {
+            "cursor": "NA=="
+          }
+        ]
       }
     }
-  ]
+  }
 }
 
-task 12, lines 82-97:
+task 12, lines 85-100:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
@@ -211,7 +221,7 @@ Response: {
   }
 }
 
-task 13, lines 99-114:
+task 13, lines 102-117:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
@@ -250,7 +260,7 @@ Response: {
   }
 }
 
-task 14, lines 116-131:
+task 14, lines 119-134:
 //# run-graphql --cursors 3
 Response: {
   "data": {
@@ -289,7 +299,7 @@ Response: {
   }
 }
 
-task 15, lines 133-148:
+task 15, lines 136-151:
 //# run-graphql --cursors 5
 Response: {
   "data": {
@@ -309,7 +319,7 @@ Response: {
   }
 }
 
-task 16, lines 150-165:
+task 16, lines 153-168:
 //# run-graphql
 Response: {
   "data": {

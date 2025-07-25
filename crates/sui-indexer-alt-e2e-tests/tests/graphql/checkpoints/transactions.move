@@ -72,7 +72,10 @@
     digest
     transactions( after: "@{cursor_0}", first: 3) {
       pageInfo {
-        ...PageInfoFields
+        hasPreviousPage
+        hasNextPage
+        startCursor
+        endCursor
       }
       edges { cursor }
     }
