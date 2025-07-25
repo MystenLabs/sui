@@ -265,7 +265,10 @@ where
         let cache_reader = self.validator_state.get_transaction_cache_reader().clone();
         let digests = [tx_digest];
         let effects_await =
-            epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(&digests));
+            epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(
+                "TransactionOrchestrator::notify_read_execute_transaction_with_effects_waiting",
+                &digests,
+            ));
 
         // Wait for either execution result or local effects to become available
         let mut local_effects_future = effects_await.boxed();
@@ -528,7 +531,10 @@ where
         Ok(async move {
             let digests = [tx_digest];
             let effects_await =
-                epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(&digests));
+                epoch_store.within_alive_epoch(cache_reader.notify_read_executed_effects(
+                    "TransactionOrchestrator::notify_read_submit_with_qd",
+                    &digests,
+                ));
             // let-and-return necessary to satisfy borrow checker.
             #[allow(clippy::let_and_return)]
             let res = match select(ticket, effects_await.boxed()).await {
@@ -573,7 +579,10 @@ where
             LOCAL_EXECUTION_TIMEOUT,
             validator_state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects_digests(&[tx_digest]),
+                .notify_read_executed_effects_digests(
+                    "TransactionOrchestrator::notify_read_wait_for_local_execution",
+                    &[tx_digest],
+                ),
         )
         .instrument(error_span!(
             "transaction_orchestrator::local_execution",

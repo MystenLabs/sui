@@ -521,6 +521,7 @@ pub trait TransactionCacheRead: Send + Sync {
 
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>>;
 
@@ -533,10 +534,13 @@ pub trait TransactionCacheRead: Send + Sync {
     /// occurring!
     fn notify_read_executed_effects<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffects>> {
         async move {
-            let digests = self.notify_read_executed_effects_digests(digests).await;
+            let digests = self
+                .notify_read_executed_effects_digests(task_name, digests)
+                .await;
             // once digests are available, effects must be present as well
             self.multi_get_effects(&digests)
                 .into_iter()

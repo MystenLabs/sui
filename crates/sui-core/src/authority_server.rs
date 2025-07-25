@@ -1175,7 +1175,10 @@ impl ValidatorService {
             let mut effects = self
                 .state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects(&tx_digests)
+                .notify_read_executed_effects(
+                    "AuthorityServer::notify_read_executed_effects_finalized",
+                    &tx_digests,
+                )
                 .await;
             let effects = effects.pop().unwrap();
             let effects_digest = effects.digest();
@@ -1284,7 +1287,10 @@ impl ValidatorService {
                 },
                 mut effects = self.state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&tx_digests) => {
+                    .notify_read_executed_effects("AuthorityServer::notify_read_executed_effects", &tx_digests) => {
+
+                    // unwrap is safe because notify_read_executed_effects is expected
+                    // to return the same amount of effects as the provided transactions.
                     let effects = effects.pop().unwrap();
                     let effects_digest = effects.digest();
                     debug!(
@@ -1292,8 +1298,6 @@ impl ValidatorService {
                         ?effects_digest,
                         "Observed executed effects",
                     );
-                    // unwrap is safe because notify_read_executed_effects is expected
-                    // to return the same amount of effects as the provided transactions.
                     break (effects, None);
                 },
                 mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(&tx_digests) => {

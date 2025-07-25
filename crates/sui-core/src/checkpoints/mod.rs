@@ -22,7 +22,7 @@ use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
-use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::sync::notify_read::{NotifyRead, CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME};
 use mysten_common::{assert_reachable, debug_fatal, fatal};
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
@@ -728,7 +728,7 @@ impl CheckpointStore {
         F: Fn() -> Option<CheckpointSequenceNumber>,
     {
         notify_read
-            .read(&[seq], |seqs| {
+            .read("notify_read_checkpoint_watermark", &[seq], |seqs| {
                 let seq = seqs[0];
                 let Some(highest) = get_watermark() else {
                     return vec![None];
@@ -1303,7 +1303,10 @@ impl CheckpointBuilder {
         let settlement_effects = loop {
             match tokio::time::timeout(Duration::from_secs(5), async {
                 self.effects_store
-                    .notify_read_executed_effects(&settlement_digests)
+                    .notify_read_executed_effects(
+                        "CheckpointBuilder::notify_read_settlement_effects",
+                        &settlement_digests,
+                    )
                     .await
             })
             .await
@@ -1387,7 +1390,10 @@ impl CheckpointBuilder {
                 .await?;
             let root_effects = self
                 .effects_store
-                .notify_read_executed_effects(&root_digests)
+                .notify_read_executed_effects(
+                    CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME,
+                    &root_digests,
+                )
                 .in_monitored_scope("CheckpointNotifyRead")
                 .await;
 
@@ -3217,6 +3223,7 @@ mod tests {
     impl TransactionCacheRead for HashMap<TransactionDigest, TransactionEffects> {
         fn notify_read_executed_effects(
             &self,
+            _: &str,
             digests: &[TransactionDigest],
         ) -> BoxFuture<'_, Vec<TransactionEffects>> {
             std::future::ready(
@@ -3230,6 +3237,7 @@ mod tests {
 
         fn notify_read_executed_effects_digests(
             &self,
+            _: &str,
             digests: &[TransactionDigest],
         ) -> BoxFuture<'_, Vec<TransactionEffectsDigest>> {
             std::future::ready(
