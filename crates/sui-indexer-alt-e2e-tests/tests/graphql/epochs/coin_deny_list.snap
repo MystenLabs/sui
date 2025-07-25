@@ -10,13 +10,13 @@ task 1, line 6:
 //# advance-epoch
 Epoch advanced: 1
 
-task 2, lines 8-49:
+task 2, lines 8-50:
 //# publish --sender A
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 13862400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 51-52:
+task 3, lines 52-53:
 //# programmable --sender A --inputs object(0x403) object(2,0)
 //> P::coin::poke_deny_list(Input(0), Input(1))
 events: Event { package_id: P, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 76, 102, 102, 53, 56, 51, 56, 100, 56, 52, 102, 49, 50, 48, 50, 100, 53, 53, 56, 99, 100, 101, 98, 102, 51, 51, 55, 50, 102, 100, 102, 98, 53, 50, 55, 57, 51, 55, 100, 54, 100, 101, 57, 52, 49, 57, 57, 53, 49, 53, 56, 100, 50, 98, 48, 52, 102, 100, 53, 53, 49, 98, 48, 52, 51, 58, 58, 99, 111, 105, 110, 58, 58, 67, 79, 73, 78, 42, 225, 19, 155, 21, 61, 71, 196, 117, 247, 51, 253, 36, 246, 86, 170, 118, 162, 71, 45, 111, 211, 99, 199, 93, 84, 154, 150, 42, 206, 127, 221] }
@@ -24,19 +24,19 @@ created: object(3,0), object(3,1), object(3,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 12502000,  storage_rebate: 3205224, non_refundable_storage_fee: 32376
 
-task 4, line 54:
+task 4, line 55:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 5, line 56:
+task 5, line 57:
 //# advance-epoch
 Epoch advanced: 2
 
-task 6, line 58:
+task 6, line 59:
 //# create-checkpoint
 Checkpoint created: 4
 
-task 7, lines 60-73:
+task 7, lines 61-74:
 //# run-graphql
 Response: {
   "data": {

@@ -27,7 +27,7 @@ const TOTAL_SUPPLY_MIST: u64 = 10_000_000_000_000_000_000;
 /// Name of the coin
 public struct SUI has drop {}
 
-#[allow(unused_function)]
+#[allow(unused_function, deprecated_usage)]
 /// Register the `SUI` Coin to acquire its `Supply`.
 /// This should be called only once during genesis creation.
 fun new(ctx: &mut TxContext): Balance<SUI> {
