@@ -4,13 +4,13 @@
 use std::sync::Arc;
 
 use consensus_core::{TransactionVerifier, ValidationError};
-use consensus_types::block::TransactionIndex;
+use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
     error::{SuiError, SuiResult},
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+    messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::Transaction,
 };
 use tap::TapFallible;
@@ -138,7 +138,11 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    fn vote_transactions(&self, txs: Vec<ConsensusTransactionKind>) -> Vec<TransactionIndex> {
+    fn vote_transactions(
+        &self,
+        block_ref: &BlockRef,
+        txs: Vec<ConsensusTransactionKind>,
+    ) -> Vec<TransactionIndex> {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return vec![];
@@ -150,9 +154,19 @@ impl SuiTxValidator {
                 continue;
             };
 
-            if let Err(e) = self.vote_transaction(&epoch_store, tx) {
-                debug!("Failed to vote transaction: {:?}", e);
+            if let Err(error) = self.vote_transaction(&epoch_store, tx) {
+                debug!("Failed to vote transaction: {:?}", error);
                 result.push(i as TransactionIndex);
+
+                // Cache the rejection vote reason (error) for the transaction
+                epoch_store.set_rejection_vote_reason(
+                    ConsensusPosition {
+                        epoch: epoch_store.epoch(),
+                        block: block_ref,
+                        index: i as TransactionIndex,
+                    },
+                    error,
+                );
             }
         }
 
@@ -209,6 +223,7 @@ impl TransactionVerifier for SuiTxValidator {
 
     fn verify_and_vote_batch(
         &self,
+        block_ref: &BlockRef,
         batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError> {
         let _scope = monitored_scope("VerifyAndVoteBatch");
@@ -221,7 +236,7 @@ impl TransactionVerifier for SuiTxValidator {
         self.validate_transactions(&txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))?;
 
-        Ok(self.vote_transactions(txs))
+        Ok(self.vote_transactions(block_ref, txs))
     }
 }
 
