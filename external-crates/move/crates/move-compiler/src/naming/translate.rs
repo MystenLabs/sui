@@ -16,7 +16,7 @@ use crate::{
     },
     ice,
     naming::{
-        ast::{self as N, BlockLabel, NominalBlockUsage, StructFields, TParamID, VariantFields},
+        ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
         fake_natives,
         syntax_methods::resolve_syntax_attributes,
     },
@@ -203,6 +203,28 @@ enum TypeAnnotation {
     FunctionSignature,
     MacroSignature,
     Expression,
+}
+
+//**************************************************************************************************
+// Resolvable Module
+//**************************************************************************************************
+
+/// Trait to abstract over module-like structures for member resolution
+trait ResolvableModule {
+    /// Returns iterator over structs: (name, type_params_len, field_info, loc)
+    fn structs(&self) -> impl Iterator<Item = (DatatypeName, usize, FieldInfo, Loc)>;
+
+    /// Returns iterator over enums: (name, type_params_len, loc, variants)
+    /// where variants is Vec of (variant_name, field_info, variant_loc)
+    fn enums(
+        &self,
+    ) -> impl Iterator<Item = (DatatypeName, usize, Loc, Vec<(VariantName, FieldInfo, Loc)>)>;
+
+    /// Returns iterator over functions: (name, type_params_len, params_len)
+    fn functions(&self) -> impl Iterator<Item = (FunctionName, usize, usize)>;
+
+    /// Returns iterator over constants: (name, defined_loc)
+    fn constants(&self) -> impl Iterator<Item = (ConstantName, Loc)>;
 }
 
 //************************************************
@@ -396,6 +418,118 @@ impl std::fmt::Display for ResolvedModuleMember {
     }
 }
 
+impl ResolvableModule for E::ModuleDefinition {
+    fn structs(&self) -> impl Iterator<Item = (DatatypeName, usize, FieldInfo, Loc)> {
+        self.structs.key_cloned_iter().map(|(name, sdef)| {
+            let field_info = match &sdef.fields {
+                E::StructFields::Positional(fields) => FieldInfo::Positional(fields.len()),
+                E::StructFields::Named(f) => {
+                    FieldInfo::Named(f.key_cloned_iter().map(|(k, _)| k).collect())
+                }
+                E::StructFields::Native(_) => FieldInfo::Empty,
+            };
+            (name, sdef.type_parameters.len(), field_info, name.loc())
+        })
+    }
+
+    fn enums(
+        &self,
+    ) -> impl Iterator<Item = (DatatypeName, usize, Loc, Vec<(VariantName, FieldInfo, Loc)>)> {
+        self.enums.key_cloned_iter().map(|(enum_name, edef)| {
+            let variants: Vec<_> = edef
+                .variants
+                .key_cloned_iter()
+                .map(|(vname, vdef)| {
+                    let field_info = match &vdef.fields {
+                        E::VariantFields::Named(fields) => {
+                            FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
+                        }
+                        E::VariantFields::Positional(tys) => FieldInfo::Positional(tys.len()),
+                        E::VariantFields::Empty => FieldInfo::Empty,
+                    };
+                    (vname, field_info, vdef.loc)
+                })
+                .collect();
+            (enum_name, edef.type_parameters.len(), edef.loc, variants)
+        })
+    }
+
+    fn functions(&self) -> impl Iterator<Item = (FunctionName, usize, usize)> {
+        self.functions.key_cloned_iter().map(|(name, fun)| {
+            (
+                name,
+                fun.signature.type_parameters.len(),
+                fun.signature.parameters.len(),
+            )
+        })
+    }
+
+    fn constants(&self) -> impl Iterator<Item = (ConstantName, Loc)> {
+        self.constants
+            .key_cloned_iter()
+            .map(|(name, _)| (name, name.loc()))
+    }
+}
+
+impl ResolvableModule for ModuleInfo {
+    fn structs(&self) -> impl Iterator<Item = (DatatypeName, usize, FieldInfo, Loc)> {
+        self.structs.key_cloned_iter().map(|(name, sdef)| {
+            let field_info = match &sdef.fields {
+                N::StructFields::Defined(positional, fields) => {
+                    if *positional {
+                        FieldInfo::Positional(fields.len())
+                    } else {
+                        FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
+                    }
+                }
+                N::StructFields::Native(_) => FieldInfo::Empty,
+            };
+            (name, sdef.type_parameters.len(), field_info, name.loc())
+        })
+    }
+
+    fn enums(
+        &self,
+    ) -> impl Iterator<Item = (DatatypeName, usize, Loc, Vec<(VariantName, FieldInfo, Loc)>)> {
+        self.enums.key_cloned_iter().map(|(enum_name, edef)| {
+            let variants: Vec<_> = edef
+                .variants
+                .key_cloned_iter()
+                .map(|(vname, vdef)| {
+                    let field_info = match &vdef.fields {
+                        N::VariantFields::Defined(positional, fields) => {
+                            if *positional {
+                                FieldInfo::Positional(fields.len())
+                            } else {
+                                FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
+                            }
+                        }
+                        N::VariantFields::Empty => FieldInfo::Empty,
+                    };
+                    (vname, field_info, vdef.loc)
+                })
+                .collect();
+            (enum_name, edef.type_parameters.len(), edef.loc, variants)
+        })
+    }
+
+    fn functions(&self) -> impl Iterator<Item = (FunctionName, usize, usize)> {
+        self.functions.key_cloned_iter().map(|(name, finfo)| {
+            (
+                name,
+                finfo.signature.type_parameters.len(),
+                finfo.signature.parameters.len(),
+            )
+        })
+    }
+
+    fn constants(&self) -> impl Iterator<Item = (ConstantName, Loc)> {
+        self.constants
+            .key_cloned_iter()
+            .map(|(name, cinfo)| (name, cinfo.defined_loc))
+    }
+}
+
 //**************************************************************************************************
 // Module Index
 //**************************************************************************************************
@@ -403,11 +537,12 @@ impl std::fmt::Display for ResolvedModuleMember {
 
 pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>;
 
-pub fn build_member_map(
+/// Generic function to build resolved members from a module-like structure
+fn resolved_members<M: ResolvableModule>(
     env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
-    prog: &E::Program,
-) -> ModuleMembers {
+    mident: ModuleIdent,
+    module: &M,
+) -> BTreeMap<Symbol, ResolvedModuleMember> {
     // NB: This checks if the element is present, and doesn't replace it if so. This is congruent
     // with how top-level definitions are handled for alias resolution, where a new definition will
     // not overwrite the previous one.
@@ -423,94 +558,101 @@ pub fn build_member_map(
     }
 
     use ResolvedModuleMember as M;
-    let mut all_members = BTreeMap::new();
-    for (mident, mdef) in prog.modules.key_cloned_iter() {
-        let mut members = BTreeMap::new();
-        for (name, sdef) in mdef.structs.key_cloned_iter() {
-            let tyarg_arity = sdef.type_parameters.len();
-            let field_info = match &sdef.fields {
-                E::StructFields::Positional(fields) => FieldInfo::Positional(fields.len()),
-                E::StructFields::Named(f) => {
-                    FieldInfo::Named(f.key_cloned_iter().map(|(k, _)| k).collect())
-                }
-                E::StructFields::Native(_) => FieldInfo::Empty,
-            };
-            let struct_def = ResolvedStruct {
+    let mut resolved_members = BTreeMap::new();
+
+    // Handle structs
+    for (name, tyarg_arity, field_info, decl_loc) in module.structs() {
+        let resolved_struct = ResolvedStruct {
+            mident,
+            name,
+            decl_loc,
+            tyarg_arity,
+            field_info,
+        };
+        add_or_error!(
+            resolved_members,
+            name,
+            M::Datatype(ResolvedDatatype::Struct(Box::new(resolved_struct)))
+        );
+    }
+
+    // Handle enums
+    for (enum_name, tyarg_arity, decl_loc, variants_vec) in module.enums() {
+        let mut variants = UniqueMap::new();
+        for (vname, field_info, variant_loc) in variants_vec {
+            let resolved_variant = ResolvedVariant {
                 mident,
-                name,
-                decl_loc: name.loc(),
+                enum_name,
                 tyarg_arity,
+                name: vname,
+                decl_loc: variant_loc,
                 field_info,
             };
-            assert!(
-                members
-                    .insert(
-                        name.value(),
-                        M::Datatype(ResolvedDatatype::Struct(Box::new(struct_def)))
-                    )
-                    .is_none()
-            )
+            let _ = variants.add(vname, resolved_variant);
         }
-        for (enum_name, edef) in mdef.enums.key_cloned_iter() {
-            let tyarg_arity = edef.type_parameters.len();
-            let variants = edef.variants.clone().map(|name, v| {
-                let field_info = match &v.fields {
-                    E::VariantFields::Named(fields) => {
-                        FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
-                    }
-                    E::VariantFields::Positional(tys) => FieldInfo::Positional(tys.len()),
-                    E::VariantFields::Empty => FieldInfo::Empty,
-                };
-                ResolvedVariant {
-                    mident,
-                    enum_name,
-                    tyarg_arity,
-                    name,
-                    decl_loc: v.loc,
-                    field_info,
-                }
-            });
-            let decl_loc = edef.loc;
-            let enum_def = ResolvedEnum {
-                mident,
-                name: enum_name,
-                decl_loc,
-                tyarg_arity,
-                variants,
-            };
-            add_or_error!(
-                members,
-                enum_name,
-                M::Datatype(ResolvedDatatype::Enum(Box::new(enum_def)))
-            );
+        let resolved_enum = ResolvedEnum {
+            mident,
+            name: enum_name,
+            decl_loc,
+            tyarg_arity,
+            variants,
+        };
+
+        add_or_error!(
+            resolved_members,
+            enum_name,
+            M::Datatype(ResolvedDatatype::Enum(Box::new(resolved_enum)))
+        );
+    }
+
+    // Handle functions
+    for (name, tyarg_arity, arity) in module.functions() {
+        let fun_def = ResolvedModuleFunction {
+            mident,
+            name,
+            tyarg_arity,
+            arity,
+        };
+        add_or_error!(resolved_members, name, M::Function(Box::new(fun_def)));
+    }
+
+    // Handle constants
+    for (name, decl_loc) in module.constants() {
+        let const_def = ResolvedConstant {
+            mident,
+            name,
+            decl_loc,
+        };
+        add_or_error!(resolved_members, name, M::Constant(Box::new(const_def)));
+    }
+
+    resolved_members
+}
+
+pub fn build_member_map(
+    env: &CompilationEnv,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
+    prog: &E::Program,
+) -> ModuleMembers {
+    let mut all_members = BTreeMap::new();
+    for (mident, mdef) in prog.modules.key_cloned_iter() {
+        let members = resolved_members(env, mident, mdef);
+        // Apply error checking for duplicate names (functions and constants are shadowed by datatypes)
+        let mut checked_members = BTreeMap::new();
+        for (name, member) in members {
+            if checked_members.contains_key(&name) {
+                assert!(env.has_errors());
+            } else {
+                checked_members.insert(name, member);
+            }
         }
-        // Functions and constants are shadowed by datatypes that share their names.
-        for (name, fun) in mdef.functions.key_cloned_iter() {
-            let tyarg_arity = fun.signature.type_parameters.len();
-            let arity = fun.signature.parameters.len();
-            let fun_def = ResolvedModuleFunction {
-                mident,
-                name,
-                tyarg_arity,
-                arity,
-            };
-            add_or_error!(members, name, M::Function(Box::new(fun_def)));
-        }
-        for (name, _) in mdef.constants.key_cloned_iter() {
-            let const_def = ResolvedConstant {
-                mident,
-                name,
-                decl_loc: name.loc(),
-            };
-            add_or_error!(members, name, M::Constant(Box::new(const_def)));
-        }
-        assert!(all_members.insert(mident, members).is_none());
+        assert!(all_members.insert(mident, checked_members).is_none());
     }
 
     if let Some(pre_compiled_lib) = pre_compiled_lib {
         all_members.extend(pre_compiled_lib.iter().filter_map(|(mident, minfo)| {
             if !prog.modules.contains_key(mident) {
-                Some((*mident, pre_compiled_resolved_members(*mident, &minfo.info)))
+                Some((*mident, resolved_members(env, *mident, &minfo.info)))
             } else {
                 None
             }
@@ -518,96 +660,6 @@ pub fn build_member_map(
     }
 
     all_members
-}
-
-/// Convert a pre-compiled module info to a map of resolved members.
-fn pre_compiled_resolved_members(
-    mident: ModuleIdent,
-    pre_compiled_module_info: &ModuleInfo,
-) -> BTreeMap<Symbol, ResolvedModuleMember> {
-    let mut resolved_members = BTreeMap::new();
-    for (name, sdef) in pre_compiled_module_info.structs.key_cloned_iter() {
-        let field_info = match &sdef.fields {
-            StructFields::Defined(positional, fields) => {
-                if *positional {
-                    FieldInfo::Positional(fields.len())
-                } else {
-                    FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
-                }
-            }
-            StructFields::Native(_) => FieldInfo::Empty,
-        };
-        let resolved_struct = ResolvedStruct {
-            mident,
-            name,
-            decl_loc: sdef.loc,
-            tyarg_arity: sdef.type_parameters.len(),
-            field_info,
-        };
-        resolved_members.insert(
-            name.value(),
-            ResolvedModuleMember::Datatype(ResolvedDatatype::Struct(Box::new(resolved_struct))),
-        );
-    }
-    for (name, edef) in pre_compiled_module_info.enums.key_cloned_iter() {
-        let mut variants = UniqueMap::new();
-        for (vname, vdef) in edef.variants.key_cloned_iter() {
-            let field_info = match &vdef.fields {
-                VariantFields::Defined(positional, fields) => {
-                    if *positional {
-                        FieldInfo::Positional(fields.len())
-                    } else {
-                        FieldInfo::Named(fields.key_cloned_iter().map(|(k, _)| k).collect())
-                    }
-                }
-                VariantFields::Empty => FieldInfo::Empty,
-            };
-            let resolved_variant = ResolvedVariant {
-                mident,
-                enum_name: name,
-                tyarg_arity: edef.type_parameters.len(),
-                name: vname,
-                decl_loc: vdef.loc,
-                field_info,
-            };
-            let _ = variants.add(vname, resolved_variant);
-        }
-        let resolved_enum = ResolvedEnum {
-            mident,
-            name,
-            decl_loc: edef.loc,
-            tyarg_arity: edef.type_parameters.len(),
-            variants,
-        };
-        resolved_members.insert(
-            name.value(),
-            ResolvedModuleMember::Datatype(ResolvedDatatype::Enum(Box::new(resolved_enum))),
-        );
-    }
-    for (name, finfo) in pre_compiled_module_info.functions.key_cloned_iter() {
-        let fun_def = ResolvedModuleFunction {
-            mident,
-            name,
-            tyarg_arity: finfo.signature.type_parameters.len(),
-            arity: finfo.signature.parameters.len(),
-        };
-        resolved_members.insert(
-            name.value(),
-            ResolvedModuleMember::Function(Box::new(fun_def)),
-        );
-    }
-    for (name, cinfo) in pre_compiled_module_info.constants.key_cloned_iter() {
-        let const_def = ResolvedConstant {
-            mident,
-            name,
-            decl_loc: cinfo.defined_loc,
-        };
-        resolved_members.insert(
-            name.value(),
-            ResolvedModuleMember::Constant(Box::new(const_def)),
-        );
-    }
-    resolved_members
 }
 
 //**************************************************************************************************
