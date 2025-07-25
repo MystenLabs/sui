@@ -9,6 +9,7 @@ mod to_lockfile;
 
 pub use linkage::LinkageError;
 pub use rename_from::RenameError;
+use tracing::debug;
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -127,13 +128,13 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// manifests digests are out of date). If the resolution graph is up-to-date, it is returned.
     /// Otherwise a new resolution graph is constructed by traversing (only) the manifest files.
     pub async fn load(path: &PackagePath, env: &Environment) -> PackageResult<Self> {
-        let package = Package::<F>::load_root(path.path(), env).await?;
-
         let builder = PackageGraphBuilder::<F>::new();
 
         if let Some(graph) = builder.load_from_lockfile(path, env).await? {
+            debug!("successfully loaded lockfile");
             Ok(graph)
         } else {
+            debug!("lockfile was missing or out of date; loading from manifests");
             builder.load_from_manifests(path, env).await
         }
     }
@@ -170,4 +171,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
             .map(|node| PackageInfo { graph: self, node })
             .collect()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO: example with a --[local]--> a/b --[local]--> a/c
 }

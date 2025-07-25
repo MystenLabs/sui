@@ -22,6 +22,9 @@ use crate::{
     schema::{EnvironmentName, PackageName, PublishAddresses},
 };
 
+// TODO(refactor): instead of `Dependency<DepInfo>`, we should just have `DependencyContext`, and
+// the dependency types will hold one of those and pass it around.
+
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
 /// fields) with additional metadata about how the dependency is used (such as the source file,
 /// enviroment overrides, etc).
