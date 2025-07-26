@@ -8752,6 +8752,32 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "reservation",
+              "type",
+              "typeParam",
+              "withdrawFrom"
+            ],
+            "properties": {
+              "reservation": {
+                "$ref": "#/components/schemas/SuiReservation"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "balanceWithdraw"
+                ]
+              },
+              "typeParam": {
+                "$ref": "#/components/schemas/SuiWithdrawTypeParam"
+              },
+              "withdrawFrom": {
+                "$ref": "#/components/schemas/SuiWithdrawFrom"
+              }
+            }
           }
         ]
       },
@@ -9576,6 +9602,28 @@
           }
         }
       },
+      "SuiReservation": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "entireBalance"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "maxAmountU64"
+            ],
+            "properties": {
+              "maxAmountU64": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "SuiSystemStateSummary": {
         "description": "This is the JSON-RPC type for the SUI system state object. It flattens all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
         "type": "object",
@@ -10378,6 +10426,28 @@
             "$ref": "#/components/schemas/Base64"
           }
         }
+      },
+      "SuiWithdrawFrom": {
+        "type": "string",
+        "enum": [
+          "sender"
+        ]
+      },
+      "SuiWithdrawTypeParam": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "balance"
+            ],
+            "properties": {
+              "balance": {
+                "$ref": "#/components/schemas/TypeTag"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "Supply": {
         "type": "object",

@@ -178,6 +178,17 @@ impl InputValue {
             inner: ResultValue::new(Value::Receiving(id, version, None)),
         }
     }
+
+    // TODO(address-balances): Populate withdraw reservation information.
+    pub fn new_balance_withdraw() -> Self {
+        InputValue {
+            object_metadata: None,
+            inner: ResultValue {
+                last_usage_kind: None,
+                value: None,
+            },
+        }
+    }
 }
 
 impl ResultValue {
