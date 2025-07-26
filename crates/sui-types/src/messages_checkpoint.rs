@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::ObjectID;
 use crate::base_types::{
     random_object_ref, ExecutionData, ExecutionDigests, VerifiedExecutionData,
 };
@@ -9,9 +10,10 @@ use crate::crypto::{
     default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
     AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, RandomnessRound,
 };
-use crate::digests::Digest;
-use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
+use crate::digests::{Digest, ObjectDigest};
+use crate::effects::{ObjectChange, TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI};
 use crate::error::SuiResult;
+use crate::full_checkpoint_content::CheckpointData;
 use crate::gas::GasCostSummary;
 use crate::global_state_hash::GlobalStateHash;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
@@ -22,7 +24,9 @@ use crate::sui_serde::Readable;
 use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
+use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::MultisetHash;
+use fastcrypto::merkle::MerkleTree;
 use mysten_metrics::histogram::Histogram as MystenHistogram;
 use once_cell::sync::OnceCell;
 use prometheus::Histogram;
@@ -30,6 +34,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::{Intent, IntentScope};
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -119,15 +125,181 @@ impl Default for ECMHLiveObjectSetDigest {
     }
 }
 
+// TODO: Does this need versioning?
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ObjectCheckpointState {
+    pub id: ObjectID,
+    pub digest: Option<ObjectDigest>,
+}
+
+impl ObjectCheckpointState {
+    pub fn new(id: ObjectID, digest: Option<ObjectDigest>) -> Self {
+        Self { id, digest }
+    }
+}
+
+impl From<ObjectChange> for ObjectCheckpointState {
+    fn from(object_change: ObjectChange) -> Self {
+        Self {
+            id: object_change.id,
+            digest: object_change.output_digest,
+        }
+    }
+}
+
+impl PartialEq for ObjectCheckpointState {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for ObjectCheckpointState {}
+
+impl PartialOrd for ObjectCheckpointState {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ObjectCheckpointState {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+/// A sorted list of object checkpoint states (by object ID).
+#[derive(Debug)]
+pub struct ObjectCheckpointStates {
+    pub contents: Vec<ObjectCheckpointState>,
+}
+
+impl ObjectCheckpointStates {
+    pub fn new(contents: Vec<ObjectCheckpointState>) -> Self {
+        let mut contents = contents;
+        contents.sort();
+        Self { contents }
+    }
+
+    /// Compute the Merkle root of the object checkpoint states.
+    /// Assumes that the object checkpoint states are sorted by object ID.
+    pub fn digest(&self) -> SuiResult<ObjectCheckpointStatesDigest> {
+        let tree = MerkleTree::<Blake2b256>::build_from_unserialized(self.contents.iter())
+            .map_err(|e| SuiError::GenericAuthorityError {
+                error: format!("Failed to build Merkle tree: {}", e),
+            })?;
+        let root = tree.root().bytes();
+        Ok(ObjectCheckpointStatesDigest::from(root))
+    }
+}
+
+#[derive(Debug)]
+pub struct ObjectCheckpointStatesDigest {
+    pub digest: Digest,
+}
+
+impl From<[u8; 32]> for ObjectCheckpointStatesDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self {
+            digest: Digest::new(digest),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CheckpointArtifacts {
+    pub latest_object_states: ObjectCheckpointStates,
+    // Add more.. e.g., execution digests, events, etc.
+}
+
+impl CheckpointArtifacts {
+    pub fn digest(&self) -> SuiResult<CheckpointArtifactsDigest> {
+        let latest_object_states_digest = self.latest_object_states.digest()?;
+
+        // When there are more artifacts, we can hash them all into a single digest.
+        Ok(CheckpointArtifactsDigest::from(
+            latest_object_states_digest.digest.into_inner(),
+        ))
+    }
+}
+
+impl From<&[&TransactionEffects]> for CheckpointArtifacts {
+    fn from(effects: &[&TransactionEffects]) -> Self {
+        let all_object_changes = effects
+            .iter()
+            .map(|e| e.object_changes())
+            .collect::<Vec<_>>();
+
+        let mut latest_object_states: BTreeMap<ObjectID, ObjectCheckpointState> = BTreeMap::new();
+        for object_changes in all_object_changes {
+            for object_change in object_changes {
+                match latest_object_states.entry(object_change.id) {
+                    Entry::Occupied(mut entry) => {
+                        let existing = entry.get_mut();
+                        *existing = object_change.into();
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(object_change.into());
+                    }
+                }
+            }
+        }
+
+        let latest_object_states =
+            ObjectCheckpointStates::new(latest_object_states.into_values().collect::<Vec<_>>());
+
+        Self {
+            latest_object_states,
+        }
+    }
+}
+
+impl From<&[TransactionEffects]> for CheckpointArtifacts {
+    fn from(effects: &[TransactionEffects]) -> Self {
+        let effect_refs: Vec<&TransactionEffects> = effects.iter().collect();
+        Self::from(effect_refs.as_slice())
+    }
+}
+
+impl From<&CheckpointData> for CheckpointArtifacts {
+    fn from(checkpoint_data: &CheckpointData) -> Self {
+        let effects = checkpoint_data
+            .transactions
+            .iter()
+            .map(|tx| &tx.effects)
+            .collect::<Vec<_>>();
+
+        Self::from(effects.as_slice())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct CheckpointArtifactsDigest {
+    pub digest: Digest,
+}
+
+impl From<[u8; 32]> for CheckpointArtifactsDigest {
+    fn from(digest: [u8; 32]) -> Self {
+        Self {
+            digest: Digest::new(digest),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub enum CheckpointCommitment {
     ECMHLiveObjectSetDigest(ECMHLiveObjectSetDigest),
-    // Other commitment types (e.g. merkle roots) go here.
+    CheckpointArtifactsDigest(CheckpointArtifactsDigest),
 }
 
 impl From<ECMHLiveObjectSetDigest> for CheckpointCommitment {
     fn from(d: ECMHLiveObjectSetDigest) -> Self {
         Self::ECMHLiveObjectSetDigest(d)
+    }
+}
+
+impl From<CheckpointArtifactsDigest> for CheckpointCommitment {
+    fn from(d: CheckpointArtifactsDigest) -> Self {
+        Self::CheckpointArtifactsDigest(d)
     }
 }
 
@@ -211,6 +383,7 @@ impl CheckpointSummary {
         end_of_epoch_data: Option<EndOfEpochData>,
         timestamp_ms: CheckpointTimestamp,
         randomness_rounds: Vec<RandomnessRound>,
+        checkpoint_commitments: Vec<CheckpointCommitment>,
     ) -> CheckpointSummary {
         let content_digest = *transactions.digest();
 
@@ -235,7 +408,7 @@ impl CheckpointSummary {
             end_of_epoch_data,
             timestamp_ms,
             version_specific_data,
-            checkpoint_commitments: Default::default(),
+            checkpoint_commitments,
         }
     }
 
@@ -293,6 +466,19 @@ impl CheckpointSummary {
             Some(1) => Ok(Some(bcs::from_bytes(&self.version_specific_data)?)),
             _ => unimplemented!("unrecognized version_specific_data version in CheckpointSummary"),
         }
+    }
+
+    pub fn checkpoint_artifacts_digest(&self) -> Result<&CheckpointArtifactsDigest> {
+        let digest = self.checkpoint_commitments.iter().find_map(|c| match c {
+            CheckpointCommitment::CheckpointArtifactsDigest(digest) => Some(digest),
+            _ => None,
+        });
+        if digest.is_none() {
+            return Err(anyhow::anyhow!(
+                "Checkpoint artifacts digest not found in checkpoint commitments"
+            ));
+        }
+        Ok(digest.unwrap())
     }
 }
 
@@ -796,6 +982,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -831,6 +1018,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             0,
+            Vec::new(),
             Vec::new(),
         );
 
@@ -873,6 +1061,7 @@ mod tests {
                         None,
                         0,
                         Vec::new(),
+                        Vec::new(),
                     ),
                     k,
                     name,
@@ -912,6 +1101,7 @@ mod tests {
             GasCostSummary::default(),
             None,
             100,
+            Vec::new(),
             Vec::new(),
         )
     }
