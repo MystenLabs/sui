@@ -72,8 +72,11 @@ pub struct CommitFinalizer {
     transaction_certifier: TransactionCertifier,
     commit_sender: UnboundedSender<CommittedSubDag>,
 
+    // Last commit index processed by CommitFinalizer.
     last_processed_commit: Option<CommitIndex>,
+    // Commits pending finalization.
     pending_commits: VecDeque<CommitState>,
+    // Blocks in the pending commits.
     blocks: Arc<RwLock<BTreeMap<BlockRef, RwLock<BlockState>>>>,
 }
 
@@ -190,7 +193,7 @@ impl CommitFinalizer {
             // -  This commit is remote.
             // -  And the latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
             // In this case, this commit's leader certificate is not guaranteed to be in local DAG.
-            if !commit_state.commit.local_dag_has_finalization_blocks {
+            if !commit_state.commit.decided_with_local_blocks {
                 let last_commit_state = self.pending_commits.back().unwrap();
                 if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
                     > last_commit_state.commit.leader.round
@@ -1191,7 +1194,7 @@ mod tests {
             let mut committed_sub_dags = fixture.linearizer.handle_commit(vec![leader]);
             assert_eq!(committed_sub_dags.len(), 1);
             let mut remote_commit = committed_sub_dags.pop().unwrap();
-            remote_commit.local_dag_has_finalization_blocks = local;
+            remote_commit.decided_with_local_blocks = local;
             // Process the remote commit.
             fixture
                 .commit_finalizer
