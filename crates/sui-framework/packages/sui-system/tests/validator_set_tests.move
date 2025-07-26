@@ -4,11 +4,12 @@
 #[test_only]
 module sui_system::validator_set_tests;
 
+use std::unit_test::assert_eq;
 use sui::address;
 use sui::balance;
 use sui::coin;
 use sui::test_scenario::{Self, Scenario};
-use sui::test_utils::{Self, assert_eq};
+use sui::test_utils;
 use sui::vec_map;
 use sui_system::validator::{Self, Validator, staking_pool_id};
 use sui_system::validator_set::{Self, ValidatorSet};
@@ -102,12 +103,12 @@ fun reference_gas_price_derivation() {
     // Create a validator set with only the first validator in it.
     let mut validator_set = validator_set::new(vector[v1], ctx);
 
-    assert_eq(validator_set.derive_reference_gas_price(), 45);
+    assert_eq!(validator_set.derive_reference_gas_price(), 45);
 
     add_and_activate_validator(&mut validator_set, v2, scenario);
     advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
 
-    assert_eq(validator_set.derive_reference_gas_price(), 45);
+    assert_eq!(validator_set.derive_reference_gas_price(), 45);
 
     add_and_activate_validator(
         &mut validator_set,
@@ -116,7 +117,7 @@ fun reference_gas_price_derivation() {
     );
     advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
 
-    assert_eq(validator_set.derive_reference_gas_price(), 42);
+    assert_eq!(validator_set.derive_reference_gas_price(), 42);
 
     add_and_activate_validator(
         &mut validator_set,
@@ -125,7 +126,7 @@ fun reference_gas_price_derivation() {
     );
     advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
 
-    assert_eq(validator_set.derive_reference_gas_price(), 42);
+    assert_eq!(validator_set.derive_reference_gas_price(), 42);
 
     add_and_activate_validator(
         &mut validator_set,
@@ -134,7 +135,7 @@ fun reference_gas_price_derivation() {
     );
     advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
 
-    assert_eq(validator_set.derive_reference_gas_price(), 43);
+    assert_eq!(validator_set.derive_reference_gas_price(), 43);
 
     test_utils::destroy(validator_set);
     scenario_val.end();
@@ -149,7 +150,7 @@ fun staking_below_threshold() {
 
     let validator1 = create_validator(@0x1, 1, 1, true, ctx);
     let mut validator_set = validator_set::new(vector[validator1], ctx);
-    assert_eq(validator_set.total_stake(), 100 * MIST_PER_SUI);
+    assert_eq!(validator_set.total_stake(), 100 * MIST_PER_SUI);
     scenario_val.end();
 
     let mut scenario_val = test_scenario::begin(@0x1);
@@ -174,7 +175,7 @@ fun staking_min_threshold() {
 
     let validator1 = create_validator(@0x1, 1, 1, true, ctx);
     let mut validator_set = validator_set::new(vector[validator1], ctx);
-    assert_eq(validator_set.total_stake(), 100 * MIST_PER_SUI);
+    assert_eq!(validator_set.total_stake(), 100 * MIST_PER_SUI);
     scenario_val.end();
 
     let mut scenario_val = test_scenario::begin(@0x1);
@@ -274,7 +275,7 @@ fun add_validator_with_min_voting_power() {
     assert!(validator_set.total_stake() == 10_000 * MIST_PER_SUI);
     // epoch change should emit one ValidatorEpochInfoEvent per validator and one ValidatorJoinEvent for the new validator
     let effects = scenario.next_tx(@0xB);
-    assert_eq(effects.num_user_events(), num_validators + 1);
+    assert_eq!(effects.num_user_events(), num_validators + 1);
 
     test_utils::destroy(validator_set);
     scenario_val.end();
@@ -294,7 +295,7 @@ fun add_candidate_then_remove() {
 
     // Create a validator set with only the first validator in it.
     let mut validator_set = validator_set::new(vector[validator1], ctx);
-    assert_eq(validator_set.total_stake(), 100 * MIST_PER_SUI);
+    assert_eq!(validator_set.total_stake(), 100 * MIST_PER_SUI);
     scenario_val.end();
 
     let mut scenario_val = test_scenario::begin(@0x1);
@@ -303,14 +304,14 @@ fun add_candidate_then_remove() {
     // Add the second one as a candidate.
     validator_set.request_add_validator_candidate(validator2, ctx1);
     assert!(validator_set.is_validator_candidate(@0x2));
-    assert_eq(validator_set.validator_address_by_pool_id(&pool_id_2), @0x2);
+    assert_eq!(validator_set.validator_address_by_pool_id(&pool_id_2), @0x2);
 
     scenario.next_tx(@0x2);
     // Then remove its candidacy.
     validator_set.request_remove_validator_candidate(scenario.ctx());
     assert!(!validator_set.is_validator_candidate(@0x2));
     assert!(validator_set.is_inactive_validator(pool_id_2));
-    assert_eq(validator_set.validator_address_by_pool_id(&pool_id_2), @0x2);
+    assert_eq!(validator_set.validator_address_by_pool_id(&pool_id_2), @0x2);
 
     test_utils::destroy(validator_set);
     scenario_val.end();
@@ -376,7 +377,7 @@ fun withdraw_all() {
     assert!(!validator_set.is_active_validator(@0xB));
     // epoch change should emit one ValidatorEpochInfoEvent per validator and one ValidatorLeaveEvent for the departed validator
     let effects = scenario.next_tx(@0xB);
-    assert_eq(effects.num_user_events(), num_validators + 1);
+    assert_eq!(effects.num_user_events(), num_validators + 1);
 
     test_utils::destroy(validator_set);
     test_utils::destroy(bal);
@@ -416,7 +417,7 @@ fun very_low_voting_power_departure() {
     assert!(!validator_set.is_active_validator(@0xB));
     // epoch change should emit one ValidatorEpochInfoEvent per validator and one ValidatorLeaveEvent for the departed validator
     let effects = scenario.next_tx(@0xB);
-    assert_eq(effects.num_user_events(), num_validators + 1);
+    assert_eq!(effects.num_user_events(), num_validators + 1);
 
     test_utils::destroy(validator_set);
     test_utils::destroy(bal);
@@ -456,7 +457,7 @@ fun low_voting_power_departure() {
     advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
     assert!(validator_set.is_active_validator(@0xB));
     assert!(validator_set.find_for_testing(@0xB).voting_power() == 1);
-    assert_eq(validator_set.find_for_testing(@0xB).voting_power(), 1);
+    assert_eq!(validator_set.find_for_testing(@0xB).voting_power(), 1);
     assert!(validator_set.is_at_risk_validator(@0xB));
 
     // ... 1 epoch goes by. still in the grace period
@@ -474,7 +475,7 @@ fun low_voting_power_departure() {
     assert!(!validator_set.is_active_validator(@0xB));
     // epoch change should emit one ValidatorEpochInfoEvent per validator and one ValidatorLeaveEvent for the departed validator
     let effects = scenario.next_tx(@0xB);
-    assert_eq(effects.num_user_events(), num_validators + 1);
+    assert_eq!(effects.num_user_events(), num_validators + 1);
 
     test_utils::destroy(validator_set);
     test_utils::destroy(bal);
@@ -571,7 +572,7 @@ fun add_then_increase_stake_of_others() {
     assert!(validator_set.total_stake() == new_total_stake);
     // epoch change should emit one ValidatorEpochInfoEvent per validator, but no ValidatorJoinEvent or ValidatorLeaveEvent
     let effects = scenario.next_tx(@0xB);
-    assert_eq(effects.num_user_events(), num_validators); // epoch changes hould not emit ValidatorJoinEvent or ValidatorLeaveEvent
+    assert_eq!(effects.num_user_events(), num_validators); // epoch changes hould not emit ValidatorJoinEvent or ValidatorLeaveEvent
 
     test_utils::destroy(validator_set);
     scenario_val.end();
