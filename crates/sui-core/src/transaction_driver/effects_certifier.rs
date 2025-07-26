@@ -155,17 +155,12 @@ impl EffectsCertifier {
                 }
                 Err(e) => {
                     tracing::debug!(?current_target, "Failed to get full effects: {e}");
-                    if matches!(
-                        e,
-                        TransactionRequestError::TimedOutGettingFullEffectsAtValidator
-                    ) {
-                        client_monitor.record_interaction_result(OperationFeedback {
-                            validator: current_target,
-                            operation: OperationType::Effects,
-                            latency: None,
-                            success: false,
-                        });
-                    }
+                    client_monitor.record_interaction_result(OperationFeedback {
+                        validator: current_target,
+                        operation: OperationType::Effects,
+                        latency: None,
+                        success: false,
+                    });
                     // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
                     // but the error should not happen after effects certification unless there are software bugs
                     // or > f malicious validators.

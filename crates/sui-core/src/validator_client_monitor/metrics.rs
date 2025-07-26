@@ -25,9 +25,6 @@ pub struct ValidatorClientMetrics {
     /// Current performance score per validator
     pub performance_score: GaugeVec,
 
-    /// Number of times each validator was selected
-    pub validator_selections: IntCounterVec,
-
     /// Consecutive failures per validator
     pub consecutive_failures: IntGaugeVec,
 
@@ -66,14 +63,6 @@ impl ValidatorClientMetrics {
             performance_score: register_gauge_vec_with_registry!(
                 "validator_client_observed_score",
                 "Current client-observed score per validator",
-                &["validator"],
-                registry,
-            )
-            .unwrap(),
-
-            validator_selections: register_int_counter_vec_with_registry!(
-                "validator_client_selections_total",
-                "Total number of times client selected each validator",
                 &["validator"],
                 registry,
             )
