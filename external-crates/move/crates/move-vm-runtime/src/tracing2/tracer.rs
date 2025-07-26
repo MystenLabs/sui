@@ -26,8 +26,8 @@ use smallvec::SmallVec;
 use std::collections::BTreeMap;
 
 /// Internal state for the tracer. This is where the actual tracing logic is implemented.
-pub(crate) struct VMTracer<'a> {
-    trace: &'a mut MoveTraceBuilder,
+pub(crate) struct VMTracer<'a, 'b> {
+    trace: &'a mut MoveTraceBuilder<'b>,
     link_context: Option<AccountAddress>,
     pc: Option<u16>,
     active_frames: BTreeMap<TraceIndex, FrameInfo>,
@@ -187,7 +187,7 @@ impl RootedType {
     }
 }
 
-impl VMTracer<'_> {
+impl VMTracer<'_, '_> {
     /// Emit an error event to the trace if `true`
     fn emit_trace_error_if_err(&mut self, is_err: bool) {
         if is_err {
@@ -1693,8 +1693,8 @@ impl VMTracer<'_> {
 }
 
 /// The (public crate) API for the VM tracer.
-impl<'a> VMTracer<'a> {
-    pub(crate) fn new(trace: &'a mut MoveTraceBuilder) -> Self {
+impl<'a, 'b> VMTracer<'a, 'b> {
+    pub(crate) fn new(trace: &'a mut MoveTraceBuilder<'b>) -> Self {
         Self {
             trace,
             link_context: None,
