@@ -1,13 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{ops::RangeInclusive, sync::Arc};
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    dataloader::DataLoader,
+    Context, Object,
+};
+
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer_alt_reader::kv_loader::{
-    KvLoader, TransactionContents as NativeTransactionContents,
+use sui_indexer_alt_reader::{
+    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
+    pg_reader::PgReader,
+    tx_digests::TxDigestKey,
+};
+
+use crate::{
+    api::{
+        scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
+        types::{
+            address::Address,
+            epoch::Epoch,
+            gas_input::GasInput,
+            transaction_effects::{EffectsContents, TransactionEffects},
+        },
+    },
+    error::RpcError,
+    pagination::Page,
+    scope::Scope,
+    task::watermark::Watermarks,
 };
 use sui_types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -15,20 +38,10 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
-use crate::{
-    api::{
-        scalars::{base64::Base64, digest::Digest},
-        types::epoch::Epoch,
-    },
-    error::RpcError,
-    scope::Scope,
-};
-
-use super::{
-    address::Address,
-    gas_input::GasInput,
-    transaction_effects::{EffectsContents, TransactionEffects},
-};
+mod filter;
+pub(crate) use filter::TransactionFilter;
+mod bounds;
+pub(crate) use bounds::TransactionBounds;
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -41,6 +54,8 @@ pub(crate) struct TransactionContents {
     pub(crate) scope: Scope,
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
 }
+
+pub(crate) type CTransaction = JsonCursor<u64>;
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -143,6 +158,100 @@ impl Transaction {
             digest: tx.digest()?,
             contents,
         }))
+    }
+
+    /// Cursor based pagination through transactions based on filters.
+    pub(crate) async fn paginate(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CTransaction>,
+        filter: TransactionFilter,
+    ) -> Result<Connection<String, Transaction>, RpcError> {
+        let mut conn = Connection::new(false, false);
+
+        if page.limit() == 0 {
+            return Ok(Connection::new(false, false));
+        }
+
+        let watermarks: &Arc<Watermarks> = ctx.data()?;
+
+        // TODO: Is this a valid way to access the lowest cp available? What is the behavior when we prune while we are paginating?
+        let Some(global_cp_lo) = watermarks
+            .low_watermark()
+            .map(|watermark| watermark.checkpoint())
+        else {
+            return Ok(Connection::new(false, false));
+        };
+
+        let mut tx_digest_keys =
+            match filter.checkpoint_bounds(scope.checkpoint_viewed_at(), global_cp_lo) {
+                // Determine tx_sequence_numbers if we have checkpoint bounds.
+                Some(cp_bounds) => {
+                    Self::tx_sequence_numbers_by_checkpoint(ctx, cp_bounds, &page).await?
+                }
+                None => return Ok(Connection::new(false, false)),
+            };
+
+        // Undo any sorting that was applied to the results for consistency.
+        if !page.is_from_front() {
+            tx_digest_keys.reverse();
+        }
+
+        // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
+        let (prev, next, results) = page.paginate_results(tx_digest_keys, |&t| JsonCursor::new(t));
+
+        let results: Vec<_> = results.collect();
+        let tx_digest_keys: Vec<TxDigestKey> =
+            results.iter().map(|(_, sq)| TxDigestKey(*sq)).collect();
+
+        // Load the transaction digests for the paginated tx_sequence_numbers
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let digest_map = pg_loader
+            .load_many(tx_digest_keys)
+            .await
+            .context("Failed to load transaction digests")?;
+
+        // Convert the transaction digests to Transaction objects
+        for (cursor, tx_sequence_number) in results {
+            let key = TxDigestKey(tx_sequence_number);
+            if let Some(stored) = digest_map.get(&key) {
+                let transaction_digest = TransactionDigest::try_from(stored.tx_digest.clone())
+                    .context("Failed to deserialize transaction digest")?;
+                let object = Self::with_id(scope.clone(), transaction_digest);
+                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
+            }
+        }
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        Ok(conn)
+    }
+
+    /// Maps a range of checkpoints to the corresponding tx_sequence_numbers, applying cursors inclusively.
+    /// Limits the results to `page.limit() + 2` to enable pagination to determine has_previous_page and has_next_page.
+    async fn tx_sequence_numbers_by_checkpoint(
+        ctx: &Context<'_>,
+        cp_bounds: RangeInclusive<u64>,
+        page: &Page<CTransaction>,
+    ) -> Result<Vec<u64>, RpcError> {
+        let transaction_bounds = TransactionBounds::fetch(ctx, cp_bounds).await?;
+
+        let tx_lo = transaction_bounds.lo();
+        let tx_hi = transaction_bounds.hi();
+
+        // Inclusive cursor bounds
+        let pg_lo = page.after().map_or(tx_lo, |sq| sq.max(tx_lo));
+        let pg_hi = page
+            .before()
+            .map(|sq| sq.saturating_add(1))
+            .map_or(tx_hi, |sq| sq.min(tx_hi));
+
+        Ok(if page.is_from_front() {
+            (pg_lo..pg_hi).take(page.limit() + 2).collect()
+        } else {
+            (pg_lo..pg_hi).rev().take(page.limit() + 2).collect()
+        })
     }
 }
 
