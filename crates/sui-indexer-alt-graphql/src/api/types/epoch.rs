@@ -6,7 +6,10 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
+use crate::api::types::safe_mode::SafeMode;
+use crate::api::types::stake_subsidy::StakeSubsidy;
 use crate::api::types::storage_fund::StorageFund;
+use crate::api::types::system_parameters::SystemParameters;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     api::types::validator_set::ValidatorSet,
@@ -288,6 +291,85 @@ impl Epoch {
         };
 
         Ok(Some(storage_fund))
+    }
+
+    /// Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+    async fn safe_mode(&self, ctx: &Context<'_>) -> Result<Option<SafeMode>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let storage_fund = match system_state {
+            SuiSystemState::V1(inner) => inner.into(),
+            SuiSystemState::V2(inner) => inner.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(storage_fund))
+    }
+
+    /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+    /// This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+    async fn system_state_version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let system_state_version = match system_state {
+            SuiSystemState::V1(inner) => inner.system_state_version,
+            SuiSystemState::V2(inner) => inner.system_state_version,
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(system_state_version.into()))
+    }
+
+    /// Details of the system that are decided during genesis.
+    async fn system_parameters(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<SystemParameters>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let system_parameters = match system_state {
+            SuiSystemState::V1(inner) => inner.parameters.into(),
+            SuiSystemState::V2(inner) => inner.parameters.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(system_parameters))
+    }
+
+    /// Parameters related to the subsidy that supplements staking rewards
+    async fn system_stake_subsidy(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<StakeSubsidy>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let stake_subsidy = match system_state {
+            SuiSystemState::V1(inner) => inner.stake_subsidy.into(),
+            SuiSystemState::V2(inner) => inner.stake_subsidy.into(),
+            #[cfg(msim)]
+            SuiSystemState::SimTestV1(_)
+            | SuiSystemState::SimTestShallowV2(_)
+            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+        };
+
+        Ok(Some(stake_subsidy))
     }
 }
 
