@@ -4,22 +4,28 @@
 
 use super::{canonicalize_handles, context::*, optimize};
 use crate::{
-    FullyCompiledProgram,
+    PreCompiledProgramInfo,
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::DiagnosticReporter,
+    diagnostics::{DiagnosticReporter, Diagnostics, warning_filters::WarningFiltersScope},
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
-    hlir::ast::{self as H, Value_, Var, Visibility},
+    hlir::{
+        ast::{self as H, Value_, Var, Visibility},
+        translate::{single_type as hlir_single_type, translate_var, type_},
+    },
     naming::{
-        ast::{BuiltinTypeName_, DatatypeTypeParameter, TParam},
+        ast::{self as N, BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
     },
     parser::ast::{
         Ability, Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName,
         ModuleName, TargetKind, UnaryOp, UnaryOp_, VariantName,
     },
-    shared::{known_attributes::AttributeKind_, unique_map::UniqueMap, *},
+    shared::{
+        ide::IDEInfo, known_attributes::AttributeKind_, program_info::ModuleInfo,
+        unique_map::UniqueMap, *,
+    },
 };
 use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
@@ -30,7 +36,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     convert::TryInto,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
@@ -38,36 +44,46 @@ type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
     DatatypeDeclarations,
     HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
-    let pre_compiled_modules = || {
-        pre_compiled_lib.iter().flat_map(|pre_compiled| {
-            pre_compiled
-                .cfgir
-                .modules
-                .key_cloned_iter()
-                .filter(|(mident, _m)| !prog.modules.contains_key(mident))
+    // pre-compiled modules contain ProgramInfo computed at typing which does contains
+    // dependency order so unwrap below is safe
+    let pre_compiled_dependency_orders = || {
+        pre_compiled_lib.iter().flat_map(|module_info| {
+            module_info
+                .iter()
+                .filter(|(mident, _)| !prog.modules.contains_key(mident))
+                .map(|(mident, minfo)| {
+                    (
+                        *mident,
+                        minfo
+                            .info
+                            .dependency_order
+                            .expect("ICE typing module info with no dependency order"),
+                    )
+                })
         })
     };
 
     let mut max_ordering = 0;
-    let mut orderings: HashMap<ModuleIdent, usize> = pre_compiled_modules()
-        .map(|(m, mdef)| {
-            max_ordering = std::cmp::max(max_ordering, mdef.dependency_order);
-            (m, mdef.dependency_order)
+    let mut orderings: HashMap<ModuleIdent, usize> = pre_compiled_dependency_orders()
+        .map(|(mident, dependency_order)| {
+            max_ordering = std::cmp::max(max_ordering, dependency_order);
+            (mident, dependency_order)
         })
         .collect();
     for (m, mdef) in prog.modules.key_cloned_iter() {
         orderings.insert(m, mdef.dependency_order + 1 + max_ordering);
     }
 
-    let all_modules = || prog.modules.key_cloned_iter().chain(pre_compiled_modules());
-    let sdecls: DatatypeDeclarations = all_modules()
+    let sdecls: DatatypeDeclarations = prog
+        .modules
+        .key_cloned_iter()
         .flat_map(|(m, mdef)| {
             mdef.structs.key_cloned_iter().map(move |(s, sdef)| {
                 let key = (m, s);
@@ -77,7 +93,9 @@ fn extract_decls(
             })
         })
         .collect();
-    let edecls: DatatypeDeclarations = all_modules()
+    let edecls: DatatypeDeclarations = prog
+        .modules
+        .key_cloned_iter()
         .flat_map(|(m, mdef)| {
             mdef.enums.key_cloned_iter().map(move |(e, edef)| {
                 let key = (m, e);
@@ -87,9 +105,11 @@ fn extract_decls(
             })
         })
         .collect();
-    let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
+    let mut ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
     let context = &mut Context::new(compilation_env, None, None);
-    let fdecls = all_modules()
+    let mut fdecls: HashMap<(ModuleIdent, FunctionName), FunctionDeclaration> = prog
+        .modules
+        .key_cloned_iter()
         .flat_map(|(m, mdef)| {
             mdef.functions
                 .key_cloned_iter()
@@ -118,7 +138,116 @@ fn extract_decls(
             )
         })
         .collect();
+
+    // add pre-compiled declaratinos if any
+    if let Some(pre_compiled_lib) = pre_compiled_lib {
+        for (mident, minfo) in pre_compiled_lib.iter() {
+            let (pre_compiled_datatype_decls, pre_compiled_fun_decls) =
+                pre_compiled_decls(compilation_env, mident, &minfo.info);
+            ddecls.extend(pre_compiled_datatype_decls);
+            fdecls.extend(pre_compiled_fun_decls);
+        }
+    }
+
     (orderings, ddecls, fdecls)
+}
+
+fn pre_compiled_decls(
+    compilation_env: &CompilationEnv,
+    mident: &ModuleIdent,
+    minfo: &ModuleInfo,
+) -> (
+    DatatypeDeclarations,
+    HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
+) {
+    fn hlir_function_signature(sig: N::FunctionSignature) -> H::FunctionSignature {
+        let type_parameters = sig.type_parameters;
+        let empty_flags = Flags::empty();
+        let empty_known_filter_names = BTreeMap::new();
+        let empty_diags = RwLock::new(Diagnostics::new());
+        let empty_ide_info = RwLock::new(IDEInfo::new());
+        let empty_warning_filters_scope = WarningFiltersScope::root(None);
+        // create an empty reporter to collect all diagnostics,
+        // and report ICE if any exist as in here there shouldn't be any
+        // (we are effectively re-doing part of an earlier pass here that
+        // succeeded in the past)
+        let empty_reporter = DiagnosticReporter::new(
+            &empty_flags,
+            &empty_known_filter_names,
+            &empty_diags,
+            &empty_ide_info,
+            empty_warning_filters_scope,
+        );
+        let parameters = sig
+            .parameters
+            .into_iter()
+            .map(|(mut_, v, tty)| {
+                let ty = hlir_single_type(&empty_reporter, tty);
+                (mut_, translate_var(v), ty)
+            })
+            .collect();
+        if !empty_reporter.is_empty() {
+            panic!("ICE There should be no errors when translating pre-compiled type");
+        }
+        let return_type = type_(&empty_reporter, sig.return_type);
+        H::FunctionSignature {
+            type_parameters,
+            parameters,
+            return_type,
+        }
+    }
+
+    let sdecls: DatatypeDeclarations = minfo
+        .structs
+        .key_cloned_iter()
+        .map(move |(s, sdef)| {
+            let key = (*mident, s);
+            let abilities = abilities(&sdef.abilities);
+            let type_parameters = datatype_type_parameters(sdef.type_parameters.clone());
+            (key, (abilities, type_parameters))
+        })
+        .collect();
+
+    let edecls: DatatypeDeclarations = minfo
+        .enums
+        .key_cloned_iter()
+        .map(move |(e, edef)| {
+            let key = (*mident, e);
+            let abilities = abilities(&edef.abilities);
+            let type_parameters = datatype_type_parameters(edef.type_parameters.clone());
+            (key, (abilities, type_parameters))
+        })
+        .collect();
+
+    let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
+
+    let context = &mut Context::new(compilation_env, None, None);
+    let fdecls = minfo
+        .functions
+        .key_cloned_iter()
+        .filter_map(move |(f, fdef)| {
+            if fdef.macro_.is_none() {
+                let key = (*mident, f);
+                let hlir_sig = hlir_function_signature(fdef.signature.clone());
+                let seen_datatypes = seen_datatypes(&hlir_sig);
+                let gsig = hlir_sig;
+                Some((key, (seen_datatypes, gsig)))
+            } else {
+                None
+            }
+        })
+        .map(|(key, (seen_datatypes, sig))| {
+            (
+                key,
+                FunctionDeclaration {
+                    seen_datatypes,
+                    signature: function_signature(context, sig),
+                },
+            )
+        })
+        .collect();
+
+    (ddecls, fdecls)
 }
 
 //**************************************************************************************************
@@ -127,10 +256,10 @@ fn extract_decls(
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
-    let mut units = vec![];
+    let mut units = Vec::new();
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
@@ -154,7 +283,7 @@ pub fn program(
             &ddecls,
             &fdecls,
         ) {
-            units.push(unit)
+            units.push(unit);
         }
     }
     // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
