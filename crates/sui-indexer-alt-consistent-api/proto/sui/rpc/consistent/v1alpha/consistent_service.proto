@@ -8,6 +8,8 @@ package sui.rpc.consistent.v1alpha;
 service ConsistentService {
   rpc AvailableRange(AvailableRangeRequest) returns (AvailableRangeResponse);
 
+  rpc GetBalance(GetBalanceRequest) returns (Balance);
+
   rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse);
 
   rpc ListObjectsByType(ListObjectsByTypeRequest) returns (ListObjectsResponse);
@@ -27,6 +29,15 @@ message AvailableRangeResponse {
   // The (inclusive) maximum checkpoint sequence number that the service can
   // answer questions for.
   optional uint64 max_checkpoint = 2;
+}
+
+message GetBalanceRequest {
+  // Required. The address of the owner whose balance is being requested.
+  optional string owner = 1;
+
+  // Required. The marker type for the coins being aggregated into this
+  // balance, e.g. `0x2::sui::SUI`.
+  optional string coin_type = 2;
 }
 
 message ListBalancesRequest {

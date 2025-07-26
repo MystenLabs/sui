@@ -7,11 +7,14 @@ use std::str::FromStr;
 use anyhow::Context;
 use bincode::serde::Compat;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
-use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::{base_types::SuiAddress, TypeTag};
 
-use crate::rpc::{
-    error::{RpcError, StatusCode},
-    pagination::Page,
+use crate::{
+    rpc::{
+        error::{RpcError, StatusCode},
+        pagination::Page,
+    },
+    schema::balances::Key,
 };
 
 use super::State;
@@ -21,16 +24,66 @@ pub(super) enum Error {
     #[error("Invalid 'owner': {0:?}")]
     InvalidOwner(String),
 
+    #[error("Invalid 'coin_type': {0:?}")]
+    InvalidType(String),
+
     #[error("Missing 'owner'")]
     MissingOwner,
+
+    #[error("Missing 'coin_type'")]
+    MissingType,
 }
 
 impl StatusCode for Error {
     fn code(&self) -> tonic::Code {
         match self {
-            Error::InvalidOwner(_) | Error::MissingOwner => tonic::Code::InvalidArgument,
+            Error::InvalidOwner(_)
+            | Error::InvalidType(_)
+            | Error::MissingOwner
+            | Error::MissingType => tonic::Code::InvalidArgument,
         }
     }
+}
+
+pub(super) fn get_balance(
+    state: &State,
+    checkpoint: u64,
+    request: grpc::GetBalanceRequest,
+) -> Result<grpc::Balance, RpcError<Error>> {
+    let owner = if request.owner().is_empty() {
+        return Err(Error::MissingOwner.into());
+    } else {
+        owner(request.owner())?
+    };
+
+    let coin_type = if request.coin_type().is_empty() {
+        return Err(Error::MissingType.into());
+    } else {
+        TypeTag::from_str(request.coin_type())
+            .map_err(|_| Error::InvalidType(request.coin_type().to_owned()))?
+    };
+
+    let key = Key {
+        owner,
+        type_: coin_type,
+    };
+
+    let index = &state.store.schema().balances;
+    let balance = index
+        .get(checkpoint, &key)
+        .context("Failed to fetch data")?
+        .unwrap_or(0);
+
+    let with_prefix = true;
+    let coin_type = key.type_.to_canonical_string(with_prefix);
+    let balance = u64::try_from(balance)
+        .with_context(|| format!("Bad balance for type {coin_type}: {balance}"))?;
+
+    Ok(grpc::Balance {
+        coin_type: Some(coin_type),
+        balance: Some(balance),
+        page_token: None,
+    })
 }
 
 pub(super) fn list_balances(

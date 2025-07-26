@@ -13,6 +13,16 @@ pub struct AvailableRangeResponse {
     pub max_checkpoint: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetBalanceRequest {
+    /// Required. The address of the owner whose balance is being requested.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The marker type for the coins being aggregated into this
+    /// balance, e.g. `0x2::sui::SUI`.
+    #[prost(string, optional, tag = "2")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListBalancesRequest {
     /// Required. The address of the owner whose balances are being requested.
     #[prost(string, optional, tag = "1")]
@@ -376,6 +386,32 @@ pub mod consistent_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn get_balance(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetBalanceRequest>,
+        ) -> std::result::Result<tonic::Response<super::Balance>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.consistent.v1alpha.ConsistentService/GetBalance",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.consistent.v1alpha.ConsistentService",
+                        "GetBalance",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn list_balances(
             &mut self,
             request: impl tonic::IntoRequest<super::ListBalancesRequest>,
@@ -514,6 +550,10 @@ pub mod consistent_service_server {
             tonic::Response<super::AvailableRangeResponse>,
             tonic::Status,
         >;
+        async fn get_balance(
+            &self,
+            request: tonic::Request<super::GetBalanceRequest>,
+        ) -> std::result::Result<tonic::Response<super::Balance>, tonic::Status>;
         async fn list_balances(
             &self,
             request: tonic::Request<super::ListBalancesRequest>,
@@ -650,6 +690,51 @@ pub mod consistent_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = AvailableRangeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.consistent.v1alpha.ConsistentService/GetBalance" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetBalanceSvc<T: ConsistentService>(pub Arc<T>);
+                    impl<
+                        T: ConsistentService,
+                    > tonic::server::UnaryService<super::GetBalanceRequest>
+                    for GetBalanceSvc<T> {
+                        type Response = super::Balance;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetBalanceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ConsistentService>::get_balance(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetBalanceSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
