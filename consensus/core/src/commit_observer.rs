@@ -96,7 +96,7 @@ impl CommitObserver {
 
         // Set if the commit is produced from local DAG, or received through commit sync.
         for subdag in committed_sub_dags.iter_mut() {
-            subdag.local_dag_has_finalization_blocks = local;
+            subdag.decided_with_local_blocks = local;
         }
 
         // Send scores as part of the first sub dag, if the leader schedule has been updated.
@@ -236,7 +236,7 @@ impl CommitObserver {
                     reputation_scores,
                 );
                 // Do not assume the commit has finalization blocks locally, when it has not been finalized before.
-                committed_sub_dag.local_dag_has_finalization_blocks =
+                committed_sub_dag.decided_with_local_blocks =
                     committed_sub_dag.commit_ref.index <= last_finalized_commit_index;
                 self.commit_finalizer_handle
                     .send(committed_sub_dag)
@@ -567,7 +567,7 @@ mod tests {
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
-            assert!(subdag.local_dag_has_finalization_blocks);
+            assert!(subdag.decided_with_local_blocks);
             assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_sent_index {
@@ -613,7 +613,7 @@ mod tests {
                 tracing::info!("Processed {subdag} on resubmission");
                 assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
                 assert_eq!(subdag, commits[processed_subdag_index as usize]);
-                assert!(subdag.local_dag_has_finalization_blocks);
+                assert!(subdag.decided_with_local_blocks);
                 assert_eq!(subdag.reputation_scores_desc, vec![]);
                 processed_subdag_index = subdag.commit_ref.index;
                 if processed_subdag_index == consumer_last_processed_commit_index {
@@ -684,7 +684,7 @@ mod tests {
             {
                 tracing::info!("Processed {subdag} on resubmission");
                 assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
-                assert!(subdag.local_dag_has_finalization_blocks);
+                assert!(subdag.decided_with_local_blocks);
                 assert_eq!(subdag.reputation_scores_desc, vec![]);
                 processed_subdag_index = subdag.commit_ref.index;
                 if processed_subdag_index == expected_last_sent_index as CommitIndex {
@@ -732,7 +732,7 @@ mod tests {
                 tracing::info!("Processed {subdag} on resubmission");
                 assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
                 assert_eq!(subdag, commits[processed_subdag_index as usize]);
-                assert!(subdag.local_dag_has_finalization_blocks);
+                assert!(subdag.decided_with_local_blocks);
                 assert_eq!(subdag.reputation_scores_desc, vec![]);
                 processed_subdag_index = subdag.commit_ref.index;
                 if processed_subdag_index == expected_last_sent_index as CommitIndex {
