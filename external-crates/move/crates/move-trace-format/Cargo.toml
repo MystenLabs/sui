@@ -10,7 +10,7 @@ edition = "2024"
 [dependencies]
 move-core-types.workspace = true
 serde.workspace = true
-move-binary-format.workspace = true
+move-binary-format = {workspace = true, features = ["serde"]}
 zstd.workspace = true
 
 serde_json = { workspace = true, features = ["arbitrary_precision"] }
