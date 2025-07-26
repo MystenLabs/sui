@@ -353,7 +353,7 @@ pub struct HandleSoftBundleCertificatesRequestV3 {
 /// Raw protobuf request for validator health information (evolvable)
 #[derive(Clone, prost::Message)]
 pub struct RawValidatorHealthRequest {
-    /// Reserved for future use - empty request is intentional for now
+    /// Reserved for future use - protobuf requires at least one field.
     #[prost(bytes = "bytes", tag = "1")]
     pub reserved: Bytes,
 }
@@ -382,14 +382,14 @@ pub struct ValidatorHealthRequest {}
 /// Response with validator health metrics (data collected but not used for scoring yet)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidatorHealthResponse {
-    /// Number of in-flight consensus transactions
-    pub num_inflight_consensus_transactions: u64,
     /// Number of in-flight execution transactions from execution scheduler
     pub num_inflight_execution_transactions: u64,
-    /// Last locally built checkpoint sequence number
-    pub last_locally_built_checkpoint: u64,
+    /// Number of in-flight consensus transactions
+    pub num_inflight_consensus_transactions: u64,
     /// Last committed leader round from Mysticeti consensus
     pub last_committed_leader_round: u32,
+    /// Last locally built checkpoint sequence number
+    pub last_locally_built_checkpoint: u64,
 }
 
 impl TryFrom<ValidatorHealthRequest> for RawValidatorHealthRequest {

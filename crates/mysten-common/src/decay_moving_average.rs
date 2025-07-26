@@ -10,6 +10,20 @@
 /// A decay factor of 0 means that the average is completely replaced with the new value every time,
 /// and a decay factor of 1 means that the average never changes (keeps the old value).
 ///
+/// ## Choosing Decay Factors for Different Behaviors
+///
+/// **Lower decay factor (closer to 0.0):**
+/// - Adapts quickly to new values, making the average more responsive to recent changes
+/// - Outliers are "forgotten" faster, providing better tolerance to temporary spikes or anomalies
+/// - Useful for tracking recent trends where you want to react quickly to changes
+/// - Example: `0.1` - heavily weights recent values, good for responsive latency tracking
+///
+/// **Higher decay factor (closer to 1.0):**
+/// - Changes slowly and retains more historical information
+/// - Outliers have a longer-lasting impact on the average, making them more visible
+/// - Provides more stable tracking that's less sensitive to temporary fluctuations
+/// - Example: `0.9` - heavily weights historical values, good for stable baseline tracking
+///
 /// When using this to track moving average of latency, it is important that
 /// there should be a cap on the maximum value that can be stored.
 #[derive(Debug, Clone)]
@@ -19,6 +33,14 @@ pub struct DecayMovingAverage {
 }
 
 impl DecayMovingAverage {
+    /// Create a new DecayMovingAverage with an initial value and decay factor.
+    ///
+    /// # Arguments
+    /// * `init_value` - The initial value for the moving average
+    /// * `decay_factor` - A value between 0.0 and 1.0 that controls how much historical data is retained.
+    ///   Lower values (e.g., 0.1) make the average more responsive to recent values and better at
+    ///   forgetting outliers. Higher values (e.g., 0.9) make the average more stable but outliers
+    ///   will have a longer-lasting impact.
     pub fn new(init_value: f64, decay_factor: f64) -> Self {
         assert!(
             decay_factor > 0.0 && decay_factor < 1.0,
@@ -39,8 +61,28 @@ impl DecayMovingAverage {
         self.value = self.value * self.decay_factor + value * (1.0 - self.decay_factor);
     }
 
-    /// Override the moving average with a new value.
-    /// This can be useful when we want to reset the initial value of the moving average.
+    /// Override the moving average with a new value, bypassing the decay calculation.
+    ///
+    /// Unlike `update_moving_average()`, this method immediately sets the average to the new value
+    /// rather than blending it with the previous value using the decay factor.
+    ///
+    /// This is particularly useful for implementing patterns like "decay moving max":
+    /// - Track the maximum value seen recently, but let it decay over time if no new maxima occur
+    /// - When a new maximum is encountered, immediately jump to that value using `override_moving_average()`
+    /// - For regular updates below the maximum, use `update_moving_average()` to let the value decay naturally
+    ///
+    /// # Example: Decay Moving Max
+    /// ```
+    /// let mut decay_max = DecayMovingAverage::new(0.0, 0.9);
+    ///
+    /// // New maximum encountered - immediately jump to it
+    /// if new_value > decay_max.get() {
+    ///     decay_max.override_moving_average(new_value);
+    /// } else {
+    ///     // Let the maximum decay naturally toward the current value
+    ///     decay_max.update_moving_average(new_value);
+    /// }
+    /// ```
     pub fn override_moving_average(&mut self, value: f64) {
         self.value = value;
     }
