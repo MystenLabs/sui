@@ -179,7 +179,10 @@ impl TestEnvironment {
             .await
             .move_call(self.move_package, "tto", function, arguments)
             .build();
-        self.test_cluster.wallet.sign_transaction(&transaction)
+        self.test_cluster
+            .wallet
+            .sign_transaction(&transaction)
+            .await
     }
 
     async fn move_call(

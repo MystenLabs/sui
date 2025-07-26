@@ -123,7 +123,8 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
 
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
     let tx_bytes1 = tx_bytes.clone();
     let dryrun_response = http_client.dry_run_transaction_block(tx_bytes).await?;
@@ -214,7 +215,8 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
@@ -274,7 +276,8 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
 
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
@@ -504,7 +507,8 @@ async fn test_get_metadata() -> Result<(), anyhow::Error> {
 
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
@@ -588,7 +592,8 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response: SuiTransactionBlockResponse = http_client
@@ -660,7 +665,8 @@ async fn test_get_total_supply() -> Result<(), anyhow::Error> {
 
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
     let tx_response = http_client
@@ -728,7 +734,8 @@ async fn test_staking() -> Result<(), anyhow::Error> {
         .await?;
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
@@ -797,7 +804,8 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
             .await?;
         let tx = cluster
             .wallet
-            .sign_transaction(&transaction_bytes.to_data()?);
+            .sign_transaction(&transaction_bytes.to_data()?)
+            .await;
 
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
@@ -854,7 +862,8 @@ async fn test_unstaking() -> Result<(), anyhow::Error> {
         .await?;
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 
@@ -934,7 +943,8 @@ async fn test_staking_multiple_coins() -> Result<(), anyhow::Error> {
         .await?;
     let tx = cluster
         .wallet
-        .sign_transaction(&transaction_bytes.to_data()?);
+        .sign_transaction(&transaction_bytes.to_data()?)
+        .await;
 
     let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
 

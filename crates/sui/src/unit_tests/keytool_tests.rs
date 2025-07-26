@@ -50,7 +50,9 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
-        keystore.import(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
+        keystore
+            .import(None, SuiKeyPair::Secp256k1(get_key_pair().1))
+            .await?;
     }
 
     // List all addresses with flag
@@ -67,12 +69,18 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 async fn test_flag_in_signature_and_keypair() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
 
-    keystore.import(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
-    keystore.import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+    keystore
+        .import(None, SuiKeyPair::Secp256k1(get_key_pair().1))
+        .await?;
+    keystore
+        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+        .await?;
 
     for pk in keystore.entries() {
         let pk1 = pk.clone();
-        let sig = keystore.sign_secure(&(&pk).into(), b"hello", Intent::sui_transaction())?;
+        let sig = keystore
+            .sign_secure(&(&pk).into(), b"hello", Intent::sui_transaction())
+            .await?;
         match sig {
             Signature::Ed25519SuiSignature(_) => {
                 // signature contains corresponding flag

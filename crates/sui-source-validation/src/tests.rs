@@ -879,7 +879,7 @@ pub async fn upgrade_package_with_wallet(
             .await
             .unwrap();
 
-        context.sign_transaction(&data)
+        context.sign_transaction(&data).await
     };
 
     let resp = context.execute_transaction_must_succeed(transaction).await;
