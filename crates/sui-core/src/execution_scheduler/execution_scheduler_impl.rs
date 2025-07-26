@@ -148,11 +148,9 @@ impl ExecutionScheduler {
         .concat();
 
         let epoch = epoch_store.epoch();
-        debug!(?tx_digest, "Scheduled transaction in execution scheduler");
-        tracing::trace!(
+        debug!(
             ?tx_digest,
-            "Waiting for input objects: {:?}",
-            input_and_receiving_keys
+            "Scheduled transaction, waiting for input objects: {:?}", input_and_receiving_keys,
         );
 
         let availability = self
