@@ -32,7 +32,7 @@ use crate::{
         metrics::TransactionDriverMetrics,
         request_retrier::RequestRetrier,
         ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
-        WaitForEffectsRequest, WaitForEffectsResponse,
+        TransactionContext, WaitForEffectsRequest, WaitForEffectsResponse,
     },
 };
 
@@ -50,12 +50,12 @@ impl EffectsCertifier {
     #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
+        txn_context: &mut TransactionContext,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
         submit_txn_resp: SubmitTxResponse,
-        options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -83,7 +83,7 @@ impl EffectsCertifier {
                 authority_aggregator,
                 tx_digest,
                 consensus_position,
-                options,
+                &txn_context.options,
             ),
             async {
                 // No need to send a full effects request if it is already provided.
@@ -94,10 +94,10 @@ impl EffectsCertifier {
                     return Ok(full_effects);
                 }
                 let (name, client) = retrier
-                    .next_target()
+                    .next_target(&mut txn_context.non_retriable_errors)
                     .expect("there should be at least 1 target");
                 current_target = name;
-                self.get_full_effects(client, tx_digest, consensus_position, options)
+                self.get_full_effects(client, tx_digest, consensus_position, &txn_context.options)
                     .await
             },
         );
@@ -131,7 +131,7 @@ impl EffectsCertifier {
                     // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
                     // but the error should not happen after effects certification unless there are software bugs
                     // or > f malicious validators.
-                    retrier.add_error(current_target, e)?;
+                    retrier.add_error(&mut txn_context.non_retriable_errors, current_target, e)?;
                 }
             };
 
@@ -140,10 +140,10 @@ impl EffectsCertifier {
             // Retry getting full effects from the next target.
 
             // This emits an error when retrier has no targets available.
-            let (name, client) = retrier.next_target()?;
+            let (name, client) = retrier.next_target(&mut txn_context.non_retriable_errors)?;
             current_target = name;
             full_effects_result = self
-                .get_full_effects(client, tx_digest, consensus_position, options)
+                .get_full_effects(client, tx_digest, consensus_position, &txn_context.options)
                 .await;
         }
     }
