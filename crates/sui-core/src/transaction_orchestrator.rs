@@ -140,10 +140,15 @@ where
 
         let transaction_driver = if td_percentage > 0 {
             let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
+            let client_metrics = Arc::new(
+                crate::validator_client_monitor::ValidatorClientMetrics::new(prometheus_registry),
+            );
             Some(TransactionDriver::new(
                 validators.clone(),
                 reconfig_observer.clone(),
                 td_metrics,
+                None, // Use default config for now
+                client_metrics,
             ))
         } else {
             None

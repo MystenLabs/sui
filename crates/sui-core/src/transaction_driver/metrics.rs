@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_with_registry, HistogramVec,
-    IntCounter, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, HistogramVec, IntCounter, IntCounterVec, Registry,
 };
 
 const FINALITY_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -23,6 +23,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) rejection_acks: IntCounter,
     pub(crate) expiration_acks: IntCounter,
     pub(crate) effects_digest_mismatches: IntCounter,
+    pub(crate) validator_selections: IntCounterVec,
 }
 
 impl TransactionDriverMetrics {
@@ -69,6 +70,13 @@ impl TransactionDriverMetrics {
             effects_digest_mismatches: register_int_counter_with_registry!(
                 "transaction_driver_effects_digest_mismatches",
                 "Number of effects digest mismatches detected by the transaction driver",
+                registry,
+            )
+            .unwrap(),
+            validator_selections: register_int_counter_vec_with_registry!(
+                "transaction_driver_validator_selections",
+                "Number of times each validator was selected for transaction submission",
+                &["validator"],
                 registry,
             )
             .unwrap(),

@@ -108,6 +108,12 @@ pub trait AuthorityAPI {
         &self,
         request: SystemStateRequest,
     ) -> Result<SuiSystemState, SuiError>;
+
+    /// Get validator health metrics (for latency measurement)
+    async fn validator_health(
+        &self,
+        request: sui_types::messages_grpc::RawValidatorHealthRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError>;
 }
 
 #[derive(Clone)]
@@ -314,6 +320,17 @@ impl AuthorityAPI for NetworkAuthorityClient {
     ) -> Result<SuiSystemState, SuiError> {
         self.client()?
             .get_system_state_object(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
+    async fn validator_health(
+        &self,
+        request: sui_types::messages_grpc::RawValidatorHealthRequest,
+    ) -> Result<sui_types::messages_grpc::RawValidatorHealthResponse, SuiError> {
+        self.client()?
+            .validator_health(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)

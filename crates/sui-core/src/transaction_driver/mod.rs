@@ -35,7 +35,9 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    validator_client_monitor::{ValidatorClientMetrics, ValidatorClientMonitor},
 };
+use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
@@ -46,11 +48,12 @@ pub struct SubmitTransactionOptions {
 }
 
 pub struct TransactionDriver<A: Clone> {
-    authority_aggregator: ArcSwap<AuthorityAggregator<A>>,
+    authority_aggregator: Arc<ArcSwap<AuthorityAggregator<A>>>,
     state: Mutex<State>,
     metrics: Arc<TransactionDriverMetrics>,
     submitter: TransactionSubmitter,
     certifier: EffectsCertifier,
+    client_monitor: Arc<ValidatorClientMonitor<A>>,
 }
 
 impl<A> TransactionDriver<A>
@@ -61,14 +64,25 @@ where
         authority_aggregator: Arc<AuthorityAggregator<A>>,
         reconfig_observer: Arc<dyn ReconfigObserver<A> + Sync + Send>,
         metrics: Arc<TransactionDriverMetrics>,
+        client_config: Option<ValidatorClientMonitorConfig>,
+        client_metrics: Arc<ValidatorClientMetrics>,
     ) -> Arc<Self> {
+        let shared_swap = Arc::new(ArcSwap::new(authority_aggregator));
+
+        // Use provided config or default if none provided
+        let config = client_config.unwrap_or_default();
+        let client_monitor =
+            ValidatorClientMonitor::new(config, client_metrics, shared_swap.clone());
+
         let driver = Arc::new(Self {
-            authority_aggregator: ArcSwap::new(authority_aggregator),
+            authority_aggregator: shared_swap,
             state: Mutex::new(State::new()),
             metrics: metrics.clone(),
             submitter: TransactionSubmitter::new(metrics.clone()),
             certifier: EffectsCertifier::new(metrics),
+            client_monitor,
         });
+
         driver.enable_reconfig(reconfig_observer);
         driver
     }
@@ -136,12 +150,25 @@ where
         // Get consensus position using TransactionSubmitter
         let (name, submit_txn_resp) = self
             .submitter
-            .submit_transaction(&auth_agg, tx_digest, raw_request, options)
+            .submit_transaction(
+                &auth_agg,
+                &self.client_monitor,
+                tx_digest,
+                raw_request,
+                options,
+            )
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .get_certified_finalized_effects(&auth_agg, tx_digest, name, submit_txn_resp, options)
+            .get_certified_finalized_effects(
+                &auth_agg,
+                &self.client_monitor,
+                tx_digest,
+                name,
+                submit_txn_resp,
+                options,
+            )
             .await
     }
 
@@ -170,11 +197,16 @@ where
     }
 
     fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>) {
+        let new_epoch = new_authorities.committee.epoch;
         tracing::info!(
             "Transaction Driver updating AuthorityAggregator with committee {}",
             new_authorities.committee
         );
+
         self.authority_aggregator.store(new_authorities);
+
+        // Notify performance monitor of epoch change
+        self.client_monitor.on_epoch_change(new_epoch);
     }
 }
 

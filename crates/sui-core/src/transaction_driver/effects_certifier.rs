@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
@@ -34,6 +38,7 @@ use crate::{
         ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
         WaitForEffectsRequest, WaitForEffectsResponse,
     },
+    validator_client_monitor::{OperationFeedback, OperationType, ValidatorClientMonitor},
 };
 
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
@@ -51,6 +56,7 @@ impl EffectsCertifier {
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         // This keeps track of the current target for getting full effects.
         mut current_target: AuthorityName,
@@ -76,11 +82,15 @@ impl EffectsCertifier {
             },
         };
 
-        let mut retrier = RequestRetrier::new(authority_aggregator);
+        let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor);
 
+        // Setting this to None at first because if the full effects are already provided,
+        // we do not need to record the latency.
+        let mut full_effects_start_time = None;
         let (acknowledgments_result, mut full_effects_result) = join!(
             self.wait_for_acknowledgments(
                 authority_aggregator,
+                client_monitor,
                 tx_digest,
                 consensus_position,
                 options,
@@ -97,6 +107,7 @@ impl EffectsCertifier {
                     .next_target()
                     .expect("there should be at least 1 target");
                 current_target = name;
+                full_effects_start_time = Some(Instant::now());
                 self.get_full_effects(client, tx_digest, consensus_position, options)
                     .await
             },
@@ -120,7 +131,23 @@ impl EffectsCertifier {
                             effects_digest,
                             certified_digest
                         );
+                        // This validator is byzantine, record the error.
+                        client_monitor.record_interaction_result(OperationFeedback {
+                            validator: current_target,
+                            operation: OperationType::Effects,
+                            latency: None,
+                            success: false,
+                        });
                     } else {
+                        if let Some(start_time) = full_effects_start_time {
+                            let latency = start_time.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: current_target,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: true,
+                            });
+                        }
                         return Ok(
                             self.get_quorum_transaction_response(effects_digest, executed_data)
                         );
@@ -128,6 +155,12 @@ impl EffectsCertifier {
                 }
                 Err(e) => {
                     tracing::debug!(?current_target, "Failed to get full effects: {e}");
+                    client_monitor.record_interaction_result(OperationFeedback {
+                        validator: current_target,
+                        operation: OperationType::Effects,
+                        latency: None,
+                        success: false,
+                    });
                     // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
                     // but the error should not happen after effects certification unless there are software bugs
                     // or > f malicious validators.
@@ -142,6 +175,7 @@ impl EffectsCertifier {
             // This emits an error when retrier has no targets available.
             let (name, client) = retrier.next_target()?;
             current_target = name;
+            full_effects_start_time = Some(Instant::now());
             full_effects_result = self
                 .get_full_effects(client, tx_digest, consensus_position, options)
                 .await;
@@ -198,6 +232,7 @@ impl EffectsCertifier {
     async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client_monitor: &Arc<ValidatorClientMonitor<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
@@ -224,6 +259,7 @@ impl EffectsCertifier {
             let name = *name;
             let raw_request = raw_request.clone();
             let future = async move {
+                let effects_start = Instant::now();
                 // This loop can only retry RPC errors, timeouts, and other errors retriable
                 // without new submission.
                 let backoff = ExponentialBackoff::from_millis(100)
@@ -238,9 +274,23 @@ impl EffectsCertifier {
                     .await;
                     match result {
                         Ok(Ok(response)) => {
+                            let latency = effects_start.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: true,
+                            });
                             return (name, Ok(response));
                         }
                         Ok(Err(e)) => {
+                            let latency = effects_start.elapsed();
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: Some(latency),
+                                success: false,
+                            });
                             if !matches!(e, SuiError::RpcError(_, _)) {
                                 return (name, Err(e));
                             }
@@ -251,6 +301,12 @@ impl EffectsCertifier {
                             );
                         }
                         Err(_) => {
+                            client_monitor.record_interaction_result(OperationFeedback {
+                                validator: name,
+                                operation: OperationType::Effects,
+                                latency: None,
+                                success: false,
+                            });
                             tracing::trace!(
                                 ?name,
                                 "Wait for effects acknowledgement (attempt {attempt}): timeout"

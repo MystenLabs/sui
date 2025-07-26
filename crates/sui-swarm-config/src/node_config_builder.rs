@@ -253,6 +253,7 @@ impl ValidatorConfigBuilder {
             enable_db_write_stall: None,
             execution_time_observer_config: self.execution_time_observer_config,
             chain_override_for_testing: self.chain_override,
+            validator_client_monitor_config: None,
         }
     }
 
@@ -560,6 +561,7 @@ impl FullnodeConfigBuilder {
             enable_db_write_stall: None,
             execution_time_observer_config: None,
             chain_override_for_testing: self.chain_override,
+            validator_client_monitor_config: None,
         }
     }
 }
