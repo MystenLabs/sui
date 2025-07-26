@@ -4,6 +4,7 @@
 #[cfg(msim)]
 mod test {
     use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
+    use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
@@ -25,7 +26,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::node::AuthorityOverloadConfig;
+    use sui_config::node::{AuthorityOverloadConfig, ForkRecoveryConfig};
     use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -46,9 +47,10 @@ mod test {
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
-    use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
+    use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
+    use sui_types::message_envelope::Message;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
@@ -1295,5 +1297,172 @@ mod test {
         });
 
         let _ = futures::join!(bench_task, surfer_task);
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_fork_recovery_transaction_effects_simulation() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let test_cluster = build_test_cluster(4, 5000, 4).await;
+
+        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
+            Arc::new(Mutex::new(HashSet::new()));
+
+        let node_to_authority_map: std::collections::HashMap<
+            sui_simulator::task::NodeId,
+            AuthorityName,
+        > = test_cluster
+            .swarm
+            .validator_nodes()
+            .filter_map(|validator| {
+                validator.get_node_handle().map(|handle| {
+                    let node_id = handle.with(|node| node.get_sim_node_id());
+                    (node_id, validator.name())
+                })
+            })
+            .collect();
+
+        register_fail_point_arg("cp_execution_nondeterminism", {
+            let forked_validators = forked_validators.clone();
+            move || Some((forked_validators.clone(), /* full_halt: */ false))
+        });
+
+        // When we detect forks, kill the node instead of panicking so test continues.
+        register_fail_point_if("kill-checkpoint-fork-node", {
+            let forked_validators = forked_validators.clone();
+            let node_to_authority_map = node_to_authority_map.clone();
+            move || {
+                forked_validators.lock().unwrap().contains(
+                    node_to_authority_map
+                        .get(&sui_simulator::current_simnode_id())
+                        .unwrap(),
+                )
+            }
+        });
+        register_fail_point_if("kill-transaction-fork-node", {
+            let forked_validators = forked_validators.clone();
+            let node_to_authority_map = node_to_authority_map.clone();
+            move || {
+                forked_validators.lock().unwrap().contains(
+                    node_to_authority_map
+                        .get(&sui_simulator::current_simnode_id())
+                        .unwrap(),
+                )
+            }
+        });
+
+        info!("Fork recovery test: Running transactions to trigger fork scenario");
+        test_simulated_load(test_cluster.clone(), 30).await;
+
+        clear_fail_point("cp_execution_nondeterminism");
+        clear_fail_point("kill-checkpoint-fork-node");
+        clear_fail_point("kill-transaction-fork-node");
+
+        let correct_validator = test_cluster
+            .swarm
+            .validator_nodes()
+            .find(|validator| {
+                let validator_name = validator.name();
+                !forked_validators.lock().unwrap().contains(&validator_name)
+            })
+            .expect("Should have at least one non-forked validator");
+
+        let checkpoint_overrides: BTreeMap<u64, String> = correct_validator.get_node_handle()
+            .expect("Validator should have a node handle")
+            .with(|node| {
+                let state = node.state();
+                let checkpoint_store = state.get_checkpoint_store();
+                let node_id = node.get_sim_node_id();
+
+                info!(?node_id, "Collecting correct checkpoint digests from non-forked validator");
+
+                let latest_checkpoint = checkpoint_store
+                    .get_highest_executed_checkpoint()
+                    .expect("should have checkpoints")
+                    .expect("should have executed checkpoints");
+
+                let latest_seq = *latest_checkpoint.sequence_number();
+
+                let mut checkpoint_overrides = BTreeMap::new();
+                for seq in 0..=latest_seq {
+                    if let Ok(Some(checkpoint)) = checkpoint_store.get_checkpoint_by_sequence_number(seq) {
+                        checkpoint_overrides.insert(seq, checkpoint.digest().to_string());
+                        info!(checkpoint_seq = seq, checkpoint_digest = ?checkpoint.digest(), "Collected checkpoint override");
+                    }
+                }
+                checkpoint_overrides
+            });
+
+        let mut effects_overrides: BTreeMap<String, String> = BTreeMap::new();
+        correct_validator
+            .get_node_handle()
+            .expect("Validator should have a node handle")
+            .with(|node| {
+                let state = node.state();
+                let transaction_cache = state.get_transaction_cache_reader();
+
+                info!("Collecting correct transaction effects from non-forked validator");
+
+                let checkpoint_store = state.get_checkpoint_store();
+
+                if let Ok(Some(latest_checkpoint)) =
+                    checkpoint_store.get_highest_executed_checkpoint()
+                {
+                    let latest_seq = *latest_checkpoint.sequence_number();
+
+                    for seq in 0..=latest_seq {
+                        if let Ok(Some(checkpoint)) =
+                            checkpoint_store.get_checkpoint_by_sequence_number(seq)
+                        {
+                            if let Ok(Some(contents)) =
+                                checkpoint_store.get_checkpoint_contents(&checkpoint.content_digest)
+                            {
+                                for execution_digest in contents.inner() {
+                                    let tx_digest = execution_digest.transaction;
+                                    if let Some(effects) =
+                                        transaction_cache.get_executed_effects(&tx_digest)
+                                    {
+                                        let correct_effects_digest = effects.digest();
+                                        effects_overrides.insert(
+                                            tx_digest.to_string(),
+                                            correct_effects_digest.to_string(),
+                                        );
+                                        info!(
+                                            ?tx_digest,
+                                            ?correct_effects_digest,
+                                            "Collected correct effects digest"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+        info!("Fork recovery test: Configuring overrides for forked validators");
+        let fork_recovery_config = ForkRecoveryConfig {
+            transaction_overrides: effects_overrides.clone(),
+            checkpoint_overrides: checkpoint_overrides.clone(),
+        };
+        for validator in test_cluster.swarm.validator_nodes() {
+            let validator_name = validator.name();
+            if forked_validators.lock().unwrap().contains(&validator_name) {
+                test_cluster.stop_node(&validator_name);
+                {
+                    let mut config = validator.config();
+                    config.fork_recovery = Some(fork_recovery_config.clone());
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                test_cluster.start_node(&validator_name).await;
+            }
+        }
+
+        info!("Fork recovery test: Fork scenario complete, validators should now have diverged");
+
+        info!("Fork recovery test: Running recovery phase with correction mechanism active");
+        test_simulated_load(test_cluster, 15).await;
+
+        info!("Fork recovery test: Recovery phase complete, all fail points cleared");
     }
 }

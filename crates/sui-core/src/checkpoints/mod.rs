@@ -29,6 +29,7 @@ use nonempty::NonEmpty;
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
+use sui_macros::{fail_point, fail_point_if};
 use sui_network::default_mysten_network_config;
 use sui_types::base_types::ConciseableName;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -622,6 +623,20 @@ impl CheckpointStore {
                 ?local_contents,
                 "Local checkpoint fork detected!",
             );
+
+            // Fork recovery testing: kill node instead of panicking simulator when failpoint is active
+            fail_point_if!("kill-checkpoint-fork-node", || {
+                #[cfg(msim)]
+                {
+                    tracing::error!(
+                        fatal = true,
+                        "Fork recovery test: killing node due to checkpoint fork for sequence number: {}",
+                        local_checkpoint.sequence_number()
+                    );
+                    sui_simulator::task::kill_current_node(None);
+                }
+            });
+
             fatal!(
                 "Local checkpoint fork detected for sequence number: {}",
                 local_checkpoint.sequence_number()
@@ -1540,13 +1555,37 @@ impl CheckpointBuilder {
                 .get(&summary.sequence_number)?
             {
                 if previously_computed_summary != *summary {
-                    // Panic so that we don't send out an equivocating checkpoint sig.
-                    fatal!(
-                        "Checkpoint {} was previously built with a different result: {:?} vs {:?}",
-                        summary.sequence_number,
-                        previously_computed_summary,
-                        summary
-                    );
+                    // Check if we have a checkpoint override configured for this sequence number
+                    let override_digest =
+                        self.state
+                            .get_fork_recovery_state()
+                            .and_then(|fork_recovery| {
+                                fork_recovery.get_checkpoint_override(&summary.sequence_number)
+                            });
+
+                    if let Some(expected_digest) = override_digest {
+                        if summary.digest() == expected_digest {
+                            info!(
+                                checkpoint_seq = summary.sequence_number,
+                                "Fork recovery: Using checkpoint override, new summary matches expected digest {:?}",
+                                expected_digest
+                            );
+                        } else {
+                            fatal!(
+                                "Fork recovery: Checkpoint {} override configured with digest {:?}, but newly built checkpoint has digest {:?}",
+                                summary.sequence_number,
+                                expected_digest,
+                                summary.digest()
+                            );
+                        }
+                    } else {
+                        fatal!(
+                            "Checkpoint {} was previously built with a different result: {:?} vs {:?}",
+                            summary.sequence_number,
+                            previously_computed_summary,
+                            summary
+                        );
+                    }
                 }
             }
 
