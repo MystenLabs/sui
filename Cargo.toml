@@ -126,6 +126,7 @@ members = [
   "crates/sui-http",
   "crates/sui-indexer",
   "crates/sui-indexer-alt",
+  "crates/sui-indexer-alt-consistent-store",
   "crates/sui-indexer-alt-e2e-tests",
   "crates/sui-indexer-alt-framework",
   "crates/sui-indexer-alt-framework-store-traits",

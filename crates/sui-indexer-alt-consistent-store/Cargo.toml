@@ -1,0 +1,31 @@
+[package]
+name = "sui-indexer-alt-consistent-store"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+bcs.workspace = true
+bincode = { version = "2.0.1", features = ["serde"] }
+futures.workspace = true
+ouroboros.workspace = true
+prometheus.workspace = true
+rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
+scoped-futures.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+move-core-types.workspace = true
+
+sui-default-config.workspace = true
+sui-indexer-alt-framework = { workspace = true, default-features = false }
+
+[dev-dependencies]
+tempfile.workspace = true
