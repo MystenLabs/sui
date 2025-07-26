@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    consistent_service_client::ConsistentServiceClient, GetBalanceRequest, ListBalancesRequest,
+    consistent_service_client::ConsistentServiceClient, BatchGetBalancesRequest, GetBalanceRequest,
+    ListBalancesRequest,
 };
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -66,6 +67,21 @@ async fn test_aggregation() {
         get_balance(&cluster, b, &gas_type, None).await.unwrap(),
         (gas_type.clone(), 9)
     );
+
+    // Perform a multi-get for both addresses
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(a, gas_type.clone()), (b, gas_type.clone())],
+            None
+        )
+        .await
+        .unwrap(),
+        vec![
+            (a.to_string(), gas_type.clone(), 6),
+            (b.to_string(), gas_type.clone(), 9)
+        ]
+    )
 }
 
 #[tokio::test]
@@ -130,6 +146,20 @@ async fn test_multiple_coin_types() {
         get_balance(&cluster, p, &my_coin_type, None).await.unwrap(),
         (my_coin_type.clone(), 1230)
     );
+
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(p, my_coin_type.clone()), (p, gas_type.clone())],
+            None
+        )
+        .await
+        .unwrap(),
+        vec![
+            (p.to_string(), my_coin_type.clone(), 1230),
+            (p.to_string(), gas_type.clone(), sui_balance as u64),
+        ]
+    );
 }
 
 #[tokio::test]
@@ -173,6 +203,20 @@ async fn test_snapshot_consistency() {
         (gas_type.clone(), 3)
     );
 
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(a, gas_type.clone()), (b, gas_type.clone())],
+            None
+        )
+        .await
+        .unwrap(),
+        vec![
+            (a.to_string(), gas_type.clone(), 3),
+            (b.to_string(), gas_type.clone(), 3)
+        ]
+    );
+
     // Add more coins
     create_coin(&mut cluster, a, 4);
     create_coin(&mut cluster, b, 5);
@@ -204,6 +248,20 @@ async fn test_snapshot_consistency() {
         (gas_type.clone(), 8)
     );
 
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(a, gas_type.clone()), (b, gas_type.clone())],
+            None
+        )
+        .await
+        .unwrap(),
+        vec![
+            (a.to_string(), gas_type.clone(), 7),
+            (b.to_string(), gas_type.clone(), 8)
+        ]
+    );
+
     // The data from checkpoint 1 is still available
     assert_eq!(
         list_balances(&cluster, a, Some(1), None, Some(10))
@@ -227,6 +285,20 @@ async fn test_snapshot_consistency() {
     assert_eq!(
         get_balance(&cluster, b, &gas_type, Some(1)).await.unwrap(),
         (gas_type.clone(), 3)
+    );
+
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(a, gas_type.clone()), (b, gas_type.clone())],
+            Some(1)
+        )
+        .await
+        .unwrap(),
+        vec![
+            (a.to_string(), gas_type.clone(), 3),
+            (b.to_string(), gas_type.clone(), 3)
+        ]
     );
 }
 
@@ -275,6 +347,20 @@ async fn test_transfers() {
         (gas_type.clone(), 0)
     );
 
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(a, gas_type.clone()), (b, gas_type.clone())],
+            None
+        )
+        .await
+        .unwrap(),
+        vec![
+            (a.to_string(), gas_type.clone(), gas_budget),
+            (b.to_string(), gas_type.clone(), 0)
+        ]
+    );
+
     // Split off some of A's gas and transfer it to B
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(b, Some(1000));
@@ -321,6 +407,20 @@ async fn test_transfers() {
         (gas_type.clone(), 1000)
     );
 
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(a, gas_type.clone()), (b, gas_type.clone())],
+            None
+        )
+        .await
+        .unwrap(),
+        vec![
+            (a.to_string(), gas_type.clone(), gas_budget),
+            (b.to_string(), gas_type.clone(), 1000)
+        ]
+    );
+
     // Send the gas coin from A to B
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.transfer_sui(b, None);
@@ -364,6 +464,20 @@ async fn test_transfers() {
     assert_eq!(
         get_balance(&cluster, b, &gas_type, None).await.unwrap(),
         (gas_type.clone(), gas_budget)
+    );
+
+    assert_eq!(
+        batch_get_balances(
+            &cluster,
+            vec![(a, gas_type.clone()), (b, gas_type.clone())],
+            None
+        )
+        .await
+        .unwrap(),
+        vec![
+            (a.to_string(), gas_type.clone(), 0),
+            (b.to_string(), gas_type.clone(), gas_budget)
+        ]
     );
 }
 
@@ -409,6 +523,23 @@ async fn test_edge_cases() {
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
     assert_eq!(err.message(), "Missing 'owner'");
 
+    let request = tonic::Request::new(BatchGetBalancesRequest {
+        requests: vec![
+            GetBalanceRequest {
+                owner: Some(a.to_string()),
+                coin_type: Some(GAS::type_().to_string()),
+            },
+            GetBalanceRequest {
+                owner: None,
+                coin_type: Some(GAS::type_().to_string()),
+            },
+        ],
+    });
+
+    let err = client.batch_get_balances(request).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert_eq!(err.message(), "Missing 'owner'");
+
     // Invalid owner address
     let request = tonic::Request::new(ListBalancesRequest {
         owner: Some("invalid_address".to_string()),
@@ -429,6 +560,23 @@ async fn test_edge_cases() {
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
     assert_eq!(err.message(), r#"Invalid 'owner': "invalid_address""#);
 
+    let request = tonic::Request::new(BatchGetBalancesRequest {
+        requests: vec![
+            GetBalanceRequest {
+                owner: Some("invalid_address".to_string()),
+                coin_type: Some(GAS::type_().to_string()),
+            },
+            GetBalanceRequest {
+                owner: Some(b.to_string()),
+                coin_type: Some(GAS::type_().to_string()),
+            },
+        ],
+    });
+
+    let err = client.batch_get_balances(request).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert_eq!(err.message(), r#"Invalid 'owner': "invalid_address""#);
+
     // Missing coin type
     let request = tonic::Request::new(GetBalanceRequest {
         owner: Some(a.to_string()),
@@ -436,6 +584,23 @@ async fn test_edge_cases() {
     });
 
     let err = client.get_balance(request).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert_eq!(err.message(), "Missing 'coin_type'");
+
+    let request = tonic::Request::new(BatchGetBalancesRequest {
+        requests: vec![
+            GetBalanceRequest {
+                owner: Some(a.to_string()),
+                coin_type: None,
+            },
+            GetBalanceRequest {
+                owner: Some(b.to_string()),
+                coin_type: Some(GAS::type_().to_string()),
+            },
+        ],
+    });
+
+    let err = client.batch_get_balances(request).await.unwrap_err();
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
     assert_eq!(err.message(), "Missing 'coin_type'");
 
@@ -448,6 +613,71 @@ async fn test_edge_cases() {
     let err = client.get_balance(request).await.unwrap_err();
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
     assert_eq!(err.message(), r#"Invalid 'coin_type': "invalid_coin_type""#);
+
+    let request = tonic::Request::new(BatchGetBalancesRequest {
+        requests: vec![
+            GetBalanceRequest {
+                owner: Some(a.to_string()),
+                coin_type: Some(GAS::type_().to_string()),
+            },
+            GetBalanceRequest {
+                owner: Some(b.to_string()),
+                coin_type: Some("invalid_coin_type".to_string()),
+            },
+        ],
+    });
+
+    let err = client.batch_get_balances(request).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert_eq!(err.message(), r#"Invalid 'coin_type': "invalid_coin_type""#);
+
+    // Not in range
+    let mut request = tonic::Request::new(ListBalancesRequest {
+        owner: Some(a.to_string()),
+        ..Default::default()
+    });
+
+    request
+        .metadata_mut()
+        .insert("x-sui-checkpoint", "10".parse().unwrap());
+
+    let err = client.list_balances(request).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::OutOfRange);
+    assert_eq!(err.message(), "Checkpoint 10 not in the consistent range");
+
+    let mut request = tonic::Request::new(GetBalanceRequest {
+        owner: Some(a.to_string()),
+        coin_type: Some(GAS::type_().to_string()),
+    });
+
+    request
+        .metadata_mut()
+        .insert("x-sui-checkpoint", "10".parse().unwrap());
+
+    let err = client.get_balance(request).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::OutOfRange);
+    assert_eq!(err.message(), "Checkpoint 10 not in the consistent range");
+
+    let mut request = tonic::Request::new(BatchGetBalancesRequest {
+        requests: vec![
+            GetBalanceRequest {
+                owner: Some(a.to_string()),
+                coin_type: Some(GAS::type_().to_string()),
+            },
+            GetBalanceRequest {
+                owner: Some(b.to_string()),
+                coin_type: Some(GAS::type_().to_string()),
+            },
+        ],
+    });
+
+    request
+        .metadata_mut()
+        .insert("x-sui-checkpoint", "10".parse().unwrap());
+
+    let err = client.batch_get_balances(request).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::OutOfRange);
+    assert_eq!(err.message(), "Checkpoint 10 not in the consistent range");
 }
 
 /// Run a transaction on `cluster` signed by a fresh funded account that sends a coin with value
@@ -488,8 +718,9 @@ async fn list_balances(
         .await
         .expect("Failed to connect to Consistent Store");
 
+    let owner = owner.to_string();
     let mut request = tonic::Request::new(ListBalancesRequest {
-        owner: Some(owner.to_string()),
+        owner: Some(owner.clone()),
         page_size,
         after_token: after_token.map(Into::into),
         ..Default::default()
@@ -511,7 +742,10 @@ async fn list_balances(
     let balances = response
         .balances
         .into_iter()
-        .map(|b| (b.coin_type().to_owned(), b.balance()))
+        .map(|b| {
+            assert_eq!(b.owner(), &owner, "Owner mismatch in balance response");
+            (b.coin_type().to_owned(), b.balance())
+        })
         .collect();
 
     Ok((balances, after_token))
@@ -528,8 +762,9 @@ async fn get_balance(
         .await
         .expect("Failed to connect to Consistent Store");
 
+    let owner = owner.to_string();
     let mut request = tonic::Request::new(GetBalanceRequest {
-        owner: Some(owner.to_string()),
+        owner: Some(owner.clone()),
         coin_type: Some(coin_type.to_owned()),
     });
 
@@ -540,5 +775,47 @@ async fn get_balance(
     }
 
     let response = client.get_balance(request).await?.into_inner();
+
+    assert_eq!(
+        response.owner(),
+        &owner,
+        "Owner mismatch in balance response"
+    );
+
     Ok((response.coin_type().to_owned(), response.balance()))
+}
+
+async fn batch_get_balances(
+    cluster: &FullCluster,
+    requests: Vec<(SuiAddress, String)>,
+    checkpoint: Option<u64>,
+) -> Result<Vec<(String, String, u64)>, tonic::Status> {
+    let mut client = ConsistentServiceClient::connect(cluster.consistent_store_url().to_string())
+        .await
+        .expect("Failed to connect to Consistent Store");
+
+    let mut request = tonic::Request::new(BatchGetBalancesRequest {
+        requests: requests
+            .into_iter()
+            .map(|(owner, coin_type)| GetBalanceRequest {
+                owner: Some(owner.to_string()),
+                coin_type: Some(coin_type),
+            })
+            .collect(),
+    });
+
+    if let Some(checkpoint) = checkpoint {
+        request
+            .metadata_mut()
+            .insert("x-sui-checkpoint", checkpoint.to_string().parse().unwrap());
+    }
+
+    Ok(client
+        .batch_get_balances(request)
+        .await?
+        .into_inner()
+        .balances
+        .into_iter()
+        .map(|b| (b.owner().to_owned(), b.coin_type().to_owned(), b.balance()))
+        .collect())
 }

@@ -8,6 +8,9 @@ package sui.rpc.consistent.v1alpha;
 service ConsistentService {
   rpc AvailableRange(AvailableRangeRequest) returns (AvailableRangeResponse);
 
+  rpc BatchGetBalances(BatchGetBalancesRequest)
+      returns (BatchGetBalancesResponse);
+
   rpc GetBalance(GetBalanceRequest) returns (Balance);
 
   rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse);
@@ -30,6 +33,10 @@ message AvailableRangeResponse {
   // answer questions for.
   optional uint64 max_checkpoint = 2;
 }
+
+message BatchGetBalancesRequest { repeated GetBalanceRequest requests = 1; }
+
+message BatchGetBalancesResponse { repeated Balance balances = 1; }
 
 message GetBalanceRequest {
   // Required. The address of the owner whose balance is being requested.
@@ -159,10 +166,13 @@ message ServiceConfigResponse {
   // The size of a page if one is not specified in the request.
   optional uint32 default_page_size = 1;
 
+  // The maximum number of requests allowed in a batch request.
+  optional uint32 max_batch_size = 2;
+
   // The maximum size of a page. Responses to requests that specify a size
   // larger than this will be capped to return at most this many elements per
   // page.
-  optional uint32 max_page_size = 2;
+  optional uint32 max_page_size = 3;
 }
 
 // Enum of different types of ownership for an object.
@@ -188,13 +198,16 @@ enum End {
 }
 
 message Balance {
+  // Address of the owner whose balance is being reported.
+  optional string owner = 1;
+
   // The marker type for the coins being aggregated into this balance, e.g.
   // `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`.
-  optional string coin_type = 1;
+  optional string coin_type = 2;
 
   /// The total balance for coins of this type, owned by one address,
   // denominated in its smallest unit.
-  optional uint64 balance = 2;
+  optional uint64 balance = 3;
 
   // Pagination cursor pointing to this balance entry, if this Balance is part
   // of a paginated response.
