@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use strum::IntoEnumIterator;
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::base_types::AuthorityName;
+use sui_types::committee::Committee;
 use tracing::debug;
 
 /// Decay factor for reliability EMA - lower values give more weight to recent observations
@@ -50,6 +51,20 @@ pub struct ValidatorClientStats {
     /// Time when validator was temporarily excluded due to failures.
     /// Validators are excluded when consecutive_failures >= max_consecutive_failures
     pub exclusion_time: Option<Instant>,
+}
+
+/// Summary of validator stats needed for selection and metrics.
+///
+/// This struct contains only the essential information needed for validator
+/// selection, avoiding the need to clone the entire ValidatorClientStats.
+#[derive(Debug, Clone)]
+pub struct ValidatorStatsSummary {
+    /// The computed score for this validator (higher is better)
+    pub score: f64,
+    /// Whether the validator is currently excluded due to failures
+    pub is_excluded: bool,
+    /// Current consecutive failure count for metrics
+    pub consecutive_failures: u32,
 }
 
 impl ValidatorClientStats {
@@ -167,29 +182,47 @@ impl ClientObservedStats {
         }
     }
 
-    /// Calculate client-observed scores for all validators.
+    /// Get validator stats summaries for all validators.
     ///
-    /// Returns a map of validator names to their computed scores based on
-    /// client-side observations. Validators that are currently excluded or
-    /// missing required data will not be included in the results.
-    pub fn calculate_all_client_scores(&self) -> HashMap<AuthorityName, f64> {
-        let mut scores = HashMap::new();
-        for (validator, stats) in self.validator_stats.iter() {
-            if let Some(score) = self.calculate_client_score(stats, &self.global_stats) {
-                scores.insert(*validator, score);
-            }
-        }
-
-        scores
+    /// Returns a map of all tracked validators to their optional stats summary.
+    /// Summary is None if the validator is not in the provided committee or
+    /// doesn't have a valid score.
+    pub fn get_all_validator_stats(
+        &self,
+        committee: &Committee,
+    ) -> HashMap<AuthorityName, Option<ValidatorStatsSummary>> {
+        committee
+            .members()
+            .map(|(validator, _stake)| {
+                let summary = self.validator_stats.get(validator).and_then(|stats| {
+                    self.calculate_client_score(stats, &self.global_stats)
+                        .map(|score| {
+                            let is_excluded = if let Some(exclusion_time) = stats.exclusion_time {
+                                exclusion_time.elapsed() < self.config.failure_cooldown
+                            } else {
+                                false
+                            };
+                            ValidatorStatsSummary {
+                                score,
+                                is_excluded,
+                                consecutive_failures: stats.consecutive_failures,
+                            }
+                        })
+                });
+                (*validator, summary)
+            })
+            .collect()
     }
 
     /// Calculate client-observed score for a single validator.
     ///
     /// The score combines reliability and latency metrics as observed by the client,
     /// weighted according to configuration. Returns None if:
-    /// - The validator is currently in exclusion cooldown period
     /// - The validator is missing data for any operation type
     /// - Global stats are missing for normalization
+    ///
+    /// Note: This method does NOT check exclusion status. Callers should check
+    /// exclusion_time and consecutive_failures separately if needed.
     ///
     /// Score calculation:
     /// 1. Latency scores are normalized against global maximums
@@ -200,13 +233,6 @@ impl ClientObservedStats {
         stats: &ValidatorClientStats,
         global_stats: &GlobalStats,
     ) -> Option<f64> {
-        // Check if validator is still in exclusion cooldown
-        if let Some(exclusion_time) = stats.exclusion_time {
-            if exclusion_time.elapsed() < self.config.failure_cooldown {
-                return None;
-            }
-        }
-
         let mut latency_score = 0.0;
         for op in OperationType::iter() {
             // Validator must have data for all operation types

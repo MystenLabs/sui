@@ -235,64 +235,64 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         committee: &Committee,
         k: usize,
     ) -> Vec<AuthorityName> {
-        // Get all validators with their scores
-        // TODO: If this is becoming a bottleneck, we should consider caching the scores,
-        // and only recalculate every few seconds.
-        let validator_scores = self.client_stats.read().calculate_all_client_scores();
+        // Get all validators with their stats and scores
+        // Drop the lock immediately after getting the data
+        let all_validator_stats = self.client_stats.read().get_all_validator_stats(committee);
 
-        // Filter out excluded validators that are still in the current committee
-        let mut available_validators: Vec<_> = validator_scores
+        // Convert to a vector for sorting, handling None summaries
+        let mut validators_with_info: Vec<_> = all_validator_stats
             .into_iter()
-            .filter(|(validator, score)| {
-                // Must be in current committee
-                if !committee.authority_exists(validator) {
-                    return false;
-                }
-                self.metrics
-                    .performance_score
-                    .with_label_values(&[&validator.concise().to_string()])
-                    .set(*score);
+            .map(|(validator, summary_opt)| {
+                if let Some(summary) = summary_opt {
+                    // Update metrics for validators with scores
+                    let validator_str = validator.concise().to_string();
+                    self.metrics
+                        .consecutive_failures
+                        .with_label_values(&[&validator_str])
+                        .set(summary.consecutive_failures as i64);
+                    self.metrics
+                        .performance_score
+                        .with_label_values(&[&validator_str])
+                        .set(summary.score);
 
-                true
+                    (validator, Some((summary.score, summary.is_excluded)))
+                } else {
+                    // No score available (not in committee or missing data)
+                    (validator, None)
+                }
             })
             .collect();
 
-        // Sort by score (highest first)
-        available_validators.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        // Sort by:
+        // 1. Has score (validators with scores first)
+        // 2. Exclusion status (non-excluded first)
+        // 3. Score (highest first)
+        validators_with_info.sort_by(|a, b| {
+            match (&a.1, &b.1) {
+                (Some((score_a, excluded_a)), Some((score_b, excluded_b))) => {
+                    // Both have scores - sort by exclusion status, then score
+                    match (excluded_a, excluded_b) {
+                        (false, true) => std::cmp::Ordering::Less,
+                        (true, false) => std::cmp::Ordering::Greater,
+                        _ => score_b.partial_cmp(score_a).unwrap(),
+                    }
+                }
+                (Some(_), None) => std::cmp::Ordering::Less, // a has score, b doesn't
+                (None, Some(_)) => std::cmp::Ordering::Greater, // a has no score, b does
+                (None, None) => std::cmp::Ordering::Equal,   // neither has score
+            }
+        });
 
-        // Split into top k and rest
-        let (top_k_with_scores, rest_with_scores) =
-            available_validators.split_at(k.min(available_validators.len()));
-
-        // Extract validator names from top k and shuffle them
-        let mut top_k_validators: Vec<_> = top_k_with_scores
-            .iter()
-            .map(|(validator, _)| *validator)
+        let committee_validators: Vec<_> = validators_with_info
+            .into_iter()
+            .map(|(validator, _info)| validator)
             .collect();
+
+        // Shuffle only the top k elements in place, leaving the rest sorted
+        let mut result = committee_validators;
+        let k = k.min(result.len());
         let mut rng = rand::thread_rng();
-        top_k_validators.shuffle(&mut rng);
-
-        // Extract rest validators (already sorted by score)
-        let rest_validators: Vec<_> = rest_with_scores
-            .iter()
-            .map(|(validator, _)| *validator)
-            .collect();
-
-        // Combine shuffled top k with sorted rest
-        let mut result = top_k_validators;
-        result.extend(rest_validators);
-
-        // If we don't have enough validators with scores, fill with random validators from committee
-        let result_set: HashSet<_> = result.iter().cloned().collect();
-        let mut unscored_validators: Vec<_> = committee
-            .members()
-            .filter(|(validator, _)| !result_set.contains(validator))
-            .map(|(validator, _)| *validator)
-            .collect();
-
-        // Shuffle unscored validators and append
-        unscored_validators.shuffle(&mut rng);
-        result.extend(unscored_validators);
+        result[..k].shuffle(&mut rng);
 
         result
     }
