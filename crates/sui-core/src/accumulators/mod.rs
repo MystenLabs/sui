@@ -161,7 +161,7 @@ pub fn create_accumulator_update_transactions(
     checkpoint_height: u64,
     cache: Option<&dyn TransactionCacheRead>,
     ckpt_effects: &[TransactionEffects],
-) -> Vec<TransactionKind> {
+) -> (Vec<TransactionKind>, usize) {
     let epoch = epoch_store.epoch();
     let accumulator_root_obj_initial_shared_version = epoch_store
         .epoch_start_config()
@@ -243,6 +243,8 @@ pub fn create_accumulator_update_transactions(
         vec![epoch_arg, checkpoint_height_arg, idx_arg],
     );
 
+    let num_updates = updates.len();
+
     for (accumulator_obj, update) in updates {
         let Update { merge, split } = update;
         let address = addresses.get(&accumulator_obj).unwrap();
@@ -251,7 +253,10 @@ pub fn create_accumulator_update_transactions(
         MergedValue::add_move_call(merged_value, split_value, root, address, &mut builder);
     }
 
-    vec![TransactionKind::ProgrammableSystemTransaction(
-        builder.finish(),
-    )]
+    (
+        vec![TransactionKind::ProgrammableSystemTransaction(
+            builder.finish(),
+        )],
+        num_updates,
+    )
 }
