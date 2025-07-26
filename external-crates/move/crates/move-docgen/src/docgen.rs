@@ -1313,14 +1313,19 @@ impl<'env> Docgen<'env> {
         let mut decorated_text = String::new();
         let mut chars = text.chars();
         let non_code_filter = |chr: &char| *chr != '`';
-
+        let mut is_start_of_code_block = false;
         while let Some(chr) = chars.next() {
             if chr == '`' {
                 // See if this is the start of a code block.
-                let is_start_of_code_block = chars.take_while_ref(|chr| *chr == '`').count() > 0;
-                if is_start_of_code_block {
+                let code_block = chars.take_while_ref(|chr| *chr == '`').count() > 0;
+                if code_block {
                     // Code block -- don't create a <code>text</code> for this.
-                    decorated_text += "```";
+                    if !is_start_of_code_block {
+                        is_start_of_code_block = true;
+                        decorated_text += "```move";
+                    } else {
+                        decorated_text += "```";
+                    }
                 } else {
                     // inside inline code section. Eagerly consume/match this '`'
                     let code = chars.take_while_ref(non_code_filter).collect::<String>();

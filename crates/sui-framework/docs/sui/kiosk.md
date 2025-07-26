@@ -89,7 +89,7 @@ object so they don't have to pay anything
 transfer items between <code><a href="../sui/kiosk.md#sui_kiosk_Kiosk">Kiosk</a></code>s in game without any charge (and maybe not
 even paying the price with a 0 SUI PurchaseCap)
 
-```
+```move
 Kiosk -> (Item, TransferRequest)
 ... TransferRequest ------> Common Transfer Policy
 ... TransferRequest ------> In-game Wrapped Transfer Policy
