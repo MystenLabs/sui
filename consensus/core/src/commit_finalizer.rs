@@ -21,7 +21,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, CommitIndex, CommittedSubDag,
+    BlockAPI, CommitIndex, CommitRange, CommittedSubDag,
 };
 
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
@@ -71,8 +71,13 @@ pub(crate) struct CommitFinalizer {
     transaction_certifier: TransactionCertifier,
     commit_sender: UnboundedSender<CommittedSubDag>,
 
+    // Last finalized commit before restarting.
+    last_finalized_commit_before_restart: CommitIndex,
+    // Last commit index processed by CommitFinalizer.
     last_processed_commit: Option<CommitIndex>,
+    // Commits pending finalization.
     pending_commits: VecDeque<CommitState>,
+    // Blocks in the pending commits.
     blocks: BTreeMap<BlockRef, BlockState>,
 }
 
@@ -84,11 +89,24 @@ impl CommitFinalizer {
         transaction_certifier: TransactionCertifier,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> Self {
+        // When this is initialized to 0, verification of rejected transactions are disabled.
+        let last_finalized_commit_before_restart = if context.protocol_config.mysticeti_fastpath() {
+            dag_state
+                .read()
+                .store()
+                .read_last_finalized_commit()
+                .unwrap()
+                .map(|c| c.index)
+                .unwrap_or(0)
+        } else {
+            0
+        };
         Self {
             context,
             dag_state,
             transaction_certifier,
             commit_sender,
+            last_finalized_commit_before_restart,
             last_processed_commit: None,
             pending_commits: VecDeque::new(),
             blocks: BTreeMap::new(),
@@ -116,6 +134,7 @@ impl CommitFinalizer {
                 vec![committed_sub_dag]
             };
             if !finalized_commits.is_empty() {
+                self.verify_previously_finalized_commits(&finalized_commits);
                 let mut dag_state = self.dag_state.write();
                 if self.context.protocol_config.mysticeti_fastpath() {
                     // Records commits that have been finalized and their rejected transactions.
@@ -140,6 +159,44 @@ impl CommitFinalizer {
                     return;
                 }
             }
+        }
+    }
+
+    // Verifies the current finalized commits have the same rejected transactions as the previously finalized commits.
+    // Rejected transactions are recomputed on restart and not part of the persisted Commit values.
+    // TODO(fastpath): recover rejected transactions when recovering CommittedSubDag.
+    fn verify_previously_finalized_commits(&self, finalized_commits: &[CommittedSubDag]) {
+        if !self.context.protocol_config.mysticeti_fastpath() || finalized_commits.is_empty() {
+            return;
+        }
+        let (start_index, end_index) = (
+            finalized_commits.first().unwrap().commit_ref.index,
+            finalized_commits.last().unwrap().commit_ref.index,
+        );
+        if start_index > self.last_finalized_commit_before_restart {
+            return;
+        }
+        let previously_rejected_transactions = self
+            .dag_state
+            .read()
+            .store()
+            .scan_finalized_commits(CommitRange::new(
+                start_index..=end_index.min(self.last_finalized_commit_before_restart),
+            ))
+            .unwrap();
+        for ((previous_commit_ref, previous_rejected_transactions), current_commit) in
+            previously_rejected_transactions
+                .iter()
+                .zip(finalized_commits.iter())
+        {
+            assert_eq!(
+                previous_commit_ref, &current_commit.commit_ref,
+                "Unexpected commit!"
+            );
+            assert_eq!(
+                previous_rejected_transactions, &current_commit.rejected_transactions_by_block,
+                "Unexpected rejected transactions!"
+            );
         }
     }
 
@@ -187,7 +244,7 @@ impl CommitFinalizer {
             // -  This commit is remote.
             // -  And the latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
             // In this case, this commit's leader certificate is not guaranteed to be in local DAG.
-            if !commit_state.commit.local_dag_has_finalization_blocks {
+            if !commit_state.commit.decided_with_local_blocks {
                 let last_commit_state = self.pending_commits.back().unwrap();
                 if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
                     > last_commit_state.commit.leader.round
@@ -1125,7 +1182,7 @@ mod tests {
                 let mut committed_sub_dags = fixture.linearizer.handle_commit(vec![leader]);
                 assert_eq!(committed_sub_dags.len(), 1);
                 let mut remote_commit = committed_sub_dags.pop().unwrap();
-                remote_commit.local_dag_has_finalization_blocks = local;
+                remote_commit.decided_with_local_blocks = local;
                 // Process the remote commit.
                 fixture
                     .commit_finalizer
