@@ -66,13 +66,6 @@
 //!   - Increase for latency-sensitive applications
 //!   - Individual operation weights can be tuned separately
 //!
-//! ### Selection Strategy
-//!
-//! - `TopK`: Round-robin among top K validators
-//!   - `k`: Number of top validators to use
-//!     - Set based on desired redundancy vs load concentration
-//!     - Monitor `validator_client_observed_score` to see score distribution
-//!
 //! # Example Configurations
 //!
 //! ## Low Latency Priority
@@ -82,9 +75,6 @@
 //!   health-check-timeout: 1s
 //!   max-consecutive-failures: 3
 //!   failure-cooldown: 20s
-//!   selection-strategy:
-//!     TopK:
-//!       k: 3  # Use top 3 validators for low latency
 //!   score-weights:
 //!     latency: 0.7
 //!     reliability: 0.3
@@ -97,9 +87,6 @@
 //!   health-check-interval: 15s
 //!   max-consecutive-failures: 10  # Very tolerant
 //!   failure-cooldown: 60s
-//!   selection-strategy:
-//!     TopK:
-//!       k: 5  # Use top 5 validators only
 //!   score-weights:
 //!     latency: 0.2
 //!     reliability: 0.8
@@ -131,12 +118,6 @@ pub struct ValidatorClientMonitorConfig {
     /// Determines how different factors contribute to validator selection.
     #[serde(default)]
     pub score_weights: ScoreWeights,
-
-    /// Selection strategy configuration.
-    ///
-    /// Controls how validators are chosen based on their scores.
-    #[serde(default)]
-    pub selection_strategy: SelectionStrategy,
 
     /// Cooldown period after failures before considering a validator again.
     ///
@@ -190,30 +171,12 @@ pub struct ScoreWeights {
     pub health_check_latency_weight: f64,
 }
 
-/// Strategy for selecting validators based on their scores
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SelectionStrategy {
-    /// Top-K selection with round-robin.
-    ///
-    /// Only uses the K best-scoring validators.
-    /// Provides predictable behavior and load concentration.
-    TopK {
-        /// Number of top validators to consider.
-        ///
-        /// Should be at least 3-5 for redundancy.
-        /// Higher values spread load but may use slower validators.
-        k: usize,
-    },
-}
-
 impl Default for ValidatorClientMonitorConfig {
     fn default() -> Self {
         Self {
             health_check_interval: default_health_check_interval(),
             health_check_timeout: default_health_check_timeout(),
             score_weights: ScoreWeights::default(),
-            selection_strategy: SelectionStrategy::default(),
             failure_cooldown: default_failure_cooldown(),
             max_consecutive_failures: default_max_consecutive_failures(),
         }
@@ -229,12 +192,6 @@ impl Default for ScoreWeights {
             effects_latency_weight: default_effects_latency_weight(),
             health_check_latency_weight: default_health_check_latency_weight(),
         }
-    }
-}
-
-impl Default for SelectionStrategy {
-    fn default() -> Self {
-        SelectionStrategy::TopK { k: 5 }
     }
 }
 

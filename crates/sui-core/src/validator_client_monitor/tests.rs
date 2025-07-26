@@ -580,7 +580,6 @@ mod client_stats_tests {
 mod client_monitor_tests {
     use super::*;
     use std::collections::HashSet;
-    use sui_config::validator_client_monitor_config::SelectionStrategy;
     use sui_types::committee::Committee;
 
     /// Simple mock for testing validator selection without full AuthorityAggregator setup
@@ -664,10 +663,7 @@ mod client_monitor_tests {
 
     #[tokio::test]
     async fn test_validator_selection_top_k_basic() {
-        let config = ValidatorClientMonitorConfig {
-            selection_strategy: SelectionStrategy::TopK { k: 2 },
-            ..Default::default()
-        };
+        let config = ValidatorClientMonitorConfig::default();
 
         let monitor = MockValidatorClientMonitor::new(config);
 
@@ -716,10 +712,7 @@ mod client_monitor_tests {
 
     #[tokio::test]
     async fn test_validator_selection_with_failures() {
-        let config = ValidatorClientMonitorConfig {
-            selection_strategy: SelectionStrategy::TopK { k: 3 },
-            ..Default::default()
-        };
+        let config = ValidatorClientMonitorConfig::default();
 
         let monitor = MockValidatorClientMonitor::new(config);
 
