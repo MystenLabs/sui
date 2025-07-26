@@ -41,11 +41,19 @@ pub(crate) enum TransactionRequestError {
 
 impl TransactionRequestError {
     pub fn is_submission_retriable(&self) -> bool {
+        // SuiError::Unknown cannot be retried right now because it is the response from validators
+        // on WaitForEffects request for rejected consensus positions. The rejection can indeed be
+        // non-retriable.
+        // TODO(fastpath): remove this condition after caching rejection reason on validators.
         match self {
             TransactionRequestError::RejectedAtValidator(error) => {
                 error.is_transaction_submission_retriable()
+                    && !matches!(error, SuiError::Unknown(_))
             }
-            TransactionRequestError::Aborted(error) => error.is_transaction_submission_retriable(),
+            TransactionRequestError::Aborted(error) => {
+                error.is_transaction_submission_retriable()
+                    && !matches!(error, SuiError::Unknown(_))
+            }
             _ => true,
         }
     }
