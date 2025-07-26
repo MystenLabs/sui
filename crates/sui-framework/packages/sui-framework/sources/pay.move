@@ -15,12 +15,14 @@ public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
     transfer::public_transfer(c, ctx.sender())
 }
 
+#[allow(lint(public_entry))]
 /// Split coin `self` to two coins, one with balance `split_amount`,
 /// and the remaining balance is left is `self`.
 public entry fun split<T>(coin: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext) {
     keep(coin.split(split_amount, ctx), ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Split coin `self` into multiple coins, each with balance specified
 /// in `split_amounts`. Remaining balance is left in `self`.
 public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {
@@ -31,6 +33,7 @@ public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ct
     };
 }
 
+#[allow(lint(public_entry))]
 /// Send `amount` units of `c` to `recipient`
 /// Aborts with `EVALUE` if `amount` is greater than or equal to `amount`
 public entry fun split_and_transfer<T>(
@@ -42,7 +45,7 @@ public entry fun split_and_transfer<T>(
     transfer::public_transfer(c.split(amount, ctx), recipient)
 }
 
-#[allow(lint(self_transfer))]
+#[allow(lint(self_transfer, public_entry))]
 /// Divide coin `self` into `n - 1` coins with equal balances. If the balance is
 /// not evenly divisible by `n`, the remainder is left in `self`.
 public entry fun divide_and_keep<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
@@ -55,12 +58,14 @@ public entry fun divide_and_keep<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxCont
     vec.destroy_empty();
 }
 
+#[allow(lint(public_entry))]
 /// Join `coin` into `self`. Re-exports `coin::join` function.
 /// Deprecated: you should call `coin.join(other)` directly.
 public entry fun join<T>(self: &mut Coin<T>, coin: Coin<T>) {
     self.join(coin)
 }
 
+#[allow(lint(public_entry))]
 /// Join everything in `coins` with `self`
 public entry fun join_vec<T>(self: &mut Coin<T>, mut coins: vector<Coin<T>>) {
     let (mut i, len) = (0, coins.length());
@@ -73,6 +78,7 @@ public entry fun join_vec<T>(self: &mut Coin<T>, mut coins: vector<Coin<T>>) {
     coins.destroy_empty()
 }
 
+#[allow(lint(public_entry))]
 /// Join a vector of `Coin` into a single object and transfer it to `receiver`.
 public entry fun join_vec_and_transfer<T>(mut coins: vector<Coin<T>>, receiver: address) {
     assert!(coins.length() > 0, ENoCoins);
