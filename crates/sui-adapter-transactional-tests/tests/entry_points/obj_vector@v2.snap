@@ -93,8 +93,8 @@ gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 
 
 task 16, lines 158-161:
 //# run Test::M::same_objects --sender A --args object(15,0) vector[object(15,0)]
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }
 
 task 17, line 163:
 //# run Test::M::mint --sender A --args 42
@@ -104,5 +104,5 @@ gas summary: computation_cost: 1000000, storage_cost: 2272400,  storage_rebate: 
 
 task 18, line 165:
 //# run Test::M::same_objects_ref --sender A --args object(17,0) vector[object(17,0)]
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }

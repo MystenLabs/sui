@@ -68,8 +68,8 @@ task 7, lines 74-80:
 //> tto::m1::id<tto::m1::C>(Input(0));
 //> tto::m1::id<tto::m1::A>(Input(0));
 // And can receive one of them
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(3) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(3) } }
 
 task 8, lines 81-87:
 //# programmable --inputs object(2,0) receiving(2,1)
@@ -85,8 +85,8 @@ task 9, lines 88-91:
 //# programmable --inputs object(2,0) receiving(2,2)
 //> tto::m1::take_two_b(Input(0), Input(1), Input(1))
 // But can use receiving multiple times with different types all at once
-Error: Transaction Effects Status: Invalid command argument at 2. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+Error: Transaction Effects Status: Invalid command argument at 2. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 2, kind: ArgumentWithoutValue }, source: None, command: Some(0) } }
 
 task 10, lines 92-93:
 //# programmable --inputs object(2,0) receiving(2,2)

@@ -88,8 +88,8 @@ gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 
 
 task 15, lines 155-158:
 //# run Test::M::same_objects_any --sender A --type-args Test::M::Any --args object(14,0) vector[object(14,0)]
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }
 
 task 16, line 160:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42
@@ -99,5 +99,5 @@ gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 
 
 task 17, line 162:
 //# run Test::M::same_objects_ref_any --sender A --type-args Test::M::Any --args object(16,0) vector[object(16,0)]
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue }, source: None, command: Some(1) } }
