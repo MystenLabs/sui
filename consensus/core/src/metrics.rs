@@ -218,6 +218,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) finalizer_round_delay: Histogram,
     pub(crate) finalizer_transaction_status: IntCounterVec,
     pub(crate) finalizer_output_commits: IntCounterVec,
+    pub(crate) finalizer_dag_total_blocks: IntGauge,
+    pub(crate) finalizer_dag_blocks_added_per_commit: IntGauge,
+    pub(crate) finalizer_dag_ancestors_processed: IntGauge,
+    pub(crate) finalizer_dag_children_links: IntGauge,
+    pub(crate) finalizer_indirect_traversal_blocks_visited: IntGauge,
+    pub(crate) finalizer_indirect_traversal_blocks_processed: IntGauge,
+    pub(crate) finalizer_indirect_traversal_transactions_finalized: IntGauge,
     pub(crate) uptime: Histogram,
 }
 
@@ -894,6 +901,41 @@ impl NodeMetrics {
                 "finalizer_output_commits",
                 "Number of output commits finalized by the finalizer, grouped by type.",
                 &["type"],
+                registry
+            ).unwrap(),
+            finalizer_dag_total_blocks: register_int_gauge_with_registry!(
+                "finalizer_dag_total_blocks",
+                "The total number of blocks processed by the finalizer",
+                registry
+            ).unwrap(),
+            finalizer_dag_blocks_added_per_commit: register_int_gauge_with_registry!(
+                "finalizer_dag_blocks_added_per_commit",
+                "The number of blocks added to the DAG per commit",
+                registry
+            ).unwrap(),
+            finalizer_dag_ancestors_processed: register_int_gauge_with_registry!(
+                "finalizer_dag_ancestors_processed",
+                "The number of ancestors processed by the finalizer",
+                registry
+            ).unwrap(),
+            finalizer_dag_children_links: register_int_gauge_with_registry!(
+                "finalizer_dag_children_links",
+                "The number of children links processed by the finalizer",
+                registry
+            ).unwrap(),
+            finalizer_indirect_traversal_blocks_visited: register_int_gauge_with_registry!(
+                "finalizer_indirect_traversal_blocks_visited",
+                "The number of blocks visited during indirect finalization",
+                registry
+            ).unwrap(),
+            finalizer_indirect_traversal_blocks_processed: register_int_gauge_with_registry!(
+                "finalizer_indirect_traversal_blocks_processed",
+                "The number of blocks processed during indirect finalization",
+                registry
+            ).unwrap(),
+            finalizer_indirect_traversal_transactions_finalized: register_int_gauge_with_registry!(
+                "finalizer_indirect_traversal_transactions_finalized",
+                "The number of transactions finalized during indirect finalization",
                 registry
             ).unwrap(),
             uptime: register_histogram_with_registry!(

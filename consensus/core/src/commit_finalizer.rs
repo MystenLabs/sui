@@ -177,25 +177,28 @@ impl CommitFinalizer {
         // vote from local DAG, although it will eventually get rejected. To finalize blocks in this commit,
         // there must be another commit with leader round >= 3 (WAVE_LENGTH) rounds above the commit leader.
         // From the indirect commit rule, a leader certificate must exist in committed blocks for the earliest commit.
-        for i in 0..self.pending_commits.len() {
-            let commit_state = &self.pending_commits[i];
-            if commit_state.pending_blocks.is_empty() {
-                // The commit has already been processed through direct finalization.
-                continue;
-            }
-            // Direct finalization cannot happen when
-            // -  This commit is remote.
-            // -  And the latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
-            // In this case, this commit's leader certificate is not guaranteed to be in local DAG.
-            if !commit_state.commit.local_dag_has_finalization_blocks {
-                let last_commit_state = self.pending_commits.back().unwrap();
-                if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
-                    > last_commit_state.commit.leader.round
-                {
-                    break;
+        {
+            let _direct_scope = monitored_scope("CommitFinalizer::process_commit_direct");
+            for i in 0..self.pending_commits.len() {
+                let commit_state = &self.pending_commits[i];
+                if commit_state.pending_blocks.is_empty() {
+                    // The commit has already been processed through direct finalization.
+                    continue;
                 }
+                // Direct finalization cannot happen when
+                // -  This commit is remote.
+                // -  And the latest commit is less than 3 (WAVE_LENGTH) rounds above this commit.
+                // In this case, this commit's leader certificate is not guaranteed to be in local DAG.
+                if !commit_state.commit.local_dag_has_finalization_blocks {
+                    let last_commit_state = self.pending_commits.back().unwrap();
+                    if commit_state.commit.leader.round + DEFAULT_WAVE_LENGTH
+                        > last_commit_state.commit.leader.round
+                    {
+                        break;
+                    }
+                }
+                self.try_direct_finalize_commit(i);
             }
-            self.try_direct_finalize_commit(i);
         }
         let direct_finalized_commits = self.pop_finalized_commits();
         self.context
@@ -208,38 +211,41 @@ impl CommitFinalizer {
 
         // Indirect finalization: one or more commits cannot be directly finalized.
         // So the pending transactions need to be checked for indirect finalization.
-        if !self.pending_commits.is_empty() {
-            // Initialize the state of the last added commit for computing indirect finalization.
-            //
-            // As long as there are remaining commits, even if the last commit has been directly finalized,
-            // its state still needs to be initialized here to help indirectly finalize previous commits.
-            // This is because the last commit may have been directly finalized, but its previous commits
-            // may not have been directly finalized.
-            self.link_blocks_in_last_commit();
-            self.inherit_reject_votes_in_last_commit();
-            // Try to indirectly finalize a prefix of the buffered commits.
-            // If only one commit remains, it cannot be indirectly finalized because there is no commit afterwards,
-            // so it is excluded.
-            while self.pending_commits.len() > 1 {
-                // Stop indirect finalization when the earliest commit has not been processed
-                // through direct finalization.
-                if !self.pending_commits[0].pending_blocks.is_empty() {
-                    break;
+        {
+            let _indirect_scope = monitored_scope("CommitFinalizer::process_commit_indirect");
+            if !self.pending_commits.is_empty() {
+                // Initialize the state of the last added commit for computing indirect finalization.
+                //
+                // As long as there are remaining commits, even if the last commit has been directly finalized,
+                // its state still needs to be initialized here to help indirectly finalize previous commits.
+                // This is because the last commit may have been directly finalized, but its previous commits
+                // may not have been directly finalized.
+                self.link_blocks_in_last_commit();
+                self.inherit_reject_votes_in_last_commit();
+                // Try to indirectly finalize a prefix of the buffered commits.
+                // If only one commit remains, it cannot be indirectly finalized because there is no commit afterwards,
+                // so it is excluded.
+                while self.pending_commits.len() > 1 {
+                    // Stop indirect finalization when the earliest commit has not been processed
+                    // through direct finalization.
+                    if !self.pending_commits[0].pending_blocks.is_empty() {
+                        break;
+                    }
+                    // Otherwise, try to indirectly finalize the earliest commit.
+                    self.try_indirect_finalize_first_commit();
+                    let indirect_finalized_commits = self.pop_finalized_commits();
+                    if indirect_finalized_commits.is_empty() {
+                        // No additional commits can be indirectly finalized.
+                        break;
+                    }
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .finalizer_output_commits
+                        .with_label_values(&["indirect"])
+                        .inc_by(indirect_finalized_commits.len() as u64);
+                    finalized_commits.extend(indirect_finalized_commits);
                 }
-                // Otherwise, try to indirectly finalize the earliest commit.
-                self.try_indirect_finalize_first_commit();
-                let indirect_finalized_commits = self.pop_finalized_commits();
-                if indirect_finalized_commits.is_empty() {
-                    // No additional commits can be indirectly finalized.
-                    break;
-                }
-                self.context
-                    .metrics
-                    .node_metrics
-                    .finalizer_output_commits
-                    .with_label_values(&["indirect"])
-                    .inc_by(indirect_finalized_commits.len() as u64);
-                finalized_commits.extend(indirect_finalized_commits);
             }
         }
 
@@ -253,11 +259,26 @@ impl CommitFinalizer {
             self.transaction_certifier.run_gc(gc_round);
         }
 
+        // Track commit finalizer DAG size
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_dag_total_blocks
+            .set(self.blocks.len() as i64);
+
         self.context
             .metrics
             .node_metrics
             .finalizer_buffered_commits
             .set(self.pending_commits.len() as i64);
+
+        // Log performance summary
+        tracing::info!(
+            "process_commit completed: {} commits finalized, {} pending commits, {} total DAG blocks",
+            finalized_commits.len(),
+            self.pending_commits.len(),
+            self.blocks.len()
+        );
 
         finalized_commits
     }
@@ -310,6 +331,7 @@ impl CommitFinalizer {
     // Creates an entry in the blocks map for each block in the commit,
     // and have its ancestors link to the block.
     fn link_blocks_in_last_commit(&mut self) {
+        let _scope = monitored_scope("CommitFinalizer::link_blocks_in_last_commit");
         let commit_state = self
             .pending_commits
             .back_mut()
@@ -319,6 +341,10 @@ impl CommitFinalizer {
         // before they are linked from.
         let mut blocks = commit_state.commit.blocks.clone();
         blocks.sort_by_key(|b| b.round());
+
+        let total_blocks = blocks.len();
+        let mut total_ancestors = 0;
+        let mut total_children_links = 0;
 
         for block in blocks {
             let block_ref = block.reference();
@@ -335,13 +361,41 @@ impl CommitFinalizer {
 
             // Link its ancestors to the block.
             for ancestor in block.ancestors() {
+                total_ancestors += 1;
                 // Ancestor may not exist in the blocks map if it has been finalized or gc'ed.
                 // So skip linking if the ancestor does not exist.
                 if let Some(ancestor_block) = self.blocks.get_mut(ancestor) {
                     ancestor_block.children.insert(block_ref);
+                    total_children_links += 1;
                 }
             }
         }
+
+        // Record DAG complexity metrics
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_dag_blocks_added_per_commit
+            .set(total_blocks as i64);
+
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_dag_ancestors_processed
+            .set(total_ancestors as i64);
+
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_dag_children_links
+            .set(total_children_links as i64);
+
+        tracing::debug!(
+            "link_blocks_in_last_commit: {} blocks, {} ancestors, {} children links",
+            total_blocks,
+            total_ancestors,
+            total_children_links
+        );
     }
 
     // To simplify counting accept and reject votes for finalization, make reject votes explicit
@@ -354,6 +408,8 @@ impl CommitFinalizer {
     // and B rejects a transaction in C, A should still be considered to reject the transaction in C
     // even if A does not contain an explicit reject vote for the transaction.
     fn inherit_reject_votes_in_last_commit(&mut self) {
+        let _scope = monitored_scope("CommitFinalizer::inherit_reject_votes_in_last_commit");
+
         let commit_state = self
             .pending_commits
             .back_mut()
@@ -401,6 +457,8 @@ impl CommitFinalizer {
 
     // Tries indirectly finalizing the buffered commits at the given index.
     fn try_indirect_finalize_first_commit(&mut self) {
+        let _scope = monitored_scope("CommitFinalizer::try_indirect_finalize_first_commit");
+
         // Ensure direct finalization has been attempted for the commit.
         assert!(!self.pending_commits.is_empty());
         assert!(self.pending_commits[0].pending_blocks.is_empty());
@@ -525,9 +583,20 @@ impl CommitFinalizer {
         pending_block_ref: BlockRef,
         pending_transactions: BTreeSet<TransactionIndex>,
     ) -> Vec<TransactionIndex> {
+        let _scope =
+            monitored_scope("CommitFinalizer::try_indirect_finalize_pending_transactions_in_block");
+        let initial_pending_count = pending_transactions.len();
+
         if pending_transactions.is_empty() {
             return vec![];
         }
+
+        tracing::info!(
+            "Starting indirect finalization for block {} with {} pending transactions",
+            pending_block_ref,
+            initial_pending_count
+        );
+
         let mut accept_votes: BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>> =
             pending_transactions
                 .into_iter()
@@ -541,11 +610,37 @@ impl CommitFinalizer {
             .children
             .clone();
         let mut visited = BTreeSet::new();
+
+        let initial_children_count = to_visit_blocks.len();
+        tracing::info!(
+            "Block {} has {} initial children to visit",
+            pending_block_ref,
+            initial_children_count
+        );
+
+        let mut blocks_visited = 0;
+        let mut blocks_processed = 0;
+        let mut total_children_added = 0;
+
         // Traverse children blocks breadth-first and accumulate accept votes for pending transactions.
         while let Some(curr_block_ref) = to_visit_blocks.pop_first() {
+            blocks_visited += 1;
+
             if !visited.insert(curr_block_ref) {
                 continue;
             }
+            blocks_processed += 1;
+
+            if blocks_processed % 100 == 0 {
+                tracing::info!(
+                    "Indirect finalization progress: visited {} blocks, processed {} blocks, remaining to visit: {}, pending transactions: {}",
+                    blocks_visited,
+                    blocks_processed,
+                    to_visit_blocks.len(),
+                    accept_votes.len()
+                );
+            }
+
             // Gets the reject votes from current block to the pending block.
             let curr_block_state = self.blocks.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash."));
             let curr_block_reject_votes = curr_block_state
@@ -575,16 +670,56 @@ impl CommitFinalizer {
             }
             // End traversing if all blocks and requested transactions have reached quorum.
             if accept_votes.is_empty() {
+                tracing::info!(
+                    "All pending transactions finalized after visiting {} blocks",
+                    blocks_processed
+                );
                 break;
             }
             // Add additional children blocks to visit.
+            let new_children_count = curr_block_state
+                .children
+                .iter()
+                .filter(|b| !visited.contains(*b))
+                .count();
             to_visit_blocks.extend(
                 curr_block_state
                     .children
                     .iter()
                     .filter(|b| !visited.contains(*b)),
             );
+            total_children_added += new_children_count;
         }
+
+        // Record detailed metrics
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_indirect_traversal_blocks_visited
+            .set(blocks_visited as i64);
+
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_indirect_traversal_blocks_processed
+            .set(blocks_processed as i64);
+
+        self.context
+            .metrics
+            .node_metrics
+            .finalizer_indirect_traversal_transactions_finalized
+            .set(finalized_transactions.len() as i64);
+
+        // Log summary
+        tracing::info!(
+            "Indirect finalization completed for block {}: {} transactions finalized, {} blocks visited, {} blocks processed, {} children added",
+            pending_block_ref,
+            finalized_transactions.len(),
+            blocks_visited,
+            blocks_processed,
+            total_children_added
+        );
+
         finalized_transactions
     }
 
