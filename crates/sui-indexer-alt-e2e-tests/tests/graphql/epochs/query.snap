@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-58:
+task 6, lines 16-67:
 //# run-graphql
 Response: {
   "data": {
@@ -51,6 +51,15 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
       }
     },
     "e0": {
@@ -82,6 +91,15 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
       }
     },
     "e1": {
@@ -113,6 +131,15 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
       }
     },
     "e2": {
@@ -144,13 +171,22 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
       }
     },
     "e3": null
   }
 }
 
-task 7, lines 60-103:
+task 7, lines 69-121:
 //# run-graphql
 Response: {
   "data": {
@@ -185,6 +221,15 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
           }
         },
         "e0": {
@@ -216,6 +261,15 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
           }
         },
         "e1": {
@@ -247,6 +301,15 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
           }
         },
         "e2": null
