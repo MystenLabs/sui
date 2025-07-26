@@ -26,6 +26,7 @@ use crate::signature::{GenericSignature, VerifyParams};
 use crate::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
 };
+use crate::storage::InputKey;
 use crate::type_input::TypeInput;
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -2177,13 +2178,18 @@ pub trait TransactionDataAPI {
 
     fn expiration(&self) -> &TransactionExpiration;
 
-    fn shared_input_objects(&self) -> Vec<SharedInputObject>;
-
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)>;
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
+    fn shared_input_objects(&self) -> Vec<SharedInputObject>;
+
     fn receiving_objects(&self) -> Vec<ObjectRef>;
+
+    // Dependency (input & receiving) objects that already have a version,
+    // and do not require version assignment from consensus.
+    // Returns the object keys for lookup in cache and store.
+    fn fastpath_dependency_objects(&self) -> UserInputResult<Vec<InputKey>>;
 
     /// Processes balance withdraws and returns a map from balance account object ID to total reservation.
     /// This method aggregates all withdraw operations for the same account by merging their reservations.
@@ -2270,10 +2276,6 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self.expiration
     }
 
-    fn shared_input_objects(&self) -> Vec<SharedInputObject> {
-        self.kind.shared_input_objects().collect()
-    }
-
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
         self.kind.move_calls()
     }
@@ -2291,8 +2293,38 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(inputs)
     }
 
+    fn shared_input_objects(&self) -> Vec<SharedInputObject> {
+        self.kind.shared_input_objects().collect()
+    }
+
     fn receiving_objects(&self) -> Vec<ObjectRef> {
         self.kind.receiving_objects()
+    }
+
+    fn fastpath_dependency_objects(&self) -> UserInputResult<Vec<InputKey>> {
+        let keys = self
+            .input_objects()?
+            .iter()
+            .filter_map(|o| match o {
+                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                    Some(InputKey::VersionedObject {
+                        id: FullObjectID::new(object_ref.0, None),
+                        version: object_ref.1,
+                    })
+                }
+                InputObjectKind::MovePackage(package_id) => {
+                    Some(InputKey::Package { id: *package_id })
+                }
+                InputObjectKind::SharedMoveObject { .. } => None,
+            })
+            .chain(self.receiving_objects().into_iter().map(|object_ref| {
+                InputKey::VersionedObject {
+                    id: FullObjectID::new(object_ref.0, None),
+                    version: object_ref.1,
+                }
+            }))
+            .collect::<Vec<_>>();
+        Ok(keys)
     }
 
     fn process_balance_withdraws(&self) -> UserInputResult<BTreeMap<ObjectID, Reservation>> {
