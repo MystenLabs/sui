@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::End;
 
 use crate::db::{
-    self,
     iter::{FwdIter, RevIter},
     map::DbMap,
 };
 
-use super::error::RpcError;
+use super::error::{db_error, RpcError};
 
 #[DefaultConfig]
 pub struct PaginationConfig {
     pub default_page_size: u32,
+    pub max_batch_size: u32,
     pub max_page_size: u32,
 }
 
@@ -99,28 +99,14 @@ impl<'r> Page<'r> {
     {
         if self.is_from_front {
             self.paginate_from_front(
-                map.prefix(checkpoint, prefix).map_err(|e| {
-                    if let db::error::Error::NotInRange { checkpoint } = e {
-                        RpcError::NotInRange(checkpoint)
-                    } else {
-                        anyhow!(e)
-                            .context("failed to create forward iterator")
-                            .into()
-                    }
-                })?,
+                map.prefix(checkpoint, prefix)
+                    .map_err(|e| db_error(e, "failed to create forward iterator"))?,
                 pred,
             )
         } else {
             self.paginate_from_back(
-                map.prefix_rev(checkpoint, prefix).map_err(|e| {
-                    if let db::error::Error::NotInRange { checkpoint } = e {
-                        RpcError::NotInRange(checkpoint)
-                    } else {
-                        anyhow!(e)
-                            .context("failed to create reverse iterator")
-                            .into()
-                    }
-                })?,
+                map.prefix_rev(checkpoint, prefix)
+                    .map_err(|e| db_error(e, "failed to create reverse iterator"))?,
                 pred,
             )
         }
@@ -243,6 +229,7 @@ impl Default for PaginationConfig {
     fn default() -> Self {
         Self {
             default_page_size: 50,
+            max_batch_size: 200,
             max_page_size: 200,
         }
     }
@@ -262,6 +249,7 @@ mod tests {
     fn config() -> PaginationConfig {
         PaginationConfig {
             default_page_size: 3,
+            max_batch_size: 5,
             max_page_size: 5,
         }
     }

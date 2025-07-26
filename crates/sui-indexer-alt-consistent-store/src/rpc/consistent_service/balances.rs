@@ -11,7 +11,7 @@ use sui_indexer_alt_framework::types::{base_types::SuiAddress, TypeTag};
 
 use crate::{
     rpc::{
-        error::{RpcError, StatusCode},
+        error::{db_error, RpcError, StatusCode},
         pagination::Page,
     },
     schema::balances::Key,
@@ -32,6 +32,9 @@ pub(super) enum Error {
 
     #[error("Missing 'coin_type'")]
     MissingType,
+
+    #[error("Too many requests in batch: {0} (max: {1})")]
+    TooManyRequests(usize, u32),
 }
 
 impl StatusCode for Error {
@@ -40,9 +43,54 @@ impl StatusCode for Error {
             Error::InvalidOwner(_)
             | Error::InvalidType(_)
             | Error::MissingOwner
-            | Error::MissingType => tonic::Code::InvalidArgument,
+            | Error::MissingType
+            | Error::TooManyRequests(_, _) => tonic::Code::InvalidArgument,
         }
     }
+}
+
+pub(super) fn batch_get_balances(
+    state: &State,
+    checkpoint: u64,
+    request: grpc::BatchGetBalancesRequest,
+) -> Result<grpc::BatchGetBalancesResponse, RpcError<Error>> {
+    let config = &state.config.pagination;
+    let keys = if request.requests.len() > config.max_batch_size as usize {
+        return Err(Error::TooManyRequests(
+            request.requests.len(),
+            state.config.pagination.max_batch_size,
+        )
+        .into());
+    } else {
+        request
+            .requests
+            .into_iter()
+            .map(key)
+            .collect::<Result<Vec<_>, _>>()?
+    };
+
+    let index = &state.store.schema().balances;
+    let values = index
+        .multi_get(checkpoint, &keys)
+        .map_err(|e| db_error(e, "failed to batch get balances"))?;
+
+    let mut balances = Vec::with_capacity(values.len());
+    for (key, value) in keys.into_iter().zip(values) {
+        let with_prefix = true;
+        let coin_type = key.type_.to_canonical_string(with_prefix);
+        let balance = value.context("Failed to deserialize balance")?.unwrap_or(0);
+        let balance = u64::try_from(balance)
+            .with_context(|| format!("Bad balance for type {coin_type}: {balance}"))?;
+
+        balances.push(grpc::Balance {
+            owner: Some(key.owner.to_string()),
+            coin_type: Some(coin_type),
+            balance: Some(balance),
+            page_token: None,
+        });
+    }
+
+    Ok(grpc::BatchGetBalancesResponse { balances })
 }
 
 pub(super) fn get_balance(
@@ -50,28 +98,11 @@ pub(super) fn get_balance(
     checkpoint: u64,
     request: grpc::GetBalanceRequest,
 ) -> Result<grpc::Balance, RpcError<Error>> {
-    let owner = if request.owner().is_empty() {
-        return Err(Error::MissingOwner.into());
-    } else {
-        owner(request.owner())?
-    };
-
-    let coin_type = if request.coin_type().is_empty() {
-        return Err(Error::MissingType.into());
-    } else {
-        TypeTag::from_str(request.coin_type())
-            .map_err(|_| Error::InvalidType(request.coin_type().to_owned()))?
-    };
-
-    let key = Key {
-        owner,
-        type_: coin_type,
-    };
-
+    let key = key(request)?;
     let index = &state.store.schema().balances;
     let balance = index
         .get(checkpoint, &key)
-        .context("Failed to fetch data")?
+        .map_err(|e| db_error(e, "failed to get balance"))?
         .unwrap_or(0);
 
     let with_prefix = true;
@@ -80,6 +111,7 @@ pub(super) fn get_balance(
         .with_context(|| format!("Bad balance for type {coin_type}: {balance}"))?;
 
     Ok(grpc::Balance {
+        owner: Some(key.owner.to_string()),
         coin_type: Some(coin_type),
         balance: Some(balance),
         page_token: None,
@@ -91,11 +123,11 @@ pub(super) fn list_balances(
     checkpoint: u64,
     request: grpc::ListBalancesRequest,
 ) -> Result<grpc::ListBalancesResponse, RpcError<Error>> {
-    if request.owner().is_empty() {
+    let owner = if request.owner().is_empty() {
         return Err(Error::MissingOwner.into());
-    }
-
-    let owner = owner(request.owner())?;
+    } else {
+        owner(request.owner())?
+    };
 
     let page = Page::from_request(
         &state.config.pagination,
@@ -120,6 +152,7 @@ pub(super) fn list_balances(
             .with_context(|| format!("Bad balance for type {coin_type}: {balance}"))?;
 
         balances.push(grpc::Balance {
+            owner: Some(key.owner.to_string()),
             coin_type: Some(coin_type),
             balance: Some(balance),
             page_token: Some(token.into()),
@@ -131,6 +164,24 @@ pub(super) fn list_balances(
         has_next_page: Some(resp.has_next),
         balances,
     })
+}
+
+/// Convert a point lookup into a key for the underlying index.
+fn key(request: grpc::GetBalanceRequest) -> Result<Key, Error> {
+    let owner = if request.owner().is_empty() {
+        return Err(Error::MissingOwner);
+    } else {
+        owner(request.owner())?
+    };
+
+    let type_ = if request.coin_type().is_empty() {
+        return Err(Error::MissingType);
+    } else {
+        TypeTag::from_str(request.coin_type())
+            .map_err(|_| Error::InvalidType(request.coin_type().to_owned()))?
+    };
+
+    Ok(Key { owner, type_ })
 }
 
 /// Parse the owner's `SuiAddress` from a string. Addresses must start with `0x` followed by

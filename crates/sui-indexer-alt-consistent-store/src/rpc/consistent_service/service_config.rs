@@ -14,6 +14,7 @@ pub(super) fn service_config(
     let config = &state.config.pagination;
     Ok(grpc::ServiceConfigResponse {
         default_page_size: Some(config.default_page_size),
+        max_batch_size: Some(config.max_batch_size),
         max_page_size: Some(config.max_page_size),
     })
 }
