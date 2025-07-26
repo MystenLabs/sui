@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module counter::constants {
+module constants::constants {
     /// The maximum value of a counter.
     const MAX_VALUE: u64 = 100;
 

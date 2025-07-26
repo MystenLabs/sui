@@ -1,6 +1,6 @@
 [package]
-name = "Constants"
+name = "BitOps"
 edition = "2024.beta"
 
 [addresses]
-constants = "0x0"
+bit_ops = "0x0"
