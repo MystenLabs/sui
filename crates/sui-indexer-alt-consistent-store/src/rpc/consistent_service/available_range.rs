@@ -15,5 +15,6 @@ pub(super) fn available_range(
     Ok(grpc::AvailableRangeResponse {
         min_checkpoint: range.as_ref().map(|r| *r.start()),
         max_checkpoint: range.as_ref().map(|r| *r.end()),
+        stride: Some(state.consistency_config.stride),
     })
 }

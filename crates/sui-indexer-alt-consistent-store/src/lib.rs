@@ -97,7 +97,7 @@ pub async fn start_service(
         path,
         indexer_args,
         client_args,
-        consistency,
+        consistency.clone(),
         ingestion.into(),
         rocksdb,
         registry,
@@ -107,7 +107,8 @@ pub async fn start_service(
 
     let state = State {
         store: indexer.store().clone(),
-        config: Arc::new(rpc),
+        rpc_config: Arc::new(rpc),
+        consistency_config: Arc::new(consistency),
     };
 
     let rpc = RpcService::new(rpc_args, version, registry, cancel.child_token())

@@ -54,11 +54,11 @@ pub(super) fn batch_get_balances(
     checkpoint: u64,
     request: grpc::BatchGetBalancesRequest,
 ) -> Result<grpc::BatchGetBalancesResponse, RpcError<Error>> {
-    let config = &state.config.pagination;
+    let config = &state.rpc_config.pagination;
     let keys = if request.requests.len() > config.max_batch_size as usize {
         return Err(Error::TooManyRequests(
             request.requests.len(),
-            state.config.pagination.max_batch_size,
+            state.rpc_config.pagination.max_batch_size,
         )
         .into());
     } else {
@@ -130,7 +130,7 @@ pub(super) fn list_balances(
     };
 
     let page = Page::from_request(
-        &state.config.pagination,
+        &state.rpc_config.pagination,
         request.after_token(),
         request.before_token(),
         request.page_size(),

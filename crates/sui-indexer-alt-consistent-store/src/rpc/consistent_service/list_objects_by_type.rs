@@ -40,7 +40,7 @@ pub(super) fn list_objects_by_type(
         .ok_or(Error::MissingType)?;
 
     let page = Page::from_request(
-        &state.config.pagination,
+        &state.rpc_config.pagination,
         request.after_token(),
         request.before_token(),
         request.page_size(),

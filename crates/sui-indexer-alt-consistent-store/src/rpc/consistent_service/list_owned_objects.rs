@@ -87,7 +87,7 @@ pub(super) fn list_owned_objects(
         .map_err(Error::from)?;
 
     let page = Page::from_request(
-        &state.config.pagination,
+        &state.rpc_config.pagination,
         request.after_token(),
         request.before_token(),
         request.page_size(),
