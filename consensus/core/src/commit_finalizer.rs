@@ -21,7 +21,7 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     transaction_certifier::TransactionCertifier,
-    BlockAPI, CommitIndex, CommittedSubDag,
+    BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
 };
 
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
@@ -215,7 +215,7 @@ impl CommitFinalizer {
             // This is because the last commit may have been directly finalized, but its previous commits
             // may not have been directly finalized.
             self.link_blocks_in_last_commit();
-            self.inherit_reject_votes_in_last_commit();
+            self.append_direct_ancestors_in_last_commit();
             // Try to indirectly finalize a prefix of the buffered commits.
             // If only one commit remains, it cannot be indirectly finalized because there is no commit afterwards,
             // so it is excluded.
@@ -321,18 +321,7 @@ impl CommitFinalizer {
 
         for block in blocks {
             let block_ref = block.reference();
-
-            // Initialize the block state with the reject votes contained in the block.
-            let block_state = self.blocks.entry(block_ref).or_default();
-            for votes in block.transaction_votes() {
-                block_state
-                    .reject_votes
-                    .entry(votes.block_ref)
-                    .or_default()
-                    .extend(votes.rejects.iter());
-            }
-
-            // Link its ancestors to the block.
+            // Link ancestors to the block.
             for ancestor in block.ancestors() {
                 // Ancestor may not exist in the blocks map if it has been finalized or gc'ed.
                 // So skip linking if the ancestor does not exist.
@@ -340,60 +329,36 @@ impl CommitFinalizer {
                     ancestor_block.children.insert(block_ref);
                 }
             }
+            // Initialize the block state.
+            self.blocks
+                .entry(block_ref)
+                .or_insert(BlockState::new(block));
         }
     }
 
-    // To simplify counting accept and reject votes for finalization, make reject votes explicit
-    // in each block state even if the original block does not contain an implicit reject vote.
-    //
-    // This means when block A and B are from the same authority and B is a direct ancestor of A,
-    // all reject votes from B are also added to the block state of A.
-    //
-    // This computation also helps to clarify the edge case: when both A and B link to another block C
-    // and B rejects a transaction in C, A should still be considered to reject the transaction in C
-    // even if A does not contain an explicit reject vote for the transaction.
-    fn inherit_reject_votes_in_last_commit(&mut self) {
+    fn append_direct_ancestors_in_last_commit(&mut self) {
         let commit_state = self
             .pending_commits
             .back_mut()
             .unwrap_or_else(|| panic!("No pending commit."));
-
-        // Inherit in ascending order of round, to ensure all lower round reject votes are included.
         let mut blocks = commit_state.commit.blocks.clone();
         blocks.sort_by_key(|b| b.round());
-
         for block in blocks {
-            // Inherit reject votes from the ancestor of block's own authority.
-            // Block verification ensures the 1st ancestor is from the own authority.
-            // If this is not the case, the ancestor block must have been gc'ed.
-            // Also, block verification ensures each authority has at most one ancestor.
-            let Some(own_ancestor) = block.ancestors().first().copied() else {
-                continue;
-            };
-            if own_ancestor.author != block.author() {
-                continue;
-            }
-            let Some(own_ancestor_rejects) = self
+            let block_ref = block.reference();
+            let mut direct_ancestor = *self
                 .blocks
-                .get(&own_ancestor)
-                .map(|b| b.reject_votes.clone())
-            else {
-                // The ancestor block has been finalized or gc'ed.
-                // So its reject votes are no longer needed either.
-                continue;
-            };
-            // No reject votes from the ancestor block to inherit.
-            if own_ancestor_rejects.is_empty() {
-                continue;
-            }
-            // Otherwise, inherit the reject votes.
-            let block_state = self.blocks.get_mut(&block.reference()).unwrap();
-            for (block_ref, reject_votes) in own_ancestor_rejects {
-                block_state
-                    .reject_votes
-                    .entry(block_ref)
-                    .or_default()
-                    .extend(reject_votes.iter());
+                .get_mut(&block_ref)
+                .unwrap()
+                .block
+                .ancestors()
+                .first()
+                .unwrap();
+            while direct_ancestor.author == block_ref.author {
+                let Some(ancestor_block) = self.blocks.get_mut(&direct_ancestor) else {
+                    break;
+                };
+                ancestor_block.direct_ancestors.push(block_ref);
+                direct_ancestor = *ancestor_block.block.ancestors().first().unwrap();
             }
         }
     }
@@ -546,6 +511,12 @@ impl CommitFinalizer {
             }
             // Gets the reject votes from current block to the pending block.
             let curr_block_state = self.blocks.get(&curr_block_ref).unwrap_or_else(|| panic!("Block {curr_block_ref} is either incorrectly gc'ed or failed to be recovered after crash."));
+            // All other direct ancestors of current block do not vote on the same block.
+            // Consider this case: block B is a direct ancestor of block A (from the same authority),
+            // and both blocks A and B link to another block C. Only B's implicit and explicit transaction votes
+            // on C are considered. None of A's implicit or explicit transaction votes on C are considered.
+            visited.extend(curr_block_state.direct_ancestors.iter());
+            // Get reject votes from current block to the pending block.
             let curr_block_reject_votes = curr_block_state
                 .reject_votes
                 .get(&pending_block_ref)
@@ -554,13 +525,11 @@ impl CommitFinalizer {
             // Because of lifetime, first collect finalized transactions, and then remove them from accept_votes.
             let mut newly_finalized = vec![];
             for (index, stake) in &mut accept_votes {
-                // Since blocks inherit reject votes from their ancestors of the same authority,
-                // a transaction will not receive accept votes from the authority that rejects it
-                // unless the authority equivocates.
+                // Skip if the transaction has been rejected by the current block.
                 if curr_block_reject_votes.contains(index) {
                     continue;
                 }
-                // add() returns true iff the total stake has reached quorum.
+                // Skip if the total stake has not reached quorum.
                 if !stake.add(curr_block_ref.author, &self.context.committee) {
                     continue;
                 }
@@ -682,12 +651,32 @@ impl CommitState {
     }
 }
 
-#[derive(Default)]
 struct BlockState {
+    // Content of the block.
+    block: VerifiedBlock,
     // Blocks which has an explicit ancestor linking to this block.
     children: BTreeSet<BlockRef>,
     // Reject votes casted by this block, and by linked ancestors from the same authority.
     reject_votes: BTreeMap<BlockRef, BTreeSet<TransactionIndex>>,
+    // Direct ancestors of this block.
+    direct_ancestors: Vec<BlockRef>,
+}
+
+impl BlockState {
+    fn new(block: VerifiedBlock) -> Self {
+        let reject_votes: BTreeMap<_, _> = block
+            .transaction_votes()
+            .iter()
+            .map(|v| (v.block_ref, v.rejects.clone().into_iter().collect()))
+            .collect();
+        let direct_ancestors = Vec::with_capacity(8);
+        Self {
+            block,
+            children: BTreeSet::new(),
+            reject_votes,
+            direct_ancestors,
+        }
+    }
 }
 
 #[cfg(test)]
