@@ -11,6 +11,9 @@ pub struct AvailableRangeResponse {
     /// answer questions for.
     #[prost(uint64, optional, tag = "2")]
     pub max_checkpoint: ::core::option::Option<u64>,
+    /// The gaps between snapshots taken by the service, measured in checkpoints.
+    #[prost(uint64, optional, tag = "3")]
+    pub stride: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BatchGetBalancesRequest {

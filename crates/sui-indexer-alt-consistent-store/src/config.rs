@@ -41,6 +41,7 @@ pub struct IngestionConfig {
 }
 
 #[DefaultConfig]
+#[derive(Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ConsistencyConfig {
     /// The number of snapshots to keep in the buffer.
@@ -49,7 +50,7 @@ pub struct ConsistencyConfig {
     /// The stride between checkpoints.
     pub stride: u64,
 
-    /// The size of the buffer for storing checkpoints.
+    /// The size of the buffer for queueing up writes for checkpoints, before they are committed.
     pub buffer_size: usize,
 }
 

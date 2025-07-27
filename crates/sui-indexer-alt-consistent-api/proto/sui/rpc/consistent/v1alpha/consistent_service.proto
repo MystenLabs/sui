@@ -32,6 +32,9 @@ message AvailableRangeResponse {
   // The (inclusive) maximum checkpoint sequence number that the service can
   // answer questions for.
   optional uint64 max_checkpoint = 2;
+
+  // The gaps between snapshots taken by the service, measured in checkpoints.
+  optional uint64 stride = 3;
 }
 
 message BatchGetBalancesRequest { repeated GetBalanceRequest requests = 1; }
