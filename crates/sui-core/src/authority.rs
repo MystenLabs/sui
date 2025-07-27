@@ -73,7 +73,6 @@ use sui_types::layout_resolver::into_struct_layout;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::storage::InputKey;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
@@ -1140,7 +1139,7 @@ impl AuthorityState {
         // failures to lock on objects waiting for future versions.
         if epoch_store.protocol_config().mysticeti_fastpath()
             && !self
-                .wait_for_fastpath_input_objects(
+                .wait_for_fastpath_dependency_objects(
                     &transaction,
                     epoch_store.epoch(),
                     WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
@@ -1299,32 +1298,18 @@ impl AuthorityState {
             .inc();
     }
 
-    /// Waits for fastpath (owned) input objects to become available until the specified max_wait timeout.
-    /// Returns true if all fastpath input objects are available, false otherwise.
-    pub(crate) async fn wait_for_fastpath_input_objects(
+    /// Waits for fastpath (owned, package) dependency objects to become available,
+    /// until the specified max_wait timeout.
+    /// Returns true if all fastpath dependency objects are available, false otherwise.
+    pub(crate) async fn wait_for_fastpath_dependency_objects(
         &self,
         transaction: &VerifiedTransaction,
         epoch: EpochId,
         max_wait: Duration,
     ) -> SuiResult<bool> {
         let txn_data = transaction.data().transaction_data();
-        let fastpath_input_objects = txn_data
-            .input_objects()?
-            .iter()
-            .filter_map(|o| match o {
-                InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
-                    Some(InputKey::VersionedObject {
-                        id: FullObjectID::new(object_ref.0, None),
-                        version: object_ref.1,
-                    })
-                }
-                InputObjectKind::MovePackage(package_id) => {
-                    Some(InputKey::Package { id: *package_id })
-                }
-                InputObjectKind::SharedMoveObject { .. } => None,
-            })
-            .collect::<Vec<_>>();
-        if fastpath_input_objects.is_empty() {
+        let fastpath_dependency_objects = txn_data.fastpath_dependency_objects()?;
+        if fastpath_dependency_objects.is_empty() {
             return Ok(true);
         }
         // It is ok to not check receiving objects, unless it turns out to be a common failure.
@@ -1332,7 +1317,7 @@ impl AuthorityState {
         match timeout(
             max_wait,
             self.get_object_cache_reader().notify_read_input_objects(
-                &fastpath_input_objects,
+                &fastpath_dependency_objects,
                 &receiving_keys,
                 epoch,
             ),
@@ -1401,7 +1386,10 @@ impl AuthorityState {
         // tx could be reverted when epoch ends, so we must be careful not to return a result
         // here after the epoch ends.
         epoch_store
-            .within_alive_epoch(self.notify_read_effects(*transaction.digest()))
+            .within_alive_epoch(self.notify_read_effects(
+                "AuthorityState::wait_for_transaction_execution",
+                *transaction.digest(),
+            ))
             .await
             .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
             .and_then(|r| r)
@@ -1423,7 +1411,9 @@ impl AuthorityState {
         // same warning as above applies: We must be careful not to return a result
         // here after the epoch ends.
         epoch_store
-            .within_alive_epoch(self.notify_read_effects(digest))
+            .within_alive_epoch(
+                self.notify_read_effects("AuthorityState::await_transaction_effects", digest),
+            )
             .await
             .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
             .and_then(|r| r)
@@ -1655,11 +1645,12 @@ impl AuthorityState {
 
     pub async fn notify_read_effects(
         &self,
+        task_name: &'static str,
         digest: TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
         Ok(self
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[digest])
+            .notify_read_executed_effects(task_name, &[digest])
             .await
             .pop()
             .expect("must return correct number of effects"))
@@ -5784,7 +5775,10 @@ impl RandomnessRoundReceiver {
                 RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
                 authority_state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&[digest]),
+                    .notify_read_executed_effects(
+                        "RandomnessRoundReceiver::notify_read_executed_effects_first",
+                        &[digest],
+                    ),
             )
             .await;
             let mut effects = match result {
@@ -5798,7 +5792,10 @@ impl RandomnessRoundReceiver {
                     // Continue waiting as long as necessary in non-debug builds.
                     authority_state
                         .get_transaction_cache_reader()
-                        .notify_read_executed_effects(&[digest])
+                        .notify_read_executed_effects(
+                            "RandomnessRoundReceiver::notify_read_executed_effects_second",
+                            &[digest],
+                        )
                         .await
                 }
             };

@@ -601,16 +601,16 @@ impl ValidatorService {
 
         // Use shorter wait timeout in simtests to exercise server-side error paths and
         // client-side retry logic.
-        let wait_for_fastpath_input_objects_timeout = if cfg!(msim) {
+        let wait_for_fastpath_dependency_objects_timeout = if cfg!(msim) {
             Duration::from_millis(100)
         } else {
             WAIT_FOR_FASTPATH_INPUT_TIMEOUT
         };
         if !state
-            .wait_for_fastpath_input_objects(
+            .wait_for_fastpath_dependency_objects(
                 &transaction,
                 epoch_store.epoch(),
-                wait_for_fastpath_input_objects_timeout,
+                wait_for_fastpath_dependency_objects_timeout,
             )
             .await?
         {
@@ -1175,7 +1175,10 @@ impl ValidatorService {
             let mut effects = self
                 .state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects(&tx_digests)
+                .notify_read_executed_effects(
+                    "AuthorityServer::notify_read_executed_effects_finalized",
+                    &tx_digests,
+                )
                 .await;
             let effects = effects.pop().unwrap();
             let effects_digest = effects.digest();
@@ -1284,7 +1287,10 @@ impl ValidatorService {
                 },
                 mut effects = self.state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&tx_digests) => {
+                    .notify_read_executed_effects("AuthorityServer::notify_read_executed_effects", &tx_digests) => {
+
+                    // unwrap is safe because notify_read_executed_effects is expected
+                    // to return the same amount of effects as the provided transactions.
                     let effects = effects.pop().unwrap();
                     let effects_digest = effects.digest();
                     debug!(
@@ -1292,8 +1298,6 @@ impl ValidatorService {
                         ?effects_digest,
                         "Observed executed effects",
                     );
-                    // unwrap is safe because notify_read_executed_effects is expected
-                    // to return the same amount of effects as the provided transactions.
                     break (effects, None);
                 },
                 mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(&tx_digests) => {

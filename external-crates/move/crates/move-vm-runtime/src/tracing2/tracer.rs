@@ -283,8 +283,17 @@ impl VMTracer<'_> {
         let RuntimeLocation::Global(idx) = location else {
             return Some(());
         };
-        let new_state = GlobalValue::AtStackOffset(interpreter.operand_stack.value.len() - 1);
+        let current_frame_identifier = self.current_frame_identifier()?;
         let global = self.loaded_data.get_mut(idx)?;
+
+        // This was an alias to a local reference further up the call stack -- do nothing.
+        if let GlobalValue::InLocal(fidx, _) = global {
+            if current_frame_identifier != *fidx {
+                return Some(());
+            }
+        }
+
+        let new_state = GlobalValue::AtStackOffset(interpreter.operand_stack.value.len() - 1);
         let GlobalValue::InLocal(..) = std::mem::replace(global, new_state) else {
             // We are pushing a global that was not in a local, this is not fine.
             return None;
@@ -366,26 +375,35 @@ impl VMTracer<'_> {
     ) -> Option<()> {
         let location = GlobalValue::InLocal(frame_identifier, local_index);
         let global = self.loaded_data.get_mut(&global_index)?;
-
-        match std::mem::replace(global, location) {
-            GlobalValue::InLocal(_, _) => {
-                // We are moving a global that was already in a local to a local, this is not fine.
-                // signal an issue.
-                None
-            }
-            GlobalValue::Value(_) | GlobalValue::AtStackOffset(_) => {
-                // We are moving a global that was on the stack to a local, this is fine.
-                Some(())
-            }
+        match global {
+            // Keep aliasing all the way back to the root.
+            // Basically this is the case where we've already rooted the global reference into a
+            // local higher up, so we don't update the root -- it's rooted in a local, and we should keep it
+            // there and that's where we should look for state updates.
+            GlobalValue::InLocal(_, _) => (),
+            // If it's not a root then set the location to be a local root
+            GlobalValue::Value(_) | GlobalValue::AtStackOffset(_) => *global = location,
         }
+
+        Some(())
     }
 
-    fn store_global(&mut self, stack_idx: usize, local_index: usize) -> Option<()> {
-        match self.type_stack.get(stack_idx)? {
+    fn store_global(
+        &mut self,
+        interpreter: &Interpreter,
+        frame_identifier: TraceIndex,
+        stack_idx: usize,
+        local_index: usize,
+    ) -> Option<()> {
+        if stack_idx >= interpreter.operand_stack.value.len() {
+            return None;
+        }
+        let offset = self.type_stack.len() - 1;
+        match self.type_stack.get(offset - stack_idx)? {
             RootedType {
                 layout: _,
                 ref_type: Some((_, RuntimeLocation::Global(idx))),
-            } => self.record_global_store(self.current_frame_identifier()?, local_index, *idx),
+            } => self.record_global_store(frame_identifier, local_index, *idx),
             _ => Some(()),
         }
     }
@@ -752,13 +770,17 @@ impl VMTracer<'_> {
         link_context: AccountAddress,
     ) -> Option<()> {
         self.link_context = Some(link_context);
+        let new_frame_idx = self.trace.current_trace_offset();
 
         let call_args = (0..function.arg_count())
             .rev()
             .enumerate()
             .map(|(local_idx, stack_idx)| {
-                self.store_global(stack_idx, local_idx)?;
-                self.resolve_stack_value(Some(calling_frame), interpreter, stack_idx)
+                let val = self.resolve_stack_value(Some(calling_frame), interpreter, stack_idx);
+                // NB: it is important for us to resolve the value _before_ we register that any
+                // global is stored there.
+                self.store_global(interpreter, new_frame_idx, stack_idx, local_idx)?;
+                val
             })
             .collect::<Option<Vec<_>>>()?;
 
@@ -793,11 +815,12 @@ impl VMTracer<'_> {
             })
             .collect();
 
-        let current_trace_offset = self.trace.current_trace_offset();
+        debug_assert!(new_frame_idx == self.trace.current_trace_offset());
+
         self.active_frames.insert(
-            current_trace_offset,
+            new_frame_idx,
             FrameInfo {
-                frame_identifier: current_trace_offset,
+                frame_identifier: new_frame_idx,
                 is_native: function.is_native(),
                 locals_types,
                 return_types: function_type_info.return_types.clone(),
@@ -975,10 +998,15 @@ impl VMTracer<'_> {
                 self.register_pre_effects(effects);
             }
             B::StLoc(lidx) => {
-                self.store_global(0, *lidx as usize)?;
-                let ty = self.type_stack.last()?;
+                let ty = self.type_stack.last()?.clone();
                 let v = self.resolve_stack_value(Some(frame), interpreter, 0)?;
-                self.insert_local(*lidx as usize, ty.clone())?;
+                self.store_global(
+                    interpreter,
+                    self.current_frame_identifier()?,
+                    0,
+                    *lidx as usize,
+                )?;
+                self.insert_local(*lidx as usize, ty)?;
                 let effects = vec![EF::Pop(v.clone())];
                 self.register_pre_effects(effects);
             }

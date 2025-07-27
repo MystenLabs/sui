@@ -171,7 +171,7 @@ impl ProjectBuilder {
 }
 
 impl Project {
-    /// Try to get the git commits in the project, but it will panic if this is not a git
+    /// Returns the SHAs of the commits in the repository. Panics if this is not a git project
     /// repository.
     pub fn commits(&self) -> Vec<String> {
         let repo = self.open();

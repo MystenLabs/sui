@@ -8,6 +8,7 @@ use std::{
     process::Stdio,
 };
 
+use path_clean::PathClean;
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -51,7 +52,8 @@ pub struct GitTree {
     /// Commit-ish (branch, tag, or SHA)
     sha: GitSha,
 
-    /// relative path inside the repository to use for sparse checkout
+    /// relative path inside the repository to use for sparse checkout. Guaranteed to not begin
+    /// with `..`
     path_in_repo: PathBuf,
 
     /// Absolute path to the root of the repository
@@ -91,7 +93,7 @@ impl GitCache {
         path_in_repo: Option<PathBuf>,
     ) -> GitResult<GitTree> {
         let sha = Self::find_sha(repo, rev).await?;
-        Ok(self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone()))
+        self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone())
     }
 
     /// Construct a tree in `self` for the repository `repo` with the provided `sha` and
@@ -101,17 +103,21 @@ impl GitCache {
         repo: String,
         sha: GitSha,
         path_in_repo: Option<PathBuf>,
-    ) -> GitTree {
+    ) -> GitResult<GitTree> {
         let filename = url_to_file_name(repo.as_str());
         let path_to_repo = self.root_dir.join(format!("{filename}_{sha}"));
-        let path_in_repo = path_in_repo.unwrap_or_default();
+        let path_in_repo = path_in_repo.unwrap_or_default().clean();
 
-        GitTree {
+        if path_in_repo.starts_with("..") {
+            return Err(GitError::BadPath { path: path_in_repo });
+        }
+
+        Ok(GitTree {
             repo,
             sha,
             path_in_repo,
             path_to_repo,
-        }
+        })
     }
 }
 
@@ -148,6 +154,21 @@ impl GitTree {
     /// The git sha for the tree
     pub fn sha(&self) -> &GitSha {
         &self.sha
+    }
+
+    /// A new tree in the same repository with `path_in_repo` set to
+    /// `self.path_in_repo.join(relative_path)`.
+    pub fn relative_tree(&self, relative_path: impl AsRef<Path>) -> GitResult<Self> {
+        let mut result = self.clone();
+
+        result.path_in_repo = self.path_in_repo.join(relative_path).clean();
+        if result.path_in_repo.to_string_lossy().starts_with("..") {
+            Err(GitError::BadPath {
+                path: result.path_in_repo,
+            })
+        } else {
+            Ok(result)
+        }
     }
 
     /// Checkout the directory using a sparse checkout. It will try to clone without checkout, set
@@ -268,7 +289,7 @@ fn url_to_file_name(url: &str) -> String {
 }
 
 /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
-/// `repo` to a commit SHA. This will make a remote call so network is required.
+/// `repo` to a 40-character commit SHA. This will make a remote call so network is required.
 async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
     if let Some(r) = rev {
         if let Ok(sha) = GitSha::try_from(r.to_string()) {

@@ -5,7 +5,7 @@ source: crates/move-package-alt/tests/test_runner.rs
 # This file should be checked in.
 
 [pinned._test_env.example]
-source = { local = "." }
+source = { root = true }
 use_environment = "_test_env"
 manifest_digest = "7078326A6155C6DCCDC0E8914B68F5D8A53C6EA81A5761CA237A3CD1BE7B6F32"
 deps = {}
@@ -21,7 +21,7 @@ manifest_digest = "cab3"
 deps = { bar = "bar" }
 
 [pinned.mainnet.example]
-source = { local = "." }
+source = { root = true }
 manifest_digest = "cb4a8948faa586ccc1694d80e25941a5227d8b9e"
 deps = { baz = "baz" }
 

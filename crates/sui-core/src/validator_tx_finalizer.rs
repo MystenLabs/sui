@@ -213,7 +213,10 @@ where
             _ = tokio::time::sleep(tx_finalization_delay) => {
                 trace!(?tx_digest, "Waking up to finalize transaction");
             }
-            _ = cache_read.notify_read_executed_effects_digests(&digests) => {
+            _ = cache_read.notify_read_executed_effects_digests(
+                "ValidatorTxFinalizer::notify_read_executed_effects_digests",
+                &digests,
+            ) => {
                 trace!(?tx_digest, "Transaction already finalized");
                 return Ok(false);
             }
