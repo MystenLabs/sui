@@ -93,7 +93,7 @@ use super::shared_object_congestion_tracker::{
 };
 use super::shared_object_version_manager::AssignedVersions;
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
-use super::transaction_reject_vote_cache::TransactionRejectVoteCache;
+use super::transaction_reject_vote_reason_cache::TransactionRejectVoteReasonCache;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
 use crate::authority::shared_object_version_manager::{
@@ -422,7 +422,7 @@ pub struct AuthorityPerEpochStore {
     pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
 
     /// A cache that maintains the reason (error) when casting a reject vote a transaction.
-    pub(crate) tx_reject_vote_cache: Option<TransactionRejectVoteCache>,
+    pub(crate) tx_reject_vote_cache: Option<TransactionRejectVoteReasonCache>,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -1124,7 +1124,7 @@ impl AuthorityPerEpochStore {
         };
 
         let tx_reject_vote_cache = if protocol_config.mysticeti_fastpath() {
-            Some(TransactionRejectVoteCache::new())
+            Some(TransactionRejectVoteReasonCache::new(None, epoch_id))
         } else {
             None
         };
@@ -4817,9 +4817,9 @@ impl AuthorityPerEpochStore {
         }
     }
 
-    pub(crate) fn set_tx_rejection_vote(&self, position: ConsensusPosition, reason: SuiError) {
+    pub(crate) fn set_rejection_vote_reason(&self, position: ConsensusPosition, reason: &SuiError) {
         if let Some(tx_reject_vote_cache) = self.tx_reject_vote_cache.as_ref() {
-            tx_reject_vote_cache.set_rejection_vote(position, reason);
+            tx_reject_vote_cache.set_rejection_vote_reason(position, reason);
         }
     }
 

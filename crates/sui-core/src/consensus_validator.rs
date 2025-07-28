@@ -162,10 +162,10 @@ impl SuiTxValidator {
                 epoch_store.set_rejection_vote_reason(
                     ConsensusPosition {
                         epoch: epoch_store.epoch(),
-                        block: block_ref,
+                        block: *block_ref,
                         index: i as TransactionIndex,
                     },
-                    error,
+                    &error,
                 );
             }
         }
