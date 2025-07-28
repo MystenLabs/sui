@@ -1,10 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::{
-    compatibility::{LegacyAddressDeclarations, LegacyDevAddressDeclarations},
-    package::EnvironmentName,
-    schema::PublishAddresses,
-};
+use crate::{package::EnvironmentName, schema::PublishAddresses};
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -22,10 +19,7 @@ pub struct LegacyData {
     pub incompatible_name: Option<String>,
 
     /// These addresses should store all addresses that were part of the package.
-    pub addresses: LegacyAddressDeclarations,
-
-    /// These addresses should store all DEV addresses that were part of the package.
-    pub dev_addresses: Option<LegacyDevAddressDeclarations>,
+    pub addresses: BTreeMap<Identifier, AccountAddress>,
 
     /// The address information that originates from the manifest file.
     /// This is optional and is the first way of doing package version management,

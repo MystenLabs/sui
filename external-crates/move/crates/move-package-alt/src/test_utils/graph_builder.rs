@@ -295,7 +295,7 @@ impl TestPackageGraph {
         move_toml.push_str(&formatdoc!(
             r#"
             [addresses]
-            {} = {}
+            {} = "{}"
             "#,
             package.name,
             publication
@@ -651,7 +651,7 @@ mod tests {
         C = { local = "../c" }
 
         [addresses]
-        b = 0x0
+        b = "0x0"
         "###);
 
         assert_snapshot!(graph.read_file("d/Move.toml"), @r###"
@@ -663,7 +663,7 @@ mod tests {
         [dependencies]
 
         [addresses]
-        d = 0x0000000000000000000000000000000000000000000000000000000000004444
+        d = "0x0000000000000000000000000000000000000000000000000000000000004444"
         "###);
     }
 }
