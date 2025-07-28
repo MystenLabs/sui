@@ -42,7 +42,7 @@ pub async fn status(
     env.check_network_identifier(&request.network_identifier)?;
 
     let system_state = context
-        .client
+        .sui_client
         .governance_api()
         .get_latest_sui_system_state()
         .await?;
@@ -62,7 +62,7 @@ pub async fn status(
     let current_block = blocks.current_block().await?;
     let index = current_block.block.block_identifier.index;
     let target = context
-        .client
+        .sui_client
         .read_api()
         .get_latest_checkpoint_sequence_number()
         .await?;

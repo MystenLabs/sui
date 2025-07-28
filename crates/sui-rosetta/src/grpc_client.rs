@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::Error;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::{
-    BatchGetTransactionsRequest, BatchGetTransactionsResponse, GetServiceInfoRequest,
-    GetServiceInfoResponse,
+    BatchGetTransactionsRequest, BatchGetTransactionsResponse, Checkpoint as ProtoCheckpoint,
+    GetCheckpointRequest, GetServiceInfoRequest, GetServiceInfoResponse,
 };
 use sui_rpc_api::client::AuthInterceptor;
 use sui_rpc_api::Client;
 use sui_types::digests::TransactionDigest;
-use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
+use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointDigest};
 use url::Url;
 
+#[derive(Clone)]
 pub struct GrpcClient {
     inner: Client,
 }
@@ -51,6 +53,78 @@ impl GrpcClient {
             .get_checkpoint_summary(sequence_number)
             .await
             .map_err(Self::convert_tonic_error)
+    }
+
+    pub async fn get_checkpoint_with_transactions_by_sequence(
+        &self,
+        sequence_number: u64,
+    ) -> Result<ProtoCheckpoint, Error> {
+        let request = GetCheckpointRequest {
+            checkpoint_id: Some(sui_rpc::proto::sui::rpc::v2beta2::get_checkpoint_request::CheckpointId::SequenceNumber(sequence_number)),
+            read_mask: Some(sui_rpc::field::FieldMask::from_paths([
+                "summary",
+                "summary.timestamp",
+                "summary.previous_digest",
+                "contents", 
+                "transactions.transaction",
+                "transactions.transaction.bcs",
+                "transactions.effects",
+                "transactions.effects.status",
+                "transactions.effects.gas_used",
+                "transactions.effects.gas_object",
+                "transactions.balance_changes",
+            ])),
+        };
+
+        let response = self
+            .inner
+            .raw_client()
+            .get_checkpoint(request)
+            .await
+            .map_err(Self::convert_tonic_error)?;
+
+        response
+            .into_inner()
+            .checkpoint
+            .ok_or_else(|| Error::DataError("No checkpoint returned".to_string()))
+    }
+
+    pub async fn get_checkpoint_with_transactions_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<ProtoCheckpoint, Error> {
+        let request = GetCheckpointRequest {
+            checkpoint_id: Some(
+                sui_rpc::proto::sui::rpc::v2beta2::get_checkpoint_request::CheckpointId::Digest(
+                    digest.to_string(),
+                ),
+            ),
+            read_mask: Some(sui_rpc::field::FieldMask::from_paths([
+                "summary",
+                "summary.timestamp",
+                "summary.previous_digest",
+                "contents",
+                "transactions.transaction",
+                "transactions.transaction.bcs",
+                "transactions.effects",
+                "transactions.effects.status",
+                "transactions.effects.gas_used",
+                "transactions.effects.gas_object",
+                "transactions.balance_changes",
+            ])),
+        };
+
+        let response = self
+            .inner
+            .raw_client()
+            .get_checkpoint(request)
+            .await
+            .map_err(Self::convert_tonic_error)?;
+
+        response
+            .into_inner()
+            .checkpoint
+            .ok_or_else(|| Error::DataError("No checkpoint returned".to_string()))
     }
 
     pub async fn get_service_info(&self) -> Result<GetServiceInfoResponse, Error> {

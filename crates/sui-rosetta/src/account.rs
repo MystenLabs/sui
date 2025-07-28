@@ -63,7 +63,7 @@ pub async fn balance(
 }
 
 async fn get_checkpoint(ctx: &OnlineServerContext) -> SuiRpcResult<CheckpointSequenceNumber> {
-    ctx.client
+    ctx.sui_client
         .read_api()
         .get_latest_checkpoint_sequence_number()
         .await
@@ -77,7 +77,7 @@ async fn get_balances(
 ) -> Result<Vec<Amount>, Error> {
     if let Some(sub_account) = &request.account_identifier.sub_account {
         let account_type = sub_account.account_type.clone();
-        get_sub_account_balances(account_type, &ctx.client, address).await
+        get_sub_account_balances(account_type, &ctx.sui_client, address).await
     } else if !currencies.0.is_empty() {
         let balance_futures = currencies.0.iter().map(|currency| {
             let coin_type = currency.metadata.clone().coin_type.clone();
@@ -115,7 +115,7 @@ async fn get_account_balances(
     coin_type: &String,
 ) -> Result<i128, Error> {
     Ok(ctx
-        .client
+        .sui_client
         .coin_read_api()
         .get_balance(address, Some(coin_type.to_string()))
         .await?
@@ -193,7 +193,7 @@ pub async fn coins(
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let coins = context
-        .client
+        .sui_client
         .coin_read_api()
         .get_coins_stream(
             request.account_identifier.address,

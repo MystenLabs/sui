@@ -17,6 +17,7 @@ use sui_json_rpc_types::SuiProgrammableMoveCall;
 use sui_json_rpc_types::SuiProgrammableTransactionBlock;
 use sui_json_rpc_types::{BalanceChange, SuiArgument};
 use sui_json_rpc_types::{SuiCallArg, SuiCommand};
+use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction as ProtoExecutedTransaction;
 use sui_sdk::rpc_types::{
     SuiTransactionBlockData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockKind, SuiTransactionBlockResponse,
@@ -26,7 +27,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::{SenderSignedData, TransactionData, TransactionDataAPI};
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
@@ -717,6 +718,126 @@ impl Operations {
                 true
             })
             .collect();
+
+        Ok(ops)
+    }
+
+    pub async fn try_from_proto_transaction(
+        proto_tx: ProtoExecutedTransaction,
+        cache: &CoinMetadataCache,
+    ) -> Result<Self, Error> {
+        // Extract transaction data from BCS
+        let tx_data = if let Some(tx) = &proto_tx.transaction {
+            if let Some(bcs) = &tx.bcs {
+                // Deserialize BCS to get SenderSignedData, then extract transaction data
+                let bcs_bytes = &bcs
+                    .value
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("BCS value missing"))?;
+                let sender_signed_data: SenderSignedData = bcs::from_bytes(bcs_bytes)
+                    .map_err(|e| anyhow!("Failed to deserialize transaction BCS: {}", e))?;
+                sender_signed_data.transaction_data().clone()
+            } else {
+                return Err(anyhow!("Transaction BCS data missing").into());
+            }
+        } else {
+            return Err(anyhow!("Transaction data missing").into());
+        };
+
+        // Convert to SuiTransactionBlockData for compatibility with existing logic
+        struct NoOpsModuleResolver;
+        impl ModuleResolver for NoOpsModuleResolver {
+            type Error = Error;
+            fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+                Ok(None)
+            }
+        }
+        let sui_tx_data = SuiTransactionBlockData::try_from_with_module_cache(
+            tx_data.clone(),
+            &&mut NoOpsModuleResolver,
+        )?;
+
+        // Extract transaction effects and determine status
+        let effects = proto_tx
+            .effects
+            .ok_or_else(|| anyhow!("Transaction effects should not be empty"))?;
+
+        let status = effects.status.map(|s| match s.success {
+            Some(true) => OperationStatus::Success,
+            _ => OperationStatus::Failure,
+        });
+
+        // Extract sender and gas information
+        let sender = tx_data.sender();
+        let gas_owner = effects
+            .gas_object
+            .as_ref()
+            .and_then(|go| go.output_owner.as_ref())
+            .and_then(|owner| owner.address.as_ref())
+            .and_then(|addr| addr.parse::<SuiAddress>().ok())
+            .unwrap_or(sender);
+
+        let gas_used = effects
+            .gas_used
+            .as_ref()
+            .map(|gcs| {
+                gcs.storage_rebate.unwrap_or(0) as i128
+                    - gcs.storage_cost.unwrap_or(0) as i128
+                    - gcs.computation_cost.unwrap_or(0) as i128
+            })
+            .unwrap_or(0);
+
+        // Extract operations from transaction data using existing logic
+        let ops = Operations::try_from_data(sui_tx_data, status)?;
+        let ops_iter = ops.into_iter();
+
+        // Convert proto balance changes to JSON-RPC format for compatibility
+        let mut proto_balance_changes = vec![];
+        for balance_change in &proto_tx.balance_changes {
+            if let (Some(address_str), Some(amount_str), Some(coin_type_str)) = (
+                balance_change.address.as_ref(),
+                balance_change.amount.as_ref(),
+                balance_change.coin_type.as_ref(),
+            ) {
+                if let (Ok(address), Ok(amount), Ok(coin_type)) = (
+                    address_str.parse::<SuiAddress>(),
+                    amount_str.parse::<i128>(),
+                    coin_type_str.parse(),
+                ) {
+                    let currency = cache.get_currency(&coin_type).await?;
+
+                    let json_balance_change = BalanceChange {
+                        owner: Owner::AddressOwner(address),
+                        coin_type,
+                        amount,
+                    };
+                    proto_balance_changes.push((json_balance_change, currency));
+                }
+            }
+        }
+
+        // We need to calculate accounted balances from existing operations
+        let mut accounted_balances = HashMap::new();
+        for op in ops_iter.as_ref().iter() {
+            if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
+                (&op.account, &op.amount, &op.status)
+            {
+                *accounted_balances
+                    .entry((acc.address, amount.clone().currency))
+                    .or_default() += amount.value;
+            }
+        }
+
+        // Extract coin change operations from balance changes using existing logic
+        let coin_change_operations = Self::process_balance_change(
+            gas_owner,
+            gas_used,
+            proto_balance_changes,
+            status,
+            accounted_balances,
+        );
+
+        let ops: Operations = ops_iter.into_iter().chain(coin_change_operations).collect();
 
         Ok(ops)
     }

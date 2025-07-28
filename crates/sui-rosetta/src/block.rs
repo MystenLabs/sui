@@ -45,7 +45,7 @@ pub async fn transaction(
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;
     let response = context
-        .client
+        .sui_client
         .read_api()
         .get_transaction_with_options(
             digest,

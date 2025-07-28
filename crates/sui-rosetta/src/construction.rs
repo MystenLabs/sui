@@ -149,7 +149,7 @@ pub async fn submit(
     // are that it should pass from there and fail here.
     let tx_data = signed_tx.data().transaction_data().clone();
     let dry_run = context
-        .client
+        .sui_client
         .read_api()
         .dry_run_transaction_block(tx_data)
         .await?;
@@ -158,7 +158,7 @@ pub async fn submit(
     };
 
     let response = context
-        .client
+        .sui_client
         .quorum_driver_api()
         .execute_transaction_block(
             signed_tx,
@@ -246,7 +246,7 @@ pub async fn metadata(
     let coin_type = currency.as_ref().map(|c| c.metadata.coin_type.clone());
 
     let mut gas_price = context
-        .client
+        .sui_client
         .governance_api()
         .get_reference_gas_price()
         .await?;
@@ -262,7 +262,7 @@ pub async fn metadata(
         InternalOperation::PayCoin { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
             let coin_objs: Vec<ObjectRef> = context
-                .client
+                .sui_client
                 .coin_read_api()
                 .select_coins(sender, coin_type, amount.into(), vec![])
                 .await
@@ -278,7 +278,7 @@ pub async fn metadata(
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
                 context
-                    .client
+                    .sui_client
                     .governance_api()
                     .get_stakes(*sender)
                     .await?
@@ -302,7 +302,7 @@ pub async fn metadata(
             }
 
             let responses = context
-                .client
+                .sui_client
                 .read_api()
                 .multi_get_object_with_options(stake_ids, SuiObjectDataOptions::default())
                 .await?;
@@ -337,7 +337,7 @@ pub async fn metadata(
                 })?;
 
             let dry_run = context
-                .client
+                .sui_client
                 .read_api()
                 .dry_run_transaction_block(data)
                 .await?;
@@ -354,7 +354,7 @@ pub async fn metadata(
     let coins = if let Some(amount) = total_required_amount {
         let total_amount = amount + budget;
         context
-            .client
+            .sui_client
             .coin_read_api()
             .select_coins(sender, None, total_amount.into(), vec![])
             .await
@@ -368,7 +368,7 @@ pub async fn metadata(
         coins
     } else {
         context
-            .client
+            .sui_client
             .coin_read_api()
             .get_coins_stream(sender, None)
             .collect::<Vec<_>>()

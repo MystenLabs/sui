@@ -16,6 +16,7 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use serde_json::{json, Value};
 use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
 use sui_node::SuiNode;
+use sui_rosetta::grpc_client::GrpcClient;
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -140,10 +141,13 @@ impl RosettaServerCommand {
                 info!(
                     "Starting Rosetta Online Server with remove Sui full node [{full_node_url}]."
                 );
-                let sui_client = wait_for_sui_client(full_node_url).await;
+                let sui_client = wait_for_sui_client(full_node_url.clone()).await;
+                let grpc_client =
+                    GrpcClient::new(full_node_url.parse().expect("Invalid URL"), None, None)
+                        .expect("Failed to create GRPC client");
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client);
+                let rosetta = RosettaOnlineServer::new(env, sui_client, grpc_client);
                 rosetta.serve(addr).await;
             }
 
@@ -172,11 +176,14 @@ impl RosettaServerCommand {
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
                 let _node = SuiNode::start(config, registry_service).await?;
 
-                let sui_client = wait_for_sui_client(rpc_address).await;
+                let sui_client = wait_for_sui_client(rpc_address.clone()).await;
+                let grpc_client =
+                    GrpcClient::new(rpc_address.parse().expect("Invalid URL"), None, None)
+                        .expect("Failed to create GRPC client");
 
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client);
+                let rosetta = RosettaOnlineServer::new(env, sui_client, grpc_client);
                 rosetta.serve(addr).await;
             }
         };
