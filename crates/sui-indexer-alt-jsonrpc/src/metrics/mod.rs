@@ -21,6 +21,9 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 /// database.
 const PAGE_SCAN_BUCKETS: &[f64] = &[1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0];
 
+/// Histogram buckets for the distribution of the number of read retries per request.
+const READ_RETRIES_BUCKETS: &[f64] = &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0];
+
 #[derive(Clone)]
 pub struct RpcMetrics {
     pub request_latency: HistogramVec,
@@ -30,6 +33,7 @@ pub struct RpcMetrics {
 
     pub owned_objects_filter_scans: Histogram,
     pub read_retries: IntCounterVec,
+    pub read_retries_per_request: HistogramVec,
 }
 
 impl RpcMetrics {
@@ -80,6 +84,15 @@ impl RpcMetrics {
                 "read_retries",
                 "Number of retries for reads from Bigtable or Postgres tables",
                 &["table"],
+                registry
+            )
+            .unwrap(),
+
+            read_retries_per_request: register_histogram_vec_with_registry!(
+                "read_retries_per_request",
+                "Distribution of the number of read retries needed per request",
+                &["table"],
+                READ_RETRIES_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
