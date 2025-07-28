@@ -48,7 +48,7 @@ pub struct PackageInfo<'a, F: MoveFlavor> {
     node: NodeIndex,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum NamedAddress {
     RootPackage(Option<OriginalID>),
     Unpublished,
@@ -124,7 +124,9 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
             let transitive_result = dep.legacy_named_addresses()?;
 
             for (name, addr) in transitive_result {
-                if let Some(existing) = result.insert(name.clone(), addr) {
+                let existing = result.insert(name.clone(), addr.clone());
+
+                if existing.is_some_and(|existing| existing != addr) {
                     return Err(PackageError::DuplicateNamedAddress {
                         address: name,
                         package: self.package().name().clone(),
@@ -137,9 +139,10 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
             let addresses = legacy_data.addresses.clone();
 
             for (name, addr) in addresses {
-                if let Some(existing) =
-                    result.insert(name.clone(), NamedAddress::Defined(OriginalID(addr)))
-                {
+                let new_addr = NamedAddress::Defined(OriginalID(addr));
+                let existing = result.insert(name.clone(), new_addr.clone());
+
+                if existing.is_some_and(|existing| existing != new_addr) {
                     return Err(PackageError::DuplicateNamedAddress {
                         address: name,
                         package: self.package().name().clone(),
