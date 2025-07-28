@@ -156,7 +156,7 @@ impl<F: MoveFlavor> Package<F> {
 
         Ok(Self {
             env: env.name().clone(),
-            digest: compute_digest(&legacy_manifest.file_handle.source()),
+            digest: compute_digest(legacy_manifest.file_handle.source()),
             metadata: legacy_manifest.metadata,
             path,
             publish_data: Default::default(),

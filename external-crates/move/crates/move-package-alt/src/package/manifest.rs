@@ -79,7 +79,7 @@ impl Manifest {
 
         let result = Self {
             inner: parsed,
-            digest: compute_digest(&file_handle.source()),
+            digest: compute_digest(file_handle.source()),
             file_handle,
         };
 
