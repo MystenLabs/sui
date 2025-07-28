@@ -196,8 +196,11 @@ fn parse_source_manifest(
             let addresses = table
                 .remove(ADDRESSES_NAME)
                 .map(parse_addresses)
-                .unwrap()
-                .context("Error parsing '[addresses]' section of manifest")?;
+                .transpose()
+                .context("Error parsing '[addresses]' section of manifest")?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("'[addresses]' section of manifest cannot be empty.")
+                })?;
 
             let metadata = table
                 .remove(PACKAGE_NAME)
@@ -236,6 +239,13 @@ fn parse_source_manifest(
 
                 // If we have BOTH the original and latest id, we can create the published ids!
                 if let (Ok(latest_id), Some(original_id)) = (latest_id, original_id) {
+                    // We cannot support "0x0" as the "original-id" of a published package.
+                    if original_id == AccountAddress::ZERO {
+                        return Err(anyhow::anyhow!(
+                            "'0x0' cannot be used as the 'original-id' of a published package."
+                        ));
+                    }
+
                     Some(PublishAddresses {
                         published_at: crate::schema::PublishedID(latest_id),
                         original_id: crate::schema::OriginalID(original_id),
@@ -260,7 +270,7 @@ fn parse_source_manifest(
 
                 let Some(addr) = addr else {
                     bail!(
-                        "Found uninstantiated named address '{}'. All addresses in the 'addresses' field must be instantiated.",
+                        "Found uninstantiated named address `{}` (declared as `_`). All addresses in the `addresses` field must be instantiated.",
                         name
                     );
                 };

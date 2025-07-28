@@ -36,8 +36,9 @@ impl LegacyData {
     /// Return the published addresses of this package. It will first check the manifest address
     /// info, and then use legacy environments if the manifest info is not available.
     pub fn publication(&self, env: &EnvironmentName) -> Option<&PublishAddresses> {
-        self.manifest_address_info
-            .as_ref()
-            .or_else(|| self.legacy_environments.get(env).map(|env| &env.addresses))
+        self.legacy_environments
+            .get(env)
+            .map(|env| &env.addresses)
+            .or(self.manifest_address_info.as_ref())
     }
 }
