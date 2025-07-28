@@ -27,6 +27,7 @@ use crate::{
 use super::{
     checkpoint::Checkpoint,
     execution_error::ExecutionError,
+    gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
@@ -111,13 +112,8 @@ impl EffectsContents {
         Ok(Some(UInt53::from(effects.lamport_version().value())))
     }
 
-<<<<<<< HEAD
     /// Rich execution error information for failed transactions.
     async fn execution_error(&self, ctx: &Context<'_>) -> Result<Option<ExecutionError>, RpcError> {
-=======
-    /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
-    async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
->>>>>>> ea696eac10 (update comment)
         let Some(content) = &self.contents else {
             return Ok(None);
         };
@@ -186,6 +182,16 @@ impl EffectsContents {
         }
 
         Ok(Some(conn))
+    }
+
+    /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+    async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(GasEffects::from(self.scope.clone(), effects)))
     }
 }
 

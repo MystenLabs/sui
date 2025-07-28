@@ -4,51 +4,19 @@
 use async_graphql::Object;
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
-    gas::GasCostSummary as NativeGasCostSummary,
 };
 
 use crate::{
-    api::{scalars::big_int::BigInt, types::address::Address},
+    api::{types::{address::Address, gas::GasCostSummary}},
     error::RpcError,
     scope::Scope,
 };
 
 use super::object::Object;
 
-pub(crate) struct GasCostSummary {
-    pub(crate) computation_cost: u64,
-    pub(crate) storage_cost: u64,
-    pub(crate) storage_rebate: u64,
-    pub(crate) non_refundable_storage_fee: u64,
-}
-
 pub(crate) struct GasEffects {
     pub(crate) scope: Scope,
     pub(crate) native: NativeTransactionEffects,
-}
-
-/// Breakdown of gas costs in effects.
-#[Object]
-impl GasCostSummary {
-    /// Gas paid for executing this transaction (in MIST).
-    async fn computation_cost(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.computation_cost))
-    }
-
-    /// Gas paid for the data stored on-chain by this transaction (in MIST).
-    async fn storage_cost(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.storage_cost))
-    }
-
-    /// Part of storage cost that can be reclaimed by cleaning up data created by this transaction (when objects are deleted or an object is modified, which is treated as a deletion followed by a creation) (in MIST).
-    async fn storage_rebate(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.storage_rebate))
-    }
-
-    /// Part of storage cost that is not reclaimed when data created by this transaction is cleaned up (in MIST).
-    async fn non_refundable_storage_fee(&self) -> Option<BigInt> {
-        Some(BigInt::from(self.non_refundable_storage_fee))
-    }
 }
 
 /// Effects related to gas (costs incurred and the identity of the smashed gas object returned).
@@ -63,7 +31,7 @@ impl GasEffects {
 
     /// Breakdown of the gas costs for this transaction.
     async fn gas_summary(&self) -> Option<GasCostSummary> {
-        Some(GasCostSummary::from(self.native.gas_cost_summary()))
+        Some(self.native.gas_cost_summary().clone().into())
     }
 }
 
@@ -72,17 +40,6 @@ impl GasEffects {
         Self {
             scope,
             native: effects,
-        }
-    }
-}
-
-impl From<&NativeGasCostSummary> for GasCostSummary {
-    fn from(gcs: &NativeGasCostSummary) -> Self {
-        Self {
-            computation_cost: gcs.computation_cost,
-            storage_cost: gcs.storage_cost,
-            storage_rebate: gcs.storage_rebate,
-            non_refundable_storage_fee: gcs.non_refundable_storage_fee,
         }
     }
 }
