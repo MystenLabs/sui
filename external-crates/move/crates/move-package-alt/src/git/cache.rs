@@ -443,13 +443,13 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
     std::fs::create_dir_all(&lookup_path).map_err(GitError::TempDirectory)?;
 
     let path_to_clone = lookup_path.join(url_to_file_name(repo));
-    let path_to_clone_str = path_to_clone.to_string_lossy();
 
     if path_to_clone.exists() {
         debug!("Repository is already in the cache for lookups, fetching the list of new history.");
         // We are fetching the "latest" history for that repository.
         run_git_cmd_with_args(&["fetch", "--filter=blob:none"], Some(&path_to_clone)).await?;
     } else {
+        let path_to_clone_str = path_to_clone.to_string_lossy();
         debug!(
             "downloading temporary git repo with full history to {}",
             path_to_clone_str
