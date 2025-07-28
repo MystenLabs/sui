@@ -2812,11 +2812,11 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedObject {
             }
             K::MutateConsensusStreamEnded(version) => {
                 message.version = Some(version.value());
-                UnchangedSharedObjectKind::MutateDeleted
+                UnchangedSharedObjectKind::MutateConsensusStreamEnded
             }
             K::ReadConsensusStreamEnded(version) => {
                 message.version = Some(version.value());
-                UnchangedSharedObjectKind::ReadDeleted
+                UnchangedSharedObjectKind::ReadConsensusStreamEnded
             }
             K::Cancelled(version) => {
                 message.version = Some(version.value());
