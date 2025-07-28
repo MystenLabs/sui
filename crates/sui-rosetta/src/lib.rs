@@ -30,6 +30,7 @@ mod account;
 mod block;
 mod construction;
 mod errors;
+pub mod grpc_client;
 mod network;
 pub mod operations;
 mod state;
