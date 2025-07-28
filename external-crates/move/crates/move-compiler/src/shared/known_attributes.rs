@@ -183,6 +183,7 @@ pub enum VerificationAttribute {
     Spec {
         focus: bool,
         prove: bool,
+        skip: bool,
         target: Option<ModuleAccess>,
         no_opaque: bool,
         ignore_abort: bool,
@@ -284,6 +285,7 @@ impl VerificationAttribute {
 
     // Spec arguments
     pub const PROVE_NAME: &'static str = "prove";
+    pub const SKIP_NAME: &'static str = "skip";
     pub const FOCUS_NAME: &'static str = "focus";
     pub const TARGET_NAME: &'static str = "target";
     pub const NO_OPAQUE_NAME: &'static str = "no_opaque";
@@ -932,7 +934,7 @@ impl AstDebug for ExpectedFailure {
 impl AstDebug for VerificationAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            VerificationAttribute::Spec { focus, prove, target, no_opaque, ignore_abort } => {
+            VerificationAttribute::Spec { focus, prove, skip, target, no_opaque, ignore_abort } => {
                 w.write("spec(");
                 let mut first = true;
                 if *focus {
@@ -943,6 +945,11 @@ impl AstDebug for VerificationAttribute {
                 if *prove {
                     if !first { w.write(", "); }
                     w.write("prove");
+                    first = false;
+                }
+                if *skip {
+                    if !first { w.write(", "); }
+                    w.write("skip");
                     first = false;
                 }
                 if let Some(target) = target {

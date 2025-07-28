@@ -311,9 +311,10 @@ fn attribute(
             KA::Testing(TestingAttribute::ExpectedFailure(Box::new(failure)))
         }
         PA::RandomTest => KA::Testing(A::TestingAttribute::RandTest),
-        PA::Spec { focus, prove, ignore_abort, no_opaque, target } => 
+        PA::Spec { focus, skip, prove, ignore_abort, no_opaque, target } => 
             KA::Verification(A::VerificationAttribute::Spec { 
                 focus,
+                skip,
                 prove,
                 ignore_abort,
                 no_opaque,

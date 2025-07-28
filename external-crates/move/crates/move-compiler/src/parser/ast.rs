@@ -231,6 +231,7 @@ pub enum Attribute_ {
     Spec {
         focus: bool,
         prove: bool,
+        skip: bool,
         target: Option<NameAccessChain>,
         no_opaque: bool,
         ignore_abort: bool,
@@ -1752,7 +1753,7 @@ impl AstDebug for Attribute_ {
             A::RandomTest => {
                 w.write("rand_test");
             },
-            A::Spec { focus, prove, target, no_opaque, ignore_abort }  => {
+            A::Spec { focus, prove, skip, target, no_opaque, ignore_abort }  => {
                 w.write("spec(");
                 let mut first = true;
                 if *focus {
@@ -1763,6 +1764,11 @@ impl AstDebug for Attribute_ {
                 if *prove {
                     if !first { w.write(", "); }
                     w.write("prove");
+                    first = false;
+                }
+                if *skip {
+                    if !first { w.write(", "); }
+                    w.write("skip");
                     first = false;
                 }
                 if let Some(target) = target {
