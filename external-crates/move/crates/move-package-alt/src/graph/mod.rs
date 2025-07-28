@@ -166,6 +166,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return the list of dependencies in this package graph
+    // TODO: I don't like the name dependencies for this. Maybe packages?
     pub(crate) fn dependencies(&self) -> Vec<PackageInfo<F>> {
         self.inner
             .node_indices()
