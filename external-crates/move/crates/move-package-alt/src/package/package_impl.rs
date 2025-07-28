@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use tracing::debug;
 
+use super::compute_digest;
 use super::manifest::Manifest;
 use super::paths::PackagePath;
 use crate::compatibility::legacy_parser::ParsedLegacyPackage;
@@ -155,8 +156,7 @@ impl<F: MoveFlavor> Package<F> {
 
         Ok(Self {
             env: env.name().clone(),
-            // TODO: Should we compute this at this point?
-            digest: "".to_string(),
+            digest: compute_digest(legacy_manifest.file_handle.source()),
             metadata: legacy_manifest.metadata,
             path,
             publish_data: Default::default(),

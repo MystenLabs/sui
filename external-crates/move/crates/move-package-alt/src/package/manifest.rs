@@ -20,7 +20,6 @@ use crate::{
 
 use super::*;
 use serde_spanned::Spanned;
-use sha2::{Digest as ShaDigest, Sha256};
 
 const ALLOWED_EDITIONS: &[&str] = &["2025", "2024", "2024.beta", "legacy"];
 
@@ -80,7 +79,7 @@ impl Manifest {
 
         let result = Self {
             inner: parsed,
-            digest: format!("{:X}", Sha256::digest(file_handle.source().as_ref())),
+            digest: compute_digest(file_handle.source()),
             file_handle,
         };
 
