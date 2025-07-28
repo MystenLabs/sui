@@ -82,6 +82,30 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_deposit_and_withdraw_with_larger_reservation() -> Result<(), anyhow::Error> {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas) = get_sender_and_gas(context).await;
+
+    let tx = make_send_to_account_tx(1000, sender, sender, gas, rgp);
+    let res = test_cluster.sign_and_execute_transaction(&tx).await;
+    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+
+    // Withdraw 800 with a reservation of 1000 (larger than actual withdrawal)
+    let tx = withdraw_from_balance_tx_with_reservation(800, 1000, sender, gas, rgp);
+    test_cluster.sign_and_execute_transaction(&tx).await;
+
+    Ok(())
+}
+
+#[sim_test]
 #[ignore(reason = "currently panics")]
 async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
@@ -135,7 +159,24 @@ fn withdraw_from_balance_tx(
     gas: ObjectRef,
     rgp: u64,
 ) -> TransactionData {
+    withdraw_from_balance_tx_with_reservation(amount, amount, sender, gas, rgp)
+}
+
+fn withdraw_from_balance_tx_with_reservation(
+    amount: u64,
+    reservation_amount: u64,
+    sender: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> TransactionData {
     let mut builder = ProgrammableTransactionBuilder::new();
+
+    // Add withdraw reservation
+    let withdraw_arg = sui_types::transaction::BalanceWithdrawArg::new_with_amount(
+        reservation_amount,
+        sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+    );
+    builder.balance_withdraw(withdraw_arg).unwrap();
 
     let amount = builder.pure(amount).unwrap();
 

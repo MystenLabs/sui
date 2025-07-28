@@ -1675,7 +1675,7 @@ mod checked {
             )?,
             CallArg::BalanceWithdraw(_) => {
                 // TODO(address-balances): Add support for balance withdraws.
-                todo!("Load balance withdraw call arg")
+                InputValue::new_balance_withdraw()
             }
         })
     }
