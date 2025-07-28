@@ -1,61 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::scalars::uint53::UInt53;
-use async_graphql::SimpleObject;
+use async_graphql::Object;
 use sui_types::gas::GasCostSummary as NativeGasCostSummary;
-use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
-use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
+
+use crate::api::scalars::uint53::UInt53;
+
+pub(crate) struct GasCostSummary {
+    native: NativeGasCostSummary,
+}
 
 /// Summary of charges from transactions.
 ///
 /// Storage is charged in three parts -- `storage_cost`, `-storage_rebate`, and `non_refundable_storage_fee` -- independently of `computation_cost`.
 ///
 /// The overall cost of a transaction, deducted from its gas coins, is its `computation_cost + storage_cost - storage_rebate`. `non_refundable_storage_fee` is collected from objects being mutated or deleted and accumulated by the system in storage funds, the remaining storage costs of previous object versions are what become the `storage_rebate`. The ratio between `non_refundable_storage_fee` and `storage_rebate` is set by the protocol.
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
-pub(crate) struct GasCostSummary {
+#[Object]
+impl GasCostSummary {
     /// The sum cost of computation/execution
-    computation_cost: Option<UInt53>,
-
+    async fn computation_cost(&self) -> Option<UInt53> {
+        Some(self.native.computation_cost.into())
+    }
     /// Cost for storage at the time the transaction is executed, calculated as the size of the objects being mutated in bytes multiplied by a storage cost per byte (part of the protocol).
-    storage_cost: Option<UInt53>,
-
+    async fn storage_cost(&self) -> Option<UInt53> {
+        Some(self.native.storage_cost.into())
+    }
     /// Amount the user gets back from the storage cost of the previous versions of objects being mutated or deleted.
-    storage_rebate: Option<UInt53>,
-
+    async fn storage_rebate(&self) -> Option<UInt53> {
+        Some(self.native.storage_rebate.into())
+    }
     /// Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
-    non_refundable_storage_fee: Option<UInt53>,
+    async fn non_refundable_storage_fee(&self) -> Option<UInt53> {
+        Some(self.native.non_refundable_storage_fee.into())
+    }
 }
 
 impl From<NativeGasCostSummary> for GasCostSummary {
     fn from(native: NativeGasCostSummary) -> Self {
-        Self {
-            computation_cost: Some(native.computation_cost.into()),
-            storage_cost: Some(native.storage_cost.into()),
-            storage_rebate: Some(native.storage_rebate.into()),
-            non_refundable_storage_fee: Some(native.non_refundable_storage_fee.into()),
-        }
-    }
-}
-
-impl From<SuiSystemStateInnerV1> for GasCostSummary {
-    fn from(value: SuiSystemStateInnerV1) -> Self {
-        Self {
-            computation_cost: Some(value.safe_mode_computation_rewards.value().into()),
-            storage_cost: Some(value.safe_mode_storage_rewards.value().into()),
-            storage_rebate: Some(value.safe_mode_storage_rebates.into()),
-            non_refundable_storage_fee: Some(value.safe_mode_non_refundable_storage_fee.into()),
-        }
-    }
-}
-
-impl From<SuiSystemStateInnerV2> for GasCostSummary {
-    fn from(value: SuiSystemStateInnerV2) -> Self {
-        Self {
-            computation_cost: Some(value.safe_mode_computation_rewards.value().into()),
-            storage_cost: Some(value.safe_mode_storage_rewards.value().into()),
-            storage_rebate: Some(value.safe_mode_storage_rebates.into()),
-            non_refundable_storage_fee: Some(value.safe_mode_non_refundable_storage_fee.into()),
-        }
+        Self { native }
     }
 }

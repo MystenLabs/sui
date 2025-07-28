@@ -856,9 +856,6 @@ type Query {
 	transactionEffects(digest: String!): TransactionEffects
 }
 
-"""
-Information about whether epoch changes are using safe mode.
-"""
 type SafeMode {
 	"""
 	Whether safe mode was used for the last epoch change.

@@ -6,7 +6,7 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
-use crate::api::types::safe_mode::SafeMode;
+use crate::api::types::safe_mode::{from_system_state, SafeMode};
 use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
 use crate::api::types::storage_fund::StorageFund;
 use crate::api::types::system_parameters::{
@@ -302,16 +302,9 @@ impl Epoch {
             return Ok(None);
         };
 
-        let storage_fund = match system_state {
-            SuiSystemState::V1(inner) => inner.into(),
-            SuiSystemState::V2(inner) => inner.into(),
-            #[cfg(msim)]
-            SuiSystemState::SimTestV1(_)
-            | SuiSystemState::SimTestShallowV2(_)
-            | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
-        };
+        let safe_mode = from_system_state(&system_state);
 
-        Ok(Some(storage_fund))
+        Ok(Some(safe_mode))
     }
 
     /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
