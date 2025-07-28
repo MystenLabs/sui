@@ -905,6 +905,10 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	User signatures for this transaction.
+	"""
+	signatures: [UserSignature!]!
 }
 
 """
@@ -951,6 +955,15 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+type UserSignature {
+	"""
+	The signature bytes, Base64-encoded.
+	For simple signatures: flag || signature || pubkey
+	For complex signatures: flag || bcs_serialized_struct
+	"""
+	signatureBytes: Base64
+}
 
 type ValidatorAggregatedSignature {
 	"""
