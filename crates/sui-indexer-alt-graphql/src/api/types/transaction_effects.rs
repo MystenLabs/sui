@@ -14,7 +14,7 @@ use sui_indexer_alt_reader::kv_loader::{
 };
 use sui_types::{
     digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus,
+    execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
 };
 
 use crate::{
@@ -26,6 +26,7 @@ use crate::{
 
 use super::{
     checkpoint::Checkpoint,
+    execution_error::ExecutionError,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
@@ -108,6 +109,27 @@ impl EffectsContents {
 
         let effects = content.effects()?;
         Ok(Some(UInt53::from(effects.lamport_version().value())))
+    }
+
+    /// Rich execution error information for failed transactions.
+    async fn execution_error(&self, ctx: &Context<'_>) -> Result<Option<ExecutionError>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        let status = effects.status();
+
+        // Extract programmable transaction if available
+        let programmable_tx = content
+            .data()
+            .ok()
+            .and_then(|tx_data| match tx_data.into_kind() {
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => Some(tx),
+                _ => None,
+            });
+
+        ExecutionError::from_execution_status(ctx, status, programmable_tx.as_ref()).await
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.

@@ -185,6 +185,18 @@ type Epoch {
 }
 
 """
+Represents execution error information for failed transactions.
+"""
+type ExecutionError {
+	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	
+	Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
+	"""
+	abortCode: BigInt
+}
+
+"""
 The execution status of this transaction: success or failure.
 """
 enum ExecutionStatus {
@@ -941,6 +953,10 @@ type TransactionEffects {
 	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
 	"""
 	lamportVersion: UInt53
+	"""
+	Rich execution error information for failed transactions.
+	"""
+	executionError: ExecutionError
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
