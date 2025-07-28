@@ -622,6 +622,13 @@ impl Address {
             Self::NamedUnassigned(_) => None,
         }
     }
+
+    pub fn name(&self) -> Option<Symbol> {
+        match self {
+            Address::Numerical { name, .. } => name.map(|name| name.value),
+            Address::NamedUnassigned(name) => Some(name.value),
+        }
+    }
 }
 
 impl ModuleIdent_ {
@@ -638,6 +645,13 @@ impl ModuleIdent_ {
             module: m,
         } = self;
         a.is(address) && m == module.as_ref()
+    }
+
+    pub fn is_named(&self, address: impl AsRef<str>, module: impl AsRef<str>) -> bool {
+        let Some(self_address) = self.address.name() else {
+            return false;
+        };
+        self_address.as_ref() == address.as_ref() && &self.module == module.as_ref()
     }
 }
 

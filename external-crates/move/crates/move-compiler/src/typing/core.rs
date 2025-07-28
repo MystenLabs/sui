@@ -1647,33 +1647,6 @@ pub fn make_tvar(context: &mut Context, loc: Loc) -> Type {
     sp(loc, Type_::Var(context.tvar_counter.next()))
 }
 
-pub fn is_u8_type(ty: &Type) -> bool {
-    match &ty.value {
-        Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), _) => bt.is_u8(),
-        _ => false,
-    }
-}
-
-pub fn is_inferred_string_type(name: &N::TypeName) -> bool {
-    use stdlib_definitions as SD;
-    match name.value {
-        TypeName_::Multiple(_) | TypeName_::Builtin(_) => false,
-        TypeName_::ModuleType(mident, datatype) => {
-            let ModuleIdent_ { address, module } = mident.value;
-            let pkg_valid = match address {
-                crate::expansion::ast::Address::Numerical { name, .. } => {
-                    let Some(name) = name else { return false };
-                    name.value == SD::STDLIB_ADDRESS_NAME
-                }
-                crate::expansion::ast::Address::NamedUnassigned(name) => {
-                    name.value == SD::STDLIB_ADDRESS_NAME
-                }
-            };
-            pkg_valid && SD::valid_string_type(module.value(), datatype.value())
-        }
-    }
-}
-
 //**************************************************************************************************
 // Structs
 //**************************************************************************************************
@@ -3387,12 +3360,15 @@ fn check_num_tvar_(subst: &Subst, ty: &Type) -> bool {
 
 fn check_string_tvar_(subst: &Subst, ty: &Type) -> bool {
     use Type_::*;
+    use stdlib_definitions as SD;
     match &ty.value {
         UnresolvedError | Anything => true,
         Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args) => {
-            bt.is_vector() && args.len() == 1 && is_u8_type(&args[0])
+            bt.is_vector() && args.len() == 1 && args[0].value.is_builtin(&BuiltinTypeName_::U8)
         }
-        Apply(_, ty_name, args) if args.is_empty() => is_inferred_string_type(ty_name),
+        Apply(_, ty_name, args) if args.is_empty() => SD::STDLIB_STRING_TYPES
+            .iter()
+            .any(|(pkg, module, name)| ty_name.value.is_named(pkg, module, name)),
         Var(v) => {
             let last_tvar = forward_tvar(subst, *v);
             match subst.get(last_tvar) {

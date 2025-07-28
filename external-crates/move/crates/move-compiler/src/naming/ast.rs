@@ -800,6 +800,20 @@ impl TypeName_ {
         }
     }
 
+    pub fn is_named(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        match self {
+            TypeName_::Builtin(_) | TypeName_::Multiple(_) => false,
+            TypeName_::ModuleType(mident, n) => {
+                mident.value.is_named(address, module) && n == name.as_ref()
+            }
+        }
+    }
+
     pub fn single_type(&self) -> Option<TypeName_> {
         match self {
             TypeName_::Multiple(_) => None,
@@ -933,6 +947,13 @@ impl Type_ {
     {
         self.type_name()
             .is_some_and(|tn| tn.value.is(address, module, name))
+    }
+
+    pub fn is_builtin(&self, builtin: &BuiltinTypeName_) -> bool {
+        match &self {
+            Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), _) => bt == builtin,
+            _ => false,
+        }
     }
 
     pub fn abilities(&self, loc: Loc) -> Option<AbilitySet> {

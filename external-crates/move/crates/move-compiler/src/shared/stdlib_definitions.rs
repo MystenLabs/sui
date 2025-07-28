@@ -71,6 +71,19 @@ pub const STDLIB_TYPE_DEFINITIONS: [(StdlibName, Symbol, Symbol); 2] = [
     ),
 ];
 
+pub const STDLIB_STRING_TYPES: [(Symbol, Symbol, Symbol); 2] = [
+    (
+        STDLIB_ADDRESS_NAME,
+        ASCII_MODULE_NAME,
+        ASCII_STRING_TYPE_NAME,
+    ),
+    (
+        STDLIB_ADDRESS_NAME,
+        STRING_MODULE_NAME,
+        STRING_STRING_TYPE_NAME,
+    ),
+];
+
 // -------------------------------------------------------------------------------------------------
 // Functions
 // -------------------------------------------------------------------------------------------------
@@ -91,15 +104,6 @@ pub fn stdlib_type_definition(loc: Loc) -> Vec<(StdlibName, NameAccessChain)> {
         .iter()
         .map(|(qualified, module, name)| (*qualified, name_access_chain(loc, *module, *name)))
         .collect::<Vec<_>>()
-}
-
-// -----------------------------------------------
-// String Type Validation
-// -----------------------------------------------
-
-pub fn valid_string_type(module: Symbol, name: Symbol) -> bool {
-    (module == ASCII_MODULE_NAME && name == ASCII_STRING_TYPE_NAME)
-        || (module == STRING_MODULE_NAME && name == STRING_STRING_TYPE_NAME)
 }
 
 // -----------------------------------------------
@@ -139,7 +143,6 @@ fn has_stdlib_module(prog: &P::Program, module: Symbol) -> bool {
                 mdef.name.0.value == module
                     && mdef.address.is_some()
                     && match &mdef.address.as_ref().unwrap().value {
-                        // TODO: remove once named addresses have landed in the stdlib
                         P::LeadingNameAccess_::Name(name) => name.value == STDLIB_ADDRESS_NAME,
                         P::LeadingNameAccess_::GlobalAddress(name) => {
                             name.value == STDLIB_ADDRESS_NAME
