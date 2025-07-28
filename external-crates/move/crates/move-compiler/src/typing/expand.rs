@@ -388,7 +388,9 @@ fn inferred_string_value(
 
     match &ty.value {
         Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args)
-            if bt.is_vector() && args.len() == 1 && core::is_u8_type(&args[0]) =>
+            if bt.is_vector()
+                && args.len() == 1
+                && args[0].value.is_builtin(&BuiltinTypeName_::U8) =>
         {
             Some(T::exp(
                 ty.clone(),
@@ -397,8 +399,6 @@ fn inferred_string_value(
         }
         Type_::Apply(_, sp!(_, name), args) if args.is_empty() => {
             let possibles = context.outer.get_stdlib_string_info();
-            println!("ty: {ty:#?}");
-            println!("possibles: {possibles:#?}");
 
             for (mut str_ty, str_ctor) in possibles {
                 // Expand our type first, because unification inisits they are the same.
