@@ -48,7 +48,7 @@ impl Build {
             }
             println!("  path: {:?}", pkg.path());
             println!("  named addresses:");
-            for (name, addr) in pkg.named_addresses() {
+            for (name, addr) in pkg.named_addresses()? {
                 println!("    {name}: {addr:?}");
             }
             println!();
