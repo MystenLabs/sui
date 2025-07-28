@@ -102,7 +102,8 @@ edition = "2025"         # use "2024" for Move 2024 edition
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 # flavor = sui
 
-# Add custom environments in this section: name: "chain-id". There are two default environments: `mainnet` and `testnet` that you can use and leave this section empty.
+# This section contains custom environments of the form `name = "chain-id"`.
+# In most cases you can leave this blank, since there are `mainnet` and `testnet` environments implicitly available
 [environments]
 # env = "chain-id"
 
