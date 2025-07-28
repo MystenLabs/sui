@@ -7,11 +7,11 @@ use std::{collections::BTreeMap, path::Path};
 use tracing::debug;
 
 use super::compute_digest;
-use super::manifest::Manifest;
+use super::manifest::{Manifest, ManifestError, ManifestErrorKind};
 use super::paths::PackagePath;
 use crate::compatibility::legacy_parser::ParsedLegacyPackage;
 use crate::dependency::FetchedDependency;
-use crate::errors::FileHandle;
+use crate::errors::{FileHandle, Location};
 use crate::schema::{ImplicitDepMode, ReplacementDependency};
 use crate::{
     compatibility::{
@@ -98,6 +98,9 @@ impl<F: MoveFlavor> Package<F> {
             // - if there's multiple keys for the same environment ID, we error
             // - if there is one key for the environment ID, we use that
             // - if there is no value with the same environment ID, we error
+
+            let default_envs = F::default_environments();
+            Self::validate_manifest(&manifest, *manifest.file_handle(), &default_envs);
 
             let publish_data = Self::load_published_info_from_lockfile(&path)?;
 
@@ -296,5 +299,41 @@ impl<F: MoveFlavor> Package<F> {
             }
             ImplicitDepMode::Testing => todo!(),
         }
+    }
+
+    /// Validate the manifest contents, after deserialization.
+    ///
+    // TODO: add more validation
+    fn validate_manifest(
+        manifest: &Manifest,
+        handle: FileHandle,
+        default_envs: &BTreeMap<String, String>,
+    ) -> PackageResult<()> {
+        let mut environments = manifest.environments();
+        environments.extend(default_envs.iter().map(|(k, v)| (k.clone(), v.clone())));
+        assert!(
+            !environments.is_empty(),
+            "there should be at least one environment"
+        );
+
+        // Do all dep-replacements have valid environments?
+        for (env, entries) in manifest.parsed().dep_replacements.iter() {
+            if !environments.contains_key(env) {
+                let span = entries
+                    .first_key_value()
+                    .expect("dep-replacements.<env> only exists if it has a dep")
+                    .1
+                    .span();
+
+                let loc = Location::new(handle, span);
+
+                return Err(ManifestError::with_span(&loc)(
+                    ManifestErrorKind::MissingEnvironment { env: env.clone() },
+                )
+                .into());
+            }
+        }
+
+        Ok(())
     }
 }
