@@ -15,6 +15,55 @@ use tokio::sync::OnceCell;
 
 use crate::{api::scalars::big_int::BigInt, error::RpcError};
 
+/// Resolves the runtime module ID in Move aborts to the storage package ID.
+///
+/// This is necessary because when a Move abort occurs, the error contains the runtime
+/// module ID, but to resolve clever errors we need the storage package ID where the
+/// module actually lives. This is especially important for upgraded packages where
+/// the runtime module ID might differ from the storage package ID.
+async fn resolve_module_id_for_move_abort(
+    ctx: &Context<'_>,
+    native_error: &mut ExecutionFailureStatus,
+    command: Option<usize>,
+    programmable_tx: Option<&ProgrammableTransaction>,
+) -> Result<(), RpcError> {
+    use sui_types::execution_status::MoveLocationOpt;
+    use sui_types::transaction::Command;
+
+    // Only resolve for Move aborts that have location information
+    let module = match native_error {
+        ExecutionFailureStatus::MoveAbort(MoveLocation { module, .. }, _) => module,
+        ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(
+            MoveLocation { module, .. },
+        ))) => module,
+        _ => return Ok(()),
+    };
+
+    // We need both a command index and a programmable transaction to resolve
+    let Some(command_idx) = command else {
+        return Ok(());
+    };
+    let Some(ptb) = programmable_tx else {
+        return Ok(());
+    };
+
+    // Find the Move call command that caused this abort
+    let Some(Command::MoveCall(ptb_call)) = ptb.commands.get(command_idx) else {
+        return Ok(());
+    };
+
+    let resolver: &PackageResolver = ctx.data()?;
+    let module_new = module.clone();
+
+    // Resolve runtime module ID to storage package ID
+    *module = resolver
+        .resolve_module_id(module_new, ptb_call.package.into())
+        .await
+        .context("Error resolving Move location")?;
+
+    Ok(())
+}
+
 #[derive(Clone)]
 pub(crate) struct ExecutionError {
     native: ExecutionFailureStatus,
@@ -25,6 +74,8 @@ pub(crate) struct ExecutionError {
 #[Object]
 impl ExecutionError {
     /// The error code of the Move abort, populated if this transaction failed with a Move abort.
+    ///
+    /// Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
     async fn abort_code(&self, ctx: &Context<'_>) -> Result<Option<BigInt>, RpcError> {
         let ExecutionFailureStatus::MoveAbort(_, raw_code) = &self.native else {
             return Ok(None);
@@ -59,8 +110,7 @@ impl ExecutionError {
 
         // Resolve the module ID for Move aborts to ensure we use the correct package version
         // when resolving clever errors later. This is critical for package upgrades.
-        Self::resolve_module_id_for_move_abort(ctx, &mut native_error, *command, programmable_tx)
-            .await?;
+        resolve_module_id_for_move_abort(ctx, &mut native_error, *command, programmable_tx).await?;
 
         Ok(Some(Self {
             native: native_error,
@@ -86,54 +136,5 @@ impl ExecutionError {
                 Ok(result)
             })
             .await
-    }
-
-    /// Resolves the runtime module ID in Move aborts to the storage package ID.
-    ///
-    /// This is necessary because when a Move abort occurs, the error contains the runtime
-    /// module ID, but to resolve clever errors we need the storage package ID where the
-    /// module actually lives. This is especially important for upgraded packages where
-    /// the runtime module ID might differ from the storage package ID.
-    async fn resolve_module_id_for_move_abort(
-        ctx: &Context<'_>,
-        native_error: &mut ExecutionFailureStatus,
-        command: Option<usize>,
-        programmable_tx: Option<&ProgrammableTransaction>,
-    ) -> Result<(), RpcError> {
-        use sui_types::execution_status::MoveLocationOpt;
-        use sui_types::transaction::Command;
-
-        // Only resolve for Move aborts that have location information
-        let module = match native_error {
-            ExecutionFailureStatus::MoveAbort(MoveLocation { module, .. }, _) => module,
-            ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(
-                MoveLocation { module, .. },
-            ))) => module,
-            _ => return Ok(()), // Not a Move abort, nothing to resolve
-        };
-
-        // We need both a command index and a programmable transaction to resolve
-        let Some(command_idx) = command else {
-            return Ok(());
-        };
-        let Some(ptb) = programmable_tx else {
-            return Ok(());
-        };
-
-        // Find the Move call command that caused this abort
-        let Some(Command::MoveCall(ptb_call)) = ptb.commands.get(command_idx) else {
-            return Ok(());
-        };
-
-        let resolver: &PackageResolver = ctx.data_unchecked();
-        let module_new = module.clone();
-
-        // Resolve runtime module ID to storage package ID
-        *module = resolver
-            .resolve_module_id(module_new, ptb_call.package.into())
-            .await
-            .context("Error resolving Move location")?;
-
-        Ok(())
     }
 }
