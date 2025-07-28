@@ -4,7 +4,7 @@
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
-use futures::{future::join_all, StreamExt};
+use futures::future::join_all;
 
 use sui_sdk::rpc_types::StakeStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
@@ -18,7 +18,6 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
-use sui_sdk::error::SuiRpcResult;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
@@ -62,11 +61,8 @@ pub async fn balance(
     Err(Error::RetryExhausted(String::from("retry")))
 }
 
-async fn get_checkpoint(ctx: &OnlineServerContext) -> SuiRpcResult<CheckpointSequenceNumber> {
-    ctx.sui_client
-        .read_api()
-        .get_latest_checkpoint_sequence_number()
-        .await
+async fn get_checkpoint(ctx: &OnlineServerContext) -> Result<CheckpointSequenceNumber, Error> {
+    ctx.client.get_latest_checkpoint().await
 }
 
 async fn get_balances(
@@ -115,11 +111,9 @@ async fn get_account_balances(
     coin_type: &String,
 ) -> Result<i128, Error> {
     Ok(ctx
-        .sui_client
-        .coin_read_api()
-        .get_balance(address, Some(coin_type.to_string()))
-        .await?
-        .total_balance as i128)
+        .client
+        .get_balance(address, coin_type.to_string())
+        .await? as i128)
 }
 
 async fn get_sub_account_balances(
@@ -192,19 +186,64 @@ pub async fn coins(
     WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let coins = context
-        .sui_client
-        .coin_read_api()
-        .get_coins_stream(
-            request.account_identifier.address,
-            Some(SUI_COIN_TYPE.to_string()),
-        )
-        .map(Coin::from)
-        .collect()
-        .await;
+
+    let mut coins = Vec::new();
+    let mut cursor = None;
+
+    loop {
+        let response = context
+            .client
+            .list_owned_objects(
+                request.account_identifier.address,
+                Some(SUI_COIN_TYPE.to_string()),
+                cursor,
+            )
+            .await?;
+
+        for object in response.objects {
+            if let Some(coin) = grpc_object_to_coin(object)? {
+                coins.push(coin);
+            }
+        }
+
+        if response.next_page_token.is_none() {
+            break;
+        }
+        cursor = response.next_page_token;
+    }
 
     Ok(AccountCoinsResponse {
         block_identifier: context.blocks().current_block_identifier().await?,
         coins,
     })
+}
+
+fn grpc_object_to_coin(
+    object: sui_rpc::proto::sui::rpc::v2beta2::Object,
+) -> Result<Option<Coin>, Error> {
+    let object_id = object
+        .object_id
+        .ok_or_else(|| Error::DataError("Missing object_id".to_string()))?
+        .parse()
+        .map_err(|e| Error::DataError(format!("Invalid object_id: {}", e)))?;
+
+    let version = object
+        .version
+        .ok_or_else(|| Error::DataError("Missing version".to_string()))?;
+
+    let balance = object.balance.unwrap_or(0);
+
+    Ok(Some(Coin {
+        coin_identifier: crate::types::CoinIdentifier {
+            identifier: crate::types::CoinID {
+                id: object_id,
+                version: version.into(),
+            },
+        },
+        amount: crate::types::Amount {
+            value: balance as i128,
+            currency: crate::SUI.clone(),
+            metadata: None,
+        },
+    }))
 }

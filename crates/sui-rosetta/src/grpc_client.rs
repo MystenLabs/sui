@@ -2,13 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::Error;
+use bytes::Bytes;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::{
     BatchGetTransactionsRequest, BatchGetTransactionsResponse, Checkpoint as ProtoCheckpoint,
-    GetCheckpointRequest, GetServiceInfoRequest, GetServiceInfoResponse,
+    GetBalanceRequest, GetCheckpointRequest, GetServiceInfoRequest, GetServiceInfoResponse,
+    ListOwnedObjectsRequest, ListOwnedObjectsResponse,
 };
 use sui_rpc_api::client::AuthInterceptor;
 use sui_rpc_api::Client;
+use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointDigest};
 use url::Url;
@@ -156,6 +159,53 @@ impl GrpcClient {
             .inner
             .raw_client()
             .batch_get_transactions(request)
+            .await
+            .map_err(Self::convert_tonic_error)?;
+
+        Ok(response.into_inner())
+    }
+
+    pub async fn get_balance(&self, owner: SuiAddress, coin_type: String) -> Result<u64, Error> {
+        let request = GetBalanceRequest {
+            owner: Some(owner.to_string()),
+            coin_type: Some(coin_type),
+        };
+
+        let response = self
+            .inner
+            .live_data_client()
+            .get_balance(request)
+            .await
+            .map_err(Self::convert_tonic_error)?;
+
+        let balance = response
+            .into_inner()
+            .balance
+            .ok_or_else(|| Error::DataError("No balance returned".to_string()))?
+            .balance
+            .ok_or_else(|| Error::DataError("No balance value returned".to_string()))?;
+
+        Ok(balance)
+    }
+
+    pub async fn list_owned_objects(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<String>,
+        cursor: Option<Bytes>,
+    ) -> Result<ListOwnedObjectsResponse, Error> {
+        let request = ListOwnedObjectsRequest {
+            owner: Some(owner.to_string()),
+            object_type,
+            page_token: cursor,
+            page_size: Some(50), // Default page size
+            read_mask: None,     // Get all fields
+        };
+
+        let response = self
+            .inner
+            .live_data_client()
+            .list_owned_objects(request)
             .await
             .map_err(Self::convert_tonic_error)?;
 
