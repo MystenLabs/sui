@@ -39,6 +39,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use heck::CamelCase;
 use indoc::formatdoc;
 use petgraph::{
     graph::{DiGraph, NodeIndex},
@@ -76,6 +77,9 @@ pub struct PackageSpec {
 
     /// The publications for each environment
     pubs: BTreeMap<EnvironmentName, PubSpec>,
+
+    /// Is the package a legacy package?
+    is_legacy: bool,
 }
 
 /// Information used to build an edge in the package graph
@@ -142,6 +146,13 @@ impl TestPackageGraph {
         let old = self.nodes.insert(node.as_ref().to_string(), index);
         assert!(old.is_none());
 
+        self
+    }
+
+    pub fn add_legacy_packages(mut self, nodes: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        for node in nodes {
+            self = self.add_package(node, |pkg| pkg.set_legacy())
+        }
         self
     }
 
@@ -234,6 +245,38 @@ impl TestPackageGraph {
         move_toml.push_str(&deps);
         move_toml.push_str(&dep_replacements);
         move_toml
+    }
+
+    /// Return the contents of a legacy `Move.toml` file for the legacy package represented by
+    /// `node`
+    fn format_legacy_manifest(&self, node: NodeIndex) -> String {
+        let package: PackageSpec = &self.inner[node];
+        assert!(package.is_legacy);
+
+        assert!(
+            package.pubs.len() <= 1,
+            "legacy packages may have at most one publication"
+        );
+        let publication = package
+            .pubs
+            .first_key_value()
+            .map(|(env, publication)| publication);
+
+        let published_at = publication
+            .map(|it| format!("published-at = {}", it.addresses.published_at))
+            .unwrap_or_default();
+
+        let mut move_toml = formatdoc!(
+            r#"
+            [package]
+            name = "{}"
+            edition = "2024"
+            {published_at}
+            "#,
+            package.id.to_camel_case()
+        );
+
+        todo!()
     }
 
     /// Return the contents of a `Move.lock` file for the package represented by
@@ -338,6 +381,18 @@ impl PackageSpec {
 
     /// Change this to a git dependency (in its own temporary directory)
     pub fn make_git(mut self) -> Self {
+        todo!();
+        self
+    }
+
+    /// Change this package to a legacy package. Legacy packages will produce manfests with
+    /// upper-cased names for the package and the dependency, and will contain an `[addresses]`
+    /// section with a single variable given by the package name.
+    ///
+    /// If the package is published, the `published-at` field will be added and the named-address
+    /// will be set to the original ID; otherwise there will be no published-at field and the
+    /// named address will be set to 0.
+    pub fn set_legacy(mut self) -> Self {
         todo!();
         self
     }

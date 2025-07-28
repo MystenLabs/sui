@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod builder;
+mod legacy_deps;
 mod linkage;
 mod rename_from;
 mod to_lockfile;
