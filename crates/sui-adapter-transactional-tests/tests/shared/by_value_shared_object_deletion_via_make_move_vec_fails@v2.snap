@@ -173,8 +173,8 @@ task 19, lines 179-187:
 //> 4: t2::o2::share_coin(Input(1));
 // Try to transfer the shared object -- this should fail since the input was
 // used for the `MakeMoveVec` call
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(4)
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Debug of error: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue } at command Some(4)
 
 task 20, lines 188-195:
 //# programmable --inputs 0 object(15,0) @0x0
@@ -184,8 +184,8 @@ task 20, lines 188-195:
 //> 3: TransferObjects([Result(2)], Input(2));
 //> 4: TransferObjects([Input(1)], Input(2));
 // Try to transfer the shared object
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(4)
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Debug of error: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue } at command Some(4)
 
 task 21, lines 196-201:
 //# programmable --inputs 0 object(15,0) @0x0
