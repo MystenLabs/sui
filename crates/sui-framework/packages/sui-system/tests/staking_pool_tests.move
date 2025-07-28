@@ -355,8 +355,7 @@ fun redeem_fungible_staked_sui_happy() {
     assert_eq!(staking_pool.pending_pool_token_withdraw_amount(), 0);
 
     let sui_1 = staking_pool.redeem_fungible_staked_sui(fungible_staked_sui_1, scenario.ctx());
-    assert!(sui_1.value() <= 4_000_000_000);
-    assert_eq!(sui_1.value(), 4_000_000_000 - 1); // duplicate?
+    assert_eq!(sui_1.value(), 4_000_000_000 - 1);
 
     let fungible_staked_sui_data = staking_pool.fungible_staked_sui_data();
     assert_eq!(fungible_staked_sui_data.total_supply(), 500_000_000);

@@ -752,7 +752,7 @@ fun stake_subsidy_with_safe_mode_testnet() {
 #[test]
 // This test triggers both sui balance and pool token to fall short but no underflow happens.
 fun process_pending_stake_withdraw_no_underflow_in_safe_mode_1() {
-    // 4 validators, each with 100 SUI stake
+    // 4 validators, each with 100, 200, 300, 400 SUI
     // safe mode epoch 1
     let mut runner = test_runner::new()
         .validators(vector[
@@ -841,7 +841,7 @@ fun process_pending_stake_withdraw_no_underflow_in_safe_mode_1() {
 #[test]
 // This test triggers pool token to fall short but no underflow happens.
 fun process_pending_stake_withdraw_no_underflow_in_safe_mode_2() {
-    // 4 validators, each with 100 SUI stake
+    // 4 validators, each with 100, 200, 300, 400 SUI
     // safe mode epoch 1
     let mut runner = test_runner::new()
         .validators(vector[
@@ -941,8 +941,11 @@ fun process_pending_stake_withdraw_no_underflow_in_safe_mode_2() {
     // Validator unstakes
     runner.set_sender(VALIDATOR_ADDR_1).unstake(0);
 
+    let pool_id: ID;
+
     runner.system_tx!(|system, _| {
         let pool = system.active_validator_by_address(VALIDATOR_ADDR_1).get_staking_pool_ref();
+        pool_id = object::id(pool);
 
         assert_eq!(pool.sui_balance(), 155 * MIST_PER_SUI);
         assert_eq!(pool.pending_stake_withdraw_amount(), 155 * MIST_PER_SUI);
@@ -954,7 +957,7 @@ fun process_pending_stake_withdraw_no_underflow_in_safe_mode_2() {
         // pending pool token to withdraw: 100 (principal) / 100 * 100 = 100
         // exchange rate for epoch 6: 155000000000: 86666666666
         // total withdraw: min(100 * 155000000000 / 86666666666, pool.sui_balance()) = 155000000000
-        assert_eq!(pool.pending_stake_withdraw_amount(), 155 * MIST_PER_SUI); // 100 pricinpal + 55 rewards
+        assert_eq!(pool.pending_stake_withdraw_amount(), 155 * MIST_PER_SUI); // 100 principal + 55 rewards
         let exchange_rates = pool.exchange_rates();
         let exchange_rate_epoch_0 = exchange_rates.borrow(0);
         assert_eq!(exchange_rate_epoch_0.sui_amount(), 0);
@@ -985,6 +988,19 @@ fun process_pending_stake_withdraw_no_underflow_in_safe_mode_2() {
     // No underflow should happen
     let opts = runner.advance_epoch_opts().protocol_version(65).epoch_start_time(99_9999_999);
     runner.advance_epoch(option::some(opts)).destroy_for_testing();
+
+    // Check that the validator is inactive and has no pending stake or pool token to withdraw
+    runner.system_tx!(|system, _| {
+        assert!(system.validators().is_inactive_validator(pool_id));
+
+        let validator = system.validators().inactive_validator_by_pool_id(pool_id);
+
+        assert_eq!(validator.pending_stake_amount(), 0);
+        assert_eq!(validator.pending_stake_withdraw_amount(), 0);
+        assert_eq!(validator.get_staking_pool_ref().pending_pool_token_withdraw_amount(), 0);
+        assert_eq!(validator.get_staking_pool_ref().sui_balance(), 0);
+        assert_eq!(validator.get_staking_pool_ref().pool_token_balance(), 0);
+    });
 
     runner.finish();
 }
