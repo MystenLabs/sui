@@ -21,7 +21,6 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::process::Stdio;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::SignatureScheme::ED25519;
 use sui_types::crypto::{PublicKey, Signature, SignatureScheme, SuiKeyPair};
 use tokio::process::Command;
 
@@ -315,7 +314,8 @@ impl AccountKeystore for External {
             },
         );
 
-        Ok((address, public_key, ED25519))
+        let scheme = public_key.scheme();
+        Ok((address, public_key, scheme))
     }
 
     async fn import(&mut self, _alias: Option<String>, _keypair: SuiKeyPair) -> Result<(), Error> {
@@ -506,9 +506,11 @@ mod tests {
     use crate::keystore::{AccountKeystore, GenerateOptions};
     use anyhow::anyhow;
     use fastcrypto::ed25519::Ed25519KeyPair;
+    use fastcrypto::secp256k1::Secp256k1KeyPair;
     use fastcrypto::traits::{EncodeDecodeBase64, KeyPair, ToFromBytes};
     use mockall::predicate::eq;
-    use rand::thread_rng;
+    use rand::prelude::StdRng;
+    use rand::{thread_rng, SeedableRng};
     use serde_json::json;
     use serde_json::Value as JsonValue;
     use shared_crypto::intent::Intent;
@@ -516,6 +518,7 @@ mod tests {
     use std::path::PathBuf;
     use std::str::FromStr;
     use sui_types::base_types::SuiAddress;
+    use sui_types::crypto::SignatureScheme::{Secp256k1, ED25519};
     use sui_types::crypto::{Ed25519SuiSignature, PublicKey, Signature, SuiKeyPair};
     use tempfile::TempDir;
 
@@ -655,8 +658,33 @@ mod tests {
             .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
             .await;
         assert!(result.is_ok());
-        let address = result.unwrap().0;
+        let (address, public_key, scheme) = result.unwrap();
+        assert_eq!(scheme, ED25519);
+        assert_eq!(address, SuiAddress::from_str(ADDRESS).unwrap());
+        assert_eq!(public_key.encode_base64(), PUBLIC_KEY);
         assert!(external.keys.contains_key(&address));
+
+        // With a different signature scheme
+        let secp256k1_key =
+            SuiKeyPair::Secp256k1(Secp256k1KeyPair::generate(&mut StdRng::from_seed([0; 32])));
+        let public_key_b64 = secp256k1_key.public().encode_base64();
+
+        let mut mock = MockCommandRunner::new();
+        mock.expect_run()
+            .with(eq("signer"), eq("create_key"), eq(json![null]))
+            .returning(move |_, _, _| {
+                Ok(json!({
+                    "key_id": key_id,
+                    "public_key": public_key_b64,
+                }))
+            });
+
+        let mut external = External::new_for_test(Box::new(mock), None);
+        let result = external
+            .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
+            .await;
+        let (_, _, scheme) = result.unwrap();
+        assert_eq!(scheme, Secp256k1);
     }
 
     #[tokio::test]
