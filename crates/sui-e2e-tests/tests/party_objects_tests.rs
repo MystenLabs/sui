@@ -8,7 +8,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{FullObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
@@ -840,7 +840,9 @@ async fn party_coin_grpc() {
         vec!["0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap()],
         vec![party_coin_arg, party_owner],
     );
-    builder.transfer_object(recipient, owned_coin).unwrap();
+    builder
+        .transfer_object(recipient, FullObjectRef::from_fastpath_ref(owned_coin))
+        .unwrap();
     let ptb = builder.finish();
 
     let gas_data = sui_types::transaction::GasData {
