@@ -5451,7 +5451,7 @@ impl AuthorityState {
 
         // Even though the system packages are committed to in the current epoch, they will run and
         // be deserialized in the next, so they should abide by (and support) the binary config of
-        // the incoming epoch and not the current one.
+        // the incoming epoch that has been determined, and not the current one.
         let incoming_config =
             ProtocolConfig::get_for_version(next_epoch_protocol_version, epoch_store.get_chain());
         let binary_config = to_binary_config(&incoming_config);

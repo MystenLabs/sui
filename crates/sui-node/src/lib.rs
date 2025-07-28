@@ -1773,6 +1773,13 @@ impl SuiNode {
                     .truncate_below(config.version);
 
                 // Pick the latest binary config and use that to determine the available system packages.
+                //
+                // This binary config is what is used to deserialize the proposed system packages for the next epoch.
+                // We pick the `max` as binary configs should be backwards compatible with versions
+                // before it, but may not necessarily be forwards compatible (e.g., if a new binary
+                // version is added). This ensures that any system packages that we select
+                // to propose for the next epoch can actually be deserialized in whichever
+                // epoch in the future is chosen.
                 let binary_config = {
                     let latest_protocol_config =
                         ProtocolConfig::get_for_version(supported_greater_versions.max, chain_id);
