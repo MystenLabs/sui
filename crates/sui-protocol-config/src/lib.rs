@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 89;
+const MAX_PROTOCOL_VERSION: u64 = 90;
 
 // Record history of protocol version allocations here:
 //
@@ -252,6 +252,7 @@ const MAX_PROTOCOL_VERSION: u64 = 89;
 // Version 89: Standard library improvements.
 //             Enable `debug_fatal` on Move invariant violations.
 //             Enable passkey and passkey inside multisig for mainnet.
+// Version 90: Minor changes in Sui Framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3883,6 +3884,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.mysticeti_fastpath = true;
                     }
                 }
+                90 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
