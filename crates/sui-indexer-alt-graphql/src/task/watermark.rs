@@ -223,11 +223,11 @@ impl Watermarks {
         &self.global_hi
     }
 
-    /// The low watermark across all pipelines. Returned as an inclusive checkpoint number,
-    pub(crate) fn low_watermark(&self) -> Option<&Watermark> {
+    /// The reader_lo for a pipeline. Returned as an inclusive checkpoint number.
+    pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> anyhow::Result<&Watermark> {
         self.pipeline_lo
-            .values()
-            .min_by_key(|watermark| watermark.checkpoint())
+            .get(pipeline)
+            .ok_or_else(|| anyhow::anyhow!("'{}' not found in pipeline_lo watermarks", pipeline))
     }
 
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range

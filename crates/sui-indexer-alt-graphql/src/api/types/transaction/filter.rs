@@ -41,26 +41,36 @@ impl TransactionFilter {
     pub(crate) fn checkpoint_bounds(
         &self,
         checkpoint_viewed_at: u64,
-        global_cp_lo: u64,
+        reader_lo: u64,
     ) -> Option<RangeInclusive<u64>> {
         let cp_after = self.after_checkpoint.map(u64::from);
         let cp_at = self.at_checkpoint.map(u64::from);
         let cp_before = self.before_checkpoint.map(u64::from);
 
-        // Calculate the lower bound checkpoint
-        let cp_lo =
-            max_option([cp_after.map(|x| x.saturating_add(1)), cp_at]).unwrap_or(global_cp_lo);
+        let cp_after_inclusive = match cp_after.map(|x| x.checked_add(1)) {
+            Some(Some(after)) => Some(after),
+            Some(None) => return None,
+            None => None,
+        };
+        // Inclusive checkpoint sequence number lower bound. If are no upper lower bound filters,
+        // we will use the smallest checkpoint available from the database, retrieved from
+        // the watermark.
+        //
+        // SAFETY: we can unwrap because of`Some(reader_lo)`
+        let cp_lo = max_option([cp_after_inclusive, cp_at, Some(reader_lo)]).unwrap();
 
-        // Handle the before_checkpoint filter
-        let cp_before_exclusive = match cp_before {
+        let cp_before_inclusive = match cp_before {
             // There are no results strictly before checkpoint 0.
             Some(0) => return None,
             Some(x) => Some(x - 1),
             None => None,
         };
 
-        // Calculate the upper bound checkpoint
-        let cp_hi = min_option([cp_before_exclusive, cp_at, Some(checkpoint_viewed_at)])?;
+        // Inclusive checkpoint sequence upperbound. If are no upper bound filters,
+        // we will use `checkpoint_viewed_at``.
+        //
+        // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)``
+        let cp_hi = min_option([cp_before_inclusive, cp_at, Some(checkpoint_viewed_at)]).unwrap();
 
         Some(RangeInclusive::new(cp_lo, cp_hi))
     }

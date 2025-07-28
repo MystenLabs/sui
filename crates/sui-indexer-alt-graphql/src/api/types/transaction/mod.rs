@@ -10,12 +10,14 @@ use async_graphql::{
     Context, Object,
 };
 
+use diesel::{prelude::QueryableByName, sql_types::BigInt};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
     pg_reader::PgReader,
     tx_digests::TxDigestKey,
 };
+use sui_sql_macro::query;
 
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
@@ -29,6 +31,7 @@ use super::{
     address::Address,
     epoch::Epoch,
     gas_input::GasInput,
+    transaction::filter::TransactionFilter,
     transaction_effects::{EffectsContents, TransactionEffects},
     user_signature::UserSignature,
 };
@@ -39,10 +42,7 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
-mod filter;
-pub(crate) use filter::TransactionFilter;
-mod bounds;
-pub(crate) use bounds::TransactionBounds;
+pub(crate) mod filter;
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -54,6 +54,14 @@ pub(crate) struct Transaction {
 pub(crate) struct TransactionContents {
     pub(crate) scope: Scope,
     pub(crate) contents: Option<Arc<NativeTransactionContents>>,
+}
+
+#[derive(QueryableByName)]
+struct TxBounds {
+    #[diesel(sql_type = BigInt, column_name = "tx_lo")]
+    tx_lo: i64,
+    #[diesel(sql_type = BigInt, column_name = "tx_hi")]
+    tx_hi: i64,
 }
 
 pub(crate) type CTransaction = JsonCursor<u64>;
@@ -189,27 +197,17 @@ impl Transaction {
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
 
-        // TODO: Is this a valid way to access the lowest cp available? What is the behavior when we prune while we are paginating?
-        let Some(global_cp_lo) = watermarks
-            .low_watermark()
-            .map(|watermark| watermark.checkpoint())
-        else {
+        let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
+
+        let global_tx_hi = watermarks.high_watermark().checkpoint();
+
+        let tx_digest_keys = if let Some(cp_bounds) =
+            filter.checkpoint_bounds(scope.checkpoint_viewed_at(), reader_lo)
+        {
+            tx_unfiltered(ctx, &cp_bounds, &page, global_tx_hi).await?
+        } else {
             return Ok(Connection::new(false, false));
         };
-
-        let mut tx_digest_keys =
-            match filter.checkpoint_bounds(scope.checkpoint_viewed_at(), global_cp_lo) {
-                // Determine tx_sequence_numbers if we have checkpoint bounds.
-                Some(cp_bounds) => {
-                    Self::tx_sequence_numbers_by_checkpoint(ctx, cp_bounds, &page).await?
-                }
-                None => return Ok(Connection::new(false, false)),
-            };
-
-        // Undo any sorting that was applied to the results for consistency.
-        if !page.is_from_front() {
-            tx_digest_keys.reverse();
-        }
 
         // Paginate the resulting tx_sequence_numbers and create cursor objects for pagination.
         let (prev, next, results) = page.paginate_results(tx_digest_keys, |&t| JsonCursor::new(t));
@@ -231,8 +229,9 @@ impl Transaction {
             if let Some(stored) = digest_map.get(&key) {
                 let transaction_digest = TransactionDigest::try_from(stored.tx_digest.clone())
                     .context("Failed to deserialize transaction digest")?;
-                let object = Self::with_id(scope.clone(), transaction_digest);
-                conn.edges.push(Edge::new(cursor.encode_cursor(), object));
+                let transaction = Self::with_id(scope.clone(), transaction_digest);
+                conn.edges
+                    .push(Edge::new(cursor.encode_cursor(), transaction));
             }
         }
 
@@ -241,32 +240,88 @@ impl Transaction {
 
         Ok(conn)
     }
+}
 
-    /// Maps a range of checkpoints to the corresponding tx_sequence_numbers, applying cursors inclusively.
-    /// Limits the results to `page.limit() + 2` to enable pagination to determine has_previous_page and has_next_page.
-    async fn tx_sequence_numbers_by_checkpoint(
-        ctx: &Context<'_>,
-        cp_bounds: RangeInclusive<u64>,
-        page: &Page<CTransaction>,
-    ) -> Result<Vec<u64>, RpcError> {
-        let transaction_bounds = TransactionBounds::fetch(ctx, cp_bounds).await?;
+/// tx_sequence numeber with safe checkpoint bounds with cursors applied inclusively.
+/// Limits the results to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
+async fn tx_unfiltered(
+    ctx: &Context<'_>,
+    cp_bounds: &RangeInclusive<u64>,
+    page: &Page<CTransaction>,
+    global_tx_hi: u64,
+) -> Result<Vec<u64>, RpcError> {
+    let pg_reader: &PgReader = ctx.data()?;
+    let query = query!(
+        r#"
+        WITH
+        tx_lo AS (
+            SELECT 
+                tx_lo 
+            FROM 
+                cp_sequence_numbers 
+            WHERE 
+                cp_sequence_number = {BigInt}
+            LIMIT 1
+        ),
 
-        let tx_lo = transaction_bounds.lo();
-        let tx_hi = transaction_bounds.hi();
+        -- tx_hi is the tx_lo of the checkpoint directly after the cp_bounds.end()
+        tx_hi AS (
+            SELECT 
+                tx_lo AS tx_hi
+            FROM 
+                cp_sequence_numbers 
+            WHERE 
+                cp_sequence_number = {BigInt} + 1 
+            LIMIT 1
+        )
 
-        // Inclusive cursor bounds
-        let pg_lo = page.after().map_or(tx_lo, |sq| sq.max(tx_lo));
-        let pg_hi = page
-            .before()
-            .map(|sq| sq.saturating_add(1))
-            .map_or(tx_hi, |sq| sq.min(tx_hi));
+        SELECT
+            (SELECT tx_lo FROM tx_lo) AS "tx_lo",
+            -- If we cannot get the tx_hi from the checkpoint directly after the cp_bounds.end() we use global tx_hi.
+            COALESCE((SELECT tx_hi FROM tx_hi), {BigInt}) AS "tx_hi";"#,
+        *cp_bounds.start() as i64,
+        *cp_bounds.end() as i64,
+        global_tx_hi as i64
+    );
 
-        Ok(if page.is_from_front() {
-            (pg_lo..pg_hi).take(page.limit() + 2).collect()
-        } else {
-            (pg_lo..pg_hi).rev().take(page.limit() + 2).collect()
-        })
-    }
+    let mut conn = pg_reader
+        .connect()
+        .await
+        .context("Failed to connect to database")?;
+
+    let results: Vec<TxBounds> = conn
+        .results(query)
+        .await
+        .context("Failed to execute query")?;
+
+    let (tx_lo, tx_hi) = match results.first() {
+        Some(bounds) => (bounds.tx_lo as u64, bounds.tx_hi as u64),
+        None => {
+            return Err(RpcError::from(anyhow::anyhow!(
+                "No valid checkpoints found."
+            )));
+        }
+    };
+
+    // Inclusive cursor bounds
+    let pg_lo = page.after().map_or(tx_lo, |cursor| cursor.max(tx_lo));
+    let pg_hi = page
+        .before()
+        .map(|cursor| cursor.saturating_add(1))
+        .map_or(tx_hi, |cursor| cursor.min(tx_hi));
+
+    Ok(if page.is_from_front() {
+        (pg_lo..pg_hi).take(page.limit() + 2).collect()
+    } else {
+        // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
+        // we reverse the results after applying limits.
+        let mut results = (pg_lo..pg_hi)
+            .rev()
+            .take(page.limit() + 2)
+            .collect::<Vec<_>>();
+        results.reverse();
+        results
+    })
 }
 
 impl TransactionContents {

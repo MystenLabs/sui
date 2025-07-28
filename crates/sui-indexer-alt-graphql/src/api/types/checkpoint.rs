@@ -15,17 +15,18 @@ use crate::{
     api::{
         query::Query,
         scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
-        types::{
-            transaction::{CTransaction, Transaction, TransactionFilter},
-            validator_aggregated_signature::ValidatorAggregatedSignature,
-        },
     },
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
-use super::{epoch::Epoch, gas::GasCostSummary};
+use super::{
+    epoch::Epoch,
+    gas::GasCostSummary,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    validator_aggregated_signature::ValidatorAggregatedSignature,
+};
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -158,7 +159,7 @@ impl CheckpointContents {
         )))
     }
 
-    // The transactions in this checkpoint, paginated.
+    // The transactions in this checkpoint.
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -175,7 +176,6 @@ impl CheckpointContents {
         let limits = pagination.limits("Checkpoint", "transactions");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Apply any filter that was supplied to the query, add checkpoint_viewed at contraint
         let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
             at_checkpoint: Some(UInt53::from(summary.sequence_number)),
             ..Default::default()

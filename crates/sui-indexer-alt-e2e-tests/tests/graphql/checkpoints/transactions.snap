@@ -17,18 +17,10 @@ Response: {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "MA==",
-          "endCursor": "MA=="
+          "startCursor": null,
+          "endCursor": null
         },
-        "edges": [
-          {
-            "cursor": "MA==",
-            "node": {
-              "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
-              "sender": null
-            }
-          }
-        ]
+        "edges": []
       }
     }
   }

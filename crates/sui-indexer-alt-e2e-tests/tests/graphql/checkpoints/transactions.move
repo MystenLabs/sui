@@ -151,7 +151,7 @@
 }
 
 //# run-graphql
-{ # Fetch noOffset to a non-existent cursor
+{ # Fetch non-existent checkpoint
   checkpoint(sequenceNumber: 6) {
     sequenceNumber
     digest
