@@ -1079,10 +1079,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 unreachable!()
             };
             let body_loc = lambda_body.loc;
-            let annot_body = all_result_ty.into_iter().fold(lambda_body, |body, ty| {
-                Box::new(sp(body_loc, N::Exp_::Annotate(body, ty)))
-            });
-            let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(annot_body))]);
+            let labeled_seq = VecDeque::from([sp(body_loc, N::SequenceItem_::Seq(lambda_body))]);
             let labeled_body_ = N::Exp_::Block(N::Block {
                 name: Some(return_label),
                 // mark lambda expansion for recursive macro check
@@ -1090,6 +1087,9 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 seq: (N::UseFuns::new(use_fun_color), labeled_seq),
             });
             let labeled_body = Box::new(sp(body_loc, labeled_body_));
+            let annot_body = all_result_ty.into_iter().fold(labeled_body, |body, ty| {
+                Box::new(sp(body_loc, N::Exp_::Annotate(body, ty)))
+            });
             // pad args with errors
             let args = args.into_iter().chain(std::iter::repeat_with(|| {
                 sp(argloc, N::Exp_::UnresolvedError)
@@ -1109,7 +1109,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     sp(param_loc, N::SequenceItem_::Bind(lvs, annot_arg))
                 })
                 .collect();
-            result.push_back(sp(body_loc, N::SequenceItem_::Seq(labeled_body)));
+            result.push_back(sp(body_loc, N::SequenceItem_::Seq(annot_body)));
 
             let block = N::Exp_::Block(N::Block {
                 name: None,

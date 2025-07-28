@@ -1,28 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::rpc::v2beta2::ledger_service_server::LedgerService;
-use crate::proto::rpc::v2beta2::BatchGetObjectsRequest;
-use crate::proto::rpc::v2beta2::BatchGetObjectsResponse;
-use crate::proto::rpc::v2beta2::BatchGetTransactionsRequest;
-use crate::proto::rpc::v2beta2::BatchGetTransactionsResponse;
-use crate::proto::rpc::v2beta2::GetCheckpointRequest;
-use crate::proto::rpc::v2beta2::GetCheckpointResponse;
-use crate::proto::rpc::v2beta2::GetEpochRequest;
-use crate::proto::rpc::v2beta2::GetEpochResponse;
-use crate::proto::rpc::v2beta2::GetObjectRequest;
-use crate::proto::rpc::v2beta2::GetObjectResponse;
-use crate::proto::rpc::v2beta2::GetServiceInfoRequest;
-use crate::proto::rpc::v2beta2::GetServiceInfoResponse;
-use crate::proto::rpc::v2beta2::GetTransactionRequest;
-use crate::proto::rpc::v2beta2::GetTransactionResponse;
 use crate::RpcService;
+use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerService;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetTransactionsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetTransactionsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCheckpointRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCheckpointResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetEpochRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetEpochResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetServiceInfoRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetServiceInfoResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetTransactionResponse;
 
 pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
 mod get_service_info;
 mod get_transaction;
+pub use get_epoch::protocol_config_to_proto;
 
 #[tonic::async_trait]
 impl LedgerService for RpcService {

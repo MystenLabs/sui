@@ -3,6 +3,7 @@
 mod lockfile;
 mod manifest;
 mod resolver;
+mod sha;
 mod shared;
 
-pub use {lockfile::*, manifest::*, resolver::*, shared::*};
+pub use {lockfile::*, manifest::*, resolver::*, sha::*, shared::*};

@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     fmt::{Debug, Display},
     fs, io,
     path::{Path, PathBuf},
@@ -7,8 +6,6 @@ use std::{
 
 use append_only_vec::AppendOnlyVec;
 use codespan_reporting::files::SimpleFile;
-
-use super::PackageResult;
 
 /// A wrapper around [PathBuf] that implements [Display]
 #[derive(Clone)]
@@ -83,6 +80,16 @@ impl FileHandle {
     /// Return the source code for the file at [id]
     pub fn source(&self) -> &'static String {
         FILES[self.id].source()
+    }
+
+    /// Return a dummy file for test scaffolding
+    #[cfg(test)]
+    pub fn dummy(path: impl AsRef<Path>, contents: impl AsRef<str>) -> Self {
+        let id = FILES.push(SimpleFile::new(
+            DisplayPath(path.as_ref().to_path_buf()),
+            contents.as_ref().to_string(),
+        ));
+        Self { id }
     }
 
     fn simple_file(&self) -> &'static SimpleFile<DisplayPath, String> {

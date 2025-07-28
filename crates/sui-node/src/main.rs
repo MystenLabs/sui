@@ -43,7 +43,7 @@ struct Args {
     run_with_range_checkpoint: Option<CheckpointSequenceNumber>,
 }
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
 #[global_allocator]
 static JEMALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 

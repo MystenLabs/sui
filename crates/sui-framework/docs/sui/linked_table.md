@@ -470,7 +470,7 @@ that key <code>k: K</code>. Note: this is also what happens when the table is em
 
 ## Function `pop_front`
 
-Removes the front of the table <code><a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;</code> and returns the value.
+Removes the front of the table <code><a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;</code>, returns the key and value.
 Aborts with <code><a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a></code> if the table is empty
 
 
@@ -498,7 +498,7 @@ Aborts with <code><a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty
 
 ## Function `pop_back`
 
-Removes the back of the table <code><a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;</code> and returns the value.
+Removes the back of the table <code><a href="../sui/table.md#sui_table">table</a>: &<b>mut</b> <a href="../sui/linked_table.md#sui_linked_table_LinkedTable">LinkedTable</a>&lt;K, V&gt;</code>, returns the key and value.
 Aborts with <code><a href="../sui/linked_table.md#sui_linked_table_ETableIsEmpty">ETableIsEmpty</a></code> if the table is empty
 
 

@@ -55,12 +55,15 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
+        accumulator_event::AccumulatorEvent,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
+        effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
         error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
+        execution_config_utils::to_binary_config,
         execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
@@ -1191,6 +1194,28 @@ mod checked {
                 SizeBound::Object(bound)
             }
         }
+
+        pub(crate) fn deserialize_modules(
+            &self,
+            module_bytes: &[Vec<u8>],
+        ) -> Result<Vec<CompiledModule>, ExecutionError> {
+            let binary_config = to_binary_config(self.protocol_config);
+            let modules = module_bytes
+                .iter()
+                .map(|b| {
+                    CompiledModule::deserialize_with_config(b, &binary_config)
+                        .map_err(|e| e.finish(Location::Undefined))
+                })
+                .collect::<VMResult<Vec<CompiledModule>>>()
+                .map_err(|e| self.convert_vm_error(e))?;
+
+            assert_invariant!(
+                !modules.is_empty(),
+                "input checker ensures package is not empty"
+            );
+
+            Ok(modules)
+        }
     }
 
     impl Arg {
@@ -1347,7 +1372,21 @@ mod checked {
         let accumulator_events = accumulator_events
             .into_iter()
             .map(|accum_event| match accum_event.value {
-                MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+                MoveAccumulatorValue::U64(amount) => {
+                    let value = AccumulatorValue::Integer(amount);
+                    let address = AccumulatorAddress::new(
+                        accum_event.target_addr.into(),
+                        accum_event.target_ty,
+                    );
+
+                    let write = AccumulatorWriteV1 {
+                        address,
+                        operation: accum_event.action.into_sui_accumulator_action(),
+                        value,
+                    };
+
+                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                }
             })
             .collect();
 

@@ -68,30 +68,7 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_ptb_v2_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    // check if the test is disabled
-    const DISABLED_DIRECTORIES: &[&str] = &[
-        "deny_list_v1",
-        "deny_list_v2",
-        "dev_inspect",
-        "dry_run",
-        "entry_points",
-        "enums",
-        "init",
-        "party",
-        "programmable",
-        "programmable_transaction_examples",
-        "publish",
-        "receive_object",
-        "sui",
-        "upgrade",
-    ];
-    let mut components = path.parent().unwrap().components();
-    let disabled = components.any(|c| {
-        let string = c.as_os_str().to_string_lossy().to_string();
-        DISABLED_DIRECTORIES.contains(&string.as_str())
-    });
-
-    ENABLE_PTB_V2.set(!disabled).unwrap();
+    ENABLE_PTB_V2.set(true).unwrap();
     let (_guard, _filter_handle) = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
@@ -168,6 +145,8 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
     ) -> SuiResult<Vec<Event>>;
 
     async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>>;
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object>;
 }
 
 #[async_trait::async_trait]
@@ -320,6 +299,10 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             .iter()
             .map(|x| x.sui_address)
             .collect::<Vec<_>>())
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.validator.get_object_store().get_object(object_id)
     }
 }
 
@@ -522,5 +505,9 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         // TODO: this is a hack to get the validator addresses. Currently using start state
         //       but we should have a better way to get this information after reconfig
         Ok(self.epoch_start_state().get_validator_addresses())
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        ObjectStore::get_object(&self.store(), object_id)
     }
 }

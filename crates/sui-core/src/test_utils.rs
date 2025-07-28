@@ -36,6 +36,7 @@ use crate::global_state_hasher::GlobalStateHasher;
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
+// TODO(fastpath): switch to use MFP flow.
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
@@ -46,7 +47,7 @@ pub async fn send_and_confirm_transaction(
     transaction.validity_check(&epoch_store.tx_validity_check_context())?;
     let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
-        .handle_transaction(&epoch_store, transaction.clone())
+        .handle_sign_transaction(&epoch_store, transaction.clone())
         .await?;
     let vote = response.status.into_signed_for_testing();
 
@@ -116,7 +117,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[digest]),
+            .notify_read_executed_effects("", &[digest]),
     )
     .await
     {
@@ -133,7 +134,7 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&digests),
+            .notify_read_executed_effects("", &digests),
     )
     .await
     {

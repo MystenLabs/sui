@@ -15,10 +15,12 @@ pub(crate) mod scheduler;
 #[cfg(test)]
 mod tests;
 
-/// The result of scheduling the withdraw reservations for a transaction.
-#[allow(dead_code)]
+#[cfg(test)]
+mod e2e_tests;
+
+/// The status of scheduling the withdraw reservations for a transaction.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum ScheduleResult {
+pub(crate) enum ScheduleStatus {
     /// We know for sure that the withdraw reservations in this transactions all have enough balance.
     /// This transaction can be executed normally as soon as its object dependencies are ready.
     SufficientBalance,
@@ -26,26 +28,34 @@ pub(crate) enum ScheduleResult {
     /// This transaction should result in an execution failure without actually executing it, similar to
     /// how transaction cancellation works.
     InsufficientBalance,
-    /// The consensus commit batch of this transaction has already been scheduled in the past.
+    /// The accumulator version for this transaction has already been executed/settled.
     /// The caller should stop the scheduling of this transaction.
-    /// This is to avoid scheduling the same transaction multiple times.
-    AlreadyScheduled,
+    /// This happens when the transaction can be executed through checkpoint executor.
+    AlreadyExecuted,
+}
+
+/// The result of scheduling the withdraw reservations for a transaction.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ScheduleResult {
+    pub tx_digest: TransactionDigest,
+    pub status: ScheduleStatus,
 }
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
-#[allow(dead_code)]
-pub(crate) struct BalanceSettlement {
+pub struct BalanceSettlement {
     /// The accumulator version at which the settlement was committed.
     /// i.e. the root accumulator object is now at this version after the settlement.
     pub accumulator_version: SequenceNumber,
     /// The balance changes for each account object ID.
+    /// This is currently unused because the naive scheduler
+    /// always load the latest balance during scheduling.
+    #[allow(unused)]
     pub balance_changes: BTreeMap<ObjectID, i128>,
 }
 
 /// Details regarding all balance withdraw reservations in a transaction.
-#[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct TxBalanceWithdraw {
     pub tx_digest: TransactionDigest,
     pub reservations: BTreeMap<ObjectID, Reservation>,

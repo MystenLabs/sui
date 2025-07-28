@@ -11,12 +11,15 @@
 //! in this module and saved in the `ReplayTransaction` instance.
 
 use crate::{
-    execution::ReplayExecutor,
+    artifacts::{Artifact, ArtifactManager},
+    data_store::DataStore,
+    execution::{execute_transaction_to_effects, ReplayExecutor},
     replay_interface::{EpochStore, ObjectKey, ObjectStore, TransactionStore, VersionQuery},
+    tracing::save_trace_output,
 };
-use anyhow::Context;
+use anyhow::{anyhow, bail, Context};
+use move_trace_format::format::MoveTraceBuilder;
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
-use sui_types::transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind};
 use sui_types::{base_types::SequenceNumber, TypeTag};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -27,6 +30,10 @@ use sui_types::{
         CallArg, Command, GasData, InputObjects, ObjectArg, TransactionData, TransactionDataAPI,
         TransactionKind,
     },
+};
+use sui_types::{
+    gas::SuiGasStatusAPI,
+    transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
 use tracing::{debug, trace};
 
@@ -43,6 +50,93 @@ pub struct ReplayTransaction {
     pub executor: ReplayExecutor,
     // Objects and packages used by the transaction
     pub object_cache: BTreeMap<ObjectID, BTreeMap<ObjectVersion, Object>>,
+}
+
+//
+// Run a single transaction and print results to stdout
+//
+pub(crate) async fn replay_transaction(
+    artifact_manager: &ArtifactManager<'_>,
+    tx_digest: &str,
+    data_store: &DataStore,
+    trace: bool,
+) -> anyhow::Result<()> {
+    // load a `ReplayTranaction`
+    let replay_txn = match ReplayTransaction::load(tx_digest, data_store, data_store, data_store) {
+        Ok(replay_txn) => replay_txn,
+        Err(e) => {
+            bail!("Failed to load transaction {}: {:?}", tx_digest, e);
+        }
+    };
+
+    // replay the transaction
+    let mut trace_builder_opt = trace.then(MoveTraceBuilder::new);
+
+    let (result, context_and_effects) =
+        execute_transaction_to_effects(replay_txn, data_store, data_store, &mut trace_builder_opt)?;
+
+    // TODO: make tracing better abstracted? different tracers?
+    if let Some(trace_builder) = trace_builder_opt {
+        save_trace_output(artifact_manager, trace_builder, &context_and_effects).map_err(|e| {
+            anyhow!(
+                "transaction {} failed to build a trace output path -> {:?}",
+                tx_digest,
+                e
+            )
+        })?;
+    }
+
+    // Save results
+    tracing::info!(
+        "Executed transaction {}: {:?}. Saving artifacts under {}",
+        tx_digest,
+        result,
+        artifact_manager.base_path.display()
+    );
+
+    artifact_manager
+        .member(Artifact::TransactionEffects)
+        .serialize_artifact(&context_and_effects.execution_effects)
+        .transpose()?
+        .unwrap();
+
+    artifact_manager
+        .member(Artifact::TransactionGasReport)
+        .serialize_artifact(&context_and_effects.gas_status.gas_usage_report())
+        .transpose()?
+        .unwrap();
+
+    verify_txn_and_save_forked_effects(
+        artifact_manager,
+        &context_and_effects.expected_effects,
+        &context_and_effects.execution_effects,
+    )?;
+
+    Ok(())
+}
+
+fn verify_txn_and_save_forked_effects(
+    artifact_manager: &ArtifactManager<'_>,
+    expected_effects: &TransactionEffects,
+    effects: &TransactionEffects,
+) -> anyhow::Result<()> {
+    if effects != expected_effects {
+        tracing::error!(
+            "Transaction effects do not match expected effects for transaction {}. Saving to ",
+            effects.transaction_digest()
+        );
+        artifact_manager
+            .member(Artifact::ForkedTransactionEffects)
+            .serialize_artifact(effects)
+            .transpose()?
+            .unwrap();
+        bail!(
+            "Transaction effects do not match expected effects for transaction {}",
+            effects.transaction_digest()
+        );
+    } else {
+        Ok(())
+    }
 }
 
 impl ReplayTransaction {

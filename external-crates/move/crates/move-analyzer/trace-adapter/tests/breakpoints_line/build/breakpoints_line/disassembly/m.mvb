@@ -44,7 +44,7 @@ B7:
 	28: StLoc[2](res#1#0: u64)
 B8:
 	29: CopyLoc[2](res#1#0: u64)
-	30: LdU64(16)
+	30: LdU64(13)
 	31: Lt
 	32: BrFalse(39)
 B9:
@@ -56,8 +56,39 @@ B10:
 	37: StLoc[2](res#1#0: u64)
 	38: Branch(29)
 B11:
-	39: MoveLoc[2](res#1#0: u64)
-	40: Ret
+	39: CopyLoc[2](res#1#0: u64)
+	40: MoveLoc[2](res#1#0: u64)
+	41: Call bar(u64): u64
+	42: Add
+	43: StLoc[2](res#1#0: u64)
+	44: CopyLoc[2](res#1#0: u64)
+	45: MoveLoc[2](res#1#0: u64)
+	46: Call bar(u64): u64
+	47: Add
+	48: Ret
+}
+
+bar(p#0#0: u64): u64 {
+L1:	%#1: u64
+B0:
+	0: CopyLoc[0](p#0#0: u64)
+	1: LdU64(1)
+	2: Lt
+	3: BrFalse(9)
+B1:
+	4: CopyLoc[0](p#0#0: u64)
+	5: MoveLoc[0](p#0#0: u64)
+	6: Add
+	7: StLoc[1](%#1: u64)
+	8: Branch(13)
+B2:
+	9: MoveLoc[0](p#0#0: u64)
+	10: LdU64(1)
+	11: Add
+	12: StLoc[1](%#1: u64)
+B3:
+	13: MoveLoc[1](%#1: u64)
+	14: Ret
 }
 
 test() {

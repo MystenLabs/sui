@@ -1,27 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMergeFrom;
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::Epoch;
-use crate::proto::rpc::v2beta2::GetEpochRequest;
-use crate::proto::rpc::v2beta2::GetEpochResponse;
-use crate::proto::rpc::v2beta2::ProtocolConfig;
-use crate::proto::timestamp_ms_to_proto;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
 use prost_types::FieldMask;
+use sui_protocol_config::ProtocolConfigValue;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::Epoch;
+use sui_rpc::proto::sui::rpc::v2beta2::GetEpochRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetEpochResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::ProtocolConfig;
+use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::EpochId;
+
+pub const READ_MASK_DEFAULT: &str =
+        "epoch,committee,first_checkpoint,last_checkpoint,start,end,reference_gas_price,protocol_config.protocol_version";
 
 #[tracing::instrument(skip(service))]
 pub fn get_epoch(service: &RpcService, request: GetEpochRequest) -> Result<GetEpochResponse> {
     let read_mask = {
         let read_mask = request
             .read_mask
-            .unwrap_or_else(|| FieldMask::from_str(GetEpochRequest::READ_MASK_DEFAULT));
+            .unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask.validate::<Epoch>().map_err(|path| {
             FieldViolation::new("read_mask")
                 .with_description(format!("invalid read_mask path: {path}"))
@@ -165,12 +169,13 @@ fn get_protocol_config(
     version: u64,
     chain: sui_protocol_config::Chain,
 ) -> Result<ProtocolConfig, ProtocolVersionNotFoundError> {
-    use sui_protocol_config::ProtocolConfigValue;
-
     let config =
         sui_protocol_config::ProtocolConfig::get_for_version_if_supported(version.into(), chain)
             .ok_or_else(|| ProtocolVersionNotFoundError::new(version))?;
+    Ok(protocol_config_to_proto(config))
+}
 
+pub fn protocol_config_to_proto(config: sui_protocol_config::ProtocolConfig) -> ProtocolConfig {
     let protocol_version = config.version.as_u64();
     let attributes = config
         .attr_map()
@@ -188,10 +193,9 @@ fn get_protocol_config(
         })
         .collect();
     let feature_flags = config.feature_map().into_iter().collect();
-
-    Ok(ProtocolConfig {
+    ProtocolConfig {
         protocol_version: Some(protocol_version),
         feature_flags,
         attributes,
-    })
+    }
 }

@@ -34,7 +34,6 @@ use crate::{
     block_manager::BlockManager,
     commit::{
         CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
-        GENESIS_COMMIT_INDEX,
     },
     commit_observer::CommitObserver,
     context::Context,
@@ -52,7 +51,7 @@ use crate::{
 #[cfg(test)]
 use crate::{
     block::CertifiedBlocksOutput, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
-    CommitConsumer, TransactionClient,
+    CommitConsumerArgs, TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -701,9 +700,7 @@ impl Core {
         }
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
-        // Commits cannot be persisted before being finalized. It is ok for the block to contain
-        // votes for unpersisted commits.
-        self.dag_state.write().flush(GENESIS_COMMIT_INDEX);
+        self.dag_state.write().flush();
 
         // Now acknowledge the transactions for their inclusion to block
         ack_transactions(verified_block.reference());
@@ -1418,7 +1415,7 @@ impl CoreTextFixture {
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
         let (commit_consumer, commit_output_receiver, blocks_output_receiver) =
-            CommitConsumer::new(0);
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1489,7 +1486,7 @@ mod test {
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
         transaction::{BlockStatus, TransactionClient},
-        CommitConsumer, CommitIndex,
+        CommitConsumerArgs, CommitIndex,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -1544,7 +1541,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1603,7 +1601,7 @@ mod test {
         }
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to and including round 4. So we should commit leaders in round 1 & 2
@@ -1677,7 +1675,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1743,7 +1742,7 @@ mod test {
         core.try_commit(vec![]).ok();
 
         // Flush the DAG state to storage.
-        core.dag_state.write().flush_all_in_test();
+        core.dag_state.write().flush();
 
         // There were no commits prior to the core starting up but there was completed
         // rounds up to round 4. So we should commit leaders in round 1 & 2 as soon
@@ -1787,7 +1786,8 @@ mod test {
             dag_state.clone(),
         ));
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1866,7 +1866,7 @@ mod test {
         assert!(core.try_propose(true).unwrap().is_none());
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -1932,7 +1932,7 @@ mod test {
         assert_eq!(transaction_vote.rejects, vec![1, 4]);
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state & store
         let last_commit = store.read_last_commit().unwrap();
@@ -2012,7 +2012,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2023,7 +2024,7 @@ mod test {
         .await;
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -2056,7 +2057,7 @@ mod test {
         );
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         let last_commit = store
             .read_last_commit()
@@ -2172,7 +2173,8 @@ mod test {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2183,7 +2185,7 @@ mod test {
         .await;
 
         // Flush the DAG state to storage.
-        dag_state.write().flush_all_in_test();
+        dag_state.write().flush();
 
         // Check no commits have been persisted to dag_state or store.
         let last_commit = store.read_last_commit().unwrap();
@@ -2264,7 +2266,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2424,7 +2427,7 @@ mod test {
             assert_eq!(core_fixture.core.last_proposed_round(), 4);
 
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -2618,7 +2621,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -2914,7 +2918,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3006,7 +3011,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3075,7 +3081,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3257,7 +3264,7 @@ mod test {
 
         for core_fixture in cores {
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -3452,7 +3459,7 @@ mod test {
         assert_eq!(committed_sub_dags.len(), 4);
 
         // Flush the DAG state to storage.
-        core.dag_state.write().flush_all_in_test();
+        core.dag_state.write().flush();
 
         println!("Case 1. Provide no certified commits. No commit should happen.");
 
@@ -3483,7 +3490,7 @@ mod test {
             .expect("Should not fail");
 
         // Flush the DAG state to storage.
-        core.dag_state.write().flush_all_in_test();
+        core.dag_state.write().flush();
 
         let commits = store.scan_commits((6..=10).into()).unwrap();
 
@@ -3530,7 +3537,8 @@ mod test {
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, _commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, _commit_receiver, _transaction_receiver) =
+            CommitConsumerArgs::new(0, 0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -3743,7 +3751,7 @@ mod test {
             };
 
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
 
             // Check commits have been persisted to store
             let last_commit = core_fixture
@@ -3878,7 +3886,7 @@ mod test {
 
         for core_fixture in cores {
             // Flush the DAG state to storage.
-            core_fixture.dag_state.write().flush_all_in_test();
+            core_fixture.dag_state.write().flush();
             // Check commits have been persisted to store
             let last_commit = core_fixture
                 .store
@@ -3972,7 +3980,7 @@ mod test {
         }
 
         // Flush the DAG state to storage.
-        core_fixture.dag_state.write().flush_all_in_test();
+        core_fixture.dag_state.write().flush();
 
         // Check commits have been persisted to store
         let last_commit = core_fixture

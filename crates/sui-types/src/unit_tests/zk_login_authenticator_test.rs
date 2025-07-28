@@ -94,7 +94,7 @@ fn zklogin_sign_personal_message() {
     };
     let (user_address, authenticator) = sign_zklogin_personal_msg(data.clone());
     let intent_msg = IntentMessage::new(Intent::personal_message(), data);
-    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch)
+    let parsed: ImHashMap<JwkId, JWK> = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch, true)
         .unwrap()
         .into_iter()
         .collect();

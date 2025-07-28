@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use sui_json_rpc_types::ObjectChange;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
-use sui_rpc_api::proto::rpc::v2beta2::{
+use sui_rpc::proto::sui::rpc::v2beta2::{
     move_package_service_client::MovePackageServiceClient, ListPackageVersionsRequest,
 };
 use sui_types::{

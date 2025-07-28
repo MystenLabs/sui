@@ -22,10 +22,10 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 3, lines 18-21:
 //# programmable
 //> 0: test::m1::a();
-// wrong type annotation doesn't matter
+// wrong type annotation did not matter in v1 of PTB execution
 //> sui::event::emit<bool>(Result(0));
-Error: Transaction Effects Status: Non Entry Function Invoked. Move Call must start with an entry function
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: NonEntryFunctionInvoked, source: Some("Cannot directly call functions in sui::event"), command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
 
 task 4, lines 23-26:
 //# programmable

@@ -2,254 +2,289 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Debug},
-    marker::PhantomData,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, fmt, path::Path};
 
-use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 use super::paths::PackagePath;
-use super::{EnvironmentID, lockfile::Lockfiles, manifest::Manifest};
+use super::{EnvironmentID, manifest::Manifest};
+use crate::graph::PackageInfo;
+use crate::schema::{Environment, OriginalID, PackageName, Publication};
 use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo, pin},
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
     graph::PackageGraph,
-    package::{EnvironmentName, Package, PackageName},
-    schema::{PackageID, ParsedLockfile, Pin},
+    package::EnvironmentName,
+    schema::ParsedLockfile,
 };
-use move_core_types::identifier::Identifier;
-use tracing::{debug, info};
 
 /// A package that is defined as the root of a Move project.
 ///
 /// This is a special package that contains the project manifest and dependencies' graphs,
 /// and associated functions to operate with this data.
+///
+/// TODO(manos): We should try to hold a lock on the manifest / lockfile when we do operations
+/// to avoid race conditions.
+#[derive(Debug)]
 pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
-    /// The root package itself as a Package
-    root: Package<F>,
-    /// A map from an environment in the manifest to its dependency graph.
-    dependencies: BTreeMap<EnvironmentName, PackageGraph<F>>,
+    /// The path to the root package
+    package_path: PackagePath,
+    /// The environment we're operating on for this root package.
+    environment: Environment,
+    /// The dependency graph for this package.
+    graph: PackageGraph<F>,
+    /// The lockfile we're operating on
+    /// Invariant: lockfile.pinned matches graph, except that digests may differ
+    lockfile: ParsedLockfile<F>,
 }
 
-// TODO: this interface needs to be designed more carefully. In particular, it focuses on a single
-// lockfile instead of a bunch. Also, it's not clear whether it represents all the environments,
-// one environment, or some set of environments
+/// Root package is the "public" entrypoint for operations with the package management.
+/// It's like a facade for all functionality, controlled by this.
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
-    /// Loads the root package from path and builds a dependency graph from the manifest. If `env`
-    /// is passed, it will check that this environment exists in the manifest, and will only load
-    /// the dependencies for that environment.
-    // TODO: maybe we want to check multiple envs
-    // TODO: load should probably use PackageGraph::load and have the same behavior?
-    pub async fn load(path: impl AsRef<Path>, env: Option<EnvironmentName>) -> PackageResult<Self> {
-        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let root = Package::<F>::load_root(package_path.path()).await?;
-        let dependencies = if let Some(env) = env {
-            if root.manifest().environments().get(&env).is_none() {
-                return Err(PackageError::Generic(format!(
-                    "Package {} does not have `{env}` defined as an environment in its manifest",
-                    root.name(),
-                )));
-            }
-            BTreeMap::from([(
-                env.clone(),
-                PackageGraph::<F>::load_from_manifest_by_env(&package_path, &env).await?,
-            )])
-        } else {
-            PackageGraph::load_from_manifests(&package_path).await?
-        };
-
-        Ok(Self { root, dependencies })
-    }
-
-    /// Only load the root manifest and ignore any dependencies. The `dependencies` field will be
-    /// empty.
-    pub async fn load_manifest(
+    pub fn environments(
         path: impl AsRef<Path>,
-        env: Option<EnvironmentName>,
-    ) -> PackageResult<Self> {
+    ) -> PackageResult<BTreeMap<EnvironmentName, EnvironmentID>> {
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
-        let root = Package::<F>::load_root(package_path.path()).await?;
+        let mut environments = F::default_environments();
 
-        if let Some(env) = env {
-            if root.manifest().environments().get(&env).is_none() {
-                return Err(PackageError::Generic(format!(
-                    "Package {} does not have `{env}` defined as an environment in its manifest",
-                    root.name(),
-                )));
-            }
+        if let Ok(modern_manifest) = Manifest::read_from_file(package_path.manifest_path()) {
+            // TODO(manos): Decide on validation (e.g. if modern manifest declares environments differently,
+            // we should error?!)
+            environments.extend(modern_manifest.environments());
         }
 
+        Ok(environments)
+    }
+
+    /// Load the root package from `env` using the "normal" path - we first try to load from the
+    /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
+    /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
+    pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
+        debug!("Loading RootPackage for {:?}", path.as_ref());
+        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let graph = PackageGraph::<F>::load(&package_path, &env).await?;
+
+        let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
+
+        root_pkg.update_lockfile_digests();
+
+        Ok(root_pkg)
+    }
+
+    /// Loads the root package from path and builds a dependency graph from the manifests.
+    /// This forcefully re-pins all dependencies even if the manifest digests match. Note that it
+    /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
+    ///
+    /// TODO: We should load from lockfiles instead of manifests for deps.
+    pub async fn load_force_repin(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
+        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+        let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
+
+        let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
+        root_pkg.update_lockfile_digests();
+
+        Ok(root_pkg)
+    }
+
+    /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
+    /// doesn't exist of if it doesn't contain a dependency graph for `env`.
+    ///
+    /// Note that this still fetches all of the dependencies, it just doesn't look at their
+    /// manifests.
+    pub async fn load_ignore_digests(
+        path: impl AsRef<Path>,
+        env: Environment,
+    ) -> PackageResult<Self> {
+        let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
+
+        let Some(graph) =
+            PackageGraph::<F>::load_from_lockfile_ignore_digests(&package_path, &env).await?
+        else {
+            return Err(PackageError::Generic(format!(
+                "No lockfile found for environment `{}`",
+                env.name()
+            )));
+        };
+
+        Self::_validate_and_construct(package_path, env, graph)
+        // Note: we do not sync the lockfile here because we haven't repinned so we don't want to
+        // update the digests
+    }
+
+    /// Central validation point for a RootPackage.
+    ///
+    /// This helps validate:
+    /// 1. TODO: Fill this in! (deduplicate nodes etc)
+    fn _validate_and_construct(
+        package_path: PackagePath,
+        env: Environment,
+        graph: PackageGraph<F>,
+    ) -> PackageResult<Self> {
+        let mut lockfile = Self::load_lockfile(&package_path)?;
+
+        // check that there is a consistent linkage
+        let _linkage = graph.linkage()?;
+        graph.check_rename_from()?;
+
         Ok(Self {
-            root,
-            dependencies: BTreeMap::new(),
+            package_path,
+            environment: env,
+            graph,
+            lockfile,
         })
     }
 
-    /// Load the root package and check if the lockfile is up-to-date. If it is not, then
-    /// all dependencies will be re-pinned.
-    pub async fn load_and_repin(path: impl AsRef<Path>) -> PackageResult<Self> {
-        let root = Package::<F>::load_root(path).await?;
-        let dependencies = PackageGraph::<F>::load(root.path()).await?;
+    /// Ensure that the in-memory lockfile digests are consistent with the package graph
+    fn update_lockfile_digests(&mut self) {
+        self.lockfile
+            .pinned
+            .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
+    }
 
-        Ok(Self { root, dependencies })
+    /// The name of the root package
+    pub fn name(&self) -> &PackageName {
+        self.graph.root_package().name()
+    }
+
+    /// The path to the root of the package
+    pub fn path(&self) -> &PackagePath {
+        &self.package_path
+    }
+
+    /// Return the list of all packages in the root package's package graph (including itself and all
+    /// transitive dependencies).
+    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+        self.graph.dependencies()
+    }
+
+    /// Return the linkage table for the root package. This contains an entry for each package that
+    /// this package depends on (transitively). Returns an error if any of the packages that this
+    /// package depends on is unpublished.
+    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+        todo!()
+    }
+
+    /// Output an updated lockfile containg the dependency graph represented by `self`. Note that
+    /// if `self` was loaded with [Self::load_ignore_digests], then the digests will not be
+    /// changed (since no repinning was performed).
+    pub fn save_to_disk(&self) -> PackageResult<()> {
+        std::fs::write(
+            self.graph.root_package().path().lockfile_path(),
+            self.lockfile.render_as_toml(),
+        )?;
+        Ok(())
+    }
+
+    /// Set the publish information, coming in from the compiler & result of `Publish` command.
+    pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
+        // Write the publish data.
+        self.lockfile
+            .published
+            .insert(self.environment.name().clone(), publish_data);
+
+        self.save_to_disk()
     }
 
     /// Read the lockfile from the root directory, returning an empty structure if none exists
-    pub fn load_lockfile(&self) -> PackageResult<ParsedLockfile<F>> {
-        let path = self.package_path().lockfile_path();
+    /// TODO(Manos): Do we wanna try to read this when loading, to make sure we can operate on it?
+    /// That will avoid doing all the work (to repin / publish etc), and then be unable to operate it.
+    fn load_lockfile(package_path: &PackagePath) -> PackageResult<ParsedLockfile<F>> {
+        let path = package_path.lockfile_path();
         debug!("loading lockfile {:?}", path);
 
         if !path.exists() {
             return Ok(ParsedLockfile::<F>::default());
         }
 
-        let file = FileHandle::new(self.package_path().lockfile_path())?;
+        let file = FileHandle::new(path)?;
         Ok(toml_edit::de::from_str(file.source())?)
     }
 
-    /// The package's manifest
-    pub fn manifest(&self) -> &Manifest<F> {
-        self.root.manifest()
-    }
-
-    /// The package's defined environments
-    pub fn environments(&self) -> BTreeMap<EnvironmentName, EnvironmentID> {
-        self.manifest().environments()
-    }
-
-    /// Return the defined package name in the manifest
-    pub fn package_name(&self) -> &PackageName {
-        self.manifest().package_name()
-    }
-
-    // *** DEPENDENCIES RELATED FUNCTIONS ***
-
-    pub fn dependencies(&self) -> &BTreeMap<EnvironmentName, PackageGraph<F>> {
-        &self.dependencies
-    }
-
-    /// Create a [`Lockfile`] with the current package's dependencies. The lockfile will have no
-    /// published information.
-    pub async fn dependencies_to_lockfile(&self) -> PackageResult<ParsedLockfile<F>> {
-        let pinned: BTreeMap<EnvironmentName, BTreeMap<PackageID, Pin>> = self
-            .dependencies()
-            .iter()
-            .map(|(env, graph)| (env.clone(), graph.into()))
-            .collect();
-
-        Ok(ParsedLockfile {
-            pinned,
-            published: BTreeMap::new(),
-        })
-    }
-
-    /// Repin dependencies for the given environments and write back to lockfile.
-    ///
-    /// Note that this will not update the [`dependencies`] field itself.
-    pub async fn update_deps_and_write_to_lockfile(
-        &self,
-        envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
-    ) -> PackageResult<()> {
-        let mut lockfile = self.load_lockfile()?;
-
-        for env in envs.keys() {
-            let graph =
-                PackageGraph::<F>::load_from_manifest_by_env(self.package_path(), env).await?;
-            let pinned_deps: BTreeMap<PackageID, Pin> = (&graph).into();
-            lockfile.pinned.insert(env.clone(), pinned_deps);
-        }
-
-        debug!("writing lockfile {:?}", self.package_path().lockfile_path());
-        std::fs::write(
-            self.package_path().lockfile_path(),
-            lockfile.render_as_toml(),
-        );
-
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub async fn direct_dependencies(
-        &self,
-    ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo>> {
-        let mut output = BTreeMap::new();
-        for env in self.environments().keys() {
-            output.extend(self.root.direct_deps(env).await?);
-        }
-
-        Ok(output)
-    }
-
-    // *** PATHS RELATED FUNCTIONS ***
-
-    /// Return the package path wrapper
-    pub fn package_path(&self) -> &PackagePath {
-        self.root.path()
+    pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
+        &self.lockfile
     }
 }
 
+// TODO(all of us!): We need to test everything.
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
+    use std::{fs, path::PathBuf};
+    use test_log::test;
+
     use super::*;
     use crate::{
-        flavor::Vanilla,
-        git::{GitCache, GitResult, GitTree, run_git_cmd_with_args},
+        flavor::{
+            Vanilla,
+            vanilla::{DEFAULT_ENV_NAME, default_environment},
+        },
         schema::LockfileDependencyInfo,
+        test_utils::{
+            self, basic_manifest_with_env,
+            git::{self},
+            graph_builder::TestPackageGraph,
+        },
     };
-    use std::{fs, process::Output};
-    use tempfile::{TempDir, tempdir};
-    use test_log::test;
-    use tokio::process::Command;
 
-    async fn setup_test_move_project() -> (TempDir, PathBuf) {
-        // Create a temporary directory
-        let temp_dir = tempfile::tempdir().unwrap();
-        let root_path = temp_dir.path().to_path_buf();
-
-        // Create the root directory for the Move project
-        fs::create_dir_all(&root_path).unwrap();
-
-        let packages = ["pkg_a", "pkg_b", "nodeps", "graph", "depends_a_b"];
-
-        let pkgs_paths = packages
-            .iter()
-            .map(|p| root_path.join("packages").join(p))
-            .collect::<Vec<_>>();
-
-        for idx in 0..packages.len() {
-            let name = packages[idx];
-            let path = pkgs_paths[idx].clone();
-            fs::create_dir_all(&path).unwrap();
-            fs::copy(
-                format!("tests/data/basic_move_project/{name}/Move.toml"),
-                path.join("Move.toml"),
+    async fn setup_test_move_project() -> (Environment, PathBuf) {
+        let env = crate::flavor::vanilla::default_environment();
+        let project = test_utils::project()
+            .file(
+                "packages/pkg_a/Move.toml",
+                &basic_manifest_with_env("pkg_a", "0.0.1", env.name(), env.id()),
             )
-            .unwrap();
+            .file(
+                "packages/pkg_b/Move.toml",
+                &basic_manifest_with_env("pkg_b", "0.0.1", env.name(), env.id()),
+            )
+            .file(
+                "packages/nodeps/Move.toml",
+                &basic_manifest_with_env("nodeps", "0.0.1", env.name(), env.id()),
+            )
+            .file(
+                "packages/graph/Move.toml",
+                &basic_manifest_with_env("graph", "0.0.1", env.name(), env.id()),
+            )
+            .file(
+                "packages/depends_a_b/Move.toml",
+                &basic_manifest_with_env("depends_a_b", "0.0.1", env.name(), env.id()),
+            );
 
-            if name == "graph" {
-                fs::copy(
-                    format!("tests/data/basic_move_project/{name}/Move.lock"),
-                    path.join("Move.lock"),
-                )
-                .unwrap();
-            }
-        }
+        let project = project.build();
+        project.extend_file(
+            "packages/graph/Move.toml",
+            r#"
+[dependencies]
+nodeps = { local = "../nodeps" }
+depends_a_b = { local = "../depends_a_b" }"#,
+        );
 
-        (temp_dir, root_path)
+        project.extend_file(
+            "packages/depends_a_b/Move.toml",
+            r#"
+[dependencies]
+pkg_a = { local = "../pkg_a" }
+pkg_b = { local = "../pkg_b" }"#,
+        );
+        fs::copy(
+            "tests/data/basic_move_project/graph/Move.lock",
+            project.root().join("packages/graph/Move.lock"),
+        )
+        .unwrap();
+
+        (env, project.root())
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_load_root_package() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let (env, root_path) = setup_test_move_project().await;
         let names = &["pkg_a", "pkg_b", "nodeps", "graph"];
 
         for name in names {
             let pkg_path = root_path.join("packages").join(name);
-            let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
+            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone())
+                .await
+                .unwrap();
             assert_eq!(
                 &&package.name().to_string(),
                 name,
@@ -258,250 +293,169 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_direct_dependencies() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
-
-        let pkg_path = root_path.join("packages").join("graph");
-        let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
-        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
-        assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
-        assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
-    }
-
-    #[tokio::test]
-    async fn test_direct_dependencies_no_transitive_deps() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
-
-        let pkg_path = root_path.join("packages").join("graph");
-        let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
-        let deps = package.direct_deps(&"testnet".to_string()).await.unwrap();
-        assert!(deps.contains_key(&Identifier::new("nodeps").unwrap()));
-        assert!(deps.contains_key(&Identifier::new("depends_a_b").unwrap()));
-        assert!(!deps.contains_key(&Identifier::new("graph").unwrap()));
-        assert!(!deps.contains_key(&Identifier::new("pkg_a").unwrap()));
-        assert!(!deps.contains_key(&Identifier::new("pkg_b").unwrap()));
-    }
-
-    #[tokio::test]
-    async fn test_direct_dependencies_no_env_in_manifest() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
-
-        let pkg_path = root_path.join("packages").join("graph");
-        let package = Package::<Vanilla>::load_root(&pkg_path).await.unwrap();
-        // devnet does not exist in the manifest, should error
-        let deps = package.direct_deps(&"devnet".to_string()).await;
-        assert!(deps.is_err());
-    }
-
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_root_package_operations() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let (env, root_path) = setup_test_move_project().await;
 
         // Test loading root package with check for environment existing in manifest
         let pkg_path = root_path.join("packages").join("graph");
-        let root = RootPackage::<Vanilla>::load(&pkg_path, Some("testnet".to_string()))
-            .await
-            .unwrap();
+        let root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
 
         // Test environment operations
-        assert!(root.environments().contains_key("testnet"));
-        assert!(root.environments().contains_key("mainnet"));
+        assert!(
+            RootPackage::<Vanilla>::environments(pkg_path)
+                .unwrap()
+                .contains_key(DEFAULT_ENV_NAME)
+        );
 
-        // Test dependencies operations
-        let deps = root.direct_dependencies().await.unwrap();
-        assert!(!deps.is_empty());
-
-        assert_eq!(root.package_name(), &Identifier::new("graph").unwrap());
+        assert_eq!(root.name(), &PackageName::new("graph").unwrap());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_lockfile_deps() {
-        // TODO: this should really be an insta test
-        let (temp_dir, root_path) = setup_test_move_project().await;
-
+        let (env, root_path) = setup_test_move_project().await;
         let pkg_path = root_path.join("packages").join("graph");
-        let root = RootPackage::<Vanilla>::load(&pkg_path, None).await.unwrap();
 
-        let lockfile_deps = root.dependencies_to_lockfile().await.unwrap();
-        let expected = root.load_lockfile().unwrap();
+        let mut root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
 
-        assert_eq!(expected.render_as_toml(), lockfile_deps.render_as_toml());
+        let new_lockfile = root.lockfile_for_testing().clone();
+
+        // TODO: put this snapshot in a more sensible place
+        assert_snapshot!("test_lockfile_deps", new_lockfile.render_as_toml());
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_load_and_check_for_env() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
+        let (env, root_path) = setup_test_move_project().await;
 
         let path = root_path.join("graph");
         // should fail as devnet does not exist in the manifest
         assert!(
-            RootPackage::<Vanilla>::load(&path, Some("devnet".to_string()))
-                .await
-                .is_err()
+            RootPackage::<Vanilla>::load(
+                &path,
+                Environment::new("devnet".to_string(), "abcd1234".to_string())
+            )
+            .await
+            .is_err()
         );
     }
 
-    #[tokio::test]
-    async fn test_load_non_existent_package() {
-        let (temp_dir, root_path) = setup_test_move_project().await;
-
-        // Test loading non-existent package
-        let non_existent_path = root_path.join("non_existent");
-        assert!(
-            Package::<Vanilla>::load_root(&non_existent_path)
-                .await
-                .is_err()
-        );
-    }
-
-    /// Sets up a test Move project with git repository
-    /// It returns the temporary directory, the root path of the project, and the commits' sha
-    pub async fn run_git_cmd(args: &[&str], repo_path: &PathBuf) -> GitResult<String> {
-        run_git_cmd_with_args(args, Some(repo_path)).await
-    }
-
-    pub async fn setup_test_move_git_repo() -> (TempDir, PathBuf, Vec<String>) {
-        // Create a temporary directory
-        let temp_dir = tempdir().unwrap();
-        let root_path = temp_dir.path().to_path_buf();
-
-        debug!("=== setting up test repo ===");
-
-        // Create the root directory for the Move project
-        fs::create_dir_all(&root_path).unwrap();
-
-        let pkg_path = root_path.join("packages").join("pkg_dep_on_git");
-        fs::create_dir_all(&pkg_path).unwrap();
-        fs::copy(
-            "tests/data/basic_move_project/pkg_dep_on_git/Move.toml",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Create directory structure
-        let pkg_path = root_path.join("packages").join("pkg_git");
-        fs::create_dir_all(&pkg_path).unwrap();
-
-        // Initialize git repository with main as default branch
-        run_git_cmd(&["init", "--initial-branch=main"], &pkg_path).await;
-
-        fs::copy(
-            "tests/data/basic_move_project/config",
-            pkg_path.join(".git").join("config"),
-        )
-        .unwrap();
-
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Initial commit
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Initial commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.1", "-m", "Initial version"], &pkg_path).await;
-
-        // Modify pkg_git and commit
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml.new",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        let cmd = Command::new("cat")
-            .arg(pkg_path.join("Move.toml"))
-            .output()
-            .await
-            .unwrap();
-
-        // Commit updates
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Second commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.2", "-m", "Second version"], &pkg_path).await;
-
-        // Modify pkg_git and commit
-        fs::copy(
-            "tests/data/basic_move_project/pkg_git/Move.toml.new2",
-            pkg_path.join("Move.toml"),
-        )
-        .unwrap();
-
-        // Commit updates
-        run_git_cmd(&["add", "."], &pkg_path).await;
-        run_git_cmd(&["commit", "-m", "Third commit"], &pkg_path).await;
-        run_git_cmd(&["tag", "-a", "v0.0.3", "-m", "Third version"], &pkg_path).await;
-
-        // Get commits SHA
-        let commits = run_git_cmd(&["log", "--pretty=format:%H"], &pkg_path)
-            .await
-            .unwrap();
-        let commits: Vec<_> = commits.lines().map(|x| x.to_string()).collect();
-
-        debug!("=== test repo setup complete ===");
-
-        (temp_dir, root_path, commits)
-    }
-
+    /// This just ensures that `RootPackage` does the `rename-from` validation; see
+    /// [crate::graph::rename_from::tests] for more detailed tests that operate directly on the
+    /// package graph
     #[test(tokio::test)]
-    async fn test_all() {
-        let (temp_dir, root_path, commits) = setup_test_move_git_repo().await;
-        let move_dir = temp_dir.path().join(".move");
-        // TODO: we need to figure a way to allow fetch to work in non ~/.move folder which would
-        // end being the ~/.move folder on the machine, rather than some temp dir.
+    async fn test_rename_from() {
+        // `a` depends on `b` which has name `b_name`, but there is no rename-from
+        // building the root package should fail because of rename-from validation
+        let scenario = TestPackageGraph::new(["a"])
+            .add_package("b", |b| b.package_name("b_name"))
+            .add_deps([("a", "b")])
+            .build();
 
-        let git_repo = root_path.join("packages").join("pkg_git");
+        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment())
+            .await
+            .unwrap_err();
+    }
 
-        let root_pkg_path = root_path.join("packages").join("pkg_dep_on_git");
+    /// This test creates a git repository with a Move package, and another package that depends on
+    /// this package as a git dependency. It then tests the following
+    /// - checkout of git dependency at the requested git sha is correct
+    /// - updating the git dependency to a different sha works as expected
+    /// - updating the git dependency in the manifest and re-pinning works as expected, including
+    /// writing back the deps to a lockfile
+    #[test(tokio::test)]
+    pub async fn test_all() {
+        debug!("running test_all");
+        let env = crate::flavor::vanilla::default_environment();
+        let (pkg_git, pkg_git_repo) = git::new_repo("pkg_git", |project| {
+            project.file(
+                "Move.toml",
+                (&basic_manifest_with_env("pkg_git", "0.0.1", env.name(), env.id())),
+            )
+        });
+
+        pkg_git.change_file(
+            "Move.toml",
+            (&basic_manifest_with_env("pkg_git", "0.0.2", env.name(), env.id())),
+        );
+        pkg_git_repo.commit();
+        pkg_git.change_file(
+            "Move.toml",
+            &basic_manifest_with_env("pkg_git", "0.0.3", env.name(), env.id()),
+        );
+        pkg_git_repo.commit();
+
+        let (pkg_dep_on_git, pkg_dep_on_git_repo) = git::new_repo("pkg_dep_on_git", |project| {
+            project.file(
+                "Move.toml",
+                &format!(
+                    r#"[package]
+name = "pkg_dep_on_git"
+edition = "2025"
+license = "Apache-2.0"
+authors = ["Move Team"]
+version = "0.0.1"
+
+[dependencies]
+pkg_git = {{ git = "../pkg_git", rev = "main" }}
+
+[environments]
+{} = "{}"
+"#,
+                    env.name(),
+                    env.id(),
+                ),
+            )
+        });
+
+        let root_pkg_path = pkg_dep_on_git.root();
+        let commits = pkg_git.commits();
         let mut root_pkg_manifest = fs::read_to_string(root_pkg_path.join("Move.toml")).unwrap();
 
         // we need to replace this relative path with the actual git repository path, because find_sha
         // function does not take a cwd, so this `git ls-remote` would be called from the cwd and not from the
         // repo path.
-        root_pkg_manifest =
-            root_pkg_manifest.replace("../pkg_git", git_repo.to_path_buf().to_str().unwrap());
+        root_pkg_manifest = root_pkg_manifest.replace("../pkg_git", pkg_git.root_path_str());
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, None)
+        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
             .await
             .unwrap();
 
-        let direct_deps = root_pkg.direct_dependencies().await.unwrap();
-        assert!(direct_deps.contains_key(&Identifier::new("pkg_git").unwrap()));
-        let git_dep = direct_deps
-            .get(&Identifier::new("pkg_git").unwrap())
-            .unwrap();
+        let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
+        debug!("pinned_deps: {pinned_deps:#?}");
+        let git_dep = pinned_deps.get("pkg_git").unwrap();
 
-        match git_dep.clone().into() {
+        match &git_dep.source {
             LockfileDependencyInfo::Git(p) => {
                 assert_eq!(&p.rev.to_string(), commits.first().unwrap())
             }
             _ => panic!("Expected a git dependency"),
         }
 
-        // Change to second commit
+        // Change ts second commit
         root_pkg_manifest = root_pkg_manifest.replace(
             "rev = \"main\"",
             format!("rev = \"{}\"", commits[1]).as_str(),
         );
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
-        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, None)
+        let root_pkg = RootPackage::<Vanilla>::load(&root_pkg_path, env.clone())
             .await
             .unwrap();
 
-        let direct_deps = root_pkg.direct_dependencies().await.unwrap();
-        let git_dep = direct_deps
-            .get(&Identifier::new("pkg_git").unwrap())
-            .unwrap();
+        let pinned_deps = root_pkg.lockfile.pinned.get(env.name()).unwrap();
+        let git_dep = pinned_deps.get("pkg_git").unwrap();
 
-        match git_dep.clone().into() {
-            LockfileDependencyInfo::Git(p) => assert_eq!(p.rev.to_string(), commits[1]),
+        match &git_dep.source {
+            LockfileDependencyInfo::Git(p) => {
+                assert_eq!(p.rev.to_string(), commits[1])
+            }
             _ => panic!("Expected a git dependency"),
         }
 
-        let lockfile = root_pkg.dependencies_to_lockfile().await.unwrap();
+        root_pkg.save_to_disk().unwrap();
+        let lockfile = root_pkg.lockfile;
         // Change to first commit in the rev in the manifest
         root_pkg_manifest = root_pkg_manifest.replace(
             format!("rev = \"{}\"", commits[1]).as_str(),
@@ -511,16 +465,15 @@ mod tests {
         fs::write(root_pkg_path.join("Move.toml"), &root_pkg_manifest).unwrap();
 
         // check if update deps works as expected
-        root_pkg
-            .update_deps_and_write_to_lockfile(&root_pkg.environments())
+        let root_pkg = RootPackage::<Vanilla>::load_force_repin(&root_pkg_path, env)
             .await
             .unwrap();
 
-        let updated_lockfile = root_pkg.load_lockfile().unwrap();
+        let updated_lockfile = root_pkg.lockfile;
 
         assert_ne!(updated_lockfile.render_as_toml(), lockfile.render_as_toml());
 
-        let updated_lockfile_dep = &updated_lockfile.pinned["mainnet"]["pkg_git"].source;
+        let updated_lockfile_dep = &updated_lockfile.pinned[DEFAULT_ENV_NAME]["pkg_git"].source;
         match updated_lockfile_dep {
             LockfileDependencyInfo::Git(p) => assert_eq!(p.rev.to_string(), commits[0]),
             x => panic!("Expected a git dependency, but got {:?}", x),

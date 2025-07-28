@@ -40,7 +40,7 @@ async fn test_immediate_return_canceled_shared() {
         version: SequenceNumber::CANCELLED_READ,
     };
     let receiving_keys = HashSet::new();
-    let epoch = &0;
+    let epoch = 0;
 
     // Should return immediately since canceled shared objects are always available
     cache
@@ -84,7 +84,7 @@ async fn test_immediate_return_cached_object() {
         version,
     }];
     let receiving_keys = HashSet::new();
-    let epoch = &0;
+    let epoch = 0;
 
     // Should return immediately since object is in cache
     cache
@@ -101,7 +101,7 @@ async fn test_immediate_return_cached_package() {
         id: SUI_FRAMEWORK_PACKAGE_ID,
     }];
     let receiving_keys = HashSet::new();
-    let epoch = &0;
+    let epoch = 0;
 
     // Should return immediately since system package is available by default.
     cache
@@ -133,7 +133,7 @@ async fn test_immediate_return_consensus_stream_ended() {
 
     // Should return immediately since object is marked as consensus stream ended
     cache
-        .notify_read_input_objects(&input_keys, &receiving_keys, &epoch)
+        .notify_read_input_objects(&input_keys, &receiving_keys, epoch)
         .now_or_never()
         .unwrap();
 }
@@ -150,7 +150,7 @@ async fn test_wait_for_object() {
         version,
     }];
     let receiving_keys = HashSet::new();
-    let epoch = &0;
+    let epoch = 0;
 
     let result = timeout(
         Duration::from_secs(3),
@@ -224,7 +224,7 @@ async fn test_wait_for_package() {
 
     let input_keys = vec![InputKey::Package { id: package_id }];
     let receiving_keys = HashSet::new();
-    let epoch = &0;
+    let epoch = 0;
 
     // Start notification future
     let notification = cache.notify_read_input_objects(&input_keys, &receiving_keys, epoch);
@@ -248,7 +248,7 @@ async fn test_wait_for_consensus_stream_end() {
 
     let object_id = ObjectID::random();
     let version = SequenceNumber::from(1);
-    let epoch = &0;
+    let epoch = 0;
 
     let input_keys = vec![InputKey::VersionedObject {
         id: FullObjectID::new(object_id, Some(version)),
@@ -265,7 +265,7 @@ async fn test_wait_for_consensus_stream_end() {
         async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
             cache.write_marker_value(
-                *epoch,
+                epoch,
                 FullObjectKey::new(FullObjectID::new(object_id, Some(version)), version),
                 MarkerValue::ConsensusStreamEnded(TransactionDigest::random()),
             );
@@ -298,7 +298,7 @@ async fn test_receiving_object_higher_version() {
     }];
     let mut receiving_keys = HashSet::new();
     receiving_keys.insert(input_keys[0]);
-    let epoch = &0;
+    let epoch = 0;
 
     // Should return immediately since a higher version exists for receiving object
     cache

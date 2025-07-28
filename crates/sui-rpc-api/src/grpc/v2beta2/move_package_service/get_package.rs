@@ -6,10 +6,10 @@ use crate::{
         conversions::{convert_error, convert_module},
         load_package,
     },
-    proto::google::rpc::bad_request::FieldViolation,
-    proto::rpc::v2beta2::{GetPackageRequest, GetPackageResponse, Package},
     ErrorReason, Result, RpcService,
 };
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::{GetPackageRequest, GetPackageResponse, Package};
 
 #[tracing::instrument(skip(service))]
 pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<GetPackageResponse> {
@@ -35,8 +35,8 @@ pub fn get_package(service: &RpcService, request: GetPackageRequest) -> Result<G
 
     Ok(GetPackageResponse {
         package: Some(Package {
-            storage_id: Some(package_id.to_string()),
-            original_id: Some(package.original_package_id().to_string()),
+            storage_id: Some(package_id.to_canonical_string(true)),
+            original_id: Some(package.original_package_id().to_canonical_string(true)),
             version: Some(package.version().value()),
             modules,
             ..Default::default()

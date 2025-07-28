@@ -3,10 +3,10 @@
 
 use shared_crypto::intent::{Intent, IntentMessage};
 use sui_macros::sim_test;
-use sui_rpc_api::proto::rpc::v2beta2::signature_verification_service_client::SignatureVerificationServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::Bcs;
-use sui_rpc_api::proto::rpc::v2beta2::UserSignature;
-use sui_rpc_api::proto::rpc::v2beta2::VerifySignatureRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::signature_verification_service_client::SignatureVerificationServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::Bcs;
+use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
+use sui_rpc::proto::sui::rpc::v2beta2::VerifySignatureRequest;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::Signature;
@@ -16,6 +16,10 @@ use test_cluster::TestClusterBuilder;
 
 #[sim_test]
 async fn test_verify_signature_zklogin() -> Result<(), anyhow::Error> {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return Ok(());
+    }
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .with_default_jwks()

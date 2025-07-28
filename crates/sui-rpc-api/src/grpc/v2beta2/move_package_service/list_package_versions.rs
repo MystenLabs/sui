@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::load_package;
-use crate::{
-    proto::google::rpc::bad_request::FieldViolation,
-    proto::rpc::v2beta2::{
-        ListPackageVersionsRequest, ListPackageVersionsResponse, PackageVersion,
-    },
-    ErrorReason, Result, RpcError, RpcService,
-};
+use crate::{ErrorReason, Result, RpcError, RpcService};
 use bytes::Bytes;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::{
+    ListPackageVersionsRequest, ListPackageVersionsResponse, PackageVersion,
+};
 use sui_types::base_types::ObjectID;
 use tap::Pipe;
 
@@ -68,7 +66,7 @@ pub fn list_package_versions(
             result.map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
         versions.push(PackageVersion {
-            package_id: Some(storage_id.to_string()),
+            package_id: Some(storage_id.to_canonical_string(true)),
             version: Some(version),
         });
     }

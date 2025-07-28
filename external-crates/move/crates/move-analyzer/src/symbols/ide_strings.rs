@@ -144,6 +144,7 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
             )
         }
         Type_::Anything => "_".to_string(),
+        Type_::Void => "_".to_string(),
         Type_::Var(_) => "invalid type (var)".to_string(),
         Type_::UnresolvedError => "unknown type (unresolved)".to_string(),
     }

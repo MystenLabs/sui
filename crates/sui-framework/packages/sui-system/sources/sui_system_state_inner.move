@@ -1105,13 +1105,11 @@ public(package) fun store_execution_time_estimates(
     self.extra_fields.add(key, estimates);
 }
 
-#[test_only]
 /// Return the current validator set
 public(package) fun validators(self: &SuiSystemStateInnerV2): &ValidatorSet {
     &self.validators
 }
 
-#[test_only]
 public(package) fun validators_mut(self: &mut SuiSystemStateInnerV2): &mut ValidatorSet {
     &mut self.validators
 }

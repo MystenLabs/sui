@@ -1,69 +1,85 @@
 current event stack:
-  summary frame (line 1): 
+  summary frame (line 2): 
     MoveCall
-    SplitCoins
+    Publish
     MoveCall
     TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
   no active event frame
 current event stack:
-  summary frame (line 1): 
+  summary frame (line 2): 
     MoveCall
-    SplitCoins
+    Publish
     MoveCall
     TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
+  event frame: 
+    Publish: ()
+current event stack:
+  summary frame (line 3): 
+    MoveCall
+    Publish
+    MoveCall
+    TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
   current frame stack:
-    function: mint (my_coin.mvb:40)
+    function: init (my_coin.mvb:19)
       scope 0 :
-        Arg0 : (0x2::coin::TreasuryCap<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
-          id : (0x2::object::UID) {
-            id : (0x2::object::ID) {
-              bytes : 98c9b813c1a6d2b7863444585ab2058b2f56399cd6dcb514c636a7fdfcf4281b
-            }
-          }
-          total_supply : (0x2::balance::Supply<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
-            value : 0
-          }
+        Arg0 : (fba24b2c50708ad973f7d4b590d03a7a272ee80ee3ea7abf60c20f6cb417398a::my_coin::MY_COIN) {
+          dummy_field : true
         }
-        type: &mut 0x2::coin::TreasuryCap<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>
+        type: fba24b2c50708ad973f7d4b590d03a7a272ee80ee3ea7abf60c20f6cb417398a::my_coin::MY_COIN
 
-        Arg1 : 1000
-        type: u64
-
-        Arg2 : (0x2::tx_context::TxContext) {
+        Arg1 : (0x2::tx_context::TxContext) {
           sender : 0000000000000000000000000000000000000000000000000000000000000000
           tx_hash : [
-            0 : 177
-            1 : 55
-            2 : 127
-            3 : 33
-            4 : 250
-            5 : 68
-            6 : 193
-            7 : 114
-            8 : 114
-            9 : 46
-            10 : 119
-            11 : 191
-            12 : 192
-            13 : 51
-            14 : 229
-            15 : 20
-            16 : 209
-            17 : 2
-            18 : 222
-            19 : 115
-            20 : 173
-            21 : 253
-            22 : 150
-            23 : 95
-            24 : 224
-            25 : 71
-            26 : 8
-            27 : 109
-            28 : 233
-            29 : 115
-            30 : 236
-            31 : 23
+            0 : 193
+            1 : 252
+            2 : 55
+            3 : 57
+            4 : 223
+            5 : 47
+            6 : 123
+            7 : 181
+            8 : 7
+            9 : 28
+            10 : 202
+            11 : 103
+            12 : 182
+            13 : 158
+            14 : 182
+            15 : 206
+            16 : 18
+            17 : 243
+            18 : 247
+            19 : 17
+            20 : 106
+            21 : 18
+            22 : 252
+            23 : 156
+            24 : 39
+            25 : 204
+            26 : 101
+            27 : 244
+            28 : 47
+            29 : 154
+            30 : 113
+            31 : 237
           ]
           epoch : 0
           epoch_timestamp_ms : 0
@@ -72,70 +88,325 @@ current event stack:
         type: &mut 0x2::tx_context::TxContext
 
 current event stack:
-  summary frame (line 2): 
+  summary frame (line 4): 
     MoveCall
-    SplitCoins
-    MoveCall
-    TransferObjects
-  no active event frame
-current event stack:
-  summary frame (line 2): 
-    MoveCall
-    SplitCoins
+    Publish
     MoveCall
     TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
   event frame: 
-    SplitCoins: input => result
-      input : (0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+    TransferObjects: obj0...objN => ()
+      obj0 : (0x2::package::UpgradeCap) {
         id : (0x2::object::UID) {
           id : (0x2::object::ID) {
-            value : cb8da0c881c16350759cd2ae37d0575de65e75cd36c313bcb96620508321a9d5
+            bytes : 8f3e305a36ef5ed09791b1027646401410a1fd0b391a007c3910a9ecd26f3b4f
           }
         }
-        balance : (0x2::balance::Balance<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+        package : (0x2::object::ID) {
+          bytes : fba24b2c50708ad973f7d4b590d03a7a272ee80ee3ea7abf60c20f6cb417398a
+        }
+        version : 1
+        policy : 0
+      }
+      type: 0x2::package::UpgradeCap
+
+current event stack:
+  summary frame (line 5): 
+    MoveCall
+    Publish
+    MoveCall
+    TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
+  event frame: 
+    MakeMoveVec: vector
+      vector : [
+        0 : 500
+        1 : 500
+      ]
+      type: vector<vector<u64>>
+
+current event stack:
+  summary frame (line 6): 
+    MoveCall
+    Publish
+    MoveCall
+    TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
+  current frame stack:
+    function: mint (my_coin.mvb:43)
+      scope 0 :
+        Arg0 : (0x2::coin::TreasuryCap<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              bytes : 3a7a381b1633c1e41324c61d042448c81c1b74300c25e8ab4c254d4f2891b1d9
+            }
+          }
+          total_supply : (0x2::balance::Supply<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 0
+          }
+        }
+        type: &mut 0x2::coin::TreasuryCap<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>
+
+        Arg1 : [
+          0 : 500
+          1 : 500
+        ]
+        type: vector<u64>
+
+        Arg2 : (0x2::tx_context::TxContext) {
+          sender : 0000000000000000000000000000000000000000000000000000000000000000
+          tx_hash : [
+            0 : 193
+            1 : 252
+            2 : 55
+            3 : 57
+            4 : 223
+            5 : 47
+            6 : 123
+            7 : 181
+            8 : 7
+            9 : 28
+            10 : 202
+            11 : 103
+            12 : 182
+            13 : 158
+            14 : 182
+            15 : 206
+            16 : 18
+            17 : 243
+            18 : 247
+            19 : 17
+            20 : 106
+            21 : 18
+            22 : 252
+            23 : 156
+            24 : 39
+            25 : 204
+            26 : 101
+            27 : 244
+            28 : 47
+            29 : 154
+            30 : 113
+            31 : 237
+          ]
+          epoch : 0
+          epoch_timestamp_ms : 0
+          ids_created : 0
+        }
+        type: &mut 0x2::tx_context::TxContext
+
+current event stack:
+  summary frame (line 7): 
+    MoveCall
+    Publish
+    MoveCall
+    TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
+  event frame: 
+    SplitCoins: input => result
+      input : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+        id : (0x2::object::UID) {
+          id : (0x2::object::ID) {
+            value : 35a1482c6fa8bac922ce77875f433ebd3d57276cfeb4a103a1351d363360064f
+          }
+        }
+        balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
           value : 500
         }
       }
-      type: 0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>
+      type: 0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>
 
       result : [
-        0 : (0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+        0 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
           id : (0x2::object::UID) {
             id : (0x2::object::ID) {
-              value : ddd648349c1fb33dd1739557349449abea1a436d4ed26b46f08bb990cac39054
+              value : 80b35f8d44ac23fbac76234d7f6a289bfe2bae353fc6074dda53e2b9b251e03e
             }
           }
-          balance : (0x2::balance::Balance<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
-            value : 500
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 100
+          }
+        }
+        1 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : d723059d5150d00be29ee38257c868778d26325c5b6c14e0723b57c1645509b6
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 100
+          }
+        }
+        2 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : f5ae46bcb338fda2ee05ce24943e546e1e283c4225644679343eccca21d982df
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 100
+          }
+        }
+        3 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : b3fc7fe7d0fbed8dd033e235b93068ec1ec8450869754234b08aafa3e3bf2c43
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 100
+          }
+        }
+        4 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : c1ddaec2fc60593e3e43708862dcb2acbdfcbfd12eb1271a5010325c9267d89e
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 100
           }
         }
       ]
-      type: vector<0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>>
+      type: vector<0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>>
 
 current event stack:
-  summary frame (line 4): 
+  summary frame (line 8): 
     MoveCall
-    SplitCoins
-    MoveCall
-    TransferObjects
-  no active event frame
-current event stack:
-  summary frame (line 4): 
-    MoveCall
-    SplitCoins
+    Publish
     MoveCall
     TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
   event frame: 
-    TransferObjects: obj0...objN => ()
-      obj0 : (0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
+    MergeCoins: merge_target, coin0...coinN => mergeresult
+      merge_target : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
         id : (0x2::object::UID) {
           id : (0x2::object::ID) {
-            value : ddd648349c1fb33dd1739557349449abea1a436d4ed26b46f08bb990cac39054
+            value : 80b35f8d44ac23fbac76234d7f6a289bfe2bae353fc6074dda53e2b9b251e03e
           }
         }
-        balance : (0x2::balance::Balance<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>) {
-          value : 500
+        balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          value : 100
         }
       }
-      type: 0x2::coin::Coin<7e8d76a50c0b65dce0cc033875ae1586476e404c71154f6d055999dea0063d0d::my_coin::MY_COIN>
+      type: 0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>
+
+      coin0 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+        id : (0x2::object::UID) {
+          id : (0x2::object::ID) {
+            value : d723059d5150d00be29ee38257c868778d26325c5b6c14e0723b57c1645509b6
+          }
+        }
+        balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          value : 100
+        }
+      }
+      type: 0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>
+
+      coin1 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+        id : (0x2::object::UID) {
+          id : (0x2::object::ID) {
+            value : f5ae46bcb338fda2ee05ce24943e546e1e283c4225644679343eccca21d982df
+          }
+        }
+        balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          value : 100
+        }
+      }
+      type: 0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>
+
+      merge_result : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+        id : (0x2::object::UID) {
+          id : (0x2::object::ID) {
+            value : 80b35f8d44ac23fbac76234d7f6a289bfe2bae353fc6074dda53e2b9b251e03e
+          }
+        }
+        balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          value : 300
+        }
+      }
+      type: 0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>
+
+current event stack:
+  summary frame (line 9): 
+    MoveCall
+    Publish
+    MoveCall
+    TransferObjects
+    MakeMoveVec
+    MoveCall
+    SplitCoins
+    MergeCoins
+    MakeMoveVec
+    MoveCall
+  event frame: 
+    MakeMoveVec: vector
+      vector : [
+        0 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : 35a1482c6fa8bac922ce77875f433ebd3d57276cfeb4a103a1351d363360064f
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 500
+          }
+        }
+        1 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : 80b35f8d44ac23fbac76234d7f6a289bfe2bae353fc6074dda53e2b9b251e03e
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 300
+          }
+        }
+        2 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : b3fc7fe7d0fbed8dd033e235b93068ec1ec8450869754234b08aafa3e3bf2c43
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 100
+          }
+        }
+        3 : (0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+          id : (0x2::object::UID) {
+            id : (0x2::object::ID) {
+              value : c1ddaec2fc60593e3e43708862dcb2acbdfcbfd12eb1271a5010325c9267d89e
+            }
+          }
+          balance : (0x2::balance::Balance<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>) {
+            value : 100
+          }
+        }
+      ]
+      type: vector<vector<0x2::coin::Coin<e8b55d70a0d6ab60dd84676d987b1177a6e77f0ca40cdb5ff0e920907cdb76b1::my_coin::MY_COIN>>>
 

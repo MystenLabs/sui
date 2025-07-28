@@ -1101,7 +1101,7 @@ fn visit_type_params(
                 f,
             )
         }
-        Type_::Var(_) | Type_::Anything | Type_::UnresolvedError => {}
+        Type_::Var(_) | Type_::Anything | Type_::Void | Type_::UnresolvedError => {}
         Type_::Unit => {}
     }
 }
@@ -1160,7 +1160,7 @@ fn has_unresolved_error_type(ty: &Type) -> bool {
         Type_::Fun(args, result) => {
             args.iter().any(has_unresolved_error_type) || has_unresolved_error_type(result)
         }
-        Type_::Param(_) | Type_::Var(_) | Type_::Anything | Type_::Unit => false,
+        Type_::Param(_) | Type_::Var(_) | Type_::Anything | Type_::Void | Type_::Unit => false,
     }
 }
 
@@ -1403,6 +1403,18 @@ fn join<T: ToString, F: FnOnce() -> T>(
         None => context.error_type(loc),
         Some(ty) => ty,
     }
+}
+
+fn join_named_block_type<T: ToString, F: FnOnce() -> T>(
+    context: &mut Context,
+    name: BlockLabel,
+    loc: Loc,
+    msg: F,
+    exp_type: Type,
+) {
+    let block_ty = context.named_block_type(name, loc);
+    let loop_ty = join(context, loc, msg, exp_type, block_ty);
+    context.update_named_block_type(name, loop_ty);
 }
 
 fn invariant_no_report(
@@ -1731,8 +1743,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     None
                 }
             };
-            let result_type = core::make_tvar(context, aloc);
-            let earms = match_arms(context, &esubject.ty, &result_type, narms_, &ref_mut);
+            let (result_type, earms) = match_arms(context, &esubject.ty, &aloc, narms_, &ref_mut);
             (result_type, TE::Match(esubject, sp(aloc, earms)))
         }
         NE::While(name, nb, nloop) => {
@@ -1745,11 +1756,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 eb.ty.clone(),
                 Type_::bool(bloc),
             );
-            let (_has_break, ty, body) = loop_body(context, eloc, name, false, nloop);
+            let (_has_break, ty, body) =
+                loop_body(context, eloc, name, /* while_loop */ true, nloop);
             (sp(eloc, ty.value), TE::While(name, eb, body))
         }
         NE::Loop(name, nloop) => {
-            let (has_break, ty, body) = loop_body(context, eloc, name, true, nloop);
+            let (has_break, ty, body) =
+                loop_body(context, eloc, name, /* while_loop */ false, nloop);
             let eloop = TE::Loop {
                 name,
                 has_break,
@@ -1823,28 +1836,30 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             let eret = exp(context, nret);
             let ret_ty = context.return_type.clone().unwrap();
             subtype(context, eloc, || "Invalid return", eret.ty.clone(), ret_ty);
-            (sp(eloc, Type_::Anything), TE::Return(eret))
+            (core::make_divergent_tvar(context, eloc), TE::Return(eret))
         }
         NE::Abort(ncode) => {
             let mut ecode = exp(context, ncode);
             let code_ty = Type_::u64(eloc);
             annotated_error_const(context, &mut ecode, "abort");
             subtype(context, eloc, || "Invalid abort", ecode.ty.clone(), code_ty);
-            (sp(eloc, Type_::Anything), TE::Abort(ecode))
+            (core::make_divergent_tvar(context, eloc), TE::Abort(ecode))
         }
         NE::Give(usage, name, rhs) => {
             let break_rhs = exp(context, rhs);
-            let loop_ty = context.named_block_type(name, eloc);
-            subtype(
+            join_named_block_type(
                 context,
+                name,
                 eloc,
                 || format!("Invalid {usage}"),
                 break_rhs.ty.clone(),
-                loop_ty,
             );
-            (sp(eloc, Type_::Anything), TE::Give(name, break_rhs))
+            (
+                core::make_divergent_tvar(context, eloc),
+                TE::Give(name, break_rhs),
+            )
         }
-        NE::Continue(name) => (sp(eloc, Type_::Anything), TE::Continue(name)),
+        NE::Continue(name) => (core::make_divergent_tvar(context, eloc), TE::Continue(name)),
 
         NE::Dereference(nref) => {
             let eref = exp(context, nref);
@@ -2171,11 +2186,11 @@ fn loop_body(
     context: &mut Context,
     eloc: Loc,
     name: BlockLabel,
-    is_loop: bool,
+    while_loop: bool,
     nloop: Box<N::Exp>,
 ) -> (bool, Type, Box<T::Exp>) {
     // set while break to ()
-    if !is_loop {
+    if while_loop {
         let while_loop_type = context.named_block_type(name, eloc);
         // while loop breaks must break with unit
         subtype(
@@ -2210,20 +2225,32 @@ fn loop_body(
 fn match_arms(
     context: &mut Context,
     subject_type: &Type,
-    result_type: &Type,
+    arms_loc: &Loc,
     narms: Vec<N::MatchArm>,
     ref_mut: &Option<bool>,
-) -> Vec<T::MatchArm> {
-    narms
+) -> (Type, Vec<T::MatchArm>) {
+    let arms = narms
         .into_iter()
-        .map(|narm| match_arm(context, subject_type, result_type, narm, ref_mut))
-        .collect()
+        .map(|narm| match_arm(context, subject_type, narm, ref_mut))
+        .collect::<Vec<_>>();
+    // Start with a divergent tvar in case all of the arms diverge
+    let result_type = arms
+        .iter()
+        .fold(core::make_divergent_tvar(context, *arms_loc), |ty, arm| {
+            join(
+                context,
+                *arms_loc,
+                || "invalid match arm",
+                ty,
+                arm.value.rhs.ty.clone(),
+            )
+        });
+    (result_type, arms)
 }
 
 fn match_arm(
     context: &mut Context,
     subject_type: &Type,
-    result_type: &Type,
     sp!(aloc, arm_): N::MatchArm,
     ref_mut: &Option<bool>,
 ) -> T::MatchArm {
@@ -2261,7 +2288,6 @@ fn match_arm(
     );
 
     let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
-
     for (pat_var, guard_var) in guard_binders.clone() {
         use Type_::*;
         let ety = binder_map.get(&pat_var).unwrap().clone();
@@ -2288,14 +2314,6 @@ fn match_arm(
     }
 
     let rhs = exp(context, rhs);
-    subtype(
-        context,
-        rhs.exp.loc,
-        || "Invalid right-hand side expression",
-        rhs.ty.clone(),
-        result_type.clone(),
-    );
-
     sp(
         aloc,
         T::MatchArm_ {
@@ -2335,9 +2353,9 @@ fn match_pattern_(
     use T::UnannotatedPat_ as TP;
 
     macro_rules! rtype {
-        ($ty:expr) => {
+        ($loc:expr, $ty:expr) => {
             if let Some(mut_) = mut_ref {
-                sp($ty.loc, Type_::Ref(*mut_, Box::new($ty)))
+                sp($loc, Type_::Ref(*mut_, Box::new($ty)))
             } else {
                 $ty
             }
@@ -2371,15 +2389,17 @@ fn match_pattern_(
                 if matches!(fty.value, N::Type_::UnresolvedError) {
                     field_error = true;
                 }
-                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty.clone());
-                subtype(
+                let mut tpat =
+                    match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(tpat.pat.loc, fty.clone());
+                let pat_ty = subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
+                tpat.ty = pat_ty;
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2397,7 +2417,7 @@ fn match_pattern_(
                     ),
                 );
             }
-            let bt = rtype!(bt);
+            let bt = rtype!(loc, bt);
             let pat_ = if field_error {
                 TP::ErrorPat
             } else if let Some(mut_) = mut_ref {
@@ -2423,15 +2443,17 @@ fn match_pattern_(
                 if matches!(fty.value, N::Type_::UnresolvedError) {
                     field_error = true;
                 }
-                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty.clone());
-                subtype(
+                let mut tpat =
+                    match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(tpat.pat.loc, fty.clone());
+                let pat_ty = subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
+                tpat.ty = pat_ty;
                 (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
@@ -2442,7 +2464,7 @@ fn match_pattern_(
                 );
                 context.add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
-            let bt = rtype!(bt);
+            let bt = rtype!(loc, bt);
             let pat_ = if field_error {
                 TP::ErrorPat
             } else if let Some(mut_) = mut_ref {
@@ -2475,7 +2497,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Constant(m, const_)))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Constant(m, const_)))
         }
         P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
@@ -2506,7 +2528,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Literal(v)))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Literal(v)))
         }
         P::Wildcard => {
             let ty = core::make_tvar(context, loc);
@@ -2516,7 +2538,7 @@ fn match_pattern_(
                 Ability_::Drop
             );
             maybe_add_drop!(ty, msg);
-            T::pat(rtype!(ty), sp(loc, TP::Wildcard))
+            T::pat(rtype!(loc, ty), sp(loc, TP::Wildcard))
         }
         P::Or(lhs, rhs) => {
             let lpat = match_pattern_(context, *lhs, mut_ref, rhs_binders, wildcard_needs_drop);
@@ -2935,7 +2957,7 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
             ));
             context.error_type(loc)
         }
-        sp!(tloc, Var(i)) if !context.subst.is_num_var(i) => {
+        sp!(tloc, Var(i)) if !context.subst.is_num_var(&i) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -3103,7 +3125,7 @@ fn find_index_funs(context: &mut Context, loc: Loc, ty: &Type) -> Option<IndexSy
 
     match ty {
         sp!(_, T::UnresolvedError) => None,
-        sp!(tloc, T::Anything) => {
+        sp!(tloc, T::Anything | T::Void) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -3967,7 +3989,7 @@ fn type_to_type_name_(
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
         t => {
             let msg = match t {
-                Ty::Anything => {
+                Ty::Anything | Ty::Void => {
                     format!("Unable to infer type for {error_msg}. Try annotating this type")
                 }
                 Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) | Ty::Fun(_, _) => {
@@ -4727,7 +4749,8 @@ fn convert_macro_arg_to_block(context: &mut Context, sp!(loc, ne_): N::Exp) -> N
                     .iter()
                     .map(|(sp!(loc, _), _)| core::make_tvar(context, *loc))
                     .collect::<Vec<_>>();
-                let res_ty = core::make_tvar(context, lambda.body.loc);
+                // The return may be divergent
+                let res_ty = core::make_divergent_tvar(context, lambda.body.loc);
                 let tfun = sp(loc, Type_::Fun(param_tys.clone(), Box::new(res_ty.clone())));
                 for annot in extra_annotations {
                     let annot_loc = annot.loc;

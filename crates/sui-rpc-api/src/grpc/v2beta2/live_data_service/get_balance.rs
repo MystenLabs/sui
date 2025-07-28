@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    proto::google::rpc::bad_request::FieldViolation,
-    proto::rpc::v2beta2::{Balance, GetBalanceRequest, GetBalanceResponse},
-    ErrorReason, Result, RpcError, RpcService,
-};
+use crate::{ErrorReason, Result, RpcError, RpcService};
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::{Balance, GetBalanceRequest, GetBalanceResponse};
 use sui_sdk_types::StructTag;
 use sui_types::base_types::SuiAddress;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;

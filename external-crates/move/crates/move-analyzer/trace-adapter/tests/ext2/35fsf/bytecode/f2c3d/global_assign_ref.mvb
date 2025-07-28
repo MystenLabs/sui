@@ -1,0 +1,68 @@
+// Move bytecode v6
+module 1b8a97ccc6a6d0e4ee653df36b1ba56579191f76cca9c4bbfe73ca3d8faf2c3d.global_assign_ref {
+
+struct SomeStruct has copy, drop {
+	field: u64
+}
+
+struct OuterStruct has copy, drop {
+	field: SomeStruct
+}
+
+public foo(Arg0: &mut OuterStruct, Arg1: u64): u64 {
+L2:	loc0: u64
+B0:
+	0: CopyLoc[0](Arg0: &mut OuterStruct)
+	1: ImmBorrowField[0](OuterStruct.field: SomeStruct)
+	2: ImmBorrowField[1](SomeStruct.field: u64)
+	3: ReadRef
+	4: StLoc[2](loc0: u64)
+	5: CopyLoc[0](Arg0: &mut OuterStruct)
+	6: MutBorrowField[0](OuterStruct.field: SomeStruct)
+	7: ImmBorrowLoc[2](loc0: u64)
+	8: CopyLoc[1](Arg1: u64)
+	9: Call bar(&mut SomeStruct, &u64, u64): u64
+	10: Pop
+	11: MoveLoc[0](Arg0: &mut OuterStruct)
+	12: ImmBorrowField[0](OuterStruct.field: SomeStruct)
+	13: ImmBorrowField[1](SomeStruct.field: u64)
+	14: ReadRef
+	15: MoveLoc[1](Arg1: u64)
+	16: Add
+	17: Ret
+}
+
+bar(Arg0: &mut SomeStruct, Arg1: &u64, Arg2: u64): u64 {
+L3:	loc0: u64
+L4:	loc1: u64
+B0:
+	0: MoveLoc[1](Arg1: &u64)
+	1: ReadRef
+	2: CopyLoc[2](Arg2: u64)
+	3: Add
+	4: StLoc[3](loc0: u64)
+	5: CopyLoc[3](loc0: u64)
+	6: CopyLoc[0](Arg0: &mut SomeStruct)
+	7: MutBorrowField[1](SomeStruct.field: u64)
+	8: WriteRef
+	9: MoveLoc[3](loc0: u64)
+	10: MoveLoc[2](Arg2: u64)
+	11: Add
+	12: StLoc[4](loc1: u64)
+	13: CopyLoc[4](loc1: u64)
+	14: MoveLoc[0](Arg0: &mut SomeStruct)
+	15: MutBorrowField[1](SomeStruct.field: u64)
+	16: WriteRef
+	17: MoveLoc[4](loc1: u64)
+	18: Ret
+}
+
+public create_outer_struct(Arg0: u64): OuterStruct {
+B0:
+	0: MoveLoc[0](Arg0: u64)
+	1: Pack[0](SomeStruct)
+	2: Pack[1](OuterStruct)
+	3: Ret
+}
+
+}

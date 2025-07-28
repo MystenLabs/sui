@@ -6,9 +6,6 @@ use sui_sdk_types::ObjectId;
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 use crate::error::ObjectNotFoundError;
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMerge;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2beta::BatchGetObjectsRequest;
 use crate::proto::rpc::v2beta::BatchGetObjectsResponse;
@@ -17,6 +14,9 @@ use crate::proto::rpc::v2beta::Object;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
 
 type ValidationResult = Result<(Vec<(ObjectId, Option<u64>)>, FieldMaskTree), RpcError>;
 

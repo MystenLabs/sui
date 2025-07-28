@@ -15,7 +15,7 @@ use crate::ProgrammableTransactionBuilder;
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::transaction::ObjectArg;
 use sui_types::{base_types::ObjectID, object::Owner};
@@ -214,7 +214,8 @@ impl Workload<dyn Payload> for SlowWorkload {
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish(path)
             .build_and_sign(gas.2.as_ref());
-        let effects = proxy.execute_transaction_block(transaction).await.unwrap();
+        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let effects = execution_result.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, shared obj.
         assert_eq!(created.len() as u64, 3);
@@ -224,7 +225,15 @@ impl Workload<dyn Payload> for SlowWorkload {
             .unwrap();
 
         for o in &created {
-            let obj = proxy.get_object(o.0 .0).await.unwrap();
+            let obj = loop {
+                match proxy.get_object(o.0 .0).await {
+                    Ok(obj) => break obj,
+                    Err(e) => {
+                        tracing::debug!("Failed to get object {}: {}", o.0 .0, e);
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                }
+            };
             if let Some(tag) = obj.data.struct_tag() {
                 if tag.to_string().contains("::slow::Obj") {
                     self.shared_obj_ref = o.0;
@@ -259,5 +268,9 @@ impl Workload<dyn Payload> for SlowWorkload {
             .into_iter()
             .map(|b| Box::<dyn Payload>::from(Box::new(b)))
             .collect()
+    }
+
+    fn name(&self) -> &str {
+        "Slow"
     }
 }

@@ -9,11 +9,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{errors::PackageResult, package::PackageName};
-use anyhow::{Context, ensure};
-use clap::{Command, Parser, Subcommand};
-use move_core_types::identifier::Identifier;
-use move_package::source_package::layout::SourcePackageLayout;
+use crate::errors::PackageResult;
+use crate::{package::layout::SourcePackageLayout, schema::PackageName};
+use anyhow::Context;
+use clap::Parser;
 
 const MAINNET_CHAIN_ID: &str = "35834a8a";
 const TESTNET_CHAIN_ID: &str = "4c78adac";
@@ -29,10 +28,10 @@ pub struct New {
 impl New {
     pub fn execute(&self) -> PackageResult<()> {
         let path = match self.path {
-            Some(ref path) => path.join(&self.name.to_string()),
+            Some(ref path) => path.join(self.name.to_string()),
             None => {
                 let current_dir = std::env::current_dir()?;
-                current_dir.join(&self.name.to_string())
+                current_dir.join(self.name.to_string())
             }
         };
 

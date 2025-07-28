@@ -4,9 +4,10 @@
 use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
+use indexmap::IndexSet;
 use move_vm_types::values::VectorSpecialization;
-use std::{cell::OnceCell, collections::BTreeMap, fmt};
-use sui_types::base_types::ObjectID;
+use std::cell::OnceCell;
+use sui_types::base_types::{ObjectID, ObjectRef};
 
 //**************************************************************************************************
 // AST Nodes
@@ -14,28 +15,66 @@ use sui_types::base_types::ObjectID;
 
 #[derive(Debug)]
 pub struct Transaction {
-    pub inputs: Inputs,
+    /// Gathered BCS bytes from Pure inputs
+    pub bytes: IndexSet<Vec<u8>>,
+    // All input objects
+    pub objects: Vec<ObjectInput>,
+    /// All pure inputs
+    pub pure: Vec<PureInput>,
+    /// All receiving inputs
+    pub receiving: Vec<ReceivingInput>,
     pub commands: Commands,
 }
 
-pub type Inputs = Vec<(InputArg, InputType)>;
+/// The original index into the `input` vector of the transaction, before the inputs were split
+/// into their respective categories (objects, pure, or receiving).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InputIndex(pub u16);
+
+#[derive(Debug)]
+pub struct ObjectInput {
+    pub original_input_index: InputIndex,
+    pub arg: ObjectArg,
+    pub ty: Type,
+}
+
+pub type ByteIndex = usize;
+
+#[derive(Debug)]
+pub struct PureInput {
+    pub original_input_index: InputIndex,
+    // A index into `byte` table of BCS bytes
+    pub byte_index: ByteIndex,
+    // the type that the BCS bytes will be deserialized into
+    pub ty: Type,
+    // Information about where this constraint came from
+    pub constraint: BytesConstraint,
+}
+
+#[derive(Debug)]
+pub struct ReceivingInput {
+    pub original_input_index: InputIndex,
+    pub object_ref: ObjectRef,
+    pub ty: Type,
+    // Information about where this constraint came from
+    pub constraint: BytesConstraint,
+}
 
 pub type Commands = Vec<(Command, ResultType)>;
-
-pub type InputArg = L::InputArg;
 
 pub type ObjectArg = L::ObjectArg;
 
 pub type Type = L::Type;
 
-#[derive(Debug)]
-pub enum InputType {
-    Bytes(
-        /* all types that this must satisfy */
-        BTreeMap<Type, /* command, arg idx */ (u16, u16)>,
-    ),
-    Fixed(Type),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Information for a given constraint for input bytes
+pub struct BytesConstraint {
+    /// The command that first added this constraint
+    pub command: u16,
+    /// The argument in that command
+    pub argument: u16,
 }
+
 pub type ResultType = Vec<Type>;
 
 pub type Command = Spanned<Command_>;
@@ -67,10 +106,13 @@ pub struct MoveCall {
     pub arguments: Vec<Argument>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum Location {
+    TxContext,
     GasCoin,
-    Input(u16),
+    ObjectInput(u16),
+    PureInput(u16),
+    ReceivingInput(u16),
     Result(u16, u16),
 }
 
@@ -91,9 +133,14 @@ pub type Argument_ = (Argument__, Type);
 
 #[derive(Clone, Debug)]
 pub enum Argument__ {
+    /// Move or copy a value
     Use(Usage),
+    /// Borrow a value, i.e. `&x` or `&mut x`
     Borrow(/* mut */ bool, Location),
+    /// Read a value from a reference, i.e. `*&x`
     Read(Usage),
+    /// Freeze a mutable reference, making an `&t` from `&mut t`
+    Freeze(Usage),
 }
 
 //**************************************************************************************************
@@ -133,6 +180,7 @@ impl Argument__ {
         match self {
             Self::Use(usage) | Self::Read(usage) => usage.location(),
             Self::Borrow(_, location) => *location,
+            Self::Freeze(usage) => usage.location(),
         }
     }
 }
@@ -157,17 +205,5 @@ impl TryFrom<Type> for VectorSpecialization {
             Type::Signer | Type::Vector(_) | Type::Datatype(_) => VectorSpecialization::Container,
             Type::Reference(_, _) => return Err("unexpected reference in vector specialization"),
         })
-    }
-}
-
-impl fmt::Display for Location {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Location::GasCoin => write!(f, "GasCoin"),
-            Location::Input(idx) => write!(f, "Input({idx})"),
-            Location::Result(result_idx, nested_idx) => {
-                write!(f, "Result({result_idx}, {nested_idx})")
-            }
-        }
     }
 }

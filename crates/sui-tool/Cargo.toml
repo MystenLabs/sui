@@ -28,6 +28,7 @@ tracing.workspace = true
 prometheus.workspace = true
 object_store.workspace = true
 indicatif.workspace = true
+consensus-core.workspace = true
 
 anemo-cli.workspace = true
 anemo.workspace = true

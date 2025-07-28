@@ -8,7 +8,10 @@ use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::effects::TransactionEffectsAPI as _;
+use sui_types::error::SuiError;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -25,9 +28,7 @@ use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::authority_server::AuthorityServer;
 use crate::execution_scheduler::SchedulingSource;
-use crate::wait_for_effects_request::{
-    RejectReason, WaitForEffectsRequest, WaitForEffectsResponse,
-};
+use crate::transaction_driver::{WaitForEffectsRequest, WaitForEffectsResponse};
 
 use super::AuthorityServerHandle;
 
@@ -87,7 +88,7 @@ impl TestContext {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_wait_for_effects_position_mismatch() {
     // This test exercise the path where if the position of the transaction
     // triggered the execution differs from the position in the request,
@@ -97,21 +98,15 @@ async fn test_wait_for_effects_position_mismatch() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position1 = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
     let tx_position2 = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN + 1,
     };
-
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
-        transaction_digest: tx_digest,
-        transaction_position: tx_position1,
-        include_details: true,
-    })
-    .unwrap();
 
     let state_clone = test_context.state.clone();
     tokio::spawn(async move {
@@ -121,13 +116,20 @@ async fn test_wait_for_effects_position_mismatch() {
         state_clone
             .try_execute_immediately(
                 &transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
                 &epoch_store,
             )
             .await
             .unwrap()
             .0
     });
+
+    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+        transaction_digest: tx_digest,
+        consensus_position: Some(tx_position1),
+        include_details: true,
+    })
+    .unwrap();
 
     let response = test_context.client.wait_for_effects(request, None).await;
 
@@ -141,14 +143,14 @@ async fn test_wait_for_effects_post_commit_rejected() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -171,15 +173,15 @@ async fn test_wait_for_effects_post_commit_rejected() {
         .unwrap();
 
     match response {
-        WaitForEffectsResponse::Rejected { reason } => {
+        WaitForEffectsResponse::Rejected { error } => {
             // TODO(fastpath): Test reject reason.
-            assert_eq!(reason, RejectReason::None);
+            assert!(matches!(error, SuiError::Unknown(_)));
         }
         _ => panic!("Expected Rejected response"),
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_wait_for_effects_epoch_mismatch() {
     // This test exercises the path where the epoch of the request does not match the epoch
     // of the authority.
@@ -187,14 +189,14 @@ async fn test_wait_for_effects_epoch_mismatch() {
 
     let tx_digest = TransactionDigest::random();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 1,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -204,7 +206,7 @@ async fn test_wait_for_effects_epoch_mismatch() {
     assert!(response.is_err());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_wait_for_effects_timeout() {
     // This test exercises the path where the transaction is never executed.
     // The request will timeout.
@@ -212,14 +214,14 @@ async fn test_wait_for_effects_timeout() {
 
     let tx_digest = TransactionDigest::random();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -237,14 +239,14 @@ async fn test_wait_for_effects_quorum_rejected() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -265,15 +267,90 @@ async fn test_wait_for_effects_quorum_rejected() {
         .unwrap();
 
     match response {
-        WaitForEffectsResponse::Rejected { reason } => {
-            assert_eq!(reason, RejectReason::None);
+        WaitForEffectsResponse::Rejected { error } => {
+            assert!(matches!(error, SuiError::Unknown(_)));
         }
         _ => panic!("Expected Rejected response"),
     }
 }
 
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_wait_for_effects_fastpath_certified_only() {
+    // This test exercises the path where the transaction is only fastpath certified.
+    // Waiting on effects acknowledgement should still succeed with consensus position.
+    // But it should timeout without consensus position.
+    let test_context = TestContext::new().await;
+
+    let transaction = test_context.build_test_transaction();
+    let tx_digest = *transaction.digest();
+    let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
+        block: BlockRef::MIN,
+        index: TransactionIndex::MIN,
+    };
+
+    let state_clone = test_context.state.clone();
+    let exec_handle = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let epoch_store = state_clone.epoch_store_for_testing();
+        epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::FastpathCertified);
+        state_clone
+            .try_execute_immediately(
+                &transaction,
+                ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+                &epoch_store,
+            )
+            .await
+            .unwrap()
+            .0
+    });
+
+    // -------- First, test getting effects acknowledgement with consensus position. --------
+
+    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+        transaction_digest: tx_digest,
+        consensus_position: Some(tx_position),
+        // Also test the case where details are not requested.
+        include_details: false,
+    })
+    .unwrap();
+
+    let response = test_context
+        .client
+        .wait_for_effects(request, None)
+        .await
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+    let exec_effects = exec_handle.await.unwrap();
+    match response {
+        WaitForEffectsResponse::Executed {
+            details,
+            effects_digest,
+        } => {
+            assert!(details.is_none());
+            assert_eq!(effects_digest, exec_effects.digest());
+        }
+        _ => panic!("Expected Executed response"),
+    }
+
+    // -------- Then, test getting effects acknowledgement without consensus position. --------
+
+    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+        transaction_digest: tx_digest,
+        consensus_position: None,
+        include_details: true,
+    })
+    .unwrap();
+
+    let response = test_context.client.wait_for_effects(request, None).await;
+
+    assert!(response.is_err());
+}
+
 #[tokio::test]
-async fn test_wait_for_effects_fastpath_certified() {
+async fn test_wait_for_effects_fastpath_certified_then_executed() {
     // This test exercises the path where the transaction is first fastpath certified,
     // then executed right away.
     let test_context = TestContext::new().await;
@@ -281,14 +358,14 @@ async fn test_wait_for_effects_fastpath_certified() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: Some(tx_position),
         // Also test the case where details are not requested.
         include_details: false,
     })
@@ -335,25 +412,18 @@ async fn test_wait_for_effects_fastpath_certified() {
 #[tokio::test]
 async fn test_wait_for_effects_finalized() {
     telemetry_subscribers::init_for_testing();
-    // This test exercises the path where the transaction is first fastpath certified,
-    // then finalized, and then executed.
+    // This test exercises the path where after the transaction has been executed,
+    // it is possible to get acknowledgement of the execution with consensus position.
+    // And it is possible to get the full effects without consensus position.
     let test_context = TestContext::new().await;
 
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
-
-    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
-        transaction_digest: tx_digest,
-        transaction_position: tx_position,
-        // Also test the case where details are not requested.
-        include_details: false,
-    })
-    .unwrap();
 
     let state_clone = test_context.state.clone();
     let exec_handle = tokio::spawn(async move {
@@ -374,6 +444,16 @@ async fn test_wait_for_effects_finalized() {
             .0
     });
 
+    // -------- First, test getting effects acknowledgement with consensus position. --------
+
+    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+        transaction_digest: tx_digest,
+        consensus_position: Some(tx_position),
+        // Also test the case where details are not requested.
+        include_details: false,
+    })
+    .unwrap();
+
     let response = test_context
         .client
         .wait_for_effects(request, None)
@@ -393,6 +473,36 @@ async fn test_wait_for_effects_finalized() {
         }
         _ => panic!("Expected Executed response"),
     }
+
+    // -------- Then, test getting full effects without consensus position. --------
+
+    let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
+        transaction_digest: tx_digest,
+        consensus_position: None,
+        include_details: true,
+    })
+    .unwrap();
+
+    let response = test_context
+        .client
+        .wait_for_effects(request, None)
+        .await
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+    match response {
+        WaitForEffectsResponse::Executed {
+            details,
+            effects_digest,
+        } => {
+            let details = details.unwrap();
+            assert_eq!(effects_digest, exec_effects.digest());
+            assert_eq!(effects_digest, details.effects.digest());
+            assert_eq!(tx_digest, *details.effects.transaction_digest());
+        }
+        _ => panic!("Expected Executed response"),
+    }
 }
 
 #[tokio::test]
@@ -402,14 +512,14 @@ async fn test_wait_for_effects_expired() {
     let transaction = test_context.build_test_transaction();
     let tx_digest = *transaction.digest();
     let tx_position = ConsensusPosition {
+        epoch: EpochId::MIN,
         block: BlockRef::MIN,
         index: TransactionIndex::MIN,
     };
 
     let request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
-        epoch: 0,
         transaction_digest: tx_digest,
-        transaction_position: tx_position,
+        consensus_position: Some(tx_position),
         include_details: true,
     })
     .unwrap();
@@ -445,5 +555,5 @@ async fn test_wait_for_effects_expired() {
         .try_into()
         .unwrap();
 
-    assert!(matches!(response, WaitForEffectsResponse::Expired(_)));
+    assert!(matches!(response, WaitForEffectsResponse::Expired { .. }));
 }

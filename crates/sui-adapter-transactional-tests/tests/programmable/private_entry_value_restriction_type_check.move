@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests dirty check happens before type checking
+// in v1 execution, dirty check happened before type checking
 
 //# init --addresses test=0x0 --accounts A
 

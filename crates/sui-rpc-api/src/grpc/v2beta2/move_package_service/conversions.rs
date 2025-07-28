@@ -6,17 +6,17 @@
 // 1. The orphan rule prevents implementing From for external types
 // 2. Many conversions require additional context (e.g., package_id, module_name) that From traits cannot provide
 
-use crate::proto::rpc::v2beta2::{
-    datatype_descriptor::DatatypeKind, function_descriptor::Visibility, open_signature::Reference,
-    open_signature_body::Type as SignatureType, Ability, DatatypeDescriptor, FieldDescriptor,
-    FunctionDescriptor, Module, OpenSignature, OpenSignatureBody, TypeParameter, VariantDescriptor,
-};
 use crate::{Result, RpcError};
 use move_binary_format::file_format::{
     Ability as MoveAbility, AbilitySet as MoveAbilitySet, DatatypeTyParameter,
     Visibility as MoveVisibility,
 };
 use sui_package_resolver::{DataDef, FunctionDef, MoveData, VariantDef};
+use sui_rpc::proto::sui::rpc::v2beta2::{
+    datatype_descriptor::DatatypeKind, function_descriptor::Visibility, open_signature::Reference,
+    open_signature_body::Type as SignatureType, Ability, DatatypeDescriptor, FieldDescriptor,
+    FunctionDescriptor, Module, OpenSignature, OpenSignatureBody, TypeParameter, VariantDescriptor,
+};
 use sui_types::base_types::ObjectID;
 
 pub(crate) fn convert_error(e: sui_package_resolver::error::Error) -> RpcError {
@@ -62,11 +62,11 @@ pub(crate) fn convert_datatype(
     DatatypeDescriptor {
         type_name: Some(format!(
             "{}::{}::{}",
-            package_id.to_hex_literal(),
+            package_id.to_canonical_string(true),
             module_name,
             datatype_name
         )),
-        defining_id: Some(data_def.defining_id.to_hex_literal()),
+        defining_id: Some(data_def.defining_id.to_canonical_string(true)),
         module: Some(module_name.to_string()),
         name: Some(datatype_name.to_string()),
         abilities,
@@ -237,7 +237,7 @@ fn convert_open_signature_body(
         sui_package_resolver::OpenSignatureBody::Datatype(key, args) => {
             let type_name = format!(
                 "{}::{}::{}",
-                key.package.to_hex_literal(),
+                key.package.to_canonical_string(true),
                 key.module,
                 key.name
             );

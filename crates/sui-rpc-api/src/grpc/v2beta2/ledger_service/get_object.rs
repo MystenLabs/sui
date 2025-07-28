@@ -1,24 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prost_types::FieldMask;
-use sui_sdk_types::ObjectId;
-use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
-
 use crate::error::ObjectNotFoundError;
-use crate::field_mask::FieldMaskTree;
-use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMerge;
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::BatchGetObjectsRequest;
-use crate::proto::rpc::v2beta2::BatchGetObjectsResponse;
-use crate::proto::rpc::v2beta2::GetObjectRequest;
-use crate::proto::rpc::v2beta2::GetObjectResponse;
-use crate::proto::rpc::v2beta2::GetObjectResult;
-use crate::proto::rpc::v2beta2::Object;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
+use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskTree;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::GetObjectResult;
+use sui_rpc::proto::sui::rpc::v2beta2::Object;
+use sui_sdk_types::ObjectId;
+
+pub const READ_MASK_DEFAULT: &str = "object_id,version,digest";
 
 type ValidationResult = Result<(Vec<(ObjectId, Option<u64>)>, FieldMaskTree), RpcError>;
 
@@ -27,8 +27,7 @@ pub fn validate_get_object_requests(
     read_mask: Option<FieldMask>,
 ) -> ValidationResult {
     let read_mask = {
-        let read_mask =
-            read_mask.unwrap_or_else(|| FieldMask::from_str(GetObjectRequest::READ_MASK_DEFAULT));
+        let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
         read_mask.validate::<Object>().map_err(|path| {
             FieldViolation::new("read_mask")
                 .with_description(format!("invalid read_mask path: {path}"))
@@ -111,39 +110,21 @@ fn get_object_impl(
     let object = if let Some(version) = version {
         service
             .reader
-            .get_object_with_version(object_id, version)?
+            .inner()
+            .get_object_by_key(&object_id.into(), version.into())
             .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?
     } else {
         service
             .reader
-            .get_object(object_id)?
+            .inner()
+            .get_object(&object_id.into())
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?
     };
 
     let mut message = Object::default();
 
     if read_mask.contains(Object::JSON_FIELD.name) {
-        message.json = object
-            .as_struct()
-            .and_then(|s| {
-                let struct_tag = struct_tag_sdk_to_core(s.object_type().to_owned()).ok()?;
-                let layout = service
-                    .reader
-                    .inner()
-                    .get_struct_layout(&struct_tag)
-                    .ok()
-                    .flatten()?;
-                Some((layout, s.contents()))
-            })
-            .and_then(|(layout, contents)| {
-                sui_types::proto_value::ProtoVisitorBuilder::new(
-                    service.config.max_json_move_value_size(),
-                )
-                .deserialize_value(contents, &layout)
-                .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
-                .ok()
-                .map(Box::new)
-            });
+        message.json = crate::grpc::v2beta2::render_object_to_json(service, &object).map(Box::new);
     }
 
     message.merge(object, read_mask);

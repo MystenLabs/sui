@@ -7,20 +7,14 @@ pub use checked::*;
 mod checked {
     use crate::{
         adapter::substitute_package_id,
-        data_store::legacy::sui_data_store::SuiDataStore,
+        data_store::{PackageStore, legacy::sui_data_store::SuiDataStore},
         execution_mode::ExecutionMode,
         execution_value::{
             CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
             ensure_serialized_size,
         },
         gas_charger::GasCharger,
-        programmable_transactions::{
-            context::*,
-            trace_utils::{
-                trace_move_call_end, trace_move_call_start, trace_ptb_summary, trace_split_coins,
-                trace_transfer,
-            },
-        },
+        programmable_transactions::{context::*, trace_utils},
         static_programmable_transactions,
         type_resolver::TypeTagResolver,
     };
@@ -33,11 +27,10 @@ mod checked {
         file_format_common::VERSION_6,
         normalized,
     };
-    use move_core_types::language_storage::StructTag;
     use move_core_types::{
         account_address::AccountAddress,
         identifier::{IdentStr, Identifier},
-        language_storage::{ModuleId, TypeTag},
+        language_storage::{ModuleId, StructTag, TypeTag},
         u256::U256,
     };
     use move_trace_format::format::MoveTraceBuilder;
@@ -59,6 +52,9 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         SUI_FRAMEWORK_ADDRESS,
+        balance::{
+            BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
+        },
         base_types::{
             MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
             RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
@@ -68,7 +64,7 @@ mod checked {
         error::{ExecutionError, ExecutionErrorKind, command_argument_error},
         execution::{ExecutionTiming, ResultWithTimings},
         execution_config_utils::to_binary_config,
-        execution_status::{CommandArgumentError, PackageUpgradeError},
+        execution_status::{CommandArgumentError, PackageUpgradeError, TypeArgumentError},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
@@ -126,7 +122,11 @@ mod checked {
 
         match result {
             Ok(result) => Ok((result, timings)),
-            Err(e) => Err((e, timings)),
+            Err(e) => {
+                trace_utils::trace_execution_error(trace_builder_opt, e.to_string());
+
+                Err((e, timings))
+            }
         }
     }
 
@@ -152,7 +152,7 @@ mod checked {
             inputs,
         )?;
 
-        trace_ptb_summary(trace_builder_opt, &commands)?;
+        trace_utils::trace_ptb_summary::<Mode>(&mut context, trace_builder_opt, &commands)?;
 
         // execute commands
         let mut mode_results = Mode::empty_results();
@@ -209,7 +209,7 @@ mod checked {
                     );
                 };
 
-                let tag = to_type_tag(context, tag)?;
+                let tag = to_type_tag(context, tag, 0)?;
 
                 let elem_ty = context.load_type(&tag).map_err(|e| {
                     if context.protocol_config.convert_type_argument_error() {
@@ -223,6 +223,9 @@ mod checked {
                 let abilities = context.get_type_abilities(&ty)?;
                 // BCS layout for any empty vector should be the same
                 let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
+
+                trace_utils::trace_make_move_vec(context, trace_builder_opt, vec![], &ty)?;
+
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -238,9 +241,10 @@ mod checked {
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
+                let mut move_values = vec![];
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
-                        let tag = to_type_tag(context, tag)?;
+                        let tag = to_type_tag(context, tag, 0)?;
                         let elem_ty = context.load_type(&tag).map_err(|e| {
                             if context.protocol_config.convert_type_argument_error() {
                                 context.convert_type_argument_error(0, e)
@@ -256,6 +260,12 @@ mod checked {
                         let (idx, arg) = arg_iter.next().unwrap();
                         let obj: ObjectValue =
                             context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                        trace_utils::add_move_value_info_from_obj_value(
+                            context,
+                            trace_builder_opt,
+                            &mut move_values,
+                            &obj,
+                        )?;
                         let bound =
                             amplification_bound::<Mode>(context, &obj.type_, &elem_abilities)?;
                         obj.write_bcs_bytes(
@@ -267,6 +277,13 @@ mod checked {
                 };
                 for (idx, arg) in arg_iter {
                     let value: Value = context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
+                    trace_utils::add_move_value_info_from_value(
+                        context,
+                        trace_builder_opt,
+                        &mut move_values,
+                        &elem_ty,
+                        &value,
+                    )?;
                     check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
@@ -278,6 +295,9 @@ mod checked {
                 }
                 let ty = Type::Vector(Box::new(elem_ty));
                 let abilities = context.get_type_abilities(&ty)?;
+
+                trace_utils::trace_make_move_vec(context, trace_builder_opt, move_values, &ty)?;
+
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -299,7 +319,7 @@ mod checked {
                 let addr: SuiAddress =
                     context.by_value_arg(CommandKind::TransferObjects, objs.len(), addr_arg)?;
 
-                trace_transfer(context, trace_builder_opt, &objs)?;
+                trace_utils::trace_transfer(context, trace_builder_opt, &objs)?;
 
                 for obj in objs {
                     obj.ensure_public_transfer_eligible()?;
@@ -334,7 +354,13 @@ mod checked {
                     })
                     .collect::<Result<_, ExecutionError>>()?;
 
-                trace_split_coins(context, trace_builder_opt, &obj.type_, coin, &split_coins)?;
+                trace_utils::trace_split_coins(
+                    context,
+                    trace_builder_opt,
+                    &obj.type_,
+                    coin,
+                    &split_coins,
+                )?;
 
                 context.restore_arg::<Mode>(&mut argument_updates, coin_arg, Value::Object(obj))?;
                 split_coins
@@ -356,6 +382,7 @@ mod checked {
                     .enumerate()
                     .map(|(idx, arg)| context.by_value_arg(CommandKind::MergeCoins, idx + 1, arg))
                     .collect::<Result<_, _>>()?;
+                let mut input_infos = vec![];
                 for (idx, coin) in coins.into_iter().enumerate() {
                     if target.type_ != coin.type_ {
                         let e = ExecutionErrorKind::command_argument_error(
@@ -371,9 +398,24 @@ mod checked {
                             This should be a coin"
                         );
                     };
+                    trace_utils::add_coin_obj_info(
+                        trace_builder_opt,
+                        &mut input_infos,
+                        balance.value(),
+                        *id.object_id(),
+                    );
                     context.delete_id(*id.object_id())?;
                     target_coin.add(balance)?;
                 }
+
+                trace_utils::trace_merge_coins(
+                    context,
+                    trace_builder_opt,
+                    &target.type_,
+                    &input_infos,
+                    target_coin,
+                )?;
+
                 context.restore_arg::<Mode>(
                     &mut argument_updates,
                     target_arg,
@@ -389,7 +431,7 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
-                trace_move_call_start(trace_builder_opt);
+                trace_utils::trace_move_call_start(trace_builder_opt);
 
                 let arguments = context.splat_args(0, arguments)?;
 
@@ -399,7 +441,7 @@ mod checked {
                 // Convert type arguments to `Type`s
                 let mut loaded_type_arguments = Vec::with_capacity(type_arguments.len());
                 for (ix, type_arg) in type_arguments.into_iter().enumerate() {
-                    let type_arg = to_type_tag(context, type_arg)?;
+                    let type_arg = to_type_tag(context, type_arg, ix)?;
                     let ty = context
                         .load_type(&type_arg)
                         .map_err(|e| context.convert_type_argument_error(ix, e))?;
@@ -421,19 +463,25 @@ mod checked {
                     trace_builder_opt,
                 );
 
-                trace_move_call_end(trace_builder_opt);
+                trace_utils::trace_move_call_end(trace_builder_opt);
 
                 context.linkage_view.reset_linkage()?;
                 return_values?
             }
-            Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
-                context,
-                &mut argument_updates,
-                modules,
-                dep_ids,
-                trace_builder_opt,
-            )?,
+            Command::Publish(modules, dep_ids) => {
+                trace_utils::trace_publish_event(trace_builder_opt)?;
+
+                execute_move_publish::<Mode>(
+                    context,
+                    &mut argument_updates,
+                    modules,
+                    dep_ids,
+                    trace_builder_opt,
+                )?
+            }
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
+                trace_utils::trace_upgrade_event(trace_builder_opt)?;
+
                 let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     context,
@@ -599,7 +647,7 @@ mod checked {
             .gas_charger
             .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
-        let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
+        let mut modules = context.deserialize_modules(&module_bytes)?;
 
         // It should be fine that this does not go through ExecutionContext::fresh_id since the Move
         // runtime does not to know about new packages created, since Move objects and Move packages
@@ -720,7 +768,7 @@ mod checked {
         // Check that this package ID points to a package and get the package we're upgrading.
         let current_package = fetch_package(&context.state_view, &upgrade_ticket.package.bytes)?;
 
-        let mut modules = deserialize_modules::<Mode>(context, &module_bytes)?;
+        let mut modules = context.deserialize_modules(&module_bytes)?;
         let runtime_id = current_package.move_package().original_package_id();
         substitute_package_id(&mut modules, runtime_id)?;
 
@@ -746,6 +794,46 @@ mod checked {
             &modules,
             upgrade_ticket.policy,
         )?;
+        if context.protocol_config.check_for_init_during_upgrade() {
+            // find newly added modules to the package,
+            // and error if they have init functions
+            let current_module_names: BTreeSet<&str> = current_package
+                .move_package()
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let upgrade_module_names: BTreeSet<&str> = package
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let new_module_names = upgrade_module_names
+                .difference(&current_module_names)
+                .copied()
+                .collect::<BTreeSet<&str>>();
+            let new_modules = modules
+                .iter()
+                .filter(|m| {
+                    let name = m.identifier_at(m.self_handle().name).as_str();
+                    new_module_names.contains(name)
+                })
+                .collect::<Vec<&CompiledModule>>();
+            let new_module_has_init = new_modules.iter().any(|module| {
+                module.function_defs.iter().any(|fdef| {
+                    let fhandle = module.function_handle_at(fdef.function);
+                    let fname = module.identifier_at(fhandle.name);
+                    fname == INIT_FN_NAME
+                })
+            });
+            if new_module_has_init {
+                // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::FeatureNotYetSupported,
+                    "`init` in new modules on upgrade is not yet supported",
+                ));
+            }
+        }
 
         context.write_package(package);
         Ok(vec![Value::Raw(
@@ -942,29 +1030,6 @@ mod checked {
         Ok(result)
     }
 
-    #[allow(clippy::extra_unused_type_parameters)]
-    fn deserialize_modules<Mode: ExecutionMode>(
-        context: &mut ExecutionContext<'_, '_, '_>,
-        module_bytes: &[Vec<u8>],
-    ) -> Result<Vec<CompiledModule>, ExecutionError> {
-        let binary_config = to_binary_config(context.protocol_config);
-        let modules = module_bytes
-            .iter()
-            .map(|b| {
-                CompiledModule::deserialize_with_config(b, &binary_config)
-                    .map_err(|e| e.finish(Location::Undefined))
-            })
-            .collect::<VMResult<Vec<CompiledModule>>>()
-            .map_err(|e| context.convert_vm_error(e))?;
-
-        assert_invariant!(
-            !modules.is_empty(),
-            "input checker ensures package is not empty"
-        );
-
-        Ok(modules)
-    }
-
     fn publish_and_verify_modules(
         context: &mut ExecutionContext<'_, '_, '_>,
         package_id: ObjectID,
@@ -1005,13 +1070,13 @@ mod checked {
         Ok(())
     }
 
-    fn init_modules<Mode: ExecutionMode>(
+    fn init_modules<'a, Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
-        modules: &[CompiledModule],
+        modules: impl IntoIterator<Item = &'a CompiledModule>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
-        let modules_to_init = modules.iter().filter_map(|module| {
+        let modules_to_init = modules.into_iter().filter_map(|module| {
             for fdef in &module.function_defs {
                 let fhandle = module.function_handle_at(fdef.function);
                 let fname = module.identifier_at(fhandle.name);
@@ -1023,6 +1088,7 @@ mod checked {
         });
 
         for module_id in modules_to_init {
+            trace_utils::trace_move_call_start(trace_builder_opt);
             let return_values = execute_move_call::<Mode>(
                 context,
                 argument_updates,
@@ -1041,7 +1107,9 @@ mod checked {
             assert_invariant!(
                 return_values.is_empty(),
                 "init should not have return values"
-            )
+            );
+
+            trace_utils::trace_move_call_end(trace_builder_opt);
         }
 
         Ok(())
@@ -1154,10 +1222,31 @@ mod checked {
                 FunctionKind::NonEntry
             }
             (Visibility::Private | Visibility::Friend, false) => {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
+                // TODO: delete this as soon as the accumulator Move API is available
+                if context
+                    .protocol_config
+                    .allow_private_accumulator_entrypoints()
+                {
+                    // Allow access to private address balance functions in simtests only.
+                    let function = module.function_handle_at(fdef.function);
+                    let function_name = module.identifier_at(function.name);
+                    if (function_name == SEND_TO_ACCOUNT_FUNCTION_NAME
+                        || function_name == WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME)
+                        && module_id.name() == BALANCE_MODULE_NAME
+                    {
+                        FunctionKind::NonEntry
+                    } else {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::NonEntryFunctionInvoked,
+                            "Can only call `entry` or `public` functions",
+                        ));
+                    }
+                } else {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::NonEntryFunctionInvoked,
+                        "Can only call `entry` or `public` functions",
+                    ));
+                }
             }
         };
         let signature = context
@@ -1549,15 +1638,25 @@ mod checked {
     fn to_type_tag(
         context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
+        idx: usize,
     ) -> Result<TypeTag, ExecutionError> {
-        let type_tag_no_def_ids = to_type_tag_(context, type_input)?;
+        let type_tag_no_def_ids = to_type_tag_(context, type_input, idx)?;
         if context
             .protocol_config
             .resolve_type_input_ids_to_defining_id()
         {
+            let ix = if context
+                .protocol_config
+                .better_adapter_type_resolution_errors()
+            {
+                idx
+            } else {
+                0
+            };
+
             let ty = context
                 .load_type(&type_tag_no_def_ids)
-                .map_err(|e| context.convert_type_argument_error(0, e))?;
+                .map_err(|e| context.convert_type_argument_error(ix, e))?;
             context.get_type_tag(&ty)
         } else {
             Ok(type_tag_no_def_ids)
@@ -1567,11 +1666,56 @@ mod checked {
     fn to_type_tag_(
         context: &mut ExecutionContext<'_, '_, '_>,
         type_input: TypeInput,
+        idx: usize,
     ) -> Result<TypeTag, ExecutionError> {
         use TypeInput as I;
         use TypeTag as T;
+        Ok(match type_input {
+            I::Bool => T::Bool,
+            I::U8 => T::U8,
+            I::U16 => T::U16,
+            I::U32 => T::U32,
+            I::U64 => T::U64,
+            I::U128 => T::U128,
+            I::U256 => T::U256,
+            I::Address => T::Address,
+            I::Signer => T::Signer,
+            I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t, idx)?)),
+            I::Struct(s) => {
+                let StructInput {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = *s;
+                let type_params = type_params
+                    .into_iter()
+                    .map(|t| to_type_tag_(context, t, idx))
+                    .collect::<Result<_, _>>()?;
+                let (module, name) = resolve_datatype_names(context, address, module, name, idx)?;
+                T::Struct(Box::new(StructTag {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                }))
+            }
+        })
+    }
+
+    fn resolve_datatype_names(
+        context: &ExecutionContext<'_, '_, '_>,
+        addr: AccountAddress,
+        module: String,
+        name: String,
+        idx: usize,
+    ) -> Result<(Identifier, Identifier), ExecutionError> {
         let validate_identifiers = context.protocol_config.validate_identifier_inputs();
-        let to_ident = |s: String| {
+        let better_resolution_errors = context
+            .protocol_config
+            .better_adapter_type_resolution_errors();
+
+        let to_ident = |s| {
             if validate_identifiers {
                 Identifier::new(s).map_err(|e| {
                     ExecutionError::new_with_source(
@@ -1586,36 +1730,26 @@ mod checked {
             }
         };
 
-        Ok(match type_input {
-            I::Bool => T::Bool,
-            I::U8 => T::U8,
-            I::U16 => T::U16,
-            I::U32 => T::U32,
-            I::U64 => T::U64,
-            I::U128 => T::U128,
-            I::U256 => T::U256,
-            I::Address => T::Address,
-            I::Signer => T::Signer,
-            I::Vector(t) => T::Vector(Box::new(to_type_tag_(context, *t)?)),
-            I::Struct(s) => {
-                let StructInput {
-                    address,
-                    module,
-                    name,
-                    type_params,
-                } = *s;
-                let type_params = type_params
-                    .into_iter()
-                    .map(|t| to_type_tag_(context, t))
-                    .collect::<Result<_, _>>()?;
-                T::Struct(Box::new(StructTag {
-                    address,
-                    module: to_ident(module)?,
-                    name: to_ident(name)?,
-                    type_params,
-                }))
-            }
-        })
+        let module_ident = to_ident(module.clone())?;
+        let name_ident = to_ident(name.clone())?;
+
+        if better_resolution_errors
+            && context
+                .linkage_view
+                .get_package(&addr.into())
+                .ok()
+                .flatten()
+                .is_none_or(|pkg| !pkg.type_origin_map().contains_key(&(module, name)))
+        {
+            return Err(ExecutionError::from_kind(
+                ExecutionErrorKind::TypeArgumentError {
+                    argument_idx: idx as u16,
+                    kind: TypeArgumentError::TypeNotFound,
+                },
+            ));
+        }
+
+        Ok((module_ident, name_ident))
     }
 
     fn get_datatype_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {

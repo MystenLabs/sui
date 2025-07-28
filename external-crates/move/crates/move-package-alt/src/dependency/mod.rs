@@ -9,17 +9,21 @@ mod resolve;
 pub use resolve::{ResolvedDependency, ResolverError};
 
 mod pin;
-pub use pin::{PinnedDependencyInfo, pin};
+pub use pin::PinnedDependencyInfo;
 
 mod fetch;
-pub use fetch::FetchedDependency;
+pub use fetch::{FetchError, FetchedDependency};
 
 mod dependency_set;
 pub use dependency_set::DependencySet;
 
-use crate::{errors::FileHandle, schema::EnvironmentName, schema::PublishedID};
+use crate::{
+    errors::FileHandle,
+    schema::{EnvironmentName, PackageName, PublishAddresses},
+};
 
-use move_core_types::account_address::AccountAddress;
+// TODO(refactor): instead of `Dependency<DepInfo>`, we should just have `DependencyContext`, and
+// the dependency types will hold one of those and pass it around.
 
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
 /// fields) with additional metadata about how the dependency is used (such as the source file,
@@ -39,11 +43,14 @@ struct Dependency<DepInfo> {
     /// `use_environment` variable would be `testnet`
     use_environment: EnvironmentName,
 
+    /// The `rename-from` field for the dependency
+    rename_from: Option<PackageName>,
+
     /// Was this dependency written with `override = true` in its original manifest?
     is_override: bool,
 
     /// Does the original manifest override the published address?
-    published_at: Option<PublishedID>,
+    addresses: Option<PublishAddresses>,
 
     /// What manifest or lockfile does this dependency come from?
     containing_file: FileHandle,
@@ -56,12 +63,17 @@ impl<T> Dependency<T> {
             dep_info: f(self.dep_info),
             use_environment: self.use_environment,
             is_override: self.is_override,
-            published_at: self.published_at,
+            addresses: self.addresses,
             containing_file: self.containing_file,
+            rename_from: self.rename_from,
         }
     }
 
     pub fn use_environment(&self) -> &EnvironmentName {
         &self.use_environment
+    }
+
+    pub fn rename_from(&self) -> &Option<PackageName> {
+        &self.rename_from
     }
 }

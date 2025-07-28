@@ -1,2 +1,0 @@
-[dependencies]
-A = { local = "../a" }

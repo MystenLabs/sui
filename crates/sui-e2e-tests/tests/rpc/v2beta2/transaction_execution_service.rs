@@ -3,13 +3,13 @@
 
 use prost_types::FieldMask;
 use sui_macros::sim_test;
-use sui_rpc_api::field_mask::FieldMaskUtil;
-use sui_rpc_api::proto::rpc::v2beta2::transaction_execution_service_client::TransactionExecutionServiceClient;
-use sui_rpc_api::proto::rpc::v2beta2::Bcs;
-use sui_rpc_api::proto::rpc::v2beta2::ExecuteTransactionRequest;
-use sui_rpc_api::proto::rpc::v2beta2::ExecuteTransactionResponse;
-use sui_rpc_api::proto::rpc::v2beta2::Transaction;
-use sui_rpc_api::proto::rpc::v2beta2::UserSignature;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::sui::rpc::v2beta2::transaction_execution_service_client::TransactionExecutionServiceClient;
+use sui_rpc::proto::sui::rpc::v2beta2::Bcs;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecuteTransactionRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::ExecuteTransactionResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
 use sui_sdk_types::BalanceChange;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;

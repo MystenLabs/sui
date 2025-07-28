@@ -934,7 +934,7 @@ mod tests {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
         let mut commit_syncer = CommitSyncer::new(
             context,
             core_thread_dispatcher,

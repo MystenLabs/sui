@@ -81,6 +81,12 @@ fn is_random_or_random_generator(sp!(_, t): &N::Type) -> Option<&str> {
                 None
             }
         }
-        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => None,
+        T::Unit
+        | T::Param(_)
+        | T::Var(_)
+        | T::Anything
+        | T::Void
+        | T::UnresolvedError
+        | T::Fun(_, _) => None,
     }
 }

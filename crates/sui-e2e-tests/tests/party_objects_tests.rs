@@ -18,6 +18,10 @@ use tracing::info;
 /// Delete a party object as the object owner.
 #[sim_test]
 async fn party_object_deletion() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -56,6 +60,10 @@ async fn party_object_deletion() {
 
 #[sim_test]
 async fn party_object_deletion_multiple_times() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_deletions = 20;
@@ -122,12 +130,16 @@ async fn party_object_deletion_multiple_times() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
 #[sim_test]
 async fn party_object_deletion_multiple_times_cert_racing() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_deletions = 10;
@@ -194,13 +206,17 @@ async fn party_object_deletion_multiple_times_cert_racing() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
 /// Transfer a party object as the object owner.
 #[sim_test]
 async fn party_object_transfer() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -249,6 +265,10 @@ async fn party_object_transfer() {
 
 #[sim_test]
 async fn party_object_transfer_multiple_times() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_transfers = 20;
@@ -316,7 +336,7 @@ async fn party_object_transfer_multiple_times() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
@@ -329,6 +349,10 @@ async fn party_object_transfer_multiple_times() {
 /// 4. Execute the remaining two.
 #[sim_test]
 async fn party_object_transfer_multi_certs() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     // cause random delay just before tx is executed (to explore all orders)
@@ -450,13 +474,17 @@ async fn party_object_transfer_multi_certs() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[repeat_tx_a_digest, repeat_tx_b_digest])
+        .notify_read_executed_effects("", &[repeat_tx_a_digest, repeat_tx_b_digest])
         .await;
 }
 
 /// Use a party object immutably.
 #[sim_test]
 async fn party_object_read() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     // Create a test cluster with enough gas coins for the below.
@@ -597,7 +625,7 @@ async fn party_object_read() {
     let effects = fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&all_digests)
+        .notify_read_executed_effects("", &all_digests)
         .await;
     assert_eq!(effects.len(), all_digests.len());
     for effect in effects {
@@ -609,13 +637,17 @@ async fn party_object_read() {
 /// indexes
 #[sim_test]
 async fn party_object_grpc() {
-    use sui_rpc_api::field_mask::FieldMask;
-    use sui_rpc_api::field_mask::FieldMaskUtil;
-    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
-    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
-    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
-    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
-    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
+    use sui_rpc::field::FieldMask;
+    use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
+    use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
 
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -652,7 +684,9 @@ async fn party_object_grpc() {
         })
         .await
         .unwrap()
-        .into_inner();
+        .into_inner()
+        .object
+        .unwrap();
     let original_owner = resp.owner.unwrap();
     assert_eq!(original_owner.kind(), OwnerKind::ConsensusAddress);
     assert!(original_owner.address.is_some());
@@ -690,7 +724,7 @@ async fn party_object_grpc() {
         .effects
         .unwrap();
 
-    // Once we've transfered the object to another address we need to make sure that its owner is
+    // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
     let resp = ledger_service_client
         .get_object(GetObjectRequest {
@@ -707,7 +741,9 @@ async fn party_object_grpc() {
         })
         .await
         .unwrap()
-        .into_inner();
+        .into_inner()
+        .object
+        .unwrap();
     let new_owner = resp.owner.unwrap();
     assert_eq!(new_owner.kind(), OwnerKind::ConsensusAddress);
     assert_eq!(new_owner.address, Some(SuiAddress::ZERO.to_string()));
@@ -742,24 +778,28 @@ async fn party_object_grpc() {
 /// selection
 #[sim_test]
 async fn party_coin_grpc() {
-    use sui_rpc_api::field_mask::FieldMask;
-    use sui_rpc_api::field_mask::FieldMaskUtil;
-    use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
-    use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
-    use sui_rpc_api::proto::rpc::v2alpha::SimulateTransactionRequest;
-    use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
-    use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
-    use sui_rpc_api::proto::rpc::v2beta::Argument;
-    use sui_rpc_api::proto::rpc::v2beta::Command;
-    use sui_rpc_api::proto::rpc::v2beta::GetObjectRequest;
-    use sui_rpc_api::proto::rpc::v2beta::Input;
-    use sui_rpc_api::proto::rpc::v2beta::MoveCall;
-    use sui_rpc_api::proto::rpc::v2beta::ProgrammableTransaction;
-    use sui_rpc_api::proto::rpc::v2beta::Transaction;
-    use sui_rpc_api::proto::rpc::v2beta::TransactionKind;
+    use sui_rpc::field::FieldMask;
+    use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_client::LedgerServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient;
+    use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
+    use sui_rpc::proto::sui::rpc::v2beta2::Argument;
+    use sui_rpc::proto::sui::rpc::v2beta2::Command;
+    use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::Input;
+    use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::MoveCall;
+    use sui_rpc::proto::sui::rpc::v2beta2::ProgrammableTransaction;
+    use sui_rpc::proto::sui::rpc::v2beta2::SimulateTransactionRequest;
+    use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
+    use sui_rpc::proto::sui::rpc::v2beta2::TransactionKind;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
     use sui_types::Identifier;
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
 
     let cluster = TestClusterBuilder::new().build().await;
     let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
@@ -835,7 +875,9 @@ async fn party_coin_grpc() {
         })
         .await
         .unwrap()
-        .into_inner();
+        .into_inner()
+        .object
+        .unwrap();
     let actual_owner = resp.owner.unwrap();
     assert_eq!(actual_owner.kind(), OwnerKind::ConsensusAddress);
     assert_eq!(actual_owner.address(), recipient.to_string());
@@ -844,6 +886,13 @@ async fn party_coin_grpc() {
     let objects = live_data_service_client
         .list_owned_objects(ListOwnedObjectsRequest {
             owner: Some(recipient.to_string()),
+            read_mask: Some(FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "owner",
+                "object_type",
+            ])),
             ..Default::default()
         })
         .await
@@ -915,6 +964,10 @@ async fn party_coin_grpc() {
 /// indexes
 #[sim_test]
 async fn party_object_jsonrpc() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, object) =
@@ -974,7 +1027,7 @@ async fn party_object_jsonrpc() {
         .effects
         .unwrap();
 
-    // Once we've transfered the object to another address we need to make sure that its owner is
+    // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
     let object = client
         .read_api()

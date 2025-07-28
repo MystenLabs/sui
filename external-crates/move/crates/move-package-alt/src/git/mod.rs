@@ -4,6 +4,5 @@
 
 mod cache;
 mod errors;
-mod sha;
 
-pub use {cache::*, errors::*, sha::*};
+pub use {cache::*, errors::*};

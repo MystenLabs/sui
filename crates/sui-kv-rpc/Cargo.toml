@@ -16,6 +16,7 @@ mysten-metrics.workspace = true
 mysten-network.workspace = true
 sui-kvstore.workspace = true
 sui-rpc-api.workspace = true
+sui-rpc.workspace = true
 sui-types.workspace = true
 sui-sdk-types.workspace = true
 telemetry-subscribers.workspace = true

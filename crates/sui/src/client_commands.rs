@@ -5,7 +5,6 @@ use crate::{
     clever_error_rendering::render_clever_error_opt,
     client_ptb::ptb::PTB,
     displays::Pretty,
-    key_identity::{get_identity_address, KeyIdentity},
     upgrade_compatibility::check_compatibility,
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
@@ -27,6 +26,7 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 use reqwest::StatusCode;
+use sui_replay_2 as SR2;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_verifier_meter::Scope;
@@ -49,6 +49,7 @@ use sui_json_rpc_types::{
     SuiProtocolConfigValue, SuiRawData, SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_conflicting_addresses, check_invalid_dependencies,
@@ -59,7 +60,6 @@ use sui_package_management::{
     system_package_versions::{latest_system_packages, system_packages_for_protocol},
     LockCommand, PublishedAtError,
 };
-use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
@@ -102,10 +102,6 @@ use tabled::{
 use move_symbol_pool::Symbol;
 use sui_types::digests::ChainIdentifier;
 use tracing::{debug, info};
-
-#[path = "unit_tests/profiler_tests.rs"]
-#[cfg(test)]
-mod profiler_tests;
 
 static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
@@ -613,19 +609,6 @@ pub enum SuiClientCommands {
         address_override: Option<ObjectID>,
     },
 
-    /// Profile the gas usage of a transaction. Unless an output filepath is not specified, outputs a file `gas_profile_{tx_digest}_{unix_timestamp}.json` which can be opened in a flamegraph tool such as speedscope.
-    #[clap(name = "profile-transaction")]
-    ProfileTransaction {
-        /// The digest of the transaction to replay
-        #[arg(long, short)]
-        tx_digest: String,
-
-        /// If specified, overrides the filepath of the output profile, for example -- /temp/my_profile_name.json will write output to `/temp/my_profile_name_{tx_digest}_{unix_timestamp}.json`
-        /// If an output filepath is not specified, it will output a file `gas_profile_{tx_digest}_{unix_timestamp}.json` to the working directory
-        #[arg(long, short)]
-        profile_output: Option<PathBuf>,
-    },
-
     /// Remove an existing address by its alias or hexadecimal string.
     #[clap(name = "remove-address")]
     RemoveAddress { alias_or_address: String },
@@ -645,13 +628,19 @@ pub enum SuiClientCommands {
         #[arg(long)]
         ptb_info: bool,
 
-        /// Optional version of the executor to use, if not specified defaults to the one originally used for the transaction.
-        #[arg(long, short, allow_hyphen_values = true)]
-        executor_version: Option<i64>,
+        /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
 
-        /// Optional protocol version to use, if not specified defaults to the one originally used for the transaction.
-        #[arg(long, short, allow_hyphen_values = true)]
-        protocol_version: Option<i64>,
+        /// Whether to trace the transaction execution. Generated traces will be saved in the output
+        /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
+        #[arg(long = "trace", default_value = "false")]
+        trace: bool,
+
+        /// Whether existing artifacts that were generated from a previous replay of the transaction
+        /// should be overwritten or an error raised if they already exist.
+        #[arg(long, default_value = "false")]
+        overwrite_existing: bool,
     },
 
     /// Replay transactions listed in a file.
@@ -664,22 +653,20 @@ pub enum SuiClientCommands {
         /// If an error is encountered during a transaction, this specifies whether to terminate or continue
         #[arg(long, short)]
         terminate_early: bool,
-    },
 
-    /// Replay all transactions in a range of checkpoints.
-    #[command(name = "replay-checkpoint")]
-    ReplayCheckpoints {
-        /// The starting checkpoint sequence number of the range of checkpoints to replay
-        #[arg(long, short)]
-        start: u64,
+        /// Whether to trace the transaction execution. Generated traces will be saved in the output
+        /// directory (or `<cur_dir>/.replay/<digest>` if none provided).
+        #[arg(long = "trace", default_value = "false")]
+        trace: bool,
 
-        /// The ending checkpoint sequence number of the range of checkpoints to replay
+        /// The output directory for the replay artifacts. Defaults `<cur_dir>/.replay/<digest>`.
         #[arg(long, short)]
-        end: u64,
+        output_dir: Option<PathBuf>,
 
-        /// If an error is encountered during a transaction, this specifies whether to terminate or continue
-        #[arg(long, short)]
-        terminate_early: bool,
+        /// Whether existing artifacts that were generated from a previous replay of the transaction
+        /// should be overwritten or an error raised if they already exist.
+        #[arg(long, default_value = "false")]
+        overwrite_existing: bool,
     },
 }
 
@@ -762,85 +749,66 @@ impl SuiClientCommands {
         context: &mut WalletContext,
     ) -> Result<SuiClientCommandResult, anyhow::Error> {
         let ret = match self {
-            SuiClientCommands::ProfileTransaction {
-                tx_digest,
-                profile_output,
-            } => {
-                move_vm_profiler::tracing_feature_disabled! {
-                    bail!(
-                        "tracing feature is not enabled, rebuild or reinstall with \
-                         --features tracing"
-                    );
-                };
-
-                let cmd = ReplayToolCommand::ProfileTransaction {
-                    tx_digest,
-                    executor_version: None,
-                    protocol_version: None,
-                    profile_output,
-                    config_objects: None,
-                };
-                let rpc = context.get_active_env()?.rpc.clone();
-                let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
-                        .await?;
-                // this will be displayed via trace info, so no output is needed here
-                SuiClientCommandResult::NoOutput
-            }
             SuiClientCommands::ReplayTransaction {
                 tx_digest,
                 gas_info: _,
                 ptb_info: _,
-                executor_version,
-                protocol_version,
+                output_dir,
+                trace,
+                overwrite_existing,
             } => {
-                let cmd = ReplayToolCommand::ReplayTransaction {
-                    tx_digest,
-                    show_effects: true,
-                    executor_version,
-                    protocol_version,
-                    config_objects: None,
+                let node = get_replay_node(context).await?;
+                let cmd2 = SR2::ReplayConfig {
+                    digest: Some(tx_digest.clone()),
+                    digests_path: None,
+                    node,
+                    trace,
+                    terminate_early: false,
+                    output_dir,
+                    show_effects: false,
+                    overwrite_existing,
                 };
 
-                let rpc = context.get_active_env()?.rpc.clone();
-                let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
-                        .await?;
+                let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
+
+                // show effects and gas
+                SR2::print_effects_or_fork(
+                    &tx_digest,
+                    &artifact_path,
+                    true,
+                    &mut std::io::stdout(),
+                )?;
+
                 // this will be displayed via trace info, so no output is needed here
                 SuiClientCommandResult::NoOutput
             }
             SuiClientCommands::ReplayBatch {
                 path,
                 terminate_early,
+                trace,
+                output_dir,
+                overwrite_existing,
             } => {
-                let cmd = ReplayToolCommand::ReplayBatch {
-                    path,
+                let node = get_replay_node(context).await?;
+                let cmd2 = SR2::ReplayConfig {
+                    digest: None,
+                    digests_path: Some(path),
+                    node,
+                    trace,
                     terminate_early,
-                    num_tasks: 16,
-                    persist_path: None,
+                    output_dir,
+                    show_effects: false,
+                    overwrite_existing,
                 };
-                let rpc = context.get_active_env()?.rpc.clone();
-                let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
-                        .await?;
-                // this will be displayed via trace info, so no output is needed here
-                SuiClientCommandResult::NoOutput
-            }
-            SuiClientCommands::ReplayCheckpoints {
-                start,
-                end,
-                terminate_early,
-            } => {
-                let cmd = ReplayToolCommand::ReplayCheckpoints {
-                    start,
-                    end,
-                    terminate_early,
-                    max_tasks: 16,
-                };
-                let rpc = context.get_active_env()?.rpc.clone();
-                let _command_result =
-                    sui_replay::execute_replay_command(Some(rpc), false, false, None, None, cmd)
-                        .await?;
+
+                let artifact_path = SR2::handle_replay_config(&cmd2, USER_AGENT).await?;
+
+                println!(
+                    "Replayed transactions from {}. Artifacts stored under {}",
+                    cmd2.digests_path.as_ref().unwrap().display(),
+                    artifact_path.display()
+                );
+
                 // this will be displayed via trace info, so no output is needed here
                 SuiClientCommandResult::NoOutput
             }
@@ -868,7 +836,7 @@ impl SuiClientCommands {
                 coin_type,
                 with_coins,
             } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let client = context.get_client().await?;
 
                 let mut objects: Vec<Coin> = Vec::new();
@@ -1382,7 +1350,7 @@ impl SuiClientCommands {
                 processing,
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
-                let to = get_identity_address(Some(to), context)?;
+                let to = context.get_identity_address(Some(to))?;
                 let client = context.get_client().await?;
 
                 let tx_kind = client
@@ -1414,7 +1382,7 @@ impl SuiClientCommands {
                 processing,
             } => {
                 let signer = context.get_object_owner(&object_id).await?;
-                let to = get_identity_address(Some(to), context)?;
+                let to = context.get_identity_address(Some(to))?;
                 let client = context.get_client().await?;
 
                 let tx_kind = client
@@ -1463,7 +1431,7 @@ impl SuiClientCommands {
                 );
                 let recipients = recipients
                     .into_iter()
-                    .map(|x| get_identity_address(Some(x), context))
+                    .map(|x| context.get_identity_address(Some(x)))
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
@@ -1519,7 +1487,7 @@ impl SuiClientCommands {
                 );
                 let recipients = recipients
                     .into_iter()
-                    .map(|x| get_identity_address(Some(x), context))
+                    .map(|x| context.get_identity_address(Some(x)))
                     .collect::<Result<Vec<SuiAddress>, anyhow::Error>>()
                     .map_err(|e| anyhow!("{e}"))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
@@ -1555,7 +1523,7 @@ impl SuiClientCommands {
                     !input_coins.is_empty(),
                     "PayAllSui transaction requires a non-empty list of input coins"
                 );
-                let recipient = get_identity_address(Some(recipient), context)?;
+                let recipient = context.get_identity_address(Some(recipient))?;
                 let signer = context.get_object_owner(&input_coins[0]).await?;
                 let client = context.get_client().await?;
 
@@ -1577,7 +1545,7 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::Objects { address } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let client = context.get_client().await?;
                 let mut objects: Vec<SuiObjectResponse> = Vec::new();
                 let mut cursor = None;
@@ -1610,7 +1578,7 @@ impl SuiClientCommands {
                 derivation_path,
                 word_length,
             } => {
-                let (address, phrase, scheme) = context.config.keystore.generate_and_add_new_key(
+                let (address, phrase, scheme) = context.config.keystore.generate(
                     key_scheme,
                     alias.clone(),
                     derivation_path,
@@ -1619,7 +1587,7 @@ impl SuiClientCommands {
 
                 let alias = match alias {
                     Some(x) => x,
-                    None => context.config.keystore.get_alias_by_address(&address)?,
+                    None => context.config.keystore.get_alias(&address)?,
                 };
 
                 SuiClientCommandResult::NewAddress(NewAddressOutput {
@@ -1631,23 +1599,17 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::RemoveAddress { alias_or_address } => {
-                let address: SuiAddress = match context
-                    .config
-                    .keystore
-                    .get_address_by_alias(alias_or_address.clone())
-                {
-                    Ok(addr) => *addr,
-                    Err(_) => SuiAddress::from_str(&alias_or_address)
-                        .map_err(|e| anyhow!("Invalid address or alias: {}", e))?,
-                };
+                let identity = KeyIdentity::from_str(&alias_or_address)
+                    .map_err(|e| anyhow!("Invalid address or alias: {}", e))?;
+                let address: SuiAddress = context.config.keystore.get_by_identity(identity)?;
 
-                context.config.keystore.remove_key(address)?;
+                context.config.keystore.remove(address)?;
 
                 SuiClientCommandResult::RemoveAddress(RemoveAddressOutput { alias_or_address })
             }
 
             SuiClientCommands::Gas { address } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let coins = context
                     .gas_objects(address)
                     .await?
@@ -1658,7 +1620,7 @@ impl SuiClientCommands {
                 SuiClientCommandResult::Gas(coins)
             }
             SuiClientCommands::Faucet { address, url } => {
-                let address = get_identity_address(address, context)?;
+                let address = context.get_identity_address(address)?;
                 let url = if let Some(url) = url {
                     ensure!(
                         !url.starts_with("https://faucet.testnet.sui.io"),
@@ -1834,7 +1796,7 @@ impl SuiClientCommands {
                 }
 
                 if let Some(address) = address {
-                    let address = get_identity_address(Some(address), context)?;
+                    let address = context.get_identity_address(Some(address))?;
                     if !context.config.keystore.addresses().contains(&address) {
                         return Err(anyhow!("Address {} not managed by wallet", address));
                     }
@@ -3548,4 +3510,20 @@ pub(crate) async fn pkg_tree_shake(
     });
 
     Ok(())
+}
+
+async fn get_replay_node(context: &mut WalletContext) -> Result<SR2::Node, anyhow::Error> {
+    let chain_id = context
+        .get_client()
+        .await?
+        .read_api()
+        .get_chain_identifier()
+        .await?;
+    let chain_id = ChainIdentifier::from_chain_short_id(&chain_id)
+        .ok_or_else(|| anyhow::anyhow!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently: {chain_id}"))?;
+    Ok(match chain_id.chain() {
+        Chain::Mainnet => SR2::Node::Mainnet,
+        Chain::Testnet => SR2::Node::Testnet,
+        Chain::Unknown => bail!("Unsupported chain identifier for replay -- only testnet and mainnet are supported currently"),
+    })
 }

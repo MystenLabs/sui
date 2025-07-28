@@ -58,18 +58,18 @@ A Full node that starts from scratch can replay (and thus re-verify) transaction
 
 A Sui Full node that fails to retrieve checkpoints from its peers via state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a Full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
-## Sui Full node pruning policies
+## Sui node pruning policies
 
-As described previously, sustainable disk usage requires Sui Full nodes to prune the information about historic object versions as well as historic transactions with the corresponding effects and events, including old checkpoint data.
+As described previously, sustainable disk usage requires Sui nodes (validators and full nodes) to prune the information about historic object versions as well as historic transactions with the corresponding effects and events, including old checkpoint data.
 
 Both transaction and object pruners run in the background. The logical deletion of entries from RocksDB ultimately triggers the physical compaction of data on disk, which is governed by RocksDB background jobs: the pruning effect on disk usage is not immediate and might take multiple days.
 
 To learn more about object pruning policies, see [Object pruning](#object-pruning). You can configure the pruner in two modes:
-* **moderate pruning** (`num-epochs-to-retain: 5`): Preferred option. Sui retains object versions for 5 epochs.
+* **aggressive pruning** (`num-epochs-to-retain: 0`): Sui prunes old object versions as soon as possible. This mode should only be used when the node does not serve read queries.
 * **epoch-based pruning** (`num-epochs-to-retain: X`): Sui prunes old object versions after X epochs.
 
 :::tip 
-Keeping some history (5 epochs) provides better RPC performance as it allows more lookups to happen from local disk rather than from remote storage.
+Keeping some history (5 epochs) provides better RPC performance on full nodes as it allows more lookups to happen from local disk rather than from remote storage.
 :::
 
 To learn more about transaction pruning policies, see [Transaction pruning](#transaction-pruning). To configure transaction pruning, specify the `num-epochs-to-retain-for-checkpoints: X` config option. The checkpoints, including their transactions, effects and events are pruned up to X epochs ago. We suggest setting transaction pruning to 2 epochs.
@@ -157,29 +157,27 @@ If you prune transactions, Archival nodes can help ensure lagging peer nodes don
 
 Use the examples in this section to configure your Sui Full node. You can copy the examples, and then, optionally, modify the values as appropriate for your environment. 
 
-### Validator and minimal Full node
+### Validator and State Sync full node
 
-This configuration keeps disk usage to a minimum. It is suitable for most validators. A Full node with this configuration cannot answer queries that require indexing or historic data.
+This configuration keeps disk usage to a minimum. It is suitable for validators and state sync full nodes that do not serve read traffic. Full nodes with this configuration cannot answer queries that require indexing or historic data.
 
 ```yaml
 # Do not generate or maintain indexing of Sui data on the node
 enable-index-processing: false
 
 authority-store-pruning-config:
-  # Retain 5 epochs of object versions for better RPC performance
-  num-epochs-to-retain: 5
+  # Prune obsolete object versions immediately.
+  num-epochs-to-retain: 0
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
 ```
 
-### Full node with indexing but no history
+### Full node with indexing but limited object history
 
-This setup manages secondary indexing in addition to the latest state, but aggressively prunes historic data. A Full node with this configuration:
+This setup manages secondary indexing in addition to the latest state, but prunes historical data after a few epochs. A full node with this configuration:
 
 - Answers RPC queries that require indexing, like `suix_getBalance()`.
 - Answers RPC queries that require historic transactions via a fallback to retrieve the data from a remote key-value store: `sui_getTransactionBlock()`.
-- Cannot answer RPC queries that require historic object versions: `sui_tryGetPastObject()`.
-  - The `showBalanceChanges` filter of `sui_getTransactionBlock()` query relies on historic object versions, so it can't work with this configuration.
 
 ```yaml
 authority-store-pruning-config:

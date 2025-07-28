@@ -234,6 +234,9 @@ async fn test_passive_reconfig_mainnet_smoke_test() {
 
 #[sim_test]
 async fn test_passive_reconfig_testnet_smoke_test() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
     do_test_passive_reconfig(Some(Chain::Testnet)).await;
 }
 
@@ -419,6 +422,9 @@ async fn test_create_advance_epoch_tx_race() {
     // proceeded with reconfiguration.
     sleep(Duration::from_secs(1)).await;
     reconfig_delay_tx.send(()).unwrap();
+
+    // wait for reconfiguration to complete
+    test_cluster.wait_for_epoch(None).await;
 }
 
 #[sim_test]

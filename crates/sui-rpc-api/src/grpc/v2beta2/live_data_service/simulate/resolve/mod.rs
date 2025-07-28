@@ -6,8 +6,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::error::ObjectNotFoundError;
-use crate::proto::google::rpc::bad_request::FieldViolation;
-use crate::proto::rpc::v2beta2::Transaction;
 use crate::reader::StateReader;
 use crate::ErrorReason;
 use crate::Result;
@@ -16,6 +14,8 @@ use crate::RpcService;
 use bytes::Bytes;
 use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
+use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
+use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
 use sui_sdk_types::Argument;
 use sui_sdk_types::Command;
 use sui_sdk_types::ObjectId;
@@ -46,11 +46,13 @@ pub fn resolve_transaction(
         .kind
         .as_ref()
         .and_then(|kind| {
-            kind.kind.as_ref().and_then(|kind| match kind {
-                crate::proto::rpc::v2beta2::transaction_kind::Kind::ProgrammableTransaction(
+            kind.kind.as_ref().and_then(|kind| {
+                match kind {
+                sui_rpc::proto::sui::rpc::v2beta2::transaction_kind::Kind::ProgrammableTransaction(
                     ptb,
                 ) => Some(ptb),
                 _ => None,
+            }
             })
         })
         .ok_or_else(|| {
@@ -79,6 +81,7 @@ pub fn resolve_transaction(
         &ptb.inputs,
         commands,
         unresolved_transaction.gas_payment.as_ref(),
+        unresolved_transaction.expiration.as_ref(),
     )
 }
 
@@ -154,16 +157,23 @@ fn resolve_unresolved_transaction(
     reference_gas_price: u64,
     max_gas_budget: u64,
     sender: sui_sdk_types::Address,
-    unresolved_inputs: &[crate::proto::rpc::v2beta2::Input],
+    unresolved_inputs: &[sui_rpc::proto::sui::rpc::v2beta2::Input],
     commands: Vec<Command>,
-    gas_payment: Option<&crate::proto::rpc::v2beta2::GasPayment>,
+    gas_payment: Option<&sui_rpc::proto::sui::rpc::v2beta2::GasPayment>,
+    expiration: Option<&sui_rpc::proto::sui::rpc::v2beta2::TransactionExpiration>,
 ) -> Result<TransactionData> {
     let gas_data = if let Some(unresolved_gas_payment) = gas_payment {
-        let payment = unresolved_gas_payment
+        let gas_coins = unresolved_gas_payment
             .objects
             .iter()
-            .map(|unresolved| resolve_object_reference(reader, unresolved.try_into()?))
+            .map(|unresolved| resolve_gas_object_reference(reader, unresolved.try_into()?))
             .collect::<Result<Vec<_>>>()?;
+        let payment = gas_coins.iter().map(|(r, _)| *r).collect::<Vec<_>>();
+        let max_gas_budget = if payment.is_empty() {
+            max_gas_budget
+        } else {
+            gas_coins.iter().map(|(_, value)| *value).sum()
+        };
         GasData {
             payment,
             owner: unresolved_gas_payment.owner().parse().map_err(|e| {
@@ -183,8 +193,15 @@ fn resolve_unresolved_transaction(
         }
     };
 
-    //TODO handle expiration unresolved_transaction.expiration.into();
-    let expiration = sui_types::transaction::TransactionExpiration::None;
+    let expiration = expiration
+        .map(sui_types::transaction::TransactionExpiration::try_from)
+        .transpose()
+        .map_err(|e| {
+            FieldViolation::new("expiration")
+                .with_description(e)
+                .with_reason(ErrorReason::FieldInvalid)
+        })?
+        .unwrap_or(sui_types::transaction::TransactionExpiration::None);
     let ptb = resolve_ptb(reader, called_packages, unresolved_inputs, commands)?;
     Ok(TransactionData::V1(
         sui_types::transaction::TransactionDataV1 {
@@ -194,6 +211,26 @@ fn resolve_unresolved_transaction(
             expiration,
         },
     ))
+}
+
+fn resolve_gas_object_reference(
+    reader: &StateReader,
+    unresolved_object_reference: UnresolvedObjectReference,
+) -> Result<(ObjectRef, u64)> {
+    let object = reader
+        .inner()
+        .get_object(&(unresolved_object_reference.object_id.into()))
+        .ok_or_else(|| ObjectNotFoundError::new(unresolved_object_reference.object_id))?;
+
+    let Ok(gas_coin) = sui_types::gas_coin::GasCoin::try_from(&object) else {
+        return Err(FieldViolation::new("payment")
+            .with_description(format!("object {} is not a valid gas coin", object.id()))
+            .with_reason(ErrorReason::FieldInvalid)
+            .into());
+    };
+
+    resolve_object_reference_with_object(&object, unresolved_object_reference)
+        .map(|r| (r, gas_coin.value()))
 }
 
 fn resolve_object_reference(
@@ -263,7 +300,7 @@ fn resolve_object_reference_with_object(
 pub(super) fn resolve_ptb(
     reader: &StateReader,
     called_packages: &mut NormalizedPackages,
-    unresolved_inputs: &[crate::proto::rpc::v2beta2::Input],
+    unresolved_inputs: &[sui_rpc::proto::sui::rpc::v2beta2::Input],
     commands: Vec<Command>,
 ) -> Result<ProgrammableTransaction> {
     let inputs = unresolved_inputs
@@ -283,10 +320,10 @@ fn resolve_arg(
     reader: &StateReader,
     called_packages: &mut NormalizedPackages,
     commands: &[Command],
-    arg: &crate::proto::rpc::v2beta2::Input,
+    arg: &sui_rpc::proto::sui::rpc::v2beta2::Input,
     arg_idx: usize,
 ) -> Result<CallArg> {
-    use crate::proto::rpc::v2beta2::input::InputKind;
+    use sui_rpc::proto::sui::rpc::v2beta2::input::InputKind;
 
     match UnresolvedInput::from_proto(arg)? {
         // Pure, already prepared BCS input
@@ -669,10 +706,12 @@ struct UnresolvedObjectReference {
     digest: Option<sui_sdk_types::ObjectDigest>,
 }
 
-impl TryFrom<&crate::proto::rpc::v2beta2::ObjectReference> for UnresolvedObjectReference {
+impl TryFrom<&sui_rpc::proto::sui::rpc::v2beta2::ObjectReference> for UnresolvedObjectReference {
     type Error = FieldViolation;
 
-    fn try_from(value: &crate::proto::rpc::v2beta2::ObjectReference) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: &sui_rpc::proto::sui::rpc::v2beta2::ObjectReference,
+    ) -> Result<Self, Self::Error> {
         let object_id = value.object_id().parse().map_err(|e| {
             FieldViolation::new("object_id")
                 .with_description(format!("invalid object_id: {e}"))
@@ -699,7 +738,7 @@ impl TryFrom<&crate::proto::rpc::v2beta2::ObjectReference> for UnresolvedObjectR
 }
 
 struct UnresolvedInput<'a> {
-    pub kind: Option<crate::proto::rpc::v2beta2::input::InputKind>,
+    pub kind: Option<sui_rpc::proto::sui::rpc::v2beta2::input::InputKind>,
     pub pure: Option<&'a Bytes>,
     pub object_id: Option<sui_sdk_types::ObjectId>,
     pub version: Option<sui_sdk_types::Version>,
@@ -709,7 +748,9 @@ struct UnresolvedInput<'a> {
 }
 
 impl<'a> UnresolvedInput<'a> {
-    fn from_proto(input: &'a crate::proto::rpc::v2beta2::Input) -> Result<Self, FieldViolation> {
+    fn from_proto(
+        input: &'a sui_rpc::proto::sui::rpc::v2beta2::Input,
+    ) -> Result<Self, FieldViolation> {
         Ok(Self {
             kind: input.kind.map(|_| input.kind()),
             literal: input.literal.as_deref(),

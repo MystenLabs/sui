@@ -39,7 +39,7 @@ use crate::{
 };
 
 use super::{
-    addressable::AddressableImpl,
+    address::AddressableImpl,
     object::{self, CVersion, Object, ObjectImpl, VersionFilter},
     transaction::Transaction,
 };

@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::rpc::v2beta2::CoinMetadata;
-use crate::proto::rpc::v2beta2::CoinTreasury;
-use crate::proto::rpc::v2beta2::GetCoinInfoRequest;
-use crate::proto::rpc::v2beta2::GetCoinInfoResponse;
-use crate::proto::rpc::v2beta2::RegulatedCoinMetadata;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
+use sui_rpc::proto::sui::rpc::v2beta2::CoinMetadata;
+use sui_rpc::proto::sui::rpc::v2beta2::CoinTreasury;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoRequest;
+use sui_rpc::proto::sui::rpc::v2beta2::GetCoinInfoResponse;
+use sui_rpc::proto::sui::rpc::v2beta2::RegulatedCoinMetadata;
 use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
