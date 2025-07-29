@@ -60,6 +60,21 @@ Some of the benefits of the new system:
 Installing and running the prototype
 ====================================
 
+To install the prototype, run
+```sh
+suiup install sui --nightly=sui-pkg-alt
+```
+
+This will compile `sui` from the prototype branch, so it will need the rust
+toolchain installed and it will take a while to finish.
+
+If you want to use `mvr` dependencies, you will need a patched version of `mvr`
+as well. You can install it using
+
+```sh
+suiup install mvr --nightly=ml/cli-pkg-alt -y
+```
+
 Changes to the `Move.toml` file
 ===============================
 
@@ -270,36 +285,21 @@ Because of `dep-replacements` (and also some details about how package
 conflicts are determined), all operations must be done in a specific
 environment. By default, the `sui` binary tries to choose the right environment
 based on the sui client environment (as determined by `sui client active-env`).
-However, in some cases there isn't an obvious choice. One example is when
-publishing to `localnet`; in this case there just won't be an environment in
-the manifest to use[^dev-environments].
 
-TODO: @stefan what's the right thing here?
-In these cases, you can pass the `--env` or `-e` command to indicate what
-environment should be used for building.
+If there is not an obvious choice of environment (either because the manifest
+declares multiple environments with the same chain ID or because it doesn't
+declare one at all[^1]), you will have to choose a specific environment by
+passing `-e <environment>`.
 
-[^1]: we have a feature for handling localnet and similar scenarios more
-    cleanly, but the implementation is currently incomplete
-
-### `--dump-bytecode-as-base64` is part of `sui client publish`
-
-TODO: @stefan double-check / fix
-
-For a variety of reasons, building with `--dump-bytecode-as-base64` is really
-more akin to publishing than building, so now instead of `sui move build
---dump-bytecode-as-base64` you run `sui client publish --dump-only`.
-
-Note: currently there is not a tool for updating your lockfile after publishing
-outside of the CLI, but this is planned
-
-### Upgrade caps are stored in the lockfile
-
-When you publish, the address of the upgrade cap is stored in the lockfile, so
-you don't need to pass it during upgrade.
+[^1]: In the current prototype, that means that to publish to devnet or
+    localnet you will need to have environments defined for them. We have a
+    `[dev-environments]` feature for this purpose, but the implementation of
+    that feature is not currently complete.
 
 ### `mvr` doesn't need additional environment information
 
 The new package system automatically tells `mvr` what chain it is building for,
-so you no longer need to set the `TODO` environment variable. You will need to
-set the `TODO` environment variable if you are building for an environment
-other than `mainnet` or `testnet` (or you can use `dep-overrides`).
+so you no longer need to set an environment variable to indicate what network
+to resolve for. You will need to set an environment variable if you are
+building for an environment other than `mainnet` or `testnet` (or you can use
+`dep-overrides` to set a non-mvr dependency to use for them).
