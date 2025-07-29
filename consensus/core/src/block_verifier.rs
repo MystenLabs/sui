@@ -602,10 +602,11 @@ mod test {
             let serialized_block = signed_block
                 .serialize()
                 .expect("Block serialization failed.");
-            let (_verified_block, rejected_transactions) = verifier
-                .verify_and_vote(signed_block, serialized_block)
+            let (verified_block, rejected_transactions) = verifier
+                .verify_and_vote(signed_block, serialized_block.clone())
                 .unwrap();
             assert_eq!(rejected_transactions, Vec::<TransactionIndex>::new());
+            assert_eq!(verified_block.serialized().clone(), serialized_block);
         }
 
         // Block with 2 transactions rejected.
