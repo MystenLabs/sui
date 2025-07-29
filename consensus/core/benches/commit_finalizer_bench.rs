@@ -9,7 +9,7 @@ use consensus_core::{
 };
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use mysten_metrics::monitored_mpsc;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 // The fixture and helper functions are adapted from consensus/core/src/commit_finalizer.rs tests.
 struct BenchFixture {
@@ -114,6 +114,14 @@ fn process_commit_indirect(c: &mut Criterion) {
     );
 }
 
+/// Accumulates statistics for the benchmark runs.
+#[derive(Debug, Default)]
+struct Stats {
+    direct: usize,
+    indirect: usize,
+    rejected: usize,
+}
+
 fn process_commits_with_parameters(
     c: &mut Criterion,
     measurement_time: Duration,
@@ -122,16 +130,20 @@ fn process_commits_with_parameters(
     transactions_per_block: usize,
     rejected_transactions_pct: u8,
 ) {
-    let mut direct = 0;
-    let mut indirect = 0;
-    let mut rejected = 0;
+    // Create a tokio runtime for async operations
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let stats = Arc::new(Mutex::new(Stats::default()));
 
     let mut group = c.benchmark_group("CommitFinalizer");
     group
         .throughput(Throughput::Elements(num_commits_per_run as u64))
         .measurement_time(measurement_time)
         .bench_function("process_commit_indirect", |b| {
-            b.iter_batched(
+            b.to_async(&runtime).iter_batched(
                 || {
                     BenchFixture::new(num_authorities).populate_commits(
                         num_commits_per_run,
@@ -140,29 +152,39 @@ fn process_commits_with_parameters(
                     )
                 },
                 |mut fixture| {
-                    for sub_dag in fixture.workload_commits {
-                        let index = sub_dag.commit_ref.index;
-                        let results = fixture.commit_finalizer.process_commit(sub_dag);
-                        for result in results {
-                            if result.commit_ref.index == index {
-                                direct += 1;
-                            } else {
-                                indirect += 1;
+                    let stats = stats.clone();
+                    async move {
+                        let mut run_stats = Stats::default();
+                        for sub_dag in fixture.workload_commits {
+                            let index = sub_dag.commit_ref.index;
+                            let results = fixture.commit_finalizer.process_commit(sub_dag).await;
+                            for result in results {
+                                if result.commit_ref.index == index {
+                                    run_stats.direct += 1;
+                                } else {
+                                    run_stats.indirect += 1;
+                                }
+                                run_stats.rejected += result
+                                    .rejected_transactions_by_block
+                                    .values()
+                                    .map(|txns| txns.len())
+                                    .sum::<usize>();
                             }
-                            rejected += result
-                                .rejected_transactions_by_block
-                                .values()
-                                .map(|txns| txns.len())
-                                .sum::<usize>();
                         }
+                        let mut stats = stats.lock();
+                        stats.direct += run_stats.direct;
+                        stats.indirect += run_stats.indirect;
+                        stats.rejected += run_stats.rejected;
                     }
                 },
                 BatchSize::PerIteration,
             )
         });
 
+    let stats = stats.lock();
     println!(
-        "Direct commits: {direct}; Indirect commits: {indirect}; Rejected transactions: {rejected}",
+        "Direct commits: {}; Indirect commits: {}; Rejected transactions: {}",
+        stats.direct, stats.indirect, stats.rejected,
     );
 }
 
