@@ -437,26 +437,37 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
         return Ok(None);
     }
 
-    let temp_dir = tempfile::tempdir().map_err(GitError::TempDirectory)?;
-    let path_to_clone = temp_dir.path().to_path_buf().join(url_to_file_name(repo));
-    let path_to_clone_str = path_to_clone.to_string_lossy();
-    debug!(
-        "downloading temporary git repo with full history to {}",
-        path_to_clone_str
-    );
-    let mut args = vec![
-        "-c",
-        "advice.detachedHead=false",
-        "clone",
-        "--quiet",
-        "--sparse",
-        "--filter=blob:none",
-        "--no-checkout",
-        repo,
-        &path_to_clone_str,
-    ];
+    let git_cache_path = PathBuf::from(get_cache_path());
+    let lookup_path = git_cache_path.join("lookups");
 
-    run_git_cmd_with_args(&args, None).await?;
+    std::fs::create_dir_all(&lookup_path).map_err(GitError::TempDirectory)?;
+
+    let path_to_clone = lookup_path.join(url_to_file_name(repo));
+    let path_to_clone_str = path_to_clone.to_string_lossy();
+
+    if path_to_clone.exists() {
+        debug!("Repository is already in the cache for lookups, fetching the list of new history.");
+        // We are fetching the "latest" history for that repository.
+        run_git_cmd_with_args(&["fetch", "--filter=blob:none"], Some(&path_to_clone)).await?;
+    } else {
+        debug!(
+            "downloading temporary git repo with full history to {}",
+            path_to_clone_str
+        );
+        let mut args = vec![
+            "-c",
+            "advice.detachedHead=false",
+            "clone",
+            "--quiet",
+            "--sparse",
+            "--filter=blob:none",
+            "--no-checkout",
+            repo,
+            &path_to_clone_str,
+        ];
+
+        run_git_cmd_with_args(&args, None).await?;
+    }
 
     let full_sha = run_git_cmd_with_args(&["rev-parse", rev], Some(&path_to_clone))
         .await?
@@ -840,7 +851,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_find_full_sha() {
-        let project_with_git = git::new("pkg_git", |project| {
+        let (project_with_git, repository) = git::new_repo("pkg_git", |project| {
             project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
         });
 
@@ -855,6 +866,20 @@ mod tests {
                 .unwrap()
                 .to_string(),
             commit
+        );
+
+        // change a file and verify "fetch" works.
+        project_with_git.change_file("Move.toml", "new content");
+        let sha = repository.commit().to_string();
+        let new_short_sha = sha[..7].to_string();
+
+        assert_eq!(
+            &try_find_full_sha(project_with_git.root_path_str(), &new_short_sha)
+                .await
+                .unwrap()
+                .unwrap()
+                .to_string(),
+            &sha
         );
     }
 }
