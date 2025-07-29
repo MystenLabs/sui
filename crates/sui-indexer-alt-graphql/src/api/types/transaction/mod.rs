@@ -9,7 +9,6 @@ use async_graphql::{
     dataloader::DataLoader,
     Context, Object,
 };
-
 use diesel::{prelude::QueryableByName, sql_types::BigInt};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
@@ -18,6 +17,11 @@ use sui_indexer_alt_reader::{
     tx_digests::TxDigestKey,
 };
 use sui_sql_macro::query;
+use sui_types::{
+    base_types::SuiAddress as NativeSuiAddress,
+    digests::TransactionDigest,
+    transaction::{TransactionDataAPI, TransactionExpiration},
+};
 
 use crate::{
     api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
@@ -34,12 +38,6 @@ use super::{
     transaction::filter::TransactionFilter,
     transaction_effects::{EffectsContents, TransactionEffects},
     user_signature::UserSignature,
-};
-
-use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    digests::TransactionDigest,
-    transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
 pub(crate) mod filter;
