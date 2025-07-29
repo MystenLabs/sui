@@ -197,7 +197,7 @@ impl Transaction {
 
         let reader_lo = watermarks.pipeline_lo_watermark("tx_digests")?.checkpoint();
 
-        let global_tx_hi = watermarks.high_watermark().checkpoint();
+        let global_tx_hi = watermarks.high_watermark().transaction();
 
         let tx_digest_keys = if let Some(cp_bounds) =
             filter.checkpoint_bounds(scope.checkpoint_viewed_at(), reader_lo)
@@ -306,7 +306,7 @@ async fn tx_unfiltered(
 
     let (tx_lo, tx_hi) = results
         .first()
-        .ok_or_else(|| RpcError::from(anyhow::anyhow!("No valid checkpoints found.")))
+        .context("No valid checkpoints found")
         .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
 
     // Inclusive cursor bounds

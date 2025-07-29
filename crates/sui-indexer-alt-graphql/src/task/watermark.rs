@@ -259,6 +259,10 @@ impl Watermark {
     pub(crate) fn checkpoint(&self) -> u64 {
         self.checkpoint as u64
     }
+
+    pub(crate) fn transaction(&self) -> u64 {
+        self.transaction as u64
+    }
 }
 
 impl WatermarkRow {
