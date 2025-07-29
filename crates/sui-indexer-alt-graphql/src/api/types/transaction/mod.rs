@@ -242,8 +242,8 @@ impl Transaction {
     }
 }
 
-/// tx_sequence numeber with safe checkpoint bounds with cursors applied inclusively.
-/// Limits the results to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
+/// The tx_sequence_numbers within safe checkpoint bounds and with cursors applied inclusively.
+/// Results are limited to `page.limit() + 2` to allow has_previous_page and has_next_page calculations.
 async fn tx_unfiltered(
     ctx: &Context<'_>,
     cp_bounds: &RangeInclusive<u64>,
@@ -294,14 +294,10 @@ async fn tx_unfiltered(
         .await
         .context("Failed to execute query")?;
 
-    let (tx_lo, tx_hi) = match results.first() {
-        Some(bounds) => (bounds.tx_lo as u64, bounds.tx_hi as u64),
-        None => {
-            return Err(RpcError::from(anyhow::anyhow!(
-                "No valid checkpoints found."
-            )));
-        }
-    };
+    let (tx_lo, tx_hi) = results
+        .first()
+        .ok_or_else(|| RpcError::from(anyhow::anyhow!("No valid checkpoints found.")))
+        .map(|bounds| (bounds.tx_lo as u64, bounds.tx_hi as u64))?;
 
     // Inclusive cursor bounds
     let pg_lo = page.after().map_or(tx_lo, |cursor| cursor.max(tx_lo));
@@ -310,14 +306,18 @@ async fn tx_unfiltered(
         .map(|cursor| cursor.saturating_add(1))
         .map_or(tx_hi, |cursor| cursor.min(tx_hi));
 
+    const PAGINATION_OVERHEAD: usize = 2; // For has_previous_page and has_next_page calculations.
+
     Ok(if page.is_from_front() {
-        (pg_lo..pg_hi).take(page.limit() + 2).collect()
+        (pg_lo..pg_hi)
+            .take(page.limit() + PAGINATION_OVERHEAD)
+            .collect()
     } else {
         // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
         // we reverse the results after applying limits.
         let mut results = (pg_lo..pg_hi)
             .rev()
-            .take(page.limit() + 2)
+            .take(page.limit() + PAGINATION_OVERHEAD)
             .collect::<Vec<_>>();
         results.reverse();
         results
