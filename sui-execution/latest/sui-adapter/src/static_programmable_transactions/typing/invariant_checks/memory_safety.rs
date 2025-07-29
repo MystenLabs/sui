@@ -3,7 +3,7 @@
 
 use crate::{
     sp,
-    static_programmable_transactions::{env::Env, spanned, typing::ast as T},
+    static_programmable_transactions::{env::Env, typing::ast as T},
 };
 use indexmap::IndexSet;
 use std::rc::Rc;
@@ -323,7 +323,7 @@ impl Context {
         self.results.len() as u16
     }
 
-    fn add_result_values(&mut self, results: impl IntoIterator<Item = Value>) {
+    fn add_result_values(&mut self, results: impl IntoIterator<Item = Option<Value>>) {
         let command = self.current_command();
         self.results.push(
             results
@@ -331,17 +331,10 @@ impl Context {
                 .enumerate()
                 .map(|(i, v)| Location {
                     self_path: Rc::new(PathSet::initial(T::Location::Result(command, i as u16))),
-                    value: Some(v),
+                    value: v,
                 })
                 .collect(),
         );
-    }
-
-    fn add_results(&mut self, results: &[T::Type]) {
-        self.add_result_values(results.iter().map(|t| {
-            debug_assert!(!matches!(t, T::Type::Reference(_, _)));
-            Value::NonRef
-        }));
     }
 
     fn location(&self, loc: T::Location) -> anyhow::Result<&Location> {
@@ -524,72 +517,71 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
 }
 
 fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
-    let i = context.current_command();
     // process the command
     debug_assert!(context.arg_roots.is_empty());
-    command_(context, c)?;
-    context.arg_roots.clear();
-    // drop unused result values
-    let dropped_locations = c
-        .value
-        .drop_values
-        .iter()
-        .copied()
-        .enumerate()
-        .filter(|(_, drop)| *drop)
-        .map(|(j, _)| {
-            let loc = T::Location::Result(i, j as u16);
-            let ty = c.value.result_type[j].clone();
-            let arg__ = T::Argument__::new_move(loc);
-            spanned::sp(j as u16, (arg__, ty))
-        });
-    for arg in dropped_locations {
-        // drop the value
-        context.argument(&arg)?;
-    }
+    let results = command_(context, c)?;
+    // drop unused result values by marking them as `None`
+    assert_invariant!(
+        results.len() == c.value.drop_values.len(),
+        "result length mismatch. expected {}, got {}",
+        c.value.drop_values.len(),
+        results.len()
+    );
+    context.add_result_values(
+        results
+            .into_iter()
+            .zip(c.value.drop_values.iter().copied())
+            .map(|(v, drop)| if drop { None } else { Some(v) }),
+    );
     context.arg_roots.clear();
     Ok(())
 }
 
-fn command_(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<()> {
+fn command_(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<Vec<Value>> {
     let result_tys = &c.result_type;
-    match &c.command {
+    let results = match &c.command {
         T::Command__::MoveCall(move_call) => {
             let T::MoveCall {
                 function,
                 arguments,
             } = &**move_call;
             let arg_values = context.arguments(arguments)?;
-            call(context, &function.signature, arg_values)?;
+            call(context, &function.signature, arg_values)?
         }
         T::Command__::TransferObjects(objs, recipient) => {
             context.arguments(objs)?;
             context.argument(recipient)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)
         }
         T::Command__::SplitCoins(_, coin, amounts) => {
             context.arguments(amounts)?;
             let coin_value = context.argument(coin)?;
             write_ref(context, coin_value)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)
         }
         T::Command__::MergeCoins(_, target, coins) => {
             context.arguments(coins)?;
             let target_value = context.argument(target)?;
             write_ref(context, target_value)?;
+            non_ref_results(result_tys)
         }
         T::Command__::MakeMoveVec(_, arguments) => {
             context.arguments(arguments)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)
         }
-        T::Command__::Publish(_, _, _) => context.add_results(result_tys),
+        T::Command__::Publish(_, _, _) => non_ref_results(result_tys),
         T::Command__::Upgrade(_, _, _, ticket, _) => {
             context.argument(ticket)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)
         }
-    }
-
-    Ok(())
+    };
+    assert_invariant!(
+        result_tys.len() == results.len(),
+        "result length mismatch. Expected {}, got {}",
+        result_tys.len(),
+        results.len()
+    );
+    Ok(results)
 }
 
 fn write_ref(context: &Context, value: Value) -> anyhow::Result<()> {
@@ -618,7 +610,7 @@ fn call(
     context: &mut Context,
     signature: &T::LoadedFunctionInstantiation,
     arguments: Vec<Value>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<Value>> {
     let return_ = &signature.return_;
     let mut all_paths: PathSet = PathSet::empty();
     let mut imm_paths: PathSet = PathSet::empty();
@@ -665,7 +657,7 @@ fn call(
     } else {
         all_paths
     };
-    let result_values = return_
+    return_
         .iter()
         .enumerate()
         .map(|(i, ty)| {
@@ -683,9 +675,17 @@ fn call(
                 _ => Ok(Value::NonRef),
             }
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    context.add_result_values(result_values);
-    Ok(())
+        .collect::<anyhow::Result<Vec<_>>>()
+}
+
+fn non_ref_results(results: &[T::Type]) -> Vec<Value> {
+    results
+        .iter()
+        .map(|t| {
+            debug_assert!(!matches!(t, T::Type::Reference(_, _)));
+            Value::NonRef
+        })
+        .collect()
 }
 
 //**************************************************************************************************

@@ -143,11 +143,11 @@ fn command<Mode: ExecutionMode>(
     })
 }
 
-fn arguments(env: &Env, context: &mut Context, args: &[T::Argument]) -> bool {
+fn arguments(env: &Env, context: &Context, args: &[T::Argument]) -> bool {
     args.iter().any(|arg| argument(env, context, arg))
 }
 
-fn argument(_env: &Env, context: &mut Context, arg: &T::Argument) -> bool {
+fn argument(_env: &Env, context: &Context, arg: &T::Argument) -> bool {
     context.is_dirty(arg)
 }
 
