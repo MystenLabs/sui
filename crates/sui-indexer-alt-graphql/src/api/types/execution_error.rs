@@ -120,13 +120,11 @@ impl ExecutionError {
             return Ok(None);
         };
 
-        let identifier = match &clever_error.error_info {
+        Ok(match &clever_error.error_info {
             ErrorConstants::None => None,
             ErrorConstants::Rendered { identifier, .. } => Some(identifier.clone()),
             ErrorConstants::Raw { identifier, .. } => Some(identifier.clone()),
-        };
-
-        Ok(identifier)
+        })
     }
 }
 
