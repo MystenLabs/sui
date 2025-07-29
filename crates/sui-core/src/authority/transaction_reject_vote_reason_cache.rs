@@ -11,8 +11,6 @@ use sui_types::messages_consensus::ConsensusPosition;
 
 #[cfg(test)]
 use consensus_types::block::Round;
-#[cfg(test)]
-use std::ops::Bound::Included;
 
 /// The number of consensus rounds to retain the reject vote reason information before garbage collection.
 /// Assuming a max round rate of 15/sec, this allows status updates to be valid within a window of ~25-30 seconds.
@@ -68,40 +66,16 @@ impl TransactionRejectVoteReasonCache {
 
     /// Sets the last committed leader round. This is used to clean up the cache based on the retention policy.
     pub fn set_last_committed_leader_round(&self, round: u32) {
-        let cut_off_round = round.saturating_sub(self.retention_rounds);
+        let cut_off_round = round.saturating_sub(self.retention_rounds) + 1;
         let cut_off_position = ConsensusPosition {
             epoch: self.epoch,
-            block: BlockRef::new(cut_off_round, AuthorityIndex::MAX, BlockDigest::MAX),
-            index: TransactionIndex::MAX,
+            block: BlockRef::new(cut_off_round, AuthorityIndex::MIN, BlockDigest::MIN),
+            index: TransactionIndex::MIN,
         };
 
         let mut cache = self.cache.write();
         let remaining = cache.split_off(&cut_off_position);
         *cache = remaining;
-    }
-
-    // Only for testing
-    #[cfg(test)]
-    pub fn get_rejection_vote_reasons_by_position_round(
-        &self,
-        round: Round,
-    ) -> Vec<(ConsensusPosition, SuiError)> {
-        self.cache
-            .read()
-            .range((
-                Included(ConsensusPosition {
-                    epoch: self.epoch,
-                    block: BlockRef::new(round, AuthorityIndex::MIN, BlockDigest::MIN),
-                    index: TransactionIndex::MIN,
-                }),
-                Included(ConsensusPosition {
-                    epoch: self.epoch,
-                    block: BlockRef::new(round, AuthorityIndex::MAX, BlockDigest::MAX),
-                    index: TransactionIndex::MAX,
-                }),
-            ))
-            .map(|(pos, reason)| (*pos, reason.clone()))
-            .collect::<Vec<_>>()
     }
 }
 
@@ -145,18 +119,25 @@ mod test {
 
     #[tokio::test]
     async fn test_set_last_committed_leader_round() {
-        let retention_rounds = 4;
-        let cache = TransactionRejectVoteReasonCache::new(Some(retention_rounds), 1);
+        const RETENTION_ROUNDS: u32 = 4;
+        const TOTAL_ROUNDS: u32 = 10;
+        let cache = TransactionRejectVoteReasonCache::new(Some(RETENTION_ROUNDS), 1);
 
-        // Set a few reject reason for different positions before and after the last committed leader round
-        for round in 0..10 {
+        let position = |round: Round, transaction_index: u16| ConsensusPosition {
+            epoch: 1,
+            block: BlockRef::new(
+                round,
+                AuthorityIndex::new_for_test(transaction_index as u32),
+                BlockDigest::MAX,
+            ),
+            index: transaction_index,
+        };
+
+        // Set a few reject reasons for different positions before and after the last committed leader round (6)
+        for round in 0..TOTAL_ROUNDS {
             for transaction_index in 0..5 {
                 cache.set_rejection_vote_reason(
-                    ConsensusPosition {
-                        epoch: 1,
-                        block: BlockRef::new(round, AuthorityIndex::MAX, BlockDigest::MAX),
-                        index: transaction_index,
-                    },
+                    position(round, transaction_index),
                     &SuiError::InvalidTransactionDigest,
                 );
             }
@@ -166,15 +147,17 @@ mod test {
         cache.set_last_committed_leader_round(6);
 
         // The reject reasons from rounds 0-2 should be cleaned up
-        for round in 0..10 {
-            if round <= 2 {
-                assert_eq!(
-                    cache.get_rejection_vote_reasons_by_position_round(round),
-                    vec![]
-                );
-            } else {
-                let reasons = cache.get_rejection_vote_reasons_by_position_round(round);
-                assert_eq!(reasons.len(), 5);
+        for round in 0..TOTAL_ROUNDS {
+            for transaction_index in 0..5 {
+                let position = position(round, transaction_index);
+                if round <= 2 {
+                    assert_eq!(cache.get_rejection_vote_reason(position), None);
+                } else {
+                    assert_eq!(
+                        cache.get_rejection_vote_reason(position),
+                        Some(SuiError::InvalidTransactionDigest)
+                    );
+                }
             }
         }
 
@@ -182,15 +165,17 @@ mod test {
         cache.set_last_committed_leader_round(10);
 
         // The reject reasons from rounds 0-6 should be cleaned up
-        for round in 0..10 {
-            if round <= 6 {
-                assert_eq!(
-                    cache.get_rejection_vote_reasons_by_position_round(round),
-                    vec![]
-                );
-            } else {
-                let reasons = cache.get_rejection_vote_reasons_by_position_round(round);
-                assert_eq!(reasons.len(), 5);
+        for round in 0..TOTAL_ROUNDS {
+            for transaction_index in 0..5 {
+                let position = position(round, transaction_index);
+                if round <= 6 {
+                    assert_eq!(cache.get_rejection_vote_reason(position), None);
+                } else {
+                    assert_eq!(
+                        cache.get_rejection_vote_reason(position),
+                        Some(SuiError::InvalidTransactionDigest)
+                    );
+                }
             }
         }
     }
