@@ -38,6 +38,24 @@ impl TransactionFilter {
         })
     }
 
+    /// The bounds on checkpoint sequence number, imposed by filters, and transaction checkpoint filters. The
+    /// outermost bounds are determined by the lowest checkpoint that is safe to read from (reader_lo) and
+    /// the highest checkpoint that has been processed based on the context's watermark(checkpoint_viewed_at).
+    ///
+    /// ```ignore
+    ///     reader_lo                                                     checkpoint_viewed_at
+    ///     [-----------------------------------------------------------------]
+    /// ```
+    ///
+    /// The bounds are further tightened by the filters if they are present.
+    ///
+    /// ```ignore
+    ///    filter.after_checkpoint                         filter.before_checkpoint
+    ///         [------------[--------------------------]------------]
+    ///                         filter.at_checkpoint
+    /// ```
+    ///
+    /// The bounds can be used to derive transaction sequence numbers to query for.
     pub(crate) fn checkpoint_bounds(
         &self,
         checkpoint_viewed_at: u64,
