@@ -40,6 +40,8 @@ use super::{
     user_signature::UserSignature,
 };
 
+use super::transaction_kind::TransactionKind;
+
 pub(crate) mod filter;
 
 #[derive(Clone)]
@@ -75,6 +77,20 @@ impl Transaction {
     /// The results to the chain of executing this transaction.
     async fn effects(&self) -> Option<TransactionEffects> {
         Some(TransactionEffects::from(self.clone()))
+    }
+
+    /// The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
+    async fn kind(&self, ctx: &Context<'_>) -> Result<Option<TransactionKind>, RpcError> {
+        let contents = self.contents.fetch(ctx, self.digest).await?;
+        let Some(content) = &contents.contents else {
+            return Ok(None);
+        };
+
+        let transaction_data = content.data()?;
+        Ok(TransactionKind::from(
+            transaction_data.kind().clone(),
+            contents.scope.clone(),
+        ))
     }
 
     #[graphql(flatten)]

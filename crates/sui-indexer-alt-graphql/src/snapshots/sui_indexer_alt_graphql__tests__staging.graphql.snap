@@ -427,6 +427,16 @@ type GasInput {
 }
 
 """
+System transaction that initializes the network and writes the initial set of objects on-chain.
+"""
+type GenesisTransaction {
+	"""
+	Objects to be created during genesis.
+	"""
+	objects(first: Int, after: String, last: Int, before: String): ObjectConnection
+}
+
+"""
 Interface implemented by GraphQL types representing entities that are identified by an address.
 
 An address uniquely represents either the public key of an account, or an object's ID, but never both. It is not possible to determine which type an address represents up-front. If an object is wrapped, its contents will not be accessible via its address, but it will still be possible to access other objects it owns.
@@ -1143,6 +1153,10 @@ type Transaction {
 	"""
 	effects: TransactionEffects
 	"""
+	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
+	"""
+	kind: TransactionKind
+	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
 	"""
 	expiration: Epoch
@@ -1271,6 +1285,11 @@ input TransactionFilter {
 	"""
 	beforeCheckpoint: UInt53
 }
+
+"""
+Different types of transactions that can be executed on the Sui network.
+"""
+union TransactionKind = GenesisTransaction
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
