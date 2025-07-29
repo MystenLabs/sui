@@ -96,9 +96,9 @@ fn process_commit_direct(c: &mut Criterion) {
     process_commits_with_parameters(
         c,
         /*measurement_time*/ Duration::from_secs(30),
-        /*num_authorities*/ 25,
+        /*num_authorities*/ 100,
         /*num_commits_per_run*/ 100,
-        /*transactions_per_block*/ 100,
+        /*transactions_per_block*/ 20,
         /*rejected_transactions_pct*/ 0,
     );
 }
@@ -106,10 +106,10 @@ fn process_commit_direct(c: &mut Criterion) {
 fn process_commit_indirect(c: &mut Criterion) {
     process_commits_with_parameters(
         c,
-        /*measurement_time*/ Duration::from_secs(90),
-        /*num_authorities*/ 25,
+        /*measurement_time*/ Duration::from_secs(210),
+        /*num_authorities*/ 100,
         /*num_commits_per_run*/ 100,
-        /*transactions_per_block*/ 100,
+        /*transactions_per_block*/ 20,
         /*rejected_transactions_pct*/ 50,
     );
 }

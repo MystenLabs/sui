@@ -435,6 +435,10 @@ impl CommitFinalizer {
     }
 
     async fn try_indirect_finalize_pending_transactions_in_first_commit(&mut self) {
+        let _scope = monitored_scope(
+            "CommitFinalizer::try_indirect_finalize_pending_transactions_in_first_commit",
+        );
+
         let pending_blocks: Vec<(BlockRef, BTreeSet<TransactionIndex>)> = self.pending_commits[0]
             .pending_transactions
             .iter()
@@ -452,7 +456,7 @@ impl CommitFinalizer {
             let blocks = self.blocks.clone();
             let chunk: Vec<(BlockRef, BTreeSet<TransactionIndex>)> = chunk.to_vec();
 
-            join_set.spawn(async move {
+            join_set.spawn(tokio::task::spawn_blocking(move || {
                 let mut chunk_results = Vec::new();
 
                 for (block_ref, pending_transactions) in chunk {
@@ -461,8 +465,7 @@ impl CommitFinalizer {
                         &blocks,
                         block_ref,
                         pending_transactions,
-                    )
-                    .await;
+                    );
 
                     if !finalized.is_empty() {
                         chunk_results.push((block_ref, finalized));
@@ -470,24 +473,27 @@ impl CommitFinalizer {
                 }
 
                 chunk_results
-            });
+            }));
         }
 
         // Collect results from all chunks
         while let Some(result) = join_set.join_next().await {
-            match result {
-                Ok(chunk_results) => {
-                    all_finalized_transactions.extend(chunk_results);
-                }
-                Err(e) => {
-                    if e.is_panic() {
-                        std::panic::resume_unwind(e.into_panic());
+            let e = match result {
+                Ok(blocking_result) => match blocking_result {
+                    Ok(chunk_results) => {
+                        all_finalized_transactions.extend(chunk_results);
+                        continue;
                     }
-                    tracing::info!("Failed to join task. Probably shutting down: {:?}", e);
-                    // Ok to return. No potential inconsistency in state.
-                    return;
-                }
+                    Err(e) => e,
+                },
+                Err(e) => e,
+            };
+            if e.is_panic() {
+                std::panic::resume_unwind(e.into_panic());
             }
+            tracing::info!("Process likely shutting down: {:?}", e);
+            // Ok to return. No potential inconsistency in state.
+            return;
         }
 
         for (block_ref, finalized_transactions) in all_finalized_transactions {
@@ -535,7 +541,7 @@ impl CommitFinalizer {
     // Returns the indices of the requested pending transactions that are indirectly finalized.
     // This function is used for checking finalization of transactions, so it must traverse
     // all blocks which can contribute to the requested transactions' finalizations.
-    async fn try_indirect_finalize_pending_transactions_in_block(
+    fn try_indirect_finalize_pending_transactions_in_block(
         context: &Arc<Context>,
         blocks: &Arc<RwLock<BTreeMap<BlockRef, RwLock<BlockState>>>>,
         pending_block_ref: BlockRef,
