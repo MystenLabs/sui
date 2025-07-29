@@ -245,10 +245,10 @@ impl EffectsContents {
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
 
         for edge in cursors.edges {
-            let balance_change = BalanceChange::from_native(
-                self.scope.clone(),
-                balance_changes[*edge.cursor].clone(),
-            );
+            let balance_change = BalanceChange {
+                scope: self.scope.clone(),
+                stored: balance_changes[*edge.cursor].clone(),
+            };
             conn.edges
                 .push(Edge::new(edge.cursor.encode_cursor(), balance_change));
         }

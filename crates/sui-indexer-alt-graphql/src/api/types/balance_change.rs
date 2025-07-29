@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::Object;
-use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
+use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
 use sui_types::object::Owner as NativeOwner;
 
 use crate::{api::scalars::big_int::BigInt, scope::Scope};
@@ -12,7 +12,7 @@ use super::address::Address;
 #[derive(Clone)]
 pub(crate) struct BalanceChange {
     pub(crate) scope: Scope,
-    pub(crate) native: NativeBalanceChange,
+    pub(crate) stored: StoredBalanceChange,
 }
 
 /// Effects to the balance (sum of coin values per coin type) of addresses and objects.
@@ -21,7 +21,7 @@ impl BalanceChange {
     /// The address or object whose balance has changed.
     async fn owner(&self) -> Option<Address> {
         use NativeOwner as O;
-        let NativeBalanceChange::V1 { owner, .. } = &self.native;
+        let StoredBalanceChange::V1 { owner, .. } = &self.stored;
 
         match owner {
             O::AddressOwner(addr)
@@ -33,22 +33,16 @@ impl BalanceChange {
         }
     }
 
+    // TODO(DVX-1169): Update to MoveType output when available.
     /// The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
     async fn coin_type(&self) -> Option<String> {
-        let NativeBalanceChange::V1 { coin_type, .. } = &self.native;
+        let StoredBalanceChange::V1 { coin_type, .. } = &self.stored;
         Some(coin_type.clone())
     }
 
     /// The signed balance change.
     async fn amount(&self) -> Option<BigInt> {
-        let NativeBalanceChange::V1 { amount, .. } = &self.native;
+        let StoredBalanceChange::V1 { amount, .. } = &self.stored;
         Some(BigInt::from(*amount))
-    }
-}
-
-impl BalanceChange {
-    /// Create a BalanceChange from the native schema type.
-    pub(crate) fn from_native(scope: Scope, native: NativeBalanceChange) -> Self {
-        Self { scope, native }
     }
 }
