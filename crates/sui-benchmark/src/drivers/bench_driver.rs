@@ -168,6 +168,7 @@ struct Stats {
     pub bench_stats: BenchmarkStats,
 }
 
+#[derive(Debug)]
 pub enum ClientType {
     // Used for Mysticeti Fast Path
     TransactionDriver,
