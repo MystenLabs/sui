@@ -1291,34 +1291,36 @@ impl CheckpointBuilder {
         &self,
         sorted_tx_effects_included_in_checkpoint: &[TransactionEffects],
         checkpoint_height: CheckpointHeight,
-    ) -> (TransactionKey, Vec<TransactionDigest>) {
+    ) -> (TransactionKey, Vec<TransactionEffects>) {
         let _scope =
             monitored_scope("CheckpointBuilder::construct_and_execute_settlement_transactions");
 
         let tx_key =
             TransactionKey::AccumulatorSettlement(self.epoch_store.epoch(), checkpoint_height);
 
-        let settlement_txns: Vec<_> = create_accumulator_update_transactions(
+        let (settlement_txns, num_updates) = create_accumulator_update_transactions(
             &self.epoch_store,
             checkpoint_height,
             Some(self.effects_store.as_ref()),
             sorted_tx_effects_included_in_checkpoint,
-        )
-        .into_iter()
-        .map(|tx| {
-            VerifiedExecutableTransaction::new_system(
-                VerifiedTransaction::new_system_transaction(tx),
-                self.epoch_store.epoch(),
-            )
-        })
-        .collect();
+        );
+
+        let settlement_txns: Vec<_> = settlement_txns
+            .into_iter()
+            .map(|tx| {
+                VerifiedExecutableTransaction::new_system(
+                    VerifiedTransaction::new_system_transaction(tx),
+                    self.epoch_store.epoch(),
+                )
+            })
+            .collect();
 
         let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
 
         debug!(
             ?settlement_digests,
             ?tx_key,
-            "created settlement transactions"
+            "created settlement transactions with {num_updates} updates"
         );
 
         self.epoch_store
@@ -1354,7 +1356,7 @@ impl CheckpointBuilder {
             );
         }
 
-        (tx_key, settlement_digests)
+        (tx_key, settlement_effects)
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -1476,7 +1478,7 @@ impl CheckpointBuilder {
             sorted.extend(CausalOrder::causal_sort(unsorted));
 
             if let Some(settlement_root) = settlement_root {
-                let (tx_key, settlement_digests) = self
+                let (tx_key, settlement_effects) = self
                     .construct_and_execute_settlement_transactions(
                         &sorted,
                         pending.details.checkpoint_height,
@@ -1486,10 +1488,13 @@ impl CheckpointBuilder {
 
                 assert_eq!(settlement_root, tx_key);
 
-                // Replace the key with the actual settlement digests
-                pending
-                    .roots
-                    .extend(settlement_digests.into_iter().map(TransactionKey::Digest));
+                // Note: we do not need to add the settlement digests to `tx_roots` - `tx_roots`
+                // should only include the digests of transactions that were originally roots in
+                // the pending checkpoint. It is later used to identify transactions which were
+                // added as dependencies, so that those transactions can be waited on using
+                // `consensus_messages_processed_notify()`. System transctions (such as
+                // settlements) are exempt from this already.
+                sorted.extend(settlement_effects);
             }
 
             #[cfg(msim)]
