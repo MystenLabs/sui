@@ -6,12 +6,16 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
+    dataloader::DataLoader,
     Context, Enum, Object,
 };
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer_alt_reader::kv_loader::{
-    KvLoader, TransactionContents as NativeTransactionContents,
+use sui_indexer_alt_reader::{
+    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
+    pg_reader::PgReader,
+    tx_balance_changes::TxBalanceChangeKey,
 };
+use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
 use sui_types::{
     digests::TransactionDigest, effects::TransactionEffectsAPI,
     execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
@@ -27,6 +31,7 @@ use crate::{
 };
 
 use super::{
+    balance_change::BalanceChange,
     checkpoint::Checkpoint,
     epoch::Epoch,
     event::Event,
@@ -58,6 +63,7 @@ pub(crate) struct EffectsContents {
 
 type CObjectChange = JsonCursor<usize>;
 type CEvent = JsonCursor<usize>;
+type CBalanceChange = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -194,6 +200,57 @@ impl EffectsContents {
 
             conn.edges
                 .push(Edge::new(edge.cursor.encode_cursor(), event));
+        }
+
+        Ok(Some(conn))
+    }
+
+    /// The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
+    async fn balance_changes(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CBalanceChange>,
+        last: Option<u64>,
+        before: Option<CBalanceChange>,
+    ) -> Result<Option<Connection<String, BalanceChange>>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        let transaction_digest = content.digest()?;
+
+        // Load balance changes from database using DataLoader
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let key = TxBalanceChangeKey(transaction_digest);
+
+        let Some(stored_balance_changes) = pg_loader
+            .load_one(key)
+            .await
+            .context("Failed to load balance changes")?
+        else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        // Deserialize balance changes from BCS bytes
+        let balance_changes: Vec<NativeBalanceChange> =
+            bcs::from_bytes(&stored_balance_changes.balance_changes)
+                .context("Failed to deserialize balance changes")?;
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "balanceChanges");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let cursors = page.paginate_indices(balance_changes.len());
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+
+        for edge in cursors.edges {
+            let balance_change = BalanceChange {
+                scope: self.scope.clone(),
+                stored: balance_changes[*edge.cursor].clone(),
+            };
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), balance_change));
         }
 
         Ok(Some(conn))

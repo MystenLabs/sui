@@ -10,6 +10,53 @@ type Address implements IAddressable {
 }
 
 """
+Effects to the balance (sum of coin values per coin type) of addresses and objects.
+"""
+type BalanceChange {
+	"""
+	The address or object whose balance has changed.
+	"""
+	owner: Address
+	"""
+	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
+	"""
+	coinType: String
+	"""
+	The signed balance change.
+	"""
+	amount: BigInt
+}
+
+type BalanceChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [BalanceChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: BalanceChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 String containing Base64-encoded binary data.
 """
 scalar Base64
@@ -1119,6 +1166,10 @@ type TransactionEffects {
 	Events emitted by this transaction.
 	"""
 	events(first: Int, after: String, last: Int, before: String): EventConnection
+	"""
+	The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
+	"""
+	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
