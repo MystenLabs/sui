@@ -94,7 +94,7 @@ pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     })
 }
 
-pub fn test_metrics() -> Arc<Metrics> {
+pub(crate) fn test_metrics() -> Arc<Metrics> {
     initialise_metrics(Registry::new())
 }
 

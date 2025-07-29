@@ -341,6 +341,9 @@ impl CommitFinalizer {
         }
     }
 
+    // Every block and its transactions are only voted by its immediate children (reverse of ancestor) blocks.
+    // Children of children blocks should not vote on the voted block. And their votes should be ignored.
+    // So after visiting a block when collecting votes, all of the visited block's direct ancestors do not need to be visited.
     fn append_direct_ancestors_in_last_commit(&mut self) {
         let commit_state = self
             .pending_commits
@@ -438,13 +441,12 @@ impl CommitFinalizer {
             .map(|(k, v)| (*k, v.clone()))
             .collect();
 
-        // Number of blocks to process in parallel.
-        const BLOCKS_PER_INDIRECT_COMMIT_TASK: usize = 4;
-        let mut all_finalized_transactions = vec![];
+        // Number of blocks to process in each task.
+        const BLOCKS_PER_INDIRECT_COMMIT_TASK: usize = 8;
 
         // Process chunks in parallel.
+        let mut all_finalized_transactions = vec![];
         let mut join_set = JoinSet::new();
-
         for chunk in pending_blocks.chunks(BLOCKS_PER_INDIRECT_COMMIT_TASK) {
             let context = self.context.clone();
             let blocks = self.blocks.clone();
@@ -478,7 +480,12 @@ impl CommitFinalizer {
                     all_finalized_transactions.extend(chunk_results);
                 }
                 Err(e) => {
-                    tracing::error!("Failed to join task: {:?}", e);
+                    if e.is_panic() {
+                        std::panic::resume_unwind(e.into_panic());
+                    }
+                    tracing::info!("Failed to join task. Probably shutting down: {:?}", e);
+                    // Ok to return. No potential inconsistency in state.
+                    return;
                 }
             }
         }

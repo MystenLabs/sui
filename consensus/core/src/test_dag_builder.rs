@@ -27,47 +27,47 @@ use crate::{
 /// Usage:
 ///
 /// DAG Building
-/// ```
+/// ```ignore
 /// let context = Arc::new(Context::new_for_test(4).0);
-/// let dag_builder = DagBuilder::new(context);
+/// let mut dag_builder = DagBuilder::new(context);
 /// dag_builder.layer(1).build(); // Round 1 is fully connected with parents by default.
-/// dag_builder.layers(2..10).build(); // Rounds 2 ~ 10 are fully connected with parents by default.
-/// dag_builder.layers(11).min_parent_links().build(); // Round 11 is minimally and randomly connected with parents, without weak links.
-/// dag_builder.layers(12).no_leader_block(0).build(); // Round 12 misses leader block. Other blocks are fully connected with parents.
-/// dag_builder.layers(13).no_leader_link(12, 0).build(); // Round 13 misses votes for leader block. Other blocks are fully connected with parents.
-/// dag_builder.layers(14).authorities(vec![3,5]).skip_block().build(); // Round 14 authorities 3 and 5 will not propose any block.
-/// dag_builder.layers(15).authorities(vec![3,5]).skip_ancestor_links(vec![1,2]).build(); // Round 15 authorities 3 and 5 will not link to ancestors 1 and 2
-/// dag_builder.layers(16).authorities(vec![3,5]).equivocate(3).build(); // Round 16 authorities 3 and 5 will produce 3 equivocating blocks.
+/// dag_builder.layers(2..=10).build(); // Rounds 2 ~ 10 are fully connected with parents by default.
+/// dag_builder.layer(11).min_parent_links().build(); // Round 11 is minimally and randomly connected with parents, without weak links.
+/// dag_builder.layer(12).no_leader_block(0).build(); // Round 12 misses leader block. Other blocks are fully connected with parents.
+/// dag_builder.layer(13).no_leader_link(12, 0).build(); // Round 13 misses votes for leader block. Other blocks are fully connected with parents.
+/// dag_builder.layer(14).authorities(vec![3,5]).skip_block().build(); // Round 14 authorities 3 and 5 will not propose any block.
+/// dag_builder.layer(15).authorities(vec![3,5]).skip_ancestor_links(vec![1,2]).build(); // Round 15 authorities 3 and 5 will not link to ancestors 1 and 2
+/// dag_builder.layer(16).authorities(vec![3,5]).equivocate(3).build(); // Round 16 authorities 3 and 5 will produce 3 equivocating blocks.
 /// ```
 ///
 /// Persisting to DagState by Layer
-/// ```
+/// ```ignore
 /// let dag_state = Arc::new(RwLock::new(DagState::new(
 ///    dag_builder.context.clone(),
 ///    Arc::new(MemStore::new()),
 /// )));
 /// let context = Arc::new(Context::new_for_test(4).0);
-/// let dag_builder = DagBuilder::new(context);
+/// let mut dag_builder = DagBuilder::new(context);
 /// dag_builder.layer(1).build().persist_layers(dag_state.clone()); // persist the layer
 /// ```
 ///
 /// Persisting entire DAG to DagState
-/// ```
+/// ```ignore
 /// let dag_state = Arc::new(RwLock::new(DagState::new(
 ///    dag_builder.context.clone(),
 ///    Arc::new(MemStore::new()),
 /// )));
 /// let context = Arc::new(Context::new_for_test(4).0);
-/// let dag_builder = DagBuilder::new(context);
+/// let mut dag_builder = DagBuilder::new(context);
 /// dag_builder.layer(1).build();
-/// dag_builder.layers(2..10).build();
+/// dag_builder.layers(2..=10).build();
 /// dag_builder.persist_all_blocks(dag_state.clone()); // persist entire DAG
 /// ```
 ///
 /// Printing DAG
-/// ```
+/// ```ignore
 /// let context = Arc::new(Context::new_for_test(4).0);
-/// let dag_builder = DagBuilder::new(context);
+/// let mut dag_builder = DagBuilder::new(context);
 /// dag_builder.layer(1).build();
 /// dag_builder.print(); // pretty print the entire DAG
 /// ```

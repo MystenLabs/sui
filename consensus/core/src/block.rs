@@ -47,9 +47,9 @@ impl Transaction {
 /// Reject votes are explicit. The rest of transactions in the block receive implicit accept votes.
 // TODO: look into making fields `pub`.
 #[derive(Clone, Deserialize, Serialize)]
-pub struct BlockTransactionVotes {
-    pub block_ref: BlockRef,
-    pub rejects: Vec<TransactionIndex>,
+pub(crate) struct BlockTransactionVotes {
+    pub(crate) block_ref: BlockRef,
+    pub(crate) rejects: Vec<TransactionIndex>,
 }
 
 /// A block includes references to previous round blocks and transactions that the authority
