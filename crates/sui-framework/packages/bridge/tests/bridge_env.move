@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+#[allow(deprecated_usage)] // TODO: update tests to not use deprecated governance
 module bridge::bridge_env {
     use bridge::bridge::{
         assert_not_paused,

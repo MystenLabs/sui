@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+#[allow(deprecated_usage)] // TODO: update tests to not use deprecated governance
 module locked_stake::locked_stake_tests;
 
 use locked_stake::epoch_time_lock;
