@@ -21,7 +21,9 @@ use sui_json_rpc_types::{
     SuiTypeTag,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::{ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress};
+use sui_types::base_types::{
+    FullObjectRef, ObjectID, ObjectInfo, ObjectRef, ObjectType, SuiAddress,
+};
 use sui_types::error::UserInputError;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_MUL_COIN_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
@@ -102,9 +104,9 @@ impl TransactionBuilder {
         object_id: ObjectID,
         recipient: SuiAddress,
     ) -> Result<TransactionKind, anyhow::Error> {
-        let obj_ref = self.get_object_ref(object_id).await?;
+        let full_obj_ref = self.get_full_object_ref(object_id).await?;
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, obj_ref)?;
+        builder.transfer_object(recipient, full_obj_ref)?;
         Ok(TransactionKind::programmable(builder.finish()))
     }
 
@@ -139,7 +141,7 @@ impl TransactionBuilder {
         object_id: ObjectID,
         recipient: SuiAddress,
     ) -> anyhow::Result<()> {
-        builder.transfer_object(recipient, self.get_object_ref(object_id).await?)?;
+        builder.transfer_object(recipient, self.get_full_object_ref(object_id).await?)?;
         Ok(())
     }
 
@@ -1015,6 +1017,19 @@ impl TransactionBuilder {
         self.get_object_ref_and_type(object_id)
             .await
             .map(|(oref, _)| oref)
+    }
+
+    pub async fn get_full_object_ref(&self, object_id: ObjectID) -> anyhow::Result<FullObjectRef> {
+        let object_data = self
+            .0
+            .get_object_with_options(object_id, SuiObjectDataOptions::new().with_owner())
+            .await?
+            .into_object()?;
+
+        let object_ref = object_data.object_ref();
+        let owner = object_data.owner.unwrap();
+
+        Ok(FullObjectRef::from_object_ref_and_owner(object_ref, &owner))
     }
 
     async fn get_object_ref_and_type(

@@ -9,6 +9,7 @@ use core::default::Default;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use sui_protocol_config::Chain;
+use sui_types::base_types::FullObjectRef;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -297,7 +298,7 @@ pub fn init_transfer_transaction(
 ) -> VerifiedTransaction {
     let data = TransactionData::new_transfer(
         recipient,
-        object_ref,
+        FullObjectRef::from_fastpath_ref(object_ref),
         sender,
         gas_object_ref,
         gas_budget,

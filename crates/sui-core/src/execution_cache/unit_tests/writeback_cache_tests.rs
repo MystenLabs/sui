@@ -16,7 +16,7 @@ use std::{
 use sui_framework::BuiltInFramework;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
-    base_types::{random_object_ref, SuiAddress},
+    base_types::{random_object_ref, FullObjectRef, SuiAddress},
     crypto::{deterministic_random_account_key, get_key_pair_from_rng, AccountKeyPair},
     object::{MoveObject, Owner, OBJECT_START_VERSION},
     storage::ChildObjectResolver,
@@ -147,7 +147,10 @@ impl Scenario {
         // Tx is opaque to the cache, so we just build a dummy tx. The only requirement is
         // that it has a unique digest every time.
         let tx = TestTransactionBuilder::new(sender, random_object_ref(), 100)
-            .transfer(random_object_ref(), receiver)
+            .transfer(
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
+                receiver,
+            )
             .build_and_sign(&keypair);
 
         let tx = VerifiedTransaction::new_unchecked(tx);

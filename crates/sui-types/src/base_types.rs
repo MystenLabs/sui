@@ -198,6 +198,15 @@ impl FullObjectRef {
         )
     }
 
+    pub fn from_object_ref_and_owner(object_ref: ObjectRef, owner: &Owner) -> Self {
+        let full_id = if let Some(start_version) = owner.start_version() {
+            FullObjectID::Consensus((object_ref.0, start_version))
+        } else {
+            FullObjectID::Fastpath(object_ref.0)
+        };
+        Self(full_id, object_ref.1, object_ref.2)
+    }
+
     pub fn as_object_ref(&self) -> ObjectRef {
         (self.0.id(), self.1, self.2)
     }

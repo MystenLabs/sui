@@ -1440,7 +1440,7 @@ mod tests {
         Chain, ConsensusTransactionOrdering, PerObjectCongestionControlMode, ProtocolVersion,
     };
     use sui_types::{
-        base_types::{random_object_ref, AuthorityName, ObjectID, SuiAddress},
+        base_types::{random_object_ref, AuthorityName, FullObjectRef, ObjectID, SuiAddress},
         committee::Committee,
         crypto::deterministic_random_account_key,
         messages_consensus::{
@@ -1950,7 +1950,7 @@ mod tests {
         let data = SenderSignedData::new(
             TransactionData::new_transfer(
                 SuiAddress::default(),
-                random_object_ref(),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
                 SuiAddress::default(),
                 random_object_ref(),
                 1000 * gas_price,

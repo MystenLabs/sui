@@ -55,7 +55,7 @@ use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use sui_types::{
-    base_types::dbg_addr,
+    base_types::{dbg_addr, FullObjectRef},
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
@@ -1435,7 +1435,10 @@ async fn test_handle_sponsored_transaction() {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(recipient, object.compute_object_reference())
+            .transfer_object(
+                recipient,
+                FullObjectRef::from_fastpath_ref(object.compute_object_reference()),
+            )
             .unwrap();
         builder.finish()
     };
@@ -2630,8 +2633,14 @@ async fn test_move_call_insufficient_gas() {
         2000
     };
     // Now we try to construct a transaction with a smaller gas budget than required.
-    let data =
-        TransactionData::new_transfer(sender, obj_ref, recipient, gas_ref, gas_used - 5, rgp);
+    let data = TransactionData::new_transfer(
+        sender,
+        FullObjectRef::from_fastpath_ref(obj_ref),
+        recipient,
+        gas_ref,
+        gas_used - 5,
+        rgp,
+    );
 
     let transaction = to_sender_signed_transaction(data, &recipient_key);
     let tx_digest = *transaction.digest();

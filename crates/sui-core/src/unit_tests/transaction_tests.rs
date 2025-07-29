@@ -20,7 +20,7 @@ use sui_types::messages_grpc::{
 use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
-    base_types::dbg_addr,
+    base_types::{dbg_addr, FullObjectRef},
     crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
     error::{SuiError, UserInputError},
     messages_consensus::ConsensusDeterminedVersionAssignments,
@@ -341,7 +341,7 @@ pub fn init_transfer_transaction(
     gas_budget: u64,
     gas_price: u64,
 ) -> Transaction {
-    let mut data = TransactionData::new_transfer_full(
+    let mut data = TransactionData::new_transfer(
         recipient,
         full_object_ref,
         sender,
@@ -1127,12 +1127,12 @@ async fn init_zklogin_transfer(
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let object = authority_state.get_object(&object_id).await.unwrap();
     let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
-    let object_ref = object.compute_object_reference();
+    let full_object_ref = object.compute_full_object_reference();
     let gas_object_ref = gas_object.compute_object_reference();
     let gas_budget = rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
     let mut data = TransactionData::new_transfer(
         recipient,
-        object_ref,
+        full_object_ref,
         sender,
         gas_object_ref,
         gas_budget,
@@ -1169,12 +1169,12 @@ async fn sign_with_zklogin_inside_multisig(
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let object = authority_state.get_object(&object_id).await.unwrap();
     let gas_object = authority_state.get_object(&gas_object_id).await.unwrap();
-    let object_ref = object.compute_object_reference();
+    let full_object_ref = object.compute_full_object_reference();
     let gas_object_ref = gas_object.compute_object_reference();
     let gas_budget = rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
     let mut data = TransactionData::new_transfer(
         recipient,
-        object_ref,
+        full_object_ref,
         sender,
         gas_object_ref,
         gas_budget,
@@ -1401,7 +1401,7 @@ fn setup_aliased_address_test() -> (Transaction, SuiAddress, SuiAddress, Object,
     // need to construct tx before authority, so we have to hardcode rgp
     let rgp = 1000;
 
-    let data = TransactionData::new_transfer_full(
+    let data = TransactionData::new_transfer(
         recipient,
         input_object_ref,
         original,
@@ -1530,7 +1530,7 @@ async fn zk_multisig_test() {
 
     let data = TransactionData::new_transfer(
         recipient,
-        object.compute_object_reference(),
+        object.compute_full_object_reference(),
         victim_addr,
         gas_object.compute_object_reference(),
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -1607,19 +1607,25 @@ async fn test_oversized_txn() {
         .protocol_config()
         .max_tx_size_bytes() as usize;
     let object = authority_state.get_object(&object_id).await.unwrap();
-    let obj_ref = object.compute_object_reference();
+    let full_object_ref = object.compute_full_object_reference();
 
     // Construct an oversized txn.
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         // Put a lot of commands in the txn so it's large.
         for _ in 0..(1024 * 16) {
-            builder.transfer_object(recipient, obj_ref).unwrap();
+            builder.transfer_object(recipient, full_object_ref).unwrap();
         }
         builder.finish()
     };
 
-    let txn_data = TransactionData::new_programmable(sender, vec![obj_ref], pt, 0, 0);
+    let txn_data = TransactionData::new_programmable(
+        sender,
+        vec![object.compute_object_reference()],
+        pt,
+        0,
+        0,
+    );
 
     let txn = to_sender_signed_transaction(txn_data, &sender_key);
     let tx_size = bcs::serialized_size(&txn).unwrap();
@@ -2156,11 +2162,11 @@ async fn test_handle_soft_bundle_certificates_errors() {
     {
         let mut certificates: Vec<CertifiedTransaction> = vec![];
         for i in 0..5 {
-            let owned_object_ref = authority
+            let full_object_ref = authority
                 .get_object(&owned_objects[i].id())
                 .await
                 .unwrap()
-                .compute_object_reference();
+                .compute_full_object_reference();
             let gas_object_ref = authority
                 .get_object(&gas_objects[i].id())
                 .await
@@ -2168,7 +2174,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                 .compute_object_reference();
             let data = TransactionData::new_transfer(
                 senders[i + 1].0,
-                owned_object_ref,
+                full_object_ref,
                 senders[i].0,
                 gas_object_ref,
                 rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -2203,11 +2209,11 @@ async fn test_handle_soft_bundle_certificates_errors() {
     // The bundle should be rejected.
     println!("Case 2: submit a soft bundle with tx containing no shared object.");
     {
-        let owned_object_ref = authority
+        let full_object_ref = authority
             .get_object(&owned_objects[5].id())
             .await
             .unwrap()
-            .compute_object_reference();
+            .compute_full_object_reference();
         let gas_object_ref = authority
             .get_object(&gas_objects[5].id())
             .await
@@ -2215,7 +2221,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
             .compute_object_reference();
         let data = TransactionData::new_transfer(
             senders[6].0,
-            owned_object_ref,
+            full_object_ref,
             senders[5].0,
             gas_object_ref,
             rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -2421,11 +2427,11 @@ async fn test_handle_soft_bundle_certificates_errors() {
         let mut certificates: Vec<CertifiedTransaction> = vec![];
 
         for i in 11..14 {
-            let owned_object_ref = authority
+            let full_object_ref = authority
                 .get_object(&owned_objects[i].id())
                 .await
                 .unwrap()
-                .compute_object_reference();
+                .compute_full_object_reference();
             let gas_object_ref = authority
                 .get_object(&gas_objects[i].id())
                 .await
@@ -2440,7 +2446,7 @@ async fn test_handle_soft_bundle_certificates_errors() {
                 // Put a lot of commands in the txn so it's large.
                 for _ in 0..1000 {
                     builder
-                        .transfer_object(*recipient, owned_object_ref)
+                        .transfer_object(*recipient, full_object_ref)
                         .unwrap();
                 }
                 builder.finish()
@@ -2489,7 +2495,7 @@ fn sender_signed_data_serialized_intent() {
     let mut txn = SenderSignedData::new(
         TransactionData::new_transfer(
             SuiAddress::default(),
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             SuiAddress::default(),
             random_object_ref(),
             0,
