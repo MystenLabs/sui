@@ -231,6 +231,10 @@ type Epoch {
 	"""
 	storageFund: StorageFund
 	"""
+	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+	"""
+	safeMode: SafeMode
+	"""
 	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
 	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
 	"""
@@ -906,6 +910,18 @@ type Query {
 	The transactions that exist in the network, optionally filtered by transaction filters.
 	"""
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+}
+
+type SafeMode {
+	"""
+	Whether safe mode was used for the last epoch change.
+	The system will retry a full epoch change on every epoch boundary and automatically reset this flag if so.
+	"""
+	enabled: Boolean
+	"""
+	Accumulated fees for computation and cost that have not been added to the various reward pools, because the full epoch change did not happen.
+	"""
+	gasSummary: GasCostSummary
 }
 
 type ServiceConfig {

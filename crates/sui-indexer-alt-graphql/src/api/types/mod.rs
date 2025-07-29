@@ -13,6 +13,7 @@ pub(crate) mod move_package;
 pub(crate) mod object;
 pub(crate) mod object_change;
 pub(crate) mod protocol_configs;
+pub(crate) mod safe_mode;
 pub(crate) mod service_config;
 mod stake_subsidy;
 pub(crate) mod storage_fund;

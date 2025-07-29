@@ -6,6 +6,7 @@ use super::{
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
 };
+use crate::api::types::safe_mode::{from_system_state, SafeMode};
 use crate::api::types::stake_subsidy::{from_stake_subsidy_v1, StakeSubsidy};
 use crate::api::types::storage_fund::StorageFund;
 use crate::api::types::system_parameters::{
@@ -293,6 +294,17 @@ impl Epoch {
         };
 
         Ok(Some(storage_fund))
+    }
+
+    /// Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+    async fn safe_mode(&self, ctx: &Context<'_>) -> Result<Option<SafeMode>, RpcError> {
+        let Some(system_state) = self.system_state(ctx).await? else {
+            return Ok(None);
+        };
+
+        let safe_mode = from_system_state(&system_state);
+
+        Ok(Some(safe_mode))
     }
 
     /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.

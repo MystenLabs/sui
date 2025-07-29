@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-76:
+task 6, lines 16-85:
 //# run-graphql
 Response: {
   "data": {
@@ -51,6 +51,15 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
       },
       "systemStateVersion": 2,
       "systemParameters": {
@@ -101,6 +110,15 @@ Response: {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
       },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
       "systemStateVersion": 1,
       "systemParameters": {
         "durationMs": "86400000",
@@ -149,6 +167,15 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
       },
       "systemStateVersion": 2,
       "systemParameters": {
@@ -199,6 +226,15 @@ Response: {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
       },
+      "safeMode": {
+        "enabled": false,
+        "gasSummary": {
+          "computationCost": 0,
+          "storageCost": 0,
+          "storageRebate": 0,
+          "nonRefundableStorageFee": 0
+        }
+      },
       "systemStateVersion": 2,
       "systemParameters": {
         "durationMs": "86400000",
@@ -222,7 +258,7 @@ Response: {
   }
 }
 
-task 7, lines 78-139:
+task 7, lines 87-157:
 //# run-graphql
 Response: {
   "data": {
@@ -257,6 +293,15 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
           },
           "systemStateVersion": 2,
           "systemParameters": {
@@ -307,6 +352,15 @@ Response: {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
           },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
+          },
           "systemStateVersion": 1,
           "systemParameters": {
             "durationMs": "86400000",
@@ -355,6 +409,15 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "safeMode": {
+            "enabled": false,
+            "gasSummary": {
+              "computationCost": 0,
+              "storageCost": 0,
+              "storageRebate": 0,
+              "nonRefundableStorageFee": 0
+            }
           },
           "systemStateVersion": 2,
           "systemParameters": {
