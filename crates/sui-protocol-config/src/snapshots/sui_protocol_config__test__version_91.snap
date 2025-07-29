@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 89
+version: 91
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -39,11 +39,14 @@ feature_flags:
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
   accept_zklogin_in_multisig: true
+  accept_passkey_in_multisig: true
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
+  enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_group_ops_native_function_msm: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   reject_mutable_random_on_entry_functions: true
@@ -64,6 +67,7 @@ feature_flags:
   reshare_at_same_initial_version: true
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
+  enable_vdf: true
   record_consensus_determined_version_assignments_in_prologue: true
   record_consensus_determined_version_assignments_in_prologue_v2: true
   fresh_vm_on_framework_upgrade: true
@@ -71,11 +75,14 @@ feature_flags:
   mysticeti_num_leaders_per_round: 1
   soft_bundle: true
   enable_coin_deny_list_v2: true
+  passkey_auth: true
+  authority_capabilities_v2: true
   rethrow_serialization_type_layout_errors: true
   consensus_distributed_vote_scoring_strategy: true
   consensus_round_prober: true
   validate_identifier_inputs: true
   disallow_self_identifier: true
+  mysticeti_fastpath: true
   relocate_event_module: true
   uncompressed_g1_group_elements: true
   disallow_new_modules_in_deps_only_packages: true
@@ -95,6 +102,7 @@ feature_flags:
   enforce_checkpoint_timestamp_monotonicity: true
   max_ptb_value_size_v2: true
   resolve_type_input_ids_to_defining_id: true
+  enable_party_transfer: true
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
   better_adapter_type_resolution_errors: true
@@ -102,6 +110,9 @@ feature_flags:
   dependency_linkage_error: true
   additional_multisig_checks: true
   ignore_execution_time_observations_after_certs_closed: true
+  debug_fatal_on_move_invariant_violation: true
+  additional_consensus_digest_indirect_state: true
+  check_for_init_during_upgrade: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -137,6 +148,7 @@ max_move_package_size: 102400
 max_publish_or_upgrade_per_ptb: 5
 max_tx_gas: 50000000000000
 max_gas_price: 50000000000
+max_gas_price_rgp_factor_for_aborted_transactions: 100
 max_gas_computation_bucket: 5000000
 gas_rounding_step: 1000
 max_loop_depth: 5
@@ -294,6 +306,7 @@ hash_blake2b256_data_cost_per_block: 2
 hash_keccak256_cost_base: 10
 hash_keccak256_data_cost_per_byte: 2
 hash_keccak256_data_cost_per_block: 2
+poseidon_bn254_cost_base: 260
 poseidon_bn254_cost_per_block: 388
 group_ops_bls12381_decode_scalar_cost: 7
 group_ops_bls12381_decode_g1_cost: 2848
@@ -335,6 +348,8 @@ hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
 check_zklogin_id_cost_base: 200
 check_zklogin_issuer_cost_base: 200
+vdf_verify_vdf_cost: 1500
+vdf_hash_to_input_cost: 100
 nitro_attestation_parse_base_cost: 2650
 nitro_attestation_parse_cost_per_byte: 50
 nitro_attestation_verify_base_cost: 2481600
@@ -397,202 +412,3 @@ gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
 consensus_commit_rate_estimation_window_size: 10
-aliased_addresses:
-  - original:
-      - 205
-      - 137
-      - 98
-      - 218
-      - 210
-      - 120
-      - 216
-      - 181
-      - 15
-      - 160
-      - 249
-      - 235
-      - 1
-      - 134
-      - 191
-      - 164
-      - 203
-      - 222
-      - 204
-      - 109
-      - 89
-      - 55
-      - 114
-      - 20
-      - 200
-      - 141
-      - 2
-      - 134
-      - 160
-      - 172
-      - 149
-      - 98
-    aliased:
-      - 11
-      - 45
-      - 163
-      - 39
-      - 186
-      - 106
-      - 76
-      - 172
-      - 190
-      - 117
-      - 221
-      - 221
-      - 80
-      - 230
-      - 232
-      - 187
-      - 248
-      - 29
-      - 100
-      - 150
-      - 233
-      - 45
-      - 102
-      - 175
-      - 145
-      - 84
-      - 198
-      - 28
-      - 119
-      - 247
-      - 51
-      - 47
-    allowed_tx_digests:
-      - - 2
-        - 145
-        - 170
-        - 78
-        - 99
-        - 246
-        - 130
-        - 221
-        - 11
-        - 53
-        - 228
-        - 241
-        - 202
-        - 113
-        - 56
-        - 105
-        - 120
-        - 236
-        - 143
-        - 114
-        - 165
-        - 106
-        - 212
-        - 165
-        - 196
-        - 178
-        - 239
-        - 253
-        - 97
-        - 66
-        - 98
-        - 197
-  - original:
-      - 226
-      - 139
-      - 80
-      - 206
-      - 241
-      - 214
-      - 51
-      - 234
-      - 67
-      - 211
-      - 41
-      - 106
-      - 63
-      - 107
-      - 103
-      - 255
-      - 3
-      - 18
-      - 165
-      - 241
-      - 169
-      - 159
-      - 10
-      - 247
-      - 83
-      - 200
-      - 91
-      - 139
-      - 93
-      - 232
-      - 255
-      - 6
-    aliased:
-      - 11
-      - 45
-      - 163
-      - 39
-      - 186
-      - 106
-      - 76
-      - 172
-      - 190
-      - 117
-      - 221
-      - 221
-      - 80
-      - 230
-      - 232
-      - 187
-      - 248
-      - 29
-      - 100
-      - 150
-      - 233
-      - 45
-      - 102
-      - 175
-      - 145
-      - 84
-      - 198
-      - 28
-      - 119
-      - 247
-      - 51
-      - 47
-    allowed_tx_digests:
-      - - 253
-        - 118
-        - 94
-        - 221
-        - 205
-        - 105
-        - 164
-        - 185
-        - 146
-        - 65
-        - 207
-        - 179
-        - 194
-        - 136
-        - 51
-        - 126
-        - 222
-        - 28
-        - 78
-        - 230
-        - 151
-        - 0
-        - 147
-        - 120
-        - 44
-        - 55
-        - 155
-        - 111
-        - 243
-        - 35
-        - 173
-        - 119

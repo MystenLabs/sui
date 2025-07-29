@@ -57,7 +57,7 @@ mod sim_only_tests {
 
     use super::*;
     use fastcrypto::encoding::Base64;
-    use move_binary_format::{file_format_common::VERSION_MAX, CompiledModule};
+    use move_binary_format::CompiledModule;
     use move_core_types::ident_str;
     use mysten_common::register_debug_fatal_handler;
     use std::path::PathBuf;
@@ -71,6 +71,7 @@ mod sim_only_tests {
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
+    use sui_protocol_config::Chain;
     use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -1045,8 +1046,7 @@ mod sim_only_tests {
         Object::new_package(
             &sui_system_modules(fixture),
             TransactionDigest::genesis_marker(),
-            u64::MAX,
-            VERSION_MAX,
+            &ProtocolConfig::get_for_version(FINISH.into(), Chain::Unknown),
             &[
                 BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),
                 BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_PACKAGE_ID)
