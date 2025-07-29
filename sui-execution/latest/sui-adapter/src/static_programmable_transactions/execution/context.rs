@@ -848,8 +848,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let dependencies = self.fetch_packages(dep_ids)?;
         let package = Rc::new(MovePackage::new_initial(
             &modules,
-            self.env.protocol_config.max_move_package_size(),
-            self.env.protocol_config.move_binary_format_version(),
+            self.env.protocol_config,
             dependencies.iter().map(|p| p.move_package()),
         )?);
         let package_id = package.id();

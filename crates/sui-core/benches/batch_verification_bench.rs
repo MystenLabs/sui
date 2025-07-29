@@ -84,6 +84,7 @@ fn async_verifier_bench(c: &mut Criterion) {
                         true,
                         Some(30),
                         vec![],
+                        true,
                     ));
 
                     b.iter(|| {
