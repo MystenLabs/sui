@@ -9,13 +9,15 @@ use sui_rpc::proto::sui::rpc::v2beta2::{
     BatchGetTransactionsRequest, BatchGetTransactionsResponse, Checkpoint as ProtoCheckpoint,
     Epoch, GetBalanceRequest, GetCheckpointRequest, GetEpochRequest, GetServiceInfoRequest,
     GetServiceInfoResponse, ListOwnedObjectsRequest, ListOwnedObjectsResponse,
+    SimulateTransactionRequest, SimulateTransactionResponse,
 };
-use sui_rpc_api::client::AuthInterceptor;
+use sui_rpc_api::client::{AuthInterceptor, TransactionExecutionResponse};
 use sui_rpc_api::Client;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::governance::StakedSui;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointDigest};
+use sui_types::transaction::{Transaction, TransactionData};
 use url::Url;
 
 #[derive(Clone)]
@@ -243,6 +245,48 @@ impl GrpcClient {
             .map_err(Self::convert_tonic_error)?;
 
         Ok(response.into_inner())
+    }
+
+    pub async fn simulate_transaction(
+        &self,
+        tx_data: TransactionData,
+    ) -> Result<SimulateTransactionResponse, Error> {
+        let request = SimulateTransactionRequest {
+            transaction: Some(tx_data.into()),
+            read_mask: Some(sui_rpc::field::FieldMask::from_paths([
+                "transaction",
+                "transaction.effects",
+                "transaction.effects.status",
+                "transaction.effects.gas_used",
+                "transaction.effects.gas_used.computation_cost",
+                "transaction.effects.gas_used.storage_cost",
+                "transaction.effects.gas_used.storage_rebate",
+            ])),
+            checks: None,
+            do_gas_selection: Some(false),
+        };
+
+        let response = self
+            .inner
+            .live_data_client()
+            .simulate_transaction(request)
+            .await
+            .map_err(Self::convert_tonic_error)?;
+
+        Ok(response.into_inner())
+    }
+
+    pub async fn execute_transaction(
+        &self,
+        tx: Transaction,
+    ) -> Result<TransactionExecutionResponse, Error> {
+        let response = self
+            .inner
+            .execute_transaction(&tx)
+            .await
+            .map_err(Self::convert_tonic_error)?;
+
+        Ok(response)
     }
 
     pub fn extract_validator_info_from_epoch(

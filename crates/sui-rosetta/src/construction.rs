@@ -11,11 +11,7 @@ use fastcrypto::hash::HashFunction;
 use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{
-    StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
-};
-use sui_sdk::rpc_types::SuiExecutionStatus;
+use sui_json_rpc_types::{StakeStatus, SuiObjectDataOptions};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
@@ -148,40 +144,44 @@ pub async fn submit(
     // through a dry_run with a possibly invalid budget (metadata endpoint), but the requirements
     // are that it should pass from there and fail here.
     let tx_data = signed_tx.data().transaction_data().clone();
-    let dry_run = context
-        .sui_client
-        .read_api()
-        .dry_run_transaction_block(tx_data)
-        .await?;
-    if let SuiExecutionStatus::Failure { error } = dry_run.effects.status() {
-        return Err(Error::TransactionDryRunError(error.clone()));
-    };
+    let dry_run = context.client.simulate_transaction(tx_data).await?;
 
-    let response = context
-        .sui_client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            signed_tx,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes(),
-            None,
-        )
-        .await?;
+    // Check if simulation was successful
+    let transaction = dry_run.transaction.as_ref().ok_or_else(|| {
+        Error::TransactionDryRunError("No transaction returned from simulation".to_string())
+    })?;
 
-    if let SuiExecutionStatus::Failure { error } = response
-        .effects
-        .expect("Execute transaction should return effects")
-        .status()
-    {
-        return Err(Error::TransactionExecutionError(error.to_string()));
+    let effects = transaction.effects.as_ref().ok_or_else(|| {
+        Error::TransactionDryRunError("No effects returned from simulation".to_string())
+    })?;
+
+    if let Some(status) = &effects.status {
+        if !status.success.unwrap_or(false) {
+            if let Some(error) = &status.error {
+                return Err(Error::TransactionDryRunError(format!("{:?}", error)));
+            }
+            return Err(Error::TransactionDryRunError(
+                "Transaction simulation failed".to_string(),
+            ));
+        }
     }
 
+    let response = context.client.execute_transaction(signed_tx).await?;
+
+    // Check if execution was successful
+    use sui_types::effects::TransactionEffectsAPI;
+    match response.effects.status() {
+        sui_types::execution_status::ExecutionStatus::Success => {}
+        sui_types::execution_status::ExecutionStatus::Failure { error, .. } => {
+            return Err(Error::TransactionExecutionError(error.to_string()));
+        }
+    }
+
+    // Extract the transaction digest from the response
+    let digest = response.effects.transaction_digest();
+
     Ok(TransactionIdentifierResponse {
-        transaction_identifier: TransactionIdentifier {
-            hash: response.digest,
-        },
+        transaction_identifier: TransactionIdentifier { hash: *digest },
         metadata: None,
     })
 }
@@ -245,11 +245,15 @@ pub async fn metadata(
     };
     let coin_type = currency.as_ref().map(|c| c.metadata.coin_type.clone());
 
-    let mut gas_price = context
-        .sui_client
-        .governance_api()
-        .get_reference_gas_price()
+    // Get the current epoch to fetch reference gas price
+    let epoch = context
+        .client
+        .get_epoch(None) // None gets the current epoch
         .await?;
+
+    let mut gas_price = epoch
+        .reference_gas_price
+        .ok_or_else(|| Error::DataError("No reference gas price in epoch".to_string()))?;
     // make sure it works over epoch changes
     gas_price += 100;
 
@@ -336,17 +340,39 @@ pub async fn metadata(
                     currency: currency.clone(),
                 })?;
 
-            let dry_run = context
-                .sui_client
-                .read_api()
-                .dry_run_transaction_block(data)
-                .await?;
-            let effects = dry_run.effects;
+            let dry_run = context.client.simulate_transaction(data).await?;
 
-            if let SuiExecutionStatus::Failure { error } = effects.status() {
-                return Err(Error::TransactionDryRunError(error.to_string()));
+            // Check if simulation was successful and get effects
+            let transaction = dry_run.transaction.as_ref().ok_or_else(|| {
+                Error::TransactionDryRunError("No transaction returned from simulation".to_string())
+            })?;
+
+            let effects = transaction.effects.as_ref().ok_or_else(|| {
+                Error::TransactionDryRunError("No effects returned from simulation".to_string())
+            })?;
+
+            if let Some(status) = &effects.status {
+                if !status.success.unwrap_or(false) {
+                    if let Some(error) = &status.error {
+                        return Err(Error::TransactionDryRunError(format!("{:?}", error)));
+                    }
+                    return Err(Error::TransactionDryRunError(
+                        "Transaction simulation failed".to_string(),
+                    ));
+                }
             }
-            effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost
+
+            // Extract gas cost from proto effects
+            let gas_summary = effects.gas_used.as_ref().ok_or_else(|| {
+                Error::TransactionDryRunError("No gas cost summary in effects".to_string())
+            })?;
+
+            let computation_cost = gas_summary.computation_cost.unwrap_or(0);
+            let storage_cost = gas_summary.storage_cost.unwrap_or(0);
+            let storage_rebate = gas_summary.storage_rebate.unwrap_or(0);
+
+            // Total gas cost = computation + storage - rebate
+            computation_cost + storage_cost - storage_rebate
         }
     };
 
