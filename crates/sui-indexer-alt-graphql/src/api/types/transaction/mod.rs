@@ -200,7 +200,7 @@ impl Transaction {
         let global_tx_hi = watermarks.high_watermark().transaction();
 
         let tx_digest_keys = if let Some(cp_bounds) =
-            filter.checkpoint_bounds(scope.checkpoint_viewed_at(), reader_lo)
+            filter.checkpoint_bounds(reader_lo, scope.checkpoint_viewed_at())
         {
             tx_unfiltered(ctx, &cp_bounds, &page, global_tx_hi).await?
         } else {
@@ -325,10 +325,10 @@ async fn tx_unfiltered(
     } else {
         // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
         // we reverse the results after applying limits.
-        let mut results = (pg_lo..pg_hi)
+        let mut results: Vec<_> = (pg_lo..pg_hi)
             .rev()
             .take(page.limit() + PAGINATION_OVERHEAD)
-            .collect::<Vec<_>>();
+            .collect();
         results.reverse();
         results
     })
