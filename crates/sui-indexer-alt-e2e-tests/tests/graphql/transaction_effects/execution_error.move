@@ -140,6 +140,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
 }
@@ -153,6 +154,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -162,6 +164,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
 }
@@ -175,6 +178,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -184,6 +188,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -193,6 +198,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -202,6 +208,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -211,6 +218,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -220,6 +228,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
 
@@ -229,6 +238,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -238,6 +248,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
 
@@ -247,6 +258,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
 }
@@ -260,6 +272,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -269,6 +282,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -278,6 +292,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
   
@@ -287,6 +302,7 @@ module test::execution_error_tests {
       sourceLineNumber
       instructionOffset
       identifier
+      constant
     }
   }
 }
