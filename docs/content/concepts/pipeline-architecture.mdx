@@ -1,0 +1,618 @@
+---
+title: Pipeline Architecture
+---
+
+The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understanding their differences is crucial for choosing the right approach, though the line between them is more blurry than it might initially appear.
+
+## Sequential versus concurrent pipelines
+
+[Sequential pipelines](#sequential-pipeline-architecture) commit complete checkpoints in order. Each checkpoint is fully committed before the next one, ensuring simple, consistent reads.
+
+[Concurrent pipelines](#concurrent-pipeline-architecture) commit out-of-order and can commit individual checkpoints partially. This allows you to process multiple checkpoints simultaneously for higher throughput, but requires reads to check which data is fully committed to ensure consistency.
+
+## When to use each pipeline
+
+Both pipeline types can handle the same data patterns - updates in place, aggregations, complex business logic. Sequential pipelines have throughput limitations compared to concurrent, but the choice is primarily about engineering complexity versus performance needs.
+
+### Sequential pipeline (recommended default)
+
+Start here for most use cases. Provides more straightforward implementation and maintenance.
+
+- You want straightforward implementation with direct commits and simple queries
+- Team prefers predictable, easy-to-debug behavior
+- Current performance meets your requirements
+- Operational simplicity is valued
+
+### Concurrent pipeline (performance optimization)
+
+Consider implementing a concurrent pipeline when:
+
+- Sequential processing can't keep up with your data volume
+- Your team is willing to handle the additional implementation complexity for the performance benefits
+
+**Complexity from out-of-order commits:**
+
+- Watermark-aware queries: All reads must check which data is fully committed (see [**The Watermark System**](https://www.notion.so/The-Watermark-System-2346d9dcb4e98054bd09e5309e7b3a64?pvs=21) section).
+- Complex application logic: Must handle the fact that data commits in pieces rather than complete checkpoints.
+
+## Decision framework
+
+1. Start with sequential (easier to implement and debug)
+2. Measure performance under realistic load
+3. Switch to a concurrent pipeline only if the sequential one can't meet requirements
+
+Specific scenarios where a sequential pipeline might not meet requirements:
+
+- Your pipeline produces data per checkpoint that benefits from chunking and out-of-order commits (individual checkpoints can produce lots of data or individual writes that can take a lot of time to process atomically) → consider concurrent pipeline.
+- You're producing a lot of data and need pruning → requires concurrent pipeline.
+
+Other scaling decisions (independent of pipeline choice):
+
+- If you're indexing multiple kinds of data, then consider multiple pipelines and introduce the complexity of reads consulting watermarks.
+- If relational databases don't fit your use case, then consider [Bring Your Own Store (BYOS)](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)
+
+## Sequential pipeline architecture
+
+Sequential pipelines provide a more straightforward yet powerful architecture for indexing that prioritizes ordered processing. While they sacrifice some throughput compared to concurrent pipelines, they offer stronger guarantees and are often easier to reason about.
+
+### Architecture overview
+
+The sequential pipeline consists of only two main components, making it significantly simpler than the concurrent pipeline's six-component architecture.
+
+![sequential.svg](Sequential%20Pipeline%20Architecture%202346d9dcb4e9805d90a9e4590f316a95/sequential.svg)
+
+**Shared with Concurrent Pipelines:** The **Ingestion Layer** (`Regulator` + `Broadcaster`) and `Processor` components are identical to concurrent pipelines - same back-pressure mechanisms, same `FANOUT` parallel processing, and same `processor()` implementation.
+
+**Sequential-Specific:** The key difference is the **dramatically simplified pipeline core** with just a single **Committer** component that handles ordering, batching, and database commits - replacing the 4 separate components (`Collector`, `Committer`, `Commit Watermark`, `Reader Watermark`, `Pruner`) used in concurrent pipelines.
+
+### Components
+
+Processor (shared implementation)
+
+The processor works identically to concurrent pipelines. See the [processor section](#concurrent-components) in the concurrent pipeline architecture for details.
+
+Committer (your main customization point)
+
+The sequential committer is the heart of the pipeline. Let's understand how it works and where your code fits in:
+
+### How the committer works
+
+1. **Receives** out-of-order processed data from the processor.
+2. **Orders** the data by checkpoint sequence.
+3. **Batches** multiple checkpoints together using your logic.
+4. **Commits** the batch to the database atomically.
+5. **Signals** progress back to the ingestion layer.
+
+### Where your code fits in
+
+You provide **two key functions** that the committer calls at specific points:
+
+1. `batch()` - data merging logic
+
+[https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs#L56-L58](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs#L56-L58)
+
+2. `commit()` - database write logic
+
+[https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs#L60-L65](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs#L60-L65)
+
+### Backpressure mechanisms
+
+![back-pressure-sequential-v2.svg](Sequential%20Pipeline%20Architecture%202346d9dcb4e9805d90a9e4590f316a95/back-pressure-sequential-v2.svg)
+
+ Figure. Backpressure mechanism for sequential pipeline ([Excalidraw](https://excalidraw.com/#json=EimSJ5cRotjLDyWrBo_Ox,A_vDGJGC20aQTsCMzIgrCQ))
+
+Sequential pipelines use two layers of backpressure to prevent memory overflow and ordering-related deadlocks:
+
+## 1. Channel-Based Back-pressure (Shared with Concurrent)
+
+Sequential pipelines use the same channel-based flow control as concurrent pipelines (see [Concurrent Pipeline Back-pressure](https://www.notion.so/link) for detailed mechanics), but with a simpler topology due to fewer components:
+
+- **Broadcaster → Processor**: `checkpoint_buffer_size` slots
+- **Processor → Committer**: `FANOUT + PIPELINE_BUFFER` slots
+
+## 2. Watermark-Based Regulation (Sequential-Specific)
+
+### **The Ordering Challenge**:
+
+Sequential pipelines must process checkpoints in strict order (N, then N+1, then N+2...). If checkpoint N is missing, they cannot commit later checkpoints even if available.
+
+### **The Deadlock Risk**:
+
+Without regulation, missing checkpoints can cause deadlocks:
+
+1. Pipeline waits for checkpoint 100
+2. Checkpoint 100 gets dropped or delayed
+3. Ingestion fills buffer with 101, 102, 103...
+4. Buffer becomes full → cannot refetch checkpoint 100 when available
+5. Pipeline permanently stuck
+
+### **The Regulator Solution - Watermark Progress Reporting**
+
+- **Each pipeline reports progress**: After successful commits, pipelines send `(pipeline_name, highest_committed_checkpoint)` to the regulator via the `ingest_hi_tx` channel
+    
+    [https://github.com/MystenLabs/sui/blob/3d801f4dbe6915a7186bb16e865766dde4d99af8/crates/sui-indexer-alt-framework/src/pipeline/sequential/committer.rs#L310](https://github.com/MystenLabs/sui/blob/3d801f4dbe6915a7186bb16e865766dde4d99af8/crates/sui-indexer-alt-framework/src/pipeline/sequential/committer.rs#L310)
+    
+- **Regulator receives updates**: Listens on `ingest_hi_rx` and calculates the ingestion boundary across all pipelines (`min_subscriber_watermark + buffer_size`)
+    
+    [https://github.com/MystenLabs/sui/blob/9f8ea0f5706e2f13ac9650578f4a5390aa60013f/crates/sui-indexer-alt-framework/src/ingestion/regulator.rs#L59-L62](https://github.com/MystenLabs/sui/blob/9f8ea0f5706e2f13ac9650578f4a5390aa60013f/crates/sui-indexer-alt-framework/src/ingestion/regulator.rs#L59-L62)
+    
+
+### How It Prevents Deadlocks
+
+- Regulator only fetches checkpoints up to the calculated boundary
+- This prevents any pipeline from falling too far behind the ingestion front
+- Guarantees buffer space remains available to retry missing checkpoints
+
+### **Why Concurrent Pipelines Don't Need This**
+
+Concurrent pipelines can process checkpoints out-of-order. Missing checkpoints only delay watermark updates but don't halt overall progress.
+
+# **Performance Tuning**
+
+## **SequentialConfig Optimization**
+
+Sequential pipelines have simpler configuration but critical tuning parameters:
+
+```rust
+let config = SequentialConfig {
+    committer: CommitterConfig {
+        // Not applicable to sequential pipelines
+        write_concurrency: 1,
+        
+        // Batch collection frequency in ms (default: 500)
+        collect_interval_ms: 1000,
+    },
+    
+    // Checkpoints to lag behind live data (default: 0)
+    checkpoint_lag: 100,
+};
+```
+
+**Tuning Guidelines:**
+
+- **collect_interval_ms**: Higher values allow more checkpoints per batch, improving efficiency
+- **checkpoint_lag**: Essential for live indexing to avoid processing incomplete data
+- **write_concurrency**: Not applicable to sequential pipelines (always single-threaded writes)
+
+## The watermark system {#watermark-system}
+
+For each pipeline, the indexer minimally tracks the `checkpoint_hi_inclusive`, or highest checkpoint where all data up to that point is committed, and optionally the `reader_lo` and `pruner_hi` if pruning is enabled. These watermarks are particularly crucial for concurrent pipelines to enable out-of-order processing while maintaining data integrity. Both concurrent and sequential pipelines rely on the `checkpoint_hi_inclusive` committer watermark to understand where to resume processing on restarts, while the `reader_lo` and `pruner_hi` define safe lower bounds for reading and pruning operations.
+
+### Scenario 1: Simple watermark (no pruning)
+
+With pruning disabled, the indexer reports each pipeline's committer `checkpoint_hi_inclusive` only. Consider the following timeline, where a number of checkpoints are being processed, with some checkpoints committed out of order.
+
+```sh
+Checkpoint Processing Timeline:
+
+[1000] [1001] [1002] [1003] [1004] [1005]
+  ✓      ✓      ✗      ✓      ✗      ✗
+         ^
+  checkpoint_hi = 1001
+
+✓ = Committed (all data written)
+✗ = Not Committed (processing or failed)
+```
+
+The `checkpoint_hi_inclusive` is the highest checkpoint where all data up to that point is committed. Because of this, the `checkpoint_hi_inclusive` is at 1001, even though checkpoint 1003 is committed, because there is still a gap at 1002. The indexer must report the high watermark at 1001 to satisfy the guarantee that all data from start to `checkpoint_hi_inclusive` is available.
+
+Safe reading zone:
+
+```sh
+// After the checkpoint 1002 is committed, there is a safe reading zone up to 1003
+[1000] [1001] [1002] [1003] [1004] [1005]
+  ✓      ✓      ✓      ✓      ✗       ✓
+[---- SAFE TO READ -------]
+(start   →   checkpoint_hi_inclusive at 1001)
+```
+
+### Scenario 2: Pruning enabled
+
+When a pipeline is configured with a retention policy, pruning is enabled for the pipeline. For example, your table is growing too large, so you want to keep only the last 4 checkpoints (`retention` = 4). This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi_inclusive` and the configured retention. A separate pruning task is responsible for pruning data between `[pruner_hi, reader_lo]`.
+
+```sh
+
+[998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
+ 🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✓      ✗
+              ^                    ^
+       reader_lo = 1000       checkpoint_hi = 1003
+
+🗑️ = Pruned (deleted)
+✓ = Committed  
+✗ = Not Committed
+```
+
+Current watermarks:
+
+- `checkpoint_hi_inclusive` = 1003:
+       - All data from start to 1003 is complete (no gaps).
+       - Cannot advance to 1005 because 1004 is not committed yet (gap).
+
+- `reader_lo` = 1000:
+       - **lowest checkpoint guaranteed to be available**
+       - Calculated as: reader_lo = checkpoint_hi - retention + 1
+       - reader_lo = 1003 - 4 + 1 = 1000
+
+- `pruner_hi` = 999:
+       - Highest checkpoint that has been deleted.
+       - Checkpoints 998 and 999 were deleted to save space.
+
+Clear safe zones:
+
+```sh
+[998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
+ 🗑️    🗑️     ✓      ✓      ✓      ✓      ✗      ✓      ✗
+
+[--PRUNED--][--- Safe Reading Zone ---] [--- Processing ---]             
+```
+
+### How watermarks progress over time
+
+Step 1: Checkpoint 1004 completes
+
+```sh
+[999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
+ 🗑️     ✓      ✓      ✓      ✓      ✓      ✗      ✓      ✗
+        ^                           ^
+ reader_lo = 1000           checkpoint_hi = 1004 (advanced by 1!)
+```
+
+Step 2: Reader watermark updates (happens periodically)
+
+```sh
+[999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
+ 🗑️     ✓      ✓      ✓      ✓      ✓      ✗      ✓      ✗
+               ^                   ^
+        reader_lo = 1001    checkpoint_hi = 1004
+        (1004 - 4 + 1 = 1001)
+```
+
+Step 3: Pruner runs (after safety delay)
+
+```sh
+[999] [1000] [1001] [1002] [1003] [1004] [1005] [1006] [1007]
+ 🗑️     🗑️     ✓      ✓      ✓      ✓      ✗      ✓      ✗
+               ^                   ^
+        reader_lo = 1001    checkpoint_hi = 1004
+        
+pruner_hi = 1000 (just deleted checkpoint 1000)
+```
+
+### How watermarks system enable safe pruning
+
+The watermark system creates a robust data lifecycle management system:
+
+1. Guaranteed data availability
+
+- reader_lo represents the **lowest checkpoint guaranteed to be available**
+- Readers can safely query any checkpoint between `[reader_lo, checkpoint_hi_inclusive]`
+    
+    :::info
+    Checkpoints older than `reader_lo` might still be temporarily available due to an intentional delay that protects in-flights queries from premature data removal.
+    :::
+
+2. Automatic cleanup process
+
+- The pipeline frequently cleans unpruned checkpoints in the range `[pruner_hi, reader_lo)`
+- This ensures storage doesn't grow indefinitely while maintaining the retention guarantee
+- The pruning process runs with a safety delay to avoid race conditions
+
+3. Perfect balance
+
+- Storage efficiency: Old data gets automatically deleted
+- Data availability: Always maintains retention amount of complete data
+- Safety guarantees: Readers never encounter missing data gaps
+- Performance: Out-of-order processing maximizes throughput
+
+This watermark system is what makes concurrent pipelines both high-performance and reliable - enabling massive throughput while maintaining strong data availability guarantees and automatic storage management.
+
+## Concurrent pipeline architecture {#concurrent-pipeline-architecture}
+
+Before diving into the concurrent pipeline architecture, make sure you understand the watermark system covered in the the [previous section](#watermark-system). The watermark concepts (`checkpoint_hi_inclusive`, `reader_lo`, `pruner_hi`, and `retention`) are fundamental to how every component in the concurrent pipeline operates and coordinates.
+
+### Architecture overview
+
+The concurrent pipeline transforms raw checkpoint data into indexed database records through a sophisticated multi-stage architecture designed for maximum throughput while maintaining data integrity:
+
+![concurrent_pipeline_1.svg](Concurrent%20Pipeline%20Architecture%202346d9dcb4e9803baa6ef4cc28b79390/concurrent_pipeline_1.svg)
+
+Key design principles:
+
+- Watermark coordination: Safe out-of-order processing with consistency guarantees.
+- Handler abstraction: Your business logic plugs into the framework.
+- Automatic storage mnagement: Framework handles watermark tracking and data cleanup within the `Watermark` DB.
+
+### Components {#concurrent-components}
+
+Processor (concurrent processing engine)
+
+- Concurrent processing: Multiple tasks running concurrently for maximum throughput.
+
+Primary responsibility: Converts raw checkpoint data into database-ready rows using parallel workers.
+
+How it works
+
+- Spawns `FANOUT` worker tasks (default: 10) for parallel processing
+    
+    [https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/processor.rs#L28](https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/processor.rs#L28)
+    
+- Each worker calls your `Handler::process()` method independently
+    
+    [https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/processor.rs#L84](https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/processor.rs#L84)
+    
+- Workers can process different checkpoints simultaneously (out-of-order)
+- Sends processed data to `Collector` with checkpoint metadata
+
+Key Ccnfiguration: `FANOUT` - controls parallel processing capacity.
+
+Collector (intelligent batching)
+
+Primary responsibility: Buffers processed data and creates user-configurable batches for database writes.
+
+How it works
+
+- Receives out-of-order processed data from multiple `Processor` workers.
+- Buffers data until reaching optimal batch size (`MIN_EAGER_ROWS`) or until a timeout is met (to preserve forward progress for quiet pipelines).
+    
+    [https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L60](https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L60)
+    
+- Combines data from multiple checkpoints into single database write batches.
+- Applies backpressure when too much data is pending (`MAX_PENDING_ROWS`).
+    
+    [https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L63](https://github.com/MystenLabs/sui/blob/059eb0bb62b1d8c3315718423a7284b592e8004c/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L63)
+    
+
+Why this matters: Database writes are expensive - batching dramatically improves throughput by reducing the number of database round-trips.
+
+Committer (parallel database writer)
+
+Primary responsibility: Writes batched data to the database using parallel connections with retry logic.
+
+How it works
+
+- Receives optimized batches from `Collector`.
+- Spawns up to `write_concurrency` parallel database writers.
+    
+    [https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/mod.rs#L31-L32](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/mod.rs#L31-L32)
+    
+- Each writer calls your `Handler::commit()` method with exponential backoff retry.
+- Reports successful writes to `CommitWatermark` component.
+
+:::important
+
+The `Committer` tasks doesn't actually perform database operations - it calls **your Handler's commit() method**. You implement the actual database logic.
+
+:::
+
+Commit watermark (progress tracker)
+
+Primary responsibility: Tracks which checkpoints are fully committed and updates `checkpoint_hi_inclusive` in the watermark table.
+
+How it works
+
+- Receives `WatermarkParts` from successful `Committer` writes.
+    
+    [https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/mod.rs#L52](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/mod.rs#L52)
+    
+- Maintains an in-memory map of checkpoint completion status.
+- Advances `checkpoint_hi_inclusive` only when there are no gaps in the sequence.
+- Periodically writes the new `checkpoint_hi_inclusive` to the `Watermark` DB.
+
+From the watermark system: Remember that `checkpoint_hi_inclusive` can advance only when all data up to that point is committed with no gaps. This component enforces that critical rule.
+
+Why polling: Updates happen on a configurable interval (`watermark_interval_ms`) rather than immediately, balancing consistency with performance.
+
+[https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/mod.rs#L38](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/mod.rs#L38)
+
+Reader watermark (safety boundary manager)
+
+Primary responsibility: Calculates and updates `reader_lo` to maintain the retention policy and provide safe pruning boundaries.
+
+How it works
+
+- Polls the `Watermark` DB periodically (interval_ms) to check current `checkpoint_hi_inclusive`.
+- Calculates new `reader_lo = checkpoint_hi_inclusive - retention + 1`.
+- Updates the `reader_lo` and `pruner_timestamp` in the `Watermark` DB.
+- Provides the safety buffer that prevents premature pruning.
+
+From the watermark system: `reader_lo` represents the lowest checkpoint guaranteed to be available. This component ensures your retention policy is maintained.
+
+Pruner (data cleanup manager)
+
+Primary responsibility: Removes old data based on retention policies and updates `pruner_hi`.
+
+How it works
+
+- Waits for safety delay (`delay_ms`) after `reader_lo` updates.
+    
+    [https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L101](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L101)
+    
+- Calculates which checkpoints can be safely deleted.
+- Spawns up to `prune_concurrency` parallel cleanup tasks.
+    
+    [https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L110](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L110)
+    
+- Each task calls your `Handler::prune()` method for specific checkpoint ranges.
+- Updates `pruner_hi` as cleanup completes.
+
+:::important
+
+The `Pruner` tasks doesn't actually delete data - it calls **your Handler's prune() method**. You implement the actual cleanup logic.
+
+:::
+
+From the watermark system: The pruner operates in the range between the current `pruner_hi` and the safe boundary determined by `reader_lo`, ensuring readers are never affected.
+
+### Handler abstraction: Where your code lives
+
+The **Handler** is where you implement your indexing business logic. The framework calls three key methods:
+
+```rust
+trait Processor {
+    // Called by Processor workers
+    fn process(&self, checkpoint: &CheckpointData) -> Vec<Self::Value>;
+}
+
+trait Handler { 
+    // Called by Committer workers  
+    async fn commit(&[Self::Value], &mut Connection) -> Result<usize>;
+    
+    // Called by Pruner workers
+    async fn prune(&self, from: u64, to: u64, &mut Connection) -> Result<usize>;
+}
+```
+
+Critical understanding: The framework components (`Committer`, `Pruner`) are orchestrators that manage concurrency, retries, and watermark coordination. The actual database operations happen in your handler methods.
+
+### Watermark table management
+
+The framework automatically creates and manages a `watermarks` table in your database with this schema:
+
+[https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-pg-db/src/schema.rs#L5-L15](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-pg-db/src/schema.rs#L5-L15)
+
+Key points
+
+- Automatically created when you first run your indexer.
+- One row per pipeline - multiple indexers can share the same database.
+- Manages all watermark coordination - you don't interact with this table directly.
+- Critical for recovery - when restarting, the framework reads this table to resume from the correct checkpoint.
+
+# Back-pressure mechanisms
+
+Now that you understand the component architecture, let's examine how the pipeline prevents memory overflow through cascading backpressure via inter-component channels.
+
+![back-pressure.svg](Concurrent%20Pipeline%20Architecture%202346d9dcb4e9803baa6ef4cc28b79390/back-pressure.svg)
+
+## **Coordinated Blocking Mechanisms**
+
+### **Channel-Level Blocking with Fixed Sizes**
+
+Each channel has a fixed buffer size that automatically blocks when full:
+
+- **Regulator → Broadcaster**: `ingest_concurrency` slots → Regulator stops signaling new fetches
+    
+    [https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/ingestion/mod.rs#L66](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/ingestion/mod.rs#L66)
+    
+- **Broadcaster → Processor**: `checkpoint_buffer_size` slots → Broadcaster blocks, upstream pressure
+    
+    [https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/ingestion/mod.rs#L63](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/ingestion/mod.rs#L63)
+    
+- **Processor → Collector**: `FANOUT + PIPELINE_BUFFER` slots → All workers block on `send()`
+    
+    [https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L207](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L207)
+    
+- **Collector → Committer**: `write_concurrency + PIPELINE_BUFFER` slots → Collector stops accepting
+    
+    [https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L209](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#L209)
+    
+
+**Cascading Effect**: When any channel fills, pressure automatically propagates backward through the entire pipeline.
+
+### **Component-Level Blocking**
+
+- **Collector Memory Limits**: Stops accepting when `pending_rows ≥ MAX_PENDING_ROWS`
+    
+    [https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/concurrent/collector.rs#L174](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/pipeline/concurrent/collector.rs#L174)
+    
+- **Database Connection Limits**: Committer blocks when all connections are busy
+
+### **Application-Level Coordination**
+
+- **Watermark Feedback**: Pipeline reports progress to Regulator via watermark updates
+- **Bounded Ingestion**: Regulator only signals fetches within a bounded range ahead of current watermark
+    
+    [https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/ingestion/regulator.rs#L64](https://github.com/MystenLabs/sui/blob/4d3e1848951660f7758241c9f769ff7020aaa568/crates/sui-indexer-alt-framework/src/ingestion/regulator.rs#L64)
+    
+- **Memory Protection**: Entire system operates within predictable memory bounds
+
+## **How Back Pressure Works in Practice**
+
+**Simple Example: Slow Database Scenario**
+
+1. **Initial State**: Your indexer is happily processing **100 checkpoints/second**
+2. **Bottleneck Appears**: Database becomes slow (maybe high load, maintenance, etc.) - can only handle **50 commits/second**
+3. **Back Pressure Cascade**:
+    - `Committer` channel fills up (can't commit fast enough)
+    - `Collector` stops sending to `Committer` (channel full)
+    - `Processor` workers stop sending to `Collector` (channel full)
+    - `Broadcaster` stops sending to `Processors` (channel full)
+    - `Regulator` stops requesting new checkpoints (channel full)
+4. **End Result**:
+    - **Indexer automatically slows** to 50 checkpoints/second (matching database capacity)
+    - **Memory stays bounded** - no runaway growth
+    - **No data loss** - everything just processes slower
+    - **System is stable** at the bottleneck's pace
+5. **Recovery**: When database speeds up, channels start draining and indexer automatically returns to full speed
+
+**What You'll Observe**:
+
+- Slower checkpoint progress in logs/metrics
+- Stable memory usage (no growth)
+- System remains responsive, just at reduced throughput
+
+# **Performance Tuning**
+
+## **CommitterConfig Optimization**
+
+The CommitterConfig controls how data flows from collection to database commits:
+
+```rust
+let config = ConcurrentConfig {
+    committer: CommitterConfig {
+        // Number of parallel database writers (default: 5)
+        write_concurrency: 10,
+        
+        // How often collector checks for batches in ms (default: 500)
+        collect_interval_ms: 250,
+        
+        // How often watermarks are updated in ms (default: 500)
+        watermark_interval_ms: 1000,
+    },
+    pruner: Some(pruner_config),
+};
+```
+
+**Tuning Guidelines:**
+
+- **write_concurrency**: Higher values = faster throughput but more database connections; `ensure total_pipelines` × `write_concurrency` < `db_connection_pool_size`
+- **collect_interval_ms**: Lower values reduce latency but increase CPU overhead
+- **watermark_interval_ms**: Controls how often watermarks are updated. Higher values reduce database contention from frequent watermark writes but make the indexer slower to respond to pipeline progress.
+
+## **PrunerConfig Settings**
+
+Configure data retention and pruning performance:
+
+```rust
+let pruner_config = PrunerConfig {
+    // Check interval for pruning opportunities in ms (default: 300,000 = 5 min)
+    interval_ms: 600_000, // 10 minutes for less frequent checks
+    
+    // Safety delay after reader watermark update in ms (default: 120,000 = 2 min)  
+    delay_ms: 300_000, // 5 minutes for conservative pruning
+    
+    // How many checkpoints to retain (default: 4,000,000)
+    retention: 10_000_000, // Keep more data for analytics
+    
+    // Max checkpoints to prune per operation (default: 2,000)
+    max_chunk_size: 5_000, // Larger chunks for faster pruning
+    
+    // Parallel pruning tasks (default: 1)
+    prune_concurrency: 3, // More parallelism for faster pruning
+};
+```
+
+**Tuning Guidelines:**
+
+- **retention**: Balance storage costs vs. data availability needs
+- **max_chunk_size**: Larger values faster pruning, but longer database transactions
+- **prune_concurrency**: Don't exceed database connection limits
+- **delay_ms**: Increase for safety, decrease for aggressive storage optimization
+
+
+## Related links
+
+[The Watermark System](https://www.notion.so/The-Watermark-System-2346d9dcb4e98054bd09e5309e7b3a64?pvs=21)
+
+[Concurrent Pipeline Architecture](https://www.notion.so/Concurrent-Pipeline-Architecture-2346d9dcb4e9803baa6ef4cc28b79390?pvs=21)
+
+[Sequential Pipeline Architecture](https://www.notion.so/Sequential-Pipeline-Architecture-2346d9dcb4e9805d90a9e4590f316a95?pvs=21)
