@@ -55,6 +55,7 @@ use sui_graphql_rpc::{
 
 use move_core_types::account_address::AccountAddress;
 use serde_json::json;
+use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::manage_package::resolve_lock_file_path;
@@ -708,7 +709,7 @@ impl SuiCommand {
                 );
                 for node_config in network_config.validator_configs() {
                     let account_kp = node_config.account_key_pair.keypair();
-                    context.add_account(None, account_kp.copy());
+                    context.add_account(None, account_kp.copy()).await;
                 }
 
                 let context = context;
@@ -740,7 +741,7 @@ impl SuiCommand {
                         1000000000,
                     )
                     .unwrap();
-                    let signed_tx = context.sign_transaction(&tx);
+                    let signed_tx = context.sign_transaction(&tx).await;
                     tasks.push(context.execute_transaction_must_succeed(signed_tx));
                 }
                 futures::future::join_all(tasks).await;
@@ -1026,7 +1027,10 @@ async fn start(
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
             let address: SuiAddress = kp.public().into();
-            keystore.import(None, SuiKeyPair::Ed25519(kp)).unwrap();
+            keystore
+                .import(None, SuiKeyPair::Ed25519(kp))
+                .await
+                .unwrap();
             SuiClientConfig {
                 keystore,
                 envs: vec![SuiEnv {
@@ -1160,9 +1164,9 @@ async fn genesis(
                 let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
                 let mut keystore = FileBasedKeystore::new(&path)?;
                 for gas_key in GenesisConfig::benchmark_gas_keys(ips.len()) {
-                    keystore.import(None, gas_key)?;
+                    keystore.import(None, gas_key).await?;
                 }
-                keystore.save()?;
+                keystore.save().await?;
 
                 // Make a new genesis config from the provided ip addresses.
                 GenesisConfig::new_for_benchmarks(&ips)
@@ -1214,7 +1218,9 @@ async fn genesis(
 
     let mut keystore = FileBasedKeystore::new(&keystore_path)?;
     for key in &network_config.account_keys {
-        keystore.import(None, SuiKeyPair::Ed25519(key.copy()))?;
+        keystore
+            .import(None, SuiKeyPair::Ed25519(key.copy()))
+            .await?;
     }
     let active_address = keystore.addresses().pop();
 
@@ -1422,7 +1428,9 @@ async fn prompt_if_no_config(
                     Err(e) => return Err(anyhow!("{e}")),
                 }
             };
-            let (new_address, phrase, scheme) = keystore.generate(key_scheme, None, None, None)?;
+
+            let (new_address, key_pair, scheme, phrase) = generate_new_key(key_scheme, None, None)?;
+            keystore.import(None, key_pair).await?;
             let alias = keystore.get_alias(&new_address)?;
             println!(
                 "Generated new keypair and alias for address with scheme {:?} [{alias}: {new_address}]",

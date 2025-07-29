@@ -104,7 +104,7 @@ async fn party_object_deletion_multiple_times() {
                 },
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))
@@ -181,7 +181,7 @@ async fn party_object_deletion_multiple_times_cert_racing() {
                 },
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
 
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
@@ -310,7 +310,7 @@ async fn party_object_transfer_multiple_times() {
                 SuiAddress::ZERO,
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))
@@ -397,7 +397,7 @@ async fn party_object_transfer_multi_certs() {
             SuiAddress::ZERO,
         )
         .build();
-    let xfer_tx = test_cluster.sign_transaction(&xfer_tx);
+    let xfer_tx = test_cluster.sign_transaction(&xfer_tx).await;
 
     let repeat_tx_a = test_cluster
         .test_transaction_builder_with_gas_object(sender, gas2)
@@ -412,7 +412,7 @@ async fn party_object_transfer_multi_certs() {
             SuiAddress::ZERO,
         )
         .build();
-    let repeat_tx_a = test_cluster.sign_transaction(&repeat_tx_a);
+    let repeat_tx_a = test_cluster.sign_transaction(&repeat_tx_a).await;
     let repeat_tx_a_digest = *repeat_tx_a.digest();
 
     let repeat_tx_b = test_cluster
@@ -428,7 +428,7 @@ async fn party_object_transfer_multi_certs() {
             SuiAddress::ZERO,
         )
         .build();
-    let repeat_tx_b = test_cluster.sign_transaction(&repeat_tx_b);
+    let repeat_tx_b = test_cluster.sign_transaction(&repeat_tx_b).await;
     let repeat_tx_b_digest = *repeat_tx_b.digest();
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
@@ -536,7 +536,7 @@ async fn party_object_read() {
                 })],
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))
@@ -566,7 +566,7 @@ async fn party_object_read() {
             recipient,
         )
         .build();
-    let signed_transfer = test_cluster.sign_transaction(&transfer_transaction);
+    let signed_transfer = test_cluster.sign_transaction(&transfer_transaction).await;
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
     test_cluster
         .create_certificate(signed_transfer.clone(), Some(client_ip))
@@ -604,7 +604,7 @@ async fn party_object_read() {
                 })],
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))

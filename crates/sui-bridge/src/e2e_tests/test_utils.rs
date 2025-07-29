@@ -1449,7 +1449,7 @@ async fn deposit_eth_to_sui_package(
             .await
             .unwrap(),
     );
-    let tx = wallet_context.sign_transaction(&tx_data);
+    let tx = wallet_context.sign_transaction(&tx_data).await;
     wallet_context.execute_transaction_may_fail(tx).await
 }
 

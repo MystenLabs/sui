@@ -354,7 +354,7 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     }
 }
 
-pub fn new_wallet_context_from_cluster(
+pub async fn new_wallet_context_from_cluster(
     cluster: &(dyn Cluster + Sync + Send),
     key_pair: AccountKeyPair,
 ) -> WalletContext {
@@ -367,6 +367,7 @@ pub fn new_wallet_context_from_cluster(
     let address: SuiAddress = key_pair.public().into();
     keystore
         .import(None, SuiKeyPair::Ed25519(key_pair))
+        .await
         .unwrap();
     SuiClientConfig {
         keystore,

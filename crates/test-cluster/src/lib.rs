@@ -584,15 +584,15 @@ impl TestCluster {
         TestTransactionBuilder::new(sender, gas, rgp)
     }
 
-    pub fn sign_transaction(&self, tx_data: &TransactionData) -> Transaction {
-        self.wallet.sign_transaction(tx_data)
+    pub async fn sign_transaction(&self, tx_data: &TransactionData) -> Transaction {
+        self.wallet.sign_transaction(tx_data).await
     }
 
     pub async fn sign_and_execute_transaction(
         &self,
         tx_data: &TransactionData,
     ) -> SuiTransactionBlockResponse {
-        let tx = self.wallet.sign_transaction(tx_data);
+        let tx = self.wallet.sign_transaction(tx_data).await;
         self.execute_transaction(tx).await
     }
 
@@ -715,11 +715,13 @@ impl TestCluster {
     ) -> ObjectRef {
         let context = &self.wallet;
         let (sender, gas) = context.get_one_gas_object().await.unwrap().unwrap();
-        let tx = context.sign_transaction(
-            &TestTransactionBuilder::new(sender, gas, rgp)
-                .transfer_sui(amount, funding_address)
-                .build(),
-        );
+        let tx = context
+            .sign_transaction(
+                &TestTransactionBuilder::new(sender, gas, rgp)
+                    .transfer_sui(amount, funding_address)
+                    .build(),
+            )
+            .await;
         context.execute_transaction_must_succeed(tx).await;
 
         context
@@ -1313,7 +1315,9 @@ impl TestClusterBuilder {
         swarm.config().save(network_path)?;
         let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
         for key in &swarm.config().account_keys {
-            keystore.import(None, SuiKeyPair::Ed25519(key.copy()))?;
+            keystore
+                .import(None, SuiKeyPair::Ed25519(key.copy()))
+                .await?;
         }
 
         let active_address = keystore.addresses().first().cloned();
