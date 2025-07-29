@@ -57,34 +57,28 @@ module test::m {
 //> 2: test::m::write_pair(Result(0));
 
 //# programmable --dev-inspect
-// borrow parent, transfer parent with child
+// borrow parent, transfer parent (dropped child)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_mut<test::m::Pair>(Result(0));
 //> 2: test::m::borrow_x_mut(Result(1));
 //> 3: test::m::write_pair(Result(1));
-//> 4: test::m::write_u64(Result(2));
 
 //# programmable --dev-inspect
-// transfer parent with children
-//> 0: test::m::pair();
-//> 1: test::m::borrow_x_y_mut(Result(0));
-//> 2: test::m::write_pair(Result(0));
-//> 3: test::m::write_u64(NestedResult(1,0));
-//> 4: test::m::write_u64(NestedResult(1,1));
-
-//# programmable --dev-inspect
-// transfer parent with child, one was released
+// transfer parent (drop one, use one)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_y_mut(Result(0));
 //> 2: test::m::write_u64(NestedResult(1,0));
 //> 3: test::m::write_pair(Result(0));
-//> 4: test::m::write_u64(NestedResult(1,1));
 
 //# programmable --dev-inspect
-// write to parent with imm child, mut was released
+// transfer parent (drop two)
+//> 0: test::m::pair();
+//> 1: test::m::borrow_x_y_mut(Result(0));
+//> 2: test::m::write_pair(Result(0));
+
+//# programmable --dev-inspect
+// write to parent with imm child (write mut drop imm)
 //> 0: test::m::pair();
 //> 1: test::m::borrow_x_mut_y_imm(Result(0));
 //> 2: test::m::write_u64(NestedResult(1,0));
-//> 3: test::m::use_ref<u64>(NestedResult(1,1));
-//> 4: test::m::write_pair(Result(0));
-//> 5: test::m::use_ref<u64>(NestedResult(1,1));
+//> 3: test::m::write_pair(Result(0));
