@@ -15,6 +15,11 @@ const FINALITY_LATENCY_SEC_BUCKETS: &[f64] = &[
     25.0,
 ];
 
+const SUBMIT_TRANSACTION_RETRIES_BUCKETS: &[f64] = &[
+    0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 30.0,
+];
+
+// TODO(mysticeti-fastpath): For validator names, use display name instead of concise name.
 #[derive(Clone)]
 pub struct TransactionDriverMetrics {
     pub(crate) settlement_finality_latency: HistogramVec,
@@ -49,13 +54,15 @@ impl TransactionDriverMetrics {
             submit_transaction_retries: register_histogram_with_registry!(
                 "transaction_driver_submit_transaction_retries",
                 "Number of retries needed for successful transaction submission",
-                vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 30.0],
+                SUBMIT_TRANSACTION_RETRIES_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             submit_transaction_latency: register_histogram_with_registry!(
                 "transaction_driver_submit_transaction_latency",
-                "Latency of transaction submission in seconds",
+                "Time in seconds to successfully submit a transaction to a validator.\n\
+                Includes all retries and measures from the start of submission\n\
+                until a validator accepts the transaction.",
                 FINALITY_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
