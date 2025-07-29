@@ -82,6 +82,7 @@ fragment E on Epoch {
       periodLength
       decreaseRate
   }
+  liveObjectSetDigest
 }
 
 //# run-graphql
@@ -154,4 +155,5 @@ fragment E on Epoch {
       periodLength
       decreaseRate
   }
+  liveObjectSetDigest
 }

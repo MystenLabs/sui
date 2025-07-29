@@ -243,6 +243,11 @@ type Epoch {
 	Parameters related to the subsidy that supplements staking rewards
 	"""
 	systemStakeSubsidy: StakeSubsidy
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
 }
 
 type Event {
