@@ -1024,6 +1024,12 @@ pool_exchange_rates
 active_validator_addresses
 	public fun
 	0x3::sui_system
+active_validator_addresses_ref
+	public fun
+	0x3::sui_system
+active_validator_voting_powers
+	public fun
+	0x3::sui_system
 calculate_rewards
 	public(package) fun
 	0x3::sui_system
@@ -1034,6 +1040,9 @@ load_system_state
 	fun
 	0x3::sui_system
 load_system_state_mut
+	fun
+	0x3::sui_system
+load_system_state_ref
 	fun
 	0x3::sui_system
 load_inner_maybe_upgrade

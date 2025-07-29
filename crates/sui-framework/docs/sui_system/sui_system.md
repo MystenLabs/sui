@@ -82,10 +82,13 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `validator_address_by_pool_id`](#sui_system_sui_system_validator_address_by_pool_id)
 -  [Function `pool_exchange_rates`](#sui_system_sui_system_pool_exchange_rates)
 -  [Function `active_validator_addresses`](#sui_system_sui_system_active_validator_addresses)
+-  [Function `active_validator_addresses_ref`](#sui_system_sui_system_active_validator_addresses_ref)
+-  [Function `active_validator_voting_powers`](#sui_system_sui_system_active_validator_voting_powers)
 -  [Function `calculate_rewards`](#sui_system_sui_system_calculate_rewards)
 -  [Function `advance_epoch`](#sui_system_sui_system_advance_epoch)
 -  [Function `load_system_state`](#sui_system_sui_system_load_system_state)
 -  [Function `load_system_state_mut`](#sui_system_sui_system_load_system_state_mut)
+-  [Function `load_system_state_ref`](#sui_system_sui_system_load_system_state_ref)
 -  [Function `load_inner_maybe_upgrade`](#sui_system_sui_system_load_inner_maybe_upgrade)
 -  [Function `validator_voting_powers`](#sui_system_sui_system_validator_voting_powers)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_store_execution_time_estimates)
@@ -1427,6 +1430,56 @@ Getter returning addresses of the currently active validators.
 
 </details>
 
+<a name="sui_system_sui_system_active_validator_addresses_ref"></a>
+
+## Function `active_validator_addresses_ref`
+
+Getter returning addresses of the currently active validators by reference.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_addresses_ref">active_validator_addresses_ref</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>): vector&lt;<b>address</b>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_addresses_ref">active_validator_addresses_ref</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): vector&lt;<b>address</b>&gt; {
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_addresses">active_validator_addresses</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_active_validator_voting_powers"></a>
+
+## Function `active_validator_voting_powers`
+
+Getter returns the voting power of the active validators, values are voting power in the scale of 10000.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>): <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, u64&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): VecMap&lt;<b>address</b>, u64&gt; {
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>()
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_system_sui_system_calculate_rewards"></a>
 
 ## Function `calculate_rewards`
@@ -1570,6 +1623,35 @@ gas coins.
 
 </details>
 
+<a name="sui_system_sui_system_load_system_state_ref"></a>
+
+## Function `load_system_state_ref`
+
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>(self: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>): &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>(self: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): &SuiSystemStateInnerV2 {
+    <b>let</b> inner: &SuiSystemStateInnerV2 = dynamic_field::borrow(
+        &self.id,
+        self.version,
+    );
+    <b>assert</b>!(inner.system_state_version() == self.version, <a href="../sui_system/sui_system.md#sui_system_sui_system_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_system_sui_system_load_inner_maybe_upgrade"></a>
 
 ## Function `load_inner_maybe_upgrade`
@@ -1622,7 +1704,7 @@ Returns the voting power of the active validators, values are voting power in th
 
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_validator_voting_powers">validator_voting_powers</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): VecMap&lt;<b>address</b>, u64&gt; {
-    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state">load_system_state</a>().active_validator_voting_powers()
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state">load_system_state</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>()
 }
 </code></pre>
 
