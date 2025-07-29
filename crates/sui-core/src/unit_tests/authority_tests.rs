@@ -2634,9 +2634,9 @@ async fn test_move_call_insufficient_gas() {
     };
     // Now we try to construct a transaction with a smaller gas budget than required.
     let data = TransactionData::new_transfer(
-        recipient,
-        FullObjectRef::from_fastpath_ref(obj_ref),
         sender,
+        FullObjectRef::from_fastpath_ref(obj_ref),
+        recipient,
         gas_ref,
         gas_used - 5,
         rgp,
