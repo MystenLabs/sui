@@ -21,7 +21,7 @@ use super::{
         object::{self, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
-        transaction::Transaction,
+        transaction::{filter::TransactionFilter, CTransaction, Transaction},
         transaction_effects::TransactionEffects,
     },
 };
@@ -358,6 +358,27 @@ impl Query {
         digest: Digest,
     ) -> Result<Option<TransactionEffects>, RpcError> {
         TransactionEffects::fetch(ctx, self.scope(ctx)?, digest).await
+    }
+
+    /// The transactions that exist in the network, optionally filtered by transaction filters.
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Connection<String, Transaction>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        // Use the filter if provided, otherwise use default (unfiltered)
+        let filter = filter.unwrap_or_default();
+
+        Transaction::paginate(ctx, scope, page, filter).await
     }
 }
 

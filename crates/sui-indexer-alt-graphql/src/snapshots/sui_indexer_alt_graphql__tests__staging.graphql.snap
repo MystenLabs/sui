@@ -119,6 +119,7 @@ type Checkpoint {
 	The aggregation of signatures from a quorum of validators for the checkpoint proposal.
 	"""
 	validatorSignatures: ValidatorAggregatedSignature
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 }
 
 """
@@ -901,6 +902,10 @@ type Query {
 	Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
 	"""
 	transactionEffects(digest: String!): TransactionEffects
+	"""
+	The transactions that exist in the network, optionally filtered by transaction filters.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
 }
 
 type ServiceConfig {
@@ -1124,6 +1129,35 @@ type Transaction {
 	signatures: [UserSignature!]!
 }
 
+type TransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Transaction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Transaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 The results of executing a transaction.
 """
@@ -1182,6 +1216,21 @@ type TransactionEffects {
 	The before and after state of objects that were modified by this transaction.
 	"""
 	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+}
+
+input TransactionFilter {
+	"""
+	Limit to transactions that occured strictly after the given checkpoint.
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Limit to transactions in the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit to transaction that occured strictly before the given checkpoint.
+	"""
+	beforeCheckpoint: UInt53
 }
 
 """
