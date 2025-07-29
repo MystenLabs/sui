@@ -65,7 +65,7 @@ impl CommitFinalizerHandle {
 /// the commit is finalized and popped from the buffer. The next earliest commit is then processed
 /// similarly, until either the buffer becomes empty or a commit with pending blocks or transactions
 /// is encountered.
-pub(crate) struct CommitFinalizer {
+pub struct CommitFinalizer {
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
     transaction_certifier: TransactionCertifier,
@@ -76,9 +76,8 @@ pub(crate) struct CommitFinalizer {
     blocks: BTreeMap<BlockRef, BlockState>,
 }
 
-#[allow(dead_code)]
 impl CommitFinalizer {
-    fn new(
+    pub fn new(
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         transaction_certifier: TransactionCertifier,
@@ -143,7 +142,7 @@ impl CommitFinalizer {
         }
     }
 
-    fn process_commit(&mut self, committed_sub_dag: CommittedSubDag) -> Vec<CommittedSubDag> {
+    pub fn process_commit(&mut self, committed_sub_dag: CommittedSubDag) -> Vec<CommittedSubDag> {
         let _scope = monitored_scope("CommitFinalizer::process_commit");
 
         if let Some(last_processed_commit) = self.last_processed_commit {
@@ -474,7 +473,6 @@ impl CommitFinalizer {
             }
         }
 
-        // Apply all changes to remove finalized transactions
         for (block_ref, finalized_transactions) in all_finalized_transactions {
             self.context
                 .metrics

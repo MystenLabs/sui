@@ -165,7 +165,6 @@ impl TrustedCommit {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn new_for_test(
         index: CommitIndex,
         previous_digest: CommitDigest,
