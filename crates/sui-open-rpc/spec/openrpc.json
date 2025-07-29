@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "89",
+              "maxSupportedProtocolVersion": "90",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1329,6 +1329,7 @@
                 "enable_accumulators": false,
                 "enable_coin_deny_list": false,
                 "enable_coin_deny_list_v2": false,
+                "enable_coin_registry": false,
                 "enable_effects_v2": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
@@ -8837,7 +8838,8 @@
               "RandomnessStateCreate",
               "CoinDenyListStateCreate",
               "StoreExecutionTimeObservations",
-              "AccumulatorRootCreate"
+              "AccumulatorRootCreate",
+              "CoinRegistryCreate"
             ]
           },
           {

@@ -85,6 +85,7 @@ module examples::regulated_token {
         token::add_rule_for_action<T, Allowlist>(policy, cap, token::transfer_action(), ctx);
     }
 
+    #[allow(deprecated_usage)]
     /// Internal: not necessary, but moving this call to a separate function for
     /// better visibility of the Closed Loop setup in `init`.
     fun create_currency<T: drop>(otw: T, ctx: &mut TxContext): TreasuryCap<T> {

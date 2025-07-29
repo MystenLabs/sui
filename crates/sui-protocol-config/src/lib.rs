@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 89;
+const MAX_PROTOCOL_VERSION: u64 = 90;
 
 // Record history of protocol version allocations here:
 //
@@ -722,6 +722,10 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
+
+    // Enable coin registry protocol
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_registry: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -1853,6 +1857,10 @@ impl ProtocolConfig {
 
     pub fn enable_accumulators(&self) -> bool {
         self.feature_flags.enable_accumulators
+    }
+
+    pub fn enable_coin_registry(&self) -> bool {
+        self.feature_flags.enable_coin_registry
     }
 
     pub fn enable_coin_deny_list_v2(&self) -> bool {
@@ -3865,6 +3873,11 @@ impl ProtocolConfig {
                     cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
                     cfg.feature_flags.additional_consensus_digest_indirect_state = true;
+                }
+                90 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_coin_registry = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

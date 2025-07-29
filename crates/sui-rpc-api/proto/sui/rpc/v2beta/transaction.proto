@@ -444,6 +444,8 @@ message EndOfEpochTransactionKind {
     uint64 bridge_committee_init = 204;
     // Create the accumulator root object.
     google.protobuf.Empty accumulator_root_create = 205;
+    // Create the coin registry object.
+    google.protobuf.Empty coin_registry_create = 206;
   }
 }
 

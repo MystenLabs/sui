@@ -9,6 +9,7 @@ module test::fake {
 
     public struct FAKE has drop {}
 
+    #[allow(deprecated_usage)]
     fun init(witness: FAKE, ctx: &mut TxContext){
         let (treasury_cap, metadata) = coin::create_currency(witness, 2, b"FAKE", b"", b"", option::none(), ctx);
         transfer::public_freeze_object(metadata);
