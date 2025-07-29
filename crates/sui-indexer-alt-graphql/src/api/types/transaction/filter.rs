@@ -85,9 +85,9 @@ impl TransactionFilter {
         };
 
         // Inclusive checkpoint sequence upperbound. If are no upper bound filters,
-        // we will use `checkpoint_viewed_at``.
+        // we will use `checkpoint_viewed_at`.
         //
-        // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)``
+        // SAFETY: we can unwrap because of the `Some(checkpoint_viewed_at)`
         let cp_hi = min_option([cp_before_inclusive, cp_at, Some(checkpoint_viewed_at)]).unwrap();
 
         Some(RangeInclusive::new(cp_lo, cp_hi))
