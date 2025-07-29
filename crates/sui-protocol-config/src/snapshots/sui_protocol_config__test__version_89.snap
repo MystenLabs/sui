@@ -107,10 +107,9 @@ feature_flags:
   type_tags_in_object_runtime: true
   better_adapter_type_resolution_errors: true
   record_time_estimate_processed: true
+  dependency_linkage_error: true
+  additional_multisig_checks: true
   ignore_execution_time_observations_after_certs_closed: true
-  debug_fatal_on_move_invariant_violation: true
-  additional_consensus_digest_indirect_state: true
-  check_for_init_during_upgrade: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -146,7 +145,6 @@ max_move_package_size: 102400
 max_publish_or_upgrade_per_ptb: 5
 max_tx_gas: 50000000000000
 max_gas_price: 50000000000
-max_gas_price_rgp_factor_for_aborted_transactions: 100
 max_gas_computation_bucket: 5000000
 gas_rounding_step: 1000
 max_loop_depth: 5
