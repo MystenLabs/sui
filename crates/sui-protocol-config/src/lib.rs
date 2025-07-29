@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 88;
+const MAX_PROTOCOL_VERSION: u64 = 89;
 
 // Record history of protocol version allocations here:
 //
@@ -249,6 +249,8 @@ const MAX_PROTOCOL_VERSION: u64 = 88;
 // Version 88: Update `sui-system` package to use `calculate_rewards` function.
 //             Define the cost for the native Move function `rgp`.
 //             Ignore execution time observations after validator stops accepting certs.
+// Version 89: Add additional signature checks
+//             Add additional linkage checks
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -736,6 +738,14 @@ struct FeatureFlags {
     // If true, ignore execution time observations after certs are closed.
     #[serde(skip_serializing_if = "is_false")]
     ignore_execution_time_observations_after_certs_closed: bool,
+
+    // If true enable additional linkage checks.
+    #[serde(skip_serializing_if = "is_false")]
+    dependency_linkage_error: bool,
+
+    // If true enable additional multisig checks.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_multisig_checks: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2100,6 +2110,14 @@ impl ProtocolConfig {
     pub fn ignore_execution_time_observations_after_certs_closed(&self) -> bool {
         self.feature_flags
             .ignore_execution_time_observations_after_certs_closed
+    }
+
+    pub fn dependency_linkage_error(&self) -> bool {
+        self.feature_flags.dependency_linkage_error
+    }
+
+    pub fn additional_multisig_checks(&self) -> bool {
+        self.feature_flags.additional_multisig_checks
     }
 }
 
@@ -3824,6 +3842,10 @@ impl ProtocolConfig {
                                 default_none_duration_for_new_keys: true,
                             },
                         );
+                }
+                89 => {
+                    cfg.feature_flags.dependency_linkage_error = true;
+                    cfg.feature_flags.additional_multisig_checks = true;
                 }
                 // Use this template when making changes:
                 //

@@ -418,8 +418,16 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         .into_iter()
         .collect();
 
-    let aux_verify_data =
-        VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, true, Some(30));
+    let aux_verify_data = VerifyParams::new(
+        parsed,
+        vec![],
+        ZkLoginEnv::Test,
+        true,
+        true,
+        true,
+        Some(30),
+        true,
+    );
     let res = multisig.verify_claims(
         intent_msg,
         multisig_address,
