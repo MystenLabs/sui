@@ -75,3 +75,7 @@ docs/content/references/framework/**
 lcov.info
 
 .sparse
+
+
+# Claude
+CLAUDE.md

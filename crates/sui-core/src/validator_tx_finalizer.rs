@@ -182,18 +182,19 @@ where
         tx: VerifiedSignedTransaction,
     ) {
         let tx_digest = *tx.digest();
-        trace!(?tx_digest, "Tracking signed transaction");
+        let epoch = epoch_store.epoch();
+        trace!(?tx_digest, ?epoch, validator = ?self.name, "Tracking signed transaction");
         match self
             .delay_and_finalize_tx(cache_read, epoch_store, tx)
             .await
         {
             Ok(did_run) => {
                 if did_run {
-                    debug!(?tx_digest, "Transaction finalized");
+                    debug!(?tx_digest, ?epoch, validator = ?self.name, "Transaction finalized");
                 }
             }
             Err(err) => {
-                debug!(?tx_digest, "Failed to finalize transaction: {err}");
+                debug!(?tx_digest, ?epoch, validator = ?self.name, "Failed to finalize transaction: {err}");
             }
         }
     }
@@ -209,15 +210,31 @@ where
             return Ok(false);
         };
         let digests = [tx_digest];
+        let initial_epoch = epoch_store.epoch();
+        debug!(
+            ?tx_digest,
+            ?initial_epoch,
+            validator = ?self.name,
+            ?tx_finalization_delay,
+            "Waiting to finalize transaction"
+        );
+        
         select! {
             _ = tokio::time::sleep(tx_finalization_delay) => {
-                trace!(?tx_digest, "Waking up to finalize transaction");
+                let current_epoch = epoch_store.epoch();
+                debug!(
+                    ?tx_digest,
+                    ?initial_epoch,
+                    ?current_epoch,
+                    validator = ?self.name,
+                    "Waking up to finalize transaction"
+                );
             }
             _ = cache_read.notify_read_executed_effects_digests(
                 "ValidatorTxFinalizer::notify_read_executed_effects_digests",
                 &digests,
             ) => {
-                trace!(?tx_digest, "Transaction already finalized");
+                trace!(?tx_digest, validator = ?self.name, "Transaction already finalized");
                 return Ok(false);
             }
         }
@@ -225,6 +242,7 @@ where
         if epoch_store.is_pending_consensus_certificate(&tx_digest) {
             trace!(
                 ?tx_digest,
+                validator = ?self.name,
                 "Transaction has been submitted to consensus, no need to help drive finality"
             );
             return Ok(false);
@@ -236,17 +254,46 @@ where
         let start_time = self.metrics.start_finalization();
         debug!(
             ?tx_digest,
+            validator = ?self.name,
+            current_epoch = ?epoch_store.epoch(),
             "Invoking authority aggregator to finalize transaction"
         );
-        tokio::time::timeout(
+        let exec_result = tokio::time::timeout(
             self.config.tx_finalization_timeout,
             self.agg
                 .load()
                 .execute_transaction_block(tx.into_unsigned().inner(), None),
         )
-        .await??;
-        self.metrics.finalization_succeeded(start_time);
-        Ok(true)
+        .await;
+        
+        match exec_result {
+            Ok(Ok(_response)) => {
+                self.metrics.finalization_succeeded(start_time);
+                debug!(
+                    ?tx_digest,
+                    validator = ?self.name,
+                    "Successfully finalized transaction via ValidatorTxFinalizer"
+                );
+                Ok(true)
+            }
+            Ok(Err(e)) => {
+                debug!(
+                    ?tx_digest,
+                    validator = ?self.name,
+                    error = ?e,
+                    "Failed to finalize transaction: authority aggregator error"
+                );
+                Err(e)
+            }
+            Err(_) => {
+                debug!(
+                    ?tx_digest,
+                    validator = ?self.name,
+                    "Failed to finalize transaction: timeout"
+                );
+                Err(anyhow::anyhow!("Timeout while finalizing transaction"))
+            }
+        }
     }
 
     // We want to avoid all validators waking up at the same time to finalize the same transaction.
