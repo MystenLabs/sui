@@ -108,6 +108,8 @@ where
                             TX_TYPE_SHARED_OBJ_TX
                         }])
                         .observe(settlement_finality_latency);
+                    // Record the number of retries
+                    self.metrics.transaction_retries.observe(attempts as f64);
                     return Ok(resp);
                 }
                 Err(e) => {

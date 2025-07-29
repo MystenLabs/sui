@@ -32,6 +32,10 @@ pub struct TransactionDriverMetrics {
     pub(crate) rejection_acks: IntCounter,
     pub(crate) expiration_acks: IntCounter,
     pub(crate) effects_digest_mismatches: IntCounter,
+    pub(crate) transaction_retries: Histogram,
+    pub(crate) certified_effects_ack_latency: Histogram,
+    pub(crate) certified_effects_ack_attempts: IntCounter,
+    pub(crate) certified_effects_ack_successes: IntCounter,
 }
 
 impl TransactionDriverMetrics {
@@ -102,6 +106,32 @@ impl TransactionDriverMetrics {
             effects_digest_mismatches: register_int_counter_with_registry!(
                 "transaction_driver_effects_digest_mismatches",
                 "Number of effects digest mismatches detected by the transaction driver",
+                registry,
+            )
+            .unwrap(),
+            transaction_retries: register_histogram_with_registry!(
+                "transaction_driver_transaction_retries",
+                "Number of retries per transaction attempt in drive_transaction_once",
+                SUBMIT_TRANSACTION_RETRIES_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            certified_effects_ack_latency: register_histogram_with_registry!(
+                "transaction_driver_certified_effects_ack_latency",
+                "Latency in seconds for getting certified effects acknowledgment",
+                FINALITY_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            certified_effects_ack_attempts: register_int_counter_with_registry!(
+                "transaction_driver_certified_effects_ack_attempts",
+                "Total number of transactions that went through certified effects ack process",
+                registry,
+            )
+            .unwrap(),
+            certified_effects_ack_successes: register_int_counter_with_registry!(
+                "transaction_driver_certified_effects_ack_successes",
+                "Number of successful certified effects acknowledgments",
                 registry,
             )
             .unwrap(),
