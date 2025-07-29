@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 89;
+const MAX_PROTOCOL_VERSION: u64 = 90;
 
 // Record history of protocol version allocations here:
 //
@@ -249,7 +249,9 @@ const MAX_PROTOCOL_VERSION: u64 = 89;
 // Version 88: Update `sui-system` package to use `calculate_rewards` function.
 //             Define the cost for the native Move function `rgp`.
 //             Ignore execution time observations after validator stops accepting certs.
-// Version 89: Standard library improvements.
+// Version 89: Add additional signature checks
+//             Add additional linkage checks
+// Version 90: Standard library improvements.
 //             Enable `debug_fatal` on Move invariant violations.
 //             Enable passkey and passkey inside multisig for mainnet.
 
@@ -735,6 +737,14 @@ struct FeatureFlags {
     // If true, record the time estimate processed in the consensus commit prologue.
     #[serde(skip_serializing_if = "is_false")]
     record_time_estimate_processed: bool,
+
+    // If true enable additional linkage checks.
+    #[serde(skip_serializing_if = "is_false")]
+    dependency_linkage_error: bool,
+
+    // If true enable additional multisig checks.
+    #[serde(skip_serializing_if = "is_false")]
+    additional_multisig_checks: bool,
 
     // If true, ignore execution time observations after certs are closed.
     #[serde(skip_serializing_if = "is_false")]
@@ -2126,6 +2136,14 @@ impl ProtocolConfig {
     pub fn ignore_execution_time_observations_after_certs_closed(&self) -> bool {
         self.feature_flags
             .ignore_execution_time_observations_after_certs_closed
+    }
+
+    pub fn dependency_linkage_error(&self) -> bool {
+        self.feature_flags.dependency_linkage_error
+    }
+
+    pub fn additional_multisig_checks(&self) -> bool {
+        self.feature_flags.additional_multisig_checks
     }
 
     pub fn debug_fatal_on_move_invariant_violation(&self) -> bool {
@@ -3870,6 +3888,10 @@ impl ProtocolConfig {
                         );
                 }
                 89 => {
+                    cfg.feature_flags.dependency_linkage_error = true;
+                    cfg.feature_flags.additional_multisig_checks = true;
+                }
+                90 => {
                     // 100x RGP
                     cfg.max_gas_price_rgp_factor_for_aborted_transactions = Some(100);
                     cfg.feature_flags.debug_fatal_on_move_invariant_violation = true;
