@@ -3,6 +3,7 @@
 
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, TransactionIndex};
+use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::BTreeMap;
 use sui_types::committee::EpochId;
@@ -66,6 +67,8 @@ impl TransactionRejectVoteReasonCache {
 
     /// Sets the last committed leader round. This is used to clean up the cache based on the retention policy.
     pub fn set_last_committed_leader_round(&self, round: u32) {
+        let _scope =
+            monitored_scope("TransactionRejectVoteReasonCache::set_last_committed_leader_round");
         let cut_off_round = round.saturating_sub(self.retention_rounds) + 1;
         let cut_off_position = ConsensusPosition {
             epoch: self.epoch,

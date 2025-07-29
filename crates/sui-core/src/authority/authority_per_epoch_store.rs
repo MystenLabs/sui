@@ -4823,6 +4823,17 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    pub(crate) fn get_rejection_vote_reason(
+        &self,
+        position: ConsensusPosition,
+    ) -> Option<SuiError> {
+        if let Some(tx_reject_vote_cache) = self.tx_reject_vote_cache.as_ref() {
+            tx_reject_vote_cache.get_rejection_vote_reason(position)
+        } else {
+            None
+        }
+    }
+
     /// Only used by admin API
     pub async fn get_estimated_tx_cost(&self, tx: &TransactionData) -> Option<u64> {
         self.execution_time_estimator
