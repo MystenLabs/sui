@@ -63,13 +63,17 @@ async fn test_deposits() -> Result<(), anyhow::Error> {
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, recipient);
+        verify_accumulator_exists(child_object_resolver, recipient, 1000);
     });
 
     Ok(())
 }
 
-fn verify_accumulator_exists(child_object_resolver: &dyn ChildObjectResolver, owner: SuiAddress) {
+fn verify_accumulator_exists(
+    child_object_resolver: &dyn ChildObjectResolver,
+    owner: SuiAddress,
+    expected_balance: u64,
+) {
     let sui_coin_type = Balance::type_tag(GAS::type_tag());
 
     assert!(
@@ -84,7 +88,9 @@ fn verify_accumulator_exists(child_object_resolver: &dyn ChildObjectResolver, ow
 
     assert_eq!(
         accumulator_value,
-        AccumulatorValue::U128(U128 { value: 1000 }),
+        AccumulatorValue::U128(U128 {
+            value: expected_balance as u128
+        }),
         "Accumulator value should be 1000"
     );
 
@@ -128,7 +134,7 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender);
+        verify_accumulator_exists(child_object_resolver, sender, 1000);
     });
 
     let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
@@ -178,9 +184,9 @@ async fn test_deposit_and_withdraw_with_larger_reservation() -> Result<(), anyho
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        let object_store = state.get_object_store().as_ref();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
         // Verify that the accumulator still exists, as the entire balance was not withdrawn
-        verify_accumulator_exists(object_store, sender);
+        verify_accumulator_exists(child_object_resolver, sender, 200);
     });
 
     Ok(())
