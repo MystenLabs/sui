@@ -421,7 +421,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
             .expect("Not enough gas to initialize randomized transaction workload");
 
         // Publish basics package
-        info!("Publishing basics package");
+        info!("Publishing basics package for randomized transaction workload");
         self.basics_package_id = Some(
             publish_basics_package(head.0, proxy.clone(), head.1, &head.2, gas_price)
                 .await

@@ -2866,6 +2866,9 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn close_user_certs(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
+        let epoch = self.epoch();
+        info!("Epoch {} - Closing user certs", epoch);
+        
         lock_guard.close_user_certs();
         self.store_reconfig_state(&lock_guard)
             .expect("Updating reconfig state cannot fail");
@@ -2874,7 +2877,9 @@ impl AuthorityPerEpochStore {
         let mut epoch_close_time = self.epoch_close_time.write();
         if epoch_close_time.is_none() {
             // Only update it the first time epoch is closed.
-            *epoch_close_time = Some(Instant::now());
+            let now = Instant::now();
+            *epoch_close_time = Some(now);
+            info!("Epoch {} - User certs closed at {:?}", epoch, now);
 
             self.user_certs_closed_notify
                 .notify()
@@ -2888,15 +2893,21 @@ impl AuthorityPerEpochStore {
 
     /// Notify epoch is terminated, can only be called once on epoch store
     pub async fn epoch_terminated(&self) {
+        let epoch = self.epoch();
+        info!("Epoch {} termination initiated", epoch);
+        
         // Notify interested tasks that epoch has ended
         self.epoch_alive_notify
             .notify()
             .expect("epoch_terminated called twice on same epoch store");
+        
         // This `write` acts as a barrier - it waits for futures executing in
         // `within_alive_epoch` to terminate before we can continue here
-        debug!("Epoch terminated - waiting for pending tasks to complete");
+        info!("Epoch {} terminated - waiting for pending tasks to complete", epoch);
+        let start = tokio::time::Instant::now();
         *self.epoch_alive.write().await = false;
-        debug!("All pending epoch tasks completed");
+        let elapsed = start.elapsed();
+        info!("Epoch {} - All pending epoch tasks completed after {:?}", epoch, elapsed);
     }
 
     /// Waits for the notification about epoch termination
@@ -2916,13 +2927,21 @@ impl AuthorityPerEpochStore {
         // acquire a write lock
         let guard = self.epoch_alive.read().await;
         if !*guard {
+            debug!("Epoch {} - within_alive_epoch called but epoch already terminated", self.epoch());
             return Err(());
         }
+        let epoch = self.epoch();
         let terminated = self.wait_epoch_terminated().boxed();
         let f = f.boxed();
         match select(terminated, f).await {
-            Either::Left((_, _f)) => Err(()),
-            Either::Right((result, _)) => Ok(result),
+            Either::Left((_, _f)) => {
+                debug!("Epoch {} - Task cancelled due to epoch termination", epoch);
+                Err(())
+            }
+            Either::Right((result, _)) => {
+                trace!("Epoch {} - Task completed before epoch termination", epoch);
+                Ok(result)
+            }
         }
     }
 

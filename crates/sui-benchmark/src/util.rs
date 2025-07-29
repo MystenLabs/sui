@@ -62,8 +62,25 @@ pub async fn publish_basics_package(
     let transaction = TestTransactionBuilder::new(sender, gas, gas_price)
         .publish_examples("basics")
         .build_and_sign(keypair);
-    let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
-    let effects = execution_result.unwrap();
+    tracing::info!(
+        "Publishing basics package with tx digest {:?}",
+        transaction.digest()
+    );
+    let (client_type, execution_result) = proxy.execute_transaction_block(transaction).await;
+    tracing::debug!(
+        "Executed publish_basics_package transaction via {:?}",
+        client_type
+    );
+    let effects = match execution_result {
+        Ok(effects) => effects,
+        Err(e) => {
+            tracing::error!(
+                "Failed to execute publish_basics_package transaction: {:?}",
+                e
+            );
+            panic!("publish_basics_package failed: {:?}", e);
+        }
+    };
     effects
         .created()
         .iter()

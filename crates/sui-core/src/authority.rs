@@ -1221,6 +1221,11 @@ impl AuthorityState {
             .get_reconfig_state_read_lock_guard()
             .should_accept_user_certs()
         {
+            debug!(
+                "Rejecting transaction {:?} - ValidatorHaltedAtEpochEnd (epoch {})",
+                transaction.digest(),
+                epoch_store.epoch()
+            );
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
@@ -3464,7 +3469,10 @@ impl AuthorityState {
     pub fn execution_lock_for_signing(&self) -> SuiResult<ExecutionLockReadGuard> {
         self.execution_lock
             .try_read()
-            .map_err(|_| SuiError::ValidatorHaltedAtEpochEnd)
+            .map_err(|_| {
+                debug!("Failed to acquire execution lock for signing - ValidatorHaltedAtEpochEnd");
+                SuiError::ValidatorHaltedAtEpochEnd
+            })
     }
 
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {

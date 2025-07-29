@@ -410,7 +410,11 @@ where
                 AggregatorProcessCertificateError::RetryableExecuteCertificate {
                     retryable_errors,
                 } => {
-                    debug!(?retryable_errors, "Retryable certificate");
+                    debug!(
+                        ?tx_digest,
+                        ?retryable_errors,
+                        "Retryable certificate - will retry"
+                    );
                     None
                 }
             })?;
@@ -608,7 +612,12 @@ where
                     certificate,
                     newly_formed,
                 }) => {
-                    debug!(?tx_digest, "Transaction processing succeeded");
+                    debug!(
+                        ?tx_digest,
+                        ?newly_formed,
+                        elapsed_ms = timer.elapsed().as_millis(),
+                        "Transaction certified"
+                    );
                     (certificate, newly_formed)
                 }
                 Ok(ProcessTransactionResult::Executed(effects_cert, events)) => {
@@ -711,7 +720,11 @@ where
         let tx_digest = *request.transaction.digest();
         match err {
             None => {
-                info!(?tx_digest, "Failed to {action}: {err:?} - Retrying");
+                info!(
+                    ?tx_digest,
+                    retry_count = old_retry_times + 1,
+                    "Failed to {action}: {err:?} - Retrying"
+                );
                 spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
                     request.clone(),
                     tx_cert,
