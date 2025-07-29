@@ -181,7 +181,7 @@ mod tests {
             prune_concurrency: 1,
         };
 
-        let metrics = IndexerMetrics::new(&Default::default());
+        let metrics = IndexerMetrics::new(None, &Default::default());
         let cancel = CancellationToken::new();
 
         let store_clone = store.clone();

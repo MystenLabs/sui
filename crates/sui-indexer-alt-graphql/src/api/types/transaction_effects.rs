@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{
-    connection::{Connection, Edge},
+    connection::{Connection, CursorType, Edge},
     Context, Enum, Object,
 };
 use fastcrypto::encoding::{Base58, Encoding};
@@ -14,11 +14,13 @@ use sui_indexer_alt_reader::kv_loader::{
 };
 use sui_types::{
     digests::TransactionDigest, effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus,
+    execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, uint53::UInt53},
+    api::scalars::{
+        base64::Base64, cursor::JsonCursor, date_time::DateTime, digest::Digest, uint53::UInt53,
+    },
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -26,6 +28,9 @@ use crate::{
 
 use super::{
     checkpoint::Checkpoint,
+    epoch::Epoch,
+    event::Event,
+    execution_error::ExecutionError,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
@@ -52,6 +57,7 @@ pub(crate) struct EffectsContents {
 }
 
 type CObjectChange = JsonCursor<usize>;
+type CEvent = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -108,6 +114,89 @@ impl EffectsContents {
 
         let effects = content.effects()?;
         Ok(Some(UInt53::from(effects.lamport_version().value())))
+    }
+
+    /// Rich execution error information for failed transactions.
+    async fn execution_error(&self, ctx: &Context<'_>) -> Result<Option<ExecutionError>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        let status = effects.status();
+
+        // Extract programmable transaction if available
+        let programmable_tx = content
+            .data()
+            .ok()
+            .and_then(|tx_data| match tx_data.into_kind() {
+                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => Some(tx),
+                _ => None,
+            });
+
+        ExecutionError::from_execution_status(ctx, status, programmable_tx.as_ref()).await
+    }
+
+    /// Timestamp corresponding to the checkpoint this transaction was finalized in.
+    async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        Ok(Some(DateTime::from_ms(content.timestamp_ms() as i64)?))
+    }
+
+    /// The epoch this transaction was finalized in.
+    async fn epoch(&self) -> Result<Option<Epoch>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(Epoch::with_id(
+            self.scope.clone(),
+            effects.executed_epoch(),
+        )))
+    }
+
+    /// Events emitted by this transaction.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CEvent>,
+        last: Option<u64>,
+        before: Option<CEvent>,
+    ) -> Result<Option<Connection<String, Event>>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "events");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let events = content.events()?;
+        let cursors = page.paginate_indices(events.len());
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+
+        let transaction_digest = content.digest()?;
+        let timestamp_ms = content.timestamp_ms();
+
+        for edge in cursors.edges {
+            let event = Event {
+                scope: self.scope.clone(),
+                native: events[*edge.cursor].clone(),
+                transaction_digest,
+                sequence_number: *edge.cursor as u64,
+                timestamp_ms,
+            };
+
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), event));
+        }
+
+        Ok(Some(conn))
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.

@@ -284,6 +284,14 @@ CommandArgumentError:
       InvalidTransferObject: UNIT
     14:
       InvalidMakeMoveVecNonObjectArgument: UNIT
+    15:
+      ArgumentWithoutValue: UNIT
+    16:
+      CannotMoveBorrowedValue: UNIT
+    17:
+      CannotWriteToExtendedReference: UNIT
+    18:
+      InvalidReferenceArgument: UNIT
 CompressedSignature:
   ENUM:
     0:

@@ -180,6 +180,84 @@ type Epoch {
 	storageFund: StorageFund
 }
 
+type Event {
+	"""
+	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
+	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
+	"""
+	eventBcs: Base64
+	"""
+	Address of the sender of the transaction that emitted this event.
+	"""
+	sender: Address
+	"""
+	The position of the event among the events from the same transaction.
+	"""
+	sequenceNumber: UInt53!
+	"""
+	Timestamp corresponding to the checkpoint this event's transaction was finalized in.
+	All events from the same transaction share the same timestamp.
+	"""
+	timestamp: DateTime
+	"""
+	The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
+	"""
+	transaction: Transaction
+}
+
+type EventConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EventEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Event!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EventEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Represents execution error information for failed transactions.
+"""
+type ExecutionError {
+	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	
+	Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
+	"""
+	abortCode: BigInt
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
+	"""
+	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+	"""
+	instructionOffset: Int
+	"""
+	The error's name. Only populated for clever errors.
+	"""
+	identifier: String
+}
+
 """
 The execution status of this transaction: success or failure.
 """
@@ -905,6 +983,10 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	User signatures for this transaction.
+	"""
+	signatures: [UserSignature!]!
 }
 
 """
@@ -934,6 +1016,22 @@ type TransactionEffects {
 	"""
 	lamportVersion: UInt53
 	"""
+	Rich execution error information for failed transactions.
+	"""
+	executionError: ExecutionError
+	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	"""
+	timestamp: DateTime
+	"""
+	The epoch this transaction was finalized in.
+	"""
+	epoch: Epoch
+	"""
+	Events emitted by this transaction.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection
+	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
@@ -951,6 +1049,15 @@ type TransactionEffects {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+type UserSignature {
+	"""
+	The signature bytes, Base64-encoded.
+	For simple signatures: flag || signature || pubkey
+	For complex signatures: flag || bcs_serialized_struct
+	"""
+	signatureBytes: Base64
+}
 
 type ValidatorAggregatedSignature {
 	"""

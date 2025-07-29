@@ -41,17 +41,20 @@ struct Path {
 #[derive(Debug)]
 struct PathSet(IndexSet<Path>);
 
+#[derive(Debug)]
 enum Value {
     NonRef,
     Ref { is_mut: bool, paths: Rc<PathSet> },
 }
 
+#[derive(Debug)]
 struct Location {
     // A singleton set pointing to the location itself
     self_path: Rc<PathSet>,
     value: Option<Value>,
 }
 
+#[derive(Debug)]
 struct Context {
     tx_context: Location,
     gas: Location,
@@ -146,17 +149,32 @@ impl PathSet {
         self.0.is_empty()
     }
 
-    /// Returns true if any path in `self` is non-`Disjoint` with any path in `other`.
-    /// Excludes `Aliases` if `allow_aliases` is true.
-    fn conflicts(&self, other: &Self, allow_aliases: bool) -> bool {
+    /// Returns true if any path in `self` `Extends` with any path in `other`.
+    /// Excludes `Aliases` if `ignore_aliases` is true.
+    fn extends(&self, other: &Self, ignore_aliases: bool) -> bool {
         self.0.iter().any(|self_path| {
             other
                 .0
                 .iter()
                 .any(|other_path| match self_path.compare(other_path) {
-                    PathComparison::Disjoint => false,
-                    PathComparison::Aliases => !allow_aliases,
-                    PathComparison::Prefix | PathComparison::Extends => true,
+                    PathComparison::Prefix | PathComparison::Disjoint => false,
+                    PathComparison::Aliases => !ignore_aliases,
+                    PathComparison::Extends => true,
+                })
+        })
+    }
+
+    /// Returns true if all paths in `self` are `Disjoint` with all paths in `other`.
+    fn is_disjoint(&self, other: &Self) -> bool {
+        self.0.iter().all(|self_path| {
+            other
+                .0
+                .iter()
+                .all(|other_path| match self_path.compare(other_path) {
+                    PathComparison::Disjoint => true,
+                    PathComparison::Prefix | PathComparison::Aliases | PathComparison::Extends => {
+                        false
+                    }
                 })
         })
     }
@@ -375,9 +393,9 @@ impl Context {
     }
 
     fn check_usage(&self, usage: &T::Usage, location: &Location) -> anyhow::Result<()> {
-        // by marking "allow alias" as `false`, we will also check for `Alias` paths, i.e. paths
+        // by marking "ignore alias" as `false`, we will also check for `Alias` paths, i.e. paths
         // that point to the location itself without any extensions.
-        let is_borrowed = self.any_conflicts(&location.self_path, /* allow alias */ false)
+        let is_borrowed = self.any_extends(&location.self_path, /* ignore alias */ false)
             || self.arg_roots.contains(&usage.location());
         match usage {
             T::Usage::Move(_) => {
@@ -460,11 +478,11 @@ impl Context {
             })
     }
 
-    /// Returns true if any of the references in a given `T::Location` conflict with the paths in
-    /// `paths`. Excludes `Aliases` if `allow_aliases` is true.
-    fn any_conflicts(&self, paths: &PathSet, allow_aliases: bool) -> bool {
+    /// Returns true if any of the references in a given `T::Location` extends a path in `paths`.
+    /// Excludes `Aliases` if `ignore_aliases` is true.
+    fn any_extends(&self, paths: &PathSet, ignore_aliases: bool) -> bool {
         self.all_references()
-            .any(|other| paths.conflicts(&other, allow_aliases))
+            .any(|other| other.extends(paths, ignore_aliases))
     }
 }
 
@@ -565,7 +583,7 @@ fn write_ref(context: &Context, value: Value) -> anyhow::Result<()> {
             paths,
         } => {
             anyhow::ensure!(
-                !context.any_conflicts(&paths, /* allow alias */ false),
+                !context.any_extends(&paths, /* ignore alias */ true),
                 "Cannot write to a mutable reference that has extensions"
             );
             Ok(())
@@ -591,14 +609,11 @@ fn call(
             } => {
                 // Allow alias conflicts with references not passed as arguments
                 anyhow::ensure!(
-                    !context.any_conflicts(&paths, /* allow alias */ true),
+                    !context.any_extends(&paths, /* ignore alias */ true),
                     "Cannot transfer a mutable ref with extensions"
                 );
                 // All mutable argument references must be disjoint from all other references
-                anyhow::ensure!(
-                    !mut_paths.conflicts(&paths, /* allow alias */ false),
-                    "Double mutable borrow"
-                );
+                anyhow::ensure!(mut_paths.is_disjoint(&paths), "Double mutable borrow");
                 all_paths.union(&paths);
                 mut_paths.union(&paths);
             }
@@ -613,7 +628,7 @@ fn call(
     }
     // All mutable references must be disjoint from all immutable references
     anyhow::ensure!(
-        !imm_paths.conflicts(&mut_paths, /* allow alias */ false),
+        imm_paths.is_disjoint(&mut_paths),
         "Mutable and immutable borrows cannot overlap"
     );
     let command = context.current_command();
@@ -648,4 +663,103 @@ fn call(
         .collect::<anyhow::Result<Vec<_>>>()?;
     context.add_result_values(result_values);
     Ok(())
+}
+
+//**************************************************************************************************
+// impl
+//**************************************************************************************************
+
+impl Path {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        print!("{:?}", self.root);
+        for ext in &self.extensions {
+            let Delta { command, result } = ext;
+            print!(".d{}_{}", command, result);
+        }
+        println!(",");
+    }
+}
+
+impl PathSet {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        println!("{{");
+        for path in &self.0 {
+            path.print();
+        }
+        println!("}}");
+    }
+}
+
+impl Value {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        match self {
+            Value::NonRef => print!("NonRef"),
+            Value::Ref { is_mut, paths } => {
+                if *is_mut {
+                    print!("mut ");
+                } else {
+                    print!("imm ");
+                }
+                paths.print();
+            }
+        }
+    }
+}
+
+impl Location {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        print!("{{ self_path: ");
+        self.self_path.print();
+        print!(", value: ");
+        if let Some(value) = &self.value {
+            value.print();
+        } else {
+            println!("_");
+        }
+        println!("}}");
+    }
+}
+
+impl Context {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        println!("Context {{");
+        println!("  tx_context: ");
+        self.tx_context.print();
+        println!("  gas: ");
+        self.gas.print();
+        println!("  object_inputs: [");
+        for input in &self.object_inputs {
+            input.print();
+        }
+        println!("  ],");
+        println!("  pure_inputs: [");
+        for input in &self.pure_inputs {
+            input.print();
+        }
+        println!("  ],");
+        println!("  receiving_inputs: [");
+        for input in &self.receiving_inputs {
+            input.print();
+        }
+        println!("  ],");
+        println!("  results: [");
+        for result in &self.results {
+            for loc in result {
+                loc.print();
+            }
+            println!(",");
+        }
+        println!("  ],");
+        println!("}}");
+    }
 }

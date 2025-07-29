@@ -569,7 +569,7 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
 
         let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
         let mut dummy_addr = 0x1000;
-        for (dep_name, dep) in pkg.named_addresses() {
+        for (dep_name, dep) in pkg.named_addresses()? {
             let name = dep_name.as_str().into();
 
             let addr = match dep {
@@ -586,7 +586,7 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
                     )?;
                     addr
                 }
-                NamedAddress::Published(original_id) => original_id.0,
+                NamedAddress::Defined(original_id) => original_id.0,
             };
 
             let addr: NumericalAddress =
