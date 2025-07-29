@@ -19,7 +19,6 @@ use sui_node::SuiNode;
 use sui_rosetta::grpc_client::GrpcClient;
 use sui_rosetta::types::{CurveType, PrefundedAccount, SuiEnv};
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
-use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, SuiKeyPair, ToFromBytes};
 use tracing::info;
@@ -141,13 +140,10 @@ impl RosettaServerCommand {
                 info!(
                     "Starting Rosetta Online Server with remove Sui full node [{full_node_url}]."
                 );
-                let sui_client = wait_for_sui_client(full_node_url.clone()).await;
-                let grpc_client =
-                    GrpcClient::new(full_node_url.parse().expect("Invalid URL"), None, None)
-                        .expect("Failed to create GRPC client");
+                let grpc_client = wait_for_grpc_client(full_node_url.clone()).await;
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client, grpc_client);
+                let rosetta = RosettaOnlineServer::new(env, grpc_client);
                 rosetta.serve(addr).await;
             }
 
@@ -176,14 +172,11 @@ impl RosettaServerCommand {
                 let rpc_address = format!("http://127.0.0.1:{}", config.json_rpc_address.port());
                 let _node = SuiNode::start(config, registry_service).await?;
 
-                let sui_client = wait_for_sui_client(rpc_address.clone()).await;
-                let grpc_client =
-                    GrpcClient::new(rpc_address.parse().expect("Invalid URL"), None, None)
-                        .expect("Failed to create GRPC client");
+                let grpc_client = wait_for_grpc_client(rpc_address.clone()).await;
 
                 let rosetta_path = data_path.join("rosetta_db");
                 info!("Rosetta db path : {rosetta_path:?}");
-                let rosetta = RosettaOnlineServer::new(env, sui_client, grpc_client);
+                let rosetta = RosettaOnlineServer::new(env, grpc_client);
                 rosetta.serve(addr).await;
             }
         };
@@ -191,12 +184,23 @@ impl RosettaServerCommand {
     }
 }
 
-async fn wait_for_sui_client(rpc_address: String) -> SuiClient {
+async fn wait_for_grpc_client(rpc_address: String) -> GrpcClient {
     loop {
-        match SuiClientBuilder::default().build(&rpc_address).await {
-            Ok(client) => return client,
+        match GrpcClient::new(rpc_address.parse().expect("Invalid URL"), None, None) {
+            Ok(client) => {
+                // Test the connection by making a simple request
+                match client.get_service_info().await {
+                    Ok(_) => return client,
+                    Err(e) => {
+                        warn!("Error connecting to GRPC server [{rpc_address}]: {e}, retrying in 5 seconds.");
+                        tokio::time::sleep(Duration::from_millis(5000)).await;
+                    }
+                }
+            }
             Err(e) => {
-                warn!("Error connecting to Sui RPC server [{rpc_address}]: {e}, retrying in 5 seconds.");
+                warn!(
+                    "Error creating GRPC client for [{rpc_address}]: {e}, retrying in 5 seconds."
+                );
                 tokio::time::sleep(Duration::from_millis(5000)).await;
             }
         }

@@ -50,7 +50,7 @@ pub async fn status(
     let system_state = epoch
         .system_state
         .ok_or_else(|| Error::DataError("Missing system state in epoch".to_string()))?;
-    
+
     let validators = system_state
         .validators
         .ok_or_else(|| Error::DataError("Missing validators in system state".to_string()))?;
@@ -59,10 +59,13 @@ pub async fn status(
         .active_validators
         .iter()
         .filter_map(|validator| {
-            let address = validator.address.as_ref()?
-                .parse::<sui_types::base_types::SuiAddress>().ok()?;
+            let address = validator
+                .address
+                .as_ref()?
+                .parse::<sui_types::base_types::SuiAddress>()
+                .ok()?;
             let staking_pool = validator.staking_pool.as_ref()?;
-            
+
             Some(Peer {
                 peer_id: ObjectID::from(address).into(),
                 metadata: Some(json!({
@@ -76,10 +79,7 @@ pub async fn status(
     let blocks = context.blocks();
     let current_block = blocks.current_block().await?;
     let index = current_block.block.block_identifier.index;
-    let target = context
-        .client
-        .get_latest_checkpoint()
-        .await?;
+    let target = context.client.get_latest_checkpoint().await?;
 
     Ok(NetworkStatusResponse {
         current_block_identifier: current_block.block.block_identifier,

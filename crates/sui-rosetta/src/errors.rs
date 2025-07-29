@@ -72,8 +72,6 @@ pub enum Error {
     #[error(transparent)]
     SuiError(#[from] SuiError),
     #[error(transparent)]
-    SuiRpcError(#[from] sui_sdk::error::Error),
-    #[error(transparent)]
     EncodingError(#[from] eyre::Report),
     #[error(transparent)]
     DBError(#[from] TypedStoreError),

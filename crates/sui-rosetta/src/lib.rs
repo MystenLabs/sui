@@ -15,7 +15,6 @@ use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::grpc_client::GrpcClient;
-use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 
 use crate::errors::Error;
 use crate::errors::Error::MissingMetadata;
@@ -37,6 +36,8 @@ pub mod operations;
 mod state;
 pub mod types;
 
+pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
+
 pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
     symbol: "SUI".to_string(),
     decimals: 9,
@@ -51,8 +52,9 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, _client: SuiClient, grpc_client: GrpcClient) -> Self {
-        let coin_cache = CoinMetadataCache::new(grpc_client.clone(), NonZeroUsize::new(1000).unwrap());
+    pub fn new(env: SuiEnv, grpc_client: GrpcClient) -> Self {
+        let coin_cache =
+            CoinMetadataCache::new(grpc_client.clone(), NonZeroUsize::new(1000).unwrap());
         let blocks = Arc::new(CheckpointBlockProvider::new(
             grpc_client.clone(),
             coin_cache.clone(),
@@ -136,14 +138,9 @@ impl CoinMetadataCache {
     pub async fn get_currency(&self, type_tag: &TypeTag) -> Result<Currency, Error> {
         let mut cache = self.metadata.lock().await;
         if !cache.contains(type_tag) {
-            let coin_info_response = self
-                .grpc_client
-                .get_coin_info(type_tag.to_string())
-                .await?;
+            let coin_info_response = self.grpc_client.get_coin_info(type_tag.to_string()).await?;
 
-            let coin_metadata = coin_info_response
-                .metadata
-                .ok_or(MissingMetadata)?;
+            let coin_metadata = coin_info_response.metadata.ok_or(MissingMetadata)?;
 
             let ccy = Currency {
                 symbol: coin_metadata.symbol.unwrap_or_default(),

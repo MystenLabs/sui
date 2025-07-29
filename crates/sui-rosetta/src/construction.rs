@@ -278,10 +278,7 @@ pub async fn metadata(
         InternalOperation::WithdrawStake { sender, stake_ids } => {
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
-                context
-                    .client
-                    .get_stakes(*sender)
-                    .await?
+                context.client.get_stakes(*sender).await?
             } else {
                 stake_ids.clone()
             };
@@ -290,10 +287,7 @@ pub async fn metadata(
                 return Err(Error::InvalidInput("No active stake to withdraw".into()));
             }
 
-            let stake_refs = context
-                .client
-                .get_object_refs(stake_ids)
-                .await?;
+            let stake_refs = context.client.get_object_refs(stake_ids).await?;
 
             (Some(0), stake_refs)
         }
@@ -363,9 +357,12 @@ pub async fn metadata(
             .select_coins(sender, None, total_amount, vec![])
             .await
             .ok()
-            .map(|selected| selected.into_iter().map(|(id, balance, _obj_ref)| {
-                sui_types::coin::Coin::new(id, balance)
-            }).collect())
+            .map(|selected| {
+                selected
+                    .into_iter()
+                    .map(|(id, balance, _obj_ref)| sui_types::coin::Coin::new(id, balance))
+                    .collect()
+            })
     } else {
         None
     };
@@ -374,13 +371,11 @@ pub async fn metadata(
     let coins: Vec<sui_types::coin::Coin> = if let Some(coins) = coins {
         coins
     } else {
-        let all_coins = context
-            .client
-            .get_all_coins(sender, None)
-            .await?;
-        all_coins.into_iter().map(|(id, balance, _obj_ref)| {
-            sui_types::coin::Coin::new(id, balance)
-        }).collect()
+        let all_coins = context.client.get_all_coins(sender, None).await?;
+        all_coins
+            .into_iter()
+            .map(|(id, balance, _obj_ref)| sui_types::coin::Coin::new(id, balance))
+            .collect()
     };
 
     let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance.value());

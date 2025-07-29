@@ -6,7 +6,7 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use futures::future::join_all;
 
-use sui_sdk::SUI_COIN_TYPE;
+use crate::SUI_COIN_TYPE;
 use sui_types::base_types::SuiAddress;
 use tracing::info;
 

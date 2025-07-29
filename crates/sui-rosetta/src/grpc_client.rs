@@ -6,10 +6,9 @@ use bytes::Bytes;
 use std::collections::HashMap;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2beta2::{
-    BatchGetTransactionsRequest, BatchGetTransactionsResponse,
-    Checkpoint as ProtoCheckpoint, Epoch, GetBalanceRequest,
-    GetCheckpointRequest, GetCoinInfoRequest, GetCoinInfoResponse, GetEpochRequest,
-    GetServiceInfoRequest, GetServiceInfoResponse, ListOwnedObjectsRequest,
+    BatchGetTransactionsRequest, BatchGetTransactionsResponse, Checkpoint as ProtoCheckpoint,
+    Epoch, GetBalanceRequest, GetCheckpointRequest, GetCoinInfoRequest, GetCoinInfoResponse,
+    GetEpochRequest, GetServiceInfoRequest, GetServiceInfoResponse, ListOwnedObjectsRequest,
     ListOwnedObjectsResponse, SimulateTransactionRequest, SimulateTransactionResponse,
 };
 use sui_rpc_api::client::{AuthInterceptor, TransactionExecutionResponse};
@@ -213,7 +212,9 @@ impl GrpcClient {
 
         let result = transactions.into_iter().next().unwrap();
         match result.result {
-            Some(sui_rpc::proto::sui::rpc::v2beta2::get_transaction_result::Result::Transaction(tx)) => Ok(tx),
+            Some(
+                sui_rpc::proto::sui::rpc::v2beta2::get_transaction_result::Result::Transaction(tx),
+            ) => Ok(tx),
             Some(sui_rpc::proto::sui::rpc::v2beta2::get_transaction_result::Result::Error(e)) => {
                 Err(Error::DataError(format!("Transaction error: {:?}", e)))
             }
@@ -334,10 +335,7 @@ impl GrpcClient {
         Ok(response)
     }
 
-    pub async fn get_coin_info(
-        &self,
-        coin_type: String,
-    ) -> Result<GetCoinInfoResponse, Error> {
+    pub async fn get_coin_info(&self, coin_type: String) -> Result<GetCoinInfoResponse, Error> {
         let request = GetCoinInfoRequest {
             coin_type: Some(coin_type),
         };
@@ -370,48 +368,57 @@ impl GrpcClient {
     ) -> Result<Vec<(ObjectID, u64, ObjectRef)>, Error> {
         let mut all_coins = Vec::new();
         let mut cursor = None;
-        
+
         loop {
-            let response = self.get_coins_for_address(owner, coin_type.clone(), cursor).await?;
-            
+            let response = self
+                .get_coins_for_address(owner, coin_type.clone(), cursor)
+                .await?;
+
             for obj in &response.objects {
-                let object_id = obj.object_id
+                let object_id = obj
+                    .object_id
                     .as_ref()
                     .ok_or_else(|| Error::DataError("Missing object ID".to_string()))?
                     .parse()
                     .map_err(|e| Error::DataError(format!("Invalid object ID: {}", e)))?;
-                
+
                 // Extract coin balance from object
                 if let Some(contents) = &obj.contents {
                     if let Some(value) = &contents.value {
-                            // Deserialize coin to get balance
-                            let coin: sui_types::coin::Coin = bcs::from_bytes(value)
-                                .map_err(|e| Error::DataError(format!("Failed to deserialize coin: {}", e)))?;
-                            
-                            let balance = coin.balance.value();
-                            let version = obj.version
-                                .ok_or_else(|| Error::DataError("Missing object version".to_string()))?;
-                            let object_ref = (
-                                object_id,
-                                SequenceNumber::from(version),
-                                obj.digest
-                                    .as_ref()
-                                    .ok_or_else(|| Error::DataError("Missing object digest".to_string()))?
-                                    .parse()
-                                    .map_err(|e| Error::DataError(format!("Invalid object digest: {}", e)))?,
-                            );
-                            
-                            all_coins.push((object_id, balance, object_ref));
+                        // Deserialize coin to get balance
+                        let coin: sui_types::coin::Coin = bcs::from_bytes(value).map_err(|e| {
+                            Error::DataError(format!("Failed to deserialize coin: {}", e))
+                        })?;
+
+                        let balance = coin.balance.value();
+                        let version = obj.version.ok_or_else(|| {
+                            Error::DataError("Missing object version".to_string())
+                        })?;
+                        let object_ref = (
+                            object_id,
+                            SequenceNumber::from(version),
+                            obj.digest
+                                .as_ref()
+                                .ok_or_else(|| {
+                                    Error::DataError("Missing object digest".to_string())
+                                })?
+                                .parse()
+                                .map_err(|e| {
+                                    Error::DataError(format!("Invalid object digest: {}", e))
+                                })?,
+                        );
+
+                        all_coins.push((object_id, balance, object_ref));
                     }
                 }
             }
-            
+
             cursor = response.next_page_token;
             if cursor.is_none() {
                 break;
             }
         }
-        
+
         Ok(all_coins)
     }
 
@@ -425,114 +432,123 @@ impl GrpcClient {
         let mut selected_coins = Vec::new();
         let mut total_balance = 0u64;
         let mut cursor = None;
-        
+
         // Keep fetching coins until we have enough
         while total_balance < amount {
-            let response = self.get_coins_for_address(owner, coin_type.clone(), cursor).await?;
-            
+            let response = self
+                .get_coins_for_address(owner, coin_type.clone(), cursor)
+                .await?;
+
             for obj in &response.objects {
-                let object_id = obj.object_id
+                let object_id = obj
+                    .object_id
                     .as_ref()
                     .ok_or_else(|| Error::DataError("Missing object ID".to_string()))?
                     .parse()
                     .map_err(|e| Error::DataError(format!("Invalid object ID: {}", e)))?;
-                
+
                 // Skip if in exclude list
                 if exclude.contains(&object_id) {
                     continue;
                 }
-                
+
                 // Extract coin balance from object
                 if let Some(contents) = &obj.contents {
                     if let Some(value) = &contents.value {
-                            // Deserialize coin to get balance
-                            let coin: sui_types::coin::Coin = bcs::from_bytes(value)
-                                .map_err(|e| Error::DataError(format!("Failed to deserialize coin: {}", e)))?;
-                            
-                            let balance = coin.balance.value();
-                            let version = obj.version
-                                .ok_or_else(|| Error::DataError("Missing object version".to_string()))?;
-                            let object_ref = (
-                                object_id,
-                                SequenceNumber::from(version),
-                                obj.digest
-                                    .as_ref()
-                                    .ok_or_else(|| Error::DataError("Missing object digest".to_string()))?
-                                    .parse()
-                                    .map_err(|e| Error::DataError(format!("Invalid object digest: {}", e)))?,
-                            );
-                            
-                            selected_coins.push((object_id, balance, object_ref));
-                            total_balance += balance;
-                            
-                            if total_balance >= amount {
-                                return Ok(selected_coins);
-                            }
+                        // Deserialize coin to get balance
+                        let coin: sui_types::coin::Coin = bcs::from_bytes(value).map_err(|e| {
+                            Error::DataError(format!("Failed to deserialize coin: {}", e))
+                        })?;
+
+                        let balance = coin.balance.value();
+                        let version = obj.version.ok_or_else(|| {
+                            Error::DataError("Missing object version".to_string())
+                        })?;
+                        let object_ref = (
+                            object_id,
+                            SequenceNumber::from(version),
+                            obj.digest
+                                .as_ref()
+                                .ok_or_else(|| {
+                                    Error::DataError("Missing object digest".to_string())
+                                })?
+                                .parse()
+                                .map_err(|e| {
+                                    Error::DataError(format!("Invalid object digest: {}", e))
+                                })?,
+                        );
+
+                        selected_coins.push((object_id, balance, object_ref));
+                        total_balance += balance;
+
+                        if total_balance >= amount {
+                            return Ok(selected_coins);
+                        }
                     }
                 }
             }
-            
+
             // Check if there are more pages
             cursor = response.next_page_token;
             if cursor.is_none() {
                 break;
             }
         }
-        
+
         if total_balance < amount {
             return Err(Error::InvalidInput(format!(
                 "Insufficient balance. Required: {}, available: {}",
                 amount, total_balance
             )));
         }
-        
+
         Ok(selected_coins)
     }
 
-    pub async fn get_stakes(
-        &self,
-        owner: SuiAddress,
-    ) -> Result<Vec<ObjectID>, Error> {
+    pub async fn get_stakes(&self, owner: SuiAddress) -> Result<Vec<ObjectID>, Error> {
         let mut stake_ids = Vec::new();
         let mut cursor = None;
-        
+
         // Fetch all StakedSui objects
         let object_type = Some("0x3::staking_pool::StakedSui".to_string());
-        
+
         loop {
-            let response = self.list_owned_objects(owner, object_type.clone(), cursor).await?;
-            
+            let response = self
+                .list_owned_objects(owner, object_type.clone(), cursor)
+                .await?;
+
             for obj in &response.objects {
                 if let Some(object_id) = &obj.object_id {
-                    let id = object_id.parse()
+                    let id = object_id
+                        .parse()
                         .map_err(|e| Error::DataError(format!("Invalid object ID: {}", e)))?;
                     stake_ids.push(id);
                 }
             }
-            
+
             cursor = response.next_page_token;
             if cursor.is_none() {
                 break;
             }
         }
-        
+
         Ok(stake_ids)
     }
-    
+
     pub async fn get_stakes_with_details(
         &self,
         owner: SuiAddress,
     ) -> Result<Vec<(ObjectID, StakedSui, SuiAddress)>, Error> {
         let mut stakes = Vec::new();
         let mut cursor = None;
-        
+
         // First get current epoch to get validator info
         let epoch = self.get_epoch(None).await?;
         let validator_map = self.extract_validator_info_from_epoch(&epoch)?;
-        
+
         // Fetch all StakedSui objects with full details
         let object_type = Some("0x3::staking_pool::StakedSui".to_string());
-        
+
         loop {
             let request = ListOwnedObjectsRequest {
                 owner: Some(owner.to_string()),
@@ -547,7 +563,7 @@ impl GrpcClient {
                     "bcs",
                 ])),
             };
-            
+
             let response = self
                 .inner
                 .live_data_client()
@@ -555,20 +571,21 @@ impl GrpcClient {
                 .await
                 .map_err(Self::convert_tonic_error)?
                 .into_inner();
-            
+
             for obj in &response.objects {
-                if let Some((staked_sui, object_id, validator_addr)) = 
-                    self.parse_staked_sui_from_proto(obj, &validator_map)? {
+                if let Some((staked_sui, object_id, validator_addr)) =
+                    self.parse_staked_sui_from_proto(obj, &validator_map)?
+                {
                     stakes.push((object_id, staked_sui, validator_addr));
                 }
             }
-            
+
             cursor = response.next_page_token;
             if cursor.is_none() {
                 break;
             }
         }
-        
+
         Ok(stakes)
     }
 
@@ -578,53 +595,61 @@ impl GrpcClient {
     ) -> Result<Vec<ObjectRef>, Error> {
         // Convert ObjectIDs to strings for the request
         let object_ids_str: Vec<String> = object_ids.iter().map(|id| id.to_string()).collect();
-        
-        let requests = object_ids_str.into_iter().map(|id| {
-            sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest {
-                object_id: Some(id),
-                version: None, // Get latest version
-                read_mask: Some(sui_rpc::field::FieldMask::from_paths([
-                    "object_id",
-                    "version", 
-                    "digest",
-                ])),
-            }
-        }).collect();
-        
+
+        let requests = object_ids_str
+            .into_iter()
+            .map(|id| {
+                sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest {
+                    object_id: Some(id),
+                    version: None, // Get latest version
+                    read_mask: Some(sui_rpc::field::FieldMask::from_paths([
+                        "object_id",
+                        "version",
+                        "digest",
+                    ])),
+                }
+            })
+            .collect();
+
         let request = sui_rpc::proto::sui::rpc::v2beta2::BatchGetObjectsRequest {
             requests,
             read_mask: None,
         };
-        
+
         let response = self
             .inner
             .raw_client()
             .batch_get_objects(request)
             .await
             .map_err(Self::convert_tonic_error)?;
-        
+
         let mut object_refs = Vec::new();
         for result in response.into_inner().objects {
-            if let Some(sui_rpc::proto::sui::rpc::v2beta2::get_object_result::Result::Object(obj)) = result.result {
-                let object_id = obj.object_id
+            if let Some(sui_rpc::proto::sui::rpc::v2beta2::get_object_result::Result::Object(obj)) =
+                result.result
+            {
+                let object_id = obj
+                    .object_id
                     .as_ref()
                     .ok_or_else(|| Error::DataError("Missing object ID".to_string()))?
                     .parse()
                     .map_err(|e| Error::DataError(format!("Invalid object ID: {}", e)))?;
-                
-                let version = obj.version
+
+                let version = obj
+                    .version
                     .ok_or_else(|| Error::DataError("Missing object version".to_string()))?;
-                
-                let digest = obj.digest
+
+                let digest = obj
+                    .digest
                     .as_ref()
                     .ok_or_else(|| Error::DataError("Missing object digest".to_string()))?
                     .parse()
                     .map_err(|e| Error::DataError(format!("Invalid object digest: {}", e)))?;
-                
+
                 object_refs.push((object_id, SequenceNumber::from(version), digest));
             }
         }
-        
+
         Ok(object_refs)
     }
 
