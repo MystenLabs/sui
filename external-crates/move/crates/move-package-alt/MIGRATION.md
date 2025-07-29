@@ -62,7 +62,7 @@ Installing and running the prototype
 
 To install the prototype, run
 ```sh
-suiup install sui --nightly=sui-pkg-alt
+suiup install sui --nightly=sui-pkg-alt -y
 ```
 
 This will compile `sui` from the prototype branch, so it will need the rust
@@ -295,11 +295,3 @@ passing `-e <environment>`.
     localnet you will need to have environments defined for them. We have a
     `[dev-environments]` feature for this purpose, but the implementation of
     that feature is not currently complete.
-
-### `mvr` doesn't need additional environment information
-
-The new package system automatically tells `mvr` what chain it is building for,
-so you no longer need to set an environment variable to indicate what network
-to resolve for. You will need to set an environment variable if you are
-building for an environment other than `mainnet` or `testnet` (or you can use
-`dep-overrides` to set a non-mvr dependency to use for them).
