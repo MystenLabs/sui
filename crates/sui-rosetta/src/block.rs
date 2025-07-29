@@ -12,7 +12,6 @@ use crate::types::{
     TransactionIdentifier,
 };
 use crate::{Error, OnlineServerContext, SuiEnv};
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 
 // This module implements the [Rosetta Block API](https://www.rosetta-api.org/docs/BlockApi.html)
 
@@ -44,24 +43,17 @@ pub async fn transaction(
 ) -> Result<BlockTransactionResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
     let digest = request.transaction_identifier.hash;
+    
+    // Use GRPC to get transaction with details
     let response = context
-        .sui_client
-        .read_api()
-        .get_transaction_with_options(
-            digest,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_events()
-                .with_effects()
-                .with_balance_changes(),
-        )
+        .client
+        .get_transaction_with_details(digest)
         .await?;
-    let hash = response.digest;
 
-    let operations = Operations::try_from_response(response, &context.coin_metadata_cache).await?;
+    let operations = Operations::try_from_grpc_response(response, &context.coin_metadata_cache).await?;
 
     let transaction = Transaction {
-        transaction_identifier: TransactionIdentifier { hash },
+        transaction_identifier: TransactionIdentifier { hash: digest },
         operations,
         related_transactions: vec![],
         metadata: None,

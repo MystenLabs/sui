@@ -51,15 +51,15 @@ pub struct RosettaOnlineServer {
 }
 
 impl RosettaOnlineServer {
-    pub fn new(env: SuiEnv, client: SuiClient, grpc_client: GrpcClient) -> Self {
-        let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1000).unwrap());
+    pub fn new(env: SuiEnv, _client: SuiClient, grpc_client: GrpcClient) -> Self {
+        let coin_cache = CoinMetadataCache::new(grpc_client.clone(), NonZeroUsize::new(1000).unwrap());
         let blocks = Arc::new(CheckpointBlockProvider::new(
             grpc_client.clone(),
             coin_cache.clone(),
         ));
         Self {
             env,
-            context: OnlineServerContext::new(grpc_client, client, blocks, coin_cache),
+            context: OnlineServerContext::new(grpc_client, blocks, coin_cache),
         }
     }
 
@@ -121,14 +121,14 @@ impl RosettaOfflineServer {
 
 #[derive(Clone)]
 pub struct CoinMetadataCache {
-    client: SuiClient,
+    grpc_client: grpc_client::GrpcClient,
     metadata: Arc<Mutex<LruCache<TypeTag, Currency>>>,
 }
 
 impl CoinMetadataCache {
-    pub fn new(client: SuiClient, size: NonZeroUsize) -> Self {
+    pub fn new(grpc_client: grpc_client::GrpcClient, size: NonZeroUsize) -> Self {
         Self {
-            client,
+            grpc_client,
             metadata: Arc::new(Mutex::new(LruCache::new(size))),
         }
     }
@@ -136,16 +136,18 @@ impl CoinMetadataCache {
     pub async fn get_currency(&self, type_tag: &TypeTag) -> Result<Currency, Error> {
         let mut cache = self.metadata.lock().await;
         if !cache.contains(type_tag) {
-            let metadata = self
-                .client
-                .coin_read_api()
-                .get_coin_metadata(type_tag.to_string())
-                .await?
+            let coin_info_response = self
+                .grpc_client
+                .get_coin_info(type_tag.to_string())
+                .await?;
+
+            let coin_metadata = coin_info_response
+                .metadata
                 .ok_or(MissingMetadata)?;
 
             let ccy = Currency {
-                symbol: metadata.symbol,
-                decimals: metadata.decimals as u64,
+                symbol: coin_metadata.symbol.unwrap_or_default(),
+                decimals: coin_metadata.decimals.unwrap_or(0) as u64,
                 metadata: CurrencyMetadata {
                     coin_type: type_tag.to_string(),
                 },

@@ -4,10 +4,10 @@
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
+use fastcrypto::encoding::{Encoding, Hex};
 use serde_json::json;
 use strum::IntoEnumIterator;
 
-use fastcrypto::encoding::Hex;
 use sui_types::base_types::ObjectID;
 
 use crate::errors::{Error, ErrorType};
@@ -41,30 +41,44 @@ pub async fn status(
 ) -> Result<NetworkStatusResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
 
-    let system_state = context
-        .sui_client
-        .governance_api()
-        .get_latest_sui_system_state()
+    // Get current epoch information including validators
+    let epoch = context
+        .client
+        .get_epoch(None) // None means get latest epoch
         .await?;
 
-    let peers = system_state
+    let system_state = epoch
+        .system_state
+        .ok_or_else(|| Error::DataError("Missing system state in epoch".to_string()))?;
+    
+    let validators = system_state
+        .validators
+        .ok_or_else(|| Error::DataError("Missing validators in system state".to_string()))?;
+
+    let peers: Vec<Peer> = validators
         .active_validators
         .iter()
-        .map(|validator| Peer {
-            peer_id: ObjectID::from(validator.sui_address).into(),
-            metadata: Some(json!({
-                "public_key": Hex::from_bytes(&validator.protocol_pubkey_bytes),
-                "stake_amount": validator.staking_pool_sui_balance,
-            })),
+        .filter_map(|validator| {
+            let address = validator.address.as_ref()?
+                .parse::<sui_types::base_types::SuiAddress>().ok()?;
+            let staking_pool = validator.staking_pool.as_ref()?;
+            
+            Some(Peer {
+                peer_id: ObjectID::from(address).into(),
+                metadata: Some(json!({
+                    "stake_amount": staking_pool.sui_balance.unwrap_or(0),
+                    "protocol_public_key": validator.protocol_public_key.as_ref()
+                        .map(Hex::encode),
+                })),
+            })
         })
         .collect();
     let blocks = context.blocks();
     let current_block = blocks.current_block().await?;
     let index = current_block.block.block_identifier.index;
     let target = context
-        .sui_client
-        .read_api()
-        .get_latest_checkpoint_sequence_number()
+        .client
+        .get_latest_checkpoint()
         .await?;
 
     Ok(NetworkStatusResponse {

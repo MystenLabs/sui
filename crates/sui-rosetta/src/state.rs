@@ -4,7 +4,6 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_rpc::proto::sui::rpc::v2beta2::Checkpoint as ProtoCheckpoint;
-use sui_sdk::SuiClient;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
 
@@ -22,9 +21,6 @@ mod balance_changing_tx_tests;
 #[derive(Clone)]
 pub struct OnlineServerContext {
     pub client: GrpcClient,
-    // TODO: Remove sui_client once all operations are migrated to GRPC
-    // Currently kept for: account balance queries, coin operations, and staking queries
-    pub sui_client: SuiClient,
     pub coin_metadata_cache: CoinMetadataCache,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
 }
@@ -32,13 +28,11 @@ pub struct OnlineServerContext {
 impl OnlineServerContext {
     pub fn new(
         client: GrpcClient,
-        sui_client: SuiClient,
         block_provider: Arc<dyn BlockProvider + Send + Sync>,
         coin_metadata_cache: CoinMetadataCache,
     ) -> Self {
         Self {
             client: client.clone(),
-            sui_client,
             block_provider,
             coin_metadata_cache,
         }

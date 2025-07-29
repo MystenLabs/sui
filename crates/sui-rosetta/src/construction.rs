@@ -8,13 +8,10 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
-use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{StakeStatus, SuiObjectDataOptions};
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
-use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
@@ -265,15 +262,15 @@ pub async fn metadata(
         }
         InternalOperation::PayCoin { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
-            let coin_objs: Vec<ObjectRef> = context
-                .sui_client
-                .coin_read_api()
-                .select_coins(sender, coin_type, amount.into(), vec![])
+            let selected_coins = context
+                .client
+                .select_coins(sender, coin_type, amount, vec![])
                 .await
                 .ok()
-                .unwrap_or_default()
-                .iter()
-                .map(|coin| coin.object_ref())
+                .unwrap_or_default();
+            let coin_objs: Vec<ObjectRef> = selected_coins
+                .into_iter()
+                .map(|(_, _, object_ref)| object_ref)
                 .collect();
             (Some(0), coin_objs) // amount is 0 for gas coin
         }
@@ -282,21 +279,9 @@ pub async fn metadata(
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
                 context
-                    .sui_client
-                    .governance_api()
+                    .client
                     .get_stakes(*sender)
                     .await?
-                    .into_iter()
-                    .flat_map(|s| {
-                        s.stakes.into_iter().filter_map(|s| {
-                            if let StakeStatus::Active { .. } = s.status {
-                                Some(s.staked_sui_id)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect()
             } else {
                 stake_ids.clone()
             };
@@ -305,16 +290,10 @@ pub async fn metadata(
                 return Err(Error::InvalidInput("No active stake to withdraw".into()));
             }
 
-            let responses = context
-                .sui_client
-                .read_api()
-                .multi_get_object_with_options(stake_ids, SuiObjectDataOptions::default())
+            let stake_refs = context
+                .client
+                .get_object_refs(stake_ids)
                 .await?;
-            let stake_refs = responses
-                .into_iter()
-                .map(|stake| stake.into_object().map(|o| o.object_ref()))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(SuiError::from)?;
 
             (Some(0), stake_refs)
         }
@@ -380,38 +359,42 @@ pub async fn metadata(
     let coins = if let Some(amount) = total_required_amount {
         let total_amount = amount + budget;
         context
-            .sui_client
-            .coin_read_api()
-            .select_coins(sender, None, total_amount.into(), vec![])
+            .client
+            .select_coins(sender, None, total_amount, vec![])
             .await
             .ok()
+            .map(|selected| selected.into_iter().map(|(id, balance, _obj_ref)| {
+                sui_types::coin::Coin::new(id, balance)
+            }).collect())
     } else {
         None
     };
 
     // If required amount is None (all SUI) or failed to select coin (might not have enough SUI), select all coins.
-    let coins = if let Some(coins) = coins {
+    let coins: Vec<sui_types::coin::Coin> = if let Some(coins) = coins {
         coins
     } else {
-        context
-            .sui_client
-            .coin_read_api()
-            .get_coins_stream(sender, None)
-            .collect::<Vec<_>>()
-            .await
+        let all_coins = context
+            .client
+            .get_all_coins(sender, None)
+            .await?;
+        all_coins.into_iter().map(|(id, balance, _obj_ref)| {
+            sui_types::coin::Coin::new(id, balance)
+        }).collect()
     };
 
-    let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
+    let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance.value());
 
-    let coins = coins
-        .into_iter()
-        .map(|c| c.object_ref())
-        .collect::<Vec<_>>();
+    // Need to get object references for coins - store them separately
+    let coin_refs = context
+        .client
+        .get_object_refs(coins.iter().map(|c| *c.id()).collect())
+        .await?;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
             sender,
-            coins,
+            coins: coin_refs,
             objects,
             total_coin_value: total_coin_value.into(),
             gas_price,
