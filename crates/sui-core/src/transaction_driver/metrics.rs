@@ -17,6 +17,7 @@ const FINALITY_LATENCY_SEC_BUCKETS: &[f64] = &[
 #[derive(Clone)]
 pub struct TransactionDriverMetrics {
     pub(crate) settlement_finality_latency: HistogramVec,
+    pub(crate) total_transactions_submitted: IntCounter,
     pub(crate) submit_transaction_success: IntCounter,
     pub(crate) submit_transaction_error: IntCounter,
     pub(crate) executed_transactions: IntCounter,
@@ -33,6 +34,12 @@ impl TransactionDriverMetrics {
                 "Settlement finality latency observed from transaction driver",
                 &["tx_type"],
                 FINALITY_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_transactions_submitted: register_int_counter_with_registry!(
+                "transaction_driver_total_transactions_submitted",
+                "Total number of transactions submitted through the transaction driver",
                 registry,
             )
             .unwrap(),

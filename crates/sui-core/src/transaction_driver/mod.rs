@@ -84,6 +84,9 @@ where
         let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
+        // Track total transactions submitted
+        self.metrics.total_transactions_submitted.inc();
+
         const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
         let mut backoff = ExponentialBackoff::from_millis(100)
             .max_delay(MAX_RETRY_DELAY)
