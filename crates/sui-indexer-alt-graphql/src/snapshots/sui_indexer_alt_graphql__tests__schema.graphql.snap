@@ -184,6 +184,60 @@ type Epoch {
 	storageFund: StorageFund
 }
 
+type Event {
+	"""
+	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
+	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
+	"""
+	eventBcs: Base64
+	"""
+	Address of the sender of the transaction that emitted this event.
+	"""
+	sender: Address
+	"""
+	The position of the event among the events from the same transaction.
+	"""
+	sequenceNumber: UInt53!
+	"""
+	Timestamp corresponding to the checkpoint this event's transaction was finalized in.
+	All events from the same transaction share the same timestamp.
+	"""
+	timestamp: DateTime
+	"""
+	The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
+	"""
+	transaction: Transaction
+}
+
+type EventConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EventEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Event!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EventEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 Represents execution error information for failed transactions.
 """
@@ -969,6 +1023,10 @@ type TransactionEffects {
 	The epoch this transaction was finalized in.
 	"""
 	epoch: Epoch
+	"""
+	Events emitted by this transaction.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
