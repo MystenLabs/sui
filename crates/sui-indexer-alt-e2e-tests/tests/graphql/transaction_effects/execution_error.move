@@ -66,6 +66,27 @@ module test::execution_error_tests {
     public entry fun assert_failure() {
         assert!(false);
     }
+
+    // MovePrimitiveRuntimeError test functions
+    public entry fun arithmetic_underflow() {
+        // Direct arithmetic error
+        0 - 1;
+    }
+
+    public entry fun arithmetic_overflow() {
+        // Direct arithmetic overflow
+        18446744073709551615u64 + 1;
+    }
+
+    public entry fun division_by_zero() {
+        // Direct division by zero
+        1 / 0;
+    }
+
+    public entry fun vector_out_of_bounds() {
+        // Direct vector access
+        std::vector::borrow(&vector[0], 1);
+    }
 }
 
 //# run test::execution_error_tests::success_function --sender A --args 123
@@ -91,6 +112,14 @@ module test::execution_error_tests {
 //# programmable --sender A --inputs @test
 //> test::execution_error_tests::nonexistent_function()
 
+//# run test::execution_error_tests::arithmetic_underflow --sender A
+
+//# run test::execution_error_tests::arithmetic_overflow --sender B
+
+//# run test::execution_error_tests::division_by_zero --sender A
+
+//# run test::execution_error_tests::vector_out_of_bounds --sender B
+
 //# create-checkpoint
 
 //# run-graphql
@@ -100,6 +129,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
 }
@@ -111,6 +141,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
   
@@ -118,6 +149,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
 }
@@ -129,6 +161,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
   
@@ -136,6 +169,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
   
@@ -143,6 +177,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
   
@@ -150,6 +185,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
   
@@ -157,6 +193,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
   
@@ -164,6 +201,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
   
@@ -171,6 +209,7 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
 
@@ -178,6 +217,43 @@ module test::execution_error_tests {
     executionError {
       abortCode
       sourceLineNumber
+      instructionOffset
     }
   }
-} 
+}
+
+//# run-graphql
+{
+  # Test MovePrimitiveRuntimeError cases
+  arithmeticUnderflow: transactionEffects(digest: "@{digest_13}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+    }
+  }
+  
+  arithmeticOverflow: transactionEffects(digest: "@{digest_14}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+    }
+  }
+  
+  divisionByZero: transactionEffects(digest: "@{digest_15}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+    }
+  }
+  
+  vectorOutOfBounds: transactionEffects(digest: "@{digest_16}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+    }
+  }
+}

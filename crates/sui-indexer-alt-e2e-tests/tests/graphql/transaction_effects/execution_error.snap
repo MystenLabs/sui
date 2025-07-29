@@ -1,78 +1,98 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 17 tasks
+processed 22 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-69:
+task 1, lines 6-90:
 //# publish
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 8268800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9940800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 71:
+task 2, line 92:
 //# run test::execution_error_tests::success_function --sender A --args 123
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 73:
+task 3, line 94:
 //# run test::execution_error_tests::abort_with_42 --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_42 (function index 1) at offset 1, Abort Code: 42
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 1, instruction: 1, function_name: Some("abort_with_42") }, 42), source: Some(VMError { major_status: ABORTED, sub_status: Some(42), message: Some("test::execution_error_tests::abort_with_42 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(1), 1)] }), command: Some(0) } }
 
-task 4, line 75:
+task 4, line 96:
 //# run test::execution_error_tests::abort_with_255 --sender B
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_255 (function index 2) at offset 1, Abort Code: 255
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 2, instruction: 1, function_name: Some("abort_with_255") }, 255), source: Some(VMError { major_status: ABORTED, sub_status: Some(255), message: Some("test::execution_error_tests::abort_with_255 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(2), 1)] }), command: Some(0) } }
 
-task 5, line 77:
+task 5, line 98:
 //# run test::execution_error_tests::abort_with_clever_u8 --sender B
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_u8 (function index 3) at offset 1, Abort Code: 13906834320372269057
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 3, instruction: 1, function_name: Some("abort_with_clever_u8") }, 13906834320372269057), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834320372269057), message: Some("test::execution_error_tests::abort_with_clever_u8 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(3), 1)] }), command: Some(0) } }
 
-task 6, line 79:
+task 6, line 100:
 //# run test::execution_error_tests::abort_with_clever_u16 --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_u16 (function index 4) at offset 1, Abort Code: 13906834333257302019
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 4, instruction: 1, function_name: Some("abort_with_clever_u16") }, 13906834333257302019), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834333257302019), message: Some("test::execution_error_tests::abort_with_clever_u16 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(4), 1)] }), command: Some(0) } }
 
-task 7, line 81:
+task 7, line 102:
 //# run test::execution_error_tests::abort_with_clever_u64 --sender B
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_u64 (function index 5) at offset 1, Abort Code: 13906834346142334981
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 5, instruction: 1, function_name: Some("abort_with_clever_u64") }, 13906834346142334981), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834346142334981), message: Some("test::execution_error_tests::abort_with_clever_u64 at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(5), 1)] }), command: Some(0) } }
 
-task 8, line 83:
+task 8, line 104:
 //# run test::execution_error_tests::abort_with_clever_address --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_address (function index 6) at offset 1, Abort Code: 13906834359027367943
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 6, instruction: 1, function_name: Some("abort_with_clever_address") }, 13906834359027367943), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834359027367943), message: Some("test::execution_error_tests::abort_with_clever_address at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(6), 1)] }), command: Some(0) } }
 
-task 9, line 85:
+task 9, line 106:
 //# run test::execution_error_tests::abort_with_clever_string --sender B
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_string (function index 7) at offset 1, Abort Code: 13906834371912400905
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 7, instruction: 1, function_name: Some("abort_with_clever_string") }, 13906834371912400905), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834371912400905), message: Some("test::execution_error_tests::abort_with_clever_string at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
 
-task 10, line 87:
+task 10, line 108:
 //# run test::execution_error_tests::abort_with_clever_code --sender A
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::abort_with_clever_code (function index 8) at offset 1, Abort Code: 13839280390386876427
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 8, instruction: 1, function_name: Some("abort_with_clever_code") }, 13839280390386876427), source: Some(VMError { major_status: ABORTED, sub_status: Some(13839280390386876427), message: Some("test::execution_error_tests::abort_with_clever_code at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
 
-task 11, line 89:
+task 11, line 110:
 //# run test::execution_error_tests::assert_failure --sender B
 Error: Transaction Effects Status: Move Runtime Abort. Location: test::execution_error_tests::assert_failure (function index 9) at offset 1, Abort Code: 13906834401976647679
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 9, instruction: 1, function_name: Some("assert_failure") }, 13906834401976647679), source: Some(VMError { major_status: ABORTED, sub_status: Some(13906834401976647679), message: Some("test::execution_error_tests::assert_failure at offset 1"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(9), 1)] }), command: Some(0) } }
 
-task 12, lines 91-92:
+task 12, lines 112-113:
 //# programmable --sender A --inputs @test
 //> test::execution_error_tests::nonexistent_function()
 Error: Transaction Effects Status: Function Not Found.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'nonexistent_function' in module test::execution_error_tests"), command: Some(0) } }
 
-task 13, line 94:
+task 13, line 115:
+//# run test::execution_error_tests::arithmetic_underflow --sender A
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::arithmetic_underflow (function index 10) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 10, instruction: 2, function_name: Some("arithmetic_underflow") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 2)] }), command: Some(0) } }
+
+task 14, line 117:
+//# run test::execution_error_tests::arithmetic_overflow --sender B
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::arithmetic_overflow (function index 11) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 11, instruction: 2, function_name: Some("arithmetic_overflow") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(11), 2)] }), command: Some(0) } }
+
+task 15, line 119:
+//# run test::execution_error_tests::division_by_zero --sender A
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::division_by_zero (function index 12) at offset 2. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 12, instruction: 2, function_name: Some("division_by_zero") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 2)] }), command: Some(0) } }
+
+task 16, line 121:
+//# run test::execution_error_tests::vector_out_of_bounds --sender B
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::vector_out_of_bounds (function index 13) at offset 4. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 13, instruction: 4, function_name: Some("vector_out_of_bounds") }))), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(13), 4)] }), command: Some(0) } }
+
+task 17, line 123:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 14, lines 96-105:
+task 18, lines 125-135:
 //# run-graphql
 Response: {
   "data": {
@@ -82,75 +102,120 @@ Response: {
   }
 }
 
-task 15, lines 107-123:
+task 19, lines 137-155:
 //# run-graphql
 Response: {
   "data": {
     "abort42": {
       "executionError": {
         "abortCode": "42",
-        "sourceLineNumber": null
+        "sourceLineNumber": null,
+        "instructionOffset": 1
       }
     },
     "abort255": {
       "executionError": {
         "abortCode": "255",
-        "sourceLineNumber": null
+        "sourceLineNumber": null,
+        "instructionOffset": 1
       }
     }
   }
 }
 
-task 16, lines 125-183:
+task 20, lines 157-223:
 //# run-graphql
 Response: {
   "data": {
     "cleverU8": {
       "executionError": {
         "abortCode": "13906834320372269057",
-        "sourceLineNumber": 34
+        "sourceLineNumber": 34,
+        "instructionOffset": 1
       }
     },
     "cleverU16": {
       "executionError": {
         "abortCode": "13906834333257302019",
-        "sourceLineNumber": 37
+        "sourceLineNumber": 37,
+        "instructionOffset": 1
       }
     },
     "cleverU64": {
       "executionError": {
         "abortCode": "13906834346142334981",
-        "sourceLineNumber": 40
+        "sourceLineNumber": 40,
+        "instructionOffset": 1
       }
     },
     "cleverAddress": {
       "executionError": {
         "abortCode": "13906834359027367943",
-        "sourceLineNumber": 43
+        "sourceLineNumber": 43,
+        "instructionOffset": 1
       }
     },
     "cleverString": {
       "executionError": {
         "abortCode": "13906834371912400905",
-        "sourceLineNumber": 46
+        "sourceLineNumber": 46,
+        "instructionOffset": 1
       }
     },
     "cleverWithCode": {
       "executionError": {
         "abortCode": "15",
-        "sourceLineNumber": 49
+        "sourceLineNumber": 49,
+        "instructionOffset": 1
       }
     },
     "assertFailure": {
       "executionError": {
         "abortCode": "13906834401976647679",
-        "sourceLineNumber": 52
+        "sourceLineNumber": 52,
+        "instructionOffset": 1
       }
     },
     "nonExistentFunction": {
       "executionError": {
         "abortCode": null,
-        "sourceLineNumber": null
+        "sourceLineNumber": null,
+        "instructionOffset": null
+      }
+    }
+  }
+}
+
+task 21, lines 225-259:
+//# run-graphql
+Response: {
+  "data": {
+    "arithmeticUnderflow": {
+      "executionError": {
+        "abortCode": null,
+        "sourceLineNumber": null,
+        "instructionOffset": 2
+      }
+    },
+    "arithmeticOverflow": {
+      "executionError": {
+        "abortCode": null,
+        "sourceLineNumber": null,
+        "instructionOffset": 2
+      }
+    },
+    "divisionByZero": {
+      "executionError": {
+        "abortCode": null,
+        "sourceLineNumber": null,
+        "instructionOffset": 2
+      }
+    },
+    "vectorOutOfBounds": {
+      "executionError": {
+        "abortCode": null,
+        "sourceLineNumber": null,
+        "instructionOffset": 4
       }
     }
   }
