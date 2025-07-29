@@ -46,12 +46,12 @@ title: Module `sui::accumulator_metadata`
 === Accumulator metadata ===
 
 Accumulator metadata is organized as follows:
-- Each address that holds at least one type of accumulator has an owner object attached
+- Each address that holds at least one type of accumulator has an owner field attached
 to the accumulator root.
-- For each type of accumulator held by that address, there is an AccumulatorMetadata object
-attached to the owner object.
-- When the value of an accumulator drops to zero, the metadata object is removed.
-- If the owner object has no more accumulator metadata objects attached to it, it is removed
+- For each type of accumulator held by that address, there is an AccumulatorMetadata field
+attached to the owner field.
+- When the value of an accumulator drops to zero, the metadata field is removed.
+- If the owner field has no more accumulator metadata field attached to it, it is removed
 as well.
 
 
@@ -79,7 +79,7 @@ as well.
 
 ## Struct `Owner`
 
-An owner object, to which all AccumulatorMetadata objects for the owner are
+An owner field, to which all AccumulatorMetadata fields for the owner are
 attached.
 
 
@@ -134,7 +134,7 @@ attached.
 
 ## Struct `Metadata`
 
-A metadata object for a balance object with type T.
+A metadata field for a balance field with type T.
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Metadata">Metadata</a>&lt;<b>phantom</b> T&gt; <b>has</b> store
@@ -177,7 +177,7 @@ A metadata object for a balance object with type T.
 ## Function `accumulator_root_owner_exists`
 
 === Owner functions ===
-Check if there is an owner object attached to the accumulator root.
+Check if there is an owner field attached to the accumulator root.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_root_owner_exists">accumulator_root_owner_exists</a>(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, owner: <b>address</b>): bool
@@ -202,7 +202,7 @@ Check if there is an owner object attached to the accumulator root.
 
 ## Function `accumulator_root_borrow_owner_mut`
 
-Borrow an owner object mutably.
+Borrow an owner field mutably.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_root_borrow_owner_mut">accumulator_root_borrow_owner_mut</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, owner: <b>address</b>): &<b>mut</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">sui::accumulator_metadata::Owner</a>
@@ -230,7 +230,7 @@ Borrow an owner object mutably.
 
 ## Function `accumulator_root_attach_owner`
 
-Attach an owner object to the accumulator root.
+Attach an owner field to the accumulator root.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_root_attach_owner">accumulator_root_attach_owner</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, owner: <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">sui::accumulator_metadata::Owner</a>)
@@ -255,7 +255,7 @@ Attach an owner object to the accumulator root.
 
 ## Function `accumulator_root_detach_owner`
 
-Detach an owner object from the accumulator root.
+Detach an owner field from the accumulator root.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_root_detach_owner">accumulator_root_detach_owner</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, owner: <b>address</b>): <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">sui::accumulator_metadata::Owner</a>
@@ -281,9 +281,9 @@ Detach an owner object from the accumulator root.
 ## Function `create_accumulator_metadata`
 
 === Metadata functions ===
-Create a metadata object for a new balance object with type T.
-The metadata will be attached to the owner object <code>owner</code>.
-If the owner object does not exist, it will be created.
+Create a metadata field for a new balance field with type T.
+The metadata will be attached to the owner field <code>owner</code>.
+If the owner field does not exist, it will be created.
 
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_create_accumulator_metadata">create_accumulator_metadata</a>&lt;T&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, owner: <b>address</b>, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -326,10 +326,10 @@ If the owner object does not exist, it will be created.
 
 ## Function `remove_accumulator_metadata`
 
-Remove the metadata object for a balance object with type T.
-The metadata will be detached from the owner object <code>owner</code>.
-If there are no more balance objects attached to the owner object,
-the owner object will be destroyed.
+Remove the metadata field for a balance field with type T.
+The metadata will be detached from the owner field <code>owner</code>.
+If there are no more balance fields attached to the owner field,
+the owner field will be destroyed.
 
 
 <pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_remove_accumulator_metadata">remove_accumulator_metadata</a>&lt;T&gt;(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, owner: <b>address</b>)
@@ -352,8 +352,7 @@ the owner object will be destroyed.
         accumulator_owner.balances.is_empty()
     };
     <b>if</b> (is_empty) {
-        <b>let</b> owner = accumulator_root.detach_owner(owner);
-        owner.destroy();
+        accumulator_root.detach_owner(owner).destroy();
     }
 }
 </code></pre>
@@ -366,7 +365,7 @@ the owner object will be destroyed.
 
 ## Function `accumulator_owner_attach_metadata`
 
-Attach a metadata object for type T to the owner object.
+Attach a metadata field for type T to the owner field.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_owner_attach_metadata">accumulator_owner_attach_metadata</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">sui::accumulator_metadata::Owner</a>, metadata: <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Metadata">sui::accumulator_metadata::Metadata</a>&lt;T&gt;)
@@ -379,7 +378,7 @@ Attach a metadata object for type T to the owner object.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_owner_attach_metadata">accumulator_owner_attach_metadata</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">Owner</a>, metadata: <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Metadata">Metadata</a>&lt;T&gt;) {
-    self.balances.add(<a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_MetadataKey">MetadataKey</a>&lt;T&gt; {}, metadata);
+    self.balances.add(<a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_MetadataKey">MetadataKey</a>&lt;T&gt;(), metadata);
 }
 </code></pre>
 
@@ -391,7 +390,7 @@ Attach a metadata object for type T to the owner object.
 
 ## Function `accumulator_owner_detach_metadata`
 
-Detach a metadata object for type T from the owner object.
+Detach a metadata field for type T from the owner field.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_owner_detach_metadata">accumulator_owner_detach_metadata</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">sui::accumulator_metadata::Owner</a>): <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Metadata">sui::accumulator_metadata::Metadata</a>&lt;T&gt;
@@ -404,7 +403,7 @@ Detach a metadata object for type T from the owner object.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_owner_detach_metadata">accumulator_owner_detach_metadata</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">Owner</a>): <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Metadata">Metadata</a>&lt;T&gt; {
-    self.balances.remove(<a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_MetadataKey">MetadataKey</a>&lt;T&gt; {})
+    self.balances.remove(<a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_MetadataKey">MetadataKey</a>&lt;T&gt;())
 }
 </code></pre>
 
@@ -416,7 +415,7 @@ Detach a metadata object for type T from the owner object.
 
 ## Function `accumulator_owner_destroy`
 
-Destroy an owner object.
+Destroy an owner field.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_owner_destroy">accumulator_owner_destroy</a>(this: <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">sui::accumulator_metadata::Owner</a>)
