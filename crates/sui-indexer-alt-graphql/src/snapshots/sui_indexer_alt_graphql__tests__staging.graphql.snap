@@ -182,6 +182,19 @@ type Epoch {
 	This is also used for storage rebates.
 	"""
 	storageFund: StorageFund
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+	"""
+	systemStateVersion: UInt53
+	"""
+	Details of the system that are decided during genesis.
+	"""
+	systemParameters: SystemParameters
+	"""
+	Parameters related to the subsidy that supplements staking rewards
+	"""
+	systemStakeSubsidy: StakeSubsidy
 }
 
 type Event {
@@ -945,6 +958,33 @@ type ServiceConfig {
 }
 
 """
+Parameters that control the distribution of the stake subsidy.
+"""
+type StakeSubsidy {
+	"""
+	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over time.
+	"""
+	balance: BigInt
+	"""
+	Number of times stake subsidies have been distributed.
+	Subsidies are distributed with other staking rewards, at the end of the epoch.
+	"""
+	distributionCounter: Int
+	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
+	currentDistributionAmount: BigInt
+	"""
+	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
+	"""
+	periodLength: Int
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
+	"""
+	decreaseRate: Int
+}
+
+"""
 SUI set aside to account for objects stored on-chain.
 """
 type StorageFund {
@@ -964,6 +1004,44 @@ type StorageFund {
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Details of the system that are decided during genesis.
+"""
+type SystemParameters {
+	"""
+	Target duration of an epoch, in milliseconds.
+	"""
+	durationMs: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
+	stakeSubsidyStartEpoch: UInt53
+	"""
+	The minimum number of active validators that the system supports.
+	"""
+	minValidatorCount: Int
+	"""
+	The maximum number of active validators that the system supports.
+	"""
+	maxValidatorCount: Int
+	"""
+	Minimum stake needed to become a new validator.
+	"""
+	minValidatorJoiningStake: BigInt
+	"""
+	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
+	"""
+	validatorLowStakeThreshold: BigInt
+	"""
+	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
+	"""
+	validatorVeryLowStakeThreshold: BigInt
+	"""
+	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
+	"""
+	validatorLowStakeGracePeriod: BigInt
+}
 
 """
 Description of a transaction, the unit of activity on Sui.

@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-58:
+task 6, lines 16-76:
 //# run-graphql
 Response: {
   "data": {
@@ -51,6 +51,24 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e0": {
@@ -82,6 +100,24 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "systemStateVersion": 1,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e1": {
@@ -113,6 +149,24 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e2": {
@@ -144,13 +198,31 @@ Response: {
       "storageFund": {
         "totalObjectStorageRebates": "0",
         "nonRefundableBalance": "0"
+      },
+      "systemStateVersion": 2,
+      "systemParameters": {
+        "durationMs": "86400000",
+        "stakeSubsidyStartEpoch": 0,
+        "minValidatorCount": null,
+        "maxValidatorCount": 150,
+        "minValidatorJoiningStake": "30000000000000000",
+        "validatorLowStakeThreshold": "20000000000000000",
+        "validatorVeryLowStakeThreshold": "15000000000000000",
+        "validatorLowStakeGracePeriod": "7"
+      },
+      "systemStakeSubsidy": {
+        "balance": "9949400000000000000",
+        "distributionCounter": 0,
+        "currentDistributionAmount": "1000000000000000",
+        "periodLength": 10,
+        "decreaseRate": 1000
       }
     },
     "e3": null
   }
 }
 
-task 7, lines 60-103:
+task 7, lines 78-139:
 //# run-graphql
 Response: {
   "data": {
@@ -185,6 +257,24 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "systemStateVersion": 2,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
           }
         },
         "e0": {
@@ -216,6 +306,24 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "systemStateVersion": 1,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
           }
         },
         "e1": {
@@ -247,6 +355,24 @@ Response: {
           "storageFund": {
             "totalObjectStorageRebates": "0",
             "nonRefundableBalance": "0"
+          },
+          "systemStateVersion": 2,
+          "systemParameters": {
+            "durationMs": "86400000",
+            "stakeSubsidyStartEpoch": 0,
+            "minValidatorCount": null,
+            "maxValidatorCount": 150,
+            "minValidatorJoiningStake": "30000000000000000",
+            "validatorLowStakeThreshold": "20000000000000000",
+            "validatorVeryLowStakeThreshold": "15000000000000000",
+            "validatorLowStakeGracePeriod": "7"
+          },
+          "systemStakeSubsidy": {
+            "balance": "9949400000000000000",
+            "distributionCounter": 0,
+            "currentDistributionAmount": "1000000000000000",
+            "periodLength": 10,
+            "decreaseRate": 1000
           }
         },
         "e2": null
