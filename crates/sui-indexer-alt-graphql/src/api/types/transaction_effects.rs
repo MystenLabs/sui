@@ -191,7 +191,7 @@ impl EffectsContents {
         };
 
         let effects = content.effects()?;
-        Ok(Some(GasEffects::from(self.scope.clone(), effects)))
+        Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
     }
 }
 

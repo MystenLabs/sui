@@ -252,7 +252,7 @@ Effects related to gas (costs incurred and the identity of the smashed gas objec
 """
 type GasEffects {
 	"""
-	The gas object used to pay for this transaction, after being smashed.
+	The gas object used to pay for this transaction. If multiple gas coins were provided, this represents the combined coin after smashing.
 	"""
 	gasObject: Object
 	"""
