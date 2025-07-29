@@ -507,6 +507,8 @@ pub enum SuiError {
         digest
     )]
     TransactionAlreadyExecuted { digest: TransactionDigest },
+    #[error("Transaction reject reason not found for transaction {digest:?}")]
+    TransactionRejectReasonNotFound { digest: TransactionDigest },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Fail to retrieve Object layout for {st}")]

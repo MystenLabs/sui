@@ -1237,7 +1237,7 @@ impl ValidatorService {
                 ConsensusTxStatus::Rejected => {
                     let error = epoch_store
                         .get_rejection_vote_reason(consensus_position)
-                        .unwrap_or(SuiError::Unknown("Unknown reject reason".to_string()));
+                        .unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
                     return Ok(WaitForEffectsResponse::Rejected { error });
                 }
                 ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => status,
@@ -1265,7 +1265,7 @@ impl ValidatorService {
                     match second_status {
                         NotifyReadConsensusTxStatusResult::Status(status) => {
                             if status == ConsensusTxStatus::Rejected {
-                                let error = epoch_store.get_rejection_vote_reason(consensus_position).unwrap_or(SuiError::Unknown("Unknown reject reason".to_string()));
+                                let error = epoch_store.get_rejection_vote_reason(consensus_position).unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
                                 return Ok(WaitForEffectsResponse::Rejected { error });
                             }
                             assert_eq!(status, ConsensusTxStatus::Finalized);
