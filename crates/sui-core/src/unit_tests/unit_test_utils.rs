@@ -39,8 +39,7 @@ async fn init_genesis(
     let pkg = Object::new_package(
         &modules,
         TransactionDigest::genesis_marker(),
-        config.max_move_package_size(),
-        config.move_binary_format_version(),
+        &config,
         &genesis_move_packages,
     )
     .unwrap();

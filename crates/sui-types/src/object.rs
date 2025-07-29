@@ -689,15 +689,13 @@ impl Object {
     pub fn new_package<'p>(
         modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
-        max_move_package_size: u64,
-        move_binary_format_version: u32,
+        protocol_config: &ProtocolConfig,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(MovePackage::new_initial(
                 modules,
-                max_move_package_size,
-                move_binary_format_version,
+                protocol_config,
                 dependencies,
             )?),
             previous_transaction,
@@ -730,13 +728,7 @@ impl Object {
     ) -> Result<Self, ExecutionError> {
         let dependencies: Vec<_> = dependencies.into_iter().collect();
         let config = ProtocolConfig::get_for_max_version_UNSAFE();
-        Self::new_package(
-            modules,
-            previous_transaction,
-            config.max_move_package_size(),
-            config.move_binary_format_version(),
-            &dependencies,
-        )
+        Self::new_package(modules, previous_transaction, &config, &dependencies)
     }
 
     /// Create a system package which is not subject to size limits. Panics if the object ID is not
