@@ -156,17 +156,15 @@ where
             if code == INTERNAL_ERROR_CODE {
                 error!(
                     method,
-                    params,
-                    code = INTERNAL_ERROR_CODE,
-                    response,
-                    elapsed_ms,
-                    "Request failed with internal error"
+                    params, code, response, elapsed_ms, "Request failed with internal error"
                 );
-            } else {
+            } else if tracing::enabled!(tracing::Level::DEBUG) {
                 debug!(
                     method,
                     params, code, response, elapsed_ms, "Request failed with non-internal error"
                 );
+            } else {
+                info!(method, code, elapsed_ms, "Request failed");
             }
         } else {
             metrics.succeeded.with_label_values(&[method]).inc();
