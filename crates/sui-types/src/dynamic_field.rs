@@ -345,17 +345,12 @@ pub fn get_dynamic_field_object_from_store<K>(
     key: &K,
 ) -> Result<Object, SuiError>
 where
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug + Clone,
 {
-    let id = derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
-        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
-    let object = object_store.get_object(&id).ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!(
-            "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
-            key, id, parent_id
-        ))
-    })?;
-    Ok(object)
+    Ok(DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
+        .into_id()?
+        .expect_object(key, object_store)?
+        .as_object())
 }
 
 /// Similar to `get_dynamic_field_object_from_store`, but returns the value in the field instead of
@@ -366,11 +361,13 @@ pub fn get_dynamic_field_from_store<K, V>(
     key: &K,
 ) -> Result<V, SuiError>
 where
-    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
+    K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug + Clone,
     V: Serialize + DeserializeOwned,
 {
-    let object = get_dynamic_field_object_from_store(object_store, parent_id, key)?;
-    deserialize_dynamic_field_object::<K, V>(object)
+    DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
+        .into_id()?
+        .expect_object(key, object_store)?
+        .load_value::<V>()
 }
 
 /// A chainable API for getting dynamic fields.
@@ -504,7 +501,7 @@ where
     /// Load the field object from the store.
     pub fn load_object(self, object_store: &dyn ObjectStore) -> Option<DynamicFieldObject<K>> {
         object_store
-            .get_object(&self.0)
+            .get_object(&self.1)
             .map(DynamicFieldObject::<K>::new)
     }
 
