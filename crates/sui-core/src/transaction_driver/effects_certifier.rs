@@ -36,6 +36,10 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+#[path = "unit_tests/effects_certifier_tests.rs"]
+mod effects_certifier_tests;
+
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct EffectsCertifier {
@@ -467,5 +471,3 @@ impl EffectsCertifier {
         }
     }
 }
-
-// TODO(fastpath): Add tests for EffectsCertifier
