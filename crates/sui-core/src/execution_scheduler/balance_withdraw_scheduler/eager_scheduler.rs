@@ -95,36 +95,6 @@ impl AccountState {
     }
 }
 
-/// Tracks which consensus commit batches have been scheduled to prevent double scheduling
-#[derive(Debug)]
-struct ScheduledBatches {
-    /// Maps accumulator version to whether that batch has been scheduled
-    scheduled_versions: BTreeMap<SequenceNumber, bool>,
-}
-
-impl ScheduledBatches {
-    fn new() -> Self {
-        Self {
-            scheduled_versions: BTreeMap::new(),
-        }
-    }
-
-    /// Check if a batch has already been scheduled
-    fn is_already_scheduled(&self, version: SequenceNumber) -> bool {
-        self.scheduled_versions.contains_key(&version)
-    }
-
-    /// Mark a batch as scheduled
-    fn mark_scheduled(&mut self, version: SequenceNumber) {
-        self.scheduled_versions.insert(version, true);
-    }
-
-    /// Clean up old entries that are before the given version
-    fn cleanup_before(&mut self, version: SequenceNumber) {
-        self.scheduled_versions = self.scheduled_versions.split_off(&version);
-    }
-}
-
 /// Metrics for tracking scheduler performance and behavior
 pub struct EagerSchedulerMetrics {
     /// Count of scheduling outcomes by status
@@ -185,8 +155,6 @@ pub(crate) struct EagerBalanceWithdrawScheduler {
 struct EagerSchedulerState {
     /// Track account states only for accounts with pending withdrawals
     account_states: BTreeMap<ObjectID, AccountState>,
-    /// Track which consensus batches have been scheduled
-    scheduled_batches: ScheduledBatches,
     /// The highest accumulator version we've processed
     highest_processed_version: SequenceNumber,
     /// The last settled accumulator version
@@ -206,7 +174,6 @@ impl EagerBalanceWithdrawScheduler {
             balance_read,
             state: Arc::new(RwLock::new(EagerSchedulerState {
                 account_states: BTreeMap::new(),
-                scheduled_batches: ScheduledBatches::new(),
                 highest_processed_version: starting_accumulator_version,
                 last_settled_version: starting_accumulator_version,
                 pending_insufficient_balance: BTreeMap::new(),
@@ -224,7 +191,6 @@ impl EagerBalanceWithdrawScheduler {
             balance_read,
             state: Arc::new(RwLock::new(EagerSchedulerState {
                 account_states: BTreeMap::new(),
-                scheduled_batches: ScheduledBatches::new(),
                 highest_processed_version: starting_accumulator_version,
                 last_settled_version: starting_accumulator_version,
                 pending_insufficient_balance: BTreeMap::new(),
@@ -325,34 +291,6 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             return;
         }
 
-        // Check if this batch has already been scheduled
-        if state
-            .scheduled_batches
-            .is_already_scheduled(withdraws.accumulator_version)
-        {
-            debug!(
-                "Batch at version {:?} already scheduled",
-                withdraws.accumulator_version
-            );
-            for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
-                let _ = sender.send(ScheduleResult {
-                    tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::AlreadyExecuted,
-                });
-                if let Some(metrics) = &self.metrics {
-                    metrics
-                        .schedule_outcome_counter
-                        .with_label_values(&["already_executed"])
-                        .inc();
-                }
-            }
-            return;
-        }
-
-        // Mark this batch as scheduled
-        state
-            .scheduled_batches
-            .mark_scheduled(withdraws.accumulator_version);
         state.highest_processed_version = state
             .highest_processed_version
             .max(withdraws.accumulator_version);
@@ -586,11 +524,6 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 }
             }
         }
-
-        // Clean up old scheduled batch entries
-        state
-            .scheduled_batches
-            .cleanup_before(settlement.accumulator_version);
 
         // Clean up accounts that no longer need tracking
         self.cleanup_accounts(&mut state);

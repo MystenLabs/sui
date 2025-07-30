@@ -50,9 +50,9 @@ Maintains the global scheduler state:
 ```rust
 struct EagerSchedulerState {
     account_states: BTreeMap<ObjectID, AccountState>,  // Only tracks accounts with withdrawals
-    scheduled_batches: ScheduledBatches,               // Prevents double scheduling
     highest_processed_version: SequenceNumber,
     last_settled_version: SequenceNumber,
+    pending_insufficient_balance: BTreeMap<SequenceNumber, Vec<(TxBalanceWithdraw, oneshot::Sender<ScheduleResult>)>>,
 }
 ```
 
@@ -67,16 +67,15 @@ Supports two types of balance reservations:
 
 ```
 1. Check if batch already executed → Return AlreadyExecuted
-2. Check if batch already scheduled → Return AlreadyExecuted
-3. For each transaction in the batch:
+2. For each transaction in the batch:
    a. Load account states (if not already tracked)
    b. For each reservation in the transaction:
       - Check if sufficient balance available
-      - If any check fails, rollback and mark as InsufficientBalance
+      - If any check fails, rollback and mark as pending for settlement
    c. If all checks pass:
       - Apply all reservations atomically
       - Mark as SufficientBalance
-4. Clean up accounts with no active reservations
+3. Clean up accounts with no active reservations
 ```
 
 #### 2. Settlement Processing
@@ -90,7 +89,8 @@ Supports two types of balance reservations:
 3. For tracked accounts not in settlement:
    - Fetch latest balance from storage
    - Apply settlement with no changes
-4. Clean up old scheduled batch entries
+4. Process pending insufficient balance transactions for this version
+5. Clean up accounts that no longer need tracking
 ```
 
 ### Version Semantics
@@ -104,6 +104,8 @@ A withdrawal with `accumulator_version = N` means it reads the state at version 
 - If `N < last_settled_version`: The state at version N has been finalized and any withdrawals reading it have been processed
 - If `N = last_settled_version`: The withdrawal might be reading the just-settled state but hasn't been executed yet
 - If `N > last_settled_version`: The withdrawal is reading a future state that hasn't been settled
+
+**Protocol Guarantee**: The Sui protocol and consensus handler guarantee that each accumulator version will only be scheduled once. This means a batch with a specific accumulator version can only be scheduled exactly once, preventing any duplicate scheduling at the protocol level.
 
 ## Key Design Decisions
 
