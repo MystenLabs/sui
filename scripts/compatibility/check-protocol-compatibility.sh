@@ -34,7 +34,9 @@ if [ -z "$RELEASED_COMMIT" ]; then
 
   VERSIONS=$(curl -s -G -k "$URL" --data-urlencode "query=uptime{network=\"$NETWORK\"}" | jq -r '.data.result[].metric.version' | sort | uniq -c | sort -rn)
   TOP_VERSION=$(echo "$VERSIONS" | head -n 1 | awk '{print $2}')
-  if [ "$TOP_VERSION" == "1.52.3-2ae3516a77d8" ]; then
+
+  # temporary override for private release in mainnet
+  if [[ "$TOP_VERSION" == "1.52.3-2ae3516a77d8" && "$NETWORK" == "mainnet" ]]; then  
     echo "Overriding private release hash"
     TOP_VERSION="1.52.3-cd58464d654d"
   fi
