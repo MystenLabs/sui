@@ -308,16 +308,12 @@ async fn proxy_request(
         };
 
     if let Ok(response_str) = std::str::from_utf8(&response_bytes) {
-        let truncated_response = if response_str.len() > 1000 {
-            let truncate_at = response_str
-                .char_indices()
-                .nth(1000)
-                .map(|(i, _)| i)
-                .unwrap_or(1000);
+        let truncated_response = if response_bytes.len() > 1000 {
+            let truncated_bytes = &response_bytes[..1000];
             format!(
-                "{}... (truncated, {} total chars)",
-                &response_str[..truncate_at],
-                response_str.len()
+                "{}... (truncated, {} total bytes)",
+                String::from_utf8_lossy(truncated_bytes),
+                response_bytes.len()
             )
         } else {
             response_str.to_string()
