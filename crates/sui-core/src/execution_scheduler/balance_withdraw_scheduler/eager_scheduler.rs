@@ -167,8 +167,6 @@ pub(crate) struct EagerBalanceWithdrawScheduler {
 struct EagerSchedulerState {
     /// Track account states only for accounts with pending withdrawals
     account_states: BTreeMap<ObjectID, AccountState>,
-    /// The highest accumulator version we've processed
-    highest_processed_version: SequenceNumber,
     /// The last settled accumulator version
     last_settled_version: SequenceNumber,
     /// Pending transactions that couldn't be scheduled due to insufficient balance
@@ -186,7 +184,6 @@ impl EagerBalanceWithdrawScheduler {
             balance_read,
             state: Arc::new(RwLock::new(EagerSchedulerState {
                 account_states: BTreeMap::new(),
-                highest_processed_version: starting_accumulator_version,
                 last_settled_version: starting_accumulator_version,
                 pending_insufficient_balance: BTreeMap::new(),
             })),
@@ -203,7 +200,6 @@ impl EagerBalanceWithdrawScheduler {
             balance_read,
             state: Arc::new(RwLock::new(EagerSchedulerState {
                 account_states: BTreeMap::new(),
-                highest_processed_version: starting_accumulator_version,
                 last_settled_version: starting_accumulator_version,
                 pending_insufficient_balance: BTreeMap::new(),
             })),
@@ -300,10 +296,6 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             }
             return;
         }
-
-        state.highest_processed_version = state
-            .highest_processed_version
-            .max(withdraws.accumulator_version);
 
         // Process each transaction's withdrawals sequentially
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
