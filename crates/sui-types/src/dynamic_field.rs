@@ -296,29 +296,6 @@ where
     Ok(id)
 }
 
-pub fn deserialize_dynamic_field<K, V>(object: Object) -> Result<Field<K, V>, SuiError>
-where
-    K: Serialize + DeserializeOwned,
-    V: Serialize + DeserializeOwned,
-{
-    let move_object = object.data.try_as_move().ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!(
-            "Dynamic field {:?} is not a Move object",
-            object.id()
-        ))
-    })?;
-    bcs::from_bytes::<Field<K, V>>(move_object.contents())
-        .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))
-}
-
-pub fn deserialize_dynamic_field_object<K, V>(object: Object) -> Result<V, SuiError>
-where
-    K: Serialize + DeserializeOwned,
-    V: Serialize + DeserializeOwned,
-{
-    deserialize_dynamic_field::<K, V>(object).map(|f| f.value)
-}
-
 pub fn serialize_dynamic_field<K, V>(id: &UID, name: &K, value: V) -> Result<Vec<u8>, SuiError>
 where
     K: Serialize + Clone,
@@ -609,7 +586,7 @@ where
     where
         V: Serialize + DeserializeOwned,
     {
-        deserialize_dynamic_field_object::<K, V>(self.0)
+        self.load_field::<V>().map(|f| f.value)
     }
 
     /// Deserialize the field value from the object. Requires that the value type is known.
@@ -617,6 +594,14 @@ where
     where
         V: Serialize + DeserializeOwned,
     {
-        deserialize_dynamic_field::<K, V>(self.0)
+        let object = self.0;
+        let move_object = object.data.try_as_move().ok_or_else(|| {
+            SuiError::DynamicFieldReadError(format!(
+                "Dynamic field {:?} is not a Move object",
+                object.id()
+            ))
+        })?;
+        bcs::from_bytes::<Field<K, V>>(move_object.contents())
+            .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))
     }
 }
