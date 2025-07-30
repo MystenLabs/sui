@@ -3,10 +3,9 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 if (0) {
     loop {
-        if (1) {
-            continue;
+        if !(1) {
+            break;
         }
-        break;
     }
 } else {
     { 2 }

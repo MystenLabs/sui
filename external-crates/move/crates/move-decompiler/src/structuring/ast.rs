@@ -12,7 +12,7 @@ use petgraph::graph::NodeIndex;
 // -----------------------------------------------
 
 pub type Label = NodeIndex;
-pub type Code = u64;
+pub type Code = (u64, bool);
 
 #[derive(Debug, Clone)]
 pub struct Block {
@@ -48,10 +48,9 @@ impl Input {
     pub fn edges(&self) -> Vec<(NodeIndex, NodeIndex)> {
         match self {
             Input::Condition(lbl, _, then, else_) => vec![(*lbl, *then), (*lbl, *else_)],
-            Input::Variants(lbl, _, items) => items
-                .iter()
-                .map(|item| (*lbl, *item))
-                .collect::<Vec<_>>(),
+            Input::Variants(lbl, _, items) => {
+                items.iter().map(|item| (*lbl, *item)).collect::<Vec<_>>()
+            }
             Input::Code(lbl, _, Some(to)) => vec![(*lbl, *to)],
             Input::Code(_, _, None) => vec![],
         }
@@ -93,7 +92,7 @@ impl std::fmt::Display for Structured {
             match s {
                 Structured::Block(code) => {
                     indent(f, level)?;
-                    writeln!(f, "{{ {:?} }}", code)
+                    writeln!(f, "{{ {:?} }}", code.0)
                 }
                 Structured::Loop(body) => {
                     indent(f, level)?;
@@ -104,13 +103,21 @@ impl std::fmt::Display for Structured {
                 }
                 Structured::While(cond, body) => {
                     indent(f, level)?;
-                    writeln!(f, "while ({:?}) {{", cond)?;
+                    if cond.1 {
+                        writeln!(f, "while !({:?}) {{", cond.0)?;
+                    } else {
+                        writeln!(f, "while ({:?}) {{", cond.0)?;
+                    }
                     fmt_structured(body, f, level + 1)?;
                     writeln!(f, "}}")
                 }
                 Structured::IfElse(cond, then_branch, else_branch) => {
                     indent(f, level)?;
-                    writeln!(f, "if ({:?}) {{", cond)?;
+                    if cond.1 {
+                        writeln!(f, "if !({:?}) {{", cond.0)?;
+                    } else {
+                        writeln!(f, "if ({:?}) {{", cond.0)?;
+                    }
                     fmt_structured(then_branch, f, level + 1)?;
                     indent(f, level)?;
                     if let Some(else_branch) = &**else_branch {
@@ -133,7 +140,7 @@ impl std::fmt::Display for Structured {
                 }
                 Structured::Switch(expr, arms) => {
                     indent(f, level)?;
-                    writeln!(f, "switch ({:?}) {{", expr)?;
+                    writeln!(f, "switch ({:?}) {{", expr.0)?;
                     for (ndx, arm) in arms.iter().enumerate() {
                         indent(f, level + 1)?;
                         writeln!(f, "_{ndx} => ")?;

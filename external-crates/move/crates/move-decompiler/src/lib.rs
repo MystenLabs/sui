@@ -60,17 +60,22 @@ pub fn structuring_unit_test(file_path: &Path) -> String {
 
             match parts.as_slice() {
                 ["cond", a, b, c] => match (a.parse::<u32>(), b.parse::<u32>(), c.parse::<u32>()) {
-                    (Ok(a), Ok(b), Ok(c)) => {
-                        nodes.push(In::Condition(a.into(), a.into(), b.into(), c.into()))
-                    }
+                    (Ok(a), Ok(b), Ok(c)) => nodes.push(In::Condition(
+                        a.into(),
+                        (a.into(), false),
+                        b.into(),
+                        c.into(),
+                    )),
                     _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
                 },
                 ["code", a, b] => match (a.parse::<u32>(), b.parse::<u32>()) {
-                    (Ok(a), Ok(b)) => nodes.push(In::Code(a.into(), a.into(), Some(b.into()))),
+                    (Ok(a), Ok(b)) => {
+                        nodes.push(In::Code(a.into(), (a.into(), false), Some(b.into())))
+                    }
                     _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
                 },
                 ["code", a] => match a.parse::<u32>() {
-                    Ok(a) => nodes.push(In::Code(a.into(), a.into(), None)),
+                    Ok(a) => nodes.push(In::Code(a.into(), (a.into(), false), None)),
                     _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
                 },
                 [head, rest @ ..] if *head == "variants" => {
@@ -102,7 +107,7 @@ pub fn structuring_unit_test(file_path: &Path) -> String {
                     }
 
                     if ok {
-                        nodes.push(In::Variants(first.into(), first.into(), others));
+                        nodes.push(In::Variants(first.into(), (first.into(), false), others));
                     }
                 }
                 _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),

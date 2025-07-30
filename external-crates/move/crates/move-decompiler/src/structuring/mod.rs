@@ -6,9 +6,7 @@ pub(crate) mod dom_tree;
 pub(crate) mod graph;
 pub(crate) mod loop_refinement;
 
-use crate::{
-    structuring::{ast as D, graph::Graph, loop_refinement::loop_type},
-};
+use crate::structuring::{ast as D, graph::Graph, loop_refinement::loop_type};
 
 use move_stackless_bytecode_2::stackless::ast as S;
 use petgraph::{graph::NodeIndex, visit::DfsPostOrder};
@@ -139,7 +137,9 @@ fn instert_breaks(
         DS::Break => node,
         DS::IfElse(code, conseq, alt) => DS::IfElse(
             code,
-            Box::new(instert_breaks(loop_nodes, loop_head, succ_node, *conseq, graph)),
+            Box::new(instert_breaks(
+                loop_nodes, loop_head, succ_node, *conseq, graph,
+            )),
             Box::new(alt.map(|alt| instert_breaks(loop_nodes, loop_head, succ_node, alt, graph))),
         ),
         DS::Jump(next) => match find_latch_kind(loop_nodes, loop_head, succ_node, next, graph) {
@@ -158,50 +158,50 @@ fn instert_breaks(
                 (LatchKind::Continue, LatchKind::Continue) => DS::Continue,
                 (LatchKind::Break, LatchKind::Break) => DS::Break,
                 (LatchKind::Continue, LatchKind::Break) => DS::Seq(vec![
-                                DS::IfElse(code, Box::new(DS::Continue), Box::new(None)),
-                                DS::Break,
-                            ]),
+                    DS::IfElse(code, Box::new(DS::Continue), Box::new(None)),
+                    DS::Break,
+                ]),
                 (LatchKind::Continue, LatchKind::InLoop) => {
-                                DS::IfElse(code, Box::new(DS::Continue), Box::new(None))
-                            }
+                    DS::IfElse(code, Box::new(DS::Continue), Box::new(None))
+                }
                 (LatchKind::Continue, LatchKind::Latch) => DS::IfElse(
-                                code,
-                                Box::new(DS::Continue),
-                                Box::new(Some(DS::Jump(other))),
-                            ),
+                    code,
+                    Box::new(DS::Continue),
+                    Box::new(Some(DS::Jump(other))),
+                ),
                 (LatchKind::Break, LatchKind::Continue) => DS::Seq(vec![
-                                DS::IfElse(code, Box::new(DS::Break), Box::new(None)),
-                                DS::Continue,
-                            ]),
+                    DS::IfElse(code, Box::new(DS::Break), Box::new(None)),
+                    DS::Continue,
+                ]),
                 (LatchKind::Break, LatchKind::InLoop) => {
-                                DS::IfElse(code, Box::new(DS::Break), Box::new(None))
-                            }
+                    DS::IfElse(code, Box::new(DS::Break), Box::new(None))
+                }
                 (LatchKind::Break, LatchKind::Latch) => {
-                                DS::IfElse(code, Box::new(DS::Break), Box::new(Some(DS::Jump(other))))
-                            }
+                    DS::IfElse(code, Box::new(DS::Break), Box::new(Some(DS::Jump(other))))
+                }
                 (LatchKind::InLoop, LatchKind::Continue) => DS::IfElse(
-                                code,
-                                Box::new(DS::Seq(vec![])),
-                                Box::new(Some(DS::Continue)),
-                            ),
+                    code,
+                    Box::new(DS::Seq(vec![])),
+                    Box::new(Some(DS::Continue)),
+                ),
                 (LatchKind::InLoop, LatchKind::Break) => {
-                                DS::IfElse(code, Box::new(DS::Seq(vec![])), Box::new(Some(DS::Break)))
-                            }
+                    DS::IfElse(code, Box::new(DS::Seq(vec![])), Box::new(Some(DS::Break)))
+                }
                 (LatchKind::InLoop, LatchKind::InLoop) => unreachable!(),
                 (LatchKind::InLoop, LatchKind::Latch) => DS::IfElse(
-                                code,
-                                Box::new(DS::Seq(vec![])),
-                                Box::new(Some(DS::Jump(other))),
-                            ),
+                    code,
+                    Box::new(DS::Seq(vec![])),
+                    Box::new(Some(DS::Jump(other))),
+                ),
                 (LatchKind::Latch, LatchKind::Continue) => {
-                                DS::IfElse(code, Box::new(DS::Jump(next)), Box::new(Some(DS::Continue)))
-                            }
+                    DS::IfElse(code, Box::new(DS::Jump(next)), Box::new(Some(DS::Continue)))
+                }
                 (LatchKind::Latch, LatchKind::Break) => {
-                                DS::IfElse(code, Box::new(DS::Jump(next)), Box::new(Some(DS::Break)))
-                            }
+                    DS::IfElse(code, Box::new(DS::Jump(next)), Box::new(Some(DS::Break)))
+                }
                 (LatchKind::Latch, LatchKind::InLoop) => {
-                                DS::IfElse(code, Box::new(DS::Jump(next)), Box::new(None))
-                            }
+                    DS::IfElse(code, Box::new(DS::Jump(next)), Box::new(None))
+                }
                 (LatchKind::Latch, LatchKind::Latch) => DS::JumpIf(code, next, other),
                 // TODO handle otherloop cases
                 (LatchKind::Continue, LatchKind::OtherLoop) => todo!(),
@@ -236,7 +236,9 @@ fn instert_breaks(
         DS::Switch(code, structureds) => {
             let result = structureds
                 .into_iter()
-                .map(|structured| instert_breaks(loop_nodes, loop_head, succ_node, structured, graph))
+                .map(|structured| {
+                    instert_breaks(loop_nodes, loop_head, succ_node, structured, graph)
+                })
                 .collect::<Vec<_>>();
             DS::Switch(code, result)
         }
