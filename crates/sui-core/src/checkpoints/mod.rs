@@ -626,18 +626,23 @@ impl CheckpointStore {
 
             fail_point_arg!(
                 "kill_checkpoint_fork_node",
-                |forked_checkpoint_seq: std::sync::Arc<
-                    std::sync::Mutex<Option<CheckpointSequenceNumber>>,
+                |checkpoint_overrides: std::sync::Arc<
+                    std::sync::Mutex<std::collections::BTreeMap<u64, String>>,
                 >| {
                     #[cfg(msim)]
                     {
-                        if let Ok(mut seq) = forked_checkpoint_seq.lock() {
-                            *seq = Some(local_checkpoint.sequence_number);
+                        if let Ok(mut overrides) = checkpoint_overrides.lock() {
+                            // The verified checkpoint from quorum is the correct one
+                            overrides.insert(
+                                local_checkpoint.sequence_number, 
+                                verified_checkpoint.digest().to_string()
+                            );
                         }
                         tracing::error!(
                         fatal = true,
-                        "Fork recovery test: killing node due to checkpoint fork for sequence number: {}",
-                        local_checkpoint.sequence_number()
+                        "Fork recovery test: killing node due to checkpoint fork for sequence number: {}, using verified digest: {}",
+                        local_checkpoint.sequence_number(),
+                        verified_checkpoint.digest()
                     );
                         sui_simulator::task::kill_current_node(None);
                     }
@@ -2477,15 +2482,56 @@ impl CheckpointSignatureAggregator {
             // forked output
             // self.halt_all_execution();
 
-            let digests_by_stake_messages = self
-                .signatures_by_digest
-                .get_all_unique_values()
-                .into_iter()
+            let all_unique_values = self.signatures_by_digest.get_all_unique_values();
+            let digests_by_stake_messages = all_unique_values
+                .iter()
                 .sorted_by_key(|(_, (_, stake))| -(*stake as i64))
                 .map(|(digest, (_authorities, total_stake))| {
                     format!("{:?} (total stake: {})", digest, total_stake)
                 })
                 .collect::<Vec<String>>();
+            fail_point_arg!(
+                "kill_split_brain_node",
+                |(checkpoint_overrides, forked_authorities): (
+                    std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<u64, String>>>,
+                    std::sync::Arc<std::sync::Mutex<std::collections::HashSet<AuthorityName>>>,
+                )| {
+                    #[cfg(msim)]
+                    {
+                        if let (Ok(mut overrides), Ok(forked_authorities_set)) = 
+                            (checkpoint_overrides.lock(), forked_authorities.lock()) {
+                            
+                            // Find the digest produced by non-forked authorities
+                            let correct_digest = all_unique_values
+                                .iter()
+                                .find(|(_, (authorities, _))| {
+                                    // Check if any authority that produced this digest is NOT in the forked set
+                                    authorities.iter().any(|auth| !forked_authorities_set.contains(auth))
+                                })
+                                .map(|(digest, _)| digest.to_string())
+                                .unwrap_or_else(|| {
+                                    // Fallback: use the digest with the highest stake
+                                    all_unique_values
+                                        .iter()
+                                        .max_by_key(|(_, (_, stake))| *stake)
+                                        .map(|(digest, _)| digest.to_string())
+                                        .unwrap_or_else(|| self.digest.to_string())
+                                });
+                            
+                            overrides.insert(self.summary.sequence_number, correct_digest.clone());
+                            
+                            tracing::error!(
+                                fatal = true,
+                                "Fork recovery test: killing node due to split-brain for sequence number: {}, using digest: {}",
+                                self.summary.sequence_number,
+                                correct_digest
+                            );
+                        }
+                        sui_simulator::task::kill_current_node(None);
+                    }
+                }
+            );
+
             debug_fatal!(
                 "Split brain detected in checkpoint signature aggregation for checkpoint {:?}. Remaining stake: {:?}, Digests by stake: {:?}",
                 self.summary.sequence_number,

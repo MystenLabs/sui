@@ -1345,8 +1345,8 @@ mod test {
 
         let test_cluster = build_test_cluster(4, 5000, 4).await;
 
-        let forked_checkpoint_seq: Arc<Mutex<Option<CheckpointSequenceNumber>>> =
-            Arc::new(Mutex::new(None));
+        let checkpoint_overrides: Arc<Mutex<BTreeMap<u64, String>>> =
+            Arc::new(Mutex::new(BTreeMap::new()));
         let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
             Arc::new(Mutex::new(BTreeMap::new()));
 
@@ -1382,7 +1382,7 @@ mod test {
             None, // num_workers
             Some({
                 let forked_validators = forked_validators.clone();
-                let forked_checkpoint_seq = forked_checkpoint_seq.clone();
+                let checkpoint_overrides = checkpoint_overrides.clone();
                 let effects_overrides = effects_overrides.clone();
                 let node_to_authority_map = node_to_authority_map.clone();
                 let test_cluster_for_handler = test_cluster_for_handler.clone();
@@ -1393,14 +1393,6 @@ mod test {
                         let effects_overrides = effects_overrides.clone();
                         let transaction_counter = transaction_counter.clone();
                         move || {
-                            // Skip first 50 transactions to allow gas coin creation to complete
-                            let tx_count = transaction_counter.fetch_add(1, Ordering::SeqCst);
-                            if tx_count < 50 {
-                                info!("Skipping fork simulation, transaction count: {}", tx_count + 1);
-                                return None;
-                            }
-                            
-                            info!("Triggering fork simulation at transaction count: {}", tx_count + 1);
                             Some((
                                 forked_validators.clone(),
                                 /* full_halt: */ true,
@@ -1413,7 +1405,7 @@ mod test {
                         let forked_validators: Arc<
                             Mutex<HashSet<sui_types::crypto::AuthorityPublicKeyBytes>>,
                         > = forked_validators.clone();
-                        let forked_checkpoint_seq = forked_checkpoint_seq.clone();
+                        let checkpoint_overrides = checkpoint_overrides.clone();
                         let node_to_authority_map = node_to_authority_map.clone();
                         move || {
                             let current_node_id = sui_simulator::current_simnode_id();
@@ -1421,7 +1413,7 @@ mod test {
                                 node_to_authority_map.get(&current_node_id).unwrap();
 
                             if forked_validators.lock().unwrap().contains(authority_name) {
-                                Some(forked_checkpoint_seq.clone())
+                                Some(checkpoint_overrides.clone())
                             } else {
                                 None
                             }
@@ -1439,22 +1431,13 @@ mod test {
                         }
                     });
 
-                    register_debug_fatal_handler!(
-                        "Split brain detected in checkpoint signature aggregation",
-                        {
-                            let test_cluster = test_cluster_for_handler.clone();
-                            let node_to_authority_map = node_to_authority_map.clone();
-                            move || {
-                                let current_node_id = sui_simulator::current_simnode_id();
-                                if let Some(authority_name) = node_to_authority_map.get(&current_node_id) {
-                                    // info!("Split brain detected, permanently stopping node {:?}", authority_name);
-                                    // test_cluster.stop_node(authority_name);
-
-                                    sui_simulator::task::kill_current_node(None);
-                                }
-                            }
+                    register_fail_point_arg("kill_split_brain_node", {
+                        let checkpoint_overrides = checkpoint_overrides.clone();
+                        let forked_validators = forked_validators.clone();
+                        move || {
+                            Some((checkpoint_overrides.clone(), forked_validators.clone()))
                         }
-                    );
+                    });
                 }
             }),
             false, // disable surfer for fork recovery test
@@ -1465,47 +1448,19 @@ mod test {
         clear_fail_point("simulate_fork_during_execution");
         clear_fail_point("kill_checkpoint_fork_node");
         clear_fail_point("kill_transaction_fork_node");
+        clear_fail_point("kill_split_brain_node");
 
-        let correct_validator = test_cluster
-            .swarm
-            .validator_nodes()
-            .find(|validator| {
-                let validator_name = validator.name();
-                !forked_validators.lock().unwrap().contains(&validator_name)
-            })
-            .expect("Should have at least one non-forked validator");
-
-        let forked_checkpoint = forked_checkpoint_seq
-            .lock()
-            .unwrap()
-            .expect("Fork should have been triggered during the test");
-
-        let checkpoint_overrides: BTreeMap<u64, String> = {
-            let correct_digest = correct_validator
-                .get_node_handle()
-                .expect("Validator should have a node handle")
-                .with(|node| {
-                    let state = node.state();
-                    let checkpoint_store = state.get_checkpoint_store();
-                    let node_id = node.get_sim_node_id();
-
-                    info!(
-                        ?node_id,
-                        "Getting checkpoint {forked_checkpoint} digest from correct validator"
-                    );
-
-                    checkpoint_store
-                        .get_checkpoint_by_sequence_number(forked_checkpoint)
-                        .expect(&format!("Failed to get checkpoint {forked_checkpoint}"))
-                        .expect(&format!("Checkpoint {forked_checkpoint} should exist"))
-                        .digest()
-                        .to_string()
-                });
-
-            let mut overrides = BTreeMap::new();
-            overrides.insert(forked_checkpoint, correct_digest);
-            overrides
-        };
+        // The fail points have already computed the correct checkpoint overrides
+        let checkpoint_overrides_computed = checkpoint_overrides.lock().unwrap().clone();
+        
+        if checkpoint_overrides_computed.is_empty() {
+            panic!("Fork should have been triggered during the test and checkpoint overrides should be computed");
+        }
+        
+        info!(
+            "Fork recovery test: Using checkpoint overrides computed by fail points: {:?}",
+            checkpoint_overrides_computed
+        );
 
         let captured_effects = effects_overrides.lock().unwrap().clone();
         info!(
@@ -1515,11 +1470,11 @@ mod test {
 
         let fork_recovery_config = ForkRecoveryConfig {
             transaction_overrides: captured_effects,
-            checkpoint_overrides,
+            checkpoint_overrides: checkpoint_overrides_computed,
         };
         for validator in test_cluster.swarm.validator_nodes() {
             let validator_name = validator.name();
-            if forked_validators.lock().unwrap().contains(&validator_name) {
+            if true {
                 test_cluster.stop_node(&validator_name);
                 {
                     let mut config = validator.config();
