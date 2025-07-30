@@ -3,5 +3,4 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 loop {
     { 0 }
-    continue;
 }

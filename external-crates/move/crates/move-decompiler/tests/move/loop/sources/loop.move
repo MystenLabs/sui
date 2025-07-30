@@ -23,16 +23,3 @@ public fun loop_1(cond: &mut bool) {
     };
     do_2(cond);
 }
-
-
-public fun is_even(x: u64): u64 {
-    let z = 10;
-    let k = 13;
-    let y;
-    if (x % 2 == 0 ) {
-        y = z + 20;
-    } else {
-        y = z + 30;
-    };
-    return y * k
-}
