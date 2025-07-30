@@ -12,6 +12,7 @@ use std::path::Path;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
+use sui_rosetta::grpc_client::GrpcClient;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, CurrencyMetadata,
@@ -22,8 +23,9 @@ use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint};
+use url::Url;
 
-use crate::rosetta_client::{start_rosetta_test_server, RosettaEndpoint};
+use crate::rosetta_client::{start_rosetta_test_server_with_rpc_url, RosettaEndpoint};
 
 #[tokio::test]
 async fn test_custom_coin_balance() {
@@ -35,7 +37,8 @@ async fn test_custom_coin_balance() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) =
+        start_rosetta_test_server_with_rpc_url(test_cluster.rpc_url()).await;
 
     let sender = test_cluster.get_address_0();
     let init_ret = init_package(
@@ -111,9 +114,9 @@ async fn test_default_balance() {
     // mint coins to `test_culset.get_address_1()` and `test_culset.get_address_2()`
     const SUI_BALANCE: u64 = 150_000_000_000_000_000;
     let test_cluster = TestClusterBuilder::new().build().await;
-    let client = test_cluster.wallet.get_client().await.unwrap();
 
-    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handles) =
+        start_rosetta_test_server_with_rpc_url(test_cluster.rpc_url()).await;
 
     let request: AccountBalanceRequest = serde_json::from_value(json!(
         {
@@ -182,7 +185,8 @@ async fn test_custom_coin_transfer() {
         .await
         .unwrap();
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) =
+        start_rosetta_test_server_with_rpc_url(test_cluster.rpc_url()).await;
 
     let ops = serde_json::from_value(json!(
         [{
@@ -238,7 +242,9 @@ async fn test_custom_coin_transfer() {
         tx.effects.as_ref().unwrap().status()
     );
     println!("Sui TX: {tx:?}");
-    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let grpc_client =
+        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
+    let coin_cache = CoinMetadataCache::new(grpc_client, NonZeroUsize::new(2).unwrap());
     let ops2 = Operations::try_from_response(tx, &coin_cache)
         .await
         .unwrap();
@@ -290,7 +296,9 @@ async fn test_custom_coin_without_symbol() {
         &SuiExecutionStatus::Success,
         tx.effects.as_ref().unwrap().status()
     );
-    let coin_cache = CoinMetadataCache::new(client, NonZeroUsize::new(2).unwrap());
+    let grpc_client =
+        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
+    let coin_cache = CoinMetadataCache::new(grpc_client, NonZeroUsize::new(2).unwrap());
     let ops = Operations::try_from_response(tx, &coin_cache)
         .await
         .unwrap();

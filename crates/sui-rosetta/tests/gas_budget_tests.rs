@@ -7,7 +7,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use serde::Deserialize;
 use serde_json::json;
 
-use rosetta_client::start_rosetta_test_server;
+use rosetta_client::start_rosetta_test_server_with_rpc_url;
 use sui_keys::keystore::AccountKeystore;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
@@ -51,10 +51,11 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let recipient = test_cluster.get_address_1();
-    let client = test_cluster.wallet.get_client().await.unwrap();
+    let _client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) =
+        start_rosetta_test_server_with_rpc_url(test_cluster.rpc_url()).await;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 

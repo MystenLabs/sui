@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::grpc_client::GrpcClient;
 use crate::CoinMetadataCache;
 use anyhow::anyhow;
 use rand::prelude::IteratorRandom;
@@ -23,6 +24,7 @@ use sui_types::transaction::{
     TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
 };
 use test_cluster::TestClusterBuilder;
+use url::Url;
 
 #[tokio::test]
 async fn test_cache() {
@@ -94,7 +96,8 @@ async fn test_cache() {
         })
         .unwrap();
 
-    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(1).unwrap());
+    let grpc_client = GrpcClient::new(Url::parse(network.rpc_url()).unwrap(), None, None).unwrap();
+    let coin_cache = CoinMetadataCache::new(grpc_client, NonZeroUsize::new(1).unwrap());
 
     assert_eq!(0, coin_cache.metadata.lock().await.len());
 

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::grpc_client::GrpcClient;
 use crate::operations::Operations;
 use crate::types::{ConstructionMetadata, OperationStatus, OperationType};
 use crate::CoinMetadataCache;
@@ -39,6 +40,11 @@ use sui_types::transaction::{
 };
 use sui_types::TypeTag;
 use test_cluster::TestClusterBuilder;
+use url::Url;
+
+fn create_grpc_client_for_testing(rpc_url: &str) -> GrpcClient {
+    GrpcClient::new(Url::parse(rpc_url).unwrap(), None, None).unwrap()
+}
 
 #[tokio::test]
 async fn test_transfer_sui() {
@@ -66,6 +72,7 @@ async fn test_transfer_sui() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -96,6 +103,7 @@ async fn test_transfer_sui_whole_coin() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -127,6 +135,7 @@ async fn test_transfer_object() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -163,6 +172,7 @@ async fn test_publish_and_move_call() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
     let object_changes = response.object_changes.unwrap();
@@ -221,6 +231,7 @@ async fn test_publish_and_move_call() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -254,6 +265,7 @@ async fn test_split_coin() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -288,6 +300,7 @@ async fn test_merge_coin() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -321,6 +334,7 @@ async fn test_pay() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -360,6 +374,7 @@ async fn test_pay_multiple_coin_multiple_recipient() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -397,6 +412,7 @@ async fn test_pay_sui_multiple_coin_same_recipient() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -432,6 +448,7 @@ async fn test_pay_sui() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -467,6 +484,7 @@ async fn test_failed_pay_sui() {
         2000000,
         rgp,
         true,
+        network.rpc_url(),
     )
     .await;
 }
@@ -515,6 +533,7 @@ async fn test_stake_sui() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -563,6 +582,7 @@ async fn test_stake_sui_with_none_amount() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_STAKING,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -595,6 +615,7 @@ async fn test_pay_all_sui() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
         false,
+        network.rpc_url(),
     )
     .await;
 }
@@ -686,6 +707,7 @@ async fn test_transaction(
     gas_budget: u64,
     gas_price: u64,
     expect_fail: bool,
+    rpc_url: &str,
 ) -> SuiTransactionBlockResponse {
     let gas = if !gas.is_empty() {
         gas
@@ -751,7 +773,8 @@ async fn test_transaction(
             SuiExecutionStatus::Failure { .. }
         ));
     }
-    let coin_cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(2).unwrap());
+    let grpc_client = create_grpc_client_for_testing(rpc_url);
+    let coin_cache = CoinMetadataCache::new(grpc_client, NonZeroUsize::new(2).unwrap());
     let ops = Operations::try_from_response(response.clone(), &coin_cache)
         .await
         .unwrap();

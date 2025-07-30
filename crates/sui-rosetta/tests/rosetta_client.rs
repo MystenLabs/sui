@@ -15,6 +15,7 @@ use tokio::task::JoinHandle;
 use sui_config::local_ip_utils;
 use sui_keys::keystore::AccountKeystore;
 use sui_keys::keystore::Keystore;
+use sui_rosetta::grpc_client::GrpcClient;
 use sui_rosetta::operations::Operations;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, ConstructionCombineRequest,
@@ -24,12 +25,15 @@ use sui_rosetta::types::{
     Signature, SignatureType, SubAccount, SubAccountType, SuiEnv, TransactionIdentifierResponse,
 };
 use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer};
-use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;
+use url::Url;
 
-pub async fn start_rosetta_test_server(client: SuiClient) -> (RosettaClient, Vec<JoinHandle<()>>) {
-    let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client);
+pub async fn start_rosetta_test_server_with_rpc_url(
+    rpc_url: &str,
+) -> (RosettaClient, Vec<JoinHandle<()>>) {
+    let grpc_client = GrpcClient::new(Url::parse(rpc_url).unwrap(), None, None).unwrap();
+    let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, grpc_client);
     let offline_server = RosettaOfflineServer::new(SuiEnv::LocalNet);
     let local_ip = local_ip_utils::localhost_for_testing();
     let port = local_ip_utils::get_available_port(&local_ip);

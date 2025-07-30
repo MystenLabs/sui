@@ -156,6 +156,7 @@ impl GrpcClient {
             epoch,
             read_mask: Some(sui_rpc::field::FieldMask::from_paths([
                 "epoch",
+                "reference_gas_price",
                 "system_state",
                 "system_state.validators",
                 "system_state.validators.active_validators",
@@ -280,7 +281,14 @@ impl GrpcClient {
             object_type,
             page_token: cursor,
             page_size: Some(50), // Default page size
-            read_mask: None,     // Get all fields
+            read_mask: Some(sui_rpc::field::FieldMask::from_paths([
+                "object_id",
+                "version",
+                "digest",
+                "object_type",
+                "contents",
+                "contents.value",
+            ])),
         };
 
         let response = self
