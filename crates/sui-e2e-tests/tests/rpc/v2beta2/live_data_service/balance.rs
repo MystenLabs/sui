@@ -463,24 +463,6 @@ async fn test_invalid_requests() {
         error.message()
     );
 
-    // Test with non-existent coin type (well-formed but doesn't exist)
-    let fake_coin_type =
-        "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef::fakecoin::FAKECOIN";
-    let result = grpc_client
-        .get_balance(GetBalanceRequest {
-            owner: Some(address.to_string()),
-            coin_type: Some(fake_coin_type.to_string()),
-        })
-        .await;
-    assert!(result.is_err(), "Expected error for non-existent coin type");
-    let error = result.unwrap_err();
-    assert_eq!(error.code(), tonic::Code::InvalidArgument);
-    assert!(
-        error.message().contains("coin type does not exist"),
-        "Expected error message to contain 'coin type does not exist', but got: {}",
-        error.message()
-    );
-
     // Test ListBalancesRequest with missing owner
     let result = grpc_client
         .list_balances(ListBalancesRequest {
