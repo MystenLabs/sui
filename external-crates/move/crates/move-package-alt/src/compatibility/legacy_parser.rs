@@ -357,7 +357,7 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
             let edition = table
                 .remove("edition")
                 .map(|v| v.as_str().unwrap_or_default().to_string())
-                .unwrap_or_default();
+                .unwrap_or("legacy".to_string());
 
             Ok(LegacyPackageMetadata {
                 legacy_name: name,
@@ -382,8 +382,10 @@ fn parse_dependencies(tval: TV) -> Result<BTreeMap<PackageName, DefaultDependenc
             for (dep_name, dep) in table.into_iter() {
                 // TODO(manos): This could fail if we have names that are not `Identifier` compatible.
                 // Though this is a super rare case, we'll probably not handle it more complex until we need to.
+                // TODO: we need to support whitespace and decide if that's how we need to keep
+                // this working
+                let dep_name = dep_name.replace("-", "___");
                 let dep_name_ident = PackageName::new(dep_name)?;
-
                 let dep = parse_dependency(dep)?;
                 deps.insert(dep_name_ident, dep);
             }

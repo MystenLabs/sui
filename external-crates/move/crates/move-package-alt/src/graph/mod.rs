@@ -24,6 +24,7 @@ use builder::PackageGraphBuilder;
 
 use derive_where::derive_where;
 use petgraph::{
+    algo::toposort,
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
 };
@@ -51,7 +52,7 @@ pub struct PackageInfo<'a, F: MoveFlavor> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NamedAddress {
     RootPackage(Option<OriginalID>),
-    Unpublished,
+    Unpublished { dummy_addr: OriginalID },
     Defined(OriginalID),
 }
 
@@ -62,9 +63,8 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
     }
 
     /// The compiler edition for the package
-    pub fn edition(&self) -> Option<&str> {
-        // TODO: pull this from manifest
-        Some("2024")
+    pub fn edition(&self) -> &str {
+        self.package().metadata().edition.as_str()
     }
 
     /// The flavor for the package
@@ -163,7 +163,9 @@ impl<F: MoveFlavor> PackageInfo<'_, F> {
         if let Some(oid) = package.original_id() {
             NamedAddress::Defined(oid)
         } else {
-            NamedAddress::Unpublished
+            NamedAddress::Unpublished {
+                dummy_addr: package.dummy_addr.clone(),
+            }
         }
     }
 
@@ -215,12 +217,45 @@ impl<F: MoveFlavor> PackageGraph<F> {
         self.inner[self.root_index].as_ref()
     }
 
-    /// Return the list of dependencies in this package graph
-    // TODO: I don't like the name dependencies for this. Maybe packages?
-    pub(crate) fn dependencies(&self) -> Vec<PackageInfo<F>> {
-        self.inner
-            .node_indices()
+    /// Return the list of packages that are in the linkage table, as well as
+    /// the unpublished ones in the package graph.
+    // TODO: Do we want a way to access ALL packages and not the "de-duplicated" ones?
+    pub(crate) fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+        let mut linkage = self.linkage()?;
+
+        // Populate ALL the linkage elements
+        let mut result: Vec<PackageInfo<F>> = linkage
+            .values()
+            .cloned()
             .map(|node| PackageInfo { graph: self, node })
+            .collect();
+
+        // Add all nodes that exist but are not in the linkage table.
+        // This is done to support unpublished packages, as linkage only includes
+        // published packages.
+        for node in self.inner.node_indices() {
+            let package = &self.inner[node];
+
+            if package
+                .original_id()
+                .is_some_and(|oid| linkage.contains_key(&oid))
+            {
+                continue;
+            }
+
+            result.push(PackageInfo { graph: self, node });
+        }
+
+        Ok(result)
+    }
+
+    /// Return the sorted list of dependencies' name
+    pub(crate) fn sorted_deps(&self) -> Vec<&PackageName> {
+        let sorted = toposort(&self.inner, None).expect("to sort the graph");
+        sorted
+            .iter()
+            .flat_map(|x| self.inner.node_weight(*x))
+            .map(|x| x.name())
             .collect()
     }
 }
@@ -244,7 +279,8 @@ mod tests {
         graph: &PackageGraph<Vanilla>,
     ) -> BTreeMap<PackageName, PackageInfo<Vanilla>> {
         graph
-            .dependencies()
+            .packages()
+            .expect("failed to get packages from graph")
             .into_iter()
             .map(|node| (node.name().clone(), node))
             .collect()

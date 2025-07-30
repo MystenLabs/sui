@@ -27,8 +27,13 @@ use crate::{
         PublishedID,
     },
 };
+use move_core_types::account_address::AccountAddress;
+use std::sync::{LazyLock, Mutex};
 
 const SYSTEM_DEPS_NAMES: [&str; 5] = ["Sui", "MoveStdlib", "Bridge", "DeepBook", "SuiSystem"];
+
+// TODO: is this the right way to handle this?
+static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -61,6 +66,10 @@ pub struct Package<F: MoveFlavor> {
     /// The pinned direct dependencies for this package
     /// Note: for legacy packages, this information will be stored in `legacy_data`.
     deps: BTreeMap<PackageName, PinnedDependencyInfo>,
+
+    /// Dummy address that is set during package graph initialization for unpublished addresses
+    // TODO: probably we want to refactor this and have it in published
+    pub dummy_addr: OriginalID,
 }
 
 impl<F: MoveFlavor> Package<F> {
@@ -91,6 +100,12 @@ impl<F: MoveFlavor> Package<F> {
         env: &Environment,
     ) -> PackageResult<Self> {
         let manifest = Manifest::read_from_file(path.manifest_path());
+        let dummy_addr = {
+            let lock = DUMMY_ADDRESSES.lock();
+            let mut dummy_addr = lock.unwrap();
+            *dummy_addr += 1;
+            *dummy_addr
+        };
 
         // If our "modern" manifest is OK, we load the modern lockfile and return early.
         if let Ok(manifest) = manifest {
@@ -134,6 +149,7 @@ impl<F: MoveFlavor> Package<F> {
                 dep_for_self: source,
                 legacy_data: None,
                 deps,
+                dummy_addr: OriginalID(AccountAddress::from_suffix(dummy_addr)),
             });
         }
 
@@ -162,10 +178,11 @@ impl<F: MoveFlavor> Package<F> {
             digest: compute_digest(legacy_manifest.file_handle.source()),
             metadata: legacy_manifest.metadata,
             path,
-            publish_data: Default::default(),
+            publish_data: None,
             dep_for_self: source,
             legacy_data: Some(legacy_manifest.legacy_data),
             deps,
+            dummy_addr: OriginalID(AccountAddress::from_suffix(dummy_addr)),
         })
     }
 
@@ -250,6 +267,10 @@ impl<F: MoveFlavor> Package<F> {
     /// including support for backwards compatibility (legacy packages)
     pub fn original_id(&self) -> Option<OriginalID> {
         self.publication().map(|data| data.original_id.clone())
+    }
+
+    pub fn metadata(&self) -> &PackageMetadata {
+        &self.metadata
     }
 
     /// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
