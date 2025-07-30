@@ -23,7 +23,7 @@ impl DominatorTree {
             value: NodeIndex,
             child_map: &mut HashMap<NodeIndex, Vec<NodeIndex>>,
         ) -> Node {
-            let children = child_map.remove(&value).unwrap_or(Vec::new());
+            let children = child_map.remove(&value).unwrap_or_default();
             let children = children
                 .into_iter()
                 .map(|child| build_node(child, child_map))

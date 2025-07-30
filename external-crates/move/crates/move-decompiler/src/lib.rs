@@ -60,7 +60,9 @@ pub fn structuring_unit_test(file_path: &Path) -> String {
 
             match parts.as_slice() {
                 ["cond", a, b, c] => match (a.parse::<u32>(), b.parse::<u32>(), c.parse::<u32>()) {
-                    (Ok(a), Ok(b), Ok(c)) => nodes.push(In::Condition(a.into(), a.into(), b.into(), c.into())),
+                    (Ok(a), Ok(b), Ok(c)) => {
+                        nodes.push(In::Condition(a.into(), a.into(), b.into(), c.into()))
+                    }
                     _ => errors.push(format!("Malformed line {}: {}", line_number, orig)),
                 },
                 ["code", a, b] => match (a.parse::<u32>(), b.parse::<u32>()) {

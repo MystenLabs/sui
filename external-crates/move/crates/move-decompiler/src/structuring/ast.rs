@@ -49,7 +49,7 @@ impl Input {
         match self {
             Input::Condition(lbl, _, then, else_) => vec![(*lbl, *then), (*lbl, *else_)],
             Input::Variants(lbl, _, items) => items
-                .into_iter()
+                .iter()
                 .map(|item| (*lbl, *item))
                 .collect::<Vec<_>>(),
             Input::Code(lbl, _, Some(to)) => vec![(*lbl, *to)],
@@ -105,9 +105,7 @@ impl std::fmt::Display for Structured {
                 Structured::While(cond, body) => {
                     indent(f, level)?;
                     writeln!(f, "while ({:?}) {{", cond)?;
-                    indent(f, level + 1)?;
-                    writeln!(f, "{:?}", body)?;
-                    indent(f, level)?;
+                    fmt_structured(body, f, level + 1)?;
                     writeln!(f, "}}")
                 }
                 Structured::IfElse(cond, then_branch, else_branch) => {
