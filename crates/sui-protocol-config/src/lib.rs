@@ -4067,6 +4067,10 @@ impl ProtocolConfig {
         self.feature_flags.passkey_auth = val
     }
 
+    pub fn set_enable_party_transfer_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_party_transfer = val
+    }
+
     pub fn set_consensus_distributed_vote_scoring_strategy_for_testing(&mut self, val: bool) {
         self.feature_flags
             .consensus_distributed_vote_scoring_strategy = val;
