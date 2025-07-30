@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{___u64}\"#)"
+---
+Error: Unexpected "_" at offset 1, expected one of 'b', 'false', 'true', 'x', '@', an identifier, a decimal number, a hexadecimal number, or a string
