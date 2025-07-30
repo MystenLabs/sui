@@ -1618,6 +1618,9 @@ settlement_prologue
 settle_u128
 	fun
 	0x2::accumulator_settlement
+record_settlement_sui_conservation
+	fun
+	0x2::accumulator_settlement
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
