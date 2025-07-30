@@ -553,7 +553,7 @@ fn merge_user_programs(
     });
     let mut typed_modules_cached_filtered = UniqueMap::new();
     for (mident, mdef) in typed_modules_cached.into_iter() {
-        if !is_typed_mod_modified(&mdef, &files_to_compile, file_paths_cached.clone()) {
+        if !is_typed_mod_modified(&mdef, &mident, &files_to_compile, file_paths_cached.clone()) {
             _ = typed_modules_cached_filtered.add(mident, mdef);
         }
     }
@@ -566,7 +566,7 @@ fn merge_user_programs(
         }
     }
     for (mident, mdef) in typed_program_modules_new.into_iter() {
-        if is_typed_mod_modified(&mdef, &files_to_compile, file_paths_new.clone()) {
+        if is_typed_mod_modified(&mdef, &mident, &files_to_compile, file_paths_new.clone()) {
             typed_modules_cached.remove(&mident); // in case new file has new definition of the module
             _ = typed_modules_cached.add(mident, mdef);
         }
@@ -583,9 +583,11 @@ fn is_parsed_mod_modified(
     modified_files: &BTreeSet<PathBuf>,
     file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
 ) -> bool {
-    // unwrap is safe as file paths comes from mapped files
-    // that the compiler relies on when comppiling all modules
-    let mod_file_path = file_paths.get(&mdef.loc.file_hash()).unwrap();
+    let Some(mod_file_path) = file_paths.get(&mdef.loc.file_hash()) else {
+        eprintln!("no file path for parse module {}", mdef.name);
+        debug_assert!(false);
+        return false;
+    };
     modified_files.contains(mod_file_path)
 }
 
@@ -594,12 +596,15 @@ fn is_parsed_mod_modified(
 /// in the set of modified file paths.
 fn is_typed_mod_modified(
     mdef: &ModuleDefinition,
+    mident: &ModuleIdent,
     modified_files: &BTreeSet<PathBuf>,
     file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
 ) -> bool {
-    // unwrap is safe as file paths comes from mapped files
-    // that the compiler relies on when comppiling all modules
-    let mod_file_path = file_paths.get(&mdef.loc.file_hash()).unwrap();
+    let Some(mod_file_path) = file_paths.get(&mdef.loc.file_hash()) else {
+        eprintln!("no file path for typed module {}", mident.value.module);
+        debug_assert!(false);
+        return false;
+    };
     modified_files.contains(mod_file_path)
 }
 
