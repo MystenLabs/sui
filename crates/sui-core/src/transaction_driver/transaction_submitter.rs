@@ -57,6 +57,7 @@ impl TransactionSubmitter {
                 }
                 Err(e) => {
                     self.metrics.submit_transaction_error.inc();
+                    tracing::warn!("Failed to submit transaction to {:?}: {:?}", name, e);
                     retrier.add_error(name, e)?;
                 }
             };
