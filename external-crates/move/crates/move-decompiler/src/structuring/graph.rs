@@ -46,7 +46,7 @@ impl Graph {
 
         let (loop_heads, back_edges) = find_loop_heads_and_back_edges(&cfg, start_node);
         let dom_tree = dom_tree::DominatorTree::from_graph(&cfg, start_node);
-        let (return_, post_dominators) = compute_post_dominators(&cfg, &input);
+        let (return_, post_dominators) = compute_post_dominators(&cfg, input);
         println!("Dom tree: {dom_tree:#?}");
         println!("Loop heads: {loop_heads:#?}");
         Self {
@@ -60,9 +60,17 @@ impl Graph {
     }
 
     pub fn update_latch_nodes(&mut self, node: NodeIndex, latch: NodeIndex) {
-        if let Some(entry) = self.back_edges.remove(&latch) {
-            println!("TRANSFER: Moving back edges from node {latch:?} to node {node:?}: {entry:?}");
-            let result = self.back_edges.insert(node, entry);
+        self.update_latch_branch_nodes(node, vec![latch]);
+    }
+
+    pub fn update_latch_branch_nodes(&mut self, node: NodeIndex, latches: Vec<NodeIndex>) {
+        let latches = latches
+            .iter()
+            .filter_map(|latch| self.back_edges.remove(latch))
+            .flatten()
+            .collect::<HashSet<NodeIndex>>();
+        if !latches.is_empty() {
+            let result = self.back_edges.insert(node, latches);
             assert!(result.is_none());
         }
     }
@@ -71,10 +79,8 @@ impl Graph {
         for (_, back_edges) in self.back_edges.iter_mut() {
             back_edges.remove(&loop_head);
         }
-        for node in self.back_edges.keys().map(|key| *key).collect::<Vec<_>>() {
-            if node == loop_head {
-                self.back_edges.remove(&node);
-            } else if self.back_edges[&node].is_empty() {
+        for node in self.back_edges.keys().copied().collect::<Vec<_>>() {
+            if node == loop_head || self.back_edges[&node].is_empty() {
                 self.back_edges.remove(&node);
             }
         }
