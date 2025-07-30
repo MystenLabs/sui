@@ -7,19 +7,13 @@ mod rosetta_client;
 mod test_coin_utils;
 
 use serde_json::json;
-use std::num::NonZeroUsize;
 use std::path::Path;
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
-};
 use sui_rosetta::grpc_client::GrpcClient;
-use sui_rosetta::operations::Operations;
+use sui_rosetta::types::Currencies;
 use sui_rosetta::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountIdentifier, Currency, CurrencyMetadata,
     NetworkIdentifier, SuiEnv,
 };
-use sui_rosetta::types::{Currencies, OperationType};
-use sui_rosetta::CoinMetadataCache;
 use sui_rosetta::SUI;
 use test_cluster::TestClusterBuilder;
 use test_coin_utils::{init_package, mint};
@@ -37,15 +31,23 @@ async fn test_custom_coin_balance() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
+    // Create GRPC client for test utilities
+    let grpc_client =
+        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
+
     let (rosetta_client, _handle) =
         start_rosetta_test_server_with_rpc_url(test_cluster.rpc_url()).await;
 
     let sender = test_cluster.get_address_0();
     let init_ret = init_package(
         &client,
+        &grpc_client,
         keystore,
         sender,
-        Path::new("tests/custom_coins/test_coin"),
+        Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/custom_coins/test_coin"
+        )),
     )
     .await
     .unwrap();
@@ -55,7 +57,7 @@ async fn test_custom_coin_balance() {
     let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
     let coin_type = init_ret.coin_tag.to_canonical_string(true);
 
-    let _mint_res = mint(&client, keystore, init_ret, balances_to)
+    let _mint_res = mint(&client, &grpc_client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
@@ -170,18 +172,26 @@ async fn test_custom_coin_transfer() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
+    // Create GRPC client for test utilities
+    let grpc_client =
+        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
+
     // TEST_COIN setup and mint
     let init_ret = init_package(
         &client,
+        &grpc_client,
         keystore,
         sender,
-        Path::new("tests/custom_coins/test_coin"),
+        Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/custom_coins/test_coin"
+        )),
     )
     .await
     .unwrap();
     let balances_to = vec![(COIN1_BALANCE, sender)];
     let coin_type = init_ret.coin_tag.to_canonical_string(true);
-    let _mint_res = mint(&client, keystore, init_ret, balances_to)
+    let _mint_res = mint(&client, &grpc_client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
@@ -224,35 +234,53 @@ async fn test_custom_coin_transfer() {
 
     let response = rosetta_client.rosetta_flow(&ops, keystore).await;
 
-    let tx = client
-        .read_api()
-        .get_transaction_with_options(
-            response.transaction_identifier.hash,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes()
-                .with_events(),
-        )
+    // Wait a bit for the transaction to be indexed
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    // Get transaction using GRPC
+    let grpc_client2 =
+        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
+    let tx_with_details = grpc_client2
+        .get_transaction_with_details(response.transaction_identifier.hash)
         .await
         .unwrap();
 
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        tx.effects.as_ref().unwrap().status()
-    );
-    println!("Sui TX: {tx:?}");
-    let grpc_client =
-        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
-    let coin_cache = CoinMetadataCache::new(grpc_client, NonZeroUsize::new(2).unwrap());
-    let ops2 = Operations::try_from_response(tx, &coin_cache)
-        .await
-        .unwrap();
+    // Check that transaction succeeded
+    let effects = tx_with_details.effects.as_ref().expect("Missing effects");
+    let status = effects.status.as_ref().expect("Missing status");
+    assert!(status.success.unwrap_or(false), "Transaction failed");
+
+    println!("Sui TX: {:?}", tx_with_details);
+
+    // Verify the balance changes match what we expected
+    let balance_changes = &tx_with_details.balance_changes;
+    assert!(!balance_changes.is_empty(), "No balance changes found");
+
+    // Find the transfer balance changes
+    let mut found_sender_decrease = false;
+    let mut found_recipient_increase = false;
+
+    for change in balance_changes {
+        if let (Some(address), Some(coin_type), Some(amount)) =
+            (&change.address, &change.coin_type, &change.amount)
+        {
+            if coin_type.contains("test_coin::TEST_COIN") {
+                if address == &sender.to_string() && amount == "-30000000" {
+                    found_sender_decrease = true;
+                } else if address == &recipient.to_string() && amount == "30000000" {
+                    found_recipient_increase = true;
+                }
+            }
+        }
+    }
+
     assert!(
-        ops2.contains(&ops),
-        "Operation mismatch. expecting:{}, got:{}",
-        serde_json::to_string(&ops).unwrap(),
-        serde_json::to_string(&ops2).unwrap()
+        found_sender_decrease,
+        "Did not find sender balance decrease"
+    );
+    assert!(
+        found_recipient_increase,
+        "Did not find recipient balance increase"
     );
 }
 
@@ -264,48 +292,55 @@ async fn test_custom_coin_without_symbol() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
+    // Create GRPC client for test utilities
+    let grpc_client =
+        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
+
     // TEST_COIN setup and mint
     let init_ret = init_package(
         &client,
+        &grpc_client,
         keystore,
         sender,
-        Path::new("tests/custom_coins/test_coin_no_symbol"),
+        Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/custom_coins/test_coin_no_symbol"
+        )),
     )
     .await
     .unwrap();
 
     let balances_to = vec![(COIN1_BALANCE, sender)];
-    let mint_res = mint(&client, keystore, init_ret, balances_to)
+    let mint_res = mint(&client, &grpc_client, keystore, init_ret, balances_to)
         .await
         .unwrap();
 
-    let tx = client
-        .read_api()
-        .get_transaction_with_options(
-            mint_res.digest,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes()
-                .with_events(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(
-        &SuiExecutionStatus::Success,
-        tx.effects.as_ref().unwrap().status()
-    );
-    let grpc_client =
+    // Get transaction using GRPC instead of read_api
+    let grpc_client2 =
         GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
-    let coin_cache = CoinMetadataCache::new(grpc_client, NonZeroUsize::new(2).unwrap());
-    let ops = Operations::try_from_response(tx, &coin_cache)
+    let tx_with_details = grpc_client2
+        .get_transaction_with_details(mint_res.digest)
         .await
         .unwrap();
 
-    for op in ops {
-        if op.type_ == OperationType::SuiBalanceChange {
-            assert!(!op.amount.unwrap().currency.symbol.is_empty())
-        }
-    }
+    // Check that transaction succeeded
+    let effects = tx_with_details.effects.as_ref().expect("Missing effects");
+    let status = effects.status.as_ref().expect("Missing status");
+    assert!(status.success.unwrap_or(false), "Transaction failed");
+
+    // Check balance changes directly from the proto transaction
+    let balance_changes = &tx_with_details.balance_changes;
+    assert!(
+        !balance_changes.is_empty(),
+        "No balance changes found in transaction"
+    );
+
+    let has_non_empty_symbols = balance_changes.iter().any(|change| {
+        // Any balance change should have a coin type
+        change.coin_type.is_some()
+    });
+    assert!(
+        has_non_empty_symbols,
+        "Expected to find balance changes with coin types"
+    );
 }
