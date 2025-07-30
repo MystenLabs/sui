@@ -36,9 +36,9 @@ if [ -z "$RELEASED_COMMIT" ]; then
   TOP_VERSION=$(echo "$VERSIONS" | head -n 1 | awk '{print $2}')
 
   # temporary override for private release in mainnet
-  if [[ "$TOP_VERSION" == "1.52.3-2ae3516a77d8" && "$NETWORK" == "mainnet" ]]; then  
-    echo "Overriding private release hash"
+  if [[ "$TOP_VERSION" == "1.52.3-2ae3516a77d8" && "$NETWORK" == "mainnet" ]]; then
     TOP_VERSION="1.52.3-cd58464d654d"
+    echo "Overriding private release hash in $NETWORK with $TOP_VERSION"
   fi
   exit 0
 
