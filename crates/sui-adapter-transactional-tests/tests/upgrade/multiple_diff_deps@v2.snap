@@ -1,0 +1,24 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-9:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5335200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-15:
+//# upgrade --package A1 --upgrade-capability 1,1 --sender A
+created: object(2,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 5563200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 4, lines 19-23:
+//# publish --upgradeable --sender A --dependencies A1 A2
+Error: Transaction Effects Status: A valid linkage was unable to be determined for the transaction
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidLinkage, source: Some("exact/exact conflicting resolutions for package: linkage requires the same package at different versions. Linkage requires exactly A1 (version std) and A2 (version sui) to be used in the same transaction"), command: Some(0) } }
