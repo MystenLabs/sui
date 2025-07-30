@@ -108,12 +108,20 @@ where
                             TX_TYPE_SHARED_OBJ_TX
                         }])
                         .observe(settlement_finality_latency);
-                    // Record the number of retries
-                    self.metrics.transaction_retries.observe(attempts as f64);
+                    // Record the number of retries for successful transaction
+                    self.metrics
+                        .transaction_retries
+                        .with_label_values(&["success"])
+                        .observe(attempts as f64);
                     return Ok(resp);
                 }
                 Err(e) => {
                     if !e.is_retriable() {
+                        // Record the number of retries for failed transaction
+                        self.metrics
+                            .transaction_retries
+                            .with_label_values(&["failure"])
+                            .observe(attempts as f64);
                         return Err(e);
                     }
                     tracing::info!(

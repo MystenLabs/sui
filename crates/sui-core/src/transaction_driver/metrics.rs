@@ -32,7 +32,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) rejection_acks: IntCounter,
     pub(crate) expiration_acks: IntCounter,
     pub(crate) effects_digest_mismatches: IntCounter,
-    pub(crate) transaction_retries: Histogram,
+    pub(crate) transaction_retries: HistogramVec,
     pub(crate) certified_effects_ack_latency: Histogram,
     pub(crate) certified_effects_ack_attempts: IntCounter,
     pub(crate) certified_effects_ack_successes: IntCounter,
@@ -109,9 +109,10 @@ impl TransactionDriverMetrics {
                 registry,
             )
             .unwrap(),
-            transaction_retries: register_histogram_with_registry!(
+            transaction_retries: register_histogram_vec_with_registry!(
                 "transaction_driver_transaction_retries",
-                "Number of retries per transaction attempt in drive_transaction_once",
+                "Number of retries per transaction attempt in drive_transaction",
+                &["result"],
                 SUBMIT_TRANSACTION_RETRIES_BUCKETS.to_vec(),
                 registry,
             )
