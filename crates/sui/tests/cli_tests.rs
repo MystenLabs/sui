@@ -19,6 +19,7 @@ use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::IndexerArgs;
 use sui_keys::key_identity::KeyIdentity;
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -5407,6 +5408,12 @@ async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_party_transfer() -> Result<(), anyhow::Error> {
+    // TODO: this test override can be removed when party objects are enabled on mainnet.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_party_transfer_for_testing(true);
+        config
+    });
+
     let (mut test_cluster, client, rgp, objects, recipients, addresses) =
         test_cluster_helper().await;
     let (object_id1, object_id2) = (objects[0], objects[1]);
@@ -5458,6 +5465,12 @@ async fn test_party_transfer() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_party_transfer_gas_object_as_transfer_object() -> Result<(), anyhow::Error> {
+    // TODO: this test override can be removed when party objects are enabled on mainnet.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_party_transfer_for_testing(true);
+        config
+    });
+
     let (mut test_cluster, _client, rgp, objects, _recipients, addresses) =
         test_cluster_helper().await;
     let object_id1 = objects[0];
