@@ -16,11 +16,16 @@ diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
 futures.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
 scoped-futures.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-postgres = "0.7.12"
+tokio-postgres-rustls = "0.12.0"
 tracing.workspace = true
 url.workspace = true
+webpki-roots = "0.26.3"
 
 sui-field-count.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true

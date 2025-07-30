@@ -7,10 +7,9 @@ use std::time::Duration;
 use anyhow::anyhow;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
-use diesel::ConnectionError;
+use diesel::{ConnectionError, ConnectionResult};
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::pooled_connection::ManagerConfig;
-use diesel_async::AsyncConnection;
 use diesel_async::{
     pooled_connection::{
         bb8::{Pool, PooledConnection},
@@ -49,6 +48,15 @@ pub struct DbArgs {
     #[arg(long)]
     /// Time spent waiting for statements to complete, in milliseconds.
     pub db_statement_timeout_ms: Option<u64>,
+
+    #[arg(long)]
+    /// Enable server certificate verification. By default, this is set to false to match the
+    /// default behavior of libpq.
+    pub tls_verify_cert: bool,
+
+    #[arg(long)]
+    /// Path to a custom CA certificate to use for server certificate verification.
+    pub tls_ca_cert_path: Option<String>,
 }
 
 #[derive(Clone)]
@@ -177,6 +185,8 @@ impl Default for DbArgs {
             db_connection_pool_size: 100,
             db_connection_timeout_ms: 60_000,
             db_statement_timeout_ms: None,
+            tls_verify_cert: false,
+            tls_ca_cert_path: None,
         }
     }
 }
@@ -217,10 +227,17 @@ async fn pool(
 ) -> anyhow::Result<Pool<AsyncPgConnection>> {
     let statement_timeout = args.statement_timeout();
 
+    // Build TLS configuration once
+    let tls_config = build_tls_config(&args)?;
+
     let mut config = ManagerConfig::default();
+
     config.custom_setup = Box::new(move |url| {
+        let tls_config = tls_config.clone();
+        let statement_timeout = statement_timeout;
+
         async move {
-            let mut conn = AsyncPgConnection::establish(url).await?;
+            let mut conn = establish_connection_with_config(url, tls_config).await?;
 
             if let Some(timeout) = statement_timeout {
                 diesel::sql_query(format!("SET statement_timeout = {}", timeout.as_millis()))
@@ -250,6 +267,63 @@ async fn pool(
         .await?)
 }
 
+/// Builds a TLS configuration from the provided DbArgs. If tls_verify_cert is false, disable server
+/// certificate verification. If tls_ca_cert_path is provided, add the custom CA certificate to the
+/// root certificates.
+fn build_tls_config(args: &DbArgs) -> anyhow::Result<rustls::ClientConfig> {
+    if args.tls_verify_cert {
+        let mut root_certs = root_certs();
+
+        // Add custom CA certificate if provided
+        if let Some(ca_cert_path) = &args.tls_ca_cert_path {
+            let ca_cert_bytes = std::fs::read(&ca_cert_path).map_err(|e| {
+                anyhow::anyhow!("Failed to read CA certificate from {}: {}", ca_cert_path, e)
+            })?;
+
+            let certs = if ca_cert_bytes.starts_with(b"-----BEGIN CERTIFICATE-----") {
+                rustls_pemfile::certs(&mut ca_cert_bytes.as_slice())
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| anyhow!("Failed to parse PEM certificates: {:?}", e))?
+            } else {
+                // Assume DER format for binary files
+                vec![rustls::pki_types::CertificateDer::from(ca_cert_bytes)]
+            };
+
+            // Add all certificates to the root store
+            for cert in certs {
+                root_certs
+                    .add(cert)
+                    .map_err(|e| anyhow!("Failed to add CA certificate to root store: {:?}", e))?;
+            }
+        }
+
+        Ok(rustls::ClientConfig::builder()
+            .with_root_certificates(root_certs)
+            .with_no_client_auth())
+    } else {
+        Ok(rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(std::sync::Arc::new(SkipServerCertCheck))
+            .with_no_client_auth())
+    }
+}
+
+async fn establish_connection_with_config(
+    config: &str,
+    tls_config: rustls::ClientConfig,
+) -> ConnectionResult<AsyncPgConnection> {
+    let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config);
+    let (client, conn) = tokio_postgres::connect(config, tls)
+        .await
+        .map_err(|e| ConnectionError::BadConnection(e.to_string()))?;
+    tokio::spawn(async move {
+        if let Err(e) = conn.await {
+            eprintln!("Database connection: {e}");
+        }
+    });
+    AsyncPgConnection::try_from(client).await
+}
+
 /// Returns new migrations derived from the combination of provided migrations and migrations
 /// defined in this crate.
 pub fn merge_migrations(
@@ -267,6 +341,54 @@ pub fn merge_migrations(
     }
 
     Migrations(migrations)
+}
+
+fn root_certs() -> rustls::RootCertStore {
+    rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    }
+}
+
+/// Skip server cert verification, as libpq skips it by default.
+#[derive(Debug)]
+struct SkipServerCertCheck;
+
+impl rustls::client::danger::ServerCertVerifier for SkipServerCertCheck {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        rustls::client::WebPkiServerVerifier::builder(std::sync::Arc::new(root_certs()))
+            .build()
+            .unwrap()
+            .supported_verify_schemes()
+    }
 }
 
 #[cfg(test)]
