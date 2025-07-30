@@ -50,8 +50,6 @@ struct MockAuthority {
     _name: AuthorityName,
     ack_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
     full_responses: Arc<StdMutex<HashMap<TransactionDigest, WaitForEffectsResponse>>>,
-    delay: Option<Duration>,
-    should_timeout: bool,
 }
 
 impl MockAuthority {
@@ -60,8 +58,6 @@ impl MockAuthority {
             _name: name,
             ack_responses: Arc::new(StdMutex::new(HashMap::new())),
             full_responses: Arc::new(StdMutex::new(HashMap::new())),
-            delay: None,
-            should_timeout: false,
         }
     }
 
@@ -87,14 +83,6 @@ impl AuthorityAPI for MockAuthority {
         request: RawWaitForEffectsRequest,
         _client_addr: Option<SocketAddr>,
     ) -> Result<RawWaitForEffectsResponse, SuiError> {
-        if self.should_timeout {
-            sleep(Duration::from_secs(10)).await;
-        }
-
-        if let Some(delay) = self.delay {
-            sleep(delay).await;
-        }
-
         let wait_request: WaitForEffectsRequest = request.try_into()?;
 
         // Choose the right response based on include_details flag
@@ -104,14 +92,27 @@ impl AuthorityAPI for MockAuthority {
             &self.ack_responses
         };
 
-        let responses = responses.lock().unwrap();
+        let maybe_response = {
+            let responses = responses.lock().unwrap();
+            responses.get(&wait_request.transaction_digest).cloned()
+        };
 
-        if let Some(response) = responses.get(&wait_request.transaction_digest) {
-            let raw_response = RawWaitForEffectsResponse::try_from(response.clone())
-                .map_err(|_| SuiError::Unknown("Conversion failed".to_string()))?;
+        if let Some(response) = maybe_response {
+            let raw_response = RawWaitForEffectsResponse::try_from(response).map_err(|e| {
+                SuiError::GrpcMessageSerializeError {
+                    type_info: "WaitForEffectsResponse conversion".to_string(),
+                    error: e.to_string(),
+                }
+            })?;
             Ok(raw_response)
         } else {
-            Err(SuiError::Unknown("No response configured".to_string()))
+            // No response configured - this simulates a scenario where effects are not available.
+            // Since the actual timeout in effects_certifier is 10 seconds, we sleep longer
+            // to ensure the timeout is triggered.
+            sleep(Duration::from_secs(30)).await;
+            Err(SuiError::TransactionNotFound {
+                digest: wait_request.transaction_digest,
+            })
         }
     }
 
@@ -635,6 +636,7 @@ async fn test_forked_execution() {
 
     let effects_digest_1 = create_test_effects_digest(2);
     let effects_digest_2 = create_test_effects_digest(3);
+    let executed_data = create_test_executed_data();
 
     // Set up conflicting effects digests from different validators
     let authorities: Vec<_> = authority_aggregator.authority_clients.keys().collect();
@@ -654,6 +656,12 @@ async fn test_forked_execution() {
             details: None,
         };
         client.set_ack_response(tx_digest, response);
+
+        let executed_response_full = WaitForEffectsResponse::Executed {
+            effects_digest: digest,
+            details: Some(Box::new(executed_data.clone())),
+        };
+        client.set_full_response(tx_digest, executed_response_full.clone());
     }
 
     let result = certifier
