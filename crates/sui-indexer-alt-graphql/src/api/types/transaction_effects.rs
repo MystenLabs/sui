@@ -36,6 +36,7 @@ use super::{
     epoch::Epoch,
     event::Event,
     execution_error::ExecutionError,
+    gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
@@ -305,6 +306,16 @@ impl EffectsContents {
         }
 
         Ok(Some(conn))
+    }
+
+    /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+    async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
     }
 }
 

@@ -389,6 +389,20 @@ type GasCostSummary {
 	nonRefundableStorageFee: UInt53
 }
 
+"""
+Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+"""
+type GasEffects {
+	"""
+	The gas object used to pay for this transaction. If multiple gas coins were provided, this represents the combined coin after smashing.
+	"""
+	gasObject: Object
+	"""
+	Breakdown of the gas costs for this transaction.
+	"""
+	gasSummary: GasCostSummary
+}
+
 type GasInput {
 	"""
 	Address of the owner of the gas object(s) used.
@@ -1233,6 +1247,10 @@ type TransactionEffects {
 	The before and after state of objects that were modified by this transaction.
 	"""
 	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+	"""
+	Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+	"""
+	gasEffects: GasEffects
 }
 
 input TransactionFilter {
