@@ -93,6 +93,7 @@ use super::shared_object_congestion_tracker::{
 };
 use super::shared_object_version_manager::AssignedVersions;
 use super::transaction_deferral::{transaction_deferral_within_limit, DeferralKey, DeferralReason};
+use super::transaction_reject_reason_cache::TransactionRejectReasonCache;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::execution_time_estimator::EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
 use crate::authority::shared_object_version_manager::{
@@ -419,6 +420,9 @@ pub struct AuthorityPerEpochStore {
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 
     pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
+
+    /// A cache that maintains the reject vote reason for a transaction.
+    pub(crate) tx_reject_reason_cache: Option<TransactionRejectReasonCache>,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -1119,6 +1123,12 @@ impl AuthorityPerEpochStore {
             None
         };
 
+        let tx_reject_reason_cache = if protocol_config.mysticeti_fastpath() {
+            Some(TransactionRejectReasonCache::new(None, epoch_id))
+        } else {
+            None
+        };
+
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
@@ -1159,6 +1169,7 @@ impl AuthorityPerEpochStore {
             tx_object_debts: OnceCell::new(),
             end_of_epoch_execution_time_observations: OnceCell::new(),
             consensus_tx_status_cache,
+            tx_reject_reason_cache,
             settlement_registrations: Default::default(),
         });
 
@@ -4803,6 +4814,23 @@ impl AuthorityPerEpochStore {
     ) {
         if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
             cache.set_transaction_status(position, status);
+        }
+    }
+
+    pub(crate) fn set_rejection_vote_reason(&self, position: ConsensusPosition, reason: &SuiError) {
+        if let Some(tx_reject_reason_cache) = self.tx_reject_reason_cache.as_ref() {
+            tx_reject_reason_cache.set_rejection_vote_reason(position, reason);
+        }
+    }
+
+    pub(crate) fn get_rejection_vote_reason(
+        &self,
+        position: ConsensusPosition,
+    ) -> Option<SuiError> {
+        if let Some(tx_reject_reason_cache) = self.tx_reject_reason_cache.as_ref() {
+            tx_reject_reason_cache.get_rejection_vote_reason(position)
+        } else {
+            None
         }
     }
 

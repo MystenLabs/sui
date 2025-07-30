@@ -148,10 +148,9 @@ impl TransactionCertifier {
                     } else {
                         // Own votes are needed for blocks not yet included in own blocks. They will be
                         // added to proposed blocks together.
-                        let reject_transaction_votes = block_verifier
-                            .verify_and_vote(b.signed_block())
-                            .unwrap_or_else(|e| {
-                                panic!("Failed to verify block during recovery: {}", e)
+                        let reject_transaction_votes =
+                            block_verifier.vote(&b).unwrap_or_else(|e| {
+                                panic!("Failed to vote on block during recovery: {}", e)
                             });
                         (b, reject_transaction_votes)
                     }

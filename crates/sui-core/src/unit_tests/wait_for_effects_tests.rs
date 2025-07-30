@@ -175,7 +175,10 @@ async fn test_wait_for_effects_post_commit_rejected() {
     match response {
         WaitForEffectsResponse::Rejected { error } => {
             // TODO(fastpath): Test reject reason.
-            assert!(matches!(error, SuiError::Unknown(_)));
+            assert!(matches!(
+                error,
+                SuiError::TransactionRejectReasonNotFound { .. }
+            ));
         }
         _ => panic!("Expected Rejected response"),
     }
@@ -268,7 +271,10 @@ async fn test_wait_for_effects_quorum_rejected() {
 
     match response {
         WaitForEffectsResponse::Rejected { error } => {
-            assert!(matches!(error, SuiError::Unknown(_)));
+            assert!(matches!(
+                error,
+                SuiError::TransactionRejectReasonNotFound { .. }
+            ));
         }
         _ => panic!("Expected Rejected response"),
     }

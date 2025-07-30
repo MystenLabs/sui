@@ -244,6 +244,7 @@ pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod test_authority_builder;
 pub mod transaction_deferral;
+pub mod transaction_reject_reason_cache;
 mod weighted_moving_average;
 
 pub(crate) mod authority_store;
