@@ -193,7 +193,8 @@ struct EagerSchedulerState {
     last_settled_version: SequenceNumber,
     /// Pending transactions that couldn't be scheduled due to insufficient balance
     /// Maps accumulator version -> list of (transaction, sender) pairs waiting for settlement
-    pending_insufficient_balance: BTreeMap<SequenceNumber, Vec<(TxBalanceWithdraw, oneshot::Sender<ScheduleResult>)>>,
+    pending_insufficient_balance:
+        BTreeMap<SequenceNumber, Vec<(TxBalanceWithdraw, oneshot::Sender<ScheduleResult>)>>,
 }
 
 impl EagerBalanceWithdrawScheduler {
@@ -302,7 +303,9 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         let mut state = self.state.write();
 
         // Check if this version has already been settled
-        if withdraws.accumulator_version <= state.last_settled_version {
+        // The accumulator_version is the version this withdrawal would READ.
+        // Only if it's strictly less than the last settled version, it has already been executed.
+        if withdraws.accumulator_version < state.last_settled_version {
             debug!(
                 "Batch at version {:?} already settled (last settled: {:?})",
                 withdraws.accumulator_version, state.last_settled_version
@@ -496,22 +499,25 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         }
 
         // Process any pending insufficient balance transactions for this version
-        if let Some(pending_txs) = state.pending_insufficient_balance.remove(&settlement.accumulator_version) {
+        if let Some(pending_txs) = state
+            .pending_insufficient_balance
+            .remove(&settlement.accumulator_version)
+        {
             debug!(
                 "Processing {} pending insufficient balance transactions for version {:?}",
                 pending_txs.len(),
                 settlement.accumulator_version
             );
-            
+
             for (withdraw, sender) in pending_txs {
                 // Re-check if we can now schedule the transaction with the settled balances
                 let mut all_success = true;
                 let mut temp_states = Vec::new();
-                
+
                 for (account_id, reservation) in &withdraw.reservations {
                     if let Some(account_state) = state.account_states.get_mut(account_id) {
                         let original_state = account_state.clone();
-                        
+
                         if account_state.try_reserve(reservation) {
                             temp_states.push((*account_id, original_state));
                         } else {
@@ -527,13 +533,14 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                         let balance = self
                             .balance_read
                             .get_account_balance(account_id, settlement.accumulator_version);
-                        state
-                            .account_states
-                            .insert(*account_id, AccountState::new(balance, settlement.accumulator_version));
-                        
+                        state.account_states.insert(
+                            *account_id,
+                            AccountState::new(balance, settlement.accumulator_version),
+                        );
+
                         let account_state = state.account_states.get_mut(account_id).unwrap();
                         let original_state = account_state.clone();
-                        
+
                         if account_state.try_reserve(reservation) {
                             temp_states.push((*account_id, original_state));
                         } else {
@@ -546,7 +553,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                         }
                     }
                 }
-                
+
                 let status = if all_success {
                     debug!(
                         "Pending transaction {:?} now has sufficient balance after settlement",
@@ -560,12 +567,12 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                     );
                     ScheduleStatus::InsufficientBalance
                 };
-                
+
                 let _ = sender.send(ScheduleResult {
                     tx_digest: withdraw.tx_digest,
                     status,
                 });
-                
+
                 if let Some(metrics) = &self.metrics {
                     let label = match status {
                         ScheduleStatus::SufficientBalance => "settled_sufficient",
@@ -664,10 +671,8 @@ mod tests {
     #[tokio::test]
     async fn test_already_settled_version() {
         let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::new()));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read,
-            SequenceNumber::from_u64(10),
-        );
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read, SequenceNumber::from_u64(10));
 
         // Settle a version
         let settlement = BalanceSettlement {
@@ -698,17 +703,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_pending_insufficient_balance_becomes_sufficient() {
-        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([
-            (ObjectID::from_hex_literal("0x1").unwrap(), 50),
-        ])));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read.clone(),
-            SequenceNumber::from_u64(0),
-        );
+        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([(
+            ObjectID::from_hex_literal("0x1").unwrap(),
+            50,
+        )])));
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
 
         let account = ObjectID::from_hex_literal("0x1").unwrap();
         let tx_digest = TransactionDigest::random();
-        
+
         // Try to withdraw more than available balance
         let withdraw = TxBalanceWithdraw {
             tx_digest,
@@ -741,17 +745,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_confirmed_insufficient_balance_after_settlement() {
-        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([
-            (ObjectID::from_hex_literal("0x1").unwrap(), 50),
-        ])));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read,
-            SequenceNumber::from_u64(0),
-        );
+        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([(
+            ObjectID::from_hex_literal("0x1").unwrap(),
+            50,
+        )])));
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read, SequenceNumber::from_u64(0));
 
         let account = ObjectID::from_hex_literal("0x1").unwrap();
         let tx_digest = TransactionDigest::random();
-        
+
         // Try to withdraw more than available balance
         let withdraw = TxBalanceWithdraw {
             tx_digest,
@@ -790,10 +793,8 @@ mod tests {
             (ObjectID::from_hex_literal("0x3").unwrap(), 200),
         ]);
         let balance_read = Arc::new(SimpleMockBalanceRead::new(initial_balances.clone()));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read.clone(),
-            SequenceNumber::from_u64(0),
-        );
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
 
         let account1 = ObjectID::from_hex_literal("0x1").unwrap();
         let account2 = ObjectID::from_hex_literal("0x2").unwrap();
@@ -840,14 +841,14 @@ mod tests {
         {
             let mut balances = balance_read.balances.lock().unwrap();
             balances.insert(account1, 200); // +100
-            balances.insert(account2, 40);  // -10
+            balances.insert(account2, 40); // -10
         }
 
         let settlement = BalanceSettlement {
             accumulator_version: SequenceNumber::from_u64(1),
             balance_changes: BTreeMap::from([
-                (account1, 100),  // Deposit
-                (account2, -10),  // Withdrawal
+                (account1, 100), // Deposit
+                (account2, -10), // Withdrawal
             ]),
         };
         scheduler.settle_balances(settlement).await;
@@ -867,13 +868,11 @@ mod tests {
         let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([
             (ObjectID::from_hex_literal("0x1").unwrap(), 0), // Empty account
         ])));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read.clone(),
-            SequenceNumber::from_u64(0),
-        );
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
 
         let account = ObjectID::from_hex_literal("0x1").unwrap();
-        
+
         // Try to reserve entire balance on empty account
         let withdraw = TxBalanceWithdraw {
             tx_digest: TransactionDigest::random(),
@@ -907,13 +906,12 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_versions_with_pending_decisions() {
         // Test transactions across multiple versions with cascading effects
-        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([
-            (ObjectID::from_hex_literal("0x1").unwrap(), 100),
-        ])));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read.clone(),
-            SequenceNumber::from_u64(0),
-        );
+        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([(
+            ObjectID::from_hex_literal("0x1").unwrap(),
+            100,
+        )])));
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
 
         let account = ObjectID::from_hex_literal("0x1").unwrap();
 
@@ -923,12 +921,17 @@ mod tests {
             reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(30))]),
         };
         let (sender1, receiver1) = oneshot::channel();
-        scheduler.schedule_withdraws(WithdrawReservations {
-            accumulator_version: SequenceNumber::from_u64(1),
-            withdraws: vec![tx1],
-            senders: vec![sender1],
-        }).await;
-        assert_eq!(receiver1.await.unwrap().status, ScheduleStatus::SufficientBalance);
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(1),
+                withdraws: vec![tx1],
+                senders: vec![sender1],
+            })
+            .await;
+        assert_eq!(
+            receiver1.await.unwrap().status,
+            ScheduleStatus::SufficientBalance
+        );
 
         // Version 2: Try to withdraw 80 (would need balance > 70, but only has 70 left)
         let tx2 = TxBalanceWithdraw {
@@ -936,34 +939,43 @@ mod tests {
             reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(80))]),
         };
         let (sender2, mut receiver2) = oneshot::channel();
-        scheduler.schedule_withdraws(WithdrawReservations {
-            accumulator_version: SequenceNumber::from_u64(2),
-            withdraws: vec![tx2],
-            senders: vec![sender2],
-        }).await;
-        
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(2),
+                withdraws: vec![tx2],
+                senders: vec![sender2],
+            })
+            .await;
+
         // Should be pending
         assert!(receiver2.try_recv().is_err());
 
         // Settle version 1 (balance becomes 70 after withdrawal)
         balance_read.balances.lock().unwrap().insert(account, 70);
-        scheduler.settle_balances(BalanceSettlement {
-            accumulator_version: SequenceNumber::from_u64(1),
-            balance_changes: BTreeMap::from([(account, -30)]),
-        }).await;
+        scheduler
+            .settle_balances(BalanceSettlement {
+                accumulator_version: SequenceNumber::from_u64(1),
+                balance_changes: BTreeMap::from([(account, -30)]),
+            })
+            .await;
 
         // Version 2 transaction should still be pending
         assert!(receiver2.try_recv().is_err());
 
         // Settle version 2 with a deposit
         balance_read.balances.lock().unwrap().insert(account, 120); // +50 deposit
-        scheduler.settle_balances(BalanceSettlement {
-            accumulator_version: SequenceNumber::from_u64(2),
-            balance_changes: BTreeMap::from([(account, 50)]),
-        }).await;
+        scheduler
+            .settle_balances(BalanceSettlement {
+                accumulator_version: SequenceNumber::from_u64(2),
+                balance_changes: BTreeMap::from([(account, 50)]),
+            })
+            .await;
 
         // Now it should succeed
-        assert_eq!(receiver2.await.unwrap().status, ScheduleStatus::SufficientBalance);
+        assert_eq!(
+            receiver2.await.unwrap().status,
+            ScheduleStatus::SufficientBalance
+        );
     }
 
     #[tokio::test]
@@ -974,10 +986,8 @@ mod tests {
             (ObjectID::from_hex_literal("0x2").unwrap(), 50),
             (ObjectID::from_hex_literal("0x3").unwrap(), 75),
         ])));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read.clone(),
-            SequenceNumber::from_u64(0),
-        );
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
 
         let account1 = ObjectID::from_hex_literal("0x1").unwrap();
         let account2 = ObjectID::from_hex_literal("0x2").unwrap();
@@ -995,36 +1005,42 @@ mod tests {
         };
         let (sender, mut receiver) = oneshot::channel();
 
-        scheduler.schedule_withdraws(WithdrawReservations {
-            accumulator_version: SequenceNumber::from_u64(1),
-            withdraws: vec![tx],
-            senders: vec![sender],
-        }).await;
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(1),
+                withdraws: vec![tx],
+                senders: vec![sender],
+            })
+            .await;
 
         // Should be pending due to account2
         assert!(receiver.try_recv().is_err());
 
         // Deposit to account2
         balance_read.balances.lock().unwrap().insert(account2, 70);
-        scheduler.settle_balances(BalanceSettlement {
-            accumulator_version: SequenceNumber::from_u64(1),
-            balance_changes: BTreeMap::from([(account2, 20)]), // +20 deposit
-        }).await;
+        scheduler
+            .settle_balances(BalanceSettlement {
+                accumulator_version: SequenceNumber::from_u64(1),
+                balance_changes: BTreeMap::from([(account2, 20)]), // +20 deposit
+            })
+            .await;
 
         // Now all accounts have sufficient balance
-        assert_eq!(receiver.await.unwrap().status, ScheduleStatus::SufficientBalance);
+        assert_eq!(
+            receiver.await.unwrap().status,
+            ScheduleStatus::SufficientBalance
+        );
     }
 
     #[tokio::test]
     async fn test_pending_with_entire_balance_blocking() {
         // Test that EntireBalance reservation blocks other transactions
-        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([
-            (ObjectID::from_hex_literal("0x1").unwrap(), 100),
-        ])));
-        let scheduler = EagerBalanceWithdrawScheduler::new(
-            balance_read.clone(),
-            SequenceNumber::from_u64(0),
-        );
+        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([(
+            ObjectID::from_hex_literal("0x1").unwrap(),
+            100,
+        )])));
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
 
         let account = ObjectID::from_hex_literal("0x1").unwrap();
 
@@ -1034,12 +1050,17 @@ mod tests {
             reservations: BTreeMap::from([(account, Reservation::EntireBalance)]),
         };
         let (sender1, receiver1) = oneshot::channel();
-        scheduler.schedule_withdraws(WithdrawReservations {
-            accumulator_version: SequenceNumber::from_u64(1),
-            withdraws: vec![tx1],
-            senders: vec![sender1],
-        }).await;
-        assert_eq!(receiver1.await.unwrap().status, ScheduleStatus::SufficientBalance);
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(1),
+                withdraws: vec![tx1],
+                senders: vec![sender1],
+            })
+            .await;
+        assert_eq!(
+            receiver1.await.unwrap().status,
+            ScheduleStatus::SufficientBalance
+        );
 
         // Second transaction: try to withdraw any amount (should be pending)
         let tx2 = TxBalanceWithdraw {
@@ -1047,32 +1068,41 @@ mod tests {
             reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(10))]),
         };
         let (sender2, mut receiver2) = oneshot::channel();
-        scheduler.schedule_withdraws(WithdrawReservations {
-            accumulator_version: SequenceNumber::from_u64(2),
-            withdraws: vec![tx2],
-            senders: vec![sender2],
-        }).await;
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(2),
+                withdraws: vec![tx2],
+                senders: vec![sender2],
+            })
+            .await;
 
         // Should be pending because entire balance is reserved
         assert!(receiver2.try_recv().is_err());
 
         // Settle with the entire balance withdrawn
         balance_read.balances.lock().unwrap().insert(account, 0);
-        scheduler.settle_balances(BalanceSettlement {
-            accumulator_version: SequenceNumber::from_u64(1),
-            balance_changes: BTreeMap::from([(account, -100)]),
-        }).await;
+        scheduler
+            .settle_balances(BalanceSettlement {
+                accumulator_version: SequenceNumber::from_u64(1),
+                balance_changes: BTreeMap::from([(account, -100)]),
+            })
+            .await;
 
         // Version 2 should still be pending
         assert!(receiver2.try_recv().is_err());
 
         // Settle version 2 - still no balance
-        scheduler.settle_balances(BalanceSettlement {
-            accumulator_version: SequenceNumber::from_u64(2),
-            balance_changes: BTreeMap::new(),
-        }).await;
+        scheduler
+            .settle_balances(BalanceSettlement {
+                accumulator_version: SequenceNumber::from_u64(2),
+                balance_changes: BTreeMap::new(),
+            })
+            .await;
 
         // Should fail due to insufficient balance
-        assert_eq!(receiver2.await.unwrap().status, ScheduleStatus::InsufficientBalance);
+        assert_eq!(
+            receiver2.await.unwrap().status,
+            ScheduleStatus::InsufficientBalance
+        );
     }
 }

@@ -26,7 +26,7 @@ The scheduler returns exactly three possible outcomes for each withdrawal reques
 
 1. **SufficientBalance**: The withdrawal can proceed as there is enough minimum guaranteed balance
 2. **InsufficientBalance**: The withdrawal cannot proceed due to insufficient balance
-3. **AlreadyScheduled**: The consensus commit batch has already been processed
+3. **AlreadyExecuted**: The consensus commit batch has already been processed
 
 ## Architecture
 
@@ -66,8 +66,9 @@ Supports two types of balance reservations:
 #### 1. Withdrawal Scheduling
 
 ```
-1. Check if batch already scheduled → Return AlreadyScheduled
-2. For each transaction in the batch:
+1. Check if batch already executed → Return AlreadyExecuted
+2. Check if batch already scheduled → Return AlreadyExecuted
+3. For each transaction in the batch:
    a. Load account states (if not already tracked)
    b. For each reservation in the transaction:
       - Check if sufficient balance available
@@ -75,7 +76,7 @@ Supports two types of balance reservations:
    c. If all checks pass:
       - Apply all reservations atomically
       - Mark as SufficientBalance
-3. Clean up accounts with no active reservations
+4. Clean up accounts with no active reservations
 ```
 
 #### 2. Settlement Processing
@@ -91,6 +92,18 @@ Supports two types of balance reservations:
    - Apply settlement with no changes
 4. Clean up old scheduled batch entries
 ```
+
+### Version Semantics
+
+Understanding the difference between accumulated and settled versions is crucial:
+
+- **Accumulated Version**: The version that a withdrawal would READ from. This represents the state of the accumulator object at the time the withdrawal needs to check balances.
+- **Settled Version**: The version that has been WRITTEN/committed. This represents the latest checkpoint where balance changes have been finalized.
+
+A withdrawal with `accumulator_version = N` means it reads the state at version N. Only if `N < last_settled_version` can we be certain the withdrawal has already been executed, because:
+- If `N < last_settled_version`: The state at version N has been finalized and any withdrawals reading it have been processed
+- If `N = last_settled_version`: The withdrawal might be reading the just-settled state but hasn't been executed yet
+- If `N > last_settled_version`: The withdrawal is reading a future state that hasn't been settled
 
 ## Key Design Decisions
 
