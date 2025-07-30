@@ -901,27 +901,45 @@ impl fmt::Debug for Enum<'_> {
 }
 
 fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, Error> {
-    u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+    u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+        what,
+        err: err.to_string(),
+    })
 }
 
 fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, Error> {
-    u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+    u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+        what,
+        err: err.to_string(),
+    })
 }
 
 fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, Error> {
-    u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+    u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+        what,
+        err: err.to_string(),
+    })
 }
 
 fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, Error> {
-    u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+    u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+        what,
+        err: err.to_string(),
+    })
 }
 
 fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, Error> {
-    u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+    u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+        what,
+        err: err.to_string(),
+    })
 }
 
 fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, Error> {
-    U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|_| Error::NumberOverflow { what })
+    U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| Error::InvalidNumber {
+        what,
+        err: err.to_string(),
+    })
 }
 
 fn read_string_literal(slice: &str) -> Cow<'_, str> {
@@ -1304,6 +1322,26 @@ mod tests {
     #[test]
     fn test_hex_literal_invalid_char() {
         assert_snapshot!(strands(r#"{x'123g'}"#));
+    }
+
+    #[test]
+    fn test_hex_literal_empty() {
+        assert_snapshot!(strands(r#"{0x}"#));
+    }
+
+    #[test]
+    fn test_hex_literal_only_underscores() {
+        assert_snapshot!(strands(r#"{0x___u8}"#));
+    }
+
+    #[test]
+    fn test_hex_literal_only_underscores_no_suffix() {
+        assert_snapshot!(strands(r#"{0x____}"#));
+    }
+
+    #[test]
+    fn test_decimal_literal_only_underscores() {
+        assert_snapshot!(strands(r#"{___u64}"#));
     }
 
     #[test]
