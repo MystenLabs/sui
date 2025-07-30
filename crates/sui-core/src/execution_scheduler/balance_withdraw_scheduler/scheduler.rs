@@ -61,7 +61,7 @@ impl BalanceWithdrawScheduler {
         balance_read: Arc<dyn AccountBalanceRead>,
         starting_accumulator_version: SequenceNumber,
     ) -> Arc<Self> {
-        let inner = NaiveBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version);
+        let inner = EagerBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version);
         let (withdraw_sender, withdraw_receiver) =
             unbounded_channel("withdraw_scheduler_withdraws");
         let (settlement_sender, settlement_receiver) =

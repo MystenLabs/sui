@@ -12,11 +12,11 @@ mod tests {
 
         // Test basic reservation
         assert_eq!(state.minimum_guaranteed_balance(), 1000);
-        assert!(state.try_reserve(&Reservation::MaxAmountU64(500)));
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(500), SequenceNumber::from_u64(1)));
         assert_eq!(state.minimum_guaranteed_balance(), 500);
-        assert!(state.try_reserve(&Reservation::MaxAmountU64(400)));
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(400), SequenceNumber::from_u64(1)));
         assert_eq!(state.minimum_guaranteed_balance(), 100);
-        assert!(!state.try_reserve(&Reservation::MaxAmountU64(200)));
+        assert!(!state.try_reserve(&Reservation::MaxAmountU64(200), SequenceNumber::from_u64(1)));
         assert_eq!(state.minimum_guaranteed_balance(), 100);
     }
 
@@ -25,12 +25,12 @@ mod tests {
         let mut state = AccountState::new(1000, SequenceNumber::from_u64(0));
 
         // Reserve entire balance
-        assert!(state.try_reserve(&Reservation::EntireBalance));
+        assert!(state.try_reserve(&Reservation::EntireBalance, SequenceNumber::from_u64(1)));
         assert_eq!(state.minimum_guaranteed_balance(), 0);
 
         // Cannot reserve anything after entire balance
-        assert!(!state.try_reserve(&Reservation::MaxAmountU64(1)));
-        assert!(!state.try_reserve(&Reservation::EntireBalance));
+        assert!(!state.try_reserve(&Reservation::MaxAmountU64(1), SequenceNumber::from_u64(2)));
+        assert!(!state.try_reserve(&Reservation::EntireBalance, SequenceNumber::from_u64(2)));
     }
 
     #[test]
@@ -38,7 +38,7 @@ mod tests {
         let mut state = AccountState::new(1000, SequenceNumber::from_u64(0));
 
         // Make some reservations
-        assert!(state.try_reserve(&Reservation::MaxAmountU64(900)));
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(900), SequenceNumber::from_u64(1)));
         assert_eq!(state.minimum_guaranteed_balance(), 100);
 
         // Apply settlement (simulating actual withdrawal of 900)
@@ -46,7 +46,7 @@ mod tests {
 
         // After settlement, reservations are cleared
         assert_eq!(state.minimum_guaranteed_balance(), 100);
-        assert!(state.try_reserve(&Reservation::MaxAmountU64(100)));
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(100), SequenceNumber::from_u64(2)));
         assert_eq!(state.minimum_guaranteed_balance(), 0);
     }
 }
