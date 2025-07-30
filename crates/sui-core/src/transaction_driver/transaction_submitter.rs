@@ -61,9 +61,14 @@ impl TransactionSubmitter {
             {
                 Ok(resp) => {
                     // Track successful submission metrics
+                    let display_name = authority_aggregator
+                        .validator_display_names
+                        .get(&name)
+                        .unwrap_or(&name.concise().to_string())
+                        .clone();
                     self.metrics
                         .validator_submit_transaction_successes
-                        .with_label_values(&[&name.concise().to_string()])
+                        .with_label_values(&[&display_name])
                         .inc();
 
                     // Track retries needed for success
@@ -84,9 +89,14 @@ impl TransactionSubmitter {
                     } else {
                         "non_retriable"
                     };
+                    let display_name = authority_aggregator
+                        .validator_display_names
+                        .get(&name)
+                        .unwrap_or(&name.concise().to_string())
+                        .clone();
                     self.metrics
                         .validator_submit_transaction_errors
-                        .with_label_values(&[&name.concise().to_string(), error_type])
+                        .with_label_values(&[&display_name, error_type])
                         .inc();
 
                     retries += 1;
