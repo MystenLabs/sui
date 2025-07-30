@@ -31,6 +31,8 @@ pub mod replay_txn;
 pub mod tracing;
 
 const DEFAULT_OUTPUT_DIR: &str = ".replay";
+const MAINNET_GQL_URL: &str = "https://public-rpc.sui-mainnet.mystenlabs.com/graphql";
+const TESTNET_GQL_URL: &str = "https://public-rpc.sui-testnet.mystenlabs.com/graphql";
 
 // Arguments to the replay tool.
 // It allows to replay a single transaction by digest or
@@ -137,8 +139,8 @@ impl Node {
 
     pub fn rpc_url(&self) -> &str {
         match self {
-            Node::Mainnet => "https://public-rpc.sui-mainnet.mystenlabs.com/graphql",
-            Node::Testnet => "https://public-rpc.sui-testnet.mystenlabs.com/graphql",
+            Node::Mainnet => MAINNET_GQL_URL,
+            Node::Testnet => TESTNET_GQL_URL,
             // Node::Devnet => "",
             Node::Custom(url) => url.as_str(),
         }

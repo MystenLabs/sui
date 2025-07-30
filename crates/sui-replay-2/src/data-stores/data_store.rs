@@ -62,13 +62,14 @@ impl TransactionStore for DataStore {
         digest: &str,
     ) -> Result<Option<TransactionInfo>, anyhow::Error> {
         match block_on!(self.transaction(digest)) {
-             self.metrics.txn_hit.fetch_add(1, Ordering::Relaxed);
-             Ok(Some(TransactionInfo {
-                data,
-                effects,
-                checkpoint,
-            }))
-                
+            Ok(Some((data, effects, checkpoint))) => {
+                self.metrics.txn_hit.fetch_add(1, Ordering::Relaxed);
+                Ok(Some(TransactionInfo {
+                    data,
+                    effects,
+                    checkpoint,
+                }))
+            }
             Ok(None) => {
                 self.metrics.txn_miss.fetch_add(1, Ordering::Relaxed);
                 Ok(None)

@@ -15776,6 +15776,7 @@ dependencies = [
  "cynic-codegen",
  "fastcrypto",
  "futures",
+ "lru 0.12.3",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-cli",
