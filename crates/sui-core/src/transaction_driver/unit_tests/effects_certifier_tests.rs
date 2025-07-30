@@ -403,7 +403,12 @@ async fn test_transaction_rejected_retriable() {
     let options = SubmitTransactionOptions::default();
 
     let retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: SuiError::RpcError("Network timeout".to_string(), "TIMEOUT".to_string()),
+        error: SuiError::UserInputError {
+            error: UserInputError::ObjectNotFound {
+                object_id: random_object_ref().0,
+                version: None,
+            },
+        },
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -565,7 +570,7 @@ async fn test_mixed_rejected_and_expired() {
             submission_retriable_errors,
         } => {
             assert_eq!(submission_non_retriable_errors.total_stake, 5000); // 2 validators with non-retriable
-            assert_eq!(submission_retriable_errors.total_stake, 2500); // 2 validators with retriable
+            assert_eq!(submission_retriable_errors.total_stake, 2500); // 2 validators with retriable, only one recorded as we exit early.
         }
         e => panic!("Expected InvalidTransaction error, got: {:?}", e),
     }
@@ -725,7 +730,12 @@ async fn test_full_effects_retry_loop() {
         if i == 0 {
             // First authority fails to get full effects
             let failed_response = WaitForEffectsResponse::Rejected {
-                error: SuiError::RpcError("Network error".to_string(), "NETWORK_ERROR".to_string()),
+                error: SuiError::UserInputError {
+                    error: UserInputError::ObjectNotFound {
+                        object_id: random_object_ref().0,
+                        version: None,
+                    },
+                },
             };
             client.set_full_response(tx_digest, failed_response);
         } else {
@@ -872,7 +882,12 @@ async fn test_request_retrier_exhaustion() {
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
         let client = safe_client.authority_client();
         let failed_response = WaitForEffectsResponse::Rejected {
-            error: SuiError::RpcError("Network error".to_string(), "NETWORK_ERROR".to_string()),
+            error: SuiError::UserInputError {
+                error: UserInputError::ObjectNotFound {
+                    object_id: random_object_ref().0,
+                    version: None,
+                },
+            },
         };
         client.set_full_response(tx_digest, failed_response);
     }
