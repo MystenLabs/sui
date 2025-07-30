@@ -106,15 +106,20 @@ async fn test_get_staked_sui() {
         .await
         .unwrap();
     let tx = to_sender_signed_transaction(delegation_tx, keystore.export(&address).unwrap());
-    client
+    let _tx_response = client
         .quorum_driver_api()
         .execute_transaction_block(
             tx,
-            SuiTransactionBlockResponseOptions::new(),
+            SuiTransactionBlockResponseOptions::new()
+                .with_effects()
+                .with_balance_changes(),
             Some(ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
         .unwrap();
+
+    // Wait for the transaction to be seen by GRPC
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     let response = rosetta_client
         .get_balance(
@@ -123,6 +128,7 @@ async fn test_get_staked_sui() {
             Some(SubAccountType::PendingStake),
         )
         .await;
+    println!("Balance response: {:?}", response);
     assert_eq!(1, response.balances.len());
     assert_eq!(1_000_000_000, response.balances[0].value);
 

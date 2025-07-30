@@ -517,8 +517,8 @@ impl GrpcClient {
         let mut stake_ids = Vec::new();
         let mut cursor = None;
 
-        // Fetch all StakedSui objects
-        let object_type = Some("0x3::staking_pool::StakedSui".to_string());
+        // Fetch all StakedSui objects - use the full address format
+        let object_type = Some("0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui".to_string());
 
         loop {
             let response = self
@@ -554,8 +554,8 @@ impl GrpcClient {
         let epoch = self.get_epoch(None).await?;
         let validator_map = self.extract_validator_info_from_epoch(&epoch)?;
 
-        // Fetch all StakedSui objects with full details
-        let object_type = Some("0x3::staking_pool::StakedSui".to_string());
+        // Fetch all StakedSui objects with full details - use the full address format
+        let object_type = Some("0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui".to_string());
 
         loop {
             let request = ListOwnedObjectsRequest {
@@ -568,7 +568,8 @@ impl GrpcClient {
                     "version",
                     "digest",
                     "object_type",
-                    "bcs",
+                    "contents",
+                    "contents.value",
                 ])),
             };
 
@@ -731,7 +732,11 @@ impl GrpcClient {
             .as_ref()
             .ok_or_else(|| Error::DataError("Missing object_type in proto object".to_string()))?;
 
-        if object_type != "0x3::staking_pool::StakedSui" {
+        // Check if this is a StakedSui object - handle both short and long address formats
+        let is_staked_sui = object_type == "0x3::staking_pool::StakedSui" || 
+                           object_type == "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui";
+
+        if !is_staked_sui {
             return Ok(None);
         }
 
@@ -743,14 +748,14 @@ impl GrpcClient {
             .parse()
             .map_err(|e| Error::DataError(format!("Invalid object_id: {}", e)))?;
 
-        // Get BCS data
-        let bcs_data = object
-            .bcs
+        // Get contents data
+        let contents = object
+            .contents
             .as_ref()
-            .ok_or_else(|| Error::DataError("Missing BCS data for StakedSui object".to_string()))?;
+            .ok_or_else(|| Error::DataError("Missing contents for StakedSui object".to_string()))?;
 
-        let bcs_bytes = bcs_data.value.as_ref().ok_or_else(|| {
-            Error::DataError("Missing BCS value for StakedSui object".to_string())
+        let bcs_bytes = contents.value.as_ref().ok_or_else(|| {
+            Error::DataError("Missing contents value for StakedSui object".to_string())
         })?;
 
         // Deserialize StakedSui

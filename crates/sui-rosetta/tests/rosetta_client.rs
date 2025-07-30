@@ -176,7 +176,7 @@ impl RosettaClient {
             .await;
         println!("Combine : {combine:?}");
         // Submit
-        let submit = self
+        let submit: TransactionIdentifierResponse = self
             .call(
                 RosettaEndpoint::Submit,
                 &ConstructionSubmitRequest {
@@ -186,6 +186,10 @@ impl RosettaClient {
             )
             .await;
         println!("Submit : {submit:?}");
+
+        // Wait for the transaction to be indexed and propagated
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
         submit
     }
 

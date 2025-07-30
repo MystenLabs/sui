@@ -29,8 +29,130 @@ use crate::types::{
     TransactionIdentifierResponse,
 };
 use crate::{OnlineServerContext, SuiEnv};
+use sui_rpc::proto::sui::rpc::v2beta2::{execution_error, ExecutionError};
 
 // This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
+
+/// Extract a simple error string from a GRPC ExecutionError
+fn extract_error_kind(error: &ExecutionError) -> String {
+    if let Some(kind) = error.kind {
+        match execution_error::ExecutionErrorKind::try_from(kind) {
+            Ok(execution_error::ExecutionErrorKind::InsufficientGas) => {
+                "InsufficientGas".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidGasObject) => {
+                "InvalidGasObject".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvariantViolation) => {
+                "InvariantViolation".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::FeatureNotYetSupported) => {
+                "FeatureNotYetSupported".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::ObjectTooBig) => "ObjectTooBig".to_string(),
+            Ok(execution_error::ExecutionErrorKind::PackageTooBig) => "PackageTooBig".to_string(),
+            Ok(execution_error::ExecutionErrorKind::CircularObjectOwnership) => {
+                "CircularObjectOwnership".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InsufficientCoinBalance) => {
+                "InsufficientCoinBalance".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CoinBalanceOverflow) => {
+                "CoinBalanceOverflow".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PublishErrorNonZeroAddress) => {
+                "PublishErrorNonZeroAddress".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::SuiMoveVerificationError) => {
+                "SuiMoveVerificationError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::MovePrimitiveRuntimeError) => {
+                "MovePrimitiveRuntimeError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::MoveAbort) => "MoveAbort".to_string(),
+            Ok(execution_error::ExecutionErrorKind::VmVerificationOrDeserializationError) => {
+                "VmVerificationOrDeserializationError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::VmInvariantViolation) => {
+                "VmInvariantViolation".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::FunctionNotFound) => {
+                "FunctionNotFound".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::ArityMismatch) => "ArityMismatch".to_string(),
+            Ok(execution_error::ExecutionErrorKind::TypeArityMismatch) => {
+                "TypeArityMismatch".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::NonEntryFunctionInvoked) => {
+                "NonEntryFunctionInvoked".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CommandArgumentError) => {
+                "CommandArgumentError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::TypeArgumentError) => {
+                "TypeArgumentError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::UnusedValueWithoutDrop) => {
+                "UnusedValueWithoutDrop".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidPublicFunctionReturnType) => {
+                "InvalidPublicFunctionReturnType".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidTransferObject) => {
+                "InvalidTransferObject".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::EffectsTooLarge) => {
+                "EffectsTooLarge".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PublishUpgradeMissingDependency) => {
+                "PublishUpgradeMissingDependency".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PublishUpgradeDependencyDowngrade) => {
+                "PublishUpgradeDependencyDowngrade".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PackageUpgradeError) => {
+                "PackageUpgradeError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::WrittenObjectsTooLarge) => {
+                "WrittenObjectsTooLarge".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CertificateDenied) => {
+                "CertificateDenied".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::SuiMoveVerificationTimedout) => {
+                "SuiMoveVerificationTimedout".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::SharedObjectOperationNotAllowed) => {
+                "SharedObjectOperationNotAllowed".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InputObjectDeleted) => {
+                "InputObjectDeleted".to_string()
+            }
+            Ok(
+                execution_error::ExecutionErrorKind::ExecutionCanceledDueToSharedObjectCongestion,
+            ) => "ExecutionCanceledDueToSharedObjectCongestion".to_string(),
+            Ok(execution_error::ExecutionErrorKind::AddressDeniedForCoin) => {
+                "AddressDeniedForCoin".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CoinTypeGlobalPause) => {
+                "CoinTypeGlobalPause".to_string()
+            }
+            Ok(
+                execution_error::ExecutionErrorKind::ExecutionCanceledDueToRandomnessUnavailable,
+            ) => "ExecutionCanceledDueToRandomnessUnavailable".to_string(),
+            Ok(execution_error::ExecutionErrorKind::MoveVectorElemTooBig) => {
+                "MoveVectorElemTooBig".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::MoveRawValueTooBig) => {
+                "MoveRawValueTooBig".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidLinkage) => "InvalidLinkage".to_string(),
+            Ok(execution_error::ExecutionErrorKind::Unknown) | Err(_) => "Unknown".to_string(),
+        }
+    } else {
+        format!("{:?}", error)
+    }
+}
 
 /// Derive returns the AccountIdentifier associated with a public key.
 ///
@@ -155,7 +277,7 @@ pub async fn submit(
     if let Some(status) = &effects.status {
         if !status.success.unwrap_or(false) {
             if let Some(error) = &status.error {
-                return Err(Error::TransactionDryRunError(format!("{:?}", error)));
+                return Err(Error::TransactionDryRunError(extract_error_kind(error)));
             }
             return Err(Error::TransactionDryRunError(
                 "Transaction simulation failed".to_string(),
@@ -327,7 +449,7 @@ pub async fn metadata(
             if let Some(status) = &effects.status {
                 if !status.success.unwrap_or(false) {
                     if let Some(error) = &status.error {
-                        return Err(Error::TransactionDryRunError(format!("{:?}", error)));
+                        return Err(Error::TransactionDryRunError(extract_error_kind(error)));
                     }
                     return Err(Error::TransactionDryRunError(
                         "Transaction simulation failed".to_string(),

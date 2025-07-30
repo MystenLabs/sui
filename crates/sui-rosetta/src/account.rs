@@ -138,7 +138,7 @@ async fn get_sub_account_balances(
             .client
             .list_owned_objects(
                 address,
-                Some("0x3::staking_pool::StakedSui".to_string()),
+                Some("0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui".to_string()),
                 cursor,
             )
             .await?;
