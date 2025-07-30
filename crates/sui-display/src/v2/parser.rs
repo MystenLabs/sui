@@ -7,7 +7,7 @@ use std::fmt;
 
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::Identifier,
+    identifier::{IdentStr, Identifier},
     language_storage::{StructTag, TypeTag},
     u256::U256,
 };
@@ -46,7 +46,7 @@ pub struct Chain<'s> {
 /// Different ways to nest deeply into an object.
 pub enum Accessor<'s> {
     /// Access a named field.
-    Field(&'s str),
+    Field(&'s IdentStr),
 
     /// Access a positional field.
     Positional(u8),
@@ -132,11 +132,15 @@ macro_rules! expected {
 macro_rules! match_token {
     (
         $lexer:expr $(, $prev:expr)?;
-        $($kind:ident($ws:pat, $($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
+        $(
+            $kind:ident($ws:pat, $($pat:path)|+, $off:pat, $slice:tt)
+            $(@ $alias:ident)?
+            $(if $cond:expr)? => $expr:expr
+        ),+
         $(,)?
     ) => {{
         match $lexer.peek() {
-            $(Some(&Lex($ws, $($pat)|+, $off, $slice)) $(if $cond)? => $expr,)+
+            $(Some($($alias @)? &Lex($ws, $($pat)|+, $off, $slice)) $(if $cond)? => $expr,)+
             lexeme => return Err(ExpectedSet::new(&[$($(expected!($kind, $pat, $slice)),+),+])
                 $(.with_prev($prev))?
                 .into_error(lexeme)),
@@ -156,11 +160,15 @@ macro_rules! match_token {
 macro_rules! match_token_opt {
     (
         $lexer:expr $(, $prev:expr)?;
-        $($kind:ident($ws:pat, $($pat:path)|+, $off:pat, $slice:tt) $(if $cond:expr)? => $expr:expr),+
+        $(
+            $kind:ident($ws:pat, $($pat:path)|+, $off:pat, $slice:tt)
+            $(@ $alias:ident)?
+            $(if $cond:expr)? => $expr:expr
+        ),+
         $(,)?
     ) => {{
         match $lexer.peek() {
-            $(Some(&Lex($ws, $($pat)|+, $off, $slice)) $(if $cond)? => Match::Found($expr),)+
+            $(Some($($alias @)? &Lex($ws, $($pat)|+, $off, $slice)) $(if $cond)? => Match::Found($expr),)+
             lexeme => Match::Tried(
                 lexeme.map(|l| l.2),
                 ExpectedSet::new(&[$($(expected!($kind, $pat, $slice)),+),+])
@@ -308,10 +316,11 @@ impl<'s> Parser<'s> {
         let root = match self.try_parse_literal()? {
             Match::Found(literal) => Some(literal),
             Match::Tried(_, tried) => {
-                accessors.push(
-                    match_token! { self.lexer, tried; Tok(_, T::Ident, _, i) => {
+                accessors.push(match_token! { self.lexer, tried;
+                    Tok(_, T::Ident, _, ident) @ lex => {
+                        let ident = IdentStr::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
-                        Accessor::Field(i)
+                        Accessor::Field(ident)
                     }},
                 );
                 None
@@ -413,9 +422,11 @@ impl<'s> Parser<'s> {
             Tok(_, T::Dot, _, _) => {
                 self.lexer.next();
                 match_token! { self.lexer;
-                    Tok(_, T::Ident, _, f) => {
+                    Tok(_, T::Ident, _, ident) @ lex => {
+                        let ident = IdentStr::new(ident)
+                            .map_err(|_| Error::InvalidIdentifier(lex.detach()))?;
                         self.lexer.next();
-                        Accessor::Field(f)
+                        Accessor::Field(ident)
                     },
 
                     Tok(_, T::NumDec, _, n) => {
@@ -720,14 +731,13 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_identifier(&mut self) -> Result<Identifier, Error> {
-        let lex @ Lex(_, _, _, ident) = match_token! { self.lexer;
-            Tok(_, T::Ident, _, _) => {
-                // SAFETY: Inside a match token arm, so there is guaranteed to be a next token.
-                self.lexer.next().unwrap()
+        match_token! { self.lexer;
+            Tok(_, T::Ident, _, ident) @ lex => {
+                let ident = Identifier::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()));
+                self.lexer.next();
+                ident
             },
-        };
-
-        Identifier::new(ident).map_err(|_| Error::InvalidIdentifier(lex.detach()))
+        }
     }
 
     fn parse_numeric_suffix(&mut self, num: &'s str, radix: u32) -> Result<Literal<'s>, Error> {
@@ -1218,6 +1228,16 @@ mod tests {
     }
 
     #[test]
+    fn test_identifier_with_leading_underscore() {
+        assert_snapshot!(strands(r#"{_field | __private | _123mixed}"#));
+    }
+
+    #[test]
+    fn test_identifier_bare_underscore() {
+        assert_snapshot!(strands(r#"{_}"#));
+    }
+
+    #[test]
     fn test_positional_field_overflow() {
         assert_snapshot!(strands(r#"{foo.500}"#));
     }
@@ -1341,6 +1361,7 @@ mod tests {
 
     #[test]
     fn test_decimal_literal_only_underscores() {
+        // Looks like a decimal literal, but it's actually an identifier
         assert_snapshot!(strands(r#"{___u64}"#));
     }
 

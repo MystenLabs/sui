@@ -149,7 +149,7 @@ impl<'s> Lexer<'s> {
 
             b'0'..=b'9' => self.take_until(ws, T::NumDec, |c| !is_valid_decimal_byte(c)),
 
-            b'a'..=b'z' | b'A'..=b'Z' => {
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 self.take_until(ws, T::Ident, |c| !is_valid_identifier_byte(c))
             }
 
@@ -599,15 +599,15 @@ mod tests {
     }
 
     /// Numbers can optionally be grouped using underscores. Underscores cannot be trailing, but
-    /// otherwise can appear in every position
+    /// otherwise can appear in every position. Leading underscores will cause the numeric literal
+    /// to be interpreted as an identifier, not a number.
     #[test]
     fn test_numeric_literal_underscores() {
         assert_snapshot!(lexemes(r#"{123_456 0x12_ab_de _123}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumDec, 1, "123_456")
         L(true, NumHex, 11, "12_ab_de")
-        L(true, Unexpected, 20, "_")
-        L(false, NumDec, 21, "123")
+        L(true, Ident, 20, "_123")
         L(false, RBrace, 24, "}")
         "###);
     }
