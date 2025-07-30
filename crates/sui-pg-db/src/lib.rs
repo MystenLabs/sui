@@ -276,7 +276,7 @@ fn build_tls_config(args: &DbArgs) -> anyhow::Result<rustls::ClientConfig> {
 
         // Add custom CA certificate if provided
         if let Some(ca_cert_path) = &args.tls_ca_cert_path {
-            let ca_cert_bytes = std::fs::read(&ca_cert_path).map_err(|e| {
+            let ca_cert_bytes = std::fs::read(ca_cert_path).map_err(|e| {
                 anyhow::anyhow!("Failed to read CA certificate from {}: {}", ca_cert_path, e)
             })?;
 
