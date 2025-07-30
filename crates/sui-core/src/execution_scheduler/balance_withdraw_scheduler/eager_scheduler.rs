@@ -200,24 +200,22 @@ impl EagerBalanceWithdrawScheduler {
     }
 
     /// Load balance for an account if not already tracked
-    fn ensure_account_loaded(
-        &self,
-        state: &mut EagerSchedulerState,
-        account_id: &ObjectID,
-        accumulator_version: SequenceNumber,
-    ) {
+    fn ensure_account_loaded(&self, state: &mut EagerSchedulerState, account_id: &ObjectID) {
         if !state.account_states.contains_key(account_id) {
+            // Use last_settled_version to avoid reading balances that have been settled
+            // but not yet processed through settle_balances interface
             let balance = self
                 .balance_read
-                .get_account_balance(account_id, accumulator_version);
-            state
-                .account_states
-                .insert(*account_id, AccountState::new(balance, accumulator_version));
+                .get_account_balance(account_id, state.last_settled_version);
+            state.account_states.insert(
+                *account_id,
+                AccountState::new(balance, state.last_settled_version),
+            );
             trace!(
                 "Loaded account {:?} with balance {} at version {:?}",
                 account_id,
                 balance,
-                accumulator_version
+                state.last_settled_version
             );
         }
     }
@@ -299,7 +297,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
             // First ensure all accounts in this transaction are loaded
             for account_id in withdraw.reservations.keys() {
-                self.ensure_account_loaded(&mut state, account_id, withdraws.accumulator_version);
+                self.ensure_account_loaded(&mut state, account_id);
             }
 
             // Try to reserve all amounts atomically for this transaction

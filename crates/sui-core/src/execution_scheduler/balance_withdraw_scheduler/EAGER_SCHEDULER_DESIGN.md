@@ -107,6 +107,12 @@ A withdrawal with `accumulator_version = N` means it reads the state at version 
 
 **Protocol Guarantee**: The Sui protocol and consensus handler guarantee that each accumulator version will only be scheduled once. This means a batch with a specific accumulator version can only be scheduled exactly once, preventing any duplicate scheduling at the protocol level.
 
+**Important Balance Loading Consideration**: When loading account balances during withdrawal scheduling, we must use `last_settled_version` rather than the withdrawal's `accumulator_version`. This is because:
+- Accounts may have only been settled at a past version, not at the current accumulator version
+- Using accumulator_version could read a just-settled balance before `settle_balances` is called
+- This would cause double-counting when the settlement is officially processed
+- Therefore, we always bound balance reads by `last_settled_version` to ensure consistency
+
 ## Key Design Decisions
 
 ### 1. Conservative Balance Tracking
