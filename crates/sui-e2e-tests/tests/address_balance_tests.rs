@@ -82,6 +82,18 @@ fn verify_accumulator_exists(
         "Accumulator value should have been created"
     );
 
+    let accumulator_object =
+        AccumulatorValue::load_object(child_object_resolver, None, owner, &sui_coin_type)
+            .expect("read cannot fail")
+            .expect("accumulator should exist");
+
+    assert!(accumulator_object
+        .data
+        .try_as_move()
+        .unwrap()
+        .type_()
+        .is_efficient_representation());
+
     let accumulator_value =
         AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
             .expect("read cannot fail")
