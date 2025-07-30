@@ -141,3 +141,228 @@ source: crates/move-stackless-bytecode-2/tests/from_source.rs
 
       Label LBL_12:
         Return()
+
+
+    Function: while_test_2 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_1 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Copy(lcl_1)
+        reg_2 : u64 = Immediate(U64(10))
+        reg_3 : u64 = LessThan(reg_2 : u64, reg_1 : u64)
+        JumpIf(reg_3 : u64, LBL_6, LBL_10)
+
+      Label LBL_6:
+        Jump(LBL_7)
+
+      Label LBL_7:
+        reg_4 : bool = Immediate(true)
+        lcl_0 = reg_4 : bool
+        Jump(LBL_14)
+
+      Label LBL_10:
+        reg_5 : u64 = Copy(lcl_1)
+        reg_6 : u64 = Immediate(U64(7))
+        reg_7 : u64 = Equal(reg_6 : u64, reg_5 : u64)
+        lcl_0 = reg_7 : u64
+
+      Label LBL_14:
+        reg_8 : bool = Move(lcl_0)
+        JumpIf(reg_8 : bool, LBL_16, LBL_21)
+
+      Label LBL_16:
+        reg_9 : u64 = Move(lcl_1)
+        reg_10 : u64 = Immediate(U64(1))
+        reg_11 : u64 = Add(reg_10 : u64, reg_9 : u64)
+        lcl_1 = reg_11 : u64
+        Jump(LBL_2)
+
+      Label LBL_21:
+        Return()
+
+
+    Function: while_test_3 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_0 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Copy(lcl_0)
+        reg_2 : u64 = Immediate(U64(10))
+        reg_3 : u64 = LessThan(reg_2 : u64, reg_1 : u64)
+        JumpIf(reg_3 : u64, LBL_6, LBL_23)
+
+      Label LBL_6:
+        Jump(LBL_7)
+
+      Label LBL_7:
+        reg_4 : u64 = Copy(lcl_0)
+        reg_5 : u64 = Immediate(U64(2))
+        reg_6 : u64 = Modulo(reg_4 : u64, reg_5 : u64)
+        reg_7 : u64 = Immediate(U64(0))
+        reg_8 : u64 = Equal(reg_7 : u64, reg_6 : u64)
+        JumpIf(reg_8 : u64, LBL_13, LBL_18)
+
+      Label LBL_13:
+        reg_9 : u64 = Move(lcl_0)
+        reg_10 : u64 = Immediate(U64(1))
+        reg_11 : u64 = Add(reg_10 : u64, reg_9 : u64)
+        lcl_0 = reg_11 : u64
+        Jump(LBL_2)
+
+      Label LBL_18:
+        reg_12 : u64 = Move(lcl_0)
+        reg_13 : u64 = Immediate(U64(2))
+        reg_14 : u64 = Add(reg_13 : u64, reg_12 : u64)
+        lcl_0 = reg_14 : u64
+        Jump(LBL_2)
+
+      Label LBL_23:
+        Return()
+
+
+    Function: while_test_4 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_1 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Copy(lcl_1)
+        reg_2 : u64 = Immediate(U64(10))
+        reg_3 : u64 = LessThan(reg_2 : u64, reg_1 : u64)
+        JumpIf(reg_3 : u64, LBL_6, LBL_10)
+
+      Label LBL_6:
+        Jump(LBL_7)
+
+      Label LBL_7:
+        reg_4 : bool = Immediate(true)
+        lcl_0 = reg_4 : bool
+        Jump(LBL_14)
+
+      Label LBL_10:
+        reg_5 : u64 = Copy(lcl_1)
+        reg_6 : u64 = Immediate(U64(7))
+        reg_7 : u64 = Equal(reg_6 : u64, reg_5 : u64)
+        lcl_0 = reg_7 : u64
+
+      Label LBL_14:
+        reg_8 : bool = Move(lcl_0)
+        JumpIf(reg_8 : bool, LBL_16, LBL_32)
+
+      Label LBL_16:
+        reg_9 : u64 = Copy(lcl_1)
+        reg_10 : u64 = Immediate(U64(2))
+        reg_11 : u64 = Modulo(reg_9 : u64, reg_10 : u64)
+        reg_12 : u64 = Immediate(U64(0))
+        reg_13 : u64 = Equal(reg_12 : u64, reg_11 : u64)
+        JumpIf(reg_13 : u64, LBL_22, LBL_27)
+
+      Label LBL_22:
+        reg_14 : u64 = Move(lcl_1)
+        reg_15 : u64 = Immediate(U64(1))
+        reg_16 : u64 = Add(reg_15 : u64, reg_14 : u64)
+        lcl_1 = reg_16 : u64
+        Jump(LBL_2)
+
+      Label LBL_27:
+        reg_17 : u64 = Move(lcl_1)
+        reg_18 : u64 = Immediate(U64(2))
+        reg_19 : u64 = Add(reg_18 : u64, reg_17 : u64)
+        lcl_1 = reg_19 : u64
+        Jump(LBL_2)
+
+      Label LBL_32:
+        Return()
+
+
+    Function: while_test_5 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_0 = reg_0 : u64
+        reg_1 : u64 = Immediate(U64(0))
+        lcl_1 = reg_1 : u64
+        reg_2 : u64 = Immediate(U64(0))
+        lcl_2 = reg_2 : u64
+
+      Label LBL_6:
+        reg_3 : u64 = Copy(lcl_0)
+        reg_4 : u64 = Immediate(U64(10))
+        reg_5 : u64 = LessThan(reg_4 : u64, reg_3 : u64)
+        JumpIf(reg_5 : u64, LBL_10, LBL_33)
+
+      Label LBL_10:
+        Jump(LBL_11)
+
+      Label LBL_11:
+        reg_6 : u64 = Copy(lcl_1)
+        reg_7 : u64 = Immediate(U64(10))
+        reg_8 : u64 = LessThan(reg_7 : u64, reg_6 : u64)
+        JumpIf(reg_8 : u64, LBL_15, LBL_28)
+
+      Label LBL_15:
+        reg_9 : u64 = Move(lcl_2)
+        reg_10 : u64 = Copy(lcl_0)
+        reg_11 : u64 = Copy(lcl_1)
+        reg_12 : u64 = Multiply(reg_10 : u64, reg_11 : u64)
+        reg_13 : u64 = Copy(lcl_1)
+        reg_14 : u64 = Add(reg_13 : u64, reg_12 : u64)
+        reg_15 : u64 = Add(reg_14 : u64, reg_9 : u64)
+        lcl_2 = reg_15 : u64
+        reg_16 : u64 = Move(lcl_1)
+        reg_17 : u64 = Immediate(U64(1))
+        reg_18 : u64 = Add(reg_17 : u64, reg_16 : u64)
+        lcl_1 = reg_18 : u64
+        Jump(LBL_11)
+
+      Label LBL_28:
+        reg_19 : u64 = Move(lcl_0)
+        reg_20 : u64 = Immediate(U64(1))
+        reg_21 : u64 = Add(reg_20 : u64, reg_19 : u64)
+        lcl_0 = reg_21 : u64
+        Jump(LBL_6)
+
+      Label LBL_33:
+        Return()
+
+
+    Function: while_test_6 (entry: LBL_0)
+      Label LBL_0:
+        reg_0 : u64 = Immediate(U64(0))
+        lcl_1 = reg_0 : u64
+
+      Label LBL_2:
+        reg_1 : u64 = Copy(lcl_1)
+        reg_2 : u64 = Immediate(U64(10))
+        reg_3 : u64 = LessThan(reg_2 : u64, reg_1 : u64)
+        JumpIf(reg_3 : u64, LBL_6, LBL_10)
+
+      Label LBL_6:
+        Jump(LBL_7)
+
+      Label LBL_7:
+        reg_4 : bool = Immediate(true)
+        lcl_0 = reg_4 : bool
+        Jump(LBL_14)
+
+      Label LBL_10:
+        reg_5 : u64 = Copy(lcl_1)
+        reg_6 : u64 = Immediate(U64(7))
+        reg_7 : u64 = Equal(reg_6 : u64, reg_5 : u64)
+        lcl_0 = reg_7 : u64
+
+      Label LBL_14:
+        reg_8 : bool = Move(lcl_0)
+        JumpIf(reg_8 : bool, LBL_16, LBL_21)
+
+      Label LBL_16:
+        reg_9 : u64 = Move(lcl_1)
+        reg_10 : u64 = Immediate(U64(1))
+        reg_11 : u64 = Add(reg_10 : u64, reg_9 : u64)
+        lcl_1 = reg_11 : u64
+        Jump(LBL_2)
+
+      Label LBL_21:
+        Return()
