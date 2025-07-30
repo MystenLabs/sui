@@ -9,7 +9,7 @@ ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"
 
 # sui-indexer need ca-certificates
-RUN apt update && apt install -y ca-certificates postgresql
+RUN apt update && apt install -y ca-certificates
 
 RUN apt-get update && apt-get install -y cmake clang
 
@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/release/sui-indexer-alt-consistent-store  /usr/local/bin
-RUN apt update && apt install -y ca-certificates postgresql
+RUN apt update && apt install -y ca-certificates
 
 ARG BUILD_DATE
 ARG GIT_REVISION
