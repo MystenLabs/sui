@@ -325,7 +325,7 @@ where
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug + Clone,
 {
     Ok(DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
-        .into_id()?
+        .into_unbounded_id()?
         .expect_object(key, object_store)?
         .as_object())
 }
@@ -342,7 +342,7 @@ where
     V: Serialize + DeserializeOwned,
 {
     DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
-        .into_id()?
+        .into_unbounded_id()?
         .expect_object(key, object_store)?
         .load_value::<V>()
 }
@@ -380,10 +380,25 @@ where
             .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))
     }
 
-    /// Convert the key into a DynamicFieldID, which can be used to load the field object.
-    pub fn into_id(self) -> Result<DynamicFieldID<K>, SuiError> {
+    /// Convert the key into a UnboundedDynamicFieldID, which can be used to load the latest
+    /// version of the field object.
+    pub fn into_unbounded_id(self) -> Result<UnboundedDynamicFieldID<K>, SuiError> {
         let id = self.object_id()?;
-        Ok(DynamicFieldID::<K>::new(self.0.into(), id))
+        Ok(UnboundedDynamicFieldID::<K>::new(self.0.into(), id))
+    }
+
+    /// Convert the key into a BoundedDynamicFieldID, which can be used to load the field object
+    /// with a version bound for consistent reads.
+    pub fn into_id_with_bound(
+        self,
+        parent_version: SequenceNumber,
+    ) -> Result<BoundedDynamicFieldID<K>, SuiError> {
+        let id = self.object_id()?;
+        Ok(BoundedDynamicFieldID::<K>::new(
+            self.0.into(),
+            id,
+            parent_version,
+        ))
     }
 
     /// Convert the key into a DynamicField, which contains the `Field<K, V>` object,
@@ -455,22 +470,22 @@ where
     }
 }
 
-/// A DynamicFieldID contains the material needed to load an a dynamic field from
+/// A UnboundedDynamicFieldID contains the material needed to load an a dynamic field from
 /// the store.
 ///
 /// Can be obtained from a DynamicFieldKey, or created directly if you know the
 /// parent and child IDs but do not know the key.
-pub struct DynamicFieldID<K: Serialize>(
+pub struct UnboundedDynamicFieldID<K: Serialize>(
     pub ObjectID, // parent
     pub ObjectID, // child
     std::marker::PhantomData<K>,
 );
 
-impl<K> DynamicFieldID<K>
+impl<K> UnboundedDynamicFieldID<K>
 where
     K: Serialize + std::fmt::Debug,
 {
-    /// Create a DynamicFieldID from a parent and child ID.
+    /// Create a UnboundedDynamicFieldID from a parent and child ID.
     pub fn new(parent: ObjectID, id: ObjectID) -> Self {
         Self(parent, id, std::marker::PhantomData)
     }
@@ -504,10 +519,8 @@ where
         self.load_object(object_store).is_some()
     }
 
-    /// Create a BoundedDynamicFieldID from a DynamicFieldID and a parent version.
-    ///
-    /// This is used to create a BoundedDynamicFieldID, which can then be used to do a
-    /// consistent lookup of the field.
+    /// Convert an UnboundedDynamicFieldID into a BoundedDynamicFieldID, which can then
+    /// be used to do a consistent lookup of the field.
     pub fn with_bound(self, parent_version: SequenceNumber) -> BoundedDynamicFieldID<K> {
         BoundedDynamicFieldID::new(self.0, self.1, parent_version)
     }

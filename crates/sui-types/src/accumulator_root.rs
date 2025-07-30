@@ -6,7 +6,9 @@ use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     collection_types::Bag,
     digests::TransactionDigest,
-    dynamic_field::{serialize_dynamic_field, DynamicFieldID, DynamicFieldKey, DynamicFieldObject},
+    dynamic_field::{
+        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject,
+    },
     error::{SuiError, SuiResult},
     object::{Object, Owner},
     storage::{ChildObjectResolver, ObjectStore},
@@ -129,8 +131,7 @@ impl AccumulatorOwner {
             key,
             OwnerKey::get_type_tag(),
         )
-        .into_id()?
-        .with_bound(version_bound.unwrap_or(SequenceNumber::MAX))
+        .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .exists(child_object_resolver)
     }
 
@@ -145,8 +146,7 @@ impl AccumulatorOwner {
             key,
             OwnerKey::get_type_tag(),
         )
-        .into_id()?
-        .with_bound(root_version.unwrap_or(SequenceNumber::MAX))
+        .into_id_with_bound(root_version.unwrap_or(SequenceNumber::MAX))?
         .load_object(child_object_resolver)?
         .map(|o| o.load_value::<Self>())
         .transpose()
@@ -164,8 +164,7 @@ impl AccumulatorOwner {
             key,
             MetadataKey::get_type_tag(&[type_.clone()]),
         )
-        .into_id()?
-        .with_bound(version_bound.unwrap_or(SequenceNumber::MAX))
+        .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .exists(child_object_resolver)
     }
 
@@ -181,8 +180,7 @@ impl AccumulatorOwner {
             key,
             MetadataKey::get_type_tag(&[type_.clone()]),
         )
-        .into_id()?
-        .with_bound(version_bound.unwrap_or(SequenceNumber::MAX))
+        .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .load_object(child_object_resolver)?
         .map(|o| o.load_value::<AccumulatorMetadata>())
         .transpose()
@@ -224,7 +222,7 @@ impl AccumulatorValue {
             key,
             AccumulatorKey::get_type_tag(&[type_.clone()]),
         )
-        .into_id()?
+        .into_unbounded_id()?
         .as_object_id())
     }
 
@@ -246,8 +244,7 @@ impl AccumulatorValue {
             key,
             AccumulatorKey::get_type_tag(&[type_.clone()]),
         )
-        .into_id()?
-        .with_bound(version_bound.unwrap_or(SequenceNumber::MAX))
+        .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
         .exists(child_object_resolver)
     }
 
@@ -259,11 +256,14 @@ impl AccumulatorValue {
     where
         T: Serialize + DeserializeOwned,
     {
-        DynamicFieldID::<AccumulatorKey>::new(SUI_ACCUMULATOR_ROOT_OBJECT_ID, id)
-            .with_bound(version_bound.unwrap_or(SequenceNumber::MAX))
-            .load_object(child_object_resolver)?
-            .map(|o| o.load_value::<T>())
-            .transpose()
+        BoundedDynamicFieldID::<AccumulatorKey>::new(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            id,
+            version_bound.unwrap_or(SequenceNumber::MAX),
+        )
+        .load_object(child_object_resolver)?
+        .map(|o| o.load_value::<T>())
+        .transpose()
     }
 
     pub fn load(
@@ -282,8 +282,7 @@ impl AccumulatorValue {
         let key_type_tag = AccumulatorKey::get_type_tag(&[type_.clone()]);
 
         let Some(value) = DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
-            .into_id()?
-            .with_bound(version_bound.unwrap_or(SequenceNumber::MAX))
+            .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
             .load_object(child_object_resolver)?
             .map(|o| o.load_value::<U128>())
             .transpose()?
