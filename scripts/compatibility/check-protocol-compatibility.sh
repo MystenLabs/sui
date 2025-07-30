@@ -40,7 +40,6 @@ if [ -z "$RELEASED_COMMIT" ]; then
     TOP_VERSION="1.52.3-cd58464d654d"
     echo "Overriding private release hash in $NETWORK with $TOP_VERSION"
   fi
-  exit 0
 
   echo "Found following versions on $NETWORK:"
   echo "$VERSIONS"
