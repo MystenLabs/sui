@@ -664,8 +664,6 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             let (verified_block, reject_txn_votes) = block_verifier
                 .verify_and_vote(signed_block, serialized_block)
                 .tap_err(|e| {
-                    // TODO: we might want to use a different metric to track the invalid "served" blocks
-                    // from the invalid "proposed" ones.
                     let hostname = context.committee.authority(peer_index).hostname.clone();
                     context
                         .metrics

@@ -35,13 +35,13 @@ const DEFAULT_RETENTION_ROUNDS: u32 = 400;
 /// ## Use Cases:
 /// - Providing detailed rejection reasons to clients querying transaction status
 /// - Debugging transaction failures in the fast path voting process
-pub(crate) struct TransactionRejectVoteReasonCache {
+pub(crate) struct TransactionRejectReasonCache {
     cache: RwLock<BTreeMap<ConsensusPosition, SuiError>>,
     retention_rounds: u32,
     epoch: EpochId,
 }
 
-impl TransactionRejectVoteReasonCache {
+impl TransactionRejectReasonCache {
     pub fn new(retention_rounds: Option<u32>, epoch: EpochId) -> Self {
         Self {
             cache: Default::default(),
@@ -69,7 +69,7 @@ impl TransactionRejectVoteReasonCache {
     /// Sets the last committed leader round. This is used to clean up the cache based on the retention policy.
     pub fn set_last_committed_leader_round(&self, round: u32) {
         let _scope =
-            monitored_scope("TransactionRejectVoteReasonCache::set_last_committed_leader_round");
+            monitored_scope("TransactionRejectReasonCache::set_last_committed_leader_round");
         let cut_off_round = round.saturating_sub(self.retention_rounds) + 1;
         let cut_off_position = ConsensusPosition {
             epoch: self.epoch,
@@ -90,7 +90,7 @@ mod test {
 
     #[tokio::test]
     async fn test_set_rejection_vote_reason_and_get_reason() {
-        let cache = TransactionRejectVoteReasonCache::new(None, 1);
+        let cache = TransactionRejectReasonCache::new(None, 1);
         let position = ConsensusPosition {
             epoch: 1,
             block: BlockRef::new(1, AuthorityIndex::MAX, BlockDigest::MAX),
@@ -126,7 +126,7 @@ mod test {
     async fn test_set_last_committed_leader_round() {
         const RETENTION_ROUNDS: u32 = 4;
         const TOTAL_ROUNDS: u32 = 10;
-        let cache = TransactionRejectVoteReasonCache::new(Some(RETENTION_ROUNDS), 1);
+        let cache = TransactionRejectReasonCache::new(Some(RETENTION_ROUNDS), 1);
 
         let position = |round: Round, transaction_index: u16| ConsensusPosition {
             epoch: 1,
