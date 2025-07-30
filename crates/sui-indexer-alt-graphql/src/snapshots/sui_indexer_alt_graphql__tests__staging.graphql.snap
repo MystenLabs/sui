@@ -137,6 +137,36 @@ input CheckpointFilter {
 }
 
 """
+System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
+"""
+type ConsensusCommitPrologueTransaction {
+	"""
+	Epoch of the commit prologue transaction.
+	"""
+	epoch: Epoch
+	"""
+	Consensus round of the commit.
+	"""
+	round: UInt53
+	"""
+	Unix timestamp from consensus.
+	"""
+	commitTimestamp: DateTime
+	"""
+	Digest of consensus output, encoded as a Base58 string (only available from V2+ of the transaction).
+	"""
+	consensusCommitDigest: String
+	"""
+	Sub-DAG index for consensus ordering (only available from V3+ of the transaction).
+	"""
+	subDagIndex: UInt53
+	"""
+	Additional state digest for enhanced security (only available from V4+ of the transaction).
+	"""
+	additionalStateDigest: String
+}
+
+"""
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
@@ -1289,7 +1319,7 @@ input TransactionFilter {
 """
 Different types of transactions that can be executed on the Sui network.
 """
-union TransactionKind = GenesisTransaction
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
