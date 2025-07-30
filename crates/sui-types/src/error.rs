@@ -936,6 +936,22 @@ impl SuiError {
                     _ => false,
                 }
             }
+
+            // Non retryable errors
+            SuiError::ExecutionError(..) => false,
+            SuiError::ByzantineAuthoritySuspicion { .. } => false,
+            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => false,
+            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
+            SuiError::ObjectLockConflict { .. } => false,
+            SuiError::TransactionExpired => false,
+            SuiError::InvalidTxKindInSoftBundle { .. } => false,
+
+            SuiError::InvalidSignature { .. } => false,
+            SuiError::SignerSignatureAbsent { .. } => false,
+            SuiError::SignerSignatureNumberMismatch { .. } => false,
+            SuiError::IncorrectSigner { .. } => false,
+            SuiError::UnknownSigner { .. } => false,
+
             // Other variants are assumed to be retriable.
             _ => true,
         }
