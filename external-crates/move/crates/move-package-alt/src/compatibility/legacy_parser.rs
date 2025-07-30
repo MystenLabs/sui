@@ -690,7 +690,8 @@ fn warn_if_unknown_field_names(table: &toml::map::Map<String, TV>, known_names: 
     }
 
     if !unknown_names.is_empty() {
-        eprintln!(
+        // TODO: manos - to fix this when migration work starts
+        tracing::debug!(
             "Warning: unknown field name{} found. Expected one of [{}], but found {}",
             if unknown_names.len() > 1 { "s" } else { "" },
             known_names.join(", "),
