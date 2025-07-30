@@ -468,7 +468,7 @@ fn parse_spec_parametized(context: &mut Context, loc: &Loc, inner_attrs: &Spanne
 
     let mut focus: bool = false;
     let mut prove: bool = false;
-    let mut skip: bool = false;
+    let mut skip: Option<String> = None;
     let mut target: Option<NameAccessChain> = None;
     let mut no_opaque: bool = false;
     let mut ignore_abort: bool = false;
@@ -493,7 +493,7 @@ fn parse_spec_parametized(context: &mut Context, loc: &Loc, inner_attrs: &Spanne
                 } else if prop == KA::VerificationAttribute::PROVE_NAME  {
                     prove = true;
                 } else if prop == KA::VerificationAttribute::SKIP_NAME {
-                    skip = true;
+                    skip = Some("".to_string());
                 } else if prop == KA::VerificationAttribute::NO_OPAQUE_NAME  {
                     no_opaque = true;
                 } else if prop == KA::VerificationAttribute::IGNORE_ABORT_NAME {
@@ -537,13 +537,24 @@ fn parse_spec_parametized(context: &mut Context, loc: &Loc, inner_attrs: &Spanne
                         return vec![];
                     };
                     target = Some(access.clone());
+                } else if prop == KA::VerificationAttribute::SKIP_NAME {
+                    let AttributeValue_::Value(sp!(_, P::Value_::ByteString(s))) = val.value else {
+                        let msg = format!(
+                            "Expected byte string for {} parameter '{}'",
+                            KA::VerificationAttribute::SPEC,
+                            prop
+                        );
+                        context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
+                        return vec![];
+                    };
+                    skip = Some(s.to_string());
                 } else {
                     let msg = format!(
-                        "Unknown {} assign parameter '{}'. Expected: {}",
+                        "Unknown {} assign parameter '{}'. Expected: {} or {}",
                         KA::VerificationAttribute::SPEC,
                         prop,
                         KA::VerificationAttribute::TARGET_NAME,
-
+                        KA::VerificationAttribute::SKIP_NAME
                     );
                     context.add_diag(diag!(Declarations::InvalidAttribute, (*inner_loc, msg)));
                     return vec![];
@@ -563,7 +574,7 @@ fn parse_spec_parametized(context: &mut Context, loc: &Loc, inner_attrs: &Spanne
         }
     }
 
-    if skip && focus {
+    if skip.is_some() && focus {
         let msg = format!(
             "Cannot use both '{}' and '{}' parameters in {}",
             KA::VerificationAttribute::FOCUS_NAME,
@@ -587,7 +598,7 @@ fn parse_spec(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
             vec![sp(loc, Attribute_::Spec { 
                 focus: false,
                 prove: false,
-                skip: false,
+                skip: None,
                 ignore_abort: false,
                 no_opaque: false,
                 target: None,

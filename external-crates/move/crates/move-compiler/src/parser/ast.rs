@@ -231,7 +231,7 @@ pub enum Attribute_ {
     Spec {
         focus: bool,
         prove: bool,
-        skip: bool,
+        skip: Option<String>,
         target: Option<NameAccessChain>,
         no_opaque: bool,
         ignore_abort: bool,
@@ -1766,9 +1766,9 @@ impl AstDebug for Attribute_ {
                     w.write("prove");
                     first = false;
                 }
-                if *skip {
+                if skip.is_some() {
                     if !first { w.write(", "); }
-                    w.write("skip");
+                    w.write(format!("skip({})", skip.clone().unwrap()));
                     first = false;
                 }
                 if let Some(target) = target {
