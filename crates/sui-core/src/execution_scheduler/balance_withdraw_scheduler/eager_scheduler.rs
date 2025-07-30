@@ -336,23 +336,42 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                         .inc();
                 }
             } else {
-                // For eager scheduling, we don't know yet if there might be more deposits
-                // coming in later versions, so we need to hold the InsufficientBalance
-                // decision until settlement
-                debug!(
-                    "Pending insufficient balance decision for withdraw {:?} with reservations {:?}",
-                    withdraw.tx_digest, withdraw.reservations
-                );
-                state
-                    .pending_insufficient_balance
-                    .entry(withdraws.accumulator_version)
-                    .or_default()
-                    .push((withdraw, sender));
-                if let Some(metrics) = &self.metrics {
-                    metrics
-                        .schedule_outcome_counter
-                        .with_label_values(&["pending_insufficient"])
-                        .inc();
+                // Check if we're reading the last settled version - if so, we can make a final decision
+                if withdraws.accumulator_version == state.last_settled_version {
+                    // We have all the information needed - no more deposits possible at this version
+                    debug!(
+                        "Insufficient balance confirmed for withdraw {:?} at settled version {:?}",
+                        withdraw.tx_digest, withdraws.accumulator_version
+                    );
+                    let _ = sender.send(ScheduleResult {
+                        tx_digest: withdraw.tx_digest,
+                        status: ScheduleStatus::InsufficientBalance,
+                    });
+                    if let Some(metrics) = &self.metrics {
+                        metrics
+                            .schedule_outcome_counter
+                            .with_label_values(&["insufficient_balance"])
+                            .inc();
+                    }
+                } else {
+                    // For future versions, we don't know yet if there might be more deposits
+                    // coming in later versions, so we need to hold the InsufficientBalance
+                    // decision until settlement
+                    debug!(
+                        "Pending insufficient balance decision for withdraw {:?} with reservations {:?}",
+                        withdraw.tx_digest, withdraw.reservations
+                    );
+                    state
+                        .pending_insufficient_balance
+                        .entry(withdraws.accumulator_version)
+                        .or_default()
+                        .push((withdraw, sender));
+                    if let Some(metrics) = &self.metrics {
+                        metrics
+                            .schedule_outcome_counter
+                            .with_label_values(&["pending_insufficient"])
+                            .inc();
+                    }
                 }
             }
         }

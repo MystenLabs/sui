@@ -71,7 +71,9 @@ Supports two types of balance reservations:
    a. Load account states (if not already tracked)
    b. For each reservation in the transaction:
       - Check if sufficient balance available
-      - If any check fails, rollback and mark as pending for settlement
+      - If any check fails:
+        * If accumulator_version == last_settled_version → Return InsufficientBalance
+        * Otherwise → Mark as pending for settlement
    c. If all checks pass:
       - Apply all reservations atomically
       - Mark as SufficientBalance
@@ -123,11 +125,18 @@ The eager scheduler is intentionally more conservative than the naive scheduler.
 
 The scheduler only tracks accounts that have active withdrawals. After settlements, accounts with no pending reservations are removed from memory, keeping the memory footprint minimal.
 
-### 3. Atomic Multi-Account Transactions
+### 3. Immediate Decision Optimization
+
+When a withdrawal's `accumulator_version` equals `last_settled_version`, we can make an immediate InsufficientBalance decision rather than deferring to pending. This is because:
+- The withdrawal is trying to read the exact version that was just settled
+- No more deposits can occur at this version
+- We have complete information to make a final decision
+
+### 4. Atomic Multi-Account Transactions
 
 When a transaction involves multiple accounts, all reservations must succeed or the entire transaction is marked as insufficient. This maintains atomicity at the transaction level.
 
-### 4. Sequential Processing Within Batches
+### 5. Sequential Processing Within Batches
 
 Transactions within a consensus commit batch are processed sequentially to maintain consistency and predictability. This ensures that the order of transactions matters for balance calculations.
 
