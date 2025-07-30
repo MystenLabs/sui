@@ -42,6 +42,7 @@ impl Indexer<Db> {
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
         migrations: Option<&'static EmbeddedMigrations>,
+        metrics_prefix: Option<&str>,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self> {
@@ -65,6 +66,7 @@ impl Indexer<Db> {
             indexer_args,
             client_args,
             ingestion_config,
+            metrics_prefix,
             registry,
             cancel,
         )
@@ -92,6 +94,7 @@ impl Indexer<Db> {
                 rpc_password: None,
             },
             IngestionConfig::default(),
+            None,
             &Registry::new(),
             CancellationToken::new(),
         )

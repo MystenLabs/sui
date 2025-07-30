@@ -15,6 +15,7 @@ use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -357,9 +358,12 @@ pub struct CommittedSubDag {
 
     /// Set by CommitObserver.
     ///
-    /// Whether the commit is produced from local DAG, or received through commit sync.
-    /// In the 2nd case, this commit may not have blocks in the local DAG to finalize it.
-    pub local: bool,
+    /// Whether the local DAG has the blocks to commit the leader.
+    /// This must be true when the commit is produced from local DAG,
+    /// and is false when the commit is received through commit sync.
+    /// When this is false, CommitFinalizer will not assume there are enough blocks
+    /// to optimistically finalize transactions in the commit.
+    pub local_dag_has_finalization_blocks: bool,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
@@ -383,7 +387,7 @@ impl CommittedSubDag {
             blocks,
             timestamp_ms,
             commit_ref,
-            local: true,
+            local_dag_has_finalization_blocks: true,
             reputation_scores_desc: vec![],
             rejected_transactions_by_block: BTreeMap::new(),
         }
@@ -404,16 +408,14 @@ impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "CommittedSubDag(leader={}, ref={}, blocks=[",
-            self.leader, self.commit_ref
-        )?;
-        for (idx, block) in self.blocks.iter().enumerate() {
-            if idx > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", block.digest())?;
-        }
-        write!(f, "])")
+            "CommittedSubDag(leader={}, ref={}, blocks=[{}])",
+            self.leader,
+            self.commit_ref,
+            self.blocks
+                .iter()
+                .map(|b| b.reference().to_string())
+                .join(", ")
+        )
     }
 }
 
@@ -432,7 +434,7 @@ impl fmt::Debug for CommittedSubDag {
 }
 
 // Recovers the full CommittedSubDag from block store, based on Commit.
-pub fn load_committed_subdag_from_store(
+pub(crate) fn load_committed_subdag_from_store(
     store: &dyn Store,
     commit: TrustedCommit,
     reputation_scores_desc: Vec<(AuthorityIndex, u64)>,

@@ -9,10 +9,10 @@ mod resolve;
 pub use resolve::{ResolvedDependency, ResolverError};
 
 mod pin;
-pub use pin::{PinnedDependencyInfo, pin};
+pub use pin::PinnedDependencyInfo;
 
 mod fetch;
-pub use fetch::FetchedDependency;
+pub use fetch::{FetchError, FetchedDependency};
 
 mod dependency_set;
 pub use dependency_set::DependencySet;
@@ -21,6 +21,9 @@ use crate::{
     errors::FileHandle,
     schema::{EnvironmentName, PackageName, PublishAddresses},
 };
+
+// TODO(refactor): instead of `Dependency<DepInfo>`, we should just have `DependencyContext`, and
+// the dependency types will hold one of those and pass it around.
 
 /// [Dependency] wraps information about the location of a dependency (such as the `git` or `local`
 /// fields) with additional metadata about how the dependency is used (such as the source file,

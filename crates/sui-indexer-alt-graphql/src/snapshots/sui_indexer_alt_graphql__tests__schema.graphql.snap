@@ -10,6 +10,53 @@ type Address implements IAddressable {
 }
 
 """
+Effects to the balance (sum of coin values per coin type) of addresses and objects.
+"""
+type BalanceChange {
+	"""
+	The address or object whose balance has changed.
+	"""
+	owner: Address
+	"""
+	The inner type of the coin whose balance has changed (e.g. `0x2::sui::SUI`).
+	"""
+	coinType: String
+	"""
+	The signed balance change.
+	"""
+	amount: BigInt
+}
+
+type BalanceChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [BalanceChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: BalanceChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 String containing Base64-encoded binary data.
 """
 scalar Base64
@@ -45,13 +92,34 @@ type Checkpoint {
 	"""
 	epoch: Epoch
 	"""
+	The total number of transactions in the network by the end of this checkpoint.
+	"""
+	networkTotalTransactions: UInt53
+	"""
 	The digest of the previous checkpoint's summary.
 	"""
 	previousCheckpointDigest: String
 	"""
+	The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+	"""
+	rollingGasSummary: GasCostSummary
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's summary.
+	"""
+	summaryBcs: Base64
+	"""
+	The Base64 serialized BCS bytes of this checkpoint's contents.
+	"""
+	contentBcs: Base64
+	"""
 	The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
 	"""
 	timestamp: DateTime
+	"""
+	The aggregation of signatures from a quorum of validators for the checkpoint proposal.
+	"""
+	validatorSignatures: ValidatorAggregatedSignature
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 }
 
 """
@@ -117,9 +185,171 @@ type Epoch {
 	"""
 	endTimestamp: DateTime
 	"""
+	Validator-related properties, including the active validators.
+	"""
+	validatorSet: ValidatorSet
+	"""
 	The total number of checkpoints in this epoch.
 	"""
 	totalCheckpoints: UInt53
+	"""
+	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	totalTransactions: UInt53
+	"""
+	The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	totalGasFees: BigInt
+	"""
+	The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
+	"""
+	totalStakeRewards: BigInt
+	"""
+	The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
+	"""
+	totalStakeSubsidies: BigInt
+	"""
+	The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+	This fund is used to redistribute storage fees from past transactions to future validators.
+	"""
+	fundSize: BigInt
+	"""
+	The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+	"""
+	netInflow: BigInt
+	"""
+	The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+	"""
+	fundInflow: BigInt
+	"""
+	The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+	"""
+	fundOutflow: BigInt
+	"""
+	SUI set aside to account for objects stored on-chain, at the start of the epoch.
+	This is also used for storage rebates.
+	"""
+	storageFund: StorageFund
+	"""
+	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
+	"""
+	safeMode: SafeMode
+	"""
+	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
+	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
+	"""
+	systemStateVersion: UInt53
+	"""
+	Details of the system that are decided during genesis.
+	"""
+	systemParameters: SystemParameters
+	"""
+	Parameters related to the subsidy that supplements staking rewards
+	"""
+	systemStakeSubsidy: StakeSubsidy
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
+	This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
+}
+
+type Event {
+	"""
+	The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
+	This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
+	"""
+	eventBcs: Base64
+	"""
+	Address of the sender of the transaction that emitted this event.
+	"""
+	sender: Address
+	"""
+	The position of the event among the events from the same transaction.
+	"""
+	sequenceNumber: UInt53!
+	"""
+	Timestamp corresponding to the checkpoint this event's transaction was finalized in.
+	All events from the same transaction share the same timestamp.
+	"""
+	timestamp: DateTime
+	"""
+	The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
+	"""
+	transaction: Transaction
+}
+
+type EventConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EventEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Event!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EventEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Represents execution error information for failed transactions.
+"""
+type ExecutionError {
+	"""
+	The error code of the Move abort, populated if this transaction failed with a Move abort.
+	
+	Returns the explicit code if the abort used `code` annotation (e.g., `abort(ERR, code = 5)` returns 5), otherwise returns the raw abort code containing encoded error information.
+	"""
+	abortCode: BigInt
+	"""
+	The source line number for the abort. Only populated for clever errors.
+	"""
+	sourceLineNumber: Int
+	"""
+	The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+	"""
+	instructionOffset: Int
+	"""
+	The error's name. Only populated for clever errors.
+	"""
+	identifier: String
+	"""
+	An associated constant for the error. Only populated for clever errors.
+	
+	Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
+	"""
+	constant: String
+}
+
+"""
+The execution status of this transaction: success or failure.
+"""
+enum ExecutionStatus {
+	"""
+	The transaction was successfully executed.
+	"""
+	SUCCESS
+	"""
+	The transaction could not be executed.
+	"""
+	FAILURE
 }
 
 """
@@ -136,6 +366,32 @@ type FeatureFlag {
 	value: Boolean!
 }
 
+
+"""
+Summary of charges from transactions.
+
+Storage is charged in three parts -- `storage_cost`, `-storage_rebate`, and `non_refundable_storage_fee` -- independently of `computation_cost`.
+
+The overall cost of a transaction, deducted from its gas coins, is its `computation_cost + storage_cost - storage_rebate`. `non_refundable_storage_fee` is collected from objects being mutated or deleted and accumulated by the system in storage funds, the remaining storage costs of previous object versions are what become the `storage_rebate`. The ratio between `non_refundable_storage_fee` and `storage_rebate` is set by the protocol.
+"""
+type GasCostSummary {
+	"""
+	The sum cost of computation/execution
+	"""
+	computationCost: UInt53
+	"""
+	Cost for storage at the time the transaction is executed, calculated as the size of the objects being mutated in bytes multiplied by a storage cost per byte (part of the protocol).
+	"""
+	storageCost: UInt53
+	"""
+	Amount the user gets back from the storage cost of the previous versions of objects being mutated or deleted.
+	"""
+	storageRebate: UInt53
+	"""
+	Amount that is retained by the system in the storage fund from the cost of the previous versions of objects being mutated or deleted.
+	"""
+	nonRefundableStorageFee: UInt53
+}
 
 type GasInput {
 	"""
@@ -655,6 +911,22 @@ type Query {
 	Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
 	"""
 	transactionEffects(digest: String!): TransactionEffects
+	"""
+	The transactions that exist in the network, optionally filtered by transaction filters.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
+}
+
+type SafeMode {
+	"""
+	Whether safe mode was used for the last epoch change.
+	The system will retry a full epoch change on every epoch boundary and automatically reset this flag if so.
+	"""
+	enabled: Boolean
+	"""
+	Accumulated fees for computation and cost that have not been added to the various reward pools, because the full epoch change did not happen.
+	"""
+	gasSummary: GasCostSummary
 }
 
 type ServiceConfig {
@@ -758,11 +1030,91 @@ type ServiceConfig {
 	maxMoveValueDepth: Int
 }
 
+"""
+Parameters that control the distribution of the stake subsidy.
+"""
+type StakeSubsidy {
+	"""
+	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over time.
+	"""
+	balance: BigInt
+	"""
+	Number of times stake subsidies have been distributed.
+	Subsidies are distributed with other staking rewards, at the end of the epoch.
+	"""
+	distributionCounter: Int
+	"""
+	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
+	"""
+	currentDistributionAmount: BigInt
+	"""
+	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
+	"""
+	periodLength: Int
+	"""
+	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
+	"""
+	decreaseRate: Int
+}
+
+"""
+SUI set aside to account for objects stored on-chain.
+"""
+type StorageFund {
+	"""
+	Sum of storage rebates of live objects on chain.
+	"""
+	totalObjectStorageRebates: BigInt
+	"""
+	The portion of the storage fund that will never be refunded through storage rebates.
+	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
+	"""
+	nonRefundableBalance: BigInt
+}
+
 
 """
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
 """
 scalar SuiAddress
+
+"""
+Details of the system that are decided during genesis.
+"""
+type SystemParameters {
+	"""
+	Target duration of an epoch, in milliseconds.
+	"""
+	durationMs: BigInt
+	"""
+	The epoch at which stake subsidies start being paid out.
+	"""
+	stakeSubsidyStartEpoch: UInt53
+	"""
+	The minimum number of active validators that the system supports.
+	"""
+	minValidatorCount: Int
+	"""
+	The maximum number of active validators that the system supports.
+	"""
+	maxValidatorCount: Int
+	"""
+	Minimum stake needed to become a new validator.
+	"""
+	minValidatorJoiningStake: BigInt
+	"""
+	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
+	"""
+	validatorLowStakeThreshold: BigInt
+	"""
+	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
+	"""
+	validatorVeryLowStakeThreshold: BigInt
+	"""
+	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
+	"""
+	validatorLowStakeGracePeriod: BigInt
+}
 
 """
 Description of a transaction, the unit of activity on Sui.
@@ -792,6 +1144,39 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	User signatures for this transaction.
+	"""
+	signatures: [UserSignature!]!
+}
+
+type TransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Transaction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Transaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 """
@@ -813,6 +1198,34 @@ type TransactionEffects {
 	"""
 	checkpoint: Checkpoint
 	"""
+	Whether the transaction executed successfully or not.
+	"""
+	status: ExecutionStatus
+	"""
+	The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
+	"""
+	lamportVersion: UInt53
+	"""
+	Rich execution error information for failed transactions.
+	"""
+	executionError: ExecutionError
+	"""
+	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	"""
+	timestamp: DateTime
+	"""
+	The epoch this transaction was finalized in.
+	"""
+	epoch: Epoch
+	"""
+	Events emitted by this transaction.
+	"""
+	events(first: Int, after: String, last: Int, before: String): EventConnection
+	"""
+	The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
+	"""
+	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
+	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
@@ -826,10 +1239,98 @@ type TransactionEffects {
 	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
 }
 
+input TransactionFilter {
+	"""
+	Limit to transactions that occured strictly after the given checkpoint.
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Limit to transactions in the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit to transaction that occured strictly before the given checkpoint.
+	"""
+	beforeCheckpoint: UInt53
+}
+
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+type UserSignature {
+	"""
+	The signature bytes, Base64-encoded.
+	For simple signatures: flag || signature || pubkey
+	For complex signatures: flag || bcs_serialized_struct
+	"""
+	signatureBytes: Base64
+}
+
+type ValidatorAggregatedSignature {
+	"""
+	The epoch when this aggregate signature was produced.
+	"""
+	epoch: Epoch
+	"""
+	The Base64 encoded BLS12381 aggregated signature.
+	"""
+	signature: Base64
+	"""
+	The indexes of validators that contributed to this signature.
+	"""
+	signersMap: [Int!]!
+}
+
+"""
+Representation of `0x3::validator_set::ValidatorSet`.
+"""
+type ValidatorSet {
+	"""
+	Total amount of stake for all active validators at the beginning of the epoch.
+	"""
+	totalStake: BigInt
+	"""
+	Validators that are pending removal from the active validator set, expressed as indices in
+	to `activeValidators`.
+	"""
+	pendingRemovals: [Int!]
+	"""
+	Object ID of the wrapped object `TableVec` storing the pending active validators.
+	"""
+	pendingActiveValidatorsId: SuiAddress
+	"""
+	Size of the pending active validators table.
+	"""
+	pendingActiveValidatorsSize: Int
+	"""
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+	of the corresponding validators. This is needed because a validator's address
+	can potentially change but the object ID of its pool will not.
+	"""
+	stakingPoolMappingsId: SuiAddress
+	"""
+	Size of the stake pool mappings `Table`.
+	"""
+	stakingPoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the inactive staking pools.
+	"""
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools `Table`.
+	"""
+	inactivePoolsSize: Int
+	"""
+	Object ID of the `Table` storing the validator candidates.
+	"""
+	validatorCandidatesId: SuiAddress
+	"""
+	Size of the validator candidates `Table`.
+	"""
+	validatorCandidatesSize: Int
+}
 
 """
 Filter for paginating the history of an Object or MovePackage.

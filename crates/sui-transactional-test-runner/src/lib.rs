@@ -145,6 +145,8 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
     ) -> SuiResult<Vec<Event>>;
 
     async fn get_active_validator_addresses(&self) -> SuiResult<Vec<SuiAddress>>;
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object>;
 }
 
 #[async_trait::async_trait]
@@ -297,6 +299,10 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             .iter()
             .map(|x| x.sui_address)
             .collect::<Vec<_>>())
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.validator.get_object_store().get_object(object_id)
     }
 }
 
@@ -499,5 +505,9 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         // TODO: this is a hack to get the validator addresses. Currently using start state
         //       but we should have a better way to get this information after reconfig
         Ok(self.epoch_start_state().get_validator_addresses())
+    }
+
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        ObjectStore::get_object(&self.store(), object_id)
     }
 }

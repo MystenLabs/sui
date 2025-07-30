@@ -66,13 +66,13 @@ use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
-        shared_object_version_manager::Schedulable, ExecutionEnv,
+        shared_object_version_manager::Schedulable, ExecutionEnv, WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
     },
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
     mysticeti_adapter::LazyMysticetiClient,
     transaction_driver::{
-        ExecutedData, RejectReason, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
+        ExecutedData, SubmitTxResponse, WaitForEffectsRequest, WaitForEffectsResponse,
     },
     transaction_outputs::TransactionOutputs,
 };
@@ -597,6 +597,28 @@ impl ValidatorService {
                 let executed_resp = executed_resp.try_into()?;
                 return Ok((tonic::Response::new(executed_resp), Weight::zero()));
             }
+        }
+
+        // Use shorter wait timeout in simtests to exercise server-side error paths and
+        // client-side retry logic.
+        let wait_for_fastpath_dependency_objects_timeout = if cfg!(msim) {
+            Duration::from_millis(100)
+        } else {
+            WAIT_FOR_FASTPATH_INPUT_TIMEOUT
+        };
+        if !state
+            .wait_for_fastpath_dependency_objects(
+                &transaction,
+                epoch_store.epoch(),
+                wait_for_fastpath_dependency_objects_timeout,
+            )
+            .await?
+        {
+            debug!(
+                ?tx_digest,
+                "Fastpath input objects are still unavailable after waiting"
+            );
+            // Proceed with input checks to generate a proper error.
         }
 
         state
@@ -1153,7 +1175,10 @@ impl ValidatorService {
             let mut effects = self
                 .state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects(&tx_digests)
+                .notify_read_executed_effects(
+                    "AuthorityServer::notify_read_executed_effects_finalized",
+                    &tx_digests,
+                )
                 .await;
             let effects = effects.pop().unwrap();
             let effects_digest = effects.digest();
@@ -1211,8 +1236,8 @@ impl ValidatorService {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
                 ConsensusTxStatus::Rejected => {
                     let response = WaitForEffectsResponse::Rejected {
-                        // TODO(fastpath): Add reject reason.
-                        reason: RejectReason::None,
+                        // TODO(fastpath): cache reject reason during voting and return it here.
+                        error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
                     };
                     return Ok(response);
                 }
@@ -1241,7 +1266,10 @@ impl ValidatorService {
                     match second_status {
                         NotifyReadConsensusTxStatusResult::Status(status) => {
                             if status == ConsensusTxStatus::Rejected {
-                                return Ok(WaitForEffectsResponse::Rejected { reason: RejectReason::None });
+                                // TODO(fastpath): cache reject reason during voting and return it here.
+                                return Ok(WaitForEffectsResponse::Rejected {
+                                    error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
+                                });
                             }
                             assert_eq!(status, ConsensusTxStatus::Finalized);
                             // Update the current status so that notify_read_transaction_status will no
@@ -1259,7 +1287,10 @@ impl ValidatorService {
                 },
                 mut effects = self.state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&tx_digests) => {
+                    .notify_read_executed_effects("AuthorityServer::notify_read_executed_effects", &tx_digests) => {
+
+                    // unwrap is safe because notify_read_executed_effects is expected
+                    // to return the same amount of effects as the provided transactions.
                     let effects = effects.pop().unwrap();
                     let effects_digest = effects.digest();
                     debug!(
@@ -1267,8 +1298,6 @@ impl ValidatorService {
                         ?effects_digest,
                         "Observed executed effects",
                     );
-                    // unwrap is safe because notify_read_executed_effects is expected
-                    // to return the same amount of effects as the provided transactions.
                     break (effects, None);
                 },
                 mut outputs = self.state.get_transaction_cache_reader().notify_read_fastpath_transaction_outputs(&tx_digests) => {

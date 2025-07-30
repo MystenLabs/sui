@@ -178,8 +178,10 @@ pub struct SetAddressCommand {
 
 #[derive(Debug, clap::Parser)]
 pub struct AdvanceClockCommand {
+    #[clap(long = "duration")]
+    pub duration: Option<String>,
     #[clap(long = "duration-ns")]
-    pub duration_ns: u64,
+    pub duration_ns: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]

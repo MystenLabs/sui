@@ -8,6 +8,7 @@ use std::{
     process::Stdio,
 };
 
+use path_clean::PathClean;
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -51,11 +52,18 @@ pub struct GitTree {
     /// Commit-ish (branch, tag, or SHA)
     sha: GitSha,
 
-    /// relative path inside the repository to use for sparse checkout
+    /// relative path inside the repository to use for sparse checkout. Guaranteed to not begin
+    /// with `..`
     path_in_repo: PathBuf,
 
     /// Absolute path to the root of the repository
     path_to_repo: PathBuf,
+}
+
+impl Default for GitCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GitCache {
@@ -85,7 +93,7 @@ impl GitCache {
         path_in_repo: Option<PathBuf>,
     ) -> GitResult<GitTree> {
         let sha = Self::find_sha(repo, rev).await?;
-        Ok(self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone()))
+        self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone())
     }
 
     /// Construct a tree in `self` for the repository `repo` with the provided `sha` and
@@ -95,17 +103,21 @@ impl GitCache {
         repo: String,
         sha: GitSha,
         path_in_repo: Option<PathBuf>,
-    ) -> GitTree {
+    ) -> GitResult<GitTree> {
         let filename = url_to_file_name(repo.as_str());
         let path_to_repo = self.root_dir.join(format!("{filename}_{sha}"));
-        let path_in_repo = path_in_repo.unwrap_or_default();
+        let path_in_repo = path_in_repo.unwrap_or_default().clean();
 
-        GitTree {
+        if path_in_repo.starts_with("..") {
+            return Err(GitError::BadPath { path: path_in_repo });
+        }
+
+        Ok(GitTree {
             repo,
             sha,
             path_in_repo,
             path_to_repo,
-        }
+        })
     }
 }
 
@@ -142,6 +154,21 @@ impl GitTree {
     /// The git sha for the tree
     pub fn sha(&self) -> &GitSha {
         &self.sha
+    }
+
+    /// A new tree in the same repository with `path_in_repo` set to
+    /// `self.path_in_repo.join(relative_path)`.
+    pub fn relative_tree(&self, relative_path: impl AsRef<Path>) -> GitResult<Self> {
+        let mut result = self.clone();
+
+        result.path_in_repo = self.path_in_repo.join(relative_path).clean();
+        if result.path_in_repo.to_string_lossy().starts_with("..") {
+            Err(GitError::BadPath {
+                path: result.path_in_repo,
+            })
+        } else {
+            Ok(result)
+        }
     }
 
     /// Checkout the directory using a sparse checkout. It will try to clone without checkout, set
@@ -190,11 +217,6 @@ impl GitTree {
             // git checkout
             self.run_git(&["checkout", "--quiet", self.sha.as_ref()])
                 .await?;
-            let cmd = Command::new("ls")
-                .arg(&self.path_to_repo)
-                .output()
-                .await
-                .unwrap();
         }
 
         // check for dirt
@@ -267,31 +289,25 @@ fn url_to_file_name(url: &str) -> String {
 }
 
 /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
-/// `repo` to a commit SHA. This will make a remote call so network is required.
+/// `repo` to a 40-character commit SHA. This will make a remote call so network is required.
 async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
     if let Some(r) = rev {
         if let Ok(sha) = GitSha::try_from(r.to_string()) {
             return Ok(sha);
         }
 
+        // if the sha is a short sha, then the repo will be cloned to a temp directory and full
+        // history will be downloaded to retrieve the full sha
+        if let Ok(Some(full_sha)) = try_find_full_sha(repo, r).await {
+            return Ok(full_sha);
+        }
+
         // if there is some revision which is likely a branch, a tag, or a wrong SHA (e.g., capital
         // letter), then we have a different set of arguments than if there is no revision. In no
         // revision case, we need to find the default branch of that remote.
 
-        // we have a branch or tag
-        // git ls-remote https://github.com/user/repo.git refs/heads/main
-        let stdout =
-            run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{r}")], None).await?;
-
-        let sha = stdout
-            .split_whitespace()
-            .next()
-            .ok_or(GitError::no_sha(repo, r))?
-            .to_string()
-            .try_into()
-            .expect("git returns valid shas");
-
-        Ok(sha)
+        // we have a branch or tag so we need to look up its Sha.
+        find_branch_or_tag_sha(repo, r).await
     } else {
         // nothing specified, so we need to find the default branch
         find_default_branch_and_get_sha(repo).await
@@ -374,6 +390,95 @@ fn display_cmd(cmd: &Command) -> String {
         result.push_str(arg.to_string_lossy().as_ref());
     }
     result
+}
+
+/// Tries to convert a "branch" or "tag" into a full SHA, using `ls-remote`.
+/// It first tries to find a tag, and if that fails, it fallbacks into a branch lookup.
+async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
+    // Note: a "no results" search for tags or branches returns an empty result (`Ok("")`)
+    // and not an error, which is why we manually cast an empty result into an error.
+    // Results from `ls-remote` are expected in format `<hash> \t <name>`.
+
+    // TODO(manos): Figure out if doing both lookups at once works fine (and add appropriate tests)
+
+    // Try to find a tag matching the `rev`:
+    // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
+    let tag = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/tags/{rev}")], None)
+        .await?
+        .split_whitespace()
+        .next()
+        .map(|s| s.to_string())
+        .ok_or(GitError::no_sha(repo, rev));
+
+    // return early if `rev` maps to a valid tag.
+    if let Ok(tag_sha) = tag {
+        return Ok(tag_sha.try_into().expect("git returns valid shas"));
+    }
+
+    // Try to find a branch matching the `rev`:
+    // git ls-remote https://github.com/user/repo.git refs/heads/<branch_name>
+    let branch = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{rev}")], None)
+        .await?
+        .split_whitespace()
+        .next()
+        .map(|s| s.to_string())
+        .ok_or(GitError::no_sha(repo, rev))?;
+
+    Ok(branch.try_into().expect("git returns valid shas"))
+}
+
+/// If the given rev is a short sha, clone the repository to a temp dir and return the full sha.
+async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
+    if rev.len() < 7
+        && !rev
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
+        return Ok(None);
+    }
+
+    let git_cache_path = PathBuf::from(get_cache_path());
+    let lookup_path = git_cache_path.join("lookups");
+
+    std::fs::create_dir_all(&lookup_path).map_err(GitError::TempDirectory)?;
+
+    let path_to_clone = lookup_path.join(url_to_file_name(repo));
+    let path_to_clone_str = path_to_clone.to_string_lossy();
+
+    if path_to_clone.exists() {
+        debug!("Repository is already in the cache for lookups, fetching the list of new history.");
+        // We are fetching the "latest" history for that repository.
+        run_git_cmd_with_args(&["fetch", "--filter=blob:none"], Some(&path_to_clone)).await?;
+    } else {
+        debug!(
+            "downloading temporary git repo with full history to {}",
+            path_to_clone_str
+        );
+        let mut args = vec![
+            "-c",
+            "advice.detachedHead=false",
+            "clone",
+            "--quiet",
+            "--sparse",
+            "--filter=blob:none",
+            "--no-checkout",
+            repo,
+            &path_to_clone_str,
+        ];
+
+        run_git_cmd_with_args(&args, None).await?;
+    }
+
+    let full_sha = run_git_cmd_with_args(&["rev-parse", rev], Some(&path_to_clone))
+        .await?
+        .trim()
+        .replace("\n", "");
+
+    debug!("Found full sha {full_sha} for temp git repo {path_to_clone_str}");
+
+    Ok(Some(
+        GitSha::try_from(full_sha).expect("Git should return correctly formatted shas"),
+    ))
 }
 
 #[cfg(test)]
@@ -705,5 +810,76 @@ mod tests {
 
         // fetch again - subtree should still be clean so it should succeed
         let result = git_tree.fetch().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_tag_checkout() {
+        let tag = "releases/1";
+
+        let project = git::new("git_repo", |project| {
+            project.file("packages/pkg_a/Move.toml", &basic_manifest("a", "0.0.1"))
+        });
+
+        project.add_tag(tag);
+
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+
+        let git_tree = cache
+            .resolve_to_tree(project.root_path_str(), &Some(tag.to_string()), None)
+            .await
+            .unwrap();
+
+        let result = git_tree.fetch().await;
+        assert!(result.is_ok());
+
+        let another_tag = "releases/2";
+        project.add_tag(another_tag);
+
+        let git_tree = cache
+            .resolve_to_tree(
+                project.root_path_str(),
+                &Some(another_tag.to_string()),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let result = git_tree.fetch().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_try_find_full_sha() {
+        let (project_with_git, repository) = git::new_repo("pkg_git", |project| {
+            project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
+        });
+
+        let commits = project_with_git.commits();
+        let commit = commits.first().unwrap();
+        let short_sha = commit[..7].to_string();
+
+        assert_eq!(
+            &try_find_full_sha(project_with_git.root_path_str(), &short_sha)
+                .await
+                .unwrap()
+                .unwrap()
+                .to_string(),
+            commit
+        );
+
+        // change a file and verify "fetch" works.
+        project_with_git.change_file("Move.toml", "new content");
+        let sha = repository.commit().to_string();
+        let new_short_sha = sha[..7].to_string();
+
+        assert_eq!(
+            &try_find_full_sha(project_with_git.root_path_str(), &new_short_sha)
+                .await
+                .unwrap()
+                .unwrap()
+                .to_string(),
+            &sha
+        );
     }
 }

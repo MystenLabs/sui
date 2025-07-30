@@ -82,6 +82,16 @@ impl FileHandle {
         FILES[self.id].source()
     }
 
+    /// Return a dummy file for test scaffolding
+    #[cfg(test)]
+    pub fn dummy(path: impl AsRef<Path>, contents: impl AsRef<str>) -> Self {
+        let id = FILES.push(SimpleFile::new(
+            DisplayPath(path.as_ref().to_path_buf()),
+            contents.as_ref().to_string(),
+        ));
+        Self { id }
+    }
+
     fn simple_file(&self) -> &'static SimpleFile<DisplayPath, String> {
         &FILES[self.id]
     }

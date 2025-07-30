@@ -1235,7 +1235,7 @@ impl KeyToolCommand {
                         let client = reqwest::Client::new();
                         let provider = OIDCProvider::from_iss(zk.get_iss())
                             .map_err(|_| anyhow!("Invalid iss"))?;
-                        let jwks = fetch_jwks(&provider, &client).await?;
+                        let jwks = fetch_jwks(&provider, &client, true).await?;
                         let parsed: ImHashMap<JwkId, JWK> = jwks.clone().into_iter().collect();
                         let env = match network.as_str() {
                             "devnet" | "localnet" => ZkLoginEnv::Test,
@@ -1243,7 +1243,7 @@ impl KeyToolCommand {
                             _ => return Err(anyhow!("Invalid network")),
                         };
                         let verify_params =
-                            VerifyParams::new(parsed, vec![], env, true, true, true, Some(2));
+                            VerifyParams::new(parsed, vec![], env, true, true, true, Some(2), true);
 
                         let (serialized, res) = match IntentScope::try_from(intent_scope)
                             .map_err(|_| anyhow!("Invalid scope"))?

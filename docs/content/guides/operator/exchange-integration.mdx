@@ -14,7 +14,7 @@ The requirements to configure a SUI integration include:
     - RAM: 128 GB
     - Storage (SSD): 4 TB NVMe drive
 
-For best results, run Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also fun a Full node on macOS.
+For best results, run Sui Full nodes on Linux. Sui supports the Ubuntu and Debian distributions. You can also run a Full node on macOS.
 
 ## Configure a Sui Full node
 
@@ -104,7 +104,7 @@ curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 
 The response can include a large number of events. Add pagination to the response using the `nextCursor` key in the request. You can determine the corresponding `txDigest` and `eventSeq` from the `id` field of a transaction.
 
-You can add the `txDigest` value instead of the first `null` within the `params`. The second `null` is an integer that defines how many results (up to 1000) to return and the `true` means ascending order. You can use the `nextCursor` so the response starts from a desired point.
+You can replace the first `null` in the `params` array with a `txDigest` value to paginate from a specific point. The second `null` is an integer that defines how many results (up to 1000) to return and the `true` means ascending order. You can use the `nextCursor` so the response starts from a desired point.
 
 The `id` field of any transaction looks like:
 
@@ -153,7 +153,7 @@ Sui supports the following API operations related to transferring SUI between ad
  - [sui_payAllSui](/sui-api-ref#sui_payAllSui)
    This method accepts an array of SUI token IDs. It merges all existing tokens into one, deducts the gas fee, then sends the merged token to the recipient address.
 
-   The method is especially useful if you want to transfer all SUI from an address. To merge together all coins for an address, set the recipient as the same address. This is a native Sui method so is not considered a transaction in Sui.
+   The method is especially useful if you want to transfer all SUI from an address. To merge together all coins for an address, set the recipient as the same address. This is a native Sui method and does not produce additional on-chain transaction objects for the internal merge operation.
 
  - [sui_paySui](/sui-api-ref#sui_paySui)
    This operation accepts an array of SUI token IDs, an array of amounts, and an array of recipient addresses.

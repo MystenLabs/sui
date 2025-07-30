@@ -54,6 +54,10 @@ pub struct Pin {
     /// Metadata about the package's source
     pub source: LockfileDependencyInfo,
 
+    /// The stored `published-at` and `original-id` overrides (from the `published-at` and
+    /// `original-id` fields in the manifest
+    pub address_override: Option<PublishAddresses>,
+
     /// The environment that should be used for the dependency (as defined in the dependency's
     /// manifest but specified in the depender's manifest).
     ///
@@ -75,12 +79,18 @@ pub struct Pin {
 }
 
 /// A serialized pinned dependency in a lockfile
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum LockfileDependencyInfo {
     Local(LocalDepInfo),
     OnChain(OnChainDepInfo),
     Git(LockfileGitDepInfo),
+    Root(RootDepInfo),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RootDepInfo {
+    pub root: bool,
 }
 
 /// A serialized lockfile dependency of the form `{git = "...", rev = "...", subdir = "..."}`

@@ -4,9 +4,12 @@
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
+use tracing::debug;
+
 use super::paths::PackagePath;
 use super::{EnvironmentID, manifest::Manifest};
-use crate::schema::{Environment, PackageName, Publication};
+use crate::graph::PackageInfo;
+use crate::schema::{Environment, OriginalID, PackageName, Publication};
 use crate::{
     errors::{FileHandle, PackageError, PackageResult},
     flavor::MoveFlavor,
@@ -14,7 +17,6 @@ use crate::{
     package::EnvironmentName,
     schema::ParsedLockfile,
 };
-use tracing::debug;
 
 /// A package that is defined as the root of a Move project.
 ///
@@ -58,10 +60,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     pub async fn load(path: impl AsRef<Path>, env: Environment) -> PackageResult<Self> {
+        debug!("Loading RootPackage for {:?}", path.as_ref());
         let package_path = PackagePath::new(path.as_ref().to_path_buf())?;
         let graph = PackageGraph::<F>::load(&package_path, &env).await?;
 
         let mut root_pkg = Self::_validate_and_construct(package_path, env, graph)?;
+
         root_pkg.update_lockfile_digests();
 
         Ok(root_pkg)
@@ -117,8 +121,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         graph: PackageGraph<F>,
     ) -> PackageResult<Self> {
         let mut lockfile = Self::load_lockfile(&package_path)?;
-        // check that there is a consistent linkage
 
+        // check that there is a consistent linkage
         let _linkage = graph.linkage()?;
         graph.check_rename_from()?;
 
@@ -137,8 +141,27 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             .insert(self.environment.name().clone(), BTreeMap::from(&self.graph));
     }
 
+    /// The name of the root package
     pub fn name(&self) -> &PackageName {
         self.graph.root_package().name()
+    }
+
+    /// The path to the root of the package
+    pub fn path(&self) -> &PackagePath {
+        &self.package_path
+    }
+
+    /// Return the list of all packages in the root package's package graph (including itself and all
+    /// transitive dependencies).
+    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+        self.graph.dependencies()
+    }
+
+    /// Return the linkage table for the root package. This contains an entry for each package that
+    /// this package depends on (transitively). Returns an error if any of the packages that this
+    /// package depends on is unpublished.
+    pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+        todo!()
     }
 
     /// Output an updated lockfile containg the dependency graph represented by `self`. Note that
@@ -146,7 +169,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// changed (since no repinning was performed).
     pub fn save_to_disk(&self) -> PackageResult<()> {
         std::fs::write(
-            self.package_path().lockfile_path(),
+            self.graph.root_package().path().lockfile_path(),
             self.lockfile.render_as_toml(),
         )?;
         Ok(())
@@ -177,20 +200,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(toml_edit::de::from_str(file.source())?)
     }
 
-    /// Return the package graph for `env`
-    // TODO: what's the right API here?
-    pub fn package_graph(&self) -> &PackageGraph<F> {
-        &self.graph
-    }
-
     pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
         &self.lockfile
-    }
-    // *** PATHS RELATED FUNCTIONS ***
-
-    /// Return the package path wrapper
-    pub fn package_path(&self) -> &PackagePath {
-        &self.package_path
     }
 }
 

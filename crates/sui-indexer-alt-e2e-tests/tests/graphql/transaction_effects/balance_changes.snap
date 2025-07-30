@@ -1,0 +1,136 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 7-11:
+//# programmable --sender A --inputs 1000 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+// Transaction with multiple balance changes - transfer to multiple recipients
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 12-16:
+//# programmable --sender A --inputs 500 @B 300 @C
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: SplitCoins(Gas, [Input(2)]);
+//> 2: TransferObjects([Result(0)], Input(1));
+//> 3: TransferObjects([Result(1)], Input(3))
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 18:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 20-37:
+//# run-graphql
+Response: {
+  "data": {
+    "singleTransferTransaction": {
+      "balanceChanges": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        },
+        "nodes": [
+          {
+            "owner": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+            "amount": "1000"
+          },
+          {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+            "amount": "-2977000"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 5, lines 39-56:
+//# run-graphql
+Response: {
+  "data": {
+    "multipleTransferTransaction": {
+      "balanceChanges": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        },
+        "nodes": [
+          {
+            "owner": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+            "amount": "500"
+          },
+          {
+            "owner": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            },
+            "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+            "amount": "300"
+          },
+          {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+            "amount": "-2986680"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 6, lines 58-78:
+//# run-graphql
+Response: {
+  "data": {
+    "paginatedBalanceChanges": {
+      "balanceChanges": {
+        "pageInfo": {
+          "hasNextPage": true,
+          "hasPreviousPage": false
+        },
+        "edges": [
+          {
+            "cursor": "MA==",
+            "node": {
+              "owner": {
+                "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+              },
+              "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+              "amount": "500"
+            }
+          },
+          {
+            "cursor": "MQ==",
+            "node": {
+              "owner": {
+                "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+              },
+              "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+              "amount": "300"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

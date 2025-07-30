@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.53.0"
+    "version": "1.54.0"
   },
   "methods": [
     {
@@ -1294,12 +1294,13 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "89",
+              "maxSupportedProtocolVersion": "91",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_consensus_digest_indirect_state": false,
+                "additional_multisig_checks": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,
@@ -1309,6 +1310,7 @@
                 "ban_entry_init": false,
                 "better_adapter_type_resolution_errors": false,
                 "bridge": false,
+                "check_for_init_during_upgrade": false,
                 "commit_root_state_digest": false,
                 "consensus_batched_block_sync": false,
                 "consensus_distributed_vote_scoring_strategy": false,
@@ -1321,6 +1323,7 @@
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
                 "debug_fatal_on_move_invariant_violation": false,
+                "dependency_linkage_error": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
@@ -8751,6 +8754,32 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "reservation",
+              "type",
+              "typeParam",
+              "withdrawFrom"
+            ],
+            "properties": {
+              "reservation": {
+                "$ref": "#/components/schemas/SuiReservation"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "balanceWithdraw"
+                ]
+              },
+              "typeParam": {
+                "$ref": "#/components/schemas/SuiWithdrawTypeParam"
+              },
+              "withdrawFrom": {
+                "$ref": "#/components/schemas/SuiWithdrawFrom"
+              }
+            }
           }
         ]
       },
@@ -9575,6 +9604,28 @@
           }
         }
       },
+      "SuiReservation": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "entireBalance"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "maxAmountU64"
+            ],
+            "properties": {
+              "maxAmountU64": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "SuiSystemStateSummary": {
         "description": "This is the JSON-RPC type for the SUI system state object. It flattens all fields to make them top-level fields such that it as minimum dependencies to the internal data structures of the SUI system state type.",
         "type": "object",
@@ -10377,6 +10428,28 @@
             "$ref": "#/components/schemas/Base64"
           }
         }
+      },
+      "SuiWithdrawFrom": {
+        "type": "string",
+        "enum": [
+          "sender"
+        ]
+      },
+      "SuiWithdrawTypeParam": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "balance"
+            ],
+            "properties": {
+              "balance": {
+                "$ref": "#/components/schemas/TypeTag"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "Supply": {
         "type": "object",

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object};
+use async_graphql::{connection::Connection, Context, Object};
+
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
@@ -13,13 +14,19 @@ use sui_types::{
 use crate::{
     api::{
         query::Query,
-        scalars::{date_time::DateTime, uint53::UInt53},
+        scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
     },
     error::RpcError,
+    pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
-use super::epoch::Epoch;
+use super::{
+    epoch::Epoch,
+    gas::GasCostSummary,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    validator_aggregated_signature::ValidatorAggregatedSignature,
+};
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -87,6 +94,12 @@ impl CheckpointContents {
         Some(Epoch::with_id(self.scope.clone(), summary.epoch))
     }
 
+    /// The total number of transactions in the network by the end of this checkpoint.
+    async fn network_total_transactions(&self) -> Option<UInt53> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(summary.network_total_transactions.into())
+    }
+
     /// The digest of the previous checkpoint's summary.
     async fn previous_checkpoint_digest(&self) -> Result<Option<String>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
@@ -98,6 +111,34 @@ impl CheckpointContents {
             .map(|digest| digest.base58_encode()))
     }
 
+    /// The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
+    async fn rolling_gas_summary(&self) -> Option<GasCostSummary> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(GasCostSummary::from(
+            summary.epoch_rolling_gas_cost_summary.clone(),
+        ))
+    }
+
+    /// The Base64 serialized BCS bytes of this checkpoint's summary.
+    async fn summary_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(Base64::from(
+            bcs::to_bytes(summary).context("Failed to serialize checkpoint summary")?,
+        )))
+    }
+
+    /// The Base64 serialized BCS bytes of this checkpoint's contents.
+    async fn content_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let Some((_, content, _)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(Base64::from(
+            bcs::to_bytes(content).context("Failed to serialize checkpoint content")?,
+        )))
+    }
+
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
     async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
         let Some((summary, _, _)) = &self.contents else {
@@ -105,6 +146,46 @@ impl CheckpointContents {
         };
 
         Ok(Some(DateTime::from_ms(summary.timestamp_ms as i64)?))
+    }
+
+    /// The aggregation of signatures from a quorum of validators for the checkpoint proposal.
+    async fn validator_signatures(&self) -> Result<Option<ValidatorAggregatedSignature>, RpcError> {
+        let Some((_, _, authority_info)) = &self.contents else {
+            return Ok(None);
+        };
+        Ok(Some(ValidatorAggregatedSignature::with_authority_info(
+            self.scope.clone(),
+            authority_info.clone(),
+        )))
+    }
+
+    // The transactions in this checkpoint.
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Checkpoint", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+            at_checkpoint: Some(UInt53::from(summary.sequence_number)),
+            ..Default::default()
+        }) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Ok(Some(
+            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+        ))
     }
 }
 

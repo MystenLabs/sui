@@ -4,8 +4,8 @@
 
 use crate::{
     compatibility::{
-        LegacyAddressDeclarations, LegacyBuildInfo, LegacyDevAddressDeclarations,
-        LegacySubstOrRename, LegacySubstitution, LegacyVersion, find_module_name_for_package,
+        LegacyBuildInfo, LegacySubstOrRename, LegacySubstitution, LegacyVersion,
+        find_module_name_for_package,
         legacy::{LegacyData, LegacyEnvironment},
     },
     errors::FileHandle,
@@ -17,7 +17,10 @@ use crate::{
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
-use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
+use move_core_types::{
+    account_address::{AccountAddress, AccountAddressParseError},
+    identifier::Identifier,
+};
 use serde_spanned::Spanned;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -53,6 +56,13 @@ pub struct ParsedLegacyPackage {
     pub metadata: PackageMetadata,
     pub legacy_data: LegacyData,
     pub file_handle: FileHandle,
+}
+
+pub struct LegacyPackageMetadata {
+    pub legacy_name: String,
+    pub edition: String,
+    pub published_at: Option<String>,
+    pub unrecognized_fields: BTreeMap<String, toml::Value>,
 }
 
 /// We try to see if a package is `legacy`-like. That means that we can parse it,
@@ -187,15 +197,12 @@ fn parse_source_manifest(
                 .remove(ADDRESSES_NAME)
                 .map(parse_addresses)
                 .transpose()
-                .context("Error parsing '[addresses]' section of manifest")?;
+                .context("Error parsing '[addresses]' section of manifest")?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("'[addresses]' section of manifest cannot be empty.")
+                })?;
 
-            let dev_addresses = table
-                .remove(DEV_ADDRESSES_NAME)
-                .map(parse_dev_addresses)
-                .transpose()
-                .context("Error parsing '[dev-addresses]' section of manifest")?;
-
-            let (legacy_name, edition, published_at) = table
+            let metadata = table
                 .remove(PACKAGE_NAME)
                 .map(parse_package_info)
                 .transpose()
@@ -226,16 +233,19 @@ fn parse_source_manifest(
             let new_name = temporary_spanned(modern_name.clone());
 
             // Gather the original publish information from the manifest, if it's defined on the Toml file.
-            let manifest_address_info = if let Some(published_at) = published_at {
+            let manifest_address_info = if let Some(published_at) = metadata.published_at {
                 let latest_id = parse_address_literal(&published_at);
-                let original_id = addresses
-                    .as_ref()
-                    .and_then(|a| a.get(modern_name.as_str()))
-                    .copied()
-                    .flatten();
+                let original_id = addresses.get(modern_name.as_str()).copied().flatten();
 
                 // If we have BOTH the original and latest id, we can create the published ids!
                 if let (Ok(latest_id), Some(original_id)) = (latest_id, original_id) {
+                    // We cannot support "0x0" as the "original-id" of a published package.
+                    if original_id == AccountAddress::ZERO {
+                        return Err(anyhow::anyhow!(
+                            "'0x0' cannot be used as the 'original-id' of a published package."
+                        ));
+                    }
+
                     Some(PublishAddresses {
                         published_at: crate::schema::PublishedID(latest_id),
                         original_id: crate::schema::OriginalID(original_id),
@@ -247,21 +257,42 @@ fn parse_source_manifest(
                 None
             };
 
+            // remove the "modern" name (address) from the addresses table to avoid duplications
+            // Validate that we no longer support `_` addresses for legacy [addresses] sections!
+            let mut programmatic_addresses = BTreeMap::new();
+
+            for (name, addr) in addresses {
+                // We skip the package base address from the addresses we want to expose
+                // as it is now exposed by default.
+                if name == modern_name {
+                    continue;
+                }
+
+                let Some(addr) = addr else {
+                    bail!(
+                        "Found uninstantiated named address `{}` (declared as `_`). All addresses in the `addresses` field must be instantiated.",
+                        name
+                    );
+                };
+
+                programmatic_addresses.insert(name, addr);
+            }
+
             Ok(ParsedLegacyPackage {
                 metadata: PackageMetadata {
                     name: new_name,
-                    edition,
+                    edition: metadata.edition,
                     implicit_deps: ImplicitDepMode::Legacy,
+                    unrecognized_fields: metadata.unrecognized_fields,
                 },
                 deps: dependencies,
                 legacy_data: LegacyData {
-                    incompatible_name: if legacy_name != modern_name.as_str() {
-                        Some(legacy_name)
+                    incompatible_name: if metadata.legacy_name != modern_name.as_str() {
+                        Some(metadata.legacy_name)
                     } else {
                         None
                     },
-                    addresses: addresses.unwrap_or_default(),
-                    dev_addresses,
+                    addresses: programmatic_addresses,
                     manifest_address_info,
                     legacy_environments: parse_legacy_lockfile_addresses(path).unwrap_or_default(),
                 },
@@ -278,7 +309,7 @@ fn parse_source_manifest(
     }
 }
 
-fn parse_package_info(tval: TV) -> Result<(String, String, Option<String>)> {
+fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
     match tval {
         TV::Table(mut table) => {
             check_for_required_field_names(&table, &["name"])?;
@@ -328,7 +359,12 @@ fn parse_package_info(tval: TV) -> Result<(String, String, Option<String>)> {
                 .map(|v| v.as_str().unwrap_or_default().to_string())
                 .unwrap_or_default();
 
-            Ok((name, edition, published_at))
+            Ok(LegacyPackageMetadata {
+                legacy_name: name,
+                edition,
+                published_at,
+                unrecognized_fields: table.into_iter().collect(),
+            })
         }
         x => bail!(
             "Malformed section in manifest {}. Expected a table, but encountered a {}",
@@ -381,12 +417,13 @@ fn parse_build_info(tval: TV) -> Result<LegacyBuildInfo> {
     }
 }
 
-fn parse_addresses(tval: TV) -> Result<LegacyAddressDeclarations> {
+fn parse_addresses(tval: TV) -> Result<BTreeMap<Identifier, Option<AccountAddress>>> {
     match tval {
         TV::Table(table) => {
             let mut addresses = BTreeMap::new();
             for (addr_name, entry) in table.into_iter() {
-                let ident = addr_name.clone();
+                let ident = Identifier::new(addr_name)?;
+
                 match entry.as_str() {
                     Some(entry_str) => {
                         if entry_str == EMPTY_ADDR_STR {
@@ -400,50 +437,6 @@ fn parse_addresses(tval: TV) -> Result<LegacyAddressDeclarations> {
                                     "Invalid address '{}' encountered.",
                                     entry_str
                                 ))?),
-                            )
-                            .is_some()
-                        {
-                            bail!("Duplicate address name '{}' found.", ident);
-                        }
-                    }
-                    None => bail!(
-                        "Invalid address name {} encountered. Expected a string but found a {}",
-                        entry,
-                        entry.type_str()
-                    ),
-                }
-            }
-            Ok(addresses)
-        }
-        x => bail!(
-            "Malformed section in manifest {}. Expected a table, but encountered a {}",
-            x,
-            x.type_str()
-        ),
-    }
-}
-
-fn parse_dev_addresses(tval: TV) -> Result<LegacyDevAddressDeclarations> {
-    match tval {
-        TV::Table(table) => {
-            let mut addresses = BTreeMap::new();
-            for (addr_name, entry) in table.into_iter() {
-                let ident = addr_name.clone();
-                match entry.as_str() {
-                    Some(entry_str) => {
-                        if entry_str == EMPTY_ADDR_STR {
-                            bail!(
-                                "Found uninstantiated named address '{}'. All addresses in the '{}' field must be instantiated.",
-                                ident,
-                                DEV_ADDRESSES_NAME
-                            );
-                        } else if addresses
-                            .insert(
-                                ident.clone(),
-                                parse_address_literal(entry_str).context(format!(
-                                    "Invalid address '{}' encountered.",
-                                    entry_str
-                                ))?,
                             )
                             .is_some()
                         {
@@ -697,7 +690,8 @@ fn warn_if_unknown_field_names(table: &toml::map::Map<String, TV>, known_names: 
     }
 
     if !unknown_names.is_empty() {
-        eprintln!(
+        // TODO: manos - to fix this when migration work starts
+        tracing::debug!(
             "Warning: unknown field name{} found. Expected one of [{}], but found {}",
             if unknown_names.len() > 1 { "s" } else { "" },
             known_names.join(", "),
@@ -750,15 +744,11 @@ fn temporary_spanned<T>(val: T) -> Spanned<T> {
 /// 1. The `0x0` address, if using the modern environments on lockfiles
 /// 2. The `name` modules use inside sources (e.g. `module yy::aa;`)
 fn derive_modern_name(
-    addresses: &Option<BTreeMap<String, Option<AccountAddress>>>,
+    addresses: &BTreeMap<Identifier, Option<AccountAddress>>,
     path: &PackagePath,
 ) -> Result<PackageName> {
-    let Some(list) = addresses else {
-        bail!("No addresses found in manifest, so the package name could not be determined.");
-    };
-
     // Find all the addresses with 0x0.
-    let zero_addresses = list
+    let zero_addresses = addresses
         .iter()
         .filter(|(_, address)| {
             address.is_some_and(|address| address == AccountAddress::ZERO) || address.is_none()

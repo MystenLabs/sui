@@ -27,6 +27,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_spanned.workspace = true
 sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 toml.workspace = true
@@ -38,10 +39,10 @@ tracing-subscriber.workspace = true
 git2 = "0.20.2"
 datatest-stable.workspace = true
 insta.workspace = true
-tempfile.workspace = true
 test-log.workspace = true
 url.workspace = true
 walkdir.workspace = true
+heck.workspace = true
 
 [[bin]]
 name = "mock-resolver"

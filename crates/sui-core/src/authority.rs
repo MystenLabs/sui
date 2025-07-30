@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::checkpoints::CheckpointBuilderError;
+use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
 use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
@@ -15,7 +17,6 @@ use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::traffic_controller::TrafficController;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
-use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
@@ -53,6 +54,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     pin::Pin,
+    str::FromStr,
     sync::Arc,
     vec,
 };
@@ -64,6 +66,7 @@ use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::get_early_execution_error;
+use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
@@ -81,6 +84,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use tracing::trace;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -101,7 +105,7 @@ use sui_json_rpc_types::{
     SuiObjectDataFilter, SuiTransactionBlockData, SuiTransactionBlockEffects,
     SuiTransactionBlockEvents, TransactionFilter,
 };
-use sui_macros::{fail_point, fail_point_async, fail_point_if};
+use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::authenticator_state::get_authenticator_state;
@@ -385,6 +389,11 @@ const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
 ];
 
 pub const DEV_INSPECT_GAS_COIN_VALUE: u64 = 1_000_000_000_000_000;
+
+// Transaction author should have observed the input objects as finalized output,
+// so usually the wait does not need to be long.
+// When submitted by TransactionDriver, it will retry quickly if there is no return from this validator too.
+pub const WAIT_FOR_FASTPATH_INPUT_TIMEOUT: Duration = Duration::from_secs(2);
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
@@ -822,14 +831,6 @@ impl AuthorityMetrics {
 ///
 pub type StableSyncAuthoritySigner = Pin<Arc<dyn Signer<AuthoritySignature> + Send + Sync>>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BalanceWithdrawStatus {
-    NoWithdraw,
-    SufficientBalance,
-    // TODO(address-balances): Add information on the address and type?
-    InsufficientBalance,
-}
-
 /// Execution env contains the "environment" for the transaction to be executed in, that is,
 /// all the information necessary for execution that is not specified by the transaction itself.
 #[derive(Debug, Clone)]
@@ -894,6 +895,78 @@ impl ExecutionEnv {
     }
 }
 
+#[derive(Debug)]
+pub struct ForkRecoveryState {
+    /// Transaction digest to effects digest overrides
+    transaction_overrides: RwLock<HashMap<TransactionDigest, TransactionEffectsDigest>>,
+    /// Checkpoint sequence to checkpoint digest overrides  
+    checkpoint_overrides: RwLock<HashMap<CheckpointSequenceNumber, CheckpointDigest>>,
+}
+
+impl Default for ForkRecoveryState {
+    fn default() -> Self {
+        Self {
+            transaction_overrides: RwLock::new(HashMap::new()),
+            checkpoint_overrides: RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+impl ForkRecoveryState {
+    pub fn new(config: Option<&sui_config::node::ForkRecoveryConfig>) -> Result<Self, SuiError> {
+        let Some(config) = config else {
+            return Ok(Self::default());
+        };
+
+        let mut transaction_overrides = HashMap::new();
+        for (tx_digest_str, effects_digest_str) in &config.transaction_overrides {
+            let tx_digest = TransactionDigest::from_str(tx_digest_str).map_err(|_| {
+                SuiError::Unknown(format!("Invalid transaction digest: {}", tx_digest_str))
+            })?;
+            let effects_digest =
+                TransactionEffectsDigest::from_str(effects_digest_str).map_err(|_| {
+                    SuiError::Unknown(format!("Invalid effects digest: {}", effects_digest_str))
+                })?;
+            transaction_overrides.insert(tx_digest, effects_digest);
+        }
+
+        let mut checkpoint_overrides = HashMap::new();
+        for (seq_num, checkpoint_digest_str) in &config.checkpoint_overrides {
+            let checkpoint_digest =
+                CheckpointDigest::from_str(checkpoint_digest_str).map_err(|_| {
+                    SuiError::Unknown(format!(
+                        "Invalid checkpoint digest: {}",
+                        checkpoint_digest_str
+                    ))
+                })?;
+            checkpoint_overrides.insert(*seq_num, checkpoint_digest);
+        }
+
+        Ok(Self {
+            transaction_overrides: RwLock::new(transaction_overrides),
+            checkpoint_overrides: RwLock::new(checkpoint_overrides),
+        })
+    }
+
+    pub async fn get_transaction_override(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<TransactionEffectsDigest> {
+        self.transaction_overrides
+            .read()
+            .await
+            .get(tx_digest)
+            .copied()
+    }
+
+    pub async fn get_checkpoint_override(
+        &self,
+        seq_num: &CheckpointSequenceNumber,
+    ) -> Option<CheckpointDigest> {
+        self.checkpoint_overrides.read().await.get(seq_num).copied()
+    }
+}
+
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -949,6 +1022,9 @@ pub struct AuthorityState {
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
+
+    /// Fork recovery state for handling equivocation after forks
+    fork_recovery_state: Option<ForkRecoveryState>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1135,7 +1211,32 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        let signed = self.handle_transaction_impl(transaction, true, epoch_store);
+        // timeout in tests can be reduced to exercise error paths, if QD properly retries
+        // failures to lock on objects waiting for future versions.
+        if epoch_store.protocol_config().mysticeti_fastpath()
+            && !self
+                .wait_for_fastpath_dependency_objects(
+                    &transaction,
+                    epoch_store.epoch(),
+                    WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
+                )
+                .await?
+        {
+            debug!("fastpath input objects are still unavailable after waiting");
+            // Proceed with input checks to generate a proper error.
+        }
+
+        self.handle_sign_transaction(epoch_store, transaction).await
+    }
+
+    /// Signs a transaction. Exposed for testing.
+    pub async fn handle_sign_transaction(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: VerifiedTransaction,
+    ) -> SuiResult<HandleTransactionResponse> {
+        let tx_digest = *transaction.digest();
+        let signed = self.handle_transaction_impl(transaction, /* sign */ true, epoch_store);
         match signed {
             Ok(Some(s)) => {
                 if self.is_validator(epoch_store) {
@@ -1273,6 +1374,39 @@ impl AuthorityState {
             .inc();
     }
 
+    /// Waits for fastpath (owned, package) dependency objects to become available,
+    /// until the specified max_wait timeout.
+    /// Returns true if all fastpath dependency objects are available, false otherwise.
+    pub(crate) async fn wait_for_fastpath_dependency_objects(
+        &self,
+        transaction: &VerifiedTransaction,
+        epoch: EpochId,
+        max_wait: Duration,
+    ) -> SuiResult<bool> {
+        let txn_data = transaction.data().transaction_data();
+        let fastpath_dependency_objects = txn_data.fastpath_dependency_objects()?;
+        if fastpath_dependency_objects.is_empty() {
+            return Ok(true);
+        }
+        // It is ok to not check receiving objects, unless it turns out to be a common failure.
+        let receiving_keys = HashSet::new();
+        match timeout(
+            max_wait,
+            self.get_object_cache_reader().notify_read_input_objects(
+                &fastpath_dependency_objects,
+                &receiving_keys,
+                epoch,
+            ),
+        )
+        .await
+        {
+            Ok(()) => Ok(true),
+            // Maybe return an error for unavailable input objects,
+            // and allow the caller to skip the rest of input checks?
+            Err(_) => Ok(false),
+        }
+    }
+
     /// Wait for a certificate to be executed.
     /// For consensus transactions, it needs to be sequenced by the consensus.
     /// For owned object transactions, this function will enqueue the transaction for execution.
@@ -1328,7 +1462,10 @@ impl AuthorityState {
         // tx could be reverted when epoch ends, so we must be careful not to return a result
         // here after the epoch ends.
         epoch_store
-            .within_alive_epoch(self.notify_read_effects(*transaction.digest()))
+            .within_alive_epoch(self.notify_read_effects(
+                "AuthorityState::wait_for_transaction_execution",
+                *transaction.digest(),
+            ))
             .await
             .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
             .and_then(|r| r)
@@ -1350,7 +1487,9 @@ impl AuthorityState {
         // same warning as above applies: We must be careful not to return a result
         // here after the epoch ends.
         epoch_store
-            .within_alive_epoch(self.notify_read_effects(digest))
+            .within_alive_epoch(
+                self.notify_read_effects("AuthorityState::await_transaction_effects", digest),
+            )
             .await
             .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
             .and_then(|r| r)
@@ -1371,13 +1510,25 @@ impl AuthorityState {
     pub async fn try_execute_immediately(
         &self,
         certificate: &VerifiedExecutableTransaction,
-        execution_env: ExecutionEnv,
+        mut execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(TransactionEffects, Option<ExecutionError>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
         let tx_digest = certificate.digest();
+
+        if let Some(fork_recovery) = &self.fork_recovery_state {
+            if let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest).await {
+                info!(
+                    ?tx_digest,
+                    original_digest = ?execution_env.expected_effects_digest,
+                    override_digest = ?override_digest,
+                    "Applying fork recovery override for transaction effects digest"
+                );
+                execution_env.expected_effects_digest = Some(override_digest);
+            }
+        }
 
         // prevent concurrent executions of the same tx.
         let tx_guard = epoch_store.acquire_tx_guard(certificate)?;
@@ -1582,11 +1733,12 @@ impl AuthorityState {
 
     pub async fn notify_read_effects(
         &self,
+        task_name: &'static str,
         digest: TransactionDigest,
     ) -> SuiResult<TransactionEffects> {
         Ok(self
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[digest])
+            .notify_read_executed_effects(task_name, &[digest])
             .await
             .pop()
             .expect("must return correct number of effects"))
@@ -1679,6 +1831,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             expected_effects_digest,
+            execution_env.withdraw_status,
             epoch_store,
         )
     }
@@ -1802,6 +1955,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
+        withdraw_status: BalanceWithdrawStatus,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<(
         TransactionOutputs,
@@ -1836,6 +1990,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            &withdraw_status,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -1896,6 +2051,19 @@ impl AuthorityState {
                     actual_effects = ?effects,
                     "fork detected!"
                 );
+
+                fail_point_if!("kill_transaction_fork_node", || {
+                    #[cfg(msim)]
+                    {
+                        tracing::error!(
+                            fatal = true,
+                            "Fork recovery test: killing node due to transaction effects fork for digest: {}",
+                            tx_digest
+                        );
+                        sui_simulator::task::kill_current_node(None);
+                    }
+                });
+
                 panic!(
                     "Transaction {} is expected to have effects digest {}, but got {}!",
                     tx_digest,
@@ -1905,9 +2073,26 @@ impl AuthorityState {
             }
         }
 
-        fail_point_if!("cp_execution_nondeterminism", || {
+        fail_point_arg!("simulate_fork_during_execution", |(
+            forked_validators,
+            full_halt,
+            effects_overrides,
+        ): (
+            std::sync::Arc<
+                std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+            >,
+            bool,
+            std::sync::Arc<std::sync::Mutex<std::collections::BTreeMap<String, String>>>,
+        )| {
             #[cfg(msim)]
-            self.create_fail_state(certificate, epoch_store, &mut effects);
+            self.simulate_fork_during_execution(
+                certificate,
+                epoch_store,
+                &mut effects,
+                forked_validators,
+                full_halt,
+                effects_overrides,
+            );
         });
 
         // index certificate
@@ -1954,6 +2139,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             None,
+            BalanceWithdrawStatus::NoWithdraw,
             epoch_store,
         )?;
         Ok((transaction_outputs, execution_error_opt))
@@ -2093,6 +2279,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            &BalanceWithdrawStatus::NoWithdraw,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2298,6 +2486,8 @@ impl AuthorityState {
             &transaction.digest(),
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            &BalanceWithdrawStatus::NoWithdraw,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2495,6 +2685,8 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
+            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
+            &BalanceWithdrawStatus::NoWithdraw,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2605,30 +2797,63 @@ impl AuthorityState {
     }
 
     #[cfg(msim)]
-    fn create_fail_state(
+    fn simulate_fork_during_execution(
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         effects: &mut TransactionEffects,
+        forked_validators: std::sync::Arc<
+            std::sync::Mutex<std::collections::HashSet<sui_types::base_types::AuthorityName>>,
+        >,
+        full_halt: bool,
+        effects_overrides: std::sync::Arc<
+            std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+        >,
     ) {
         use std::cell::RefCell;
         thread_local! {
-            static FAIL_STATE: RefCell<(u64, HashSet<AuthorityName>)> = RefCell::new((0, HashSet::new()));
+            static TOTAL_FAILING_STAKE: RefCell<u64> = RefCell::new(0);
         }
         if !certificate.data().intent_message().value.is_system_tx() {
             let committee = epoch_store.committee();
             let cur_stake = (**committee).weight(&self.name);
             if cur_stake > 0 {
-                FAIL_STATE.with_borrow_mut(|fail_state| {
-                    //let (&mut failing_stake, &mut failing_validators) = fail_state;
-                    if fail_state.0 < committee.validity_threshold() {
-                        fail_state.0 += cur_stake;
-                        fail_state.1.insert(self.name);
+                TOTAL_FAILING_STAKE.with_borrow_mut(|total_stake| {
+                    let should_fork = if full_halt {
+                        // For partial fork, fork enough nodes to cause true split brain
+                        *total_stake <= committee.validity_threshold()
+                    } else {
+                        // For partial fork, only fork up to but not including validity threshold
+                        *total_stake + cur_stake < committee.validity_threshold()
+                    };
+
+                    if should_fork {
+                        *total_stake += cur_stake;
+
+                        if let Ok(mut external_set) = forked_validators.lock() {
+                            external_set.insert(self.name);
+                            info!("forked_validators: {:?}", external_set);
+                        }
                     }
 
-                    if fail_state.1.contains(&self.name) {
-                        info!("cp_exec failing tx");
-                        effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                    if let Ok(external_set) = forked_validators.lock() {
+                        if external_set.contains(&self.name) {
+                            let tx_digest = certificate.digest().to_string();
+                            let original_effects_digest = effects.digest().to_string();
+
+                            if let Ok(mut overrides) = effects_overrides.lock() {
+                                overrides
+                                    .insert(tx_digest.clone(), original_effects_digest.clone());
+                                info!(
+                                    ?tx_digest,
+                                    ?original_effects_digest,
+                                    "Captured forked effects digest for transaction"
+                                );
+                            }
+
+                            info!("cp_exec failing tx");
+                            effects.gas_cost_summary_mut_for_testing().computation_cost += 1;
+                        }
                     }
                 });
             }
@@ -3198,6 +3423,12 @@ impl AuthorityState {
         } else {
             None
         };
+
+        let fork_recovery_state = config.fork_recovery.as_ref().map(|fork_config| {
+            ForkRecoveryState::new(Some(fork_config))
+                .expect("Failed to initialize fork recovery state")
+        });
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3222,6 +3453,7 @@ impl AuthorityState {
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             traffic_controller,
+            fork_recovery_state,
         });
 
         let state_clone = Arc::downgrade(&state);
@@ -3766,6 +3998,10 @@ impl AuthorityState {
     /// Chain Identifier is the digest of the genesis checkpoint.
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
+    }
+
+    pub fn get_fork_recovery_state(&self) -> Option<&ForkRecoveryState> {
+        self.fork_recovery_state.as_ref()
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -5310,7 +5546,7 @@ impl AuthorityState {
         // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
         // >1 checkpoint.
         last_checkpoint: CheckpointSequenceNumber,
-    ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
+    ) -> CheckpointBuilderResult<(SuiSystemState, TransactionEffects)> {
         let mut txns = Vec::new();
 
         if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
@@ -5387,9 +5623,7 @@ impl AuthorityState {
             //   state sync, and execute it. This will upgrade the framework packages, reconfigure,
             //   and most likely shut down in the new epoch (this validator likely doesn't support
             //   the new protocol version, or else it should have had the packages.)
-            return Err(anyhow!(
-                "missing system packages: cannot form ChangeEpochTx"
-            ));
+            return Err(CheckpointBuilderError::SystemPackagesMissing);
         };
 
         let tx = if epoch_store
@@ -5451,9 +5685,7 @@ impl AuthorityState {
             .is_tx_already_executed(tx_digest)
         {
             warn!("change epoch tx has already been executed via state sync");
-            return Err(anyhow::anyhow!(
-                "change epoch tx has already been executed via state sync"
-            ));
+            return Err(CheckpointBuilderError::ChangeEpochTxAlreadyExecuted);
         }
 
         let execution_guard = self.execution_lock_for_executable_transaction(&executable_tx)?;
@@ -5480,6 +5712,7 @@ impl AuthorityState {
             &executable_tx,
             input_objects,
             None,
+            BalanceWithdrawStatus::NoWithdraw,
             epoch_store,
         )?;
         let system_obj = get_sui_system_state(&transaction_outputs.written)
@@ -5704,7 +5937,10 @@ impl RandomnessRoundReceiver {
                 RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
                 authority_state
                     .get_transaction_cache_reader()
-                    .notify_read_executed_effects(&[digest]),
+                    .notify_read_executed_effects(
+                        "RandomnessRoundReceiver::notify_read_executed_effects_first",
+                        &[digest],
+                    ),
             )
             .await;
             let mut effects = match result {
@@ -5718,7 +5954,10 @@ impl RandomnessRoundReceiver {
                     // Continue waiting as long as necessary in non-debug builds.
                     authority_state
                         .get_transaction_cache_reader()
-                        .notify_read_executed_effects(&[digest])
+                        .notify_read_executed_effects(
+                            "RandomnessRoundReceiver::notify_read_executed_effects_second",
+                            &[digest],
+                        )
                         .await
                 }
             };

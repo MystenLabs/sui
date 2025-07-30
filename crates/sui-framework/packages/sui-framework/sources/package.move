@@ -249,18 +249,21 @@ public fun additive_policy(): u8 { ADDITIVE }
 
 public fun dep_only_policy(): u8 { DEP_ONLY }
 
+#[allow(lint(public_entry))]
 /// Restrict upgrades through this upgrade `cap` to just add code, or
 /// change dependencies.
 public entry fun only_additive_upgrades(cap: &mut UpgradeCap) {
     cap.restrict(ADDITIVE)
 }
 
+#[allow(lint(public_entry))]
 /// Restrict upgrades through this upgrade `cap` to just change
 /// dependencies.
 public entry fun only_dep_upgrades(cap: &mut UpgradeCap) {
     cap.restrict(DEP_ONLY)
 }
 
+#[allow(lint(public_entry))]
 /// Discard the `UpgradeCap` to make a package immutable.
 public entry fun make_immutable(cap: UpgradeCap) {
     let UpgradeCap { id, package: _, version: _, policy: _ } = cap;

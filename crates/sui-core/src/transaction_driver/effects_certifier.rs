@@ -1,34 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
-use rand::{seq::SliceRandom as _, Rng as _};
 use sui_types::{
-    base_types::ConciseableName,
+    base_types::AuthorityName,
+    committee::StakeUnit,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffectsAPI as _,
+    error::SuiError,
     messages_consensus::ConsensusPosition,
     messages_grpc::RawWaitForEffectsRequest,
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::time::{sleep, timeout};
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::instrument;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
-    stake_aggregator::{InsertResult, StakeAggregator},
+    safe_client::SafeClient,
+    status_aggregator::StatusAggregator,
     transaction_driver::{
-        error::TransactionDriverError, metrics::TransactionDriverMetrics, ExecutedData,
-        QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
+        error::{
+            aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
+            TransactionRequestError,
+        },
+        metrics::TransactionDriverMetrics,
+        request_retrier::RequestRetrier,
+        ExecutedData, QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxResponse,
         WaitForEffectsRequest, WaitForEffectsResponse,
     },
 };
 
-const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(2);
+const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct EffectsCertifier {
     metrics: Arc<TransactionDriverMetrics>,
@@ -39,11 +47,13 @@ impl EffectsCertifier {
         Self { metrics }
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
     pub(crate) async fn get_certified_finalized_effects<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
+        // This keeps track of the current target for getting full effects.
+        mut current_target: AuthorityName,
         submit_txn_resp: SubmitTxResponse,
         options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError>
@@ -65,161 +75,127 @@ impl EffectsCertifier {
                 None => (None, None),
             },
         };
+
+        let mut retrier = RequestRetrier::new(authority_aggregator);
+
         let (acknowledgments_result, mut full_effects_result) = join!(
-            self.wait_for_acknowledgments_with_retry(
+            self.wait_for_acknowledgments(
                 authority_aggregator,
                 tx_digest,
                 consensus_position,
                 options,
             ),
-            async move {
+            async {
+                // No need to send a full effects request if it is already provided.
                 if let Some(full_effects) = full_effects {
+                    // In this branch, current_target is the authority providing the full effects,
+                    // so it is consistent. This is not used though because current_target is
+                    // only used with failed full effects query.
                     return Ok(full_effects);
                 }
-                self.get_full_effects_with_retry(
-                    authority_aggregator,
-                    tx_digest,
-                    consensus_position,
-                    options,
-                )
-                .await
+                let (name, client) = retrier
+                    .next_target()
+                    .expect("there should be at least 1 target");
+                current_target = name;
+                self.get_full_effects(client, tx_digest, consensus_position, options)
+                    .await
             },
         );
 
+        // If the consensus position got rejected, effects certification will see the failure and gather
+        // error messages to explain the rejection.
         let certified_digest = acknowledgments_result?;
 
-        // Retry until full effects digest matches the certified digest.
+        // Retry until there is a valid full effects that matches the certified digest, or all targets
+        // have been attempted.
+        //
         // TODO(fastpath): send backup requests to get full effects before timeout or failure.
         loop {
             match full_effects_result {
                 Ok((effects_digest, executed_data)) => {
                     if effects_digest != certified_digest {
                         tracing::warn!(
+                            ?current_target,
                             "Full effects digest mismatch ({} vs certified {})",
                             effects_digest,
                             certified_digest
                         );
                     } else {
-                        return Ok(self.get_effects_response(
-                            effects_digest,
-                            executed_data,
-                            tx_digest,
-                        ));
+                        return Ok(
+                            self.get_quorum_transaction_response(effects_digest, executed_data)
+                        );
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to get full effects: {e}");
+                    tracing::debug!(?current_target, "Failed to get full effects: {e}");
+                    // This emits an error when retrier gathers enough (f+1) non-retriable effects errors,
+                    // but the error should not happen after effects certification unless there are software bugs
+                    // or > f malicious validators.
+                    retrier.add_error(current_target, e)?;
                 }
             };
+
+            tokio::task::yield_now().await;
+
+            // Retry getting full effects from the next target.
+
+            // This emits an error when retrier has no targets available.
+            let (name, client) = retrier.next_target()?;
+            current_target = name;
             full_effects_result = self
-                .get_full_effects_with_retry(
-                    authority_aggregator,
-                    tx_digest,
-                    consensus_position,
-                    options,
-                )
+                .get_full_effects(client, tx_digest, consensus_position, options)
                 .await;
         }
     }
 
-    async fn get_full_effects_with_retry<A>(
+    async fn get_full_effects<A>(
         &self,
-        authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        client: Arc<SafeClient<A>>,
         tx_digest: &TransactionDigest,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
-    ) -> Result<(TransactionEffectsDigest, Box<ExecutedData>), TransactionDriverError>
+    ) -> Result<(TransactionEffectsDigest, Box<ExecutedData>), TransactionRequestError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let mut attempts = 0;
-        // TODO(fastpath): Remove MAX_ATTEMPTS. Retry until unretriable error.
-        const MAX_ATTEMPTS: usize = 10;
-        let clients = authority_aggregator
-            .authority_clients
-            .iter()
-            .collect::<Vec<_>>();
-
         let raw_request = RawWaitForEffectsRequest::try_from(WaitForEffectsRequest {
             transaction_digest: *tx_digest,
             consensus_position,
             include_details: true,
         })
-        .map_err(TransactionDriverError::SerializationError)?;
+        .unwrap();
 
-        // TODO(fastpath): only retry transient (RPC) errors. aggregate permanent errors on a higher level.
-        loop {
-            attempts += 1;
-            // TODO(fastpath): pick target with performance metrics.
-            let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
-
-            match timeout(
-                WAIT_FOR_EFFECTS_TIMEOUT,
-                client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
-            )
-            .await
-            {
-                Ok(Ok(response)) => match response {
-                    WaitForEffectsResponse::Executed {
-                        effects_digest,
-                        details,
-                    } => {
-                        // All error cases are retryable until max attempt due to the chance
-                        // of the status being returned from a byzantine validator.
-                        if let Some(details) = details {
-                            return Ok((effects_digest, details));
-                        } else {
-                            if attempts >= MAX_ATTEMPTS {
-                                return Err(TransactionDriverError::ExecutionDataNotFound(
-                                    tx_digest.to_string(),
-                                ));
-                            }
-                            tracing::debug!("Execution data not found, retrying...");
-                        }
+        match timeout(
+            WAIT_FOR_EFFECTS_TIMEOUT,
+            client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
+        )
+        .await
+        {
+            Ok(Ok(response)) => match response {
+                WaitForEffectsResponse::Executed {
+                    effects_digest,
+                    details,
+                } => {
+                    if let Some(details) = details {
+                        Ok((effects_digest, details))
+                    } else {
+                        tracing::debug!("Execution data not found, retrying...");
+                        Err(TransactionRequestError::ExecutionDataNotFound)
                     }
-                    WaitForEffectsResponse::Rejected { ref reason } => {
-                        if attempts >= MAX_ATTEMPTS {
-                            return Err(TransactionDriverError::TransactionRejected(
-                                reason.to_string(),
-                            ));
-                        }
-                        tracing::debug!("Transaction rejected, retrying... Reason: {}", reason);
-                    }
-                    WaitForEffectsResponse::Expired { epoch, round } => {
-                        if attempts >= MAX_ATTEMPTS {
-                            return Err(TransactionDriverError::TransactionStatusExpired);
-                        }
-                        tracing::debug!(
-                            "Transaction status expired at epoch {}, round {}, retrying...",
-                            epoch,
-                            round.unwrap_or(0),
-                        );
-                    }
-                },
-                Ok(Err(e)) => {
-                    if attempts >= MAX_ATTEMPTS {
-                        return Err(TransactionDriverError::RpcFailure(
-                            name.concise().to_string(),
-                            e.to_string(),
-                        ));
-                    }
-                    tracing::debug!(
-                        "Full effects request failed from {}: {}, retrying...",
-                        name.concise(),
-                        e
-                    );
                 }
-                Err(_) => {
-                    if attempts >= MAX_ATTEMPTS {
-                        return Err(TransactionDriverError::TimeoutGettingFullEffects);
-                    }
-                    tracing::debug!("Full effects request timed out, retrying...");
+                WaitForEffectsResponse::Rejected { error } => {
+                    Err(TransactionRequestError::RejectedAtValidator(error))
                 }
-            }
+                WaitForEffectsResponse::Expired { epoch, round } => Err(
+                    TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0)),
+                ),
+            },
+            Ok(Err(e)) => Err(TransactionRequestError::Aborted(e)),
+            Err(_) => Err(TransactionRequestError::TimedOutGettingFullEffectsAtValidator),
         }
     }
 
-    async fn wait_for_acknowledgments_with_retry<A>(
+    async fn wait_for_acknowledgments<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
         tx_digest: &TransactionDigest,
@@ -239,7 +215,7 @@ impl EffectsCertifier {
             consensus_position,
             include_details: false,
         })
-        .map_err(TransactionDriverError::SerializationError)?;
+        .unwrap();
 
         // Create futures for all validators (digest-only requests)
         let mut futures = FuturesUnordered::new();
@@ -248,8 +224,13 @@ impl EffectsCertifier {
             let name = *name;
             let raw_request = raw_request.clone();
             let future = async move {
-                // Keep retrying transient errors until cancellation.
-                loop {
+                // This loop can only retry RPC errors, timeouts, and other errors retriable
+                // without new submission.
+                let backoff = ExponentialBackoff::from_millis(100)
+                    .max_delay(Duration::from_secs(2))
+                    .map(jitter)
+                    .take(5);
+                for (attempt, delay) in backoff.enumerate() {
                     let result = timeout(
                         WAIT_FOR_EFFECTS_TIMEOUT,
                         client.wait_for_effects(raw_request.clone(), options.forwarded_client_addr),
@@ -257,157 +238,203 @@ impl EffectsCertifier {
                     .await;
                     match result {
                         Ok(Ok(response)) => {
-                            return (name, response);
+                            return (name, Ok(response));
                         }
                         Ok(Err(e)) => {
-                            tracing::trace!("Wait for effects acknowledgement: error: {:?}", e);
+                            if !matches!(e, SuiError::RpcError(_, _)) {
+                                return (name, Err(e));
+                            }
+                            tracing::trace!(
+                                ?name,
+                                "Wait for effects acknowledgement (attempt {attempt}): rpc error: {:?}",
+                                e
+                            );
                         }
                         Err(_) => {
-                            tracing::trace!("Wait for effects acknowledgement: timeout");
+                            tracing::trace!(
+                                ?name,
+                                "Wait for effects acknowledgement (attempt {attempt}): timeout"
+                            );
                         }
                     };
-                    let delay_ms = rand::thread_rng().gen_range(1000..2000);
-                    sleep(Duration::from_millis(delay_ms)).await;
+                    sleep(delay).await;
                 }
+                (name, Err(SuiError::TimeoutError))
             };
 
             futures.push(future);
         }
 
-        let mut effects_digest_aggregators: HashMap<
+        let mut effects_digest_aggregators: BTreeMap<
             TransactionEffectsDigest,
-            StakeAggregator<(), true>,
-        > = HashMap::new();
-        let mut rejected_aggregator = StakeAggregator::<(), true>::new(committee.clone());
-        let mut expired_aggregator = StakeAggregator::<(), true>::new(committee.clone());
-        let mut rejected_errors = Vec::new();
-        let mut expired_errors = Vec::new();
+            StatusAggregator<()>,
+        > = BTreeMap::new();
+        // Collect errors non-retriable even with new transaction submission.
+        let mut non_retriable_errors_aggregator =
+            StatusAggregator::<TransactionRequestError>::new(committee.clone());
+        // Collect errors retriable with new transaction submission.
+        let mut retriable_errors_aggregator =
+            StatusAggregator::<TransactionRequestError>::new(committee.clone());
 
         // Every validator returns at most one WaitForEffectsResponse.
         while let Some((name, response)) = futures.next().await {
             match response {
-                WaitForEffectsResponse::Executed {
+                Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details: _,
-                } => {
+                }) => {
                     let aggregator = effects_digest_aggregators
                         .entry(effects_digest)
-                        .or_insert_with(|| StakeAggregator::<(), true>::new(committee.clone()));
-
-                    match aggregator.insert_generic(name, ()) {
-                        InsertResult::QuorumReached(_) => {
-                            let quorum_weight = aggregator.total_votes();
-                            for (other_digest, other_aggregator) in effects_digest_aggregators {
-                                if other_digest != effects_digest
-                                    && other_aggregator.total_votes() > 0
-                                {
-                                    tracing::warn!(
-                                        "Effects digest inconsistency detected: quorum digest {effects_digest:?} (weight {quorum_weight}), other digest {other_digest:?} (weight {})",
-                                        other_aggregator.total_votes()
-                                    );
-                                    self.metrics.effects_digest_mismatches.inc();
-                                }
+                        .or_insert_with(|| StatusAggregator::<()>::new(committee.clone()));
+                    aggregator.insert(name, ());
+                    if aggregator.reached_quorum_threshold() {
+                        let quorum_weight = aggregator.total_votes();
+                        for (other_digest, other_aggregator) in effects_digest_aggregators {
+                            if other_digest != effects_digest && other_aggregator.total_votes() > 0
+                            {
+                                tracing::warn!(?name,
+                                    "Effects digest inconsistency detected: quorum digest {effects_digest:?} (weight {quorum_weight}), other digest {other_digest:?} (weight {})",
+                                    other_aggregator.total_votes()
+                                );
+                                self.metrics.effects_digest_mismatches.inc();
                             }
-                            return Ok(effects_digest);
                         }
-                        InsertResult::NotEnoughVotes { .. } => {}
-                        InsertResult::Failed { error } => {
-                            debug_fatal!(
-                                "Failed to insert vote for digest {}: {:?}",
-                                effects_digest,
-                                error
-                            );
-                        }
+                        return Ok(effects_digest);
                     }
                 }
-                WaitForEffectsResponse::Rejected { reason } => {
-                    rejected_errors.push(format!("{}: {}", name.concise(), reason));
+                Ok(WaitForEffectsResponse::Rejected { error }) => {
+                    let error = TransactionRequestError::RejectedAtValidator(error);
+                    if error.is_submission_retriable() {
+                        retriable_errors_aggregator.insert(name, error);
+                    } else {
+                        non_retriable_errors_aggregator.insert(name, error);
+                    }
                     self.metrics.rejection_acks.inc();
-                    if let InsertResult::Failed { error } =
-                        rejected_aggregator.insert_generic(name, ())
-                    {
-                        debug_fatal!("Failed to insert rejection vote: {:?}", error);
-                    }
                 }
-                WaitForEffectsResponse::Expired { epoch, round } => {
-                    expired_errors.push(format!(
-                        "{} at epoch {}, round {}",
-                        name.concise(),
-                        epoch,
-                        round.unwrap_or(0),
-                    ));
+                Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
+                    let error = TransactionRequestError::StatusExpired(epoch, round.unwrap_or(0));
+                    // Expired status is submission retriable.
+                    retriable_errors_aggregator.insert(name, error);
                     self.metrics.expiration_acks.inc();
-                    if let InsertResult::Failed { error } =
-                        expired_aggregator.insert_generic(name, ())
-                    {
-                        debug_fatal!("Failed to insert expiration vote: {:?}", error);
+                }
+                Err(error) => {
+                    let error = TransactionRequestError::Aborted(error);
+                    if error.is_submission_retriable() {
+                        retriable_errors_aggregator.insert(name, error);
+                    } else {
+                        non_retriable_errors_aggregator.insert(name, error);
                     }
                 }
             };
 
+            // Adding vote up between different StatusAggregators without de-duplication is ok,
+            // because each authority only returns one response.
             let executed_weight: u64 = effects_digest_aggregators
                 .values()
                 .map(|agg| agg.total_votes())
                 .sum();
-            let rejected_weight = rejected_aggregator.total_votes();
-            let expired_weight = expired_aggregator.total_votes();
-            let total_weight = executed_weight + rejected_weight + expired_weight;
+            let non_retriable_weight = non_retriable_errors_aggregator.total_votes();
+            let retriable_weight = retriable_errors_aggregator.total_votes();
+            let total_weight = executed_weight + non_retriable_weight + retriable_weight;
 
-            if total_weight >= committee.quorum_threshold() {
-                // Abort as early as possible because there is no guarantee that another response will be received.
-                if rejected_weight + expired_weight >= committee.validity_threshold() {
-                    return Err(TransactionDriverError::TransactionRejectedOrExpired(
-                        rejected_errors.join(", "),
-                        expired_errors.join(", "),
-                    ));
-                }
-                // Check if quorum can still be reached with remaining responses.
-                let remaining_weight = committee.total_votes().saturating_sub(total_weight);
-                let quorum_feasible = effects_digest_aggregators.values().any(|agg| {
-                    agg.total_votes() + remaining_weight >= committee.quorum_threshold()
-                });
-                if !quorum_feasible {
-                    break;
-                }
-            } else {
-                // Abort less eagerly for clearer error message.
-                // More responses are available when the network is live.
-                if rejected_weight >= committee.validity_threshold() {
-                    return Err(TransactionDriverError::TransactionRejected(
-                        rejected_errors.join(", "),
-                    ));
+            // Quorum threshold is used here to gather as many responses as possible for summary,
+            // while making sure the loop can still exit with < 1/3 malicious stake.
+            if total_weight >= committee.quorum_threshold()
+                && non_retriable_weight + retriable_weight >= committee.validity_threshold()
+            {
+                if non_retriable_errors_aggregator.reached_validity_threshold() {
+                    return Err(TransactionDriverError::InvalidTransaction {
+                        submission_non_retriable_errors: aggregate_request_errors(
+                            non_retriable_errors_aggregator.status_by_authority(),
+                        ),
+                        submission_retriable_errors: aggregate_request_errors(
+                            retriable_errors_aggregator.status_by_authority(),
+                        ),
+                    });
+                } else {
+                    let mut observed_effects_digests =
+                        Vec::<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>::new();
+                    for (effects_digest, aggregator) in effects_digest_aggregators {
+                        observed_effects_digests.push((
+                            effects_digest,
+                            aggregator.authorities(),
+                            aggregator.total_votes(),
+                        ));
+                    }
+                    return Err(TransactionDriverError::Aborted {
+                        submission_non_retriable_errors: aggregate_request_errors(
+                            non_retriable_errors_aggregator.status_by_authority(),
+                        ),
+                        submission_retriable_errors: aggregate_request_errors(
+                            retriable_errors_aggregator.status_by_authority(),
+                        ),
+                        observed_effects_digests: AggregatedEffectsDigests {
+                            digests: observed_effects_digests,
+                        },
+                    });
                 }
             }
         }
 
-        // No quorum is reached or can be reached for any effects digest.
-        let executed_weight: u64 = effects_digest_aggregators
-            .values()
-            .map(|agg| agg.total_votes())
-            .sum();
-        let rejected_weight = rejected_aggregator.total_votes();
-        let expired_weight = expired_aggregator.total_votes();
-
-        Err(TransactionDriverError::ForkedExecution {
-            total_responses_weight: executed_weight + rejected_weight + expired_weight,
-            executed_weight,
-            rejected_weight,
-            expired_weight,
-            // TODO(fastpath): Aggregate and summarize forked effects and errors.
-            errors: vec![],
-        })
+        // At this point, no effects digest has reached quorum. But there is not a validity threshold
+        // of failed responses either.
+        let retriable_weight = retriable_errors_aggregator.total_votes();
+        let mut observed_effects_digests =
+            Vec::<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>::new();
+        let mut submission_retriable = false;
+        for (effects_digest, aggregator) in effects_digest_aggregators {
+            // An effects digest can still get certified, so the transaction is retriable.
+            if aggregator.total_votes() + retriable_weight >= committee.quorum_threshold() {
+                submission_retriable = true;
+            }
+            observed_effects_digests.push((
+                effects_digest,
+                aggregator.authorities(),
+                aggregator.total_votes(),
+            ));
+        }
+        if observed_effects_digests.len() <= 1 {
+            debug_fatal!(
+                "Expect at least 2 effects digests, but got {:?}",
+                observed_effects_digests
+            );
+        }
+        if submission_retriable {
+            Err(TransactionDriverError::Aborted {
+                submission_non_retriable_errors: aggregate_request_errors(
+                    non_retriable_errors_aggregator.status_by_authority(),
+                ),
+                submission_retriable_errors: aggregate_request_errors(
+                    retriable_errors_aggregator.status_by_authority(),
+                ),
+                observed_effects_digests: AggregatedEffectsDigests {
+                    digests: observed_effects_digests,
+                },
+            })
+        } else {
+            Err(TransactionDriverError::ForkedExecution {
+                observed_effects_digests: AggregatedEffectsDigests {
+                    digests: observed_effects_digests,
+                },
+                submission_non_retriable_errors: aggregate_request_errors(
+                    non_retriable_errors_aggregator.status_by_authority(),
+                ),
+                submission_retriable_errors: aggregate_request_errors(
+                    retriable_errors_aggregator.status_by_authority(),
+                ),
+            })
+        }
     }
 
     /// Creates the final full response.
-    fn get_effects_response(
+    fn get_quorum_transaction_response(
         &self,
         effects_digest: TransactionEffectsDigest,
         executed_data: Box<ExecutedData>,
-        tx_digest: &TransactionDigest,
     ) -> QuorumTransactionResponse {
         self.metrics.executed_transactions.inc();
 
-        tracing::debug!("Transaction {tx_digest} executed with effects digest: {effects_digest}",);
+        tracing::debug!("Transaction executed with effects digest: {effects_digest}",);
 
         let epoch = executed_data.effects.executed_epoch();
         let details = FinalizedEffects {

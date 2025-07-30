@@ -17,11 +17,11 @@ use url::Url;
 
 use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
-use crate::ingestion::slow_future_monitor::with_slow_future_monitor;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::Result as IngestionResult;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
+use crate::task::with_slow_future_monitor;
 use crate::types::full_checkpoint_content::CheckpointData;
 
 /// Wait at most this long between retries for transient errors.
@@ -291,7 +291,7 @@ mod tests {
 
     fn setup_test() -> (IngestionClient, Arc<MockIngestionClient>) {
         let registry = Registry::new_custom(Some("test".to_string()), None).unwrap();
-        let metrics = IndexerMetrics::new(&registry);
+        let metrics = IndexerMetrics::new(None, &registry);
         let mock_client = Arc::new(MockIngestionClient::default());
         let client = IngestionClient::new_impl(mock_client.clone(), metrics);
         (client, mock_client)

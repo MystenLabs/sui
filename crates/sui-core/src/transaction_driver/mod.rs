@@ -5,13 +5,19 @@ mod effects_certifier;
 mod error;
 mod message_types;
 mod metrics;
+mod request_retrier;
 mod transaction_submitter;
 
 /// Exports
 pub use message_types::*;
 pub use metrics::*;
+use tokio_retry::strategy::{jitter, ExponentialBackoff};
 
-use std::{net::SocketAddr, sync::Arc, time::Instant};
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use arc_swap::ArcSwap;
 use effects_certifier::*;
@@ -21,7 +27,7 @@ use parking_lot::Mutex;
 use sui_types::{
     committee::EpochId, digests::TransactionDigest, messages_grpc::RawSubmitTxRequest,
 };
-use tokio::task::JoinSet;
+use tokio::{task::JoinSet, time::sleep};
 use tracing::instrument;
 use transaction_submitter::*;
 
@@ -67,7 +73,7 @@ where
         driver
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
     pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
@@ -75,14 +81,15 @@ where
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
-        let raw_request = request
-            .into_raw()
-            .map_err(TransactionDriverError::SerializationError)?;
+        let raw_request = request.into_raw().unwrap();
         let timer = Instant::now();
 
+        const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
+        let mut backoff = ExponentialBackoff::from_millis(100)
+            .max_delay(MAX_RETRY_DELAY)
+            .map(jitter);
         let mut attempts = 0;
         loop {
-            attempts += 1;
             // TODO(fastpath): Check local state before submitting transaction
             match self
                 .drive_transaction_once(tx_digest, raw_request.clone(), &options)
@@ -101,18 +108,23 @@ where
                     return Ok(resp);
                 }
                 Err(e) => {
-                    // TODO(fastpath): Break when the error is unretriable.
-                    tracing::warn!(
-                        "Failed to finalize transaction {tx_digest} (attempt {}): {}",
+                    if !e.is_retriable() {
+                        return Err(e);
+                    }
+                    tracing::info!(
+                        "Failed to finalize transaction (attempt {}): {}. Retrying ...",
                         attempts,
                         e
                     );
                 }
             }
+
+            sleep(backoff.next().unwrap_or(MAX_RETRY_DELAY)).await;
+            attempts += 1;
         }
     }
 
-    #[instrument(level = "trace", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
     async fn drive_transaction_once(
         &self,
         tx_digest: &TransactionDigest,
@@ -122,14 +134,14 @@ where
         let auth_agg = self.authority_aggregator.load();
 
         // Get consensus position using TransactionSubmitter
-        let submit_txn_resp = self
+        let (name, submit_txn_resp) = self
             .submitter
             .submit_transaction(&auth_agg, tx_digest, raw_request, options)
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .get_certified_finalized_effects(&auth_agg, tx_digest, submit_txn_resp, options)
+            .get_certified_finalized_effects(&auth_agg, tx_digest, name, submit_txn_resp, options)
             .await
     }
 
@@ -164,6 +176,29 @@ where
         );
         self.authority_aggregator.store(new_authorities);
     }
+}
+
+// Chooses the percentage of transactions to be driven by TransactionDriver.
+pub fn choose_transaction_driver_percentage() -> u8 {
+    // Currently, TD cannot work in non-test environments.
+    if std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME).is_ok() {
+        return 0;
+    }
+
+    if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
+        if let Ok(tx_driver_percentage) = v.parse::<u8>() {
+            if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
+                return tx_driver_percentage;
+            }
+        }
+    }
+
+    // Default to 50% in simtests.
+    if cfg!(msim) {
+        return 50;
+    }
+
+    0
 }
 
 // Inner state of TransactionDriver.

@@ -104,8 +104,8 @@ task 12, lines 92-98:
 //> 2: TransferObjects([Result(1)], Input(2));
 //> 3: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Input(1));
 // Try to double-use the input using a user-defined function
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Debug of error: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue } at command Some(3)
 
 task 13, lines 99-105:
 //# programmable --inputs 0 object(10,0) @0x0
@@ -114,8 +114,8 @@ task 13, lines 99-105:
 //> 2: TransferObjects([Result(1)], Input(2));
 //> 3: t2::o2::share_coin(Input(1));
 // Try to transfer the shared object and double-use the input
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Debug of error: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue } at command Some(3)
 
 task 14, lines 106-112:
 //# programmable --inputs 0 object(10,0) @0x0
@@ -124,8 +124,8 @@ task 14, lines 106-112:
 //> 2: TransferObjects([Result(1)], Input(2));
 //> 3: TransferObjects([Input(1)], Input(2));
 // Try to transfer the shared object
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(3)
+Error: Transaction Effects Status: Invalid command argument at 0. Specified argument location does not have a value and cannot be used
+Debug of error: CommandArgumentError { arg_idx: 0, kind: ArgumentWithoutValue } at command Some(3)
 
 task 15, lines 113-117:
 //# programmable --inputs 0 object(10,0) @0x0
