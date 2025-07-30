@@ -147,6 +147,28 @@ scalar BigInt
 
 
 """
+Reason why a transaction was cancelled.
+"""
+enum CancellationReason {
+	"""
+	Read operation was cancelled.
+	"""
+	CANCELLED_READ
+	"""
+	Object congestion prevented execution.
+	"""
+	CONGESTED
+	"""
+	Randomness service was unavailable.
+	"""
+	RANDOMNESS_UNAVAILABLE
+	"""
+	Internal use only.
+	"""
+	UNKNOWN
+}
+
+"""
 A system transaction that updates epoch information on-chain (increments the current epoch). Executed by the system once per epoch, without using gas. Epoch change transactions cannot be submitted by users, because validators will refuse to sign them.
 
 This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
@@ -252,6 +274,20 @@ input CheckpointFilter {
 }
 
 """
+A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
+"""
+type ConsensusCancelled {
+	"""
+	The ID of the consensus-managed object that the transaction intended to access.
+	"""
+	address: SuiAddress
+	"""
+	Reason why the transaction was cancelled.
+	"""
+	cancellationReason: CancellationReason
+}
+
+"""
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
 """
 type ConsensusCommitPrologueTransaction {
@@ -293,6 +329,41 @@ type ConsensusCommitPrologueTransaction {
 	Present in V4.
 	"""
 	additionalStateDigest: String
+}
+
+"""
+A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
+"""
+type ConsensusMutateStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
+type ConsensusRead {
+	"""
+	The version of the consensus-managed object that was read by this transaction.
+	"""
+	object: Object
+}
+
+"""
+A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
+"""
+type ConsensusReadStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
 }
 
 """
@@ -930,6 +1001,13 @@ type PageInfo {
 	endCursor: String
 }
 
+type PerEpochConfig {
+	"""
+	The per-epoch configuration object as of the checkpoint when the transaction was executed.
+	"""
+	object: Object
+}
+
 """
 A protocol configuration that can hold an arbitrary value (or no value at all).
 """
@@ -1236,65 +1314,6 @@ type ServiceConfig {
 }
 
 """
-Access to a cancelled shared object.
-"""
-type SharedObjectCancelled {
-	"""
-	The ID of the shared object.
-	"""
-	address: SuiAddress
-	"""
-	The sequence number associated with the cancellation.
-	"""
-	sequenceNumber: UInt53
-}
-
-"""
-Access to a shared object whose mutable consensus stream has ended.
-"""
-type SharedObjectMutateStreamEnded {
-	"""
-	The ID of the shared object.
-	"""
-	address: SuiAddress
-	"""
-	The sequence number associated with the consensus stream ending.
-	"""
-	sequenceNumber: UInt53
-}
-
-"""
-Access to a per-epoch configuration object.
-"""
-type SharedObjectPerEpochConfig {
-	"""
-	The ID of the per-epoch configuration object.
-	"""
-	address: SuiAddress
-}
-
-type SharedObjectRead {
-	"""
-	The shared object that was accessed read-only.
-	"""
-	object: Object
-}
-
-"""
-Access to a shared object whose read-only consensus stream has ended.
-"""
-type SharedObjectReadStreamEnded {
-	"""
-	The ID of the shared object.
-	"""
-	address: SuiAddress
-	"""
-	The sequence number associated with the consensus stream ending.
-	"""
-	sequenceNumber: UInt53
-}
-
-"""
 Parameters that control the distribution of the stake subsidy.
 """
 type StakeSubsidy {
@@ -1541,9 +1560,9 @@ An unsigned integer that can hold values up to 2^53 - 1. This can be treated sim
 scalar UInt53
 
 """
-Details pertaining to shared objects that are referenced by but not changed by a transaction.
+Details pertaining to consensus-managed objects that are referenced by but not changed by a transaction.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectMutateStreamEnded | SharedObjectReadStreamEnded | SharedObjectCancelled | SharedObjectPerEpochConfig
+union UnchangedSharedObject = ConsensusRead | ConsensusMutateStreamEnded | ConsensusReadStreamEnded | ConsensusCancelled | PerEpochConfig
 
 type UnchangedSharedObjectConnection {
 	"""

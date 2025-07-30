@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Object, SimpleObject, Union};
+use async_graphql::{Context, Enum, Object, SimpleObject, Union};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,
@@ -10,22 +10,40 @@ use sui_types::{
 
 use crate::{
     api::scalars::{sui_address::SuiAddress, uint53::UInt53},
+    error::RpcError,
     scope::Scope,
 };
 
-use super::{address::Address, object::Object};
+use super::{
+    address::Address,
+    object::{self, Object},
+};
 
-/// Details pertaining to shared objects that are referenced by but not changed by a transaction.
-#[derive(Union)]
-pub(crate) enum UnchangedSharedObject {
-    Read(SharedObjectRead),
-    MutateStreamEnded(SharedObjectMutateStreamEnded),
-    ReadStreamEnded(SharedObjectReadStreamEnded),
-    Cancelled(SharedObjectCancelled),
-    PerEpochConfig(SharedObjectPerEpochConfig),
+/// Reason why a transaction was cancelled.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum CancellationReason {
+    /// Read operation was cancelled.
+    CancelledRead,
+    /// Object congestion prevented execution.
+    Congested,
+    /// Randomness service was unavailable.
+    RandomnessUnavailable,
+    /// Internal use only.
+    Unknown,
 }
 
-pub(crate) struct SharedObjectRead {
+/// Details pertaining to consensus-managed objects that are referenced by but not changed by a transaction.
+#[derive(Union)]
+pub(crate) enum UnchangedSharedObject {
+    Read(ConsensusRead),
+    MutateStreamEnded(ConsensusMutateStreamEnded),
+    ReadStreamEnded(ConsensusReadStreamEnded),
+    Cancelled(ConsensusCancelled),
+    PerEpochConfig(PerEpochConfig),
+}
+
+/// A consensus-managed object that was read by this transaction but not modified.
+pub(crate) struct ConsensusRead {
     scope: Scope,
     object_id: ObjectID,
     version: SequenceNumber,
@@ -33,58 +51,71 @@ pub(crate) struct SharedObjectRead {
 }
 
 #[Object]
-impl SharedObjectRead {
-    /// The shared object that was accessed read-only.
+impl ConsensusRead {
+    /// The version of the consensus-managed object that was read by this transaction.
     async fn object(&self) -> Option<Object> {
         let address = Address::with_address(self.scope.clone(), self.object_id.into());
         Some(Object::with_ref(address, self.version, self.digest))
     }
 }
 
-/// Access to a shared object whose mutable consensus stream has ended.
+/// A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
 #[derive(SimpleObject)]
-pub(crate) struct SharedObjectMutateStreamEnded {
-    /// The ID of the shared object.
+pub(crate) struct ConsensusMutateStreamEnded {
+    /// The ID of the consensus-managed object.
     address: Option<SuiAddress>,
 
     /// The sequence number associated with the consensus stream ending.
     sequence_number: Option<UInt53>,
 }
 
-/// Access to a shared object whose read-only consensus stream has ended.
+/// A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
 #[derive(SimpleObject)]
-pub(crate) struct SharedObjectReadStreamEnded {
-    /// The ID of the shared object.
+pub(crate) struct ConsensusReadStreamEnded {
+    /// The ID of the consensus-managed object.
     address: Option<SuiAddress>,
 
     /// The sequence number associated with the consensus stream ending.
     sequence_number: Option<UInt53>,
 }
 
-/// Access to a cancelled shared object.
+/// A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
 #[derive(SimpleObject)]
-pub(crate) struct SharedObjectCancelled {
-    /// The ID of the shared object.
+pub(crate) struct ConsensusCancelled {
+    /// The ID of the consensus-managed object that the transaction intended to access.
     address: Option<SuiAddress>,
-
-    /// The sequence number associated with the cancellation.
-    sequence_number: Option<UInt53>,
+    /// Reason why the transaction was cancelled.
+    cancellation_reason: Option<CancellationReason>,
 }
 
-/// Access to a per-epoch configuration object.
-#[derive(SimpleObject)]
-pub(crate) struct SharedObjectPerEpochConfig {
-    /// The ID of the per-epoch configuration object.
-    address: Option<SuiAddress>,
+/// A per-epoch configuration object that was accessed by this transaction and remains constant during the epoch.
+pub(crate) struct PerEpochConfig {
+    scope: Scope,
+    object_id: ObjectID,
+    /// The checkpoint when the transaction was executed (not the current view checkpoint)
+    execution_checkpoint: u64,
+}
+
+#[Object]
+impl PerEpochConfig {
+    /// The per-epoch configuration object as of the checkpoint when the transaction was executed.
+    async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError<object::Error>> {
+        let cp: UInt53 = self.execution_checkpoint.into();
+        Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
+    }
 }
 
 impl UnchangedSharedObject {
-    pub(crate) fn from_native(scope: Scope, native: (ObjectID, NativeUnchangedSharedKind)) -> Self {
+    pub(crate) fn from_native(
+        scope: Scope,
+        native: (ObjectID, NativeUnchangedSharedKind),
+        execution_checkpoint: u64,
+    ) -> Self {
         let (object_id, kind) = native;
 
         match kind {
             NativeUnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
-                Self::Read(SharedObjectRead {
+                Self::Read(ConsensusRead {
                     scope,
                     object_id,
                     version,
@@ -92,28 +123,36 @@ impl UnchangedSharedObject {
                 })
             }
             NativeUnchangedSharedKind::MutateConsensusStreamEnded(sequence_number) => {
-                Self::MutateStreamEnded(SharedObjectMutateStreamEnded {
+                Self::MutateStreamEnded(ConsensusMutateStreamEnded {
                     address: Some(object_id.into()),
                     sequence_number: Some(sequence_number.into()),
                 })
             }
             NativeUnchangedSharedKind::ReadConsensusStreamEnded(sequence_number) => {
-                Self::ReadStreamEnded(SharedObjectReadStreamEnded {
+                Self::ReadStreamEnded(ConsensusReadStreamEnded {
                     address: Some(object_id.into()),
                     sequence_number: Some(sequence_number.into()),
                 })
             }
             NativeUnchangedSharedKind::Cancelled(sequence_number) => {
-                Self::Cancelled(SharedObjectCancelled {
+                let cancellation_reason = match sequence_number {
+                    SequenceNumber::CANCELLED_READ => CancellationReason::CancelledRead,
+                    SequenceNumber::CONGESTED => CancellationReason::Congested,
+                    SequenceNumber::RANDOMNESS_UNAVAILABLE => {
+                        CancellationReason::RandomnessUnavailable
+                    }
+                    _ => CancellationReason::Unknown,
+                };
+                Self::Cancelled(ConsensusCancelled {
                     address: Some(object_id.into()),
-                    sequence_number: Some(sequence_number.into()),
+                    cancellation_reason: Some(cancellation_reason),
                 })
             }
-            NativeUnchangedSharedKind::PerEpochConfig => {
-                Self::PerEpochConfig(SharedObjectPerEpochConfig {
-                    address: Some(object_id.into()),
-                })
-            }
+            NativeUnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig(PerEpochConfig {
+                scope,
+                object_id,
+                execution_checkpoint,
+            }),
         }
     }
 }
