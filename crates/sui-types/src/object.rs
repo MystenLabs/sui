@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -18,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
+use crate::accumulator_root::AccumulatorValue;
 use crate::base_types::{FullObjectID, FullObjectRef, MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
 use crate::crypto::{default_hash, deterministic_random_account_key};
@@ -366,26 +366,19 @@ impl MoveObject {
 
     /// Get the total amount of SUI embedded in `self`. Intended for testing purposes
     pub fn get_total_sui(&self, layout_resolver: &mut dyn LayoutResolver) -> Result<u64, SuiError> {
-        let balances = self.get_coin_balances(layout_resolver)?;
-        Ok(balances.get(&GAS::type_tag()).copied().unwrap_or(0))
-    }
-}
-
-// Helpers for extracting Coin<T> balances for all T
-impl MoveObject {
-    /// Get the total balances for all `Coin<T>` embedded in `self`.
-    pub fn get_coin_balances(
-        &self,
-        layout_resolver: &mut dyn LayoutResolver,
-    ) -> Result<BTreeMap<TypeTag, u64>, SuiError> {
-        // Fast path without deserialization.
-        if let Some(type_tag) = self.type_.coin_type_maybe() {
+        if self.type_.is_gas_coin() {
             let balance = self.get_coin_value_unsafe();
-            Ok(if balance > 0 {
-                BTreeMap::from([(type_tag.clone(), balance)])
-            } else {
-                BTreeMap::default()
-            })
+            Ok(balance)
+        } else if self.type_.is_sui_balance_accumulator_field() {
+            let value = AccumulatorValue::try_from(self)?;
+            let AccumulatorValue::U128(v) = value;
+            // Well behaved balance types can never have more than their total supply
+            // anywhere, which is 10B for SUI.
+            assert!(
+                v.value <= u64::MAX as u128,
+                "SUI balance cannot exceed u64::MAX"
+            );
+            Ok(v.value as u64)
         } else {
             let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
 
@@ -395,7 +388,11 @@ impl MoveObject {
                     error: e.to_string(),
                 })?;
 
-            Ok(traversal.finish())
+            Ok(traversal
+                .finish()
+                .get(&GAS::type_tag())
+                .copied()
+                .unwrap_or(0))
         }
     }
 }

@@ -84,6 +84,8 @@ pub struct RuntimeResults {
     pub loaded_child_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
     pub created_object_ids: Set<ObjectID>,
     pub deleted_object_ids: Set<ObjectID>,
+    pub settlement_input_sui: u64,
+    pub settlement_output_sui: u64,
 }
 
 #[derive(Default)]
@@ -101,6 +103,13 @@ pub(crate) struct ObjectRuntimeState {
     // total size of events emitted so far
     total_events_size: u64,
     received: IndexMap<ObjectID, DynamicallyLoadedObjectMetadata>,
+    // Used to track SUI conservation in settlement transactions. Settlement transactions
+    // gather up withdraws and deposits from other transactions, and record them to accumulator
+    // fields. The settlement transaction records the total amount of SUI being disbursed here,
+    // so that we can verify that the amount stored in the fields at the end of the transaction
+    // is correct.
+    settlement_input_sui: u64,
+    settlement_output_sui: u64,
 }
 
 #[derive(Tid)]
@@ -185,6 +194,8 @@ impl<'a> ObjectRuntime<'a> {
                 accumulator_events: vec![],
                 total_events_size: 0,
                 received: IndexMap::new(),
+                settlement_input_sui: 0,
+                settlement_output_sui: 0,
             },
             is_metered,
             protocol_config,
@@ -558,6 +569,11 @@ impl<'a> ObjectRuntime<'a> {
     pub fn wrapped_object_containers(&self) -> BTreeMap<ObjectID, ObjectID> {
         self.child_object_store.wrapped_object_containers().clone()
     }
+
+    pub fn record_settlement_sui_conservation(&mut self, input_sui: u64, output_sui: u64) {
+        self.state.settlement_input_sui += input_sui;
+        self.state.settlement_output_sui += output_sui;
+    }
 }
 
 pub fn max_event_error(max_events: u64) -> PartialVMError {
@@ -605,6 +621,8 @@ impl ObjectRuntimeState {
             total_events_size: _,
             received,
             accumulator_events,
+            settlement_input_sui,
+            settlement_output_sui,
         } = self;
 
         // Check new owners from transfers, reports an error on cycles.
@@ -658,6 +676,8 @@ impl ObjectRuntimeState {
             loaded_child_objects,
             created_object_ids: new_ids,
             deleted_object_ids: deleted_ids,
+            settlement_input_sui,
+            settlement_output_sui,
         })
     }
 
