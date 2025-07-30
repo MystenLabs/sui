@@ -26,58 +26,61 @@ use crate::execution_scheduler::balance_withdraw_scheduler::{
 pub(super) struct AccountState {
     /// The last known settled balance from the accumulator
     settled_balance: u64,
-    /// Cumulative reservations since the last known settlement
-    /// This tracks the sum of all reservations scheduled since the last settlement
-    cumulative_reservations: u64,
+    /// Reservations tracked by the version they were made at
+    /// This allows us to clear only the reservations <= settled version
+    reservations_by_version: BTreeMap<SequenceNumber, u64>,
     /// The accumulator version at which this balance was last settled
     last_settled_version: SequenceNumber,
-    /// Whether an EntireBalance reservation has been made for this account
-    /// If true, no further reservations can be scheduled until settlement
-    entire_balance_reserved: bool,
+    /// Track which version reserved the entire balance (if any)
+    entire_balance_reserved_at_version: Option<SequenceNumber>,
 }
 
 impl AccountState {
     pub(super) fn new(balance: u64, version: SequenceNumber) -> Self {
         Self {
             settled_balance: balance,
-            cumulative_reservations: 0,
+            reservations_by_version: BTreeMap::new(),
             last_settled_version: version,
-            entire_balance_reserved: false,
+            entire_balance_reserved_at_version: None,
         }
     }
 
     /// Calculate the minimum guaranteed balance available for new reservations
     pub(super) fn minimum_guaranteed_balance(&self) -> u64 {
-        if self.entire_balance_reserved {
+        if self.entire_balance_reserved_at_version.is_some() {
             0
         } else {
-            self.settled_balance
-                .saturating_sub(self.cumulative_reservations)
+            let total_reservations: u64 = self.reservations_by_version.values().sum();
+            self.settled_balance.saturating_sub(total_reservations)
         }
     }
 
-    /// Try to reserve an amount from this account
+    /// Try to reserve an amount from this account at a specific version
     /// Returns true if the reservation was successful
-    pub(super) fn try_reserve(&mut self, reservation: &Reservation) -> bool {
+    pub(super) fn try_reserve(
+        &mut self,
+        reservation: &Reservation,
+        version: SequenceNumber,
+    ) -> bool {
         match reservation {
             Reservation::MaxAmountU64(amount) => {
-                if self.entire_balance_reserved {
+                if self.entire_balance_reserved_at_version.is_some() {
                     return false;
                 }
                 let available = self.minimum_guaranteed_balance();
                 if available >= *amount {
-                    self.cumulative_reservations =
-                        self.cumulative_reservations.saturating_add(*amount);
+                    *self.reservations_by_version.entry(version).or_default() += *amount;
                     true
                 } else {
                     false
                 }
             }
             Reservation::EntireBalance => {
-                if self.entire_balance_reserved || self.cumulative_reservations > 0 {
+                let total_reservations: u64 = self.reservations_by_version.values().sum();
+                if self.entire_balance_reserved_at_version.is_some() || total_reservations > 0 {
                     false
                 } else if self.settled_balance > 0 {
-                    self.entire_balance_reserved = true;
+                    self.entire_balance_reserved_at_version = Some(version);
                     true
                 } else {
                     false
@@ -87,11 +90,20 @@ impl AccountState {
     }
 
     /// Apply a settlement to this account
+    /// Only clears reservations that are <= the settlement version
     pub(super) fn apply_settlement(&mut self, new_balance: u64, version: SequenceNumber) {
         self.settled_balance = new_balance;
-        self.cumulative_reservations = 0;
-        self.entire_balance_reserved = false;
         self.last_settled_version = version;
+
+        // Clear only reservations at or before the settled version
+        self.reservations_by_version.retain(|&v, _| v > version);
+
+        // Clear entire balance reservation if it was at or before settled version
+        if let Some(reserved_version) = self.entire_balance_reserved_at_version {
+            if reserved_version <= version {
+                self.entire_balance_reserved_at_version = None;
+            }
+        }
     }
 }
 
@@ -224,8 +236,8 @@ impl EagerBalanceWithdrawScheduler {
     fn cleanup_accounts(&self, state: &mut EagerSchedulerState) {
         let _before_count = state.account_states.len();
         state.account_states.retain(|account_id, account_state| {
-            let should_retain =
-                account_state.cumulative_reservations > 0 || account_state.entire_balance_reserved;
+            let should_retain = !account_state.reservations_by_version.is_empty()
+                || account_state.entire_balance_reserved_at_version.is_some();
             if !should_retain {
                 trace!("Removing account {:?} from tracking", account_id);
             }
@@ -241,7 +253,7 @@ impl EagerBalanceWithdrawScheduler {
             let with_reservations = state
                 .account_states
                 .values()
-                .filter(|s| s.cumulative_reservations > 0)
+                .filter(|s| !s.reservations_by_version.is_empty())
                 .count();
             metrics
                 .tracked_accounts_gauge
@@ -251,7 +263,7 @@ impl EagerBalanceWithdrawScheduler {
             let entire_balance_reserved = state
                 .account_states
                 .values()
-                .filter(|s| s.entire_balance_reserved)
+                .filter(|s| s.entire_balance_reserved_at_version.is_some())
                 .count();
             metrics
                 .tracked_accounts_gauge
@@ -308,7 +320,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 let account_state = state.account_states.get_mut(account_id).unwrap();
                 let original_state = account_state.clone();
 
-                if account_state.try_reserve(reservation) {
+                if account_state.try_reserve(reservation, withdraws.accumulator_version) {
                     temp_states.push((*account_id, original_state));
                 } else {
                     all_success = false;
@@ -473,7 +485,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                     if let Some(account_state) = state.account_states.get_mut(account_id) {
                         let original_state = account_state.clone();
 
-                        if account_state.try_reserve(reservation) {
+                        if account_state.try_reserve(reservation, settlement.accumulator_version) {
                             temp_states.push((*account_id, original_state));
                         } else {
                             all_success = false;
@@ -496,7 +508,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                         let account_state = state.account_states.get_mut(account_id).unwrap();
                         let original_state = account_state.clone();
 
-                        if account_state.try_reserve(reservation) {
+                        if account_state.try_reserve(reservation, settlement.accumulator_version) {
                             temp_states.push((*account_id, original_state));
                         } else {
                             all_success = false;
@@ -588,34 +600,67 @@ mod tests {
         let mut state = AccountState::new(100, SequenceNumber::from_u64(0));
 
         // Test MaxAmountU64 reservation
-        assert!(state.try_reserve(&Reservation::MaxAmountU64(50)));
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(50), SequenceNumber::from_u64(1)));
         assert_eq!(state.minimum_guaranteed_balance(), 50);
-        assert!(state.try_reserve(&Reservation::MaxAmountU64(30)));
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(30), SequenceNumber::from_u64(1)));
         assert_eq!(state.minimum_guaranteed_balance(), 20);
-        assert!(!state.try_reserve(&Reservation::MaxAmountU64(30)));
+        assert!(!state.try_reserve(&Reservation::MaxAmountU64(30), SequenceNumber::from_u64(1)));
 
         // Test EntireBalance reservation
         let mut state2 = AccountState::new(100, SequenceNumber::from_u64(0));
-        assert!(state2.try_reserve(&Reservation::EntireBalance));
+        assert!(state2.try_reserve(&Reservation::EntireBalance, SequenceNumber::from_u64(1)));
         assert_eq!(state2.minimum_guaranteed_balance(), 0);
-        assert!(!state2.try_reserve(&Reservation::MaxAmountU64(1)));
+        assert!(!state2.try_reserve(&Reservation::MaxAmountU64(1), SequenceNumber::from_u64(1)));
 
         // Test EntireBalance after partial reservation
         let mut state3 = AccountState::new(100, SequenceNumber::from_u64(0));
-        assert!(state3.try_reserve(&Reservation::MaxAmountU64(50)));
-        assert!(!state3.try_reserve(&Reservation::EntireBalance));
+        assert!(state3.try_reserve(&Reservation::MaxAmountU64(50), SequenceNumber::from_u64(1)));
+        assert!(!state3.try_reserve(&Reservation::EntireBalance, SequenceNumber::from_u64(1)));
     }
 
     #[test]
     fn test_settlement_resets_reservations() {
         let mut state = AccountState::new(100, SequenceNumber::from_u64(0));
-        assert!(state.try_reserve(&Reservation::MaxAmountU64(80)));
-        assert_eq!(state.minimum_guaranteed_balance(), 20);
 
-        state.apply_settlement(150, SequenceNumber::from_u64(1));
-        assert_eq!(state.minimum_guaranteed_balance(), 150);
-        assert_eq!(state.cumulative_reservations, 0);
-        assert!(!state.entire_balance_reserved);
+        // Make reservations at version 1
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(30), SequenceNumber::from_u64(1)));
+        // Make reservations at version 2
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(20), SequenceNumber::from_u64(2)));
+        // Make reservations at version 3
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(10), SequenceNumber::from_u64(3)));
+        assert_eq!(state.minimum_guaranteed_balance(), 40); // 100 - 30 - 20 - 10
+
+        // Settle at version 2 - should only clear reservations at versions 1 and 2
+        state.apply_settlement(150, SequenceNumber::from_u64(2));
+        assert_eq!(state.minimum_guaranteed_balance(), 140); // 150 - 10 (only version 3 remains)
+        assert_eq!(state.reservations_by_version.len(), 1);
+        assert!(state
+            .reservations_by_version
+            .contains_key(&SequenceNumber::from_u64(3)));
+    }
+
+    #[test]
+    fn test_entire_balance_reservation_clearing() {
+        let mut state = AccountState::new(100, SequenceNumber::from_u64(0));
+
+        // Reserve entire balance at version 2
+        assert!(state.try_reserve(&Reservation::EntireBalance, SequenceNumber::from_u64(2)));
+        assert_eq!(
+            state.entire_balance_reserved_at_version,
+            Some(SequenceNumber::from_u64(2))
+        );
+
+        // Try to reserve at version 3 - should fail
+        assert!(!state.try_reserve(&Reservation::MaxAmountU64(10), SequenceNumber::from_u64(3)));
+
+        // Settle at version 2 - should clear entire balance reservation
+        state.apply_settlement(50, SequenceNumber::from_u64(2));
+        assert_eq!(state.entire_balance_reserved_at_version, None);
+        assert_eq!(state.minimum_guaranteed_balance(), 50);
+
+        // Now we can reserve again
+        assert!(state.try_reserve(&Reservation::MaxAmountU64(30), SequenceNumber::from_u64(3)));
+        assert_eq!(state.minimum_guaranteed_balance(), 20);
     }
 
     #[tokio::test]

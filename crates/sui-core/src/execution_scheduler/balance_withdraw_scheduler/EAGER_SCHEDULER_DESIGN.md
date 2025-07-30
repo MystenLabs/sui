@@ -11,12 +11,13 @@ The Eager Balance Withdrawal Scheduler is an optimized implementation of the bal
 The core innovation of the eager scheduler is the concept of **minimum guaranteed balance**, which is calculated as:
 
 ```
-minimum_guaranteed_balance = settled_balance - cumulative_reservations
+minimum_guaranteed_balance = settled_balance - sum(reservations_by_version.values())
 ```
 
 Where:
 - `settled_balance`: The last known balance from a checkpoint settlement
-- `cumulative_reservations`: The sum of all reservations scheduled since the last settlement
+- `reservations_by_version`: A map tracking reservations by the version they were made at
+- The sum includes all reservations across all versions (both settled and unsettled)
 
 This allows the scheduler to make immediate decisions about whether a withdrawal can succeed without waiting for the next checkpoint.
 
@@ -38,9 +39,9 @@ Tracks the state of individual accounts with active withdrawals:
 ```rust
 struct AccountState {
     settled_balance: u64,              // Last known settled balance
-    cumulative_reservations: u64,      // Sum of all reservations since settlement
+    reservations_by_version: BTreeMap<SequenceNumber, u64>, // Reservations tracked by version
     last_settled_version: SequenceNumber,
-    entire_balance_reserved: bool,     // Flag for EntireBalance reservations
+    entire_balance_reserved_at_version: Option<SequenceNumber>, // Version where entire balance was reserved
 }
 ```
 
@@ -86,12 +87,14 @@ Supports two types of balance reservations:
 1. Update last settled version
 2. For each account with balance changes:
    - Apply the change to calculate new settled balance
-   - Reset cumulative_reservations to 0
-   - Clear entire_balance_reserved flag
+   - Clear only reservations at versions <= settled version
+   - Clear entire_balance_reserved flag if it was at version <= settled version
 3. For tracked accounts not in settlement:
    - Fetch latest balance from storage
-   - Apply settlement with no changes
+   - Apply settlement (clearing appropriate reservations)
 4. Process pending insufficient balance transactions for this version
+   - Re-evaluate with settled balances
+   - Make final SufficientBalance/InsufficientBalance decisions
 5. Clean up accounts that no longer need tracking
 ```
 
@@ -140,6 +143,15 @@ When a transaction involves multiple accounts, all reservations must succeed or 
 
 Transactions within a consensus commit batch are processed sequentially to maintain consistency and predictability. This ensures that the order of transactions matters for balance calculations.
 
+### 6. Version-Based Reservation Tracking
+
+Reservations are tracked by the version they were made at, not as a cumulative sum. This enables:
+- Partial settlement: When settling version N, only clear reservations at versions <= N
+- Future reservations persist: Reservations at versions > N remain active after settlement
+- Accurate balance calculations: The scheduler knows exactly which reservations are still pending
+
+This is crucial for correctness when multiple versions are in flight simultaneously.
+
 ## Comparison with Naive Scheduler
 
 | Aspect | Naive Scheduler | Eager Scheduler |
@@ -186,6 +198,21 @@ Next transaction with:
   - Withdraw 30 from C
   - Withdraw 100 from D
 Result: Failure (C only has 20 remaining)
+```
+
+### Scenario 4: Version-Based Reservation Tracking
+
+```
+Initial: Account E has 100 coins, last_settled_version = 10
+1. Version 11: Withdraw 30 → Success (reserves 30 at v11)
+2. Version 12: Withdraw 40 → Success (reserves 40 at v12)
+3. Version 13: Withdraw 20 → Success (reserves 20 at v13)
+   - Total reservations: 90, available: 10
+4. Settlement at version 12 with balance = 60
+   - Clears reservations at v11 and v12 (total: 70)
+   - Keeps reservation at v13 (20)
+   - New available: 60 - 20 = 40
+5. Version 14: Withdraw 35 → Success (reserves 35 at v14)
 ```
 
 ## Performance Characteristics
