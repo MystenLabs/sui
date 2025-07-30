@@ -12,7 +12,7 @@ use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use surf_strategy::SurfStrategy;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::sync::watch;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::surfer_state::SurfStatistics;
 use crate::surfer_task::SurferTask;
@@ -102,11 +102,14 @@ pub async fn run_with_test_cluster_and_strategy(
             .await;
     }
 
+    warn!("Spawning tasks now!");
     let mut handles = vec![];
     for task in tasks {
         handles.push(tokio::task::spawn(task.surf()));
     }
+    warn!("Waiting some secs for test to die!");
     tokio::time::sleep(run_duration).await;
+    warn!("Test should die now!");
     exit_sender.send(()).unwrap();
     let all_stats: Result<Vec<_>, _> = join_all(handles).await.into_iter().collect();
     SurfStatistics::aggregate(all_stats.unwrap())

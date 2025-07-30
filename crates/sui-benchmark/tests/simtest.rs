@@ -3,13 +3,14 @@
 
 #[cfg(msim)]
 mod test {
+    use mysten_common::register_debug_fatal_handler;
     use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
     use std::str::FromStr;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use sui_benchmark::bank::BenchmarkBank;
@@ -647,6 +648,7 @@ mod test {
             None,
             None,
             None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
         )
         .await;
     }
@@ -704,6 +706,7 @@ mod test {
             Some(target_qps),
             Some(num_workers),
             None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
         )
         .await;
     }
@@ -1134,6 +1137,7 @@ mod test {
             None,
             None,
             None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            true, // enable_surfer
         )
         .await;
     }
@@ -1145,6 +1149,7 @@ mod test {
         target_qps: Option<u64>,
         num_workers: Option<u64>,
         pre_load_setup: Option<F>,
+        enable_surfer: bool,
     ) where
         F: FnOnce(Arc<TestCluster>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
@@ -1152,12 +1157,24 @@ mod test {
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let genesis = test_cluster.swarm.config().genesis.clone();
-        let primary_gas = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
-            .await
-            .unwrap()
-            .unwrap();
+        // Choose the largest gas coin owned by the sender to be sure it has
+        // enough balance for `create_init_coin`.
+        let primary_gas = {
+            // Fetch all gas objects with their balances.
+            let mut gas_objects = test_cluster
+                .wallet
+                .gas_objects(sender)
+                .await
+                .unwrap();
+
+            // Sort by balance descending and pick the first.
+            gas_objects.sort_by(|a, b| b.0.cmp(&a.0));
+            gas_objects
+                .first()
+                .expect("Sender should own at least one gas object")
+                .1
+                .object_ref()
+        };
 
         let ed25519_keypair =
             Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
@@ -1287,34 +1304,39 @@ mod test {
             assert!(benchmark_stats.num_error_txes < 100);
         });
 
-        let surfer_task = tokio::spawn(async move {
-            // now do a sui-surfer test
-            let mut test_packages_dir = benchmark_move_base_dir();
-            test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
-            let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
-                .unwrap()
-                .flat_map(|entry| {
-                    let entry = entry.unwrap();
-                    entry.metadata().unwrap().is_dir().then_some(entry.path())
-                })
-                .collect();
-            info!("using sui_surfer test packages: {test_package_paths:?}");
+        if enable_surfer {
+            let surfer_task = tokio::spawn(async move {
+                // now do a sui-surfer test
+                let mut test_packages_dir = benchmark_move_base_dir();
+                test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
+                let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
+                    .unwrap()
+                    .flat_map(|entry| {
+                        let entry = entry.unwrap();
+                        entry.metadata().unwrap().is_dir().then_some(entry.path())
+                    })
+                    .collect();
+                info!("using sui_surfer test packages: {test_package_paths:?}");
 
-            let surf_strategy = SurfStrategy::new(Duration::from_millis(400));
-            let results = sui_surfer::run_with_test_cluster_and_strategy(
-                surf_strategy,
-                test_duration,
-                test_package_paths,
-                test_cluster,
-                1, // skip first account for use by bench_task
-            )
-            .await;
-            info!("sui_surfer test complete with results: {results:?}");
-            assert!(results.num_successful_transactions > 0);
-            assert!(!results.unique_move_functions_called.is_empty());
-        });
+                let surf_strategy = SurfStrategy::new(Duration::from_millis(400));
+                let results = sui_surfer::run_with_test_cluster_and_strategy(
+                    surf_strategy,
+                    test_duration,
+                    test_package_paths,
+                    test_cluster,
+                    1, // skip first account for use by bench_task
+                )
+                .await;
+                info!("sui_surfer test complete with results: {results:?}");
+                assert!(results.num_successful_transactions > 0);
+                assert!(!results.unique_move_functions_called.is_empty());
+            });
 
-        let _ = futures::join!(bench_task, surfer_task);
+            let _ = futures::join!(bench_task, surfer_task);
+        } else {
+            info!("Surfer disabled, running only benchmark task");
+            bench_task.await.unwrap();
+        }
     }
 
     #[sim_test(config = "test_config()")]
@@ -1328,8 +1350,10 @@ mod test {
         let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
             Arc::new(Mutex::new(BTreeMap::new()));
 
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
+                let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
             Arc::new(Mutex::new(HashSet::new()));
+
+        let transaction_counter: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
 
         let node_to_authority_map: std::collections::HashMap<
             sui_simulator::task::NodeId,
@@ -1346,6 +1370,10 @@ mod test {
             .collect();
 
         info!("Fork recovery test: Running transactions to trigger fork scenario");
+        
+        // Clone test_cluster before moving into closure
+        let test_cluster_for_handler = test_cluster.clone();
+        
         test_simulated_load_with_test_config(
             test_cluster.clone(),
             30,
@@ -1357,12 +1385,22 @@ mod test {
                 let forked_checkpoint_seq = forked_checkpoint_seq.clone();
                 let effects_overrides = effects_overrides.clone();
                 let node_to_authority_map = node_to_authority_map.clone();
+                let test_cluster_for_handler = test_cluster_for_handler.clone();
                 move |_cluster: Arc<TestCluster>| async move {
                     // Setup CP execution non-determinism after gas creation but before load generation
                     register_fail_point_arg("simulate_fork_during_execution", {
                         let forked_validators = forked_validators.clone();
                         let effects_overrides = effects_overrides.clone();
+                        let transaction_counter = transaction_counter.clone();
                         move || {
+                            // Skip first 50 transactions to allow gas coin creation to complete
+                            let tx_count = transaction_counter.fetch_add(1, Ordering::SeqCst);
+                            if tx_count < 50 {
+                                info!("Skipping fork simulation, transaction count: {}", tx_count + 1);
+                                return None;
+                            }
+                            
+                            info!("Triggering fork simulation at transaction count: {}", tx_count + 1);
                             Some((
                                 forked_validators.clone(),
                                 /* full_halt: */ true,
@@ -1400,8 +1438,26 @@ mod test {
                             )
                         }
                     });
+
+                    register_debug_fatal_handler!(
+                        "Split brain detected in checkpoint signature aggregation",
+                        {
+                            let test_cluster = test_cluster_for_handler.clone();
+                            let node_to_authority_map = node_to_authority_map.clone();
+                            move || {
+                                let current_node_id = sui_simulator::current_simnode_id();
+                                if let Some(authority_name) = node_to_authority_map.get(&current_node_id) {
+                                    // info!("Split brain detected, permanently stopping node {:?}", authority_name);
+                                    // test_cluster.stop_node(authority_name);
+
+                                    sui_simulator::task::kill_current_node(None);
+                                }
+                            }
+                        }
+                    );
                 }
             }),
+            false, // disable surfer for fork recovery test
         )
         .await;
         info!("Fork recovery test: First load gen done");
@@ -1471,12 +1527,66 @@ mod test {
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 test_cluster.start_node(&validator_name).await;
+                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
             }
         }
 
-        info!("Fork recovery test: Fork scenario complete, validators should now have diverged");
+        test_cluster.wait_for_epoch(None).await;
 
-        info!("Fork recovery test: Running recovery phase with correction mechanism active");
+        // Verify all validators are healthy and synchronized
+        info!("Fork recovery test: Verifying all validators are healthy and synchronized");
+        let validator_handles = test_cluster.all_validator_handles();
+        let mut checkpoint_seq_numbers = Vec::new();
+        
+        for handle in validator_handles.iter() {
+            // Obtain the authority name (stable across restarts).
+            let authority_name = handle.with(|node| node.state().name);
+
+            // Fetch the highest executed checkpoint sequence number on this validator.
+            let seq_num = handle.with(|node| {
+                node.state()
+                    .get_checkpoint_store()
+                    .get_highest_executed_checkpoint_seq_number()
+                    .unwrap_or(Some(0))
+                    .unwrap_or(0)
+            });
+
+            // Track for later consensus comparison.
+            checkpoint_seq_numbers.push(seq_num);
+
+            // Determine whether this validator was part of the forked set.
+            let is_forked = forked_validators.lock().unwrap().contains(&authority_name);
+
+            info!(?authority_name, is_forked, "Validator checkpoint sequence number = {seq_num}");
+        }
+        
+        // Check that all validators have the same checkpoint sequence number
+        let first_seq = checkpoint_seq_numbers[0];
+        let all_synced = checkpoint_seq_numbers.iter().all(|&seq| seq == first_seq);
+        
+        if !all_synced {
+            panic!(
+                "Fork recovery test: Validators are not synchronized! Checkpoint sequence numbers: {:?}",
+                checkpoint_seq_numbers
+            );
+        }
+        
+        info!("Fork recovery test: All validators synchronized at checkpoint sequence number {}", first_seq);
+
+        // -------------------------------------------------------------------
+        // Reset BenchmarkBank wallet: transfer a fresh large gas coin so that
+        // the second load-generation phase has enough balance for
+        // `create_init_coin`.
+        // -------------------------------------------------------------------
+
+        let sender = test_cluster.get_address_0();
+        let rgp = test_cluster.get_reference_gas_price().await;
+        // Transfer an arbitrarily large coin (None => full coin value) to sender.
+        test_cluster
+            .fund_address_and_return_gas(rgp, None, sender)
+            .await;
+
+        info!("Fork recovery test: Running second load gen to ensure liveness");
         test_simulated_load_with_test_config(
             test_cluster.clone(),
             15,
@@ -1484,11 +1594,10 @@ mod test {
             None,                                                   // target_qps
             None,                                                   // num_workers
             None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>, // no setup needed for recovery phase
+            true, // enable_surfer for recovery phase
         )
         .await;
 
         test_cluster.wait_for_epoch(None).await;
-
-        info!("Fork recovery test: Recovery phase complete, all fail points cleared");
     }
 }
