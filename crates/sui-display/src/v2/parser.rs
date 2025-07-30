@@ -1235,6 +1235,19 @@ mod tests {
     }
 
     #[test]
+    fn test_unexpected_characters_malformed_utf8() {
+        // Create input with malformed UTF-8: '{' + first byte of multi-byte sequence without continuation
+        let mut input = vec![b'{'];
+        input.push(0xC3); // First byte of multi-byte UTF-8 sequence (missing continuation)
+        input.push(b'}'); // Close brace
+        let input_str = unsafe { std::str::from_utf8_unchecked(&input) };
+
+        // This should generate an error message containing the malformed UTF-8,
+        // which tests our safe error formatting implementation
+        assert_snapshot!(strands(input_str));
+    }
+
+    #[test]
     fn test_trailing_alternate() {
         assert_snapshot!(strands(r#"{foo | bar | baz |}"#));
     }

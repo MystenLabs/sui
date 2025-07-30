@@ -204,23 +204,19 @@ impl<'s> Lexer<'s> {
             // If the next byte cannot be recognized, extract the next (potentially variable
             // length) character, and indicate that it is an unexpected token.
             _ => {
-                let mut indices = self.src.char_indices();
-                indices.next(); // skip the first character
-                let bytes = indices.next().map(|i| i.0).unwrap_or(self.src.len());
-                self.take(ws, T::Unexpected, bytes)
+                let next_boundary = (1..=self.src.len())
+                    .find(|&i| self.src.is_char_boundary(i))
+                    .unwrap_or(self.src.len());
+                self.take(ws, T::Unexpected, next_boundary)
             }
         })
     }
 
+    /// Eat ASCII whitespace from the beginning of `self.src`. Returns `true` if and only if any
+    /// whitespace was consumed.
     fn take_whitespace(&mut self) -> bool {
-        let Lexeme(_, _, _, slice) = self.take(
-            false,
-            Token::Unexpected,
-            self.src
-                .find(|c: char| !c.is_whitespace())
-                .unwrap_or(self.src.len()),
-        );
-
+        let Lexeme(_, _, _, slice) =
+            self.take_until(false, Token::Unexpected, |b| !b.is_ascii_whitespace());
         !slice.is_empty()
     }
 
@@ -309,7 +305,21 @@ impl fmt::Display for OwnedLexeme {
             L(_, T::RRBrace, _, _) => write!(f, "'}}}}'"),
             L(_, T::String, _, s) => write!(f, "string {s:?}"),
             L(_, T::Text, _, s) => write!(f, "text {s:?}"),
-            L(_, T::Unexpected, _, s) => write!(f, "{s:?}"),
+            L(_, T::Unexpected, _, s) => {
+                write!(f, "\"")?;
+                for b in s.bytes() {
+                    match b {
+                        b'"' => write!(f, "\\\"")?,
+                        b'\\' => write!(f, "\\\\")?,
+                        b'\n' => write!(f, "\\n")?,
+                        b'\t' => write!(f, "\\t")?,
+                        b'\r' => write!(f, "\\r")?,
+                        b if b.is_ascii_graphic() || b == b' ' => write!(f, "{}", b as char)?,
+                        b => write!(f, "\\x{:02X}", b)?,
+                    }
+                }
+                write!(f, "\"")
+            }
         }?;
 
         write!(f, " at offset {}", self.2)
@@ -367,7 +377,22 @@ mod tests {
 
     fn lexemes(src: &str) -> String {
         Lexer::new(src)
-            .map(|L(ws, t, o, s)| format!("L({ws:?}, {t:?}, {o:?}, {s:?})"))
+            .map(|L(ws, t, o, s)| {
+                // Handle potentially invalid UTF-8 by working at byte level
+                let safe_s: String = s
+                    .bytes()
+                    .map(|b| match b {
+                        b'"' => "\\\"".to_string(),
+                        b'\\' => "\\\\".to_string(),
+                        b'\n' => "\\n".to_string(),
+                        b'\t' => "\\t".to_string(),
+                        b'\r' => "\\r".to_string(),
+                        b if b.is_ascii_graphic() || b == b' ' => (b as char).to_string(),
+                        b => format!("\\x{:02X}", b),
+                    })
+                    .collect();
+                format!("L({ws:?}, {t:?}, {o:?}, \"{}\")", safe_s)
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -484,7 +509,7 @@ mod tests {
         L(false, Unexpected, 15, "?")
         L(true, Unexpected, 17, "%")
         L(true, Unexpected, 19, "!")
-        L(true, Unexpected, 21, "🔥")
+        L(true, Unexpected, 21, "\xF0\x9F\x94\xA5")
         L(false, RBrace, 25, "}")
         "###);
     }
@@ -799,6 +824,68 @@ mod tests {
         assert_snapshot!(lexemes(r#"{'foo bar}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, Unexpected, 1, "'foo bar}")
+        "###);
+    }
+
+    /// Test handling of single-byte unexpected characters followed by valid tokens.
+    #[test]
+    fn test_unexpected_single_byte() {
+        assert_snapshot!(lexemes("{$hello}"), @r###"
+        L(false, LBrace, 0, "{")
+        L(false, Unexpected, 1, "$")
+        L(false, Ident, 2, "hello")
+        L(false, RBrace, 7, "}")
+        "###);
+    }
+
+    /// Test unexpected character followed by multi-byte UTF-8 character.
+    #[test]
+    fn test_unexpected_before_multibyte() {
+        assert_snapshot!(lexemes("{$é}"), @r###"
+        L(false, LBrace, 0, "{")
+        L(false, Unexpected, 1, "$")
+        L(false, Unexpected, 2, "\xC3\xA9")
+        L(false, RBrace, 4, "}")
+        "###);
+    }
+
+    /// Test handling of various unexpected multi-byte UTF-8 characters in expression mode.
+    #[test]
+    fn test_unexpected_characters_utf8_safe() {
+        assert_snapshot!(lexemes("{$∑∞}"), @r###"
+        L(false, LBrace, 0, "{")
+        L(false, Unexpected, 1, "$")
+        L(false, Unexpected, 2, "\xE2\x88\x91")
+        L(false, Unexpected, 5, "\xE2\x88\x9E")
+        L(false, RBrace, 8, "}")
+        "###);
+    }
+
+    /// Test that ASCII-only whitespace handling works correctly. ASCII whitespace is recognized,
+    /// and non-ASCII whitespace is treated as unexpected.
+    #[test]
+    fn test_ascii_whitespace_only() {
+        assert_snapshot!(lexemes("{ \t\n\u{00A0}hello}"), @r###"
+        L(false, LBrace, 0, "{")
+        L(true, Unexpected, 4, "\xC2\xA0")
+        L(false, Ident, 6, "hello")
+        L(false, RBrace, 11, "}")
+        "###);
+    }
+
+    /// Test the UTF-8 boundary fallback when string ends with incomplete UTF-8.
+    /// This exercises the .unwrap_or(self.src.len()) fallback in the boundary detection.
+    #[test]
+    fn test_incomplete_utf8_boundary_fallback() {
+        // Create input with incomplete UTF-8: '{' + first byte of multi-byte sequence
+        let mut input = vec![b'{'];
+        input.push(0xC3); // First byte of multi-byte UTF-8 sequence (missing continuation)
+        let input_str = unsafe { std::str::from_utf8_unchecked(&input) };
+
+        // The boundary detection should fall back to src.len() when no boundary is found
+        assert_snapshot!(lexemes(input_str), @r###"
+        L(false, LBrace, 0, "{")
+        L(false, Unexpected, 1, "\xC3")
         "###);
     }
 }
