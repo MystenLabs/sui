@@ -940,8 +940,6 @@ impl SuiError {
             // Non retryable errors
             SuiError::ExecutionError(..) => false,
             SuiError::ByzantineAuthoritySuspicion { .. } => false,
-            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => false,
-            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
             SuiError::ObjectLockConflict { .. } => false,
             SuiError::TransactionExpired => false,
             SuiError::InvalidTxKindInSoftBundle { .. } => false,
