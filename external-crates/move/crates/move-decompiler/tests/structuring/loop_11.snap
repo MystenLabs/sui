@@ -1,0 +1,15 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+{ 0 }
+while (1) {
+    { 2 }
+    if (3) {
+        { 4 }
+        continue;
+    } else {
+        { 5 }
+        continue;
+    }
+}
+{ 6 }
