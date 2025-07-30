@@ -42,7 +42,7 @@ async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectR
 
 #[ignore(reason = "currently panics")]
 #[sim_test]
-async fn test_deposits() -> Result<(), anyhow::Error> {
+async fn test_deposits() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
         cfg
@@ -66,7 +66,9 @@ async fn test_deposits() -> Result<(), anyhow::Error> {
         verify_accumulator_exists(child_object_resolver, recipient, 1000);
     });
 
-    Ok(())
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 fn verify_accumulator_exists(
@@ -128,7 +130,7 @@ fn verify_accumulator_exists(
 }
 
 #[sim_test]
-async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
+async fn test_deposit_and_withdraw() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
         cfg
@@ -169,12 +171,14 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
         );
     });
 
-    Ok(())
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 #[ignore(reason = "currently panics")]
 #[sim_test]
-async fn test_deposit_and_withdraw_with_larger_reservation() -> Result<(), anyhow::Error> {
+async fn test_deposit_and_withdraw_with_larger_reservation() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
         cfg
@@ -201,12 +205,14 @@ async fn test_deposit_and_withdraw_with_larger_reservation() -> Result<(), anyho
         verify_accumulator_exists(child_object_resolver, sender, 200);
     });
 
-    Ok(())
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 #[sim_test]
 #[ignore(reason = "currently panics")]
-async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
+async fn test_withdraw_non_existent_balance() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
         cfg
@@ -222,12 +228,14 @@ async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
     let tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
     test_cluster.sign_and_execute_transaction(&tx).await;
 
-    Ok(())
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 #[sim_test]
 #[ignore(reason = "currently panics")]
-async fn test_withdraw_underflow() -> Result<(), anyhow::Error> {
+async fn test_withdraw_underflow() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
         cfg
@@ -249,7 +257,9 @@ async fn test_withdraw_underflow() -> Result<(), anyhow::Error> {
     let tx = withdraw_from_balance_tx(1001, sender, gas, rgp);
     test_cluster.sign_and_execute_transaction(&tx).await;
 
-    Ok(())
+    // ensure that no conservation failures are detected during reconfig.
+    test_cluster.trigger_reconfiguration().await;
+    test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
 fn withdraw_from_balance_tx(

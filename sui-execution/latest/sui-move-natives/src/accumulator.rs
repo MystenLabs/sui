@@ -76,3 +76,21 @@ fn emit_event(
 
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
+
+pub fn record_settlement_sui_conservation(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 2);
+
+    let output_sui = args.pop_back().unwrap().value_as::<u64>().unwrap();
+    let input_sui = args.pop_back().unwrap().value_as::<u64>().unwrap();
+
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
+
+    obj_runtime.record_settlement_sui_conservation(input_sui, output_sui);
+
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+}
