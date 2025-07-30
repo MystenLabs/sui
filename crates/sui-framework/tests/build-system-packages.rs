@@ -306,6 +306,7 @@ fn serialize_modules_to_file<'a>(
     );
 
     let binary = bcs::to_bytes(&serialized_modules)?;
+    members.sort();
 
     fs::write(file, binary)?;
 
