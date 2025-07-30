@@ -157,9 +157,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// Return the list of all packages in the root package's package graph (including itself and all
-    /// transitive dependencies).
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
-        self.graph.dependencies()
+    /// transitive dependencies). This includes the non-duplicate addresses only.
+    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+        self.graph.packages()
     }
 
     /// Return the linkage table for the root package. This contains an entry for each package that
@@ -244,11 +244,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Return a list of sorted package names
     pub fn sorted_deps(&self) -> Vec<&PackageName> {
         self.package_graph().sorted_deps()
-    }
-
-    /// Return the list of this root package's dependencies
-    pub fn dependencies(&self) -> Vec<PackageInfo<F>> {
-        self.package_graph().dependencies()
     }
 
     pub fn deps_published_ids(&self) -> &Vec<OriginalID> {

@@ -264,6 +264,10 @@ impl<F: MoveFlavor> Package<F> {
         self.publication().map(|data| data.original_id.clone())
     }
 
+    pub fn metadata(&self) -> &PackageMetadata {
+        &self.metadata
+    }
+
     /// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
     /// is ImplicitDepMode::Legacy, a `legacy_manifest` is required otherwise it will panic.
     // TODO this needs to be moved into a ImplicitDeps trait

@@ -187,9 +187,9 @@ pub async fn run_move_unit_tests<F: MoveFlavor, W: Write + Send>(
     };
 
     let root_pkg = RootPackage::<F>::load(pkg_path, env).await?;
-    let package_name = Symbol::from(root_pkg.name().as_str());
+    let package_name = Symbol::from(format!("{}_root", root_pkg.name().as_str()));
 
-    let packages = root_pkg.packages();
+    let packages = root_pkg.packages()?;
 
     let mut dummy_addr = 0x1000;
     let mut addresses: Vec<(String, NumericalAddress)> = vec![];

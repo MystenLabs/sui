@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use itertools::Itertools;
 use petgraph::{
-    algo::{toposort, Cycle},
+    algo::{Cycle, toposort},
     graph::NodeIndex,
     visit::EdgeRef,
 };

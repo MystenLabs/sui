@@ -559,9 +559,10 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
     root_pkg: RootPackage<F>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
-    let packages = root_pkg.packages();
+    let packages = root_pkg.packages()?;
 
     let mut package_paths: Vec<PackagePaths> = vec![];
+    let mut counter = 0;
 
     for pkg in packages {
         let name: Symbol = pkg.name().as_str().into();
@@ -597,21 +598,31 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
             is_dependency: !pkg.is_root(),
-            edition: Edition::from_str(pkg.edition().unwrap_or("2024"))?,
+            edition: Edition::from_str(pkg.edition())?,
             flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
             warning_filter: WarningFiltersBuilder::new_for_source(),
         };
 
-        debug!("Package name {:?}", name);
+        let safe_name = if pkg.is_root() {
+            Symbol::from(format!("{}_root", name))
+        } else {
+            Symbol::from(format!("{}_{}", name, counter))
+        };
+
+        counter += 1;
+
+        debug!("Package name {:?} -- Safe name {:?}", name, safe_name);
         debug!("Named address map {:#?}", addresses);
         let paths = PackagePaths {
-            name: Some((name, config)),
+            name: Some((safe_name, config)),
             paths: get_sources(pkg.path(), build_config)?,
             named_address_map: addresses,
         };
 
         package_paths.push(paths);
     }
+
+    debug!("Package paths {:#?}", package_paths);
 
     writeln!(w, "{} {}", "BUILDING".bold().green(), root_pkg.name())?;
 

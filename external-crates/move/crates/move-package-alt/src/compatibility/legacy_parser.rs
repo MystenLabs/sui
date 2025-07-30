@@ -357,7 +357,7 @@ fn parse_package_info(tval: TV) -> Result<LegacyPackageMetadata> {
             let edition = table
                 .remove("edition")
                 .map(|v| v.as_str().unwrap_or_default().to_string())
-                .unwrap_or_default();
+                .unwrap_or("legacy".to_string());
 
             Ok(LegacyPackageMetadata {
                 legacy_name: name,
