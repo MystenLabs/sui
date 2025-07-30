@@ -10,9 +10,12 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     safe_client::SafeClient,
     status_aggregator::StatusAggregator,
-    transaction_driver::error::{
-        aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
-        TransactionRequestError,
+    transaction_driver::{
+        error::{
+            aggregate_request_errors, AggregatedEffectsDigests, TransactionDriverError,
+            TransactionRequestError,
+        },
+        TransactionContext,
     },
 };
 
@@ -26,7 +29,6 @@ use crate::{
 /// This component helps to manager this retry pattern.
 pub(crate) struct RequestRetrier<A: Clone> {
     remaining_clients: Vec<(AuthorityName, Arc<SafeClient<A>>)>,
-    non_retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
     retriable_errors_aggregator: StatusAggregator<TransactionRequestError>,
 }
 
@@ -39,30 +41,30 @@ impl<A: Clone> RequestRetrier<A> {
             .map(|(name, client)| (*name, client.clone()))
             .collect::<Vec<_>>();
         remaining_clients.shuffle(&mut rand::thread_rng());
-        let non_retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         let retriable_errors_aggregator = StatusAggregator::new(auth_agg.committee.clone());
         Self {
             remaining_clients,
-            non_retriable_errors_aggregator,
             retriable_errors_aggregator,
         }
     }
 
     // Selects the next target validator to attempt an operation.
+    // Accepts a non-retriable errors aggregator to track non-retriable errors across retries.
     pub(crate) fn next_target(
         &mut self,
+        txn_context: &mut TransactionContext,
     ) -> Result<(AuthorityName, Arc<SafeClient<A>>), TransactionDriverError> {
         if let Some((name, client)) = self.remaining_clients.pop() {
             return Ok((name, client));
         };
 
-        if self
-            .non_retriable_errors_aggregator
+        if txn_context
+            .non_retriable_errors
             .reached_validity_threshold()
         {
             Err(TransactionDriverError::InvalidTransaction {
                 submission_non_retriable_errors: aggregate_request_errors(
-                    self.non_retriable_errors_aggregator.status_by_authority(),
+                    txn_context.non_retriable_errors.status_by_authority(),
                 ),
                 submission_retriable_errors: aggregate_request_errors(
                     self.retriable_errors_aggregator.status_by_authority(),
@@ -71,7 +73,7 @@ impl<A: Clone> RequestRetrier<A> {
         } else {
             Err(TransactionDriverError::Aborted {
                 submission_non_retriable_errors: aggregate_request_errors(
-                    self.non_retriable_errors_aggregator.status_by_authority(),
+                    txn_context.non_retriable_errors.status_by_authority(),
                 ),
                 submission_retriable_errors: aggregate_request_errors(
                     self.retriable_errors_aggregator.status_by_authority(),
@@ -88,22 +90,25 @@ impl<A: Clone> RequestRetrier<A> {
     // Returns an error if it has aggregated >= f+1 submission non-retriable errors.
     // In this case, the transaction cannot finalize unless there is a software bug
     // or > f malicious validators.
+    //
+    // Accepts a non-retriable errors aggregator to track non-retriable errors across retries.
     pub(crate) fn add_error(
         &mut self,
+        txn_context: &mut TransactionContext,
         name: AuthorityName,
         error: TransactionRequestError,
     ) -> Result<(), TransactionDriverError> {
         if error.is_submission_retriable() {
             self.retriable_errors_aggregator.insert(name, error);
         } else {
-            self.non_retriable_errors_aggregator.insert(name, error);
-            if self
-                .non_retriable_errors_aggregator
+            txn_context.non_retriable_errors.insert(name, error);
+            if txn_context
+                .non_retriable_errors
                 .reached_validity_threshold()
             {
                 return Err(TransactionDriverError::InvalidTransaction {
                     submission_non_retriable_errors: aggregate_request_errors(
-                        self.non_retriable_errors_aggregator.status_by_authority(),
+                        txn_context.non_retriable_errors.status_by_authority(),
                     ),
                     submission_retriable_errors: aggregate_request_errors(
                         self.retriable_errors_aggregator.status_by_authority(),
@@ -124,7 +129,6 @@ mod tests {
     use sui_types::{
         committee::Committee,
         crypto::{get_key_pair, AuthorityKeyPair},
-        error::{SuiError, UserInputError},
     };
 
     use crate::{
@@ -161,13 +165,14 @@ mod tests {
     #[tokio::test]
     async fn test_next_target() {
         let auth_agg = Arc::new(get_authority_aggregator(4));
+        let mut txn_context = TransactionContext::new_for_test(auth_agg.committee.clone());
         let mut retrier = RequestRetrier::new(&auth_agg);
 
         for _ in 0..4 {
-            retrier.next_target().unwrap();
+            retrier.next_target(&mut txn_context).unwrap();
         }
 
-        let Err(error) = retrier.next_target() else {
+        let Err(error) = retrier.next_target(&mut txn_context) else {
             panic!("Expected an error");
         };
         assert!(error.is_retriable());
@@ -180,11 +185,13 @@ mod tests {
 
         // Add retriable errors.
         {
+            let mut txn_context = TransactionContext::new_for_test(auth_agg.committee.clone());
             let mut retrier = RequestRetrier::new(&auth_agg);
 
             // 25% stake.
             retrier
                 .add_error(
+                    &mut txn_context,
                     authorities[0],
                     TransactionRequestError::TimedOutSubmittingTransaction,
                 )
@@ -192,6 +199,7 @@ mod tests {
             // 50% stake.
             retrier
                 .add_error(
+                    &mut txn_context,
                     authorities[1],
                     TransactionRequestError::TimedOutSubmittingTransaction,
                 )
@@ -199,6 +207,7 @@ mod tests {
             // 75% stake.
             retrier
                 .add_error(
+                    &mut txn_context,
                     authorities[1],
                     TransactionRequestError::TimedOutSubmittingTransaction,
                 )
@@ -206,6 +215,7 @@ mod tests {
             // 100% stake.
             retrier
                 .add_error(
+                    &mut txn_context,
                     authorities[1],
                     TransactionRequestError::TimedOutSubmittingTransaction,
                 )
@@ -215,11 +225,13 @@ mod tests {
 
         // Add mix of retriable and non-retriable errors.
         {
+            let mut txn_context = TransactionContext::new_for_test(auth_agg.committee.clone());
             let mut retrier = RequestRetrier::new(&auth_agg);
 
             // 25% stake retriable error.
             retrier
                 .add_error(
+                    &mut txn_context,
                     authorities[0],
                     TransactionRequestError::TimedOutSubmittingTransaction,
                 )
@@ -227,19 +239,17 @@ mod tests {
             // 25% stake non-retriable error.
             retrier
                 .add_error(
+                    &mut txn_context,
                     authorities[1],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedWithoutReason,
                 )
                 .unwrap();
             // 50% stake non-retriable error. Above validity threshold.
             let aggregated_error = retrier
                 .add_error(
+                    &mut txn_context,
                     authorities[2],
-                    TransactionRequestError::RejectedAtValidator(SuiError::UserInputError {
-                        error: UserInputError::EmptyCommandInput,
-                    }),
+                    TransactionRequestError::RejectedWithoutReason,
                 )
                 .unwrap_err();
             // The aggregated error is non-retriable.

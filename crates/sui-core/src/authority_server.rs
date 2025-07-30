@@ -1237,7 +1237,9 @@ impl ValidatorService {
                 ConsensusTxStatus::Rejected => {
                     let response = WaitForEffectsResponse::Rejected {
                         // TODO(fastpath): cache reject reason during voting and return it here.
-                        error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
+                        error: Some(SuiError::Unknown(
+                            "TODO: use cached reject reason".to_string(),
+                        )),
                     };
                     return Ok(response);
                 }
@@ -1268,7 +1270,7 @@ impl ValidatorService {
                             if status == ConsensusTxStatus::Rejected {
                                 // TODO(fastpath): cache reject reason during voting and return it here.
                                 return Ok(WaitForEffectsResponse::Rejected {
-                                    error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
+                                    error: Some(SuiError::Unknown("TODO: use cached reject reason".to_string())),
                                 });
                             }
                             assert_eq!(status, ConsensusTxStatus::Finalized);

@@ -35,7 +35,31 @@ use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
     quorum_driver::{reconfig_observer::ReconfigObserver, AuthorityAggregatorUpdatable},
+    status_aggregator::StatusAggregator,
 };
+
+// Chooses the percentage of transactions to be driven by TransactionDriver.
+pub fn choose_transaction_driver_percentage() -> u8 {
+    // Currently, TD cannot work in non-test environments.
+    if std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME).is_ok() {
+        return 0;
+    }
+
+    if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
+        if let Ok(tx_driver_percentage) = v.parse::<u8>() {
+            if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
+                return tx_driver_percentage;
+            }
+        }
+    }
+
+    // Default to 50% in simtests.
+    if cfg!(msim) {
+        return 50;
+    }
+
+    0
+}
 
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
@@ -82,6 +106,12 @@ where
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.is_consensus_tx();
         let raw_request = request.into_raw().unwrap();
+        let mut txn_context = TransactionContext {
+            options,
+            non_retriable_errors: StatusAggregator::new(
+                self.authority_aggregator.load().committee.clone(),
+            ),
+        };
         let timer = Instant::now();
 
         const MAX_RETRY_DELAY: Duration = Duration::from_secs(10);
@@ -92,7 +122,7 @@ where
         loop {
             // TODO(fastpath): Check local state before submitting transaction
             match self
-                .drive_transaction_once(tx_digest, raw_request.clone(), &options)
+                .drive_transaction_once(&mut txn_context, tx_digest, raw_request.clone())
                 .await
             {
                 Ok(resp) => {
@@ -112,8 +142,9 @@ where
                         return Err(e);
                     }
                     tracing::info!(
-                        "Failed to finalize transaction (attempt {}): {}. Retrying ...",
+                        "Failed to finalize transaction (attempt {}, accumulated non-retriable stake {}): {}. Retrying ...",
                         attempts,
+                        txn_context.non_retriable_errors.total_votes(),
                         e
                     );
                 }
@@ -127,21 +158,27 @@ where
     #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
     async fn drive_transaction_once(
         &self,
+        txn_context: &mut TransactionContext,
         tx_digest: &TransactionDigest,
         raw_request: RawSubmitTxRequest,
-        options: &SubmitTransactionOptions,
     ) -> Result<QuorumTransactionResponse, TransactionDriverError> {
         let auth_agg = self.authority_aggregator.load();
 
         // Get consensus position using TransactionSubmitter
         let (name, submit_txn_resp) = self
             .submitter
-            .submit_transaction(&auth_agg, tx_digest, raw_request, options)
+            .submit_transaction(txn_context, &auth_agg, tx_digest, raw_request)
             .await?;
 
         // Wait for quorum effects using EffectsCertifier
         self.certifier
-            .get_certified_finalized_effects(&auth_agg, tx_digest, name, submit_txn_resp, options)
+            .get_certified_finalized_effects(
+                txn_context,
+                &auth_agg,
+                tx_digest,
+                name,
+                submit_txn_resp,
+            )
             .await
     }
 
@@ -178,27 +215,22 @@ where
     }
 }
 
-// Chooses the percentage of transactions to be driven by TransactionDriver.
-pub fn choose_transaction_driver_percentage() -> u8 {
-    // Currently, TD cannot work in non-test environments.
-    if std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME).is_ok() {
-        return 0;
-    }
+/// Context while driving the transaction to finality.
+pub(crate) struct TransactionContext {
+    pub(crate) options: SubmitTransactionOptions,
 
-    if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
-        if let Ok(tx_driver_percentage) = v.parse::<u8>() {
-            if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                return tx_driver_percentage;
-            }
+    // Accumulates non-retriable errors across retries.
+    pub(crate) non_retriable_errors: StatusAggregator<TransactionRequestError>,
+}
+
+impl TransactionContext {
+    #[cfg(test)]
+    pub(crate) fn new_for_test(committee: Arc<sui_types::committee::Committee>) -> Self {
+        Self {
+            options: SubmitTransactionOptions::default(),
+            non_retriable_errors: StatusAggregator::new(committee),
         }
     }
-
-    // Default to 50% in simtests.
-    if cfg!(msim) {
-        return 50;
-    }
-
-    0
 }
 
 // Inner state of TransactionDriver.
