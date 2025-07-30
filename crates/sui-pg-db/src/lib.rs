@@ -18,7 +18,7 @@ use diesel_async::{
     AsyncPgConnection, RunQueryDsl,
 };
 use futures::FutureExt;
-use tracing::info;
+use tracing::{error, info};
 use url::Url;
 
 mod model;
@@ -318,7 +318,7 @@ async fn establish_connection_with_config(
         .map_err(|e| ConnectionError::BadConnection(e.to_string()))?;
     tokio::spawn(async move {
         if let Err(e) = conn.await {
-            eprintln!("Database connection: {e}");
+            error!("Database connection terminated: {e}");
         }
     });
     AsyncPgConnection::try_from(client).await
