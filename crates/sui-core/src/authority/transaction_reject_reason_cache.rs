@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use sui_types::committee::EpochId;
 use sui_types::error::SuiError;
 use sui_types::messages_consensus::ConsensusPosition;
-use tracing::debug;
+use tracing::trace;
 
 #[cfg(test)]
 use consensus_types::block::Round;
@@ -79,7 +79,7 @@ impl TransactionRejectReasonCache {
 
         let mut cache = self.cache.write();
         let remaining = cache.split_off(&cut_off_position);
-        debug!("Cleaned up {} entries", cache.len());
+        trace!("Cleaned up {} entries", cache.len());
         *cache = remaining;
     }
 }
