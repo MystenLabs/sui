@@ -745,20 +745,6 @@ impl fmt::UpperHex for TransactionEffectsDigest {
     }
 }
 
-impl std::str::FromStr for TransactionEffectsDigest {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut result = [0; 32];
-        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
-        if buffer.len() != 32 {
-            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
-        }
-        result.copy_from_slice(&buffer);
-        Ok(TransactionEffectsDigest::new(result))
-    }
-}
-
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct TransactionEventsDigest(Digest);

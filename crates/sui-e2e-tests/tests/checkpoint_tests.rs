@@ -7,10 +7,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use sui_macros::register_fail_point_arg;
+use sui_macros::register_fail_point_if;
 use sui_macros::sim_test;
 use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::base_types::AuthorityName;
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
 use tracing::info;
@@ -71,18 +70,7 @@ async fn test_checkpoint_split_brain() {
         }
     );
 
-    register_fail_point_arg("simulate_fork_during_execution", || {
-        Some((
-            std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::<
-                AuthorityName,
-            >::new())),
-            true, // full_halt = true for checkpoint tests (expects network halt)
-            std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::<
-                String,
-                String,
-            >::new())), // empty effects overrides - not used in this test
-        ))
-    });
+    register_fail_point_if("cp_execution_nondeterminism", || true);
 
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(committee_size)

@@ -4,7 +4,6 @@
 #[cfg(msim)]
 mod test {
     use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
-    use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
@@ -26,7 +25,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::node::{AuthorityOverloadConfig, ForkRecoveryConfig};
+    use sui_config::node::AuthorityOverloadConfig;
     use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -47,10 +46,9 @@ mod test {
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
-    use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
+    use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
-    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
@@ -640,15 +638,8 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(
-            test_cluster,
-            60,
-            simulated_load_config,
-            None,
-            None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
-        )
-        .await;
+        test_simulated_load_with_test_config(test_cluster, 60, simulated_load_config, None, None)
+            .await;
     }
 
     // Tests cluster defense against failing transaction floods Traffic Control
@@ -703,7 +694,6 @@ mod test {
             simulated_load_config,
             Some(target_qps),
             Some(num_workers),
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
         )
         .await;
     }
@@ -1133,22 +1123,17 @@ mod test {
             SimulatedLoadConfig::default(),
             None,
             None,
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
         )
         .await;
     }
 
-    async fn test_simulated_load_with_test_config<F, Fut>(
+    async fn test_simulated_load_with_test_config(
         test_cluster: Arc<TestCluster>,
         test_duration_secs: u64,
         config: SimulatedLoadConfig,
         target_qps: Option<u64>,
         num_workers: Option<u64>,
-        pre_load_setup: Option<F>,
-    ) where
-        F: FnOnce(Arc<TestCluster>) -> Fut + Send,
-        Fut: std::future::Future<Output = ()> + Send,
-    {
+    ) {
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let genesis = test_cluster.swarm.config().genesis.clone();
@@ -1258,11 +1243,6 @@ mod test {
             Duration::from_secs(test_duration_secs)
         };
 
-        // Run any pre-load setup after gas creation but before load generation
-        if let Some(setup_fn) = pre_load_setup {
-            setup_fn(test_cluster.clone()).await;
-        }
-
         let bench_task = tokio::spawn(async move {
             let driver = BenchDriver::new(5, false);
 
@@ -1315,180 +1295,5 @@ mod test {
         });
 
         let _ = futures::join!(bench_task, surfer_task);
-    }
-
-    #[sim_test(config = "test_config()")]
-    async fn test_fork_recovery_transaction_effects_simulation() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-
-        let test_cluster = build_test_cluster(4, 5000, 4).await;
-
-        let forked_checkpoint_seq: Arc<Mutex<Option<CheckpointSequenceNumber>>> =
-            Arc::new(Mutex::new(None));
-        let effects_overrides: Arc<Mutex<BTreeMap<String, String>>> =
-            Arc::new(Mutex::new(BTreeMap::new()));
-
-        let forked_validators: Arc<Mutex<HashSet<AuthorityName>>> =
-            Arc::new(Mutex::new(HashSet::new()));
-
-        let node_to_authority_map: std::collections::HashMap<
-            sui_simulator::task::NodeId,
-            AuthorityName,
-        > = test_cluster
-            .swarm
-            .validator_nodes()
-            .filter_map(|validator| {
-                validator.get_node_handle().map(|handle| {
-                    let node_id = handle.with(|node| node.get_sim_node_id());
-                    (node_id, validator.name())
-                })
-            })
-            .collect();
-
-        info!("Fork recovery test: Running transactions to trigger fork scenario");
-        test_simulated_load_with_test_config(
-            test_cluster.clone(),
-            30,
-            SimulatedLoadConfig::default(),
-            None, // target_qps
-            None, // num_workers
-            Some({
-                let forked_validators = forked_validators.clone();
-                let forked_checkpoint_seq = forked_checkpoint_seq.clone();
-                let effects_overrides = effects_overrides.clone();
-                let node_to_authority_map = node_to_authority_map.clone();
-                move |_cluster: Arc<TestCluster>| async move {
-                    // Setup CP execution non-determinism after gas creation but before load generation
-                    register_fail_point_arg("simulate_fork_during_execution", {
-                        let forked_validators = forked_validators.clone();
-                        let effects_overrides = effects_overrides.clone();
-                        move || {
-                            Some((
-                                forked_validators.clone(),
-                                /* full_halt: */ true,
-                                effects_overrides.clone(),
-                            ))
-                        }
-                    });
-
-                    register_fail_point_arg("kill_checkpoint_fork_node", {
-                        let forked_validators: Arc<
-                            Mutex<HashSet<sui_types::crypto::AuthorityPublicKeyBytes>>,
-                        > = forked_validators.clone();
-                        let forked_checkpoint_seq = forked_checkpoint_seq.clone();
-                        let node_to_authority_map = node_to_authority_map.clone();
-                        move || {
-                            let current_node_id = sui_simulator::current_simnode_id();
-                            let authority_name =
-                                node_to_authority_map.get(&current_node_id).unwrap();
-
-                            if forked_validators.lock().unwrap().contains(authority_name) {
-                                Some(forked_checkpoint_seq.clone())
-                            } else {
-                                None
-                            }
-                        }
-                    });
-                    register_fail_point_if("kill_transaction_fork_node", {
-                        let forked_validators = forked_validators.clone();
-                        let node_to_authority_map = node_to_authority_map.clone();
-                        move || {
-                            forked_validators.lock().unwrap().contains(
-                                node_to_authority_map
-                                    .get(&sui_simulator::current_simnode_id())
-                                    .unwrap(),
-                            )
-                        }
-                    });
-                }
-            }),
-        )
-        .await;
-        info!("Fork recovery test: First load gen done");
-
-        clear_fail_point("simulate_fork_during_execution");
-        clear_fail_point("kill_checkpoint_fork_node");
-        clear_fail_point("kill_transaction_fork_node");
-
-        let correct_validator = test_cluster
-            .swarm
-            .validator_nodes()
-            .find(|validator| {
-                let validator_name = validator.name();
-                !forked_validators.lock().unwrap().contains(&validator_name)
-            })
-            .expect("Should have at least one non-forked validator");
-
-        let forked_checkpoint = forked_checkpoint_seq
-            .lock()
-            .unwrap()
-            .expect("Fork should have been triggered during the test");
-
-        let checkpoint_overrides: BTreeMap<u64, String> = {
-            let correct_digest = correct_validator
-                .get_node_handle()
-                .expect("Validator should have a node handle")
-                .with(|node| {
-                    let state = node.state();
-                    let checkpoint_store = state.get_checkpoint_store();
-                    let node_id = node.get_sim_node_id();
-
-                    info!(
-                        ?node_id,
-                        "Getting checkpoint {forked_checkpoint} digest from correct validator"
-                    );
-
-                    checkpoint_store
-                        .get_checkpoint_by_sequence_number(forked_checkpoint)
-                        .expect(&format!("Failed to get checkpoint {forked_checkpoint}"))
-                        .expect(&format!("Checkpoint {forked_checkpoint} should exist"))
-                        .digest()
-                        .to_string()
-                });
-
-            let mut overrides = BTreeMap::new();
-            overrides.insert(forked_checkpoint, correct_digest);
-            overrides
-        };
-
-        let captured_effects = effects_overrides.lock().unwrap().clone();
-        info!(
-            "Fork recovery test: Captured forked effects for recovery {:?}",
-            captured_effects
-        );
-
-        let fork_recovery_config = ForkRecoveryConfig {
-            transaction_overrides: captured_effects,
-            checkpoint_overrides,
-        };
-        for validator in test_cluster.swarm.validator_nodes() {
-            let validator_name = validator.name();
-            if forked_validators.lock().unwrap().contains(&validator_name) {
-                test_cluster.stop_node(&validator_name);
-                {
-                    let mut config = validator.config();
-                    config.fork_recovery = Some(fork_recovery_config.clone());
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                test_cluster.start_node(&validator_name).await;
-            }
-        }
-
-        info!("Fork recovery test: Fork scenario complete, validators should now have diverged");
-
-        info!("Fork recovery test: Running recovery phase with correction mechanism active");
-        test_simulated_load_with_test_config(
-            test_cluster.clone(),
-            15,
-            SimulatedLoadConfig::default(),
-            None,                                                   // target_qps
-            None,                                                   // num_workers
-            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>, // no setup needed for recovery phase
-        )
-        .await;
-
-        test_cluster.wait_for_epoch(None).await;
-
-        info!("Fork recovery test: Recovery phase complete, all fail points cleared");
     }
 }
