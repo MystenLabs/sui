@@ -70,33 +70,33 @@ This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
 """
 type ChangeEpochTransaction {
 	"""
-	The next (to become) epoch ID.
+	The next (to become) epoch.
 	"""
-	epoch: Int
+	epoch: Epoch
 	"""
-	The protocol version in effect in the new epoch.
+	The epoch's corresponding protocol configuration.
 	"""
-	protocolVersion: Int
+	protocolConfigs: ProtocolConfigs
 	"""
 	The total amount of gas charged for storage during the epoch.
 	"""
-	storageCharge: Int
+	storageCharge: UInt53
 	"""
 	The total amount of gas charged for computation during the epoch.
 	"""
-	computationCharge: Int
+	computationCharge: UInt53
 	"""
 	The amount of storage rebate refunded to the transaction senders.
 	"""
-	storageRebate: Int
+	storageRebate: UInt53
 	"""
 	The non-refundable storage fee.
 	"""
-	nonRefundableStorageFee: Int
+	nonRefundableStorageFee: UInt53
 	"""
-	Unix timestamp when epoch started (in milliseconds).
+	Unix timestamp when epoch started.
 	"""
-	epochStartTimestampMs: Int
+	epochStartTimestamp: DateTime
 }
 
 """

@@ -45,7 +45,9 @@ impl TransactionKind {
             K::ConsensusCommitPrologueV4(ccp) => Some(T::ConsensusCommitPrologue(
                 ConsensusCommitPrologueTransaction::from_v4(ccp, scope),
             )),
-            K::ChangeEpoch(ce) => Some(T::ChangeEpoch(ChangeEpochTransaction { native: ce })),
+            K::ChangeEpoch(ce) => {
+                Some(T::ChangeEpoch(ChangeEpochTransaction { native: ce, scope }))
+            }
             K::RandomnessStateUpdate(rsu) => {
                 Some(T::RandomnessStateUpdate(RandomnessStateUpdateTransaction {
                     native: rsu,
