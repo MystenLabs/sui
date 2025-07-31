@@ -262,7 +262,7 @@ impl Object {
         }
     }
 
-    /// Construct a GraphQL representation of an `Object` from a genesis object.
+    /// Construct a GraphQL representation of an `Object` from a raw object bundled into the genesis transaction.
     pub(crate) fn from_genesis_object(scope: Scope, genesis_obj: GenesisObject) -> Self {
         let GenesisObject::RawObject { data, owner } = genesis_obj;
         let native =
