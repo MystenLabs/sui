@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
 use diesel::{ConnectionError, ConnectionResult};
@@ -56,7 +57,7 @@ pub struct DbArgs {
 
     #[arg(long)]
     /// Path to a custom CA certificate to use for server certificate verification.
-    pub tls_ca_cert_path: Option<String>,
+    pub tls_ca_cert_path: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -271,56 +272,75 @@ async fn pool(
 /// certificate verification. If tls_ca_cert_path is provided, add the custom CA certificate to the
 /// root certificates.
 fn build_tls_config(args: &DbArgs) -> anyhow::Result<rustls::ClientConfig> {
-    if args.tls_verify_cert {
-        let mut root_certs = root_certs();
-
-        // Add custom CA certificate if provided
-        if let Some(ca_cert_path) = &args.tls_ca_cert_path {
-            let ca_cert_bytes = std::fs::read(ca_cert_path).map_err(|e| {
-                anyhow::anyhow!("Failed to read CA certificate from {}: {}", ca_cert_path, e)
-            })?;
-
-            let certs = if ca_cert_bytes.starts_with(b"-----BEGIN CERTIFICATE-----") {
-                rustls_pemfile::certs(&mut ca_cert_bytes.as_slice())
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| anyhow!("Failed to parse PEM certificates: {:?}", e))?
-            } else {
-                // Assume DER format for binary files
-                vec![rustls::pki_types::CertificateDer::from(ca_cert_bytes)]
-            };
-
-            // Add all certificates to the root store
-            for cert in certs {
-                root_certs
-                    .add(cert)
-                    .map_err(|e| anyhow!("Failed to add CA certificate to root store: {:?}", e))?;
-            }
-        }
-
-        Ok(rustls::ClientConfig::builder()
-            .with_root_certificates(root_certs)
-            .with_no_client_auth())
-    } else {
-        Ok(rustls::ClientConfig::builder()
+    if !args.tls_verify_cert {
+        return Ok(rustls::ClientConfig::builder()
             .dangerous()
             .with_custom_certificate_verifier(std::sync::Arc::new(SkipServerCertCheck))
-            .with_no_client_auth())
+            .with_no_client_auth());
     }
+
+    let mut root_certs = root_certs();
+
+    // Add custom CA certificate if provided
+    if let Some(ca_cert_path) = &args.tls_ca_cert_path {
+        let ca_cert_bytes = std::fs::read(ca_cert_path).with_context(|| {
+            format!(
+                "Failed to read CA certificate from {}",
+                ca_cert_path.display()
+            )
+        })?;
+
+        let certs = if ca_cert_bytes.starts_with(b"-----BEGIN CERTIFICATE-----") {
+            rustls_pemfile::certs(&mut ca_cert_bytes.as_slice())
+                .collect::<Result<Vec<_>, _>>()
+                .with_context(|| {
+                    format!(
+                        "Failed to parse PEM certificates from {}",
+                        ca_cert_path.display()
+                    )
+                })?
+        } else {
+            // Assume DER format for binary files
+            vec![rustls::pki_types::CertificateDer::from(ca_cert_bytes)]
+        };
+
+        // Add all certificates to the root store
+        for cert in certs {
+            root_certs
+                .add(cert)
+                .with_context(|| format!("Failed to add CA certificate to root store"))?;
+        }
+    }
+
+    Ok(rustls::ClientConfig::builder()
+        .with_root_certificates(root_certs)
+        .with_no_client_auth())
 }
 
+/// Establish a PostgreSQL connection with custom TLS configuration using tokio-postgres. The
+/// returned connection is compatible with diesel-async. This is needed because diesel-async does
+/// not expose TLS configuration.
 async fn establish_connection_with_config(
-    config: &str,
+    database_url: &str,
     tls_config: rustls::ClientConfig,
 ) -> ConnectionResult<AsyncPgConnection> {
     let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config);
-    let (client, conn) = tokio_postgres::connect(config, tls)
+    let (client, conn) = tokio_postgres::connect(database_url, tls)
         .await
         .map_err(|e| ConnectionError::BadConnection(e.to_string()))?;
+
+    // The `conn` object performs actual IO with the database, and tokio-postgres suggests spawning
+    // it off to run in the background. This will resolve only when the connection is closed, either
+    // because of a fatal error or because its associated Client has dropped and all outstanding
+    // work has completed.
     tokio::spawn(async move {
         if let Err(e) = conn.await {
             error!("Database connection terminated: {e}");
         }
     });
+
+    // Users interact with the database through the client object. We convert it into an
+    // AsyncPgConnection so it can be compatible with diesel.
     AsyncPgConnection::try_from(client).await
 }
 
