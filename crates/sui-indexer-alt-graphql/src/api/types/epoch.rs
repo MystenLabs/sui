@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
+    checkpoint::{CCheckpoint, Checkpoint, EpochFilter},
     move_package::{self, CSysPackage, MovePackage},
     object::{self, Object},
     protocol_configs::ProtocolConfigs,
@@ -60,6 +61,26 @@ impl Epoch {
     /// The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
     async fn epoch_id(&self) -> UInt53 {
         self.epoch_id.into()
+    }
+
+    /// The epoch's corresponding checkpoints.
+    async fn checkpoints(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CCheckpoint>,
+        last: Option<u64>,
+        before: Option<CCheckpoint>,
+    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Epoch", "checkpoints");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let filter = EpochFilter {
+            at_epoch: Some(self.epoch_id as u64),
+        };
+
+        Checkpoint::paginate(ctx, self.scope.clone(), page, filter).await
     }
 
     /// State of the Coin DenyList object (0x403) at the start of this epoch.

@@ -64,6 +64,10 @@ pub(crate) enum Error {
     TooLarge { limit: u64, max: u32 },
 }
 
+/// Number of extra items to fetch for pagination (for has_previous_page and has_next_page
+/// calculations)
+pub(crate) const PAGINATION_OVERHEAD: usize = 2;
+
 impl PaginationConfig {
     pub(crate) fn new(
         max_multi_get_size: u32,
@@ -146,6 +150,11 @@ impl<C> Page<C> {
 
     pub(crate) fn limit(&self) -> usize {
         self.limit as usize
+    }
+
+    /// Returns the limit plus pagination overhead for has_previous_page and has_next_page.
+    pub(crate) fn limit_with_overhead(&self) -> usize {
+        self.limit() + PAGINATION_OVERHEAD
     }
 
     pub(crate) fn is_from_front(&self) -> bool {
