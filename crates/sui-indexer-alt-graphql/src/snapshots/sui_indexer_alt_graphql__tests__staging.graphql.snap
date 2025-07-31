@@ -147,28 +147,6 @@ scalar BigInt
 
 
 """
-Reason why a transaction was cancelled.
-"""
-enum CancellationReason {
-	"""
-	Read operation was cancelled.
-	"""
-	CANCELLED_READ
-	"""
-	Object congestion prevented execution.
-	"""
-	CONGESTED
-	"""
-	Randomness service was unavailable.
-	"""
-	RANDOMNESS_UNAVAILABLE
-	"""
-	Internal use only.
-	"""
-	UNKNOWN
-}
-
-"""
 A system transaction that updates epoch information on-chain (increments the current epoch). Executed by the system once per epoch, without using gas. Epoch change transactions cannot be submitted by users, because validators will refuse to sign them.
 
 This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
@@ -274,20 +252,6 @@ input CheckpointFilter {
 }
 
 """
-A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
-"""
-type ConsensusCancelled {
-	"""
-	The ID of the consensus-managed object that the transaction intended to access.
-	"""
-	address: SuiAddress
-	"""
-	Reason why the transaction was cancelled.
-	"""
-	cancellationReason: CancellationReason
-}
-
-"""
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
 """
 type ConsensusCommitPrologueTransaction {
@@ -332,38 +296,46 @@ type ConsensusCommitPrologueTransaction {
 }
 
 """
-A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
+Reason why a transaction that attempted to access a consensus-managed object was cancelled.
 """
-type ConsensusMutateStreamEnded {
+enum ConsensusObjectCancellationReason {
 	"""
-	The ID of the consensus-managed object.
+	Read operation was cancelled.
+	"""
+	CANCELLED_READ
+	"""
+	Object congestion prevented execution.
+	"""
+	CONGESTED
+	"""
+	Randomness service was unavailable.
+	"""
+	RANDOMNESS_UNAVAILABLE
+	"""
+	Internal use only.
+	"""
+	UNKNOWN
+}
+
+"""
+A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
+"""
+type ConsensusObjectCancelled {
+	"""
+	The ID of the consensus-managed object that the transaction intended to access.
 	"""
 	address: SuiAddress
 	"""
-	The sequence number associated with the consensus stream ending.
+	Reason why the transaction was cancelled.
 	"""
-	sequenceNumber: UInt53
+	cancellationReason: ConsensusObjectCancellationReason
 }
 
-type ConsensusRead {
+type ConsensusObjectRead {
 	"""
 	The version of the consensus-managed object that was read by this transaction.
 	"""
 	object: Object
-}
-
-"""
-A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
-"""
-type ConsensusReadStreamEnded {
-	"""
-	The ID of the consensus-managed object.
-	"""
-	address: SuiAddress
-	"""
-	The sequence number associated with the consensus stream ending.
-	"""
-	sequenceNumber: UInt53
 }
 
 """
@@ -799,6 +771,20 @@ type MovePackageEdge {
 }
 
 """
+A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type MutateConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
+"""
 An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 
 Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
@@ -1200,6 +1186,20 @@ type RandomnessStateUpdateTransaction {
 	randomnessObjInitialSharedVersion: Int
 }
 
+"""
+A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type ReadConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
 type SafeMode {
 	"""
 	Whether safe mode was used for the last epoch change.
@@ -1529,9 +1529,9 @@ type TransactionEffects {
 	"""
 	gasEffects: GasEffects
 	"""
-	The unchanged shared objects that were referenced by this transaction.
+	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
-	unchangedSharedObjects(first: Int, after: String, last: Int, before: String): UnchangedSharedObjectConnection
+	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
 }
 
 input TransactionFilter {
@@ -1562,9 +1562,9 @@ scalar UInt53
 """
 Details pertaining to consensus-managed objects that are referenced by but not changed by a transaction.
 """
-union UnchangedSharedObject = ConsensusRead | ConsensusMutateStreamEnded | ConsensusReadStreamEnded | ConsensusCancelled | PerEpochConfig
+union UnchangedConsensusObject = ConsensusObjectRead | MutateConsensusStreamEnded | ReadConsensusStreamEnded | ConsensusObjectCancelled | PerEpochConfig
 
-type UnchangedSharedObjectConnection {
+type UnchangedConsensusObjectConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -1572,21 +1572,21 @@ type UnchangedSharedObjectConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [UnchangedSharedObjectEdge!]!
+	edges: [UnchangedConsensusObjectEdge!]!
 	"""
 	A list of nodes.
 	"""
-	nodes: [UnchangedSharedObject!]!
+	nodes: [UnchangedConsensusObject!]!
 }
 
 """
 An edge in a connection.
 """
-type UnchangedSharedObjectEdge {
+type UnchangedConsensusObjectEdge {
 	"""
 	The item at the end of the edge
 	"""
-	node: UnchangedSharedObject!
+	node: UnchangedConsensusObject!
 	"""
 	A cursor for use in pagination
 	"""

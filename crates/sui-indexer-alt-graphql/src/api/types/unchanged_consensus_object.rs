@@ -19,9 +19,9 @@ use super::{
     object::{self, Object},
 };
 
-/// Reason why a transaction was cancelled.
+/// Reason why a transaction that attempted to access a consensus-managed object was cancelled.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum CancellationReason {
+pub(crate) enum ConsensusObjectCancellationReason {
     /// Read operation was cancelled.
     CancelledRead,
     /// Object congestion prevented execution.
@@ -34,34 +34,25 @@ pub(crate) enum CancellationReason {
 
 /// Details pertaining to consensus-managed objects that are referenced by but not changed by a transaction.
 #[derive(Union)]
-pub(crate) enum UnchangedSharedObject {
-    Read(ConsensusRead),
-    MutateStreamEnded(ConsensusMutateStreamEnded),
-    ReadStreamEnded(ConsensusReadStreamEnded),
-    Cancelled(ConsensusCancelled),
+pub(crate) enum UnchangedConsensusObject {
+    Read(ConsensusObjectRead),
+    MutateConsensusStreamEnded(MutateConsensusStreamEnded),
+    ReadConsensusStreamEnded(ReadConsensusStreamEnded),
+    Cancelled(ConsensusObjectCancelled),
     PerEpochConfig(PerEpochConfig),
 }
 
 /// A consensus-managed object that was read by this transaction but not modified.
-pub(crate) struct ConsensusRead {
+pub(crate) struct ConsensusObjectRead {
     scope: Scope,
     object_id: ObjectID,
     version: SequenceNumber,
     digest: ObjectDigest,
 }
 
-#[Object]
-impl ConsensusRead {
-    /// The version of the consensus-managed object that was read by this transaction.
-    async fn object(&self) -> Option<Object> {
-        let address = Address::with_address(self.scope.clone(), self.object_id.into());
-        Some(Object::with_ref(address, self.version, self.digest))
-    }
-}
-
-/// A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
+/// A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
 #[derive(SimpleObject)]
-pub(crate) struct ConsensusMutateStreamEnded {
+pub(crate) struct MutateConsensusStreamEnded {
     /// The ID of the consensus-managed object.
     address: Option<SuiAddress>,
 
@@ -69,9 +60,9 @@ pub(crate) struct ConsensusMutateStreamEnded {
     sequence_number: Option<UInt53>,
 }
 
-/// A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (either it was deleted, or turned into an owned object).
+/// A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
 #[derive(SimpleObject)]
-pub(crate) struct ConsensusReadStreamEnded {
+pub(crate) struct ReadConsensusStreamEnded {
     /// The ID of the consensus-managed object.
     address: Option<SuiAddress>,
 
@@ -81,11 +72,11 @@ pub(crate) struct ConsensusReadStreamEnded {
 
 /// A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
 #[derive(SimpleObject)]
-pub(crate) struct ConsensusCancelled {
+pub(crate) struct ConsensusObjectCancelled {
     /// The ID of the consensus-managed object that the transaction intended to access.
     address: Option<SuiAddress>,
     /// Reason why the transaction was cancelled.
-    cancellation_reason: Option<CancellationReason>,
+    cancellation_reason: Option<ConsensusObjectCancellationReason>,
 }
 
 /// A per-epoch configuration object that was accessed by this transaction and remains constant during the epoch.
@@ -105,7 +96,16 @@ impl PerEpochConfig {
     }
 }
 
-impl UnchangedSharedObject {
+#[Object]
+impl ConsensusObjectRead {
+    /// The version of the consensus-managed object that was read by this transaction.
+    async fn object(&self) -> Option<Object> {
+        let address = Address::with_address(self.scope.clone(), self.object_id.into());
+        Some(Object::with_ref(address, self.version, self.digest))
+    }
+}
+
+impl UnchangedConsensusObject {
     pub(crate) fn from_native(
         scope: Scope,
         native: (ObjectID, NativeUnchangedSharedKind),
@@ -115,7 +115,7 @@ impl UnchangedSharedObject {
 
         match kind {
             NativeUnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
-                Self::Read(ConsensusRead {
+                Self::Read(ConsensusObjectRead {
                     scope,
                     object_id,
                     version,
@@ -123,27 +123,29 @@ impl UnchangedSharedObject {
                 })
             }
             NativeUnchangedSharedKind::MutateConsensusStreamEnded(sequence_number) => {
-                Self::MutateStreamEnded(ConsensusMutateStreamEnded {
+                Self::MutateConsensusStreamEnded(MutateConsensusStreamEnded {
                     address: Some(object_id.into()),
                     sequence_number: Some(sequence_number.into()),
                 })
             }
             NativeUnchangedSharedKind::ReadConsensusStreamEnded(sequence_number) => {
-                Self::ReadStreamEnded(ConsensusReadStreamEnded {
+                Self::ReadConsensusStreamEnded(ReadConsensusStreamEnded {
                     address: Some(object_id.into()),
                     sequence_number: Some(sequence_number.into()),
                 })
             }
             NativeUnchangedSharedKind::Cancelled(sequence_number) => {
                 let cancellation_reason = match sequence_number {
-                    SequenceNumber::CANCELLED_READ => CancellationReason::CancelledRead,
-                    SequenceNumber::CONGESTED => CancellationReason::Congested,
-                    SequenceNumber::RANDOMNESS_UNAVAILABLE => {
-                        CancellationReason::RandomnessUnavailable
+                    SequenceNumber::CANCELLED_READ => {
+                        ConsensusObjectCancellationReason::CancelledRead
                     }
-                    _ => CancellationReason::Unknown,
+                    SequenceNumber::CONGESTED => ConsensusObjectCancellationReason::Congested,
+                    SequenceNumber::RANDOMNESS_UNAVAILABLE => {
+                        ConsensusObjectCancellationReason::RandomnessUnavailable
+                    }
+                    _ => ConsensusObjectCancellationReason::Unknown,
                 };
-                Self::Cancelled(ConsensusCancelled {
+                Self::Cancelled(ConsensusObjectCancelled {
                     address: Some(object_id.into()),
                     cancellation_reason: Some(cancellation_reason),
                 })

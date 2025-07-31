@@ -47,12 +47,12 @@ module test::shared_object_tests {
 
 //# run-graphql
 {
-  # Test read-only access to shared object (should show ConsensusRead)
+  # Test read-only access to consensus object (should show ConsensusObjectRead)
   readOnlyAccess1: transactionEffects(digest: "@{digest_3}") {
-    unchangedSharedObjects {
+    unchangedConsensusObjects {
       edges {
         node {
-          ... on ConsensusRead {
+          ... on ConsensusObjectRead {
             object {
               address
               version
@@ -67,12 +67,12 @@ module test::shared_object_tests {
 
 //# run-graphql
 {
-  # Test mutable access to shared object (should have no unchanged shared objects)
+  # Test mutable access to consensus object (should have no unchanged consensus objects)
   mutableAccess: transactionEffects(digest: "@{digest_4}") {
-    unchangedSharedObjects {
+    unchangedConsensusObjects {
       edges {
         node {
-          ... on ConsensusRead {
+          ... on ConsensusObjectRead {
             object {
               address
               version
@@ -86,12 +86,12 @@ module test::shared_object_tests {
 
 //# run-graphql
 {
-  # Test read-only access after mutation (should show ConsensusRead with updated version)
+  # Test read-only access after mutation (should show ConsensusObjectRead with updated version)
   readOnlyAccess2: transactionEffects(digest: "@{digest_5}") {
-    unchangedSharedObjects {
+    unchangedConsensusObjects {
       edges {
         node {
-          ... on ConsensusRead {
+          ... on ConsensusObjectRead {
             object {
               address
               version

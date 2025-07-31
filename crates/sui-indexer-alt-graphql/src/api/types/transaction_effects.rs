@@ -39,7 +39,7 @@ use super::{
     gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
-    unchanged_shared_object::UnchangedSharedObject,
+    unchanged_consensus_object::UnchangedConsensusObject,
 };
 
 /// The execution status of this transaction: success or failure.
@@ -66,7 +66,7 @@ pub(crate) struct EffectsContents {
 type CObjectChange = JsonCursor<usize>;
 type CEvent = JsonCursor<usize>;
 type CBalanceChange = JsonCursor<usize>;
-type CUnchangedSharedObject = JsonCursor<usize>;
+type CUnchangedConsensusObject = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -320,37 +320,38 @@ impl EffectsContents {
         Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
     }
 
-    /// The unchanged shared objects that were referenced by this transaction.
-    async fn unchanged_shared_objects(
+    /// The unchanged consensus-managed objects that were referenced by this transaction.
+    async fn unchanged_consensus_objects(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<CUnchangedSharedObject>,
+        after: Option<CUnchangedConsensusObject>,
         last: Option<u64>,
-        before: Option<CUnchangedSharedObject>,
-    ) -> Result<Option<Connection<CUnchangedSharedObject, UnchangedSharedObject>>, RpcError> {
+        before: Option<CUnchangedConsensusObject>,
+    ) -> Result<Option<Connection<CUnchangedConsensusObject, UnchangedConsensusObject>>, RpcError>
+    {
         let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("TransactionEffects", "unchangedSharedObjects");
+        let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let Some(content) = &self.contents else {
             return Ok(None);
         };
 
-        let unchanged_shared_objects = content.effects()?.unchanged_shared_objects();
-        let cursors = page.paginate_indices(unchanged_shared_objects.len());
+        let unchanged_consensus_objects = content.effects()?.unchanged_shared_objects();
+        let cursors = page.paginate_indices(unchanged_consensus_objects.len());
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
         for edge in cursors.edges {
             let execution_checkpoint = content.cp_sequence_number();
-            let unchanged_shared_object = UnchangedSharedObject::from_native(
+            let unchanged_consensus_object = UnchangedConsensusObject::from_native(
                 self.scope.clone(),
-                unchanged_shared_objects[*edge.cursor].clone(),
+                unchanged_consensus_objects[*edge.cursor].clone(),
                 execution_checkpoint,
             );
 
             conn.edges
-                .push(Edge::new(edge.cursor, unchanged_shared_object))
+                .push(Edge::new(edge.cursor, unchanged_consensus_object))
         }
 
         Ok(Some(conn))

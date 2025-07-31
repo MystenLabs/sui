@@ -54,7 +54,7 @@ task 7, lines 48-66:
 Response: {
   "data": {
     "readOnlyAccess1": {
-      "unchangedSharedObjects": {
+      "unchangedConsensusObjects": {
         "edges": [
           {
             "node": {
@@ -76,7 +76,7 @@ task 8, lines 68-85:
 Response: {
   "data": {
     "mutableAccess": {
-      "unchangedSharedObjects": {
+      "unchangedConsensusObjects": {
         "edges": []
       }
     }
@@ -88,7 +88,7 @@ task 9, lines 87-105:
 Response: {
   "data": {
     "readOnlyAccess2": {
-      "unchangedSharedObjects": {
+      "unchangedConsensusObjects": {
         "edges": [
           {
             "node": {
