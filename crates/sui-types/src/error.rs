@@ -938,11 +938,11 @@ impl SuiError {
             }
 
             // Non retryable errors
-            SuiError::ExecutionError(..) => false,
             SuiError::ByzantineAuthoritySuspicion { .. } => false,
             SuiError::ObjectLockConflict { .. } => false,
             SuiError::TransactionExpired => false,
             SuiError::InvalidTxKindInSoftBundle { .. } => false,
+            SuiError::UnsupportedFeatureError { .. } => false,
 
             SuiError::InvalidSignature { .. } => false,
             SuiError::SignerSignatureAbsent { .. } => false,
