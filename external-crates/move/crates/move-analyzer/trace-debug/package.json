@@ -5,7 +5,7 @@
     "publisher": "mysten",
     "icon": "images/move.png",
     "license": "Apache-2.0",
-    "version": "0.0.12",
+    "version": "0.0.14",
     "preview": true,
     "repository": {
         "url": "https://github.com/MystenLabs/sui.git",
@@ -162,12 +162,12 @@
         "prestart": "npm run compile; tsc -p ../trace-adapter; cp ../trace-adapter/out/*.* ./out/"
     },
     "dependencies": {
+        "@iarna/toml": "^2.2.5",
         "@vscode/debugadapter": "^1.56.0",
         "@vscode/debugadapter-testsupport": "^1.56.0",
         "@vscode/debugprotocol": "1.66.0",
         "fzstd": "^0.1.1",
-        "lodash.snakecase": "^4.1.1",
-        "toml": "^3.0.0"
+        "lodash.snakecase": "^4.1.1"
     },
     "devDependencies": {
         "@types/lodash.snakecase": "^4.1.9",
