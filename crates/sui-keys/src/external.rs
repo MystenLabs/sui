@@ -46,7 +46,7 @@ pub struct StoredKey {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExternalKey {
-    pub public_key: String,
+    pub public_key: PublicKey,
     pub key_id: String,
 }
 
@@ -210,8 +210,7 @@ impl External {
         for external_key in keys_response.keys.into_iter() {
             keys.push(StoredKey {
                 key_id: external_key.key_id,
-                public_key: PublicKey::decode_base64(&external_key.public_key)
-                    .map_err(|e| anyhow!("Failed to decode public key: {}", e))?,
+                public_key: external_key.public_key,
                 ext_signer: ext_signer.clone(),
             });
         }
@@ -304,7 +303,6 @@ impl AccountKeystore for External {
         let res = self.exec(&ext_signer, "create_key", json![null]).await?;
         let ExternalKey { key_id, public_key } = serde_json::from_value(res)
             .map_err(|e| anyhow!("Failed to parse key response: {}", e))?;
-        let public_key = PublicKey::decode_base64(&public_key)?;
         let address: SuiAddress = (&public_key).into();
 
         self.keys.insert(
@@ -525,8 +523,8 @@ mod tests {
     use mockall::predicate::eq;
     use rand::prelude::StdRng;
     use rand::{thread_rng, SeedableRng};
-    use serde_json::json;
     use serde_json::Value as JsonValue;
+    use serde_json::{json, Value};
     use shared_crypto::intent::{Intent, IntentMessage};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
@@ -537,6 +535,7 @@ mod tests {
     use tempfile::TempDir;
 
     const PUBLIC_KEY: &str = "ALJ0GaLcBTTwTTh5dvyc6xaxwrjkG1spQzlL+W4CGLqG";
+    const UNTAGGED_PUBLIC_KEY: &str = "snQZotwFNPBNOHl2/JzrFrHCuOQbWylDOUv5bgIYuoY=";
     const ADDRESS: &str = "0x9219616732544c54259b3f5aeef5ec078535e322ee63f7de2ca8a197fd2a4f6f";
 
     fn load_external_keystore() -> External {
@@ -664,7 +663,9 @@ mod tests {
             .returning(move |_, _, _| {
                 Ok(json!({
                     "key_id": key_id,
-                    "public_key": PUBLIC_KEY,
+                    "public_key": {
+                        "Ed25519": UNTAGGED_PUBLIC_KEY
+                    }
                 }))
             });
         let mut external = External::new_for_test(Box::new(mock), None);
@@ -681,7 +682,7 @@ mod tests {
         // With a different signature scheme
         let secp256k1_key =
             SuiKeyPair::Secp256k1(Secp256k1KeyPair::generate(&mut StdRng::from_seed([0; 32])));
-        let public_key_b64 = secp256k1_key.public().encode_base64();
+        let public_key_json_value: Value = serde_json::to_value(secp256k1_key.public()).unwrap();
 
         let mut mock = MockCommandRunner::new();
         mock.expect_run()
@@ -689,7 +690,7 @@ mod tests {
             .returning(move |_, _, _| {
                 Ok(json!({
                     "key_id": key_id,
-                    "public_key": public_key_b64,
+                    "public_key": public_key_json_value,
                 }))
             });
 
@@ -708,7 +709,12 @@ mod tests {
         mock.expect_run().returning(move |_, _, _| {
             Ok(json!({
                 "keys": [
-                    {"key_id": key_id, "public_key": PUBLIC_KEY}
+                    {
+                        "key_id": key_id,
+                        "public_key": {
+                            "Ed25519": UNTAGGED_PUBLIC_KEY
+                        }
+                    }
                 ]
             }))
         });
@@ -764,8 +770,8 @@ mod tests {
         mock.expect_run().returning(move |_, _, _| {
             Ok(json!({
                 "keys": [
-                    {"key_id": "key-1", "public_key": PUBLIC_KEY},
-                    {"key_id": "key-2", "public_key": PUBLIC_KEY}
+                    {"key_id": "key-1", "public_key": { "Ed25519": UNTAGGED_PUBLIC_KEY }},
+                    {"key_id": "key-2", "public_key": { "Ed25519": UNTAGGED_PUBLIC_KEY }}
                 ]
             }))
         });
