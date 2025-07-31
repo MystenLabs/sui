@@ -4,7 +4,6 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use move_core_types::identifier::Identifier;
 use tracing::debug;
 
 use super::compute_digest;
@@ -27,7 +26,7 @@ use crate::{
         PublishedID,
     },
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::sync::{LazyLock, Mutex};
 
 // TODO: is this the right way to handle this?
