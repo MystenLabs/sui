@@ -358,11 +358,25 @@ impl WalletContext {
         &self,
         tx: Transaction,
     ) -> SuiTransactionBlockResponse {
-        tracing::debug!("Executing transaction: {:?}", tx);
-        let response = self.execute_transaction_may_fail(tx).await.unwrap();
+        let tx_digest = tx.digest();
+        tracing::info!("Executing transaction: digest={}, sender={:?}", tx_digest, tx.sender_address());
+        
+        let response = self.execute_transaction_may_fail(tx.clone()).await
+            .map_err(|e| {
+                tracing::error!(
+                    "Transaction execution failed: digest={}, sender={:?}, error={:?}", 
+                    tx_digest, 
+                    tx.sender_address(), 
+                    e
+                );
+                e
+            })
+            .unwrap();
+            
         assert!(
             response.status_ok().unwrap(),
-            "Transaction failed: {:?}",
+            "Transaction failed: digest={}, response={:?}",
+            tx_digest,
             response
         );
         response

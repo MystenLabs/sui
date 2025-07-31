@@ -35,7 +35,7 @@ use prometheus::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_simulator::anemo::PeerId;
-use sui_types::base_types::AuthorityName;
+use sui_types::base_types::{AuthorityName, ConciseableName};
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::error::{SuiError, SuiResult};
@@ -750,9 +750,19 @@ impl ConsensusAdapter {
         let (await_submit, position, positions_moved, preceding_disconnected, amplification_factor) =
             self.await_submit_delay(epoch_store, &transactions[..]);
 
-        let processed_via_consensus_or_checkpoint = if skip_processed_checks {
+        // Check if any transaction is a checkpoint signature
+        // let has_checkpoint_signature = transactions.iter().any(|tx| {
+        //     matches!(tx.kind, ConsensusTransactionKind::CheckpointSignature(_))
+        // });
+        let has_checkpoint_signature = false;
+
+        let processed_via_consensus_or_checkpoint = if skip_processed_checks || has_checkpoint_signature {
             // If we need to get consensus position, don't bypass consensus submission
             // for tx digest returned from consensus/checkpoint processing
+            // Also bypass for checkpoint signatures to allow corrected signatures through
+            if has_checkpoint_signature {
+                info!("Bypassing deduplication for checkpoint signature transactions");
+            }
             future::pending().boxed()
         } else {
             self.await_consensus_or_checkpoint(transaction_keys.clone(), epoch_store)
@@ -805,7 +815,22 @@ impl ConsensusAdapter {
         };
 
         if let Some(processed_waiter) = processed_waiter {
-            debug!("Submitting {:?} to consensus", transaction_keys);
+            info!("Submitting {:?} to consensus", transaction_keys);
+            
+            // Log checkpoint signature details if present
+            for transaction in &transactions {
+                if let ConsensusTransactionKind::CheckpointSignature(ckpt_sig) = &transaction.kind {
+                    info!(
+                        checkpoint_seq = ckpt_sig.summary.sequence_number,
+                        digest = ?ckpt_sig.summary.digest(),
+                        authority = ?ckpt_sig.summary.auth_sig().authority.concise(),
+                        "CONSENSUS ADAPTER: Submitting checkpoint signature to consensus: seq={}, digest={:?}, authority={:?}",
+                        ckpt_sig.summary.sequence_number,
+                        ckpt_sig.summary.digest(),
+                        ckpt_sig.summary.auth_sig().authority.concise()
+                    );
+                }
+            }
 
             // populate the position only when this authority submits the transaction
             // to consensus
@@ -1038,15 +1063,17 @@ impl ConsensusAdapter {
             };
 
             let checkpoint_synced_future = if let SequencedConsensusTransactionKey::External(
-                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
+                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number, _),
             ) = transaction_key
             {
                 // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence
                 // number has been already synced. This way we don't try to unnecessarily sequence the signature for an already verified checkpoint.
-                Either::Left(
-                    self.checkpoint_store
-                        .notify_read_synced_checkpoint(checkpoint_sequence_number),
-                )
+                // Either::Left(
+                //     self.checkpoint_store
+                //         .notify_read_synced_checkpoint(checkpoint_sequence_number),
+                // )
+
+                Either::Left(future::pending())
             } else {
                 Either::Right(future::pending())
             };

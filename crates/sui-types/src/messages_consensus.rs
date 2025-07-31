@@ -7,7 +7,7 @@ use crate::committee::EpochId;
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
 use crate::error::SuiError;
 use crate::execution::ExecutionTimeObservationKey;
-use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
+use crate::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber, CheckpointSignatureMessage};
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
@@ -184,7 +184,7 @@ pub struct ConsensusTransaction {
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
-    CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
+    CheckpointSignature(AuthorityName, CheckpointSequenceNumber, CheckpointDigest),
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityName, u64 /* generation */),
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
@@ -199,8 +199,8 @@ impl Debug for ConsensusTransactionKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Certificate(digest) => write!(f, "Certificate({:?})", digest),
-            Self::CheckpointSignature(name, seq) => {
-                write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
+            Self::CheckpointSignature(name, seq, digest) => {
+                write!(f, "CheckpointSignature({:?}, {:?}, {:?})", name.concise(), seq, digest)
             }
             Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
             Self::CapabilityNotification(name, generation) => write!(
@@ -658,6 +658,7 @@ impl ConsensusTransaction {
                 ConsensusTransactionKey::CheckpointSignature(
                     data.summary.auth_sig().authority,
                     data.summary.sequence_number,
+                    *data.summary.digest(),
                 )
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {

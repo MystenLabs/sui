@@ -715,11 +715,20 @@ impl TestCluster {
     ) -> ObjectRef {
         let context = &self.wallet;
         let (sender, gas) = context.get_one_gas_object().await.unwrap().unwrap();
-        let tx = context.sign_transaction(
-            &TestTransactionBuilder::new(sender, gas, rgp)
-                .transfer_sui(amount, funding_address)
-                .build(),
+        let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+            .transfer_sui(amount, funding_address)
+            .build();
+        let tx = context.sign_transaction(&tx_data);
+        
+        info!(
+            "Fund address transaction: digest={}, sender={:?}, recipient={:?}, amount={:?}, gas={:?}",
+            tx.digest(),
+            sender,
+            funding_address, 
+            amount,
+            gas
         );
+        
         context.execute_transaction_must_succeed(tx).await;
 
         context

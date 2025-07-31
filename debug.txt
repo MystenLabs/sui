@@ -1,0 +1,28 @@
+We certify checkpoints 1-27
+
+Checkpoint 28 is forked
+
+2022-01-02T14:31:51.628294Z  INFO node{id=7 name="k#addeef94.."}: sui_core::checkpoints: crates/sui-core/src/checkpoints/mod.rs:2391: Processing signature for checkpoint (digest: CheckpointDigest(4mPbTcAb6NKZf5XTGiHzgEkHmGw4TyJnNkBQUHxmPnPM)) from k#addeef94.. checkpoint_seq=28
+2022-01-02T14:31:51.628294Z  INFO node{id=7 name="k#addeef94.."}: sui_core::checkpoints: crates/sui-core/src/checkpoints/mod.rs:2460: Trying to aggregate signature from k#addeef94... Their digest: CheckpointDigest(4mPbTcAb6NKZf5XTGiHzgEkHmGw4TyJnNkBQUHxmPnPM), Our digest: CheckpointDigest(4mPbTcAb6NKZf5XTGiHzgEkHmGw4TyJnNkBQUHxmPnPM) checkpoint_seq=28
+2022-01-02T14:31:51.628294Z  WARN node{id=7 name="k#addeef94.."}: sui_core::checkpoints: crates/sui-core/src/checkpoints/mod.rs:2531: Quorum unreachable! Vote progress: 10000 total stake, 0 uncommitted, 2 unique digests checkpoint_seq=28
+2022-01-02T14:31:51.628294Z ERROR node{id=7 name="k#addeef94.."}: sui_core::checkpoints: crates/sui-core/src/checkpoints/mod.rs:2620: Split brain detected in checkpoint signature aggregation for checkpoint 28. Remaining stake: 0, Digests by stake: ["CheckpointDigest(4mPbTcAb6NKZf5XTGiHzgEkHmGw4TyJnNkBQUHxmPnPM) (total stake: 5000)", "CheckpointDigest(EfcRcpJ9Dt4W1KBQ2H6PsRBYJqJLQCPC9RoxsC6XZdes) (total stake: 5000)"]
+
+Competing digests:
+4mPbTcAb6NKZf5XTGiHzgEkHmGw4TyJnNkBQUHxmPnPM
+EfcRcpJ9Dt4W1KBQ2H6PsRBYJqJLQCPC9RoxsC6XZdes
+
+why is checkpoint 28 forked?
+We fix up all the others & apply overrides -
+did we attempt to apply an override to 28?
+
+what was the last checkpoint that we allowed rebuild?
+
+2022-01-02T14:31:42.473205Z  INFO node{id=7 name="k#addeef94.."}: sui_core::checkpoints: crates/sui-core/src/checkpoints/mod.rs:1616: Fork recovery: Allowing checkpoint rebuild because previous digest Some(CheckpointDigest(EBvynC6Pb4BCpgcxheHbQHM7jhR9QJhhqWGq2QCmmb36)) is bad checkpoint_seq=27
+
+We rebuilt 27 because 6-27 are forked and possible to recover
+
+Checkpoint 27 is certified, meaning we reached quorum
+
+2022-01-02T14:31:48.489631Z  INFO node{id=8 name="k#b3fd5efb.."}: sui_core::checkpoints: crates/sui-core/src/checkpoints/mod.rs:2405: Checkpoint certified (digest: CheckpointDigest(233Yx3LcDN89pjt71b8dC9CdmVxPsVzhhej9Khsf3iMS)) checkpoint_seq=27
+
+Updated the test to include checkpoint_fork_dump in logs

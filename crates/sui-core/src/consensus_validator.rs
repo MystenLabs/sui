@@ -9,6 +9,7 @@ use fastcrypto_tbls::dkg_v1;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use sui_types::{
+    base_types::ConciseableName,
     error::{SuiError, SuiResult},
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
     transaction::Transaction,
@@ -125,6 +126,15 @@ impl SuiTxValidator {
 
         // All checkpoint sigs have been verified, forward them to the checkpoint service
         for ckpt in ckpt_messages {
+            info!(
+                checkpoint_seq = ckpt.summary.sequence_number,
+                digest = ?ckpt.summary.digest(),
+                authority = ?ckpt.summary.auth_sig().authority.concise(),
+                "RECEIVED checkpoint signature from consensus: seq={}, digest={:?}, authority={:?}",
+                ckpt.summary.sequence_number,
+                ckpt.summary.digest(),
+                ckpt.summary.auth_sig().authority.concise()
+            );
             self.checkpoint_service
                 .notify_checkpoint_signature(&epoch_store, ckpt)?;
         }

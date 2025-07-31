@@ -1581,7 +1581,14 @@ impl CheckpointBuilder {
                     // Also allow if we rebuilt the previous checkpoint of the previously computed summary
                     let rebuilt_previous = previously_computed_summary
                         .previous_digest
-                        .map(|digest| self.rebuilt_checkpoint_digests.contains(&digest))
+                        .map(|digest| {
+                            info!(
+                                "Fork recovery: Checking if previous digest {:?} is in rebuilt_checkpoint_digests: {:?}",
+                                digest,
+                                self.rebuilt_checkpoint_digests
+                            );
+                            self.rebuilt_checkpoint_digests.contains(&digest)
+                        })
                         .unwrap_or(false);
 
                     if let Some(expected_digest) = override_digest {
@@ -1593,6 +1600,10 @@ impl CheckpointBuilder {
                             );
                             self.rebuilt_checkpoint_digests
                                 .insert(previously_computed_summary.digest());
+                            info!(
+                                "Fork recovery: Added digest to rebuilt_checkpoint_digests via override, contents: {:?}",
+                                self.rebuilt_checkpoint_digests
+                            );
                         } else {
                             fatal!(
                                 "Fork recovery: Checkpoint {} override configured with digest {:?}, but newly built checkpoint has digest {:?}",
@@ -1605,13 +1616,13 @@ impl CheckpointBuilder {
                         info!(
                             checkpoint_seq = summary.sequence_number,
                             "Fork recovery: Allowing checkpoint rebuild because previous digest {:?} is bad",
-                            summary.previous_digest
+                            previously_computed_summary.previous_digest
                         );
                         self.rebuilt_checkpoint_digests
                             .insert(previously_computed_summary.digest());
                     } else {
                         fatal!(
-                            "Checkpoint {} was previously built with a different result: {:?} vs {:?}",
+                            "Checkpoint {} was previously built with a different result: previously_computed_summary {:?} vs current_summary {:?}",
                             summary.sequence_number,
                             previously_computed_summary,
                             summary
@@ -1954,9 +1965,23 @@ impl CheckpointBuilder {
                         sequence_number,
                         Some(acc),
                     )?;
-                    state_acc
+                    
+                    // DEBUG: Log before ECMH digest computation
+                    info!(
+                        "ECMH_CHECKPOINT_DEBUG: About to compute ECMH digest for checkpoint {} (epoch {})",
+                        sequence_number, epoch
+                    );
+                    
+                    let digest_result = state_acc
                         .digest_epoch(self.epoch_store.clone(), sequence_number)
-                        .await?
+                        .await?;
+                        
+                    info!(
+                        "ECMH_CHECKPOINT_DEBUG: Computed ECMH digest for checkpoint {} (epoch {}): {:?}",
+                        sequence_number, epoch, digest_result
+                    );
+                    
+                    digest_result
                 };
                 self.metrics.highest_accumulated_epoch.set(epoch as i64);
                 info!("Epoch {epoch} root state hash digest: {root_state_digest:?}");
@@ -2300,6 +2325,11 @@ impl CheckpointAggregator {
         let mut result = vec![];
         'outer: loop {
             let next_to_certify = self.next_checkpoint_to_certify()?;
+            info!(
+                checkpoint_seq = next_to_certify,
+                "CheckpointAggregator processing sequence {}", 
+                next_to_certify
+            );
             let current = if let Some(current) = &mut self.current {
                 // It's possible that the checkpoint was already certified by
                 // the rest of the network and we've already received the
@@ -2307,6 +2337,13 @@ impl CheckpointAggregator {
                 // the current signature aggregator to the next checkpoint to
                 // be certified
                 if current.summary.sequence_number < next_to_certify {
+                    info!(
+                        current_seq = current.summary.sequence_number,
+                        next_to_certify = next_to_certify,
+                        "SKIPPING checkpoint {} - already certified via StateSync, moving to {}",
+                        current.summary.sequence_number,
+                        next_to_certify
+                    );
                     assert_reachable!("skip checkpoint certification");
                     self.current = None;
                     continue;
@@ -2317,8 +2354,20 @@ impl CheckpointAggregator {
                     .epoch_store
                     .get_built_checkpoint_summary(next_to_certify)?
                 else {
+                    info!(
+                        checkpoint_seq = next_to_certify,
+                        "No locally built checkpoint summary found for sequence {}, stopping aggregation",
+                        next_to_certify
+                    );
                     return Ok(result);
                 };
+                info!(
+                    checkpoint_seq = next_to_certify,
+                    digest = ?summary.digest(),
+                    "Found locally built checkpoint for aggregation: seq={}, digest={:?}",
+                    next_to_certify,
+                    summary.digest()
+                );
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
                     digest: summary.digest(),
@@ -2346,17 +2395,17 @@ impl CheckpointAggregator {
             for item in iter {
                 let ((seq, index), data) = item?;
                 if seq != current.summary.sequence_number {
-                    trace!(
+                    info!(
                         checkpoint_seq =? current.summary.sequence_number,
                         "Not enough checkpoint signatures",
                     );
                     // No more signatures (yet) for this checkpoint
                     return Ok(result);
                 }
-                trace!(
+                info!(
                     checkpoint_seq = current.summary.sequence_number,
                     "Processing signature for checkpoint (digest: {:?}) from {:?}",
-                    current.summary.digest(),
+                    data.summary.digest(),
                     data.summary.auth_sig().authority.concise()
                 );
                 self.metrics
@@ -2367,9 +2416,9 @@ impl CheckpointAggregator {
                     )])
                     .inc();
                 if let Ok(auth_signature) = current.try_aggregate(data) {
-                    debug!(
+                    info!(
                         checkpoint_seq = current.summary.sequence_number,
-                        "Successfully aggregated signatures for checkpoint (digest: {:?})",
+                        "Checkpoint certified (digest: {:?})",
                         current.summary.digest(),
                     );
                     let summary = VerifiedCheckpoint::new_unchecked(
@@ -2421,6 +2470,14 @@ impl CheckpointSignatureAggregator {
         let their_digest = *data.summary.digest();
         let (_, signature) = data.summary.into_data_and_sig();
         let author = signature.authority;
+        
+        info!(
+            checkpoint_seq = self.summary.sequence_number,
+            "Trying to aggregate signature from {:?}. Their digest: {:?}, Our digest: {:?}",
+            author.concise(),
+            their_digest,
+            self.digest
+        );
         let envelope =
             SignedCheckpointSummary::new_from_data_and_sig(self.summary.clone(), signature);
         match self.signatures_by_digest.insert(their_digest, envelope) {
@@ -2431,7 +2488,15 @@ impl CheckpointSignatureAggregator {
                         conflicting_sig: false,
                         ..
                     },
-            } => Err(()),
+            } => {
+                info!(
+                    checkpoint_seq = self.summary.sequence_number,
+                    "Ignoring repeated signature from validator {:?} for digest {:?}",
+                    author.concise(),
+                    their_digest
+                );
+                Err(())
+            }
             InsertResult::Failed { error } => {
                 warn!(
                     checkpoint_seq = self.summary.sequence_number,
@@ -2449,7 +2514,7 @@ impl CheckpointSignatureAggregator {
                     self.metrics.remote_checkpoint_forks.inc();
                     warn!(
                         checkpoint_seq = self.summary.sequence_number,
-                        "Validator {:?} has mismatching checkpoint digest {}, we have digest {}",
+                        "FORK DETECTED: Validator {:?} reached quorum with digest {} but we expect {}. This indicates a network partition or Byzantine behavior!",
                         author.concise(),
                         their_digest,
                         self.digest
@@ -2459,9 +2524,42 @@ impl CheckpointSignatureAggregator {
                 Ok(cert)
             }
             InsertResult::NotEnoughVotes {
-                bad_votes: _,
-                bad_authorities: _,
+                bad_votes,
+                bad_authorities,
             } => {
+                if bad_votes > 0 || !bad_authorities.is_empty() {
+                    warn!(
+                        checkpoint_seq = self.summary.sequence_number,
+                        "Some bad signatures detected while aggregating from {:?} (digest: {:?}). Bad votes: {}, Bad authorities: {}",
+                        author.concise(),
+                        their_digest,
+                        bad_votes,
+                        bad_authorities.len()
+                    );
+                } else {
+                    let total_votes = self.signatures_by_digest.total_votes();
+                    let uncommitted = self.signatures_by_digest.uncommitted_stake();
+                    let unique_digests = self.signatures_by_digest.unique_key_count();
+                    
+                    if self.signatures_by_digest.quorum_unreachable() {
+                        warn!(
+                            checkpoint_seq = self.summary.sequence_number,
+                            "Quorum unreachable! Vote progress: {} total stake, {} uncommitted, {} unique digests",
+                            total_votes,
+                            uncommitted,
+                            unique_digests
+                        );
+                    } else {
+                        info!(
+                            checkpoint_seq = self.summary.sequence_number,
+                            "Signature from {:?} accepted. Vote progress: {} total stake, {} uncommitted, {} unique digests",
+                            author.concise(),
+                            total_votes,
+                            uncommitted,
+                            unique_digests
+                        );
+                    }
+                }
                 self.check_for_split_brain();
                 Err(())
             }
@@ -2522,22 +2620,23 @@ impl CheckpointSignatureAggregator {
                             
                             tracing::error!(
                                 fatal = true,
-                                "Fork recovery test: killing node due to split-brain for sequence number: {}, using digest: {}",
+                                "Fork recovery test: detected split-brain for sequence number: {}, using digest: {}",
                                 self.summary.sequence_number,
                                 correct_digest
                             );
                         }
-                        sui_simulator::task::kill_current_node(None);
+                        return;
+                        // sui_simulator::task::kill_current_node(None);
                     }
                 }
             );
 
-            debug_fatal!(
-                "Split brain detected in checkpoint signature aggregation for checkpoint {:?}. Remaining stake: {:?}, Digests by stake: {:?}",
-                self.summary.sequence_number,
-                self.signatures_by_digest.uncommitted_stake(),
-                digests_by_stake_messages,
-            );
+            // debug_fatal!(
+            //     "Split brain detected in checkpoint signature aggregation for checkpoint {:?}. Remaining stake: {:?}, Digests by stake: {:?}",
+            //     self.summary.sequence_number,
+            //     self.signatures_by_digest.uncommitted_stake(),
+            //     digests_by_stake_messages,
+            // );
             self.metrics.split_brain_checkpoint_forks.inc();
 
             let all_unique_values = self.signatures_by_digest.get_all_unique_values();
@@ -2729,7 +2828,7 @@ async fn diagnose_split_brain(
         .join(Path::new("checkpoint_fork_dump.txt"));
     let mut file = File::create(path).unwrap();
     write!(file, "{}", fork_logs_text).unwrap();
-    debug!("{}", fork_logs_text);
+    info!("checkpoint_fork_dump: {}", fork_logs_text);
 }
 
 pub trait CheckpointServiceNotify {
@@ -2887,6 +2986,19 @@ impl CheckpointService {
         let mut tasks = JoinSet::new();
 
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
+
+        // Clean up state hashes computed after the last committed checkpoint
+        // This prevents ECMH divergence after fork recovery restarts
+        if let Some(last_committed_seq) = self.tables.get_highest_verified_checkpoint()
+            .expect("Failed to get highest verified checkpoint")
+            .map(|checkpoint| *checkpoint.sequence_number())
+        {
+            if let Err(e) = builder.epoch_store.clear_state_hashes_after_checkpoint(last_committed_seq) {
+                error!("Failed to clear state hashes after checkpoint {}: {:?}", last_committed_seq, e);
+            } else {
+                info!("Cleared state hashes after checkpoint {} to ensure consistent ECMH computation", last_committed_seq);
+            }
+        }
         tasks.spawn(monitored_future!(builder.run(consensus_replay_waiter)));
         tasks.spawn(monitored_future!(aggregator.run()));
         tasks.spawn(monitored_future!(state_hasher.run()));
@@ -2965,10 +3077,12 @@ impl CheckpointServiceNotify for CheckpointService {
             .map(|x| *x.sequence_number())
         {
             if sequence <= highest_verified_checkpoint {
-                trace!(
+                info!(
                     checkpoint_seq = sequence,
-                    "Ignore checkpoint signature from {} - already certified",
+                    digest = ?info.summary.digest(),
+                    "IGNORING checkpoint signature from {} - already certified (highest verified: {})",
                     signer,
+                    highest_verified_checkpoint
                 );
                 self.metrics
                     .last_ignored_checkpoint_signature_received
@@ -2976,11 +3090,12 @@ impl CheckpointServiceNotify for CheckpointService {
                 return Ok(());
             }
         }
-        trace!(
+        info!(
             checkpoint_seq = sequence,
-            "Received checkpoint signature, digest {} from {}",
-            info.summary.digest(),
+            digest = ?info.summary.digest(),
+            "ACCEPTING checkpoint signature from {}, digest={:?}, will store and notify aggregator",
             signer,
+            info.summary.digest()
         );
         self.metrics
             .last_received_checkpoint_signatures

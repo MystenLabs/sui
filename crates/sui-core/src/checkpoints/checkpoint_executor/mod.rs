@@ -408,6 +408,7 @@ impl CheckpointExecutor {
 
             self.global_state_hasher
                 .accumulate_epoch(self.epoch_store.clone(), seq)
+                .await
                 .expect("Accumulating epoch cannot fail");
 
             self.checkpoint_store

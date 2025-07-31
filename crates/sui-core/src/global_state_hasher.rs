@@ -12,7 +12,7 @@ use sui_types::committee::EpochId;
 use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::storage::{ObjectKey, ObjectStore};
-use tracing::debug;
+use tracing::{debug, info};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -48,6 +48,7 @@ impl GlobalStateHashMetrics {
 pub struct GlobalStateHasher {
     store: Arc<dyn GlobalStateHashStore>,
     metrics: Arc<GlobalStateHashMetrics>,
+    state_hash_insertion_lock: tokio::sync::Mutex<()>,
 }
 
 pub trait GlobalStateHashStore: ObjectStore + Send + Sync {
@@ -374,7 +375,11 @@ fn accumulate_effects_v3(effects: &[TransactionEffects]) -> GlobalStateHash {
 
 impl GlobalStateHasher {
     pub fn new(store: Arc<dyn GlobalStateHashStore>, metrics: Arc<GlobalStateHashMetrics>) -> Self {
-        Self { store, metrics }
+        Self { 
+            store, 
+            metrics,
+            state_hash_insertion_lock: tokio::sync::Mutex::new(()),
+        }
     }
 
     pub fn new_for_tests(store: Arc<dyn GlobalStateHashStore>) -> Self {
@@ -459,7 +464,15 @@ impl GlobalStateHasher {
         include_wrapped_tombstone: bool,
     ) -> ECMHLiveObjectSetDigest {
         let acc = self.accumulate_live_object_set(include_wrapped_tombstone);
-        acc.digest().into()
+        let digest = acc.digest().into();
+        
+        // DEBUG: Log basic digest information for ECMH debugging
+        info!(
+            "ECMH_DEBUG: digest_live_object_set computed digest={:?}, include_wrapped_tombstone={}", 
+            digest, include_wrapped_tombstone
+        );
+        
+        digest
     }
 
     pub async fn digest_epoch(
@@ -467,10 +480,16 @@ impl GlobalStateHasher {
         epoch_store: Arc<AuthorityPerEpochStore>,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
     ) -> SuiResult<ECMHLiveObjectSetDigest> {
-        Ok(self
-            .accumulate_epoch(epoch_store, last_checkpoint_of_epoch)?
-            .digest()
-            .into())
+        let running_root = self.accumulate_epoch(epoch_store.clone(), last_checkpoint_of_epoch).await?;
+        let final_digest: ECMHLiveObjectSetDigest = running_root.digest().into();
+        
+        // DEBUG: Log the final epoch digest computation
+        info!(
+            "ECMH_DEBUG: Final epoch digest for checkpoint {}: {:?}",
+            last_checkpoint_of_epoch, final_digest
+        );
+        
+        Ok(final_digest)
     }
 
     pub async fn wait_for_previous_running_root(
@@ -574,7 +593,7 @@ impl GlobalStateHasher {
         Ok(())
     }
 
-    pub fn accumulate_epoch(
+    pub async fn accumulate_epoch(
         &self,
         epoch_store: Arc<AuthorityPerEpochStore>,
         last_checkpoint_of_epoch: CheckpointSequenceNumber,
@@ -584,6 +603,10 @@ impl GlobalStateHasher {
             .get_running_root_state_hash(last_checkpoint_of_epoch)?
             .expect("Expected running root accumulator to exist up to last checkpoint of epoch");
 
+        // Serialize access to insert_state_hash_for_epoch to prevent race conditions
+        // that could cause ECMH divergence during concurrent checkpoint creation
+        let _lock = self.state_hash_insertion_lock.lock().await;
+        
         self.store.insert_state_hash_for_epoch(
             epoch_store.epoch(),
             &last_checkpoint_of_epoch,

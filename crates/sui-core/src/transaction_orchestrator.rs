@@ -324,7 +324,12 @@ where
                 }
                 // A timeout has occurred while waiting for finality
                 _ = &mut timeout_future => {
-                    debug!(?tx_digest, "Timeout waiting for transaction finality.");
+                    error!(
+                        ?tx_digest, 
+                        sender = ?transaction.sender_address(),
+                        timeout_secs = %WAIT_FOR_FINALITY_TIMEOUT.as_secs(),
+                        "Transaction timed out waiting for finality - possible consensus or network issues"
+                    );
                     self.metrics.wait_for_finality_timeout.inc();
                     return Err(QuorumDriverError::TimeoutBeforeFinality);
                 }

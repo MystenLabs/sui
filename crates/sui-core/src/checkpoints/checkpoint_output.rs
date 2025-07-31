@@ -7,7 +7,7 @@ use crate::consensus_adapter::SubmitToConsensus;
 use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
 use std::sync::Arc;
-use sui_types::base_types::AuthorityName;
+use sui_types::base_types::{AuthorityName, ConciseableName};
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
@@ -94,17 +94,23 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             .map(|x| *x.sequence_number());
 
         if Some(checkpoint_seq) > highest_verified_checkpoint {
-            debug!(
-                "Sending checkpoint signature at sequence {checkpoint_seq} to consensus, timestamp {checkpoint_timestamp}.
-                {}ms left till end of epoch at timestamp {}",
-                self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp), self.next_reconfiguration_timestamp_ms
-            );
-
             let summary = SignedCheckpointSummary::new(
                 epoch_store.epoch(),
                 summary.clone(),
                 &*self.signer,
                 self.authority,
+            );
+
+            info!(
+                checkpoint_seq = checkpoint_seq,
+                digest = ?summary.digest(),
+                authority = ?self.authority.concise(),
+                "SENDING checkpoint signature to consensus: seq={}, digest={:?}, authority={:?}, timestamp={}, {}ms left till epoch end",
+                checkpoint_seq,
+                summary.digest(),
+                self.authority.concise(),
+                checkpoint_timestamp,
+                self.next_reconfiguration_timestamp_ms.saturating_sub(checkpoint_timestamp)
             );
 
             let message = CheckpointSignatureMessage { summary };

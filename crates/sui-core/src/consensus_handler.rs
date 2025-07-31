@@ -26,7 +26,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConsensusObjectSequenceKey, EpochId, SequenceNumber, TransactionDigest,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, EpochId, SequenceNumber, TransactionDigest,
     },
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
@@ -783,6 +783,26 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         .consensus_handler_transaction_sizes
                         .with_label_values(&[kind])
                         .observe(parsed.serialized_len as f64);
+
+
+                    if let ConsensusTransactionKind::CheckpointSignature(ckpt_sig) =
+                        &parsed.transaction.kind
+                    {
+                        info!(
+                            checkpoint_seq = ckpt_sig.summary.sequence_number,
+                            digest = ?ckpt_sig.summary.digest(),
+                            authority = ?ckpt_sig.summary.auth_sig().authority.concise(),
+                            "CONSENSUS HANDLER: Processing checkpoint signature from consensus: seq={}, digest={:?}, authority={:?}",
+                            ckpt_sig.summary.sequence_number,
+                            ckpt_sig.summary.digest(),
+                            ckpt_sig.summary.auth_sig().authority.concise()
+                        );
+                        // self.checkpoint_service.notify_checkpoint_signature(
+                        //     self.epoch_store.as_ref(),
+                        //     ckpt_sig,
+                        // ).expect("Failed to notify checkpoint signature");
+                    }
+                    
                     // UserTransaction exists only when mysticeti_fastpath is enabled in protocol config.
                     if matches!(
                         &parsed.transaction.kind,
