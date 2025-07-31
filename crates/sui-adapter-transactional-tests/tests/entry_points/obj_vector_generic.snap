@@ -76,9 +76,8 @@ gas summary: computation_cost: 1000000, storage_cost: 2599200,  storage_rebate: 
 
 task 13, lines 148-151:
 //# run Test::M::obj_vec_destroy_any --sender A --type-args Test::M::Any --args vector[object(12,0)]
-mutated: object(0,0)
-deleted: object(12,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2573208, non_refundable_storage_fee: 25992
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 14, line 153:
 //# run Test::M::mint_any --sender A --type-args Test::M::Any --args 42

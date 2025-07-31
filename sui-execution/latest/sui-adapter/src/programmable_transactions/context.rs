@@ -1328,6 +1328,7 @@ mod checked {
             // of `Shared`.
             if let Some(obj) = written_objects.get(id) {
                 if !obj.is_shared() {
+                    debug_assert!(!protocol_config.per_command_shared_object_transfer_rules());
                     return Err(ExecutionError::new(
                         ExecutionErrorKind::SharedObjectOperationNotAllowed,
                         Some(
@@ -1344,6 +1345,7 @@ mod checked {
                 // If it's not in the written objects, the object must have been deleted. Otherwise
                 // it's an error.
                 if !deleted_object_ids.contains(id) {
+                    debug_assert!(!protocol_config.per_command_shared_object_transfer_rules());
                     return Err(ExecutionError::new(
                             ExecutionErrorKind::SharedObjectOperationNotAllowed,
                             Some(
