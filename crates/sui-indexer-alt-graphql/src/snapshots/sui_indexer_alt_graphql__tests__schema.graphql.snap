@@ -142,26 +142,40 @@ System transaction that runs at the beginning of a checkpoint, and is responsibl
 type ConsensusCommitPrologueTransaction {
 	"""
 	Epoch of the commit prologue transaction.
+	
+	Present in V1, V2, V3, V4.
 	"""
 	epoch: Epoch
 	"""
 	Consensus round of the commit.
+	
+	Present in V1, V2, V3, V4.
 	"""
 	round: UInt53
 	"""
 	Unix timestamp from consensus.
+	
+	Present in V1, V2, V3, V4.
 	"""
 	commitTimestamp: DateTime
 	"""
-	Digest of consensus output, encoded as a Base58 string (only available from V2+ of the transaction).
+	Digest of consensus output, encoded as a Base58 string.
+	
+	Present in V2, V3, V4.
 	"""
 	consensusCommitDigest: String
 	"""
-	Sub-DAG index for consensus ordering (only available from V3+ of the transaction).
+	The sub DAG index of the consensus commit. This field is populated if there
+	are multiple consensus commits per round.
+	
+	Present in V3, V4.
 	"""
 	subDagIndex: UInt53
 	"""
-	Additional state digest for enhanced security (only available from V4+ of the transaction).
+	Digest of any additional state computed by the consensus handler.
+	Used to detect forking bugs as early as possible.
+	
+	Present in V4.
 	"""
 	additionalStateDigest: String
 }

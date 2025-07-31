@@ -37,33 +37,47 @@ pub(crate) struct ConsensusCommitPrologueTransaction {
 #[Object]
 impl ConsensusCommitPrologueTransaction {
     /// Epoch of the commit prologue transaction.
+    ///
+    /// Present in V1, V2, V3, V4.
     async fn epoch(&self) -> Option<Epoch> {
         Some(Epoch::with_id(self.scope.clone(), self.epoch))
     }
 
     /// Consensus round of the commit.
+    ///
+    /// Present in V1, V2, V3, V4.
     async fn round(&self) -> Option<UInt53> {
         Some(self.round.into())
     }
 
     /// Unix timestamp from consensus.
+    ///
+    /// Present in V1, V2, V3, V4.
     async fn commit_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
         Ok(Some(DateTime::from_ms(self.commit_timestamp_ms as i64)?))
     }
 
-    /// Digest of consensus output, encoded as a Base58 string (only available from V2+ of the transaction).
+    /// Digest of consensus output, encoded as a Base58 string.
+    ///
+    /// Present in V2, V3, V4.
     async fn consensus_commit_digest(&self) -> Option<String> {
         self.consensus_commit_digest
             .as_ref()
             .map(|digest| Base58::encode(digest.inner()))
     }
 
-    /// Sub-DAG index for consensus ordering (only available from V3+ of the transaction).
+    /// The sub DAG index of the consensus commit. This field is populated if there
+    /// are multiple consensus commits per round.
+    ///
+    /// Present in V3, V4.
     async fn sub_dag_index(&self) -> Option<UInt53> {
         self.sub_dag_index.map(|idx| idx.into())
     }
 
-    /// Additional state digest for enhanced security (only available from V4+ of the transaction).
+    /// Digest of any additional state computed by the consensus handler.
+    /// Used to detect forking bugs as early as possible.
+    ///
+    /// Present in V4.
     async fn additional_state_digest(&self) -> Option<String> {
         self.additional_state_digest
             .as_ref()
