@@ -300,7 +300,6 @@ impl<F: MoveFlavor> Package<F> {
                     Ok(deps
                         .into_iter()
                         .filter(|(name, _)| specified_deps.contains(&name.to_string()))
-                        .map(|(name, dep)| (name, dep))
                         .collect())
                 } else {
                     Ok(deps)
