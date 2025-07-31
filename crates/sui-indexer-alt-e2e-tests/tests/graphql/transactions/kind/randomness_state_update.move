@@ -15,6 +15,7 @@
   randomnessStateUpdateTransaction: transaction(digest: "@{digest_2}") {
     digest
     kind {
+      __typename
       ... on RandomnessStateUpdateTransaction {
         epoch
         randomnessRound
