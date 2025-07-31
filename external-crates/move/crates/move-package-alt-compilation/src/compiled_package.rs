@@ -6,7 +6,7 @@ use move_package_alt::{
     flavor::MoveFlavor,
     graph::NamedAddress,
     package::{RootPackage, paths::PackagePath},
-    schema::OriginalID,
+    schema::{OriginalID, PackageName},
 };
 
 use colored::Colorize;
@@ -50,6 +50,11 @@ use vfs::VfsPath;
 /// References file for documentation generation
 pub const REFERENCE_TEMPLATE_FILENAME: &str = "references.md";
 
+#[derive(Clone, Debug)]
+pub struct BuildNamedAddresses {
+    pub inner: BTreeMap<Symbol, NumericalAddress>,
+}
+
 /// Represents a compiled package in memory.
 #[derive(Clone, Debug)]
 pub struct CompiledPackage {
@@ -91,12 +96,21 @@ pub struct CompiledUnitWithSource {
 
 impl CompiledPackage {
     /// Return an iterator over all compiled units in this package, including dependencies
-    pub fn get_all_compiled_units_with_source(
-        &self,
-    ) -> impl Iterator<Item = &CompiledUnitWithSource> {
+    pub fn all_compiled_units_with_source(&self) -> impl Iterator<Item = &CompiledUnitWithSource> {
         self.root_compiled_units
             .iter()
             .chain(self.deps_compiled_units.iter().map(|(_, unit)| unit))
+    }
+
+    /// Returns all compiled units for this package in transitive dependencies. Order is not
+    /// guaranteed.
+    pub fn all_compiled_units(&self) -> impl Iterator<Item = &CompiledUnit> {
+        self.all_compiled_units_with_source().map(|unit| &unit.unit)
+    }
+
+    /// Returns compiled modules for this package and its transitive dependencies
+    pub fn all_modules_map(&self) -> Modules {
+        Modules::new(self.all_compiled_units().map(|unit| &unit.module))
     }
 
     /// `root_compiled_units` filtered over `CompiledUnit::Module`
@@ -106,7 +120,7 @@ impl CompiledPackage {
 
     /// Return an iterator over all bytecode modules in this package, including dependencies
     pub fn get_modules_and_deps(&self) -> impl Iterator<Item = &CompiledModule> {
-        self.get_all_compiled_units_with_source()
+        self.all_compiled_units_with_source()
             .map(|m| &m.unit.module)
     }
 
@@ -441,7 +455,7 @@ fn compiler_flags(build_config: &BuildConfig) -> Flags {
 pub fn build_all<W: Write, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
-    root_pkg: RootPackage<F>,
+    root_pkg: &RootPackage<F>,
     build_config: &BuildConfig,
     compiler_driver: impl FnOnce(Compiler) -> Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
 ) -> Result<CompiledPackage> {
@@ -530,6 +544,7 @@ pub fn build_all<W: Write, F: MoveFlavor>(
         build_flags: build_config.clone(),
     };
 
+    // TODO: take into consideration install dir flag
     let under_path = project_root.join("build");
 
     save_to_disk(
@@ -559,7 +574,7 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
     w: &mut W,
     vfs_root: Option<VfsPath>,
     build_config: &BuildConfig,
-    root_pkg: RootPackage<F>,
+    root_pkg: &RootPackage<F>,
     compiler_driver: impl FnOnce(Compiler) -> Result<T>,
 ) -> Result<T> {
     let packages = root_pkg.packages()?;
@@ -573,29 +588,7 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
             writeln!(w, "{} {name}", "INCLUDING DEPENDENCY".bold().green())?;
         }
 
-        let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
-        for (dep_name, dep) in pkg.named_addresses()? {
-            let name = dep_name.as_str().into();
-
-            let addr = match dep {
-                NamedAddress::RootPackage(_) => AccountAddress::ZERO,
-                NamedAddress::Unpublished { dummy_addr } => {
-                    writeln!(
-                        w,
-                        "{} Using address 0x{} for unpublished dependency `{name}` in package `{}`",
-                        "NOTE".bold().yellow(),
-                        dummy_addr.0.short_str_lossless(),
-                        pkg.name()
-                    )?;
-                    dummy_addr.0
-                }
-                NamedAddress::Defined(original_id) => original_id.0,
-            };
-
-            let addr: NumericalAddress =
-                NumericalAddress::new(addr.into_bytes(), move_compiler::shared::NumberFormat::Hex);
-            addresses.insert(name, addr);
-        }
+        let addresses: BuildNamedAddresses = pkg.named_addresses()?.into();
 
         // TODO: better default handling for edition and flavor
         let config = PackageConfig {
@@ -617,7 +610,7 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
         let paths = PackagePaths {
             name: Some((safe_name, config)),
             paths: get_sources(pkg.path(), build_config)?,
-            named_address_map: addresses,
+            named_address_map: addresses.inner,
         };
 
         package_paths.push(paths);
@@ -646,4 +639,24 @@ pub(crate) fn build_for_driver<W: Write, T, F: MoveFlavor>(
         .add_visitors(linters::linter_visitors(lint_level));
 
     compiler_driver(compiler)
+}
+
+impl From<BTreeMap<PackageName, NamedAddress>> for BuildNamedAddresses {
+    fn from(value: BTreeMap<PackageName, NamedAddress>) -> Self {
+        let mut addresses: BTreeMap<Symbol, NumericalAddress> = BTreeMap::new();
+        for (dep_name, dep) in value {
+            let name = dep_name.as_str().into();
+
+            let addr = match dep {
+                NamedAddress::RootPackage(_) => AccountAddress::ZERO,
+                NamedAddress::Unpublished { dummy_addr } => dummy_addr.0,
+                NamedAddress::Defined(original_id) => original_id.0,
+            };
+
+            let addr: NumericalAddress =
+                NumericalAddress::new(addr.into_bytes(), move_compiler::shared::NumberFormat::Hex);
+            addresses.insert(name, addr);
+        }
+        Self { inner: addresses }
+    }
 }

@@ -148,7 +148,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// The name of the root package
     pub fn name(&self) -> &PackageName {
-        self.graph.root_package().name()
+        self.package_graph().root_package().name()
     }
 
     /// The path to the root of the package

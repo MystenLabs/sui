@@ -214,7 +214,14 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
     /// Returns the root package of the graph.
     pub fn root_package(&self) -> &Package<F> {
-        self.inner[self.root_index].as_ref()
+        &self.inner[self.root_index]
+    }
+
+    pub fn root_package_info(&self) -> PackageInfo<F> {
+        PackageInfo {
+            graph: self,
+            node: self.root_index,
+        }
     }
 
     /// Return the list of packages that are in the linkage table, as well as
