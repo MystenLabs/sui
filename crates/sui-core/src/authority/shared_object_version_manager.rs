@@ -39,6 +39,56 @@ impl AssignedTxAndVersions {
     pub fn into_map(self) -> HashMap<TransactionKey, AssignedVersions> {
         self.0.into_iter().collect()
     }
+
+    /// If balance accumulator is enabled, we turn every withdraw transaction
+    /// into the correct Schedulable::Withdraw variant, so that it will trigger
+    /// proper balance withdraw scheduling in the scheduler.
+    /// The basic idea is that each settlement transaction bumps the version of the accumulator object.
+    /// So we first identify all the settlement transactions and their assigned accumulator versions.
+    /// With this information, we can derive that all withdraw transactions that are scheduled
+    /// before a settlement transaction will have the same accumulator version as the settlement transaction.
+    /// So we can turn all withdraw transactions into the correct Schedulable::Withdraw variant.
+    pub(crate) fn finish_process_balance_withdraw_transactions<'a>(
+        &self,
+        all_transactions: impl Iterator<Item = &'a mut Schedulable<VerifiedExecutableTransaction>>,
+    ) {
+        let mut accumulator_versions = vec![];
+        for (tx_key, assigned_versions) in self.0.iter() {
+            if matches!(tx_key, TransactionKey::AccumulatorSettlement(..)) {
+                let accumulator_version = assigned_versions
+                    .iter()
+                    .find_map(|((id, _), assigned_version)| {
+                        if id == &SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+                            Some(assigned_version)
+                        } else {
+                            None
+                        }
+                    })
+                    .copied()
+                    .expect("accumulator version should be assigned for settlement tx");
+                accumulator_versions.push((*tx_key, accumulator_version));
+            }
+        }
+        let mut cur_idx = 0;
+        for tx in all_transactions {
+            // Before processing, it is impossible for a transaction to be a Withdraw Schedulable variant.
+            assert!(!matches!(tx, Schedulable::Withdraw(..)));
+            let is_withdraw_transaction = if let Schedulable::Transaction(tx) = tx {
+                tx.transaction_data().has_balance_withdraws()
+            } else {
+                false
+            };
+            if is_withdraw_transaction {
+                let accumulator_version = accumulator_versions[cur_idx].1;
+                *tx = Schedulable::Withdraw(tx.as_tx().unwrap().clone(), accumulator_version);
+            }
+            if matches!(tx, Schedulable::AccumulatorSettlement(..)) {
+                assert_eq!(accumulator_versions[cur_idx].0, tx.key());
+                cur_idx += 1;
+            }
+        }
+        assert_eq!(cur_idx, accumulator_versions.len());
+    }
 }
 
 /// A wrapper around things that can be scheduled for execution by the assigning of
@@ -436,17 +486,21 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use std::collections::{BTreeMap, HashMap};
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+    use sui_types::base_types::{random_object_ref, ObjectID, SequenceNumber, SuiAddress};
     use sui_types::crypto::RandomnessRound;
     use sui_types::digests::ObjectDigest;
     use sui_types::effects::TestEffectsBuilder;
     use sui_types::executable_transaction::{
         CertificateProof, ExecutableTransaction, VerifiedExecutableTransaction,
     };
+    use sui_types::gas_coin::GAS;
     use sui_types::object::Object;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
-    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::transaction::{
+        BalanceWithdrawArg, ObjectArg, SenderSignedData, VerifiedTransaction,
+    };
+    use sui_types::type_input::TypeInput;
+    use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
     #[tokio::test]
     async fn test_assign_versions_from_consensus_basic() {
@@ -843,6 +897,18 @@ mod tests {
         );
     }
 
+    /// Generate a simple dummy transaction for testing.
+    fn generate_dummy_tx() -> VerifiedExecutableTransaction {
+        let tx_data = TestTransactionBuilder::new(SuiAddress::ZERO, random_object_ref(), 0)
+            .transfer_sui(None, SuiAddress::ZERO)
+            .build();
+        let tx = SenderSignedData::new(tx_data, vec![]);
+        VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
+            tx,
+            CertificateProof::new_system(0),
+        ))
+    }
+
     /// Generate a transaction that uses shared objects as specified in the parameters.
     /// Also uses a gas object with specified version.
     /// The version of the gas object is used to manipulate the lamport version of this transaction.
@@ -877,5 +943,311 @@ mod tests {
             tx,
             CertificateProof::new_system(0),
         ))
+    }
+
+    /// Generate a withdraw transaction with a default amount.
+    fn generate_withdraw_tx() -> VerifiedExecutableTransaction {
+        let sender = SuiAddress::random_for_testing_only();
+        let mut ptb = ProgrammableTransactionBuilder::new();
+        ptb.balance_withdraw(BalanceWithdrawArg::new_with_amount(
+            100,
+            TypeInput::from(GAS::type_tag()),
+        ))
+        .unwrap();
+        let withdraw_tx_data = TestTransactionBuilder::new(sender, random_object_ref(), 1)
+            .programmable(ptb.finish())
+            .build();
+        VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
+            SenderSignedData::new(withdraw_tx_data, vec![]),
+            CertificateProof::new_system(0),
+        ))
+    }
+
+    /// Generate multiple withdraw transactions.
+    fn generate_withdraw_txs(count: usize) -> Vec<VerifiedExecutableTransaction> {
+        (0..count).map(|_| generate_withdraw_tx()).collect()
+    }
+
+    /// Create a settlement transaction with the specified checkpoint height.
+    fn create_settlement_tx(checkpoint_height: u64) -> Schedulable<VerifiedExecutableTransaction> {
+        Schedulable::AccumulatorSettlement(0, checkpoint_height)
+    }
+
+    /// Create assigned versions for a settlement transaction with the specified accumulator version.
+    fn create_settlement_assigned_versions(
+        accumulator_version: SequenceNumber,
+    ) -> AssignedVersions {
+        vec![(
+            (SUI_ACCUMULATOR_ROOT_OBJECT_ID, SequenceNumber::from_u64(0)),
+            accumulator_version,
+        )]
+    }
+
+    #[tokio::test]
+    async fn test_finish_process_balance_withdraw_transactions_basic() {
+        // Test basic case with one withdraw transaction followed by one settlement transaction
+        let accumulator_version = SequenceNumber::from_u64(100);
+
+        // Create a withdraw transaction
+        let withdraw_tx = generate_withdraw_tx();
+
+        // Create a settlement transaction
+        let settlement_tx = create_settlement_tx(1);
+
+        // Create assigned versions
+        let mut assigned_tx_and_versions = AssignedTxAndVersions::default();
+        assigned_tx_and_versions.0.push((withdraw_tx.key(), vec![]));
+        assigned_tx_and_versions.0.push((
+            settlement_tx.key(),
+            create_settlement_assigned_versions(accumulator_version),
+        ));
+
+        // Create schedulables
+        let mut schedulables = vec![Schedulable::Transaction(withdraw_tx.clone()), settlement_tx];
+
+        // Process the transactions
+        assigned_tx_and_versions
+            .finish_process_balance_withdraw_transactions(schedulables.iter_mut());
+
+        // Verify the withdraw transaction was converted to Schedulable::Withdraw
+        assert!(
+            matches!(schedulables[0], Schedulable::Withdraw(_, version) if version == accumulator_version)
+        );
+        assert!(matches!(
+            schedulables[1],
+            Schedulable::AccumulatorSettlement(_, _)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_finish_process_balance_withdraw_transactions_multiple_withdraws() {
+        // Test multiple withdraw transactions between settlements
+        let accumulator_version1 = SequenceNumber::from_u64(100);
+        let accumulator_version2 = SequenceNumber::from_u64(200);
+
+        // Create withdraw transactions
+        let withdraw_txs = generate_withdraw_txs(3);
+
+        // Create settlement transactions
+        let settlement_tx1 = create_settlement_tx(1);
+        let settlement_tx2 = create_settlement_tx(2);
+
+        // Create assigned versions
+        let mut assigned_tx_and_versions = AssignedTxAndVersions::default();
+
+        // First withdraw tx
+        assigned_tx_and_versions
+            .0
+            .push((withdraw_txs[0].key(), vec![]));
+
+        // First settlement
+        assigned_tx_and_versions.0.push((
+            settlement_tx1.key(),
+            create_settlement_assigned_versions(accumulator_version1),
+        ));
+
+        // Second and third withdraw txs
+        assigned_tx_and_versions
+            .0
+            .push((withdraw_txs[1].key(), vec![]));
+        assigned_tx_and_versions
+            .0
+            .push((withdraw_txs[2].key(), vec![]));
+
+        // Second settlement
+        assigned_tx_and_versions.0.push((
+            settlement_tx2.key(),
+            create_settlement_assigned_versions(accumulator_version2),
+        ));
+
+        // Create schedulables
+        let mut schedulables = vec![
+            Schedulable::Transaction(withdraw_txs[0].clone()),
+            settlement_tx1,
+            Schedulable::Transaction(withdraw_txs[1].clone()),
+            Schedulable::Transaction(withdraw_txs[2].clone()),
+            settlement_tx2,
+        ];
+
+        // Process the transactions
+        assigned_tx_and_versions
+            .finish_process_balance_withdraw_transactions(schedulables.iter_mut());
+
+        // Verify correct accumulator versions were assigned
+        assert!(
+            matches!(schedulables[0], Schedulable::Withdraw(_, version) if version == accumulator_version1)
+        );
+        assert!(matches!(
+            schedulables[1],
+            Schedulable::AccumulatorSettlement(_, _)
+        ));
+        assert!(
+            matches!(schedulables[2], Schedulable::Withdraw(_, version) if version == accumulator_version2)
+        );
+        assert!(
+            matches!(schedulables[3], Schedulable::Withdraw(_, version) if version == accumulator_version2)
+        );
+        assert!(matches!(
+            schedulables[4],
+            Schedulable::AccumulatorSettlement(_, _)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_finish_process_balance_withdraw_transactions_no_withdraws() {
+        // Test with no withdraw transactions
+        let settlement_tx = create_settlement_tx(1);
+        let accumulator_version = SequenceNumber::from_u64(100);
+
+        // Create a regular transaction (no withdraws)
+        let tx = generate_dummy_tx();
+
+        // Create assigned versions
+        let mut assigned_tx_and_versions = AssignedTxAndVersions::default();
+        assigned_tx_and_versions.0.push((tx.key(), vec![]));
+        assigned_tx_and_versions.0.push((
+            settlement_tx.key(),
+            create_settlement_assigned_versions(accumulator_version),
+        ));
+
+        // Create schedulables
+        let mut schedulables = vec![Schedulable::Transaction(tx.clone()), settlement_tx];
+
+        // Process the transactions
+        assigned_tx_and_versions
+            .finish_process_balance_withdraw_transactions(schedulables.iter_mut());
+
+        // Verify the regular transaction remains unchanged
+        assert!(matches!(schedulables[0], Schedulable::Transaction(_)));
+        assert!(matches!(
+            schedulables[1],
+            Schedulable::AccumulatorSettlement(_, _)
+        ));
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_finish_process_balance_withdraw_transactions_no_settlements() {
+        // Test with withdraw transactions but no settlements
+        // This should panic because the function expects each withdraw to have a corresponding settlement
+
+        // Create a withdraw transaction
+        let withdraw_tx = generate_withdraw_tx();
+
+        // Create assigned versions with no settlements
+        let mut assigned_tx_and_versions = AssignedTxAndVersions::default();
+        assigned_tx_and_versions.0.push((withdraw_tx.key(), vec![]));
+
+        // Create schedulables
+        let mut schedulables = vec![Schedulable::Transaction(withdraw_tx.clone())];
+
+        // This should panic because there are no settlements but we have a withdraw transaction
+        assigned_tx_and_versions
+            .finish_process_balance_withdraw_transactions(schedulables.iter_mut());
+    }
+
+    #[tokio::test]
+    async fn test_finish_process_balance_withdraw_transactions_mixed_types() {
+        // Test with mixed transaction types
+        let accumulator_version = SequenceNumber::from_u64(100);
+
+        // Create different types of transactions
+        let regular_tx = generate_dummy_tx();
+        let withdraw_tx = generate_withdraw_tx();
+
+        let randomness_update = VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_randomness_state_update(
+                0,
+                RandomnessRound::new(1),
+                vec![],
+                SequenceNumber::from_u64(1),
+            ),
+            0,
+        );
+
+        let settlement_tx = create_settlement_tx(1);
+
+        // Create assigned versions
+        let mut assigned_tx_and_versions = AssignedTxAndVersions::default();
+        assigned_tx_and_versions.0.push((regular_tx.key(), vec![]));
+        assigned_tx_and_versions.0.push((withdraw_tx.key(), vec![]));
+        assigned_tx_and_versions
+            .0
+            .push((randomness_update.key(), vec![]));
+        assigned_tx_and_versions.0.push((
+            settlement_tx.key(),
+            create_settlement_assigned_versions(accumulator_version),
+        ));
+
+        // Create schedulables
+        let mut schedulables = vec![
+            Schedulable::Transaction(regular_tx.clone()),
+            Schedulable::Transaction(withdraw_tx.clone()),
+            Schedulable::RandomnessStateUpdate(0, RandomnessRound::new(1)),
+            settlement_tx,
+        ];
+
+        // Process the transactions
+        assigned_tx_and_versions
+            .finish_process_balance_withdraw_transactions(schedulables.iter_mut());
+
+        // Verify only the withdraw transaction was converted
+        assert!(matches!(schedulables[0], Schedulable::Transaction(_)));
+        assert!(
+            matches!(schedulables[1], Schedulable::Withdraw(_, version) if version == accumulator_version)
+        );
+        assert!(matches!(
+            schedulables[2],
+            Schedulable::RandomnessStateUpdate(_, _)
+        ));
+        assert!(matches!(
+            schedulables[3],
+            Schedulable::AccumulatorSettlement(_, _)
+        ));
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "accumulator version should be assigned for settlement tx")]
+    async fn test_finish_process_balance_withdraw_transactions_missing_accumulator_version() {
+        // Test assertion when settlement doesn't have accumulator version
+        let settlement_tx = create_settlement_tx(1);
+
+        // Create assigned versions with settlement but no accumulator version
+        let mut assigned_tx_and_versions = AssignedTxAndVersions::default();
+        assigned_tx_and_versions.0.push((
+            settlement_tx.key(),
+            vec![], // Missing accumulator version
+        ));
+
+        // Create schedulables
+        let mut schedulables = vec![settlement_tx];
+
+        // This should panic
+        assigned_tx_and_versions
+            .finish_process_balance_withdraw_transactions(schedulables.iter_mut());
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_finish_process_balance_withdraw_transactions_mismatched_keys() {
+        // Test assertion when settlement key doesn't match
+        let settlement_tx1 = create_settlement_tx(1);
+        let accumulator_version = SequenceNumber::from_u64(100);
+
+        // Create assigned versions
+        let mut assigned_tx_and_versions = AssignedTxAndVersions::default();
+        assigned_tx_and_versions.0.push((
+            settlement_tx1.key(),
+            create_settlement_assigned_versions(accumulator_version),
+        ));
+
+        // Create schedulables with different settlement
+        let mut schedulables = vec![
+            create_settlement_tx(2), // Mismatched
+        ];
+
+        // This should panic
+        assigned_tx_and_versions
+            .finish_process_balance_withdraw_transactions(schedulables.iter_mut());
     }
 }

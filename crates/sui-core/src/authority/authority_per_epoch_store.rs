@@ -3357,8 +3357,8 @@ impl AuthorityPerEpochStore {
             .collect();
 
         let (
-            verified_non_randomness_transactions,
-            verified_randomness_transactions,
+            mut verified_non_randomness_transactions,
+            mut verified_randomness_transactions,
             notifications,
             lock,
             final_round,
@@ -3386,6 +3386,13 @@ impl AuthorityPerEpochStore {
                 authority_metrics,
             )
             .await?;
+        if self.accumulators_enabled() {
+            assigned_versions.finish_process_balance_withdraw_transactions(
+                verified_non_randomness_transactions
+                    .iter_mut()
+                    .chain(verified_randomness_transactions.iter_mut()),
+            );
+        }
         self.process_user_signatures(
             verified_non_randomness_transactions
                 .iter()
@@ -3789,23 +3796,6 @@ impl AuthorityPerEpochStore {
                 .push_back(Schedulable::RandomnessStateUpdate(self.epoch(), round));
         }
 
-        if self.accumulators_enabled() {
-            let checkpoint_height =
-                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
-
-            let non_random_settlement =
-                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
-            non_randomness_roots.insert(non_random_settlement.key());
-            verified_non_randomness_certificates.push_back(non_random_settlement);
-
-            if randomness_round.is_some() {
-                let randomness_settlement =
-                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
-                randomness_roots.insert(randomness_settlement.key());
-                verified_randomness_certificates.push_back(randomness_settlement);
-            }
-        }
-
         for entry in non_randomness_transactions
             .iter()
             .map(Either::Left)
@@ -3892,6 +3882,23 @@ impl AuthorityPerEpochStore {
                     non_randomness_roots.remove(&txn_key);
                     randomness_roots.remove(&txn_key);
                 }
+            }
+        }
+
+        if self.accumulators_enabled() {
+            let checkpoint_height =
+                self.calculate_pending_checkpoint_height(consensus_commit_info.round);
+
+            let non_random_settlement =
+                Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height);
+            non_randomness_roots.insert(non_random_settlement.key());
+            verified_non_randomness_certificates.push_back(non_random_settlement);
+
+            if randomness_round.is_some() {
+                let randomness_settlement =
+                    Schedulable::AccumulatorSettlement(self.epoch(), checkpoint_height + 1);
+                randomness_roots.insert(randomness_settlement.key());
+                verified_randomness_certificates.push_back(randomness_settlement);
             }
         }
 
