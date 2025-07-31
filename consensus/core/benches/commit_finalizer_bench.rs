@@ -95,6 +95,7 @@ impl BenchFixture {
 fn process_commit_direct(c: &mut Criterion) {
     process_commits_with_parameters(
         c,
+        "process_commit_direct",
         /*measurement_time*/ Duration::from_secs(30),
         /*num_authorities*/ 100,
         /*num_commits_per_run*/ 100,
@@ -106,6 +107,7 @@ fn process_commit_direct(c: &mut Criterion) {
 fn process_commit_indirect(c: &mut Criterion) {
     process_commits_with_parameters(
         c,
+        "process_commit_indirect",
         /*measurement_time*/ Duration::from_secs(210),
         /*num_authorities*/ 100,
         /*num_commits_per_run*/ 100,
@@ -124,6 +126,7 @@ struct Stats {
 
 fn process_commits_with_parameters(
     c: &mut Criterion,
+    name: &'static str,
     measurement_time: Duration,
     num_authorities: usize,
     num_commits_per_run: usize,
@@ -142,7 +145,7 @@ fn process_commits_with_parameters(
     group
         .throughput(Throughput::Elements(num_commits_per_run as u64))
         .measurement_time(measurement_time)
-        .bench_function("process_commit_indirect", |b| {
+        .bench_function(name, |b| {
             b.to_async(&runtime).iter_batched(
                 || {
                     BenchFixture::new(num_authorities).populate_commits(

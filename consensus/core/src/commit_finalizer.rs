@@ -354,6 +354,8 @@ impl CommitFinalizer {
         let blocks_map = self.blocks.read();
         for block in blocks {
             let block_ref = block.reference();
+            // Block verification ensures the first ancestor is from the block's own authority.
+            // Also, block verification ensures each authority appears at most once among ancestors.
             let mut direct_ancestor = *blocks_map
                 .get(&block_ref)
                 .unwrap()
@@ -451,6 +453,8 @@ impl CommitFinalizer {
         // Process chunks in parallel.
         let mut all_finalized_transactions = vec![];
         let mut join_set = JoinSet::new();
+        // TODO(fastpath): investigate using a cost based batching,
+        // for example each block has cost num authorities + pending_transactions.len().
         for chunk in pending_blocks.chunks(BLOCKS_PER_INDIRECT_COMMIT_TASK) {
             let context = self.context.clone();
             let blocks = self.blocks.clone();
@@ -557,6 +561,7 @@ impl CommitFinalizer {
                 .collect();
         let mut finalized_transactions = vec![];
         let blocks_map = blocks.read();
+        // Use BTreeSet to ensure always visit blocks in the earliest round.
         let mut to_visit_blocks = blocks_map
             .get(&pending_block_ref)
             .unwrap()
@@ -730,6 +735,8 @@ impl BlockState {
             .iter()
             .map(|v| (v.block_ref, v.rejects.clone().into_iter().collect()))
             .collect();
+        // With at most 4 pending commits and assume 2 direct ancestors per commit,
+        // there will be at most 8 direct ancestors.
         let direct_ancestors = Vec::with_capacity(8);
         Self {
             block,
