@@ -13,25 +13,26 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
-use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
 };
-use sui_indexer_alt_consistent_store::{
+pub use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, args::TlsArgs as ConsistentTlsArgs,
     config::ServiceConfig as ConsistentConfig, start_service as start_consistent_store,
 };
 use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::schema::watermarks, IndexerArgs};
-use sui_indexer_alt_graphql::{
+pub use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };
-use sui_indexer_alt_jsonrpc::{
+pub use sui_indexer_alt_jsonrpc::{
     config::RpcConfig as JsonRpcConfig, start_rpc as start_jsonrpc, NodeArgs as JsonRpcNodeArgs,
     RpcArgs as JsonRpcArgs,
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, system_package_task::SystemPackageTaskArgs,
 };
+use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
@@ -64,10 +65,6 @@ pub struct FullCluster {
     /// The off-chain services (database, indexer, RPC) that are ingesting data from the
     /// simulation.
     offchain: OffchainCluster,
-
-    /// Temporary directory to store checkpoint information in, so that the indexer can pick it up.
-    #[allow(unused)]
-    temp_dir: TempDir,
 }
 
 /// A collection of the off-chain services (an indexer, a database, and JSON-RPC/GraphQL servers
@@ -116,7 +113,12 @@ pub struct OffchainCluster {
     /// Hold on to the temporary directory where the consistent store writes its data, so it
     /// doesn't get cleaned up until the cluster is stopped.
     #[allow(unused)]
-    dir: TempDir,
+    rocksdb_temp_dir: TempDir,
+
+    /// Hold on to the temporary directory where the consistent store writes its data, so it
+    /// doesn't get cleaned up until the cluster is stopped.
+    #[allow(unused)]
+    ingestion_temp_dir: Option<TempDir>,
 
     /// This token controls the clean up of the cluster.
     cancel: CancellationToken,
@@ -151,11 +153,7 @@ impl FullCluster {
             .await
             .context("Failed to create off-chain cluster")?;
 
-        Ok(Self {
-            executor,
-            offchain,
-            temp_dir,
-        })
+        Ok(Self { executor, offchain })
     }
 
     /// Return the reference gas price for the current epoch
@@ -262,6 +260,14 @@ impl FullCluster {
             .await
     }
 
+    pub async fn wait_for_graphql(
+        &self,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        self.offchain.wait_for_graphql(checkpoint, timeout).await
+    }
+
     /// Triggers cancellation of all downstream services, waits for them to stop, cleans up the
     /// temporary database, and the temporary directory used for ingestion.
     pub async fn stopped(self) {
@@ -279,15 +285,17 @@ pub struct OffchainClusterConfig {
     pub graphql_config: GraphQlConfig,
     pub registry: prometheus::Registry,
     pub cancel: CancellationToken,
+    pub ingestion_temp_dir: Option<TempDir>,
+    pub bootstrap_genesis: Option<BootstrapGenesis>,
 }
 
 impl OffchainClusterConfig {
     pub fn with_local_ingestion() -> Self {
-        let temp_dir = tempfile::tempdir()
+        let ingestion_temp_dir = tempfile::tempdir()
             .context("Failed to create data ingestion path")
             .unwrap();
         let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            local_ingestion_path: Some(ingestion_temp_dir.path().to_owned()),
             remote_store_url: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -303,6 +311,8 @@ impl OffchainClusterConfig {
             graphql_config: GraphQlConfig::default(),
             registry: prometheus::Registry::new(),
             cancel: CancellationToken::new(),
+            ingestion_temp_dir: Some(ingestion_temp_dir),
+            bootstrap_genesis: None,
         }
     }
 }
@@ -326,6 +336,8 @@ impl OffchainCluster {
             graphql_config,
             registry,
             cancel,
+            ingestion_temp_dir,
+            bootstrap_genesis,
         }: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
         let consistent_port = get_available_port();
@@ -341,8 +353,9 @@ impl OffchainCluster {
         let database = TempDb::new().context("Failed to create database")?;
         let database_url = database.database().url();
 
-        let dir = tempfile::tempdir().context("Failed to create temporary directory")?;
-        let rocksdb_path = dir.path().join("rocksdb");
+        let rocksdb_temp_dir =
+            tempfile::tempdir().context("Failed to create temporary directory")?;
+        let rocksdb_path = rocksdb_temp_dir.path().join("rocksdb");
 
         let consistent_args = ConsistentArgs {
             rpc_listen_address: consistent_listen_address,
@@ -363,14 +376,13 @@ impl OffchainCluster {
             .await
             .context("Failed to connect to database")?;
 
-        let with_genesis = true;
         let indexer = setup_indexer(
             database_url.clone(),
             DbArgs::default(),
             indexer_args,
             client_args.clone(),
             indexer_config,
-            with_genesis,
+            bootstrap_genesis,
             &registry,
             cancel.child_token(),
         )
@@ -383,7 +395,7 @@ impl OffchainCluster {
         let consistent_store = start_consistent_store(
             rocksdb_path,
             consistent_indexer_args,
-            client_args,
+            client_args.clone(),
             consistent_args,
             "0.0.0",
             consistent_config,
@@ -435,7 +447,8 @@ impl OffchainCluster {
             jsonrpc,
             graphql,
             database,
-            dir,
+            rocksdb_temp_dir,
+            ingestion_temp_dir,
             cancel,
         })
     }

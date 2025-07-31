@@ -26,7 +26,7 @@ use tonic_health::ServingStatus;
 use tower::Service;
 use tracing::{error, info};
 
-pub(crate) mod consistent_service;
+pub mod consistent_service;
 mod error;
 mod metrics;
 mod middleware;
