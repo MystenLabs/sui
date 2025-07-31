@@ -1,0 +1,299 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-27:
+//# run-graphql
+Response: {
+  "data": {
+    "nonGenesisTransaction": {
+      "digest": "BHbfKkkQWomffJrjJ5PdxGUm5mREWMyNGDeky4dt9rnw",
+      "kind": null
+    }
+  }
+}
+
+task 4, lines 29-48:
+//# run-graphql
+Response: {
+  "data": {
+    "genesisTransaction": {
+      "nodes": [
+        {
+          "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+          "kind": {
+            "__typename": "GenesisTransaction",
+            "objects": {
+              "nodes": [
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                  "version": 1
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                  "version": 1
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                  "version": 1
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                  "version": 0
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "version": 0
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                  "version": 0
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                  "version": 0
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000009",
+                  "version": 0
+                },
+                {
+                  "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
+                  "version": 1
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000403",
+                  "version": 0
+                },
+                {
+                  "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                  "version": 1
+                },
+                {
+                  "address": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+                  "version": 0
+                },
+                {
+                  "address": "0x29efa2355bad50325946d9243062b64110c7fab283c88ff9514d6e08b16b4d9d",
+                  "version": 0
+                },
+                {
+                  "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                  "version": 0
+                },
+                {
+                  "address": "0x6d0b9758ab130cfb5c8c79dae3643aacb01a01ee013214ac1aefce0e61b2d54c",
+                  "version": 0
+                },
+                {
+                  "address": "0x6d33474042ca5b7b77083b1fa13d699b1f65ddce5ad7c87eb6f66eb9deb014dd",
+                  "version": 0
+                },
+                {
+                  "address": "0x793898ba83ca8a41d0a635be4f3c3ec696dc4df77afbb652c95057e7620af112",
+                  "version": 0
+                },
+                {
+                  "address": "0x989b8b78d36d1199f9c3bad347b822009d8ae730dacc501b13633f6c491c6dc8",
+                  "version": 0
+                },
+                {
+                  "address": "0xadc60c5485f3e8db89130dabf5bb0e2b728dff8306d49e79e14bd7d285ed662d",
+                  "version": 0
+                },
+                {
+                  "address": "0xb5f1cff9e175de3ada5201af3530ff1cfb794cdf766ec839ddcf644fbd78d372",
+                  "version": 0
+                },
+                {
+                  "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                  "version": 0
+                },
+                {
+                  "address": "0xee1a26743f5025d6a8eda005159be9594c8554227ccbbe0d315f08bc7c4fe0d5",
+                  "version": 0
+                },
+                {
+                  "address": "0xf0b6039716354c46639d0c84ae011def2ae2232a4e1e7a104f2acff9a126cad2",
+                  "version": 0
+                },
+                {
+                  "address": "0xf354b8eb4321881a7d6012c665bbece1241bfd36459ec784fc98e836fcf25b42",
+                  "version": 0
+                },
+                {
+                  "address": "0xfdc25bc3b2d2b3664199d08f5275c3a6bb360b0629ab5784672f083149163417",
+                  "version": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 5, lines 50-86:
+//# run-graphql
+Response: {
+  "data": {
+    "paginationTest": {
+      "nodes": [
+        {
+          "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+          "kind": {
+            "__typename": "GenesisTransaction",
+            "objects": {
+              "nodes": [
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                  "version": 1
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                  "version": 1
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                  "version": 1
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "backwardPaginationTest": {
+      "nodes": [
+        {
+          "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+          "kind": {
+            "__typename": "GenesisTransaction",
+            "objects": {
+              "nodes": [
+                {
+                  "address": "0xf0b6039716354c46639d0c84ae011def2ae2232a4e1e7a104f2acff9a126cad2",
+                  "version": 0
+                },
+                {
+                  "address": "0xf354b8eb4321881a7d6012c665bbece1241bfd36459ec784fc98e836fcf25b42",
+                  "version": 0
+                },
+                {
+                  "address": "0xfdc25bc3b2d2b3664199d08f5275c3a6bb360b0629ab5784672f083149163417",
+                  "version": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 6, lines 89-117:
+//# run-graphql --cursors 2
+Response: {
+  "data": {
+    "paginationAfterCursor": {
+      "nodes": [
+        {
+          "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+          "kind": {
+            "__typename": "GenesisTransaction",
+            "objects": {
+              "pageInfo": {
+                "hasNextPage": true,
+                "hasPreviousPage": true,
+                "startCursor": "Mw==",
+                "endCursor": "NQ=="
+              },
+              "edges": [
+                {
+                  "cursor": "Mw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "version": 0
+                  }
+                },
+                {
+                  "cursor": "NA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "version": 0
+                  }
+                },
+                {
+                  "cursor": "NQ==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                    "version": 0
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 7, lines 119-147:
+//# run-graphql --cursors 5
+Response: {
+  "data": {
+    "paginationBeforeCursor": {
+      "nodes": [
+        {
+          "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+          "kind": {
+            "__typename": "GenesisTransaction",
+            "objects": {
+              "pageInfo": {
+                "hasNextPage": true,
+                "hasPreviousPage": true,
+                "startCursor": "Mw==",
+                "endCursor": "NA=="
+              },
+              "edges": [
+                {
+                  "cursor": "Mw==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "version": 0
+                  }
+                },
+                {
+                  "cursor": "NA==",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "version": 0
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

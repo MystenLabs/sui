@@ -21,9 +21,10 @@ use sui_indexer_alt_reader::{
 };
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
 use sui_types::{
-    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
+    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress, TransactionDigest},
     digests::ObjectDigest,
     object::Object as NativeObject,
+    transaction::GenesisObject,
 };
 use tokio::join;
 
@@ -258,6 +259,21 @@ impl Object {
             version,
             digest,
             contents: None,
+        }
+    }
+
+    /// Construct a GraphQL representation of an `Object` from a raw object bundled into the genesis transaction.
+    pub(crate) fn from_genesis_object(scope: Scope, genesis_obj: GenesisObject) -> Self {
+        let GenesisObject::RawObject { data, owner } = genesis_obj;
+        let native =
+            NativeObject::new_from_genesis(data, owner, TransactionDigest::genesis_marker());
+        let address = Address::with_address(scope, native.id().into());
+
+        Self {
+            super_: address,
+            version: native.version(),
+            digest: native.digest(),
+            contents: Some(Arc::new(native)),
         }
     }
 
