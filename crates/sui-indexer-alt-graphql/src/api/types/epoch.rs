@@ -77,7 +77,7 @@ impl Epoch {
         let page = Page::from_params(limits, first, after, last, before)?;
 
         let filter = EpochFilter {
-            at_epoch: Some(self.epoch_id as u64),
+            at_epoch: Some(self.epoch_id),
         };
 
         Checkpoint::paginate(ctx, self.scope.clone(), page, filter).await
