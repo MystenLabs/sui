@@ -41,7 +41,6 @@ import {
     IDebugInfoFunction
 } from './debug_info_utils';
 import { decompress } from 'fzstd';
-import { logger } from '@vscode/debugadapter';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -602,10 +601,6 @@ export async function readTrace(
             }
             const srcFunEntry = debugInfo.functions.get(frame.function_name);
             if (!srcFunEntry) {
-                logger.log(`MODULE ${modInfo.name} FUNCTIONS`);
-                for (const [key, value] of debugInfo.functions) {
-                    logger.log(key);
-                }
                 throw new Error('Cannot find function entry in debug info for function '
                     + frame.function_name
                     + ' in module '
