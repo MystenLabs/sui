@@ -13,7 +13,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
-use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
 };
@@ -296,6 +296,7 @@ pub struct OffchainClusterConfig {
     pub consistent_config: ConsistentConfig,
     pub jsonrpc_config: JsonRpcConfig,
     pub graphql_config: GraphQlConfig,
+    pub bootstrap_genesis: Option<BootstrapGenesis>,
 }
 
 impl Default for OffchainClusterConfig {
@@ -307,6 +308,7 @@ impl Default for OffchainClusterConfig {
             consistent_config: ConsistentConfig::for_test(),
             jsonrpc_config: JsonRpcConfig::default(),
             graphql_config: GraphQlConfig::default(),
+            bootstrap_genesis: None,
         }
     }
 }
@@ -328,6 +330,7 @@ impl OffchainCluster {
             consistent_config,
             jsonrpc_config,
             graphql_config,
+            bootstrap_genesis,
         }: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
         let consistent_port = get_available_port();
@@ -367,14 +370,13 @@ impl OffchainCluster {
 
         let registry = &prometheus::Registry::new();
         let cancel = CancellationToken::new();
-        let with_genesis = true;
         let indexer = setup_indexer(
             database_url.clone(),
             DbArgs::default(),
             indexer_args,
             client_args.clone(),
             indexer_config,
-            with_genesis,
+            bootstrap_genesis,
             registry,
             cancel.child_token(),
         )
@@ -387,7 +389,7 @@ impl OffchainCluster {
         let consistent_store = start_consistent_store(
             rocksdb_path,
             consistent_indexer_args,
-            client_args,
+            client_args.clone(),
             consistent_args,
             "0.0.0",
             consistent_config,
