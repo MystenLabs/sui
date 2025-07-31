@@ -35,7 +35,7 @@ task 6, line 21:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 7, lines 23-50:
+task 7, lines 23-51:
 //# run-graphql
 Response: {
   "data": {
@@ -46,13 +46,14 @@ Response: {
   }
 }
 
-task 8, lines 52-87:
+task 8, lines 53-89:
 //# run-graphql
 Response: {
   "data": {
     "singleJwkTransaction": {
       "digest": "EuB2BT9d9bz6btCzRdwV3rmnrDNT2Po1HgDrBxWknwuc",
       "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
         "epoch": {
           "epochId": 0
         },
@@ -85,13 +86,14 @@ Response: {
   }
 }
 
-task 9, lines 89-124:
+task 9, lines 91-127:
 //# run-graphql
 Response: {
   "data": {
     "multipleJwksTransaction": {
       "digest": "AUnxb6azkw5c9Q2LJT3j1oGubvmGCjt3DhdFc3BFNMbc",
       "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
         "epoch": {
           "epochId": 1
         },
@@ -138,13 +140,14 @@ Response: {
   }
 }
 
-task 10, lines 126-176:
+task 10, lines 129-181:
 //# run-graphql
 Response: {
   "data": {
     "paginationFirstJwk": {
       "digest": "AUnxb6azkw5c9Q2LJT3j1oGubvmGCjt3DhdFc3BFNMbc",
       "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
         "round": 2,
         "newActiveJwks": {
           "pageInfo": {
@@ -168,6 +171,7 @@ Response: {
     "paginationLastJwk": {
       "digest": "AUnxb6azkw5c9Q2LJT3j1oGubvmGCjt3DhdFc3BFNMbc",
       "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
         "round": 2,
         "newActiveJwks": {
           "pageInfo": {

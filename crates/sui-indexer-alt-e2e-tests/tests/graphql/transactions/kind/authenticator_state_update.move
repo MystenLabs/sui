@@ -26,6 +26,7 @@
   nonAuthenticatorTransaction: transaction(digest: "@{digest_1}") {
     digest
     kind {
+      __typename
       ... on AuthenticatorStateUpdateTransaction {
         round
         newActiveJwks {
@@ -55,6 +56,7 @@
   singleJwkTransaction: transaction(digest: "@{digest_2}") {
     digest
     kind {
+      __typename
       ... on AuthenticatorStateUpdateTransaction {
         epoch {
           epochId
@@ -92,6 +94,7 @@
   multipleJwksTransaction: transaction(digest: "@{digest_5}") {
     digest
     kind {
+      __typename
       ... on AuthenticatorStateUpdateTransaction {
         epoch {
           epochId
@@ -129,6 +132,7 @@
   paginationFirstJwk: transaction(digest: "@{digest_5}") {
     digest
     kind {
+      __typename
       ... on AuthenticatorStateUpdateTransaction {
         round
         newActiveJwks(first: 1) {
@@ -153,6 +157,7 @@
   paginationLastJwk: transaction(digest: "@{digest_5}") {
     digest
     kind {
+      __typename
       ... on AuthenticatorStateUpdateTransaction {
         round
         newActiveJwks(last: 1) {
