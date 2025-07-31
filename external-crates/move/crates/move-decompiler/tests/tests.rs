@@ -27,7 +27,7 @@ fn run_structuring_test(file_path: &Path) -> datatest_stable::Result<()> {
 }
 
 // Hand in each stt path
-datatest_stable::harness!(run_structuring_test, "tests/structuring", r"\.stt$");
+// datatest_stable::harness!(run_structuring_test, "tests/structuring", r"\.stt$");
 
 // -------------------------------------------------------------------------------------------------
 // Move Tests [disabled for now]
@@ -81,4 +81,4 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
 }
 
 // Hand in each move path
-// datatest_stable::harness!(run_move_test, "tests/move", r"modules\.txt$");
+datatest_stable::harness!(run_move_test, "tests/move", r"modules\.txt$");

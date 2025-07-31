@@ -1,0 +1,4 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+Module { name: "infinite_loop", functions: {"inf_loop_0": Function { name: "inf_loop_0", code: Continue }, "inf_loop_1": Function { name: "inf_loop_1", code: Continue }} }

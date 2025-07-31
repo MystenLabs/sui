@@ -27,13 +27,17 @@ pub fn loop_type(loop_head: Structured) -> Structured {
                         // this is a do-while loop
                         println!("This could be a Do-while loop");
                         Structured::Loop(Box::new(Structured::Seq(seq)))
-                    } else if matches!(seq.last().unwrap(), Structured::Break) && !seq.iter().any(contains_continue) {
+                    } else if matches!(seq.last().unwrap(), Structured::Break)
+                        && !seq.iter().any(contains_continue)
+                    {
                         // this is the LoopToSeq
                         println!("Loop to Seq detected");
                         let brk = seq.pop().unwrap();
                         assert!(matches!(brk, Structured::Break));
                         Structured::Seq(seq)
-                    } else if matches!(seq.last().unwrap(), Structured::Continue) && !seq.iter().any(is_break_condition) {
+                    } else if matches!(seq.last().unwrap(), Structured::Continue)
+                        && !seq.iter().any(is_break_condition)
+                    {
                         // removing unnecessary continue
                         let cntn = seq.pop().unwrap();
                         assert!(matches!(cntn, Structured::Continue));
@@ -49,7 +53,11 @@ pub fn loop_type(loop_head: Structured) -> Structured {
                         };
                         // TODO invert condition here
                         let inverted_cond = invert_condition(cond);
-                        condition = Structured::IfElse(inverted_cond, Box::new(Structured::Break), Box::new(None));
+                        condition = Structured::IfElse(
+                            inverted_cond,
+                            Box::new(Structured::Break),
+                            Box::new(None),
+                        );
                         seq.push(condition);
                         Structured::Loop(Box::new(Structured::Seq(seq)))
                     } else {
@@ -125,12 +133,7 @@ fn contains_break(structured: &Structured) -> bool {
         Structured::Seq(seq) => seq.iter().any(contains_break),
         Structured::While(_, body) => contains_break(body),
         Structured::IfElse(_, conseq, alt) => {
-            contains_break(conseq)
-                || alt
-                    .as_ref()
-                    .as_ref()
-                    .map(contains_break)
-                    .unwrap_or(false)
+            contains_break(conseq) || alt.as_ref().as_ref().map(contains_break).unwrap_or(false)
         }
         Structured::Switch(_, cases) => cases.iter().any(contains_break),
         Structured::Jump(_) => false,

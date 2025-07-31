@@ -15,12 +15,14 @@ use std::{
     path::Path,
 };
 
+use crate::translate::module;
+
 // -------------------------------------------------------------------------------------------------
 // Main Entry Points
 // -------------------------------------------------------------------------------------------------
 
-pub fn decompile_module(module: S::Module) -> crate::ast::Module {
-    todo!();
+pub fn decompile_module(module_: S::Module) -> crate::ast::Module {
+    module(module_)
 }
 
 // -------------------------------------------------------------------------------------------------
