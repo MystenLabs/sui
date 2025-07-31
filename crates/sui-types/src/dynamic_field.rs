@@ -298,6 +298,10 @@ where
     Ok(id)
 }
 
+pub fn key_to_bytes<K: ?Sized + Serialize>(key: &K) -> Vec<u8> {
+    bcs::to_bytes(key).unwrap()
+}
+
 fn get_dynamic_field_object_from_store_impl<K>(
     object_store: &dyn ObjectStore,
     parent_id: ObjectID,
@@ -307,7 +311,7 @@ fn get_dynamic_field_object_from_store_impl<K>(
 where
     K: Serialize + DeserializeOwned + fmt::Debug,
 {
-    let id = derive_dynamic_field_id(parent_id, key_type_tag, &bcs::to_bytes(key).unwrap())
+    let id = derive_dynamic_field_id(parent_id, key_type_tag, &key_to_bytes(key))
         .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
     let object = object_store.get_object(&id).ok_or_else(|| {
         SuiError::DynamicFieldReadError(format!(
