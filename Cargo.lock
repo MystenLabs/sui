@@ -14605,6 +14605,7 @@ dependencies = [
  "sui-pg-db",
  "sui-protocol-config",
  "sui-simulator",
+ "sui-storage",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-transactional-test-runner",

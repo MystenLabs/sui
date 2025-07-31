@@ -86,6 +86,7 @@ pub async fn bootstrap(
                 transactions,
                 ..
             } = genesis_checkpoint.as_ref();
+
             let Some(genesis_transaction) = transactions.iter().find(|tx| {
                 matches!(
                     tx.transaction.intent_message().value.kind(),

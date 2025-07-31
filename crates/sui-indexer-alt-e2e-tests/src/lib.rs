@@ -9,8 +9,10 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
+use std::path::Path;
 use std::{
     collections::HashMap,
+    fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
@@ -38,6 +40,8 @@ use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
 };
+use sui_storage::blob::{Blob, BlobEncoding};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -290,6 +294,14 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
     (client_args, temp_dir)
 }
 
+pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+    let file_path = path.join(file_name);
+    let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
+    fs::write(file_path, blob.to_bytes())?;
+    Ok(())
+}
+
 pub struct OffchainClusterConfig {
     pub indexer_args: IndexerArgs,
     pub consistent_indexer_args: IndexerArgs,
@@ -313,7 +325,6 @@ impl Default for OffchainClusterConfig {
         }
     }
 }
-
 impl OffchainCluster {
     /// Construct a new off-chain cluster and spin up its constituent services.
     ///

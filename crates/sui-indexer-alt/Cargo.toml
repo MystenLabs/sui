@@ -10,6 +10,11 @@ edition = "2021"
 name = "sui-indexer-alt"
 path = "src/main.rs"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(msim)',
+] }
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

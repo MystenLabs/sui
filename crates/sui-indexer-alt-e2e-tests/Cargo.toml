@@ -35,6 +35,7 @@ sui-indexer-alt-graphql.workspace = true
 sui-indexer-alt-jsonrpc.workspace = true
 sui-indexer-alt-reader.workspace = true
 sui-pg-db.workspace = true
+sui-storage.workspace = true
 sui-types.workspace = true
 
 [target.'cfg(msim)'.dependencies]
