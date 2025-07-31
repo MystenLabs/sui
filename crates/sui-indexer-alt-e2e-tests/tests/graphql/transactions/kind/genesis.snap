@@ -18,7 +18,7 @@ task 2, line 10:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 12-29:
+task 3, lines 12-27:
 //# run-graphql
 Response: {
   "data": {
@@ -29,7 +29,7 @@ Response: {
   }
 }
 
-task 4, lines 30-48:
+task 4, lines 29-48:
 //# run-graphql
 Response: {
   "data": {
@@ -38,6 +38,7 @@ Response: {
         {
           "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
           "kind": {
+            "__typename": "GenesisTransaction",
             "objects": {
               "nodes": [
                 {
@@ -149,7 +150,7 @@ Response: {
   }
 }
 
-task 5, lines 50-84:
+task 5, lines 50-86:
 //# run-graphql
 Response: {
   "data": {
@@ -158,6 +159,7 @@ Response: {
         {
           "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
           "kind": {
+            "__typename": "GenesisTransaction",
             "objects": {
               "nodes": [
                 {
@@ -183,6 +185,7 @@ Response: {
         {
           "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
           "kind": {
+            "__typename": "GenesisTransaction",
             "objects": {
               "nodes": [
                 {
@@ -206,7 +209,7 @@ Response: {
   }
 }
 
-task 6, lines 87-114:
+task 6, lines 89-117:
 //# run-graphql --cursors 2
 Response: {
   "data": {
@@ -215,6 +218,7 @@ Response: {
         {
           "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
           "kind": {
+            "__typename": "GenesisTransaction",
             "objects": {
               "pageInfo": {
                 "hasNextPage": true,
@@ -253,7 +257,7 @@ Response: {
   }
 }
 
-task 7, lines 116-143:
+task 7, lines 119-147:
 //# run-graphql --cursors 5
 Response: {
   "data": {
@@ -262,6 +266,7 @@ Response: {
         {
           "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
           "kind": {
+            "__typename": "GenesisTransaction",
             "objects": {
               "pageInfo": {
                 "hasNextPage": true,

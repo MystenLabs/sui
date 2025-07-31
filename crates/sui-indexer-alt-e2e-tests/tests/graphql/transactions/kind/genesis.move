@@ -26,7 +26,6 @@
   }
 }
 
-# TODO(DVX-1386): Add __typename field to `kind` block.
 //# run-graphql
 {
   # Test accessing genesis transactions directly
@@ -34,6 +33,7 @@
     nodes {
       digest
       kind {
+        __typename
         ... on GenesisTransaction {
           objects(first: 50) {
             nodes {
@@ -54,6 +54,7 @@
     nodes {
       digest
       kind {
+        __typename
         ... on GenesisTransaction {
           objects(first: 3) {
             nodes {
@@ -70,6 +71,7 @@
     nodes {
       digest
       kind {
+        __typename
         ... on GenesisTransaction {
           objects(last: 3) {
             nodes {
@@ -91,6 +93,7 @@
     nodes {
       digest
       kind {
+        __typename
         ... on GenesisTransaction {
           objects(after: "@{cursor_0}", first: 3) {
             pageInfo {
@@ -120,6 +123,7 @@
     nodes {
       digest
       kind {
+        __typename
         ... on GenesisTransaction {
           objects(before: "@{cursor_0}", last: 2) {
             pageInfo {
