@@ -34,5 +34,6 @@ task 4, lines 35-37:
 //# programmable --sender A --inputs object(2,0)
 //> 0: MakeMoveVec<t2::o2::Obj2>([Input(0)]);
 //> t2::o2::consume(Result(0))
-Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command Some(0)
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1226412, non_refundable_storage_fee: 12388

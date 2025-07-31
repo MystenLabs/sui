@@ -49,8 +49,9 @@ task 6, lines 56-58:
 //# programmable --inputs object(2,0) object(3,0)
 //> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
 //> 1: t2::o2::delete(Result(0));
-Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command Some(0)
+mutated: object(0,0), object(2,0)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 task 7, line 60:
 //# run t2::o2::mint_shared_coin
@@ -81,4 +82,4 @@ task 9, lines 65-70:
 //> 3: TransferObjects([Result(2)], Input(2));
 //> 4: t2::o2::share_coin(Result(1));
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command Some(0)
+Debug of error: SharedObjectOperationNotAllowed at command Some(1)
