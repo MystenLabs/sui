@@ -55,9 +55,11 @@ mod checked {
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
+        accumulator_event::AccumulatorEvent,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
+        effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
         error::{ExecutionError, ExecutionErrorKind, SuiError, command_argument_error},
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV2},
@@ -662,12 +664,7 @@ mod checked {
             modules: &[CompiledModule],
             dependencies: impl IntoIterator<Item = &'p MovePackage>,
         ) -> Result<MovePackage, ExecutionError> {
-            MovePackage::new_initial(
-                modules,
-                self.protocol_config.max_move_package_size(),
-                self.protocol_config.move_binary_format_version(),
-                dependencies,
-            )
+            MovePackage::new_initial(modules, self.protocol_config, dependencies)
         }
 
         /// Create a package upgrade from `previous_package` with `new_modules` and `dependencies`
@@ -1370,7 +1367,21 @@ mod checked {
         let accumulator_events = accumulator_events
             .into_iter()
             .map(|accum_event| match accum_event.value {
-                MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+                MoveAccumulatorValue::U64(amount) => {
+                    let value = AccumulatorValue::Integer(amount);
+                    let address = AccumulatorAddress::new(
+                        accum_event.target_addr.into(),
+                        accum_event.target_ty,
+                    );
+
+                    let write = AccumulatorWriteV1 {
+                        address,
+                        operation: accum_event.action.into_sui_accumulator_action(),
+                        value,
+                    };
+
+                    AccumulatorEvent::new(accum_event.accumulator_id, write)
+                }
             })
             .collect();
 
@@ -1659,7 +1670,7 @@ mod checked {
             )?,
             CallArg::BalanceWithdraw(_) => {
                 // TODO(address-balances): Add support for balance withdraws.
-                todo!("Load balance withdraw call arg")
+                InputValue::new_balance_withdraw()
             }
         })
     }

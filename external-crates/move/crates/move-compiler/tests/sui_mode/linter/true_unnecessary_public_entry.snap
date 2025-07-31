@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99010]: unnecessary `entry` on a `public` function
+  ┌─ tests/sui_mode/linter/true_unnecessary_public_entry.move:2:12
+  │
+2 │     public entry fun true_unnecessary_public_entry() {}
+  │            ^^^^^ `entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.
+  │
+  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+  = This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99010]: unnecessary `entry` on a `public` function
+  ┌─ tests/sui_mode/linter/true_unnecessary_public_entry.move:3:5
+  │
+3 │     entry public fun true_unnecessary_public_entry_2() {}
+  │     ^^^^^ `entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.
+  │
+  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+  = This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

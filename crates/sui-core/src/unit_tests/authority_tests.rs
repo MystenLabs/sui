@@ -27,6 +27,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::str::FromStr;
 use std::{convert::TryInto, env};
+use sui_test_transaction_builder::TestTransactionBuilder;
 
 use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
@@ -54,7 +55,7 @@ use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use sui_types::{
-    base_types::dbg_addr,
+    base_types::{dbg_addr, FullObjectRef},
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
@@ -1434,7 +1435,10 @@ async fn test_handle_sponsored_transaction() {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(recipient, object.compute_object_reference())
+            .transfer_object(
+                recipient,
+                FullObjectRef::from_fastpath_ref(object.compute_object_reference()),
+            )
             .unwrap();
         builder.finish()
     };
@@ -2629,8 +2633,14 @@ async fn test_move_call_insufficient_gas() {
         2000
     };
     // Now we try to construct a transaction with a smaller gas budget than required.
-    let data =
-        TransactionData::new_transfer(sender, obj_ref, recipient, gas_ref, gas_used - 5, rgp);
+    let data = TransactionData::new_transfer(
+        sender,
+        FullObjectRef::from_fastpath_ref(obj_ref),
+        recipient,
+        gas_ref,
+        gas_used - 5,
+        rgp,
+    );
 
     let transaction = to_sender_signed_transaction(data, &recipient_key);
     let tx_digest = *transaction.digest();
@@ -4972,7 +4982,7 @@ async fn test_shared_object_transaction_ok() {
 
     // Ensure transaction effects are available.
     authority
-        .notify_read_effects(*certificate.digest())
+        .notify_read_effects("", *certificate.digest())
         .await
         .unwrap();
 
@@ -6698,4 +6708,55 @@ async fn test_single_authority_reconfigure() {
     assert_eq!(state.epoch_store_for_testing().epoch(), 0);
     state.reconfigure_for_testing().await;
     assert_eq!(state.epoch_store_for_testing().epoch(), 1);
+}
+
+#[tokio::test]
+async fn test_insufficient_balance_for_withdraw_early_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = Object::with_owner_for_testing(sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let state = TestAuthorityBuilder::new()
+        .with_starting_objects(&[gas_object])
+        .build()
+        .await;
+    let epoch_store = state.load_epoch_store_one_call_per_task();
+
+    let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, 1000)
+        .transfer_sui(None, sender)
+        .build();
+
+    let certificate = VerifiedExecutableTransaction::new_for_testing(tx_data, &sender_key);
+
+    // Create an execution environment with insufficient balance status
+    let mut execution_env =
+        ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath);
+    execution_env.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+
+    // Test that the transaction fails with InsufficientBalanceForWithdraw error
+    let result = state
+        .try_execute_immediately(&certificate, execution_env, &epoch_store)
+        .await
+        .unwrap();
+
+    let (effects, execution_error) = result;
+
+    // Check that we got an execution error due to insufficient balance
+    assert!(execution_error.is_some());
+    let error = execution_error.unwrap();
+    assert_eq!(
+        error.kind(),
+        &ExecutionFailureStatus::InsufficientBalanceForWithdraw
+    );
+
+    // Check that the transaction status shows failure
+    assert!(effects.status().is_err());
+    if let ExecutionStatus::Failure { error, .. } = effects.status() {
+        assert_eq!(
+            error,
+            &ExecutionFailureStatus::InsufficientBalanceForWithdraw
+        );
+    } else {
+        panic!("Expected execution status to be Failure");
+    }
 }

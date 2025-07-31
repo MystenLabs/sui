@@ -12,7 +12,7 @@ Checkpoint created: 1
 
 task 2, line 12:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 3, lines 14-16:
 //# programmable --sender C --inputs 10000000000 @C
@@ -36,7 +36,7 @@ Checkpoint created: 3
 
 task 6, line 22:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 7, line 24:
 //# create-checkpoint
@@ -44,7 +44,7 @@ Checkpoint created: 5
 
 task 8, line 26:
 //# advance-epoch
-Epoch advanced: 2
+Epoch advanced: 3
 
 task 9, lines 28-30:
 //# programmable --sender C --inputs 10000000000 @C
@@ -60,7 +60,7 @@ Checkpoint created: 7
 
 task 11, line 34:
 //# advance-epoch
-Epoch advanced: 3
+Epoch advanced: 4
 
 task 12, line 36:
 //# run 0x3::sui_system::request_withdraw_stake --args object(0x5) object(4,0) --sender C
@@ -76,7 +76,7 @@ Checkpoint created: 9
 
 task 14, line 40:
 //# advance-epoch
-Epoch advanced: 4
+Epoch advanced: 5
 
 task 15, lines 42-44:
 //# programmable --sender C --inputs 10000000000 @C
@@ -92,7 +92,7 @@ Checkpoint created: 11
 
 task 17, line 48:
 //# advance-epoch
-Epoch advanced: 5
+Epoch advanced: 6
 
 task 18, lines 50-60:
 //# run-graphql

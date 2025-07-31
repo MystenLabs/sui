@@ -786,8 +786,8 @@ impl<C: NetworkClient> Inner<C> {
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedBlock)?;
             // Only block signatures need to be verified, to verify commit votes.
             // But the blocks will be sent to Core, so they need to be fully verified.
-            let reject_transaction_votes = self.block_verifier.verify_and_vote(&block)?;
-            let block = VerifiedBlock::new_verified(block, serialized);
+            let (block, reject_transaction_votes) =
+                self.block_verifier.verify_and_vote(block, serialized)?;
             if self.context.protocol_config.mysticeti_fastpath() {
                 self.transaction_certifier
                     .add_voted_blocks(vec![(block.clone(), reject_transaction_votes)]);
@@ -934,7 +934,7 @@ mod tests {
         let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0));
+        let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
         let mut commit_syncer = CommitSyncer::new(
             context,
             core_thread_dispatcher,

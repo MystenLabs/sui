@@ -698,6 +698,7 @@ pub fn compile_ir_module(
         .iter()
         .map(|(name, addr)| (name.clone(), addr.into_inner()))
         .collect();
+    // TODO this mapping does not work well with upgrades since they have the same original ID
     IRCompiler::new(state.dep_modules().collect())
         .with_named_addresses(named_addresses)
         .into_compiled_module(&code)

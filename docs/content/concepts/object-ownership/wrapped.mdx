@@ -111,7 +111,7 @@ The function interface for the function that the service operator can call to pe
 public fun execute_swap(s1: SwapRequest, s2: SwapRequest): Balance<SUI>;
 ```
 
-Where `s1` and `s2` are two wrapped objects that were sent from different object owners to the service operator. Both wrapped objects are passed by value because they eventually need to be [unpacked](https://move-book.com/advanced-topics/struct.html#destructing-structures).
+Where `s1` and `s2` are two wrapped objects that were sent from different object owners to the service operator. Both wrapped objects are passed by value because they eventually need to be [unpacked](https://move-book.com/move-basics/struct.html#destructing-structures).
 
 First, unpack the two object to obtain the inner fields:
 

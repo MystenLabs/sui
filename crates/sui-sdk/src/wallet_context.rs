@@ -14,8 +14,9 @@ use sui_json_rpc_types::{
     SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
     SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::AccountKeystore;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::SuiKeyPair;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
@@ -72,6 +73,17 @@ impl WalletContext {
         self.env_override.clone()
     }
 
+    pub fn get_identity_address(
+        &mut self,
+        input: Option<KeyIdentity>,
+    ) -> Result<SuiAddress, anyhow::Error> {
+        if let Some(key_identity) = input {
+            Ok(self.config.keystore.get_by_identity(key_identity)?)
+        } else {
+            self.active_address()
+        }
+    }
+
     pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
         let read = self.client.read().await;
 
@@ -102,7 +114,7 @@ impl WalletContext {
 
     // TODO: Ger rid of mut
     pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        if self.config.keystore.addresses().is_empty() {
+        if self.config.keystore.entries().is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
             ));
@@ -128,6 +140,24 @@ impl WalletContext {
             .await?
             .into_object()?
             .object_ref())
+    }
+
+    /// Get the latest full object reference given a object id
+    pub async fn get_full_object_ref(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<FullObjectRef, anyhow::Error> {
+        let client = self.get_client().await?;
+        let object = client
+            .read_api()
+            .get_object_with_options(object_id, SuiObjectDataOptions::new().with_owner())
+            .await?
+            .into_object()?;
+        let object_ref = object.object_ref();
+        let owner = object
+            .owner
+            .expect("Owner should be present if `with_owner` is set");
+        Ok(FullObjectRef::from_object_ref_and_owner(object_ref, &owner))
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
@@ -326,7 +356,7 @@ impl WalletContext {
 
     /// Add an account
     pub fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
-        self.config.keystore.add_key(alias, keypair).unwrap();
+        self.config.keystore.import(alias, keypair).unwrap();
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext

@@ -108,6 +108,9 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_testnet_config() {
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
+        }
         chain_config_smoke_test(Chain::Testnet).await;
     }
 
@@ -125,6 +128,8 @@ mod test {
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
+            // Disable TransactionDriver in chain configide override tests.
+            .transaction_driver_percentage(0)
             .build()
             .await
             .into();
@@ -162,8 +167,8 @@ mod test {
         // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
-        let test_cluster = build_test_cluster(4, 10000, 1).await;
-        test_simulated_load(test_cluster, 60).await;
+        let test_cluster = build_test_cluster(4, 15000, 1).await;
+        test_simulated_load(test_cluster, 90).await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -707,9 +712,11 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_mysticeti_fastpath() {
-        unsafe {
-            std::env::set_var("TRANSACTION_DRIVER", "100");
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
         }
+
+        std::env::set_var("TRANSACTION_DRIVER", "100");
 
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;
@@ -824,10 +831,10 @@ mod test {
     }
 
     async fn test_protocol_upgrade_compatibility_impl() {
-        // Override record_time_estimate_processed for protocol version 87 in tests
-        // it is currently set to true in 87 in mainnet only
+        // Override record_time_estimate_processed for protocol versions before 88 in tests
+        // to correct for known issue that appeared on mainnet.
         let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut config| {
-            if version.as_u64() == 87 {
+            if version.as_u64() <= 87 {
                 config.set_record_time_estimate_processed_for_testing(true);
             }
             config
@@ -854,6 +861,8 @@ mod test {
                 )
                 .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
                 .with_stake_subsidy_start_epoch(10)
+                // Disable TransactionDriver in upgrade compatibility tests.
+                .transaction_driver_percentage(0)
                 .build()
                 .await,
         );
@@ -1037,6 +1046,7 @@ mod test {
             })
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
+            .disable_fullnode_pruning()
             .build()
             .await
             .into()
@@ -1139,8 +1149,15 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
-            Arc::new(LocalValidatorAggregatorProxy::from_genesis(&genesis, &registry, None).await);
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            LocalValidatorAggregatorProxy::from_genesis(
+                &genesis,
+                &registry,
+                None,
+                test_cluster.transaction_driver_percentage(),
+            )
+            .await,
+        );
 
         let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
         let system_state_observer = {

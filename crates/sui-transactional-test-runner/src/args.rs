@@ -128,6 +128,8 @@ pub struct ProgrammableTransactionCommand {
     pub dev_inspect: bool,
     #[clap(long = "dry-run")]
     pub dry_run: bool,
+    #[clap(long = "expiration")]
+    pub expiration: Option<u64>,
     #[clap(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
@@ -176,8 +178,10 @@ pub struct SetAddressCommand {
 
 #[derive(Debug, clap::Parser)]
 pub struct AdvanceClockCommand {
+    #[clap(long = "duration")]
+    pub duration: Option<String>,
     #[clap(long = "duration-ns")]
-    pub duration_ns: u64,
+    pub duration_ns: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]

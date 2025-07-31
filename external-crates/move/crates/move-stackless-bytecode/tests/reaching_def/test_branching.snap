@@ -1,0 +1,49 @@
+---
+source: crates/move-stackless-bytecode/tests/testsuite.rs
+---
+============ initial translation from Move ================
+
+[variant baseline]
+fun TestBranching::branching($t0|cond: bool): u64 {
+     var $t1|tmp#$1: u64
+     var $t2: bool
+     var $t3: u64
+     var $t4: u64
+     var $t5: u64
+  0: $t2 := move($t0)
+  1: if ($t2) goto 2 else goto 6
+  2: label L1
+  3: $t3 := 3
+  4: $t1 := $t3
+  5: goto 10
+  6: label L0
+  7: $t4 := 4
+  8: $t1 := $t4
+  9: goto 10
+ 10: label L2
+ 11: $t5 := move($t1)
+ 12: return $t5
+}
+
+============ after pipeline `reaching_def` ================
+
+[variant baseline]
+fun TestBranching::branching($t0|cond: bool): u64 {
+     var $t1|tmp#$1: u64
+     var $t2: bool
+     var $t3: u64
+     var $t4: u64
+     var $t5: u64
+  0: $t2 := move($t0)
+  1: if ($t0) goto 2 else goto 6
+  2: label L1
+  3: $t3 := 3
+  4: $t1 := $t3
+  5: goto 9
+  6: label L0
+  7: $t4 := 4
+  8: $t1 := $t4
+  9: label L2
+ 10: $t5 := move($t1)
+ 11: return $t1
+}

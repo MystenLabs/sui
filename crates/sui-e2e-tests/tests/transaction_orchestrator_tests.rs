@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_macros::sim_test;
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
@@ -55,7 +55,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     handle
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[digest])
+        .notify_read_executed_effects("", &[digest])
         .await;
 
     // Transaction Orchestrator proactivcely executes txn locally
@@ -285,7 +285,7 @@ async fn test_tx_across_epoch_boundaries() {
 }
 
 async fn execute_with_orchestrator(
-    orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
+    orchestrator: &TransactionOrchestrator<NetworkAuthorityClient>,
     txn: Transaction,
     request_type: ExecuteTransactionRequestType,
 ) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError> {

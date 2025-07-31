@@ -14,6 +14,7 @@ use criterion::Criterion;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
+use iso8601::Duration as IsoDuration;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::files::verify_and_create_named_address_mapping;
@@ -41,6 +42,7 @@ use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Deserialize;
 use serde_json::Value;
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fmt::{self, Write};
 use std::path::PathBuf;
@@ -93,7 +95,7 @@ use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind}
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{
     move_package::MovePackage,
-    transaction::{Argument, CallArg},
+    transaction::{Argument, CallArg, TransactionDataAPI, TransactionExpiration},
 };
 use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
@@ -772,10 +774,37 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let epoch = self.get_latest_epoch_id()?;
                 Ok(Some(format!("Epoch advanced: {epoch}")))
             }
-            SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
-                self.executor
-                    .advance_clock(Duration::from_nanos(duration_ns))
-                    .await?;
+            SuiSubcommand::AdvanceClock(advance_clock_command) => {
+                let duration = match advance_clock_command {
+                    AdvanceClockCommand {
+                        duration: Some(_),
+                        duration_ns: Some(_),
+                    } => panic!("Must specify only one of `--duration` or `--duration_ns`"),
+                    AdvanceClockCommand {
+                        duration: Some(duration),
+                        duration_ns: None,
+                    } => duration.parse::<IsoDuration>().unwrap().into(),
+                    AdvanceClockCommand {
+                        duration: None,
+                        duration_ns: Some(duration_ns),
+                    } => Duration::from_nanos(duration_ns),
+                    AdvanceClockCommand {
+                        duration: None,
+                        duration_ns: None,
+                    } => panic!("Must specify either `--duration` or `--duration_ns`"),
+                };
+
+                let effects = self.executor.advance_clock(duration).await?;
+
+                // Add the transaction digest to digest_enumeration for variable substitution
+                let digest = effects.transaction_digest();
+                let task = self.next_fake.0;
+                if let Some(prev) = self.digest_enumeration.insert(task, *digest) {
+                    panic!(
+                        "Task {task} executed two transactions (expected at most one): {prev}, {digest}"
+                    );
+                }
+
                 Ok(None)
             }
             SuiSubcommand::SetRandomState(SetRandomStateCommand {
@@ -880,6 +909,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 gas_payment,
                 dev_inspect,
                 dry_run,
+                expiration,
                 inputs,
             }) => {
                 if dev_inspect && self.is_simulator() {
@@ -929,37 +959,46 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let summary = if !dev_inspect && !dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
+                    let expiration = expiration
+                        .map(TransactionExpiration::Epoch)
+                        .unwrap_or(TransactionExpiration::None);
                     let transaction = self.sign_sponsor_txn(
                         sender,
                         sponsor,
                         gas_payment.unwrap_or_default(),
                         |sender, sponsor, gas| {
-                            TransactionData::new_programmable_allow_sponsor(
+                            let mut tx_data = TransactionData::new_programmable_allow_sponsor(
                                 sender,
                                 gas,
                                 ProgrammableTransaction { inputs, commands },
                                 gas_budget,
                                 gas_price,
                                 sponsor,
-                            )
+                            );
+                            *tx_data.expiration_mut_for_testing() = expiration;
+                            tx_data
                         },
                     );
                     self.execute_txn(transaction).await?
                 } else if dry_run {
                     let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
+                    let expiration = expiration
+                        .map(TransactionExpiration::Epoch)
+                        .unwrap_or(TransactionExpiration::None);
                     let sender = self.get_sender(sender);
                     let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
                     let payments = self.get_payments(sponsor, gas_payment.unwrap_or_default());
 
-                    let transaction = TransactionData::new_programmable(
+                    let mut transaction = TransactionData::new_programmable(
                         sender.address,
                         payments,
                         ProgrammableTransaction { inputs, commands },
                         gas_budget,
                         gas_price,
                     );
+                    *transaction.expiration_mut_for_testing() = expiration;
                     self.dry_run(transaction).await?
                 } else {
                     assert!(
@@ -2124,15 +2163,27 @@ impl SuiTestAdapter {
 impl<'a> GetModule for &'a SuiTestAdapter {
     type Error = anyhow::Error;
 
-    type Item = &'a CompiledModule;
+    type Item = Cow<'a, CompiledModule>;
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        Ok(Some(
-            self.compiled_state
-                .dep_modules()
-                .find(|m| &m.self_id() == id)
-                .unwrap_or_else(|| panic!("Internal error: Unbound module {}", id)),
-        ))
+        if let Some(m) = self
+            .compiled_state
+            .dep_modules()
+            .find(|m| &m.self_id() == id)
+        {
+            Ok(Some(Cow::Borrowed(m)))
+        } else {
+            let module = self
+                .executor
+                .get_object(&ObjectID::from(*id.address()))
+                .and_then(|obj| {
+                    let data = obj.data.try_as_package()?.get_module(id)?;
+                    let module = CompiledModule::deserialize_with_defaults(data).unwrap();
+                    Some(module)
+                })
+                .unwrap_or_else(|| panic!("Internal error: Unbound module {}", id));
+            Ok(Some(Cow::Owned(module)))
+        }
     }
 }
 

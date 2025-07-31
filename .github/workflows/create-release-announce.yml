@@ -6,6 +6,10 @@ concurrency: ${{ github.workflow }}-${{ inputs.network }}
 on:
   workflow_dispatch:
     inputs:
+      sui_commit:
+        description: "Sui commit to ship"
+        type: string
+        required: true
       network:
         description: Network to generate and announce release for
         required: true
@@ -55,39 +59,31 @@ jobs:
 
       - name: Checkout release branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # pin@v4
-        env:
-          RELEASE_BRANCH: ${{ env.current_release_branch }}
         with:
           fetch-depth: 0
-          ref: ${{ env.RELEASE_BRANCH }}
+          ref: ${{ inputs.sui_commit }}
 
       - name: Update ${{ inputs.network }} branch
         shell: bash
-        run: |
-          export sui_commit=$(git rev-parse HEAD)
-          echo "sui_commit=${sui_commit}" >> $GITHUB_ENV
-          
+        run: |          
           export sui_release_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')
           echo "sui_release_version=${sui_release_version}" >> $GITHUB_ENV
 
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
-          echo "{\"sha\": \"${sui_commit}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/${{ inputs.network }} \
+          echo "{\"sha\": \"${{ inputs.sui_commit }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/${{ inputs.network }} \
             --header "Accept: application/vnd.github+json" --input -
 
       - name: Update framework/${{ inputs.network }} branch
         if: ${{ inputs.network == 'devnet' }}
-        env:
-          SUI_COMMIT: ${{ env.sui_commit }}
         shell: bash
         run: |
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
-          echo "{\"sha\": \"${{ env.SUI_COMMIT }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/framework/${{ inputs.network }} \
+          echo "{\"sha\": \"${{ inputs.sui_commit }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/framework/${{ inputs.network }} \
             --header "Accept: application/vnd.github+json" --input -            
 
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
         shell: bash
         env:
-          SUI_COMMIT: ${{ env.sui_commit }}
           SUI_RELEASE_VERSION: ${{ env.sui_release_version }}
         run: |
           export release_tag="${{ inputs.network }}-v${{ env.SUI_RELEASE_VERSION }}"
@@ -98,7 +94,7 @@ jobs:
             https://api.github.com/repos/MystenLabs/sui/git/refs \
             -d "{
               \"ref\": \"refs/tags/${release_tag}\",
-              \"sha\": \"${{ env.SUI_COMMIT }}\"
+              \"sha\": \"${{ inputs.sui_commit }}\"
             }"
 
       - name: Get commits for branches

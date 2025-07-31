@@ -9,6 +9,9 @@
 pub mod git;
 mod paths;
 
+pub mod graph_builder;
+
+use indoc::formatdoc;
 use paths::PathExt;
 use paths::root;
 use std::env;
@@ -168,11 +171,10 @@ impl ProjectBuilder {
 }
 
 impl Project {
-    /// Try to get the git commits in the project, but it will panic if this is not a git
+    /// Returns the SHAs of the commits in the repository. Panics if this is not a git project
     /// repository.
     pub fn commits(&self) -> Vec<String> {
-        let repo = git2::Repository::open(self.root.clone())
-            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()));
+        let repo = self.open();
         git::commits(&repo)
             .into_iter()
             .map(|c| c.id().to_string())
@@ -220,6 +222,16 @@ impl Project {
         let contents = self.read_file("Move.toml").replace("#", "");
         fs::write(self.root().join("Move.toml"), contents).unwrap();
     }
+
+    pub fn add_tag(&self, name: &str) {
+        let repo = self.open();
+        git::tag(&repo, name);
+    }
+
+    fn open(&self) -> git2::Repository {
+        git2::Repository::open(self.root.clone())
+            .unwrap_or_else(|_| panic!("failed to open git repository at {}", self.root.display()))
+    }
 }
 
 /// Generates a project layout, see [`ProjectBuilder`]
@@ -229,7 +241,7 @@ pub fn project() -> ProjectBuilder {
 
 /// Generate a basic `Move.toml` content
 pub fn basic_manifest(name: &str, version: &str) -> String {
-    format!(
+    formatdoc!(
         r#"
         [package]
         name = "{}"
@@ -241,6 +253,27 @@ pub fn basic_manifest(name: &str, version: &str) -> String {
         mainnet = "35834a8a"
         testnet = "4c78adac"
     "#,
-        name, version
+        name,
+        version,
+    )
+}
+
+/// Generate a basic manifest with specific environment info
+pub fn basic_manifest_with_env(name: &str, version: &str, env: &str, chain_id: &str) -> String {
+    formatdoc!(
+        r#"
+        [package]
+        name = "{}"
+        version = "{}"
+        authors = []
+        edition = "2025"
+
+        [environments]
+        {} = "{}"
+    "#,
+        name,
+        version,
+        env,
+        chain_id
     )
 }

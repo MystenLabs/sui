@@ -23,7 +23,7 @@ fn mnemonic_test() {
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let (address, phrase, scheme) = keystore
-        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
+        .generate(SignatureScheme::ED25519, None, None, None)
         .unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
@@ -69,6 +69,10 @@ async fn test_verify_personal_message_signature() {
 #[sim_test]
 async fn test_verify_signature_zklogin() {
     use test_cluster::TestClusterBuilder;
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
 
     let message = b"hello";
     let personal_message = PersonalMessage {

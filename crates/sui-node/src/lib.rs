@@ -105,7 +105,7 @@ use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
-use sui_core::transaction_orchestrator::TransactiondOrchestrator;
+use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_client::NetworkAuthorityClient,
@@ -206,6 +206,7 @@ mod simulator {
         parse_jwks(
             sui_types::zk_login_util::DEFAULT_JWK_BYTES,
             &OIDCProvider::Twitch,
+            true,
         )
         .map_err(|_| SuiError::JWKRetrievalError)
     }
@@ -243,7 +244,7 @@ pub struct SuiNode {
     http_servers: HttpServers,
 
     state: Arc<AuthorityState>,
-    transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
+    transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
     metrics: Arc<SuiNodeMetrics>,
 
@@ -789,15 +790,13 @@ impl SuiNode {
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
         let transaction_orchestrator = if is_full_node && run_with_range.is_none() {
-            Some(Arc::new(
-                TransactiondOrchestrator::new_with_auth_aggregator(
-                    auth_agg.load_full(),
-                    state.clone(),
-                    end_of_epoch_receiver,
-                    &config.db_path(),
-                    &prometheus_registry,
-                ),
-            ))
+            Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
+                auth_agg.load_full(),
+                state.clone(),
+                end_of_epoch_receiver,
+                &config.db_path(),
+                &prometheus_registry,
+            )))
         } else {
             None
         };
@@ -1647,7 +1646,10 @@ impl SuiNode {
             std::time::Duration::from_secs(timeout),
             state
                 .get_transaction_cache_reader()
-                .notify_read_executed_effects_digests(&digests),
+                .notify_read_executed_effects_digests(
+                    "SuiNode::notify_read_executed_effects_digests",
+                    &digests,
+                ),
         )
         .await
         .is_err()
@@ -1708,7 +1710,7 @@ impl SuiNode {
 
     pub fn transaction_orchestrator(
         &self,
-    ) -> Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>> {
+    ) -> Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>> {
         self.transaction_orchestrator.clone()
     }
 
@@ -2104,7 +2106,7 @@ impl SuiNode {
     ) -> SuiResult<Vec<(JwkId, JWK)>> {
         use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
         let client = reqwest::Client::new();
-        fetch_jwks(provider, &client)
+        fetch_jwks(provider, &client, true)
             .await
             .map_err(|_| SuiError::JWKRetrievalError)
     }
@@ -2226,7 +2228,7 @@ fn build_kv_store(
 async fn build_http_servers(
     state: Arc<AuthorityState>,
     store: RocksDbStore,
-    transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
+    transaction_orchestrator: &Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
     server_version: ServerVersion,

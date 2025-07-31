@@ -12,7 +12,7 @@ Checkpoint created: 1
 
 task 2, line 9:
 //# advance-epoch
-Epoch advanced: 0
+Epoch advanced: 1
 
 task 3, lines 11-13:
 //# programmable --sender C --inputs 10000000000 @C
@@ -36,7 +36,7 @@ Checkpoint created: 3
 
 task 6, line 20:
 //# advance-epoch
-Epoch advanced: 1
+Epoch advanced: 2
 
 task 7, lines 22-37:
 //# run-graphql

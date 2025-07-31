@@ -64,7 +64,7 @@ mod refine {
 
     fn argument(used: &mut BTreeSet<T::Location>, arg: &mut T::Argument) {
         let usage = match &mut arg.value.0 {
-            T::Argument__::Use(u) | T::Argument__::Read(u) => u,
+            T::Argument__::Use(u) | T::Argument__::Read(u) | T::Argument__::Freeze(u) => u,
             T::Argument__::Borrow(_, loc) => {
                 // mark location as used
                 used.insert(*loc);
@@ -106,17 +106,27 @@ mod verify {
     struct Context {
         tx_context: Option<Value>,
         gas_coin: Option<Value>,
-        inputs: Vec<Option<Value>>,
+        objects: Vec<Option<Value>>,
+        pure: Vec<Option<Value>>,
+        receiving: Vec<Option<Value>>,
         results: Vec<Vec<Option<Value>>>,
     }
 
     impl Context {
         fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
-            let inputs = ast.inputs.iter().map(|_| Some(Value)).collect();
+            let objects = ast.objects.iter().map(|_| Some(Value)).collect::<Vec<_>>();
+            let pure = ast.pure.iter().map(|_| Some(Value)).collect::<Vec<_>>();
+            let receiving = ast
+                .receiving
+                .iter()
+                .map(|_| Some(Value))
+                .collect::<Vec<_>>();
             Ok(Self {
                 tx_context: Some(Value),
                 gas_coin: Some(Value),
-                inputs,
+                objects,
+                pure,
+                receiving,
                 results: Vec::with_capacity(ast.commands.len()),
             })
         }
@@ -125,7 +135,9 @@ mod verify {
             match l {
                 T::Location::TxContext => &mut self.tx_context,
                 T::Location::GasCoin => &mut self.gas_coin,
-                T::Location::Input(i) => &mut self.inputs[i as usize],
+                T::Location::ObjectInput(i) => &mut self.objects[i as usize],
+                T::Location::PureInput(i) => &mut self.pure[i as usize],
+                T::Location::ReceivingInput(i) => &mut self.receiving[i as usize],
                 T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
             }
         }
@@ -149,12 +161,16 @@ mod verify {
         let Context {
             tx_context,
             gas_coin,
-            inputs,
+            objects,
+            pure,
+            receiving,
             results,
         } = context;
         consume_value_opt(gas_coin);
         // TODO do we want to check inputs in the dev inspect case?
-        consume_value_opts(inputs);
+        consume_value_opts(objects);
+        consume_value_opts(pure);
+        consume_value_opts(receiving);
         assert_invariant!(results.len() == commands.len(), "result length mismatch");
         for (i, (result, (_, tys))) in results.into_iter().zip(&ast.commands).enumerate() {
             assert_invariant!(result.len() == tys.len(), "result length mismatch");
@@ -271,6 +287,7 @@ mod verify {
             T::Argument__::Use(T::Usage::Copy { location, .. }) => copy_value(context, *location),
             T::Argument__::Borrow(_, location) => borrow_location(context, *location),
             T::Argument__::Read(usage) => read_ref(context, usage),
+            T::Argument__::Freeze(usage) => freeze_ref(context, usage),
         }
     }
 
@@ -298,6 +315,15 @@ mod verify {
     }
 
     fn read_ref(context: &mut Context, u: &T::Usage) -> Result<Value, ExecutionError> {
+        let value = match u {
+            T::Usage::Move(l) => move_value(context, *l)?,
+            T::Usage::Copy { location, .. } => copy_value(context, *location)?,
+        };
+        consume_value(value);
+        Ok(Value)
+    }
+
+    fn freeze_ref(context: &mut Context, u: &T::Usage) -> Result<Value, ExecutionError> {
         let value = match u {
             T::Usage::Move(l) => move_value(context, *l)?,
             T::Usage::Copy { location, .. } => copy_value(context, *location)?,

@@ -1364,6 +1364,15 @@ dependencies = [
 
 [[package]]
 name = "heck"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "heck"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
@@ -2617,6 +2626,8 @@ dependencies = [
  "derive-where",
  "futures",
  "git2",
+ "heck 0.3.3",
+ "indoc",
  "insta",
  "itertools 0.10.5",
  "jsonrpc",
@@ -2643,6 +2654,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-package-alt-compilation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.5.41",
+ "colored",
+ "dunce",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-bytecode-utils",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-docgen",
+ "move-model-2",
+ "move-package-alt",
+ "move-symbol-pool",
+ "petgraph",
+ "serde",
+ "serde_yaml",
+ "tracing",
+ "vfs",
+]
+
+[[package]]
 name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
@@ -2659,6 +2696,54 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "petgraph",
+]
+
+[[package]]
+name = "move-stackless-bytecode"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "codespan",
+ "codespan-reporting",
+ "datatest-stable",
+ "ethnum",
+ "im",
+ "itertools 0.10.5",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-model",
+ "move-stdlib",
+ "num",
+ "petgraph",
+ "regex",
+ "serde",
+]
+
+[[package]]
+name = "move-stackless-bytecode-2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "clap 4.5.41",
+ "datatest-stable",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-model",
+ "move-model-2",
+ "move-package",
+ "move-stackless-bytecode",
+ "move-stdlib",
+ "move-symbol-pool",
+ "move-vm-runtime",
+ "tempfile",
 ]
 
 [[package]]

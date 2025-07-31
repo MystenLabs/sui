@@ -261,7 +261,7 @@ export class MoveDebugSession extends LoggingDebugSession {
      */
     protected stackTraceRequest(
         response: CustomizedStackTraceResponse,
-        _args: DebugProtocol.StackTraceArguments
+        args: DebugProtocol.StackTraceArguments
     ): void {
         try {
             const stackFrames = [];
@@ -320,8 +320,16 @@ export class MoveDebugSession extends LoggingDebugSession {
                     stackFrames.push(extEventFrame);
                 }
             }
+            const stackFramesReversed = stackFrames.reverse();
+            const startFrame = args.startFrame ?? 0;
+            const levels = args.levels ?
+                args.levels === 0 ? stackFramesReversed.length : args.levels
+                : stackFramesReversed.length;
+            const endFrame = startFrame + levels;
+            const ideStackFrames = stackFrames.slice(startFrame, endFrame);
+
             response.body = {
-                stackFrames: stackFrames.reverse(),
+                stackFrames: ideStackFrames,
                 totalFrames: stackFrames.length,
                 optimizedLines
             };

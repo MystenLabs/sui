@@ -23,6 +23,9 @@ module test::m1 {
     public fun copyable(): Copyable { Copyable {} }
     public fun borrow(_: &Copyable) {}
     public fun copy_(c: Copyable) { let Copyable {} = c; }
+    public fun borrow_and_copy(_: &Copyable, c: Copyable) {
+        let Copyable {} = c;
+    }
 
     public fun num_mut(_: &u64) {}
 }
@@ -49,3 +52,7 @@ module test::m1 {
 // unused pure that was cast
 //# programmable --sender A --inputs 0
 //> test::m1::num_mut(Input(0))
+
+//# programmable --sender A
+//> 0: test::m1::copyable();
+//> test::m1::borrow_and_copy(Result(0), Result(0));

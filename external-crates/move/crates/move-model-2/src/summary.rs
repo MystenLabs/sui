@@ -884,7 +884,9 @@ impl Type {
                     .collect(),
                 Box::new(Self::from_ast(context, ret_)),
             ),
-            N::Type_::Var(_) | N::Type_::Anything | N::Type_::UnresolvedError => Self::Any,
+            N::Type_::Var(_) | N::Type_::Anything | N::Type_::Void | N::Type_::UnresolvedError => {
+                Self::Any
+            }
         }
     }
 }

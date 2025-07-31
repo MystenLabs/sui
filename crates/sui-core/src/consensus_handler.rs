@@ -138,6 +138,7 @@ mod additional_consensus_state {
     use std::marker::PhantomData;
 
     use fastcrypto::hash::HashFunction as _;
+    use sui_types::crypto::DefaultHash;
 
     use super::*;
     /// AdditionalConsensusState tracks any in-memory state that is retained by ConsensusHandler
@@ -207,7 +208,7 @@ mod additional_consensus_state {
 
         /// Get the digest of the current state.
         fn digest(&self) -> AdditionalConsensusStateDigest {
-            let mut hash = sui_types::crypto::DefaultHash::new();
+            let mut hash = DefaultHash::new();
             bcs::serialize_into(&mut hash, self).unwrap();
             AdditionalConsensusStateDigest::new(hash.finalize().into())
         }
@@ -336,6 +337,7 @@ mod additional_consensus_state {
                 Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
             )>,
             commit_info: &ConsensusCommitInfo,
+            indirect_state_observer: IndirectStateObserver,
         ) -> VerifiedExecutableTransaction {
             let version_assignments = if protocol_config
                 .record_consensus_determined_version_assignments_in_prologue_v2()
@@ -365,10 +367,18 @@ mod additional_consensus_state {
             };
 
             if protocol_config.record_additional_state_digest_in_prologue() {
+                let additional_state_digest =
+                    if protocol_config.additional_consensus_digest_indirect_state() {
+                        let d1 = commit_info.additional_state_digest();
+                        indirect_state_observer.fold_with(d1)
+                    } else {
+                        commit_info.additional_state_digest()
+                    };
+
                 self.consensus_commit_prologue_v4_transaction(
                     epoch,
                     version_assignments.unwrap(),
-                    commit_info.additional_state_digest(),
+                    additional_state_digest,
                 )
             } else if let Some(version_assignments) = version_assignments {
                 self.consensus_commit_prologue_v3_transaction(epoch, version_assignments)
@@ -377,6 +387,34 @@ mod additional_consensus_state {
             } else {
                 self.consensus_commit_prologue_transaction(epoch)
             }
+        }
+    }
+
+    #[derive(Default)]
+    pub struct IndirectStateObserver {
+        hash: DefaultHash,
+    }
+
+    impl IndirectStateObserver {
+        pub fn new() -> Self {
+            Self::default()
+        }
+
+        pub fn observe_indirect_state<T: Serialize>(&mut self, state: &T) {
+            bcs::serialize_into(&mut self.hash, state).unwrap();
+        }
+
+        pub fn fold_with(
+            self,
+            d1: AdditionalConsensusStateDigest,
+        ) -> AdditionalConsensusStateDigest {
+            let hash = self.hash.finalize();
+            let d2 = AdditionalConsensusStateDigest::new(hash.into());
+
+            let mut hasher = DefaultHash::new();
+            bcs::serialize_into(&mut hasher, &d1).unwrap();
+            bcs::serialize_into(&mut hasher, &d2).unwrap();
+            AdditionalConsensusStateDigest::new(hasher.finalize().into())
         }
     }
 
@@ -461,7 +499,7 @@ mod additional_consensus_state {
     }
 }
 use additional_consensus_state::AdditionalConsensusState;
-pub(crate) use additional_consensus_state::ConsensusCommitInfo;
+pub(crate) use additional_consensus_state::{ConsensusCommitInfo, IndirectStateObserver};
 
 pub struct ConsensusHandler<C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -581,6 +619,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .update_last_committed_leader_round(last_committed_round as u32)
                 .await;
         }
+        if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
+            tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
+        }
 
         let commit_info = if self
             .epoch_store
@@ -615,6 +656,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         }
 
         /* (transaction, serialized length) */
+        let epoch = self.epoch_store.epoch();
         let mut transactions = vec![];
         let timestamp = consensus_commit.commit_timestamp_ms();
         let leader_author = consensus_commit.leader_author_index();
@@ -717,6 +759,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 self.last_consensus_stats.stats.inc_num_messages(author);
                 for (tx_index, parsed) in parsed_transactions.into_iter().enumerate() {
                     let position = ConsensusPosition {
+                        epoch,
                         block,
                         index: tx_index as TransactionIndex,
                     };
@@ -834,6 +877,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             }
         }
 
+        let indirect_state_observer = IndirectStateObserver::new();
+
         let (executable_transactions, assigned_versions) = self
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
@@ -842,6 +887,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
                 &commit_info,
+                indirect_state_observer,
                 &self.metrics,
             )
             .await
@@ -1285,7 +1331,7 @@ impl ConsensusBlockHandler {
 
         let _scope = monitored_scope("ConsensusBlockHandler::handle_certified_blocks");
         self.metrics.consensus_block_handler_block_processed.inc();
-
+        let epoch = self.epoch_store.epoch();
         let parsed_transactions = blocks_output
             .blocks
             .into_iter()
@@ -1300,6 +1346,7 @@ impl ConsensusBlockHandler {
         for (block, transactions) in parsed_transactions.into_iter() {
             for (txn_idx, parsed) in transactions.into_iter().enumerate() {
                 let position = ConsensusPosition {
+                    epoch,
                     block,
                     index: txn_idx as TransactionIndex,
                 };
@@ -1396,7 +1443,7 @@ mod tests {
         Chain, ConsensusTransactionOrdering, PerObjectCongestionControlMode, ProtocolVersion,
     };
     use sui_types::{
-        base_types::{random_object_ref, AuthorityName, ObjectID, SuiAddress},
+        base_types::{random_object_ref, AuthorityName, FullObjectRef, ObjectID, SuiAddress},
         committee::Committee,
         crypto::deterministic_random_account_key,
         messages_consensus::{
@@ -1602,7 +1649,7 @@ mod tests {
             let digest = t.digest();
             if let Ok(Ok(_)) = tokio::time::timeout(
                 std::time::Duration::from_secs(10),
-                state.notify_read_effects(*digest),
+                state.notify_read_effects("", *digest),
             )
             .await
             {
@@ -1617,7 +1664,7 @@ mod tests {
             let digest = t.digest();
             if let Ok(Ok(_)) = tokio::time::timeout(
                 std::time::Duration::from_secs(10),
-                state.notify_read_effects(*digest),
+                state.notify_read_effects("", *digest),
             )
             .await
             {
@@ -1741,6 +1788,7 @@ mod tests {
         let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
         for txn_idx in 0..transactions.len() {
             let position = ConsensusPosition {
+                epoch: epoch_store.epoch(),
                 block: block.reference(),
                 index: txn_idx as TransactionIndex,
             };
@@ -1905,7 +1953,7 @@ mod tests {
         let data = SenderSignedData::new(
             TransactionData::new_transfer(
                 SuiAddress::default(),
-                random_object_ref(),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
                 SuiAddress::default(),
                 random_object_ref(),
                 1000 * gas_price,

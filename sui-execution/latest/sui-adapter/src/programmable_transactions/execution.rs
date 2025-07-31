@@ -52,6 +52,9 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         SUI_FRAMEWORK_ADDRESS,
+        balance::{
+            BALANCE_MODULE_NAME, SEND_TO_ACCOUNT_FUNCTION_NAME, WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME,
+        },
         base_types::{
             MoveLegacyTxContext, MoveObjectType, ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
             RESOLVED_UTF8_STR, SuiAddress, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
@@ -791,6 +794,46 @@ mod checked {
             &modules,
             upgrade_ticket.policy,
         )?;
+        if context.protocol_config.check_for_init_during_upgrade() {
+            // find newly added modules to the package,
+            // and error if they have init functions
+            let current_module_names: BTreeSet<&str> = current_package
+                .move_package()
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let upgrade_module_names: BTreeSet<&str> = package
+                .serialized_module_map()
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
+            let new_module_names = upgrade_module_names
+                .difference(&current_module_names)
+                .copied()
+                .collect::<BTreeSet<&str>>();
+            let new_modules = modules
+                .iter()
+                .filter(|m| {
+                    let name = m.identifier_at(m.self_handle().name).as_str();
+                    new_module_names.contains(name)
+                })
+                .collect::<Vec<&CompiledModule>>();
+            let new_module_has_init = new_modules.iter().any(|module| {
+                module.function_defs.iter().any(|fdef| {
+                    let fhandle = module.function_handle_at(fdef.function);
+                    let fname = module.identifier_at(fhandle.name);
+                    fname == INIT_FN_NAME
+                })
+            });
+            if new_module_has_init {
+                // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::FeatureNotYetSupported,
+                    "`init` in new modules on upgrade is not yet supported",
+                ));
+            }
+        }
 
         context.write_package(package);
         Ok(vec![Value::Raw(
@@ -1027,13 +1070,13 @@ mod checked {
         Ok(())
     }
 
-    fn init_modules<Mode: ExecutionMode>(
+    fn init_modules<'a, Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
-        modules: &[CompiledModule],
+        modules: impl IntoIterator<Item = &'a CompiledModule>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
-        let modules_to_init = modules.iter().filter_map(|module| {
+        let modules_to_init = modules.into_iter().filter_map(|module| {
             for fdef in &module.function_defs {
                 let fhandle = module.function_handle_at(fdef.function);
                 let fname = module.identifier_at(fhandle.name);
@@ -1179,10 +1222,31 @@ mod checked {
                 FunctionKind::NonEntry
             }
             (Visibility::Private | Visibility::Friend, false) => {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::NonEntryFunctionInvoked,
-                    "Can only call `entry` or `public` functions",
-                ));
+                // TODO: delete this as soon as the accumulator Move API is available
+                if context
+                    .protocol_config
+                    .allow_private_accumulator_entrypoints()
+                {
+                    // Allow access to private address balance functions in simtests only.
+                    let function = module.function_handle_at(fdef.function);
+                    let function_name = module.identifier_at(function.name);
+                    if (function_name == SEND_TO_ACCOUNT_FUNCTION_NAME
+                        || function_name == WITHDRAW_FROM_ACCOUNT_FUNCTION_NAME)
+                        && module_id.name() == BALANCE_MODULE_NAME
+                    {
+                        FunctionKind::NonEntry
+                    } else {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::NonEntryFunctionInvoked,
+                            "Can only call `entry` or `public` functions",
+                        ));
+                    }
+                } else {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::NonEntryFunctionInvoked,
+                        "Can only call `entry` or `public` functions",
+                    ));
+                }
             }
         };
         let signature = context

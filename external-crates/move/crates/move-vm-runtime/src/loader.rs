@@ -1790,7 +1790,7 @@ impl<'a> Resolver<'a> {
 #[derive(Debug)]
 pub(crate) struct LoadedModule {
     #[allow(dead_code)]
-    id: ModuleId,
+    pub(crate) id: ModuleId,
 
     //
     // types as indexes into the Loader type list

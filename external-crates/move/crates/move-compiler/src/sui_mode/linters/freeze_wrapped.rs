@@ -193,6 +193,7 @@ impl Context<'_> {
             | T::Ref(_, _)
             | T::Var(_)
             | T::Anything
+            | T::Void
             | T::UnresolvedError
             | T::Fun(_, _) => None,
         }

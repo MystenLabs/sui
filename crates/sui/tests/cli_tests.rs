@@ -17,8 +17,9 @@ use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildCo
 use serde_json::json;
 use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
 use sui::client_ptb::ptb::PTB;
-use sui::key_identity::{get_identity_address, KeyIdentity};
 use sui::sui_commands::IndexerArgs;
+use sui_keys::key_identity::KeyIdentity;
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -418,7 +419,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
     }
 
     // Print all addresses
@@ -438,11 +439,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-    let alias = context
-        .config
-        .keystore
-        .get_alias_by_address(&address)
-        .unwrap();
+    let alias = context.config.keystore.get_alias(&address).unwrap();
     // Print objects owned by `address`
     SuiClientCommands::Objects {
         address: Some(KeyIdentity::Address(address)),
@@ -714,11 +711,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-    let alias = context
-        .config
-        .keystore
-        .get_alias_by_address(&address)
-        .unwrap();
+    let alias = context.config.keystore.get_alias(&address).unwrap();
 
     let client = context.get_client().await?;
     let object_refs = client
@@ -2924,7 +2917,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .keys()
+            .entries()
             .iter()
             .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
             .count(),
@@ -2945,7 +2938,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .keys()
+            .entries()
             .iter()
             .filter(|k| k.flag() == Secp256k1SuiSignature::SCHEME.flag())
             .count(),
@@ -3019,11 +3012,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     );
 
     // switch back to addr1 by using its alias
-    let alias1 = context
-        .config
-        .keystore
-        .get_alias_by_address(&addr1)
-        .unwrap();
+    let alias1 = context.config.keystore.get_alias(&addr1).unwrap();
     let resp = SuiClientCommands::Switch {
         address: Some(KeyIdentity::Alias(alias1)),
         env: None,
@@ -3458,11 +3447,7 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     let address = test_cluster.get_address_0();
     let address1 = test_cluster.get_address_1();
     let context = &mut test_cluster.wallet;
-    let alias1 = context
-        .config
-        .keystore
-        .get_alias_by_address(&address1)
-        .unwrap();
+    let alias1 = context.config.keystore.get_alias(&address1).unwrap();
     let client = context.get_client().await?;
     let object_refs = client
         .read_api()
@@ -3777,29 +3762,31 @@ async fn key_identity_test() {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
-    let alias = context
-        .config
-        .keystore
-        .get_alias_by_address(&address)
-        .unwrap();
+    let alias = context.config.keystore.get_alias(&address).unwrap();
 
     // by alias
     assert_eq!(
         address,
-        get_identity_address(Some(KeyIdentity::Alias(alias)), context).unwrap()
+        context
+            .get_identity_address(Some(KeyIdentity::Alias(alias)))
+            .unwrap()
     );
     // by address
     assert_eq!(
         address,
-        get_identity_address(Some(KeyIdentity::Address(address)), context).unwrap()
+        context
+            .get_identity_address(Some(KeyIdentity::Address(address)))
+            .unwrap()
     );
     // alias does not exist
-    assert!(get_identity_address(Some(KeyIdentity::Alias("alias".to_string())), context).is_err());
+    assert!(context
+        .get_identity_address(Some(KeyIdentity::Alias("alias".to_string())))
+        .is_err());
 
     // get active address instead when no alias/address is given
     assert_eq!(
         context.active_address().unwrap(),
-        get_identity_address(None, context).unwrap()
+        context.get_identity_address(None).unwrap()
     );
 }
 
@@ -5416,5 +5403,95 @@ async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
     let output = String::from_utf8_lossy(&cmd.stdout);
     assert!(!output.contains("dependencies: []"));
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_party_transfer() -> Result<(), anyhow::Error> {
+    // TODO: this test override can be removed when party objects are enabled on mainnet.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_party_transfer_for_testing(true);
+        config
+    });
+
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+
+    let party_transfer = SuiClientCommands::PartyTransfer {
+        to: recipient1.clone(),
+        object_id: object_id1,
+        payment: PaymentArgs::default(),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = party_transfer else {
+        panic!("PartyTransfer test failed");
+    };
+
+    assert!(response.status_ok().unwrap());
+    assert_eq!(
+        response.effects.as_ref().unwrap().gas_object().object_id(),
+        object_id2
+    );
+
+    let object_read = client
+        .read_api()
+        .get_object_with_options(object_id1, SuiObjectDataOptions::full_content())
+        .await?;
+
+    let object_data = object_read.data.unwrap();
+    let owner = object_data.owner.unwrap();
+
+    let Owner::ConsensusAddressOwner {
+        owner: owner_addr, ..
+    } = owner
+    else {
+        panic!("Expected ConsensusAddressOwner but got different owner type");
+    };
+
+    assert_eq!(owner_addr, address2);
+    Ok(())
+}
+
+#[sim_test]
+async fn test_party_transfer_gas_object_as_transfer_object() -> Result<(), anyhow::Error> {
+    // TODO: this test override can be removed when party objects are enabled on mainnet.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_party_transfer_for_testing(true);
+        config
+    });
+
+    let (mut test_cluster, _client, rgp, objects, _recipients, addresses) =
+        test_cluster_helper().await;
+    let object_id1 = objects[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+
+    let party_transfer = SuiClientCommands::PartyTransfer {
+        to: KeyIdentity::Address(address2),
+        object_id: object_id1,
+        payment: PaymentArgs {
+            gas: vec![object_id1],
+        },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await;
+
+    assert!(party_transfer.is_err());
     Ok(())
 }

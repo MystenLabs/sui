@@ -1,0 +1,266 @@
+---
+source: crates/move-stackless-bytecode/tests/testsuite.rs
+---
+============ initial translation from Move ================
+
+[variant baseline]
+fun LeakInternalRefs::leak_immut_ref($t0|s: &LeakInternalRefs::S): &u64 {
+     var $t1: &LeakInternalRefs::S
+     var $t2: &u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<LeakInternalRefs::S>.f($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_in_branch($t0|b: bool, $t1|x: &mut u64, $t2|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t3|tmp#$3: &mut u64
+     var $t4: bool
+     var $t5: &mut LeakInternalRefs::S
+     var $t6: &mut u64
+     var $t7: &mut u64
+     var $t8: &mut LeakInternalRefs::S
+     var $t9: &mut u64
+     var $t10: &mut u64
+  0: $t4 := move($t0)
+  1: if ($t4) goto 2 else goto 8
+  2: label L1
+  3: $t5 := move($t2)
+  4: destroy($t5)
+  5: $t6 := move($t1)
+  6: $t3 := $t6
+  7: goto 15
+  8: label L0
+  9: $t7 := move($t1)
+ 10: destroy($t7)
+ 11: $t8 := move($t2)
+ 12: $t9 := borrow_field<LeakInternalRefs::S>.f($t8)
+ 13: $t3 := $t9
+ 14: goto 15
+ 15: label L2
+ 16: $t10 := move($t3)
+ 17: return $t10
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_in_loop($t0|x: &mut u64, $t1|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t2|i#1#0: u64
+     var $t3: u64
+     var $t4: u64
+     var $t5: u64
+     var $t6: bool
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: &mut u64
+     var $t11: &mut LeakInternalRefs::S
+     var $t12: &mut u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: &mut LeakInternalRefs::S
+     var $t17: &mut u64
+  0: $t3 := 0
+  1: $t2 := $t3
+  2: goto 3
+  3: label L5
+  4: $t4 := copy($t2)
+  5: $t5 := 10
+  6: $t6 := <($t4, $t5)
+  7: if ($t6) goto 8 else goto 27
+  8: label L1
+  9: goto 10
+ 10: label L2
+ 11: $t7 := copy($t2)
+ 12: $t8 := 7
+ 13: $t9 := ==($t7, $t8)
+ 14: if ($t9) goto 15 else goto 21
+ 15: label L4
+ 16: $t10 := move($t0)
+ 17: destroy($t10)
+ 18: $t11 := move($t1)
+ 19: $t12 := borrow_field<LeakInternalRefs::S>.f($t11)
+ 20: return $t12
+ 21: label L3
+ 22: $t13 := move($t2)
+ 23: $t14 := 1
+ 24: $t15 := +($t13, $t14)
+ 25: $t2 := $t15
+ 26: goto 3
+ 27: label L0
+ 28: $t16 := move($t1)
+ 29: destroy($t16)
+ 30: $t17 := move($t0)
+ 31: return $t17
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_mut_ref($t0|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t1: &mut LeakInternalRefs::S
+     var $t2: &mut u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<LeakInternalRefs::S>.f($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_two_refs($t0|s: &mut LeakInternalRefs::S): (&mut u64, &mut u64) {
+     var $t1: &mut LeakInternalRefs::S
+     var $t2: &mut u64
+     var $t3: &mut LeakInternalRefs::S
+     var $t4: &mut u64
+  0: $t1 := copy($t0)
+  1: $t2 := borrow_field<LeakInternalRefs::S>.f($t1)
+  2: $t3 := move($t0)
+  3: $t4 := borrow_field<LeakInternalRefs::S>.g($t3)
+  4: return ($t2, $t4)
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::read_but_dont_leak($t0|x: &mut u64, $t1|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t2: &mut LeakInternalRefs::S
+     var $t3: &mut u64
+     var $t4: &mut u64
+  0: $t2 := move($t1)
+  1: $t3 := borrow_field<LeakInternalRefs::S>.f($t2)
+  2: destroy($t3)
+  3: $t4 := move($t0)
+  4: return $t4
+}
+
+============ after pipeline `escape_analysis` ================
+
+[variant baseline]
+fun LeakInternalRefs::leak_immut_ref($t0|s: &LeakInternalRefs::S): &u64 {
+     var $t1: &LeakInternalRefs::S
+     var $t2: &u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<LeakInternalRefs::S>.f($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_in_branch($t0|b: bool, $t1|x: &mut u64, $t2|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t3|tmp#$3: &mut u64
+     var $t4: bool
+     var $t5: &mut LeakInternalRefs::S
+     var $t6: &mut u64
+     var $t7: &mut u64
+     var $t8: &mut LeakInternalRefs::S
+     var $t9: &mut u64
+     var $t10: &mut u64
+  0: $t4 := move($t0)
+  1: if ($t4) goto 2 else goto 8
+  2: label L1
+  3: $t5 := move($t2)
+  4: destroy($t5)
+  5: $t6 := move($t1)
+  6: $t3 := $t6
+  7: goto 15
+  8: label L0
+  9: $t7 := move($t1)
+ 10: destroy($t7)
+ 11: $t8 := move($t2)
+ 12: $t9 := borrow_field<LeakInternalRefs::S>.f($t8)
+ 13: $t3 := $t9
+ 14: goto 15
+ 15: label L2
+ 16: $t10 := move($t3)
+ 17: return $t10
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_in_loop($t0|x: &mut u64, $t1|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t2|i#1#0: u64
+     var $t3: u64
+     var $t4: u64
+     var $t5: u64
+     var $t6: bool
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: &mut u64
+     var $t11: &mut LeakInternalRefs::S
+     var $t12: &mut u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: &mut LeakInternalRefs::S
+     var $t17: &mut u64
+  0: $t3 := 0
+  1: $t2 := $t3
+  2: goto 3
+  3: label L5
+  4: $t4 := copy($t2)
+  5: $t5 := 10
+  6: $t6 := <($t4, $t5)
+  7: if ($t6) goto 8 else goto 27
+  8: label L1
+  9: goto 10
+ 10: label L2
+ 11: $t7 := copy($t2)
+ 12: $t8 := 7
+ 13: $t9 := ==($t7, $t8)
+ 14: if ($t9) goto 15 else goto 21
+ 15: label L4
+ 16: $t10 := move($t0)
+ 17: destroy($t10)
+ 18: $t11 := move($t1)
+ 19: $t12 := borrow_field<LeakInternalRefs::S>.f($t11)
+ 20: return $t12
+ 21: label L3
+ 22: $t13 := move($t2)
+ 23: $t14 := 1
+ 24: $t15 := +($t13, $t14)
+ 25: $t2 := $t15
+ 26: goto 3
+ 27: label L0
+ 28: $t16 := move($t1)
+ 29: destroy($t16)
+ 30: $t17 := move($t0)
+ 31: return $t17
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_mut_ref($t0|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t1: &mut LeakInternalRefs::S
+     var $t2: &mut u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<LeakInternalRefs::S>.f($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::leak_two_refs($t0|s: &mut LeakInternalRefs::S): (&mut u64, &mut u64) {
+     var $t1: &mut LeakInternalRefs::S
+     var $t2: &mut u64
+     var $t3: &mut LeakInternalRefs::S
+     var $t4: &mut u64
+  0: $t1 := copy($t0)
+  1: $t2 := borrow_field<LeakInternalRefs::S>.f($t1)
+  2: $t3 := move($t0)
+  3: $t4 := borrow_field<LeakInternalRefs::S>.g($t3)
+  4: return ($t2, $t4)
+}
+
+
+[variant baseline]
+fun LeakInternalRefs::read_but_dont_leak($t0|x: &mut u64, $t1|s: &mut LeakInternalRefs::S): &mut u64 {
+     var $t2: &mut LeakInternalRefs::S
+     var $t3: &mut u64
+     var $t4: &mut u64
+  0: $t2 := move($t1)
+  1: $t3 := borrow_field<LeakInternalRefs::S>.f($t2)
+  2: destroy($t3)
+  3: $t4 := move($t0)
+  4: return $t4
+}

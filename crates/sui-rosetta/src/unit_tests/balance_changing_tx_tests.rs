@@ -27,7 +27,7 @@ use sui_sdk::rpc_types::{
     SuiTransactionBlockResponse,
 };
 use sui_sdk::SuiClient;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::gas_coin::{GasCoin, GAS};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -114,7 +114,9 @@ async fn test_transfer_object() {
     let object_ref = get_random_sui(&client, sender, vec![]).await;
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(recipient, object_ref).unwrap();
+        builder
+            .transfer_object(recipient, FullObjectRef::from_fastpath_ref(object_ref))
+            .unwrap();
         builder.finish()
     };
     test_transaction(
