@@ -110,8 +110,8 @@ export interface IDebugInfoFunction {
 export interface IFileInfo {
     // File path.
     path: string;
-    // File content.
-    content: string;
+    // File content as bytes.
+    content: Uint8Array;
     // File content split into lines (for efficient line/column calculations).
     lines: string[];
 }
@@ -245,7 +245,8 @@ function readDebugInfo(
     for (const funEntry of Object.values(functionMap)) {
         let nameStart = funEntry.definition_location.start;
         let nameEnd = funEntry.definition_location.end;
-        const funName = fileInfo.content.slice(nameStart, nameEnd);
+        const nameBytes = fileInfo.content.slice(nameStart, nameEnd);
+        const funName = Buffer.from(nameBytes).toString('utf8');
         const pcLocs: IFileLoc[] = [];
         let prevPC = 0;
         // we need to initialize `prevFileLoc` to make the compiler happy but it's never
@@ -319,9 +320,10 @@ function readDebugInfo(
  * @returns a tuple with the file hash and the file info.
  */
 export function createFileInfo(filePath: string): [string, IFileInfo] {
-    const content = fs.readFileSync(filePath, 'utf8');
+    const content = new Uint8Array(fs.readFileSync(filePath));
     const numFileHash = computeFileHash(content);
-    const lines = content.split('\n');
+    const contentString = Buffer.from(content).toString('utf8');
+    const lines = contentString.split('\n');
     const fileInfo = { path: filePath, content, lines };
     const fileHash = Buffer.from(numFileHash).toString('base64');
     return [fileHash, fileInfo];
@@ -332,7 +334,7 @@ export function createFileInfo(filePath: string): [string, IFileInfo] {
  *
  * @param fileContents contents of the file.
  */
-function computeFileHash(fileContents: string): Uint8Array {
+function computeFileHash(fileContents: Uint8Array): Uint8Array {
     const hash = crypto.createHash('sha256').update(fileContents).digest();
     return new Uint8Array(hash);
 }
