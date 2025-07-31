@@ -372,7 +372,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(manifest.package.system_dependencies == None);
+        assert!(manifest.package.system_dependencies.is_none());
     }
 
     /// You can turn implicit deps off
