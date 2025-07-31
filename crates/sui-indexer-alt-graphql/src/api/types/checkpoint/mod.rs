@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{connection::Connection, Context, Object};
+use async_graphql::{
+    connection::{Connection, CursorType, Edge},
+    Context, Object,
+};
 
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
@@ -14,7 +17,7 @@ use sui_types::{
 use crate::{
     api::{
         query::Query,
-        scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
+        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
     },
     error::RpcError,
     pagination::{Page, PaginationConfig},
@@ -22,11 +25,14 @@ use crate::{
 };
 
 use super::{
+    checkpoint::filter::{checkpoint_bounds, cp_by_epoch, cp_unfiltered, CheckpointFilter},
     epoch::Epoch,
     gas::GasCostSummary,
     transaction::{filter::TransactionFilter, CTransaction, Transaction},
     validator_aggregated_signature::ValidatorAggregatedSignature,
 };
+
+pub(crate) mod filter;
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -44,6 +50,8 @@ struct CheckpointContents {
         AuthorityStrongQuorumSignInfo,
     )>,
 }
+
+pub(crate) type CCheckpoint = JsonCursor<u64>;
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -198,6 +206,50 @@ impl Checkpoint {
             scope,
             sequence_number,
         })
+    }
+
+    /// Paginate through checkpoints with filters applied.
+    pub(crate) async fn paginate(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CCheckpoint>,
+        filter: CheckpointFilter,
+    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+        let mut conn = Connection::new(false, false);
+
+        // TODO: (henrychen) Update when we figure out retention for key-value stores.
+        let cp_lo = 0;
+        let cp_hi_inclusive = scope.checkpoint_viewed_at();
+
+        let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint.map(u64::from),
+            filter.at_checkpoint.map(u64::from),
+            filter.before_checkpoint.map(u64::from),
+            cp_lo,
+            cp_hi_inclusive,
+        ) else {
+            return Ok(Connection::new(false, false));
+        };
+
+        let results = if let Some(epoch) = filter.at_epoch {
+            cp_by_epoch(ctx, &page, &cp_bounds, epoch.into()).await?
+        } else {
+            cp_unfiltered(&cp_bounds, &page)
+        };
+
+        let (prev, next, results) = page.paginate_results(results, |c| JsonCursor::new(*c));
+
+        conn.has_previous_page = prev;
+        conn.has_next_page = next;
+
+        for (cursor, cp_sequence_number) in results {
+            conn.edges.push(Edge::new(
+                cursor.encode_cursor(),
+                Self::with_sequence_number(scope.clone(), cp_sequence_number).unwrap(),
+            ));
+        }
+
+        Ok(conn)
     }
 }
 
