@@ -16,6 +16,7 @@ use handlers::{
     tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
 use prometheus::Registry;
+use sui_indexer_alt_framework::types::sui_system_state::SuiSystemState;
 use sui_indexer_alt_framework::{
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
@@ -27,6 +28,7 @@ use sui_indexer_alt_framework::{
     Indexer, IndexerArgs,
 };
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
+use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -37,6 +39,11 @@ pub mod benchmark;
 pub(crate) mod bootstrap;
 pub mod config;
 pub(crate) mod handlers;
+
+pub struct BootstrapGenesisData {
+    pub stored_genesis: StoredGenesis,
+    pub sui_system_state: SuiSystemState,
+}
 
 pub async fn setup_indexer(
     database_url: Url,

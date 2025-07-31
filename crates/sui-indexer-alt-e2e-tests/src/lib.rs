@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod mock;
+
 use anyhow::{bail, ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
@@ -11,6 +13,7 @@ use serde_json::json;
 use simulacrum::Simulacrum;
 use std::{
     collections::HashMap,
+    fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
@@ -37,6 +40,8 @@ use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
 };
+use sui_storage::blob::{Blob, BlobEncoding};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -316,7 +321,6 @@ impl OffchainClusterConfig {
         }
     }
 }
-
 impl OffchainCluster {
     /// Construct a new off-chain cluster and spin up its constituent services.
     ///
@@ -592,6 +596,19 @@ impl OffchainCluster {
         ensure!(sequence_number != i64::MAX, "Indexer has not started yet");
 
         Ok(sequence_number as u64)
+    }
+
+    pub async fn write_checkpoint(&self, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+        let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+        let file_path = self
+            .ingestion_temp_dir
+            .as_ref()
+            .unwrap()
+            .path()
+            .join(file_name);
+        let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
+        fs::write(file_path, blob.to_bytes())?;
+        Ok(())
     }
 
     /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is

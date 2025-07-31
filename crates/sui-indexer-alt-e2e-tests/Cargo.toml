@@ -25,6 +25,7 @@ tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 url.workspace = true
+bcs.workspace = true
 
 simulacrum.workspace = true
 sui-indexer-alt.workspace = true
