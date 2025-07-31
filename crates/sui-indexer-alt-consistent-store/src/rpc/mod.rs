@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::{convert::Infallible, sync::Arc};
 
 use anyhow::Context;
 use axum::extract::Request;
 use axum::response::IntoResponse;
 use axum::Router;
+use axum_server::tls_rustls::RustlsConfig;
+use axum_server::Handle;
+use futures::future::OptionFuture;
 use metrics::RpcMetrics;
 use middleware::metrics::MakeMetricsHandler;
 use middleware::version::Version;
 use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
+use tokio::join;
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -34,6 +39,25 @@ pub struct RpcArgs {
     /// Address to accept incoming RPC connections on.
     #[clap(long, default_value_t = Self::default().rpc_listen_address)]
     pub rpc_listen_address: SocketAddr,
+
+    /// TLS configuration
+    #[clap(flatten)]
+    pub tls: TlsArgs,
+}
+
+#[derive(clap::Args, Clone, Debug, Default)]
+pub struct TlsArgs {
+    /// Address to accept incoming TLS/HTTPS connections on
+    #[clap(long, requires_all = &["tls_cert", "tls_key"])]
+    pub rpc_tls_listen_address: Option<SocketAddr>,
+
+    /// Path to TLS certificate file (PEM format)
+    #[clap(long, requires_all = &["rpc_tls_listen_address", "tls_key"])]
+    pub tls_cert: Option<PathBuf>,
+
+    /// Path to TLS private key file (PEM format)
+    #[clap(long, requires_all = &["rpc_tls_listen_address", "tls_cert"])]
+    pub tls_key: Option<PathBuf>,
 }
 
 /// Responsible for the set-up of a gRPC service -- adding services, configuring reflection,
@@ -41,6 +65,12 @@ pub struct RpcArgs {
 pub(crate) struct RpcService<'d> {
     /// Address to accept incoming RPC connections on.
     rpc_listen_address: SocketAddr,
+
+    /// Optional address to accept incoming TLS RPC connections on.
+    rpc_tls_listen_address: Option<SocketAddr>,
+
+    /// TLS configuration
+    tls_config: Option<RustlsConfig>,
 
     /// The version string to report with each response, as an HTTP header.
     version: &'static str,
@@ -66,15 +96,37 @@ pub(crate) struct RpcService<'d> {
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 impl<'d> RpcService<'d> {
-    pub(crate) fn new(
+    pub(crate) async fn new(
         args: RpcArgs,
         version: &'static str,
         registry: &Registry,
         cancel: CancellationToken,
-    ) -> Self {
-        let RpcArgs { rpc_listen_address } = args;
-        Self {
+    ) -> anyhow::Result<Self> {
+        let RpcArgs {
             rpc_listen_address,
+            tls,
+        } = args;
+
+        let TlsArgs {
+            rpc_tls_listen_address,
+            tls_cert,
+            tls_key,
+        } = tls;
+
+        let tls_config = if let (Some(cert), Some(key)) = (tls_cert, tls_key) {
+            Some(
+                RustlsConfig::from_pem_file(cert, key)
+                    .await
+                    .context("Failed to load TLS configuration")?,
+            )
+        } else {
+            None
+        };
+
+        Ok(Self {
+            rpc_listen_address,
+            rpc_tls_listen_address,
+            tls_config,
             version,
             reflection_v1: tonic_reflection::server::Builder::configure(),
             reflection_v1alpha: tonic_reflection::server::Builder::configure(),
@@ -82,7 +134,7 @@ impl<'d> RpcService<'d> {
             router: Router::new(),
             metrics: Arc::new(RpcMetrics::new(registry)),
             cancel,
-        }
+        })
     }
 
     /// Register a file descriptor set to be exposed via the reflection service.
@@ -112,6 +164,8 @@ impl<'d> RpcService<'d> {
     pub(crate) async fn run(self) -> anyhow::Result<JoinHandle<()>> {
         let Self {
             rpc_listen_address,
+            rpc_tls_listen_address,
+            tls_config,
             version,
             reflection_v1,
             reflection_v1alpha,
@@ -155,21 +209,56 @@ impl<'d> RpcService<'d> {
                 .await;
         }
 
+        // Start HTTPS server if TLS is configured
+        let https_service: OptionFuture<_> =
+            if let (Some(listen_address), Some(config)) = (rpc_tls_listen_address, tls_config) {
+                info!("Starting Consistent RPC TLS service on {listen_address}");
+
+                // Handle graceful shutdown for TLS service
+                let handle = Handle::new();
+                tokio::spawn({
+                    let handle = handle.clone();
+                    let cancel = cancel.clone();
+                    async move {
+                        cancel.cancelled().await;
+                        handle.graceful_shutdown(None);
+                    }
+                });
+
+                Some(
+                    axum_server::bind_rustls(listen_address, config)
+                        .handle(handle)
+                        .serve(router.clone().into_make_service()),
+                )
+            } else {
+                None
+            }
+            .into();
+
+        // Start HTTP server
         info!("Starting Consistent RPC service on {rpc_listen_address}");
         let listener = TcpListener::bind(rpc_listen_address)
             .await
             .context("Failed to bind Consistent RPC to listen address")?;
 
-        let service = axum::serve(listener, router).with_graceful_shutdown({
+        let http_service = axum::serve(listener, router.clone()).with_graceful_shutdown({
             let cancel = cancel.clone();
             async move {
                 cancel.cancelled().await;
-                info!("Shutting down Consistent RPC service");
+                info!("Shutting down Consistent RPC HTTP service");
             }
         });
 
+        // Return a single task that waits for all servers
         Ok(tokio::spawn(async move {
-            if let Err(e) = service.await {
+            let (https, http) = join!(https_service, http_service);
+
+            if let Err(e) = https.transpose() {
+                error!("Failed to start Consistent RPC TLS service: {e:?}");
+                cancel.cancel();
+            }
+
+            if let Err(e) = http {
                 error!("Failed to start Consistent RPC service: {e:?}");
                 cancel.cancel();
             }
@@ -181,6 +270,7 @@ impl Default for RpcArgs {
     fn default() -> Self {
         Self {
             rpc_listen_address: "0.0.0.0:7001".parse().unwrap(),
+            tls: TlsArgs::default(),
         }
     }
 }
