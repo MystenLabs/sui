@@ -11,7 +11,7 @@ use sui_types::base_types::{ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::effects::TransactionEffectsAPI as _;
-use sui_types::error::SuiError;
+use sui_types::error::{SuiError, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
 use sui_types::messages_consensus::ConsensusPosition;
@@ -259,6 +259,14 @@ async fn test_wait_for_effects_quorum_rejected() {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
         epoch_store.set_consensus_tx_status(tx_position, ConsensusTxStatus::Rejected);
+        epoch_store.set_rejection_vote_reason(
+            tx_position,
+            &SuiError::UserInputError {
+                error: UserInputError::TransactionDenied {
+                    error: "object denied".to_string(),
+                },
+            },
+        );
     });
 
     let response = test_context
@@ -271,10 +279,14 @@ async fn test_wait_for_effects_quorum_rejected() {
 
     match response {
         WaitForEffectsResponse::Rejected { error } => {
-            assert!(matches!(
+            assert_eq!(
                 error,
-                SuiError::TransactionRejectReasonNotFound { .. }
-            ));
+                SuiError::UserInputError {
+                    error: UserInputError::TransactionDenied {
+                        error: "object denied".to_string(),
+                    },
+                }
+            );
         }
         _ => panic!("Expected Rejected response"),
     }
