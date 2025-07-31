@@ -5,7 +5,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use move_core_types::identifier::Identifier;
-use tracing::{debug, info};
+use tracing::debug;
 
 use super::compute_digest;
 use super::manifest::{Manifest, ManifestError, ManifestErrorKind};
@@ -288,9 +288,10 @@ impl<F: MoveFlavor> Package<F> {
                     // that all of the deps are valid in the implicit deps list, or warn.
                     for dep in &specified_deps {
                         if !deps.contains_key(&Identifier::new(dep.as_str())?) {
-                            // TODO: Should we error? I believe it's fine not to error and just warn
-                            // otherwise we need "context" logic (are we root?)
-                            info!("[warning] Implicit dependency {} not found", dep);
+                            return Err(PackageError::Generic(format!(
+                                "The implicit dependency `{}` does not exist in the implicit deps list.",
+                                dep
+                            )));
                         }
                     }
 
@@ -424,11 +425,7 @@ mod tests {
         let implicit_deps =
             ImplicitDepMode::Enabled(Some(vec!["ignore".to_string(), "foo".to_string()]));
 
-        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
-        let dep_keys: Vec<_> = deps.keys().cloned().collect();
-
-        assert_eq!(dep_keys.len(), 1);
-        assert!(dep_keys.contains(&new_package_name("foo")));
+        assert!(Package::<TestFlavor>::implicit_deps(&env, implicit_deps).is_err());
     }
 
     #[test]
