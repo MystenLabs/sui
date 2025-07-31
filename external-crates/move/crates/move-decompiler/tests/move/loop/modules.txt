@@ -1,2 +1,3 @@
 loop
 infinite_loop
+loops

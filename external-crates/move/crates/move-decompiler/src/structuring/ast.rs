@@ -16,7 +16,7 @@ pub type Code = (u64, bool);
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    body: Vec<crate::ast::Exp>,
+    pub body: Vec<crate::ast::Exp>,
 }
 
 #[derive(Debug, Clone)]
