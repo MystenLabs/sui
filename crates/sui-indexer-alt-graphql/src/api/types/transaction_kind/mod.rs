@@ -7,11 +7,13 @@ use sui_types::transaction::TransactionKind as NativeTransactionKind;
 use crate::scope::Scope;
 
 use self::{
+    authenticator_state_update::AuthenticatorStateUpdateTransaction,
     change_epoch::ChangeEpochTransaction,
     consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
     randomness_state_update::RandomnessStateUpdateTransaction,
 };
 
+pub(crate) mod authenticator_state_update;
 pub(crate) mod change_epoch;
 pub(crate) mod consensus_commit_prologue;
 pub(crate) mod genesis;
@@ -24,6 +26,7 @@ pub enum TransactionKind {
     ConsensusCommitPrologue(ConsensusCommitPrologueTransaction),
     ChangeEpoch(ChangeEpochTransaction),
     RandomnessStateUpdate(RandomnessStateUpdateTransaction),
+    AuthenticatorStateUpdate(AuthenticatorStateUpdateTransaction),
 }
 
 impl TransactionKind {
@@ -53,6 +56,9 @@ impl TransactionKind {
                     native: rsu,
                 }))
             }
+            K::AuthenticatorStateUpdate(asu) => Some(T::AuthenticatorStateUpdate(
+                AuthenticatorStateUpdateTransaction { native: asu, scope },
+            )),
             // Other types will return None for now
             _ => None,
         }

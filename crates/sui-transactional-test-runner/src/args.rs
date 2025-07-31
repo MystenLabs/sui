@@ -228,6 +228,18 @@ pub struct SetRandomStateCommand {
     pub randomness_initial_version: u64,
 }
 
+#[derive(Debug, clap::Parser)]
+pub struct AuthenticatorStateUpdateCommand {
+    #[clap(long = "round")]
+    pub round: u64,
+    /// Comma-separated list of JWK issuers (e.g., "google.com,microsoft.com").
+    /// Key IDs will be automatically generated as "key1", "key2", etc.
+    #[clap(long = "jwk-iss", value_delimiter = ',')]
+    pub jwk_iss: Vec<String>,
+    #[clap(long = "authenticator-obj-initial-shared-version")]
+    pub authenticator_obj_initial_shared_version: Option<u64>,
+}
+
 #[derive(Debug)]
 pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     ViewObject(ViewObjectCommand),
@@ -241,6 +253,7 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     AdvanceEpoch(AdvanceEpochCommand),
     AdvanceClock(AdvanceClockCommand),
     SetRandomState(SetRandomStateCommand),
+    AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand),
     ViewCheckpoint,
     RunGraphql(RunGraphqlCommand),
     RunJsonRpc(RunJsonRpcCommand),
@@ -284,6 +297,11 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
             }
             Some(("set-random-state", matches)) => {
                 SuiSubcommand::SetRandomState(SetRandomStateCommand::from_arg_matches(matches)?)
+            }
+            Some(("authenticator-state-update", matches)) => {
+                SuiSubcommand::AuthenticatorStateUpdate(
+                    AuthenticatorStateUpdateCommand::from_arg_matches(matches)?,
+                )
             }
             Some(("view-checkpoint", _)) => SuiSubcommand::ViewCheckpoint,
             Some(("run-graphql", matches)) => {
@@ -332,6 +350,9 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(RunJsonRpcCommand::command().name("run-jsonrpc"))
             .subcommand(
                 RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("bench"),
+            )
+            .subcommand(
+                AuthenticatorStateUpdateCommand::command().name("authenticator-state-update"),
             )
     }
 
