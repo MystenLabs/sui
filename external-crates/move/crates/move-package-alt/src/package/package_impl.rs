@@ -9,7 +9,6 @@ use tracing::debug;
 use super::compute_digest;
 use super::manifest::{Manifest, ManifestError, ManifestErrorKind};
 use super::paths::PackagePath;
-use crate::compatibility::legacy_parser::ParsedLegacyPackage;
 use crate::dependency::FetchedDependency;
 use crate::errors::{FileHandle, Location};
 use crate::schema::{ImplicitDepMode, ReplacementDependency};
@@ -27,10 +26,8 @@ use crate::{
         PublishedID,
     },
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::sync::{LazyLock, Mutex};
-
-const SYSTEM_DEPS_NAMES: [&str; 5] = ["Sui", "MoveStdlib", "Bridge", "DeepBook", "SuiSystem"];
 
 // TODO: is this the right way to handle this?
 static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
@@ -121,7 +118,7 @@ impl<F: MoveFlavor> Package<F> {
 
             debug!("adding implicit dependencies");
             let implicit_deps =
-                Self::implicit_deps(env, manifest.parsed().package.implicit_deps, None);
+                Self::implicit_deps(env, manifest.parsed().package.implicit_deps.clone())?;
 
             // TODO: We should error if there environment is not supported!
             debug!("combining [dependencies] with [dep-replacements] for {env:?}");
@@ -160,8 +157,9 @@ impl<F: MoveFlavor> Package<F> {
 
         // Here, that means that we're working on legacy package, so we can throw its errors.
         let legacy_manifest = parse_legacy_manifest_from_file(&path)?;
+
         let implicit_deps =
-            Self::implicit_deps(env, ImplicitDepMode::Legacy, Some(&legacy_manifest));
+            Self::implicit_deps(env, legacy_manifest.metadata.implicit_deps.clone())?;
 
         let combined_deps = CombinedDependency::combine_deps(
             &legacy_manifest.file_handle,
@@ -273,51 +271,40 @@ impl<F: MoveFlavor> Package<F> {
         &self.metadata
     }
 
-    /// Return the implicit deps depending on the implicit dep mode. Note that if `implicit_dep_mode`
-    /// is ImplicitDepMode::Legacy, a `legacy_manifest` is required otherwise it will panic.
-    // TODO this needs to be moved into a ImplicitDeps trait
+    /// Return the implicit deps depending on the implicit dep mode.
     fn implicit_deps(
         env: &Environment,
         implicit_dep_mode: ImplicitDepMode,
-        legacy_manifest: Option<&ParsedLegacyPackage>,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
-        // TODO - rethink how this implict dep mode works
-        // let system_pacakages = F::implicit_deps;
-        // if let Some(legacy) = package.legacy_deta {
-        //   check if package is a system package (i.e. if package.name() is in system_packages)
-        //   check if package has any deps with same names as system packages
-        //   if either is true: set implicit_dep_mode to Disabled
-        // }
-
+    ) -> PackageResult<BTreeMap<PackageName, ReplacementDependency>> {
         match implicit_dep_mode {
-            // for modern packages, the manifest should have the implicit-deps field set to true
-            // (by default), or to false.
-            ImplicitDepMode::Enabled => F::implicit_deps(env.id().to_string()),
-            ImplicitDepMode::Disabled => BTreeMap::new(),
-            ImplicitDepMode::Legacy => {
-                let legacy_manifest = legacy_manifest.expect("Legacy manifest should be present");
-                let system_deps_in_legacy_manifest = legacy_manifest
-                    .deps
-                    .iter()
-                    .any(|(name, _)| SYSTEM_DEPS_NAMES.contains(&name.as_str()));
+            // For enabled state, we need to pick the deps based on whether there is
+            // a specfiied
+            ImplicitDepMode::Enabled(specified_deps) => {
+                let deps = F::implicit_deps(env.id().to_string());
 
-                // if the legacy manifest has system dependencies explicitly defined, return an empty
-                // map
-                if system_deps_in_legacy_manifest {
-                    BTreeMap::new()
-                } else {
-                    let deps = F::implicit_deps(env.id().to_string());
-
-                    // for legacy system packages, we don't need to add implicit deps for them as their
-                    // dependencies are explicitly set in their manifest
-
-                    if deps.contains_key(legacy_manifest.metadata.name.get_ref()) {
-                        BTreeMap::new()
-                    } else {
-                        deps
+                if let Some(specified_deps) = specified_deps {
+                    // If a list of deps is specified, we need to make sure
+                    // that all of the deps are valid in the implicit deps list, or warn.
+                    for dep in &specified_deps {
+                        if !deps.contains_key(&Identifier::new(dep.as_str())?) {
+                            return Err(PackageError::Generic(format!(
+                                "The implicit dependency `{}` does not exist in the implicit deps list.",
+                                dep
+                            )));
+                        }
                     }
+
+                    // If we have a "specified" list of deps, we need to filter the implicit deps to only support
+                    // the ones that are in the specified list.
+                    Ok(deps
+                        .into_iter()
+                        .filter(|(name, _)| specified_deps.contains(&name.to_string()))
+                        .collect())
+                } else {
+                    Ok(deps)
                 }
             }
+            ImplicitDepMode::Disabled => Ok(BTreeMap::new()),
             ImplicitDepMode::Testing => todo!(),
         }
     }
@@ -356,5 +343,117 @@ impl<F: MoveFlavor> Package<F> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestFlavor;
+
+    impl MoveFlavor for TestFlavor {
+        type PublishedMetadata = ();
+        type PackageMetadata = ();
+        type AddressInfo = String;
+
+        fn name() -> String {
+            "test".to_string()
+        }
+
+        fn default_environments() -> BTreeMap<String, String> {
+            BTreeMap::new()
+        }
+
+        // Our test flavor has "foo" and "bar" accessible.
+        fn implicit_deps(_: String) -> BTreeMap<PackageName, ReplacementDependency> {
+            let mut deps = BTreeMap::new();
+            deps.insert(
+                new_package_name("foo"),
+                ReplacementDependency {
+                    dependency: None,
+                    addresses: None,
+                    use_environment: None,
+                },
+            );
+            deps.insert(
+                new_package_name("bar"),
+                ReplacementDependency {
+                    dependency: None,
+                    addresses: None,
+                    use_environment: None,
+                },
+            );
+            deps
+        }
+    }
+
+    #[test]
+    /// We enable ALL implicit-deps.
+    fn test_all_implicit_deps() {
+        let env = test_environment();
+        let implicit_deps = ImplicitDepMode::Enabled(None);
+
+        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+
+        assert_eq!(dep_keys.len(), 2);
+        assert!(dep_keys.contains(&new_package_name("foo")));
+        assert!(dep_keys.contains(&new_package_name("bar")));
+    }
+
+    #[test]
+    /// We enable implicit-deps, but specifying which ones we want.
+    fn test_explicit_implicit_deps() {
+        let env = test_environment();
+        let implicit_deps = ImplicitDepMode::Enabled(Some(vec!["foo".to_string()]));
+
+        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+
+        assert_eq!(dep_keys.len(), 1);
+        assert!(dep_keys.contains(&new_package_name("foo")));
+        assert!(!dep_keys.contains(&new_package_name("bar")));
+    }
+
+    #[test]
+    fn test_explicit_implicit_deps_with_invalid_names() {
+        let env = test_environment();
+        let implicit_deps =
+            ImplicitDepMode::Enabled(Some(vec!["ignore".to_string(), "foo".to_string()]));
+
+        assert!(Package::<TestFlavor>::implicit_deps(&env, implicit_deps).is_err());
+    }
+
+    #[test]
+    /// We disable implicit deps.
+    fn test_no_implicit_deps() {
+        let env = test_environment();
+        let implicit_deps = ImplicitDepMode::Disabled;
+
+        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+
+        assert_eq!(deps.len(), 0);
+    }
+
+    #[test]
+    /// We disable implicit deps by providing empty array
+    ///
+    fn test_empty_implicit_deps() {
+        let env = test_environment();
+        let implicit_deps = ImplicitDepMode::Enabled(Some(vec![]));
+
+        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+
+        assert_eq!(deps.len(), 0);
+    }
+
+    fn test_environment() -> Environment {
+        Environment::new("test".to_string(), "test".to_string())
+    }
+
+    fn new_package_name(name: &str) -> PackageName {
+        PackageName::new(name.to_string()).unwrap()
     }
 }

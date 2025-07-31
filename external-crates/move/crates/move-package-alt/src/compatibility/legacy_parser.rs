@@ -51,6 +51,9 @@ const KNOWN_NAMES: &[&str] = &[
 
 const REQUIRED_FIELDS: &[&str] = &[PACKAGE_NAME];
 
+const LEGACY_SYSTEM_DEPS_NAMES: [&str; 5] =
+    ["Sui", "MoveStdlib", "Bridge", "DeepBook", "SuiSystem"];
+
 pub struct ParsedLegacyPackage {
     pub deps: BTreeMap<PackageName, DefaultDependency>,
     pub metadata: PackageMetadata,
@@ -278,11 +281,29 @@ fn parse_source_manifest(
                 programmatic_addresses.insert(name, addr);
             }
 
+            // Check if the package has any system package on its deps.
+            let has_system_package = dependencies
+                .iter()
+                .any(|(name, _)| LEGACY_SYSTEM_DEPS_NAMES.contains(&name.as_str()));
+
+            // Check if the name of the package refers to a system package
+            let is_system_package =
+                LEGACY_SYSTEM_DEPS_NAMES.contains(&metadata.legacy_name.as_str());
+
+            // IF we have one system package OR this package is a system package itself,
+            // we disable implicit deps.
+            let implicit_deps = if has_system_package || is_system_package {
+                ImplicitDepMode::Disabled
+            } else {
+                // Otherwise we enable implicit deps (unfortunately all of them)
+                ImplicitDepMode::Enabled(None)
+            };
+
             Ok(ParsedLegacyPackage {
                 metadata: PackageMetadata {
                     name: new_name,
                     edition: metadata.edition,
-                    implicit_deps: ImplicitDepMode::Legacy,
+                    implicit_deps,
                     unrecognized_fields: metadata.unrecognized_fields,
                 },
                 deps: dependencies,
