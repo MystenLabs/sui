@@ -28,6 +28,9 @@ pub(super) enum Error {
     #[error("Missing 'owner'")]
     MissingOwner,
 
+    #[error("Missing 'object_type' filter for kind '{}'", .0.as_str_name())]
+    MissingType(grpc::owner::OwnerKind),
+
     #[error("Unexpected 'address' for kind '{}'", .0.as_str_name())]
     UnexpectedAddress(grpc::owner::OwnerKind),
 }
@@ -39,6 +42,7 @@ impl StatusCode for Error {
             | Error::InvalidAddress(_)
             | Error::MissingAddress(_)
             | Error::MissingOwner
+            | Error::MissingType(_)
             | Error::UnexpectedAddress(_) => tonic::Code::InvalidArgument,
         }
     }
@@ -48,7 +52,7 @@ pub(super) fn list_owned_objects(
     state: &State,
     checkpoint: u64,
     request: grpc::ListOwnedObjectsRequest,
-) -> Result<grpc::ListOwnedObjectsResponse, RpcError<Error>> {
+) -> Result<grpc::ListObjectsResponse, RpcError<Error>> {
     let owner = request.owner.as_ref().ok_or(Error::MissingOwner)?;
 
     use grpc::owner::OwnerKind as GK;
@@ -72,9 +76,9 @@ pub(super) fn list_owned_objects(
         }
     };
 
-    // Only support address filters for now.
-    if matches!(kind, SK::Immutable | SK::Shared) {
-        return Err(RpcError::Unimplemented);
+    // Looking up immutable or shared objects requires some sort of type filter.
+    if matches!(kind, SK::Immutable | SK::Shared) && request.object_type().is_empty() {
+        return Err(Error::MissingType(owner.kind()).into());
     }
 
     let type_: Option<TypeFilter> = (!request.object_type().is_empty())
@@ -83,7 +87,7 @@ pub(super) fn list_owned_objects(
         .map_err(Error::from)?;
 
     let page = Page::from_request(
-        &state.config.pagination,
+        &state.rpc_config.pagination,
         request.after_token(),
         request.before_token(),
         request.page_size(),
@@ -92,12 +96,12 @@ pub(super) fn list_owned_objects(
 
     let index = &state.store.schema().object_by_owner;
     let resp = if let Some(type_) = type_ {
-        page.paginate_prefix(index, checkpoint, &(kind, Some(type_)))?
+        page.paginate_prefix(index, checkpoint, &(kind, type_))?
     } else {
         page.paginate_prefix(index, checkpoint, &kind)?
     };
 
-    Ok(grpc::ListOwnedObjectsResponse {
+    Ok(grpc::ListObjectsResponse {
         has_previous_page: Some(resp.has_prev),
         has_next_page: Some(resp.has_next),
         objects: resp

@@ -17,6 +17,7 @@ mod files;
 pub use files::FileHandle;
 pub use files::Files;
 
+use move_core_types::identifier::Identifier;
 use thiserror::Error;
 
 use crate::dependency::FetchError;
@@ -26,6 +27,7 @@ use crate::graph::LinkageError;
 use crate::graph::RenameError;
 use crate::package::manifest::ManifestError;
 use crate::package::paths::PackagePathError;
+use crate::schema::PackageName;
 
 /// Result type for package operations
 pub type PackageResult<T> = Result<T, PackageError>;
@@ -71,6 +73,14 @@ pub enum PackageError {
 
     #[error(transparent)]
     FetchError(#[from] FetchError),
+
+    #[error(
+        "Address `{address}` is defined more than once in package `{package}` (or its dependencies)"
+    )]
+    DuplicateNamedAddress {
+        address: Identifier,
+        package: PackageName,
+    },
 }
 
 impl PackageError {

@@ -1235,11 +1235,10 @@ impl ValidatorService {
         let mut cur_status = match first_status {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
                 ConsensusTxStatus::Rejected => {
-                    let response = WaitForEffectsResponse::Rejected {
-                        // TODO(fastpath): cache reject reason during voting and return it here.
-                        error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
-                    };
-                    return Ok(response);
+                    let error = epoch_store
+                        .get_rejection_vote_reason(consensus_position)
+                        .unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
+                    return Ok(WaitForEffectsResponse::Rejected { error });
                 }
                 ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => status,
             },
@@ -1266,10 +1265,8 @@ impl ValidatorService {
                     match second_status {
                         NotifyReadConsensusTxStatusResult::Status(status) => {
                             if status == ConsensusTxStatus::Rejected {
-                                // TODO(fastpath): cache reject reason during voting and return it here.
-                                return Ok(WaitForEffectsResponse::Rejected {
-                                    error: SuiError::Unknown("TODO: use cached reject reason".to_string()),
-                                });
+                                let error = epoch_store.get_rejection_vote_reason(consensus_position).unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
+                                return Ok(WaitForEffectsResponse::Rejected { error });
                             }
                             assert_eq!(status, ConsensusTxStatus::Finalized);
                             // Update the current status so that notify_read_transaction_status will no

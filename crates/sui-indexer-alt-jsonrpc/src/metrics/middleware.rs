@@ -19,7 +19,7 @@ use pin_project_lite::pin_project;
 use prometheus::{HistogramTimer, IntCounterVec};
 use serde_json::value::RawValue;
 use tower_layer::Layer;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use super::RpcMetrics;
 
@@ -139,10 +139,10 @@ where
         let method = this.method.as_ref();
         let elapsed_ms = metrics.timer.stop_and_record() * 1000.0;
 
-        if let Some(INTERNAL_ERROR_CODE) = resp.as_error_code() {
+        if let Some(code) = resp.as_error_code() {
             metrics
                 .failed
-                .with_label_values(&[method, &format!("{INTERNAL_ERROR_CODE}")])
+                .with_label_values(&[method, &format!("{code}")])
                 .inc();
 
             let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
@@ -153,20 +153,19 @@ where
                 result.to_string()
             };
 
-            error!(
-                method,
-                params,
-                code = INTERNAL_ERROR_CODE,
-                response,
-                elapsed_ms,
-                "Internal error"
-            );
-        } else if let Some(code) = resp.as_error_code() {
-            metrics
-                .failed
-                .with_label_values(&[method, &format!("{code}")])
-                .inc();
-            info!(method, code, elapsed_ms, "Request failed");
+            if code == INTERNAL_ERROR_CODE {
+                error!(
+                    method,
+                    params, code, response, elapsed_ms, "Request failed with internal error"
+                );
+            } else if tracing::enabled!(tracing::Level::DEBUG) {
+                debug!(
+                    method,
+                    params, code, response, elapsed_ms, "Request failed with non-internal error"
+                );
+            } else {
+                info!(method, code, elapsed_ms, "Request failed");
+            }
         } else {
             metrics.succeeded.with_label_values(&[method]).inc();
             info!(method, elapsed_ms, "Request succeeded");

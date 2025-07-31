@@ -3,6 +3,7 @@
 
 use anyhow::{self, Context as _};
 use async_graphql::{Context, Object};
+use fastcrypto::encoding::{Base64, Encoding};
 use sui_indexer_alt_reader::package_resolver::PackageResolver;
 use sui_package_resolver::CleverError;
 use sui_types::{
@@ -90,6 +91,60 @@ impl ExecutionError {
                 .and_then(|err| err.error_code)
                 .map_or(*raw_code, |code| code as u64),
         )))
+    }
+
+    /// The source line number for the abort. Only populated for clever errors.
+    async fn source_line_number(&self, ctx: &Context<'_>) -> Result<Option<u64>, RpcError> {
+        let Some(clever_error) = self.clever_error(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(clever_error.source_line_number as u64))
+    }
+
+    /// The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
+    async fn instruction_offset(&self) -> Result<Option<u16>, RpcError> {
+        match &self.native {
+            ExecutionFailureStatus::MoveAbort(location, _) => Ok(Some(location.instruction)),
+            ExecutionFailureStatus::MovePrimitiveRuntimeError(location_opt) => {
+                Ok(location_opt.0.as_ref().map(|loc| loc.instruction))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The error's name. Only populated for clever errors.
+    async fn identifier(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        use sui_package_resolver::ErrorConstants;
+
+        let Some(clever_error) = self.clever_error(ctx).await? else {
+            return Ok(None);
+        };
+
+        Ok(match &clever_error.error_info {
+            ErrorConstants::None => None,
+            ErrorConstants::Rendered { identifier, .. } => Some(identifier.clone()),
+            ErrorConstants::Raw { identifier, .. } => Some(identifier.clone()),
+        })
+    }
+
+    /// An associated constant for the error. Only populated for clever errors.
+    ///
+    /// Constants are returned as human-readable strings when possible. Complex types are returned as Base64-encoded bytes.
+    async fn constant(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+        use sui_package_resolver::ErrorConstants;
+
+        let Some(clever_error) = self.clever_error(ctx).await? else {
+            return Ok(None);
+        };
+
+        let constant = match &clever_error.error_info {
+            ErrorConstants::None => None,
+            ErrorConstants::Rendered { constant, .. } => Some(constant.clone()),
+            ErrorConstants::Raw { bytes, .. } => Some(Base64::encode(bytes)),
+        };
+
+        Ok(constant)
     }
 }
 

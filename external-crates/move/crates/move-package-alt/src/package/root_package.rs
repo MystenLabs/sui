@@ -36,6 +36,8 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     /// The lockfile we're operating on
     /// Invariant: lockfile.pinned matches graph, except that digests may differ
     lockfile: ParsedLockfile<F>,
+    /// The list of published ids for every dependency in the root package
+    deps_published_ids: Vec<OriginalID>,
 }
 
 /// Root package is the "public" entrypoint for operations with the package management.
@@ -126,11 +128,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let _linkage = graph.linkage()?;
         graph.check_rename_from()?;
 
+        let deps_published_ids = _linkage.into_keys().collect();
+
         Ok(Self {
             package_path,
             environment: env,
             graph,
             lockfile,
+            deps_published_ids,
         })
     }
 
@@ -152,9 +157,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// Return the list of all packages in the root package's package graph (including itself and all
-    /// transitive dependencies).
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
-        self.graph.dependencies()
+    /// transitive dependencies). This includes the non-duplicate addresses only.
+    pub fn packages(&self) -> PackageResult<Vec<PackageInfo<F>>> {
+        self.graph.packages()
     }
 
     /// Return the linkage table for the root package. This contains an entry for each package that
@@ -202,6 +207,47 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     pub fn lockfile_for_testing(&self) -> &ParsedLockfile<F> {
         &self.lockfile
+    }
+
+    /// Return the package graph for `env`
+    // TODO: what's the right API here?
+    pub fn package_graph(&self) -> &PackageGraph<F> {
+        &self.graph
+    }
+
+    pub fn lockfile(&self) -> &ParsedLockfile<F> {
+        &self.lockfile
+    }
+
+    /// Return the publication information for this environment.
+    pub fn publication(&self, env: EnvironmentName) -> PackageResult<Publication<F>> {
+        self.lockfile
+            .published
+            .get(&env)
+            .ok_or_else(|| {
+                PackageError::Generic(format!(
+                    "Could not find publication info for {} environment in package {}",
+                    env,
+                    self.name()
+                ))
+            })
+            .cloned()
+    }
+
+    // *** PATHS RELATED FUNCTIONS ***
+
+    /// Return the package path wrapper
+    pub fn package_path(&self) -> &PackagePath {
+        &self.package_path
+    }
+
+    /// Return a list of sorted package names
+    pub fn sorted_deps(&self) -> Vec<&PackageName> {
+        self.package_graph().sorted_deps()
+    }
+
+    pub fn deps_published_ids(&self) -> &Vec<OriginalID> {
+        &self.deps_published_ids
     }
 }
 
@@ -318,7 +364,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let mut root = RootPackage::<Vanilla>::load(&pkg_path, env).await.unwrap();
 
-        let new_lockfile = root.lockfile_for_testing().clone();
+        let new_lockfile = root.lockfile().clone();
 
         // TODO: put this snapshot in a more sensible place
         assert_snapshot!("test_lockfile_deps", new_lockfile.render_as_toml());

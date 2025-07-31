@@ -501,10 +501,6 @@ impl VerifiedBlock {
         self.digest
     }
 
-    pub(crate) fn signed_block(&self) -> &SignedBlock {
-        &self.block
-    }
-
     /// Returns the serialized block with signature.
     pub(crate) fn serialized(&self) -> &Bytes {
         &self.serialized
@@ -653,7 +649,6 @@ impl TestBlock {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn set_transaction_votes(mut self, votes: Vec<BlockTransactionVotes>) -> Self {
         self.block.transaction_votes = votes;
         self

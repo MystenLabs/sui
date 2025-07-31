@@ -33,7 +33,7 @@ use std::{path::Path, sync::Arc};
 
 use config::{PipelineLayer, ServiceConfig};
 use db::config::DbConfig;
-use handlers::object_by_owner::ObjectByOwner;
+use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
 use indexer::Indexer;
 use prometheus::Registry;
 use rpc::{state::State, RpcArgs, RpcService};
@@ -82,7 +82,12 @@ pub async fn start_service(
         consistency,
         rocksdb,
         committer,
-        pipeline: PipelineLayer { object_by_owner },
+        pipeline:
+            PipelineLayer {
+                balances,
+                object_by_owner,
+                object_by_type,
+            },
         rpc,
     } = config;
 
@@ -92,7 +97,7 @@ pub async fn start_service(
         path,
         indexer_args,
         client_args,
-        consistency,
+        consistency.clone(),
         ingestion.into(),
         rocksdb,
         registry,
@@ -102,7 +107,8 @@ pub async fn start_service(
 
     let state = State {
         store: indexer.store().clone(),
-        config: Arc::new(rpc),
+        rpc_config: Arc::new(rpc),
+        consistency_config: Arc::new(consistency),
     };
 
     let rpc = RpcService::new(rpc_args, version, registry, cancel.child_token())
@@ -125,7 +131,9 @@ pub async fn start_service(
         };
     }
 
+    add_sequential!(Balances, balances);
     add_sequential!(ObjectByOwner, object_by_owner);
+    add_sequential!(ObjectByType, object_by_type);
 
     let h_rpc = rpc.run().await?;
     let h_indexer = indexer.run().await?;

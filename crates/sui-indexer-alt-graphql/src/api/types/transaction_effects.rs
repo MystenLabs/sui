@@ -5,28 +5,38 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::{
-    connection::{Connection, Edge},
+    connection::{Connection, CursorType, Edge},
+    dataloader::DataLoader,
     Context, Enum, Object,
 };
 use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer_alt_reader::kv_loader::{
-    KvLoader, TransactionContents as NativeTransactionContents,
+use sui_indexer_alt_reader::{
+    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
+    pg_reader::PgReader,
+    tx_balance_changes::TxBalanceChangeKey,
 };
+use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
 use sui_types::{
     digests::TransactionDigest, effects::TransactionEffectsAPI,
     execution_status::ExecutionStatus as NativeExecutionStatus, transaction::TransactionDataAPI,
 };
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest, uint53::UInt53},
+    api::scalars::{
+        base64::Base64, cursor::JsonCursor, date_time::DateTime, digest::Digest, uint53::UInt53,
+    },
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
 use super::{
+    balance_change::BalanceChange,
     checkpoint::Checkpoint,
+    epoch::Epoch,
+    event::Event,
     execution_error::ExecutionError,
+    gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
 };
@@ -53,6 +63,8 @@ pub(crate) struct EffectsContents {
 }
 
 type CObjectChange = JsonCursor<usize>;
+type CEvent = JsonCursor<usize>;
+type CBalanceChange = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -132,6 +144,119 @@ impl EffectsContents {
         ExecutionError::from_execution_status(ctx, status, programmable_tx.as_ref()).await
     }
 
+    /// Timestamp corresponding to the checkpoint this transaction was finalized in.
+    async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        Ok(Some(DateTime::from_ms(content.timestamp_ms() as i64)?))
+    }
+
+    /// The epoch this transaction was finalized in.
+    async fn epoch(&self) -> Result<Option<Epoch>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(Epoch::with_id(
+            self.scope.clone(),
+            effects.executed_epoch(),
+        )))
+    }
+
+    /// Events emitted by this transaction.
+    async fn events(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CEvent>,
+        last: Option<u64>,
+        before: Option<CEvent>,
+    ) -> Result<Option<Connection<String, Event>>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "events");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let events = content.events()?;
+        let cursors = page.paginate_indices(events.len());
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+
+        let transaction_digest = content.digest()?;
+        let timestamp_ms = content.timestamp_ms();
+
+        for edge in cursors.edges {
+            let event = Event {
+                scope: self.scope.clone(),
+                native: events[*edge.cursor].clone(),
+                transaction_digest,
+                sequence_number: *edge.cursor as u64,
+                timestamp_ms,
+            };
+
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), event));
+        }
+
+        Ok(Some(conn))
+    }
+
+    /// The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
+    async fn balance_changes(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CBalanceChange>,
+        last: Option<u64>,
+        before: Option<CBalanceChange>,
+    ) -> Result<Option<Connection<String, BalanceChange>>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        let transaction_digest = content.digest()?;
+
+        // Load balance changes from database using DataLoader
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        let key = TxBalanceChangeKey(transaction_digest);
+
+        let Some(stored_balance_changes) = pg_loader
+            .load_one(key)
+            .await
+            .context("Failed to load balance changes")?
+        else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        // Deserialize balance changes from BCS bytes
+        let balance_changes: Vec<NativeBalanceChange> =
+            bcs::from_bytes(&stored_balance_changes.balance_changes)
+                .context("Failed to deserialize balance changes")?;
+
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "balanceChanges");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let cursors = page.paginate_indices(balance_changes.len());
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+
+        for edge in cursors.edges {
+            let balance_change = BalanceChange {
+                scope: self.scope.clone(),
+                stored: balance_changes[*edge.cursor].clone(),
+            };
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), balance_change));
+        }
+
+        Ok(Some(conn))
+    }
+
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
     async fn effects_bcs(&self) -> Result<Option<Base64>, RpcError> {
         let Some(content) = &self.contents else {
@@ -181,6 +306,16 @@ impl EffectsContents {
         }
 
         Ok(Some(conn))
+    }
+
+    /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+    async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
     }
 }
 

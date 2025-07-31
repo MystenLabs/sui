@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::base_types::random_object_ref;
+use crate::base_types::{random_object_ref, FullObjectRef};
 use crate::committee::Committee;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
 use crate::crypto::Secp256k1SuiSignature;
@@ -51,7 +51,7 @@ fn test_signed_values() {
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             _a2,
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             a_sender,
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -65,7 +65,7 @@ fn test_signed_values() {
     let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             _a2,
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             a_sender,
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -136,7 +136,7 @@ fn test_certificates() {
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             a2,
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             a_sender,
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -477,7 +477,7 @@ fn test_digest_caching() {
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             sa1,
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             sa2,
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -553,7 +553,7 @@ fn test_user_signature_committed_in_transactions() {
     let gas_price = 10;
     let tx_data = TransactionData::new_transfer(
         a_sender2,
-        random_object_ref(),
+        FullObjectRef::from_fastpath_ref(random_object_ref()),
         a_sender,
         random_object_ref(),
         TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -602,7 +602,7 @@ fn test_user_signature_committed_in_signed_transactions() {
     let gas_price = 10;
     let tx_data = TransactionData::new_transfer(
         a_sender2,
-        random_object_ref(),
+        FullObjectRef::from_fastpath_ref(random_object_ref()),
         a_sender,
         random_object_ref(),
         TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -689,7 +689,10 @@ fn test_sponsored_transaction_message() {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(dbg_addr(1), random_object_ref())
+            .transfer_object(
+                dbg_addr(1),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
+            )
             .unwrap();
         builder.finish()
     };
@@ -796,7 +799,10 @@ fn test_sponsored_transaction_validity_check() {
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
-            .transfer_object(dbg_addr(1), random_object_ref())
+            .transfer_object(
+                dbg_addr(1),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
+            )
             .unwrap();
         builder.finish()
     };
@@ -906,7 +912,7 @@ fn verify_sender_signature_correctly_with_flag() {
     let gas_price = 10;
     let tx_data = TransactionData::new_transfer(
         receiver_address,
-        random_object_ref(),
+        FullObjectRef::from_fastpath_ref(random_object_ref()),
         (&sender_kp.public()).into(),
         random_object_ref(),
         TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
@@ -1310,7 +1316,7 @@ fn test_certificate_digest() {
         Transaction::from_data_and_signer(
             TransactionData::new_transfer(
                 receiver,
-                random_object_ref(),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
                 sender,
                 random_object_ref(),
                 TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,

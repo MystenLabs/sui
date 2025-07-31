@@ -507,6 +507,8 @@ pub enum SuiError {
         digest
     )]
     TransactionAlreadyExecuted { digest: TransactionDigest },
+    #[error("Transaction reject reason not found for transaction {digest:?}")]
+    TransactionRejectReasonNotFound { digest: TransactionDigest },
     #[error("Object ID did not have the expected type")]
     BadObjectType { error: String },
     #[error("Fail to retrieve Object layout for {st}")]
@@ -934,6 +936,20 @@ impl SuiError {
                     _ => false,
                 }
             }
+
+            // Non retryable errors
+            SuiError::ByzantineAuthoritySuspicion { .. } => false,
+            SuiError::ObjectLockConflict { .. } => false,
+            SuiError::TransactionExpired => false,
+            SuiError::InvalidTxKindInSoftBundle { .. } => false,
+            SuiError::UnsupportedFeatureError { .. } => false,
+
+            SuiError::InvalidSignature { .. } => false,
+            SuiError::SignerSignatureAbsent { .. } => false,
+            SuiError::SignerSignatureNumberMismatch { .. } => false,
+            SuiError::IncorrectSigner { .. } => false,
+            SuiError::UnknownSigner { .. } => false,
+
             // Other variants are assumed to be retriable.
             _ => true,
         }

@@ -1294,12 +1294,13 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "90",
+              "maxSupportedProtocolVersion": "91",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "additional_consensus_digest_indirect_state": false,
+                "additional_multisig_checks": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,
@@ -1322,6 +1323,7 @@
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
                 "debug_fatal_on_move_invariant_violation": false,
+                "dependency_linkage_error": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,

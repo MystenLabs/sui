@@ -24,6 +24,9 @@ module test::execution_error_tests {
     #[error(code=15)]
     const ECleverWithCode: vector<u8> = b"Error with explicit code";
 
+    #[error]
+    const ECleverRaw: vector<address> = vector[@0x1, @0x2, @0x3];
+
     /// Function that succeeds (for testing successful transactions)
     public entry fun success_function(_x: u64) {
         // Does nothing, just succeeds
@@ -63,8 +66,33 @@ module test::execution_error_tests {
         abort ECleverWithCode
     }
 
+    public entry fun abort_with_clever_raw() {
+        abort ECleverRaw
+    }
+
     public entry fun assert_failure() {
         assert!(false);
+    }
+
+    // MovePrimitiveRuntimeError test functions
+    public entry fun arithmetic_underflow() {
+        // Direct arithmetic error
+        0 - 1;
+    }
+
+    public entry fun arithmetic_overflow() {
+        // Direct arithmetic overflow
+        18446744073709551615u64 + 1;
+    }
+
+    public entry fun division_by_zero() {
+        // Direct division by zero
+        1 / 0;
+    }
+
+    public entry fun vector_out_of_bounds() {
+        // Direct vector access
+        std::vector::borrow(&vector[0], 1);
     }
 }
 
@@ -86,10 +114,20 @@ module test::execution_error_tests {
 
 //# run test::execution_error_tests::abort_with_clever_code --sender A
 
+//# run test::execution_error_tests::abort_with_clever_raw --sender B
+
 //# run test::execution_error_tests::assert_failure --sender B
 
 //# programmable --sender A --inputs @test
 //> test::execution_error_tests::nonexistent_function()
+
+//# run test::execution_error_tests::arithmetic_underflow --sender A
+
+//# run test::execution_error_tests::arithmetic_overflow --sender B
+
+//# run test::execution_error_tests::division_by_zero --sender A
+
+//# run test::execution_error_tests::vector_out_of_bounds --sender B
 
 //# create-checkpoint
 
@@ -99,6 +137,10 @@ module test::execution_error_tests {
   successTransaction: transactionEffects(digest: "@{digest_2}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
 }
@@ -109,12 +151,20 @@ module test::execution_error_tests {
   abort42: transactionEffects(digest: "@{digest_3}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
   
   abort255: transactionEffects(digest: "@{digest_4}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
 }
@@ -125,48 +175,134 @@ module test::execution_error_tests {
   cleverU8: transactionEffects(digest: "@{digest_5}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
   
   cleverU16: transactionEffects(digest: "@{digest_6}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
   
   cleverU64: transactionEffects(digest: "@{digest_7}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
   
   cleverAddress: transactionEffects(digest: "@{digest_8}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
   
   cleverString: transactionEffects(digest: "@{digest_9}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
   
   cleverWithCode: transactionEffects(digest: "@{digest_10}") {
     executionError {
       abortCode
-    }
-  }
-  
-  assertFailure: transactionEffects(digest: "@{digest_11}") {
-    executionError {
-      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
 
-  nonExistentFunction: transactionEffects(digest: "@{digest_12}") {
+  cleverRaw: transactionEffects(digest: "@{digest_11}") {
     executionError {
       abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
     }
   }
-} 
+  
+  assertFailure: transactionEffects(digest: "@{digest_12}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
+    }
+  }
+
+  nonExistentFunction: transactionEffects(digest: "@{digest_13}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
+    }
+  }
+}
+
+//# run-graphql
+{
+  # Test MovePrimitiveRuntimeError cases
+  arithmeticUnderflow: transactionEffects(digest: "@{digest_14}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
+    }
+  }
+  
+  arithmeticOverflow: transactionEffects(digest: "@{digest_15}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
+    }
+  }
+  
+  divisionByZero: transactionEffects(digest: "@{digest_16}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
+    }
+  }
+  
+  vectorOutOfBounds: transactionEffects(digest: "@{digest_17}") {
+    executionError {
+      abortCode
+      sourceLineNumber
+      instructionOffset
+      identifier
+      constant
+    }
+  }
+}

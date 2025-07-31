@@ -27,7 +27,7 @@ use sui_test_transaction_builder::{
     TestTransactionBuilder,
 };
 use sui_tool::restore_from_db_checkpoint;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::base_types::{FullObjectRef, ObjectID, SuiAddress, TransactionDigest};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::crypto::{get_key_pair, SuiKeyPair};
 use sui_types::error::{SuiError, UserInputError};
@@ -133,7 +133,10 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
         transfer_coin(&test_cluster.wallet).await.unwrap();
     assert_eq!(sender, sender_);
     assert_eq!(sponsor, receiver);
-    let object_ref = test_cluster.wallet.get_object_ref(object_ref.0).await?;
+    let full_object_ref = test_cluster
+        .wallet
+        .get_full_object_ref(object_ref.0)
+        .await?;
     let gas_obj = test_cluster.wallet.get_object_ref(sent_coin).await?;
     info!("updated obj ref: {:?}", object_ref);
     info!("updated gas ref: {:?}", gas_obj);
@@ -141,7 +144,9 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     // Construct the sponsored transction
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
-        builder.transfer_object(another_addr, object_ref).unwrap();
+        builder
+            .transfer_object(another_addr, full_object_ref)
+            .unwrap();
         builder.finish()
     };
     let kind = TransactionKind::programmable(pt);
@@ -1007,7 +1012,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .unwrap();
     let nft_transfer_tx = test_cluster.wallet.sign_transaction(
         &TestTransactionBuilder::new(sender, gas_ref, rgp)
-            .transfer(object_ref_v1, recipient)
+            .transfer(FullObjectRef::from_fastpath_ref(object_ref_v1), recipient)
             .build(),
     );
     test_cluster.execute_transaction(nft_transfer_tx).await;
@@ -1313,7 +1318,7 @@ async fn transfer_coin(
     let object_to_send = accounts_and_objs[0].1[1];
     let txn = context.sign_transaction(
         &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .transfer(object_to_send, receiver)
+            .transfer(FullObjectRef::from_fastpath_ref(object_to_send), receiver)
             .build(),
     );
     let resp = context.execute_transaction_must_succeed(txn).await;

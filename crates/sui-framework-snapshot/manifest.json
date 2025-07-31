@@ -1950,7 +1950,37 @@
     ]
   },
   "89": {
-    "git_revision": "cc6c1eb8b4b542466f8d32fedb9b19c894414b52",
+    "git_revision": "79918a3f13579814e17ab3843250b2856b794d30",
+    "packages": [
+      {
+        "name": "MoveStdlib",
+        "path": "crates/sui-framework/packages/move-stdlib",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "name": "Sui",
+        "path": "crates/sui-framework/packages/sui-framework",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "name": "SuiSystem",
+        "path": "crates/sui-framework/packages/sui-system",
+        "id": "0x0000000000000000000000000000000000000000000000000000000000000003"
+      },
+      {
+        "name": "DeepBook",
+        "path": "crates/sui-framework/packages/deepbook",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000dee9"
+      },
+      {
+        "name": "Bridge",
+        "path": "crates/sui-framework/packages/bridge",
+        "id": "0x000000000000000000000000000000000000000000000000000000000000000b"
+      }
+    ]
+  },
+  "90": {
+    "git_revision": "b448b1d971bd6c1aac8ef4eee4305943806d5d5b",
     "packages": [
       {
         "name": "MoveStdlib",

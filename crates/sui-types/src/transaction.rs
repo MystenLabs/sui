@@ -1861,23 +1861,6 @@ impl TransactionData {
 
     pub fn new_transfer(
         recipient: SuiAddress,
-        object_ref: ObjectRef,
-        sender: SuiAddress,
-        gas_payment: ObjectRef,
-        gas_budget: u64,
-        gas_price: u64,
-    ) -> Self {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_object(recipient, object_ref).unwrap();
-            builder.finish()
-        };
-        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
-    }
-
-    // TODO: Merge with `new_transfer` above and update existing callers.
-    pub fn new_transfer_full(
-        recipient: SuiAddress,
         full_object_ref: FullObjectRef,
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -1886,9 +1869,7 @@ impl TransactionData {
     ) -> Self {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
-            builder
-                .transfer_object_full(recipient, full_object_ref)
-                .unwrap();
+            builder.transfer_object(recipient, full_object_ref).unwrap();
             builder.finish()
         };
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)

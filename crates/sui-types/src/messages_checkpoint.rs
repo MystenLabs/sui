@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{
-    random_object_ref, ExecutionData, ExecutionDigests, VerifiedExecutionData,
+    random_object_ref, ExecutionData, ExecutionDigests, FullObjectRef, VerifiedExecutionData,
 };
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
@@ -639,7 +639,7 @@ impl FullCheckpointContents {
         let transaction = Transaction::from_data_and_signer(
             TransactionData::new_transfer(
                 a,
-                random_object_ref(),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
                 a,
                 random_object_ref(),
                 100000000000,

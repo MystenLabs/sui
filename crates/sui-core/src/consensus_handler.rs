@@ -619,6 +619,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .update_last_committed_leader_round(last_committed_round as u32)
                 .await;
         }
+        if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
+            tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
+        }
 
         let commit_info = if self
             .epoch_store
@@ -1440,7 +1443,7 @@ mod tests {
         Chain, ConsensusTransactionOrdering, PerObjectCongestionControlMode, ProtocolVersion,
     };
     use sui_types::{
-        base_types::{random_object_ref, AuthorityName, ObjectID, SuiAddress},
+        base_types::{random_object_ref, AuthorityName, FullObjectRef, ObjectID, SuiAddress},
         committee::Committee,
         crypto::deterministic_random_account_key,
         messages_consensus::{
@@ -1950,7 +1953,7 @@ mod tests {
         let data = SenderSignedData::new(
             TransactionData::new_transfer(
                 SuiAddress::default(),
-                random_object_ref(),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
                 SuiAddress::default(),
                 random_object_ref(),
                 1000 * gas_price,

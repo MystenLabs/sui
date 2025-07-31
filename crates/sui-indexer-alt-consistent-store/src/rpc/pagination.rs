@@ -2,23 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use bincode::{Decode, Encode};
 use serde::{de::DeserializeOwned, Serialize};
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::End;
 
 use crate::db::{
-    self,
     iter::{FwdIter, RevIter},
     map::DbMap,
 };
 
-use super::error::RpcError;
+use super::error::{db_error, RpcError};
 
 #[DefaultConfig]
 pub struct PaginationConfig {
     pub default_page_size: u32,
+    pub max_batch_size: u32,
     pub max_page_size: u32,
 }
 
@@ -80,32 +80,42 @@ impl<'r> Page<'r> {
         K: Encode + Decode<()>,
         V: Serialize + DeserializeOwned,
     {
+        self.paginate_filtered(map, checkpoint, prefix, |_, _, _| true)
+    }
+
+    /// Paginate over the key-value pairs in `map` that share a `prefix`, and match a predicate
+    /// `pred`, at the given `checkpoint`.
+    pub(super) fn paginate_filtered<J, K, V, E>(
+        &self,
+        map: &DbMap<K, V>,
+        checkpoint: u64,
+        prefix: &J,
+        pred: impl FnMut(&[u8], &K, &V) -> bool,
+    ) -> Result<Response<K, V>, RpcError<E>>
+    where
+        J: Encode,
+        K: Encode + Decode<()>,
+        V: Serialize + DeserializeOwned,
+    {
         if self.is_from_front {
-            self.paginate_from_front(map.prefix(checkpoint, prefix).map_err(|e| {
-                if let db::error::Error::NotInRange { checkpoint } = e {
-                    RpcError::NotInRange(checkpoint)
-                } else {
-                    anyhow!(e)
-                        .context("failed to create forward iterator")
-                        .into()
-                }
-            })?)
+            self.paginate_from_front(
+                map.prefix(checkpoint, prefix)
+                    .map_err(|e| db_error(e, "failed to create forward iterator"))?,
+                pred,
+            )
         } else {
-            self.paginate_from_back(map.prefix_rev(checkpoint, prefix).map_err(|e| {
-                if let db::error::Error::NotInRange { checkpoint } = e {
-                    RpcError::NotInRange(checkpoint)
-                } else {
-                    anyhow!(e)
-                        .context("failed to create reverse iterator")
-                        .into()
-                }
-            })?)
+            self.paginate_from_back(
+                map.prefix_rev(checkpoint, prefix)
+                    .map_err(|e| db_error(e, "failed to create reverse iterator"))?,
+                pred,
+            )
         }
     }
 
     fn paginate_from_front<K, V, E>(
         &self,
         mut iter: FwdIter<'_, K, V>,
+        mut pred: impl FnMut(&[u8], &K, &V) -> bool,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -144,7 +154,10 @@ impl<'r> Page<'r> {
             // SAFETY: If there is a raw key, there must be a next entry.
             let cursor = cursor.to_owned();
             let (key, value) = iter.next().unwrap().context("iteration failed")?;
-            results.push((cursor, key, value))
+
+            if pred(&cursor, &key, &value) {
+                results.push((cursor, key, value))
+            }
         }
 
         Ok(Response {
@@ -157,6 +170,7 @@ impl<'r> Page<'r> {
     fn paginate_from_back<K, V, E>(
         &self,
         mut iter: RevIter<'_, K, V>,
+        mut pred: impl FnMut(&[u8], &K, &V) -> bool,
     ) -> Result<Response<K, V>, RpcError<E>>
     where
         K: Decode<()>,
@@ -196,7 +210,10 @@ impl<'r> Page<'r> {
             // SAFETY: If there is a raw key, there must be a next entry.
             let cursor = cursor.to_owned();
             let (key, value) = iter.next().unwrap().context("iteration failed")?;
-            results.push((cursor, key, value))
+
+            if pred(&cursor, &key, &value) {
+                results.push((cursor, key, value))
+            }
         }
 
         results.reverse();
@@ -212,6 +229,7 @@ impl Default for PaginationConfig {
     fn default() -> Self {
         Self {
             default_page_size: 50,
+            max_batch_size: 200,
             max_page_size: 200,
         }
     }
@@ -231,6 +249,7 @@ mod tests {
     fn config() -> PaginationConfig {
         PaginationConfig {
             default_page_size: 3,
+            max_batch_size: 5,
             max_page_size: 5,
         }
     }
