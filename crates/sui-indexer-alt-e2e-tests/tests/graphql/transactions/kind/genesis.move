@@ -90,3 +90,68 @@
     }
   }
 }
+
+
+//# run-graphql --cursors 2
+{ 
+  # Test cursor-based pagination - after first cursor, get 3 objects
+  paginationAfterCursor: checkpoint(sequenceNumber: 0) {
+    sequenceNumber
+    transactions {
+      nodes {
+        digest
+        kind {
+          ... on GenesisTransaction {
+            objects(after: "@{cursor_0}", first: 3) {
+              pageInfo {
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+              }
+              edges {
+                cursor
+                node {
+                  address
+                  version
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors 5
+{ 
+  # Test cursor-based pagination - before a specific cursor, get last 2 objects
+  paginationBeforeCursor: checkpoint(sequenceNumber: 0) {
+    sequenceNumber
+    transactions {
+      nodes {
+        digest
+        kind {
+          ... on GenesisTransaction {
+            objects(before: "@{cursor_0}", last: 2) {
+              pageInfo {
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+              }
+              edges {
+                cursor
+                node {
+                  address
+                  version
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

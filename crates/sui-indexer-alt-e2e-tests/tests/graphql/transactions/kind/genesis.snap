@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 6 tasks
+processed 8 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -204,6 +204,99 @@ Response: {
                   {
                     "address": "0xfdc25bc3b2d2b3664199d08f5275c3a6bb360b0629ab5784672f083149163417",
                     "version": 0
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 6, lines 95-125:
+//# run-graphql --cursors 2
+Response: {
+  "data": {
+    "paginationAfterCursor": {
+      "sequenceNumber": 0,
+      "transactions": {
+        "nodes": [
+          {
+            "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+            "kind": {
+              "objects": {
+                "pageInfo": {
+                  "hasNextPage": true,
+                  "hasPreviousPage": true,
+                  "startCursor": "Mw==",
+                  "endCursor": "NQ=="
+                },
+                "edges": [
+                  {
+                    "cursor": "Mw==",
+                    "node": {
+                      "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                      "version": 0
+                    }
+                  },
+                  {
+                    "cursor": "NA==",
+                    "node": {
+                      "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                      "version": 0
+                    }
+                  },
+                  {
+                    "cursor": "NQ==",
+                    "node": {
+                      "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                      "version": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 7, lines 127-157:
+//# run-graphql --cursors 5
+Response: {
+  "data": {
+    "paginationBeforeCursor": {
+      "sequenceNumber": 0,
+      "transactions": {
+        "nodes": [
+          {
+            "digest": "9YaSDYB2hY7DwGwATGe2y5D4d8BwtQjE8bj2wRQecqnr",
+            "kind": {
+              "objects": {
+                "pageInfo": {
+                  "hasNextPage": true,
+                  "hasPreviousPage": true,
+                  "startCursor": "Mw==",
+                  "endCursor": "NA=="
+                },
+                "edges": [
+                  {
+                    "cursor": "Mw==",
+                    "node": {
+                      "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                      "version": 0
+                    }
+                  },
+                  {
+                    "cursor": "NA==",
+                    "node": {
+                      "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                      "version": 0
+                    }
                   }
                 ]
               }
