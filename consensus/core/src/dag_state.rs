@@ -37,7 +37,7 @@ use crate::{
 ///
 /// Note: DagState should be wrapped with Arc<parking_lot::RwLock<_>>, to allow
 /// concurrent access from multiple components.
-pub(crate) struct DagState {
+pub struct DagState {
     context: Arc<Context>,
 
     // The genesis blocks
@@ -107,7 +107,7 @@ pub(crate) struct DagState {
 
 impl DagState {
     /// Initializes DagState from storage.
-    pub(crate) fn new(context: Arc<Context>, store: Arc<dyn Store>) -> Self {
+    pub fn new(context: Arc<Context>, store: Arc<dyn Store>) -> Self {
         let cached_rounds = context.parameters.dag_state_cached_rounds as Round;
         let num_authorities = context.committee.size();
 

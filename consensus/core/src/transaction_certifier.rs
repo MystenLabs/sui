@@ -47,7 +47,7 @@ use crate::{
 /// must also be finalized post consensus commit. The reverse is not true though, because
 /// fastpath execution is only a latency optimization, and not required for correctness.
 #[derive(Clone)]
-pub(crate) struct TransactionCertifier {
+pub struct TransactionCertifier {
     // The state of blocks being voted on and certified.
     certifier_state: Arc<RwLock<CertifierState>>,
     // The state of the DAG.
@@ -57,7 +57,7 @@ pub(crate) struct TransactionCertifier {
 }
 
 impl TransactionCertifier {
-    pub(crate) fn new(
+    pub fn new(
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         certified_blocks_sender: UnboundedSender<CertifiedBlocksOutput>,
@@ -163,10 +163,7 @@ impl TransactionCertifier {
 
     /// Stores own reject votes on input blocks, and aggregates reject votes from the input blocks.
     /// Newly certified blocks are sent to the fastpath output channel.
-    pub(crate) fn add_voted_blocks(
-        &self,
-        voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
-    ) {
+    pub fn add_voted_blocks(&self, voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)>) {
         let certified_blocks = self.certifier_state.write().add_voted_blocks(voted_blocks);
         self.send_certified_blocks(certified_blocks);
     }

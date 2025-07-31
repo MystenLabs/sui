@@ -649,7 +649,6 @@ impl TestBlock {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn set_transaction_votes(mut self, votes: Vec<BlockTransactionVotes>) -> Self {
         self.block.transaction_votes = votes;
         self
