@@ -101,7 +101,7 @@ pub struct DepSpec {
 }
 
 /// Information about a publication
-pub struct PubSpec {
+struct PubSpec {
     chain_id: EnvironmentID,
     addresses: PublishAddresses,
 }
@@ -134,7 +134,7 @@ impl TestPackageGraph {
         })
     }
 
-    /// Add and configure a package named
+    /// Add and configure a package named `node`
     pub fn add_package(
         mut self,
         node: impl AsRef<str>,
@@ -413,6 +413,8 @@ impl PackageSpec {
         }
     }
 
+    /// Add a published entry in the default environment with the given `original-id` and
+    /// `published-at` fields
     pub fn publish(mut self, original_id: OriginalID, published_at: PublishedID) -> Self {
         self.pubs.insert(
             DEFAULT_ENV_NAME.to_string(),
@@ -427,7 +429,7 @@ impl PackageSpec {
         self
     }
 
-    /// Update that `name` field in the `[package]` section of the manifest
+    /// Update the `name` field in the `[package]` section of the manifest
     pub fn package_name(mut self, name: impl AsRef<str>) -> Self {
         self.name = PackageName::new(name.as_ref()).expect("valid package name");
         self
@@ -519,6 +521,7 @@ impl Scenario {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
 
