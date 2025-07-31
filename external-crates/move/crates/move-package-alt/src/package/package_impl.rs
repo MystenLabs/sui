@@ -420,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn test_explicit_implicit_deps_with_invalid_names_are_ignored() {
+    fn test_explicit_implicit_deps_with_invalid_names() {
         let env = test_environment();
         let implicit_deps =
             ImplicitDepMode::Enabled(Some(vec!["ignore".to_string(), "foo".to_string()]));
