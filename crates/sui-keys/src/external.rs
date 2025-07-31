@@ -482,19 +482,8 @@ impl AccountKeystore for External {
         old_alias: &str,
         new_alias: Option<&str>,
     ) -> Result<String, Error> {
-        if !self.alias_exists(old_alias) {
-            bail!("The provided alias {old_alias} does not exist");
-        }
-        let new_alias_name = self.create_alias(new_alias.map(str::to_string))?;
-        for a in self.aliases_mut() {
-            if a.alias == old_alias {
-                let pk = &a.public_key_base64;
-                *a = Alias {
-                    alias: new_alias_name.clone(),
-                    public_key_base64: pk.clone(),
-                };
-            }
-        }
+        let new_alias_name = self.update_alias_value(old_alias, new_alias)?;
+        self.save_aliases().await?;
         Ok(new_alias_name)
     }
 }
@@ -781,7 +770,6 @@ mod tests {
             },
         );
         let result = external.remove(address).await;
-        println!("[test_remove_key] result: {:?}", result);
         assert!(result.is_ok());
         assert!(!external.keys.contains_key(&address));
     }
@@ -923,14 +911,38 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_alias() {
-        let mut external = load_external_keystore();
-        let old_alias = "test_alias".to_string();
+        let tmp_dir = TempDir::new().unwrap();
+        let path = tmp_dir.path().join("external.keystore");
+
+        let old_alias = "old_alias".to_string();
         let new_alias = "updated_alias".to_string();
 
-        // Ensure the alias exists
-        assert!(external.alias_exists(&old_alias));
+        let mut external = External {
+            aliases: Default::default(),
+            keys: Default::default(),
+            command_runner: Box::new(StdCommandRunner),
+            path: Some(path.clone()),
+        };
 
-        // Update the alias
+        external.keys.insert(
+            SuiAddress::from_str(ADDRESS).unwrap(),
+            StoredKey {
+                public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
+                signer: "signer".to_string(),
+                key_id: "key-123".to_string(),
+            },
+        );
+
+        external.aliases.insert(
+            SuiAddress::from_str(ADDRESS).unwrap(),
+            crate::keystore::Alias {
+                alias: old_alias.clone(),
+                public_key_base64: PUBLIC_KEY.to_string(),
+            },
+        );
+
+        assert_ne!(old_alias, new_alias);
+
         let updated_alias = external
             .update_alias(&old_alias, Some(&new_alias))
             .await
