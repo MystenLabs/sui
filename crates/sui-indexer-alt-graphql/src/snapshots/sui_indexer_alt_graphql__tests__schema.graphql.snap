@@ -291,6 +291,35 @@ type Checkpoint {
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 }
 
+type CheckpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CheckpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 Filter for paginating packages published within a range of checkpoints.
 """
@@ -500,6 +529,10 @@ type Epoch {
 	"""
 	epochId: UInt53!
 	"""
+	The epoch's corresponding checkpoints.
+	"""
+	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	"""
 	State of the Coin DenyList object (0x403) at the start of this epoch.
 	
 	The DenyList controls access to Regulated Coins. Writes to the DenyList are accumulated and only take effect on the next epoch boundary. Consequently, it's possible to determine the state of the DenyList for a transaction by reading it at the start of the epoch the transaction is in.
@@ -597,6 +630,13 @@ type Epoch {
 	This can be used to verify state snapshots.
 	"""
 	liveObjectSetDigest: String
+}
+
+input EpochFilter {
+	"""
+	Filter to checkpoints at this epoch.
+	"""
+	atEpoch: Int
 }
 
 type Event {
@@ -1265,6 +1305,10 @@ type Query {
 	Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
 	"""
 	checkpoint(sequenceNumber: UInt53): Checkpoint
+	"""
+	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
+	"""
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: EpochFilter): CheckpointConnection!
 	"""
 	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
 	

@@ -196,7 +196,7 @@ impl Transaction {
         }))
     }
 
-    /// Cursor based pagination through transactions based on filters.
+    /// Cursor based pagination through transactions with filters applied.
     pub(crate) async fn paginate(
         ctx: &Context<'_>,
         scope: Scope,
@@ -332,18 +332,14 @@ async fn tx_unfiltered(
         .map(|cursor| cursor.saturating_add(1))
         .map_or(tx_hi, |cursor| cursor.min(tx_hi));
 
-    const PAGINATION_OVERHEAD: usize = 2; // For has_previous_page and has_next_page calculations.
-
     Ok(if page.is_from_front() {
-        (pg_lo..pg_hi)
-            .take(page.limit() + PAGINATION_OVERHEAD)
-            .collect()
+        (pg_lo..pg_hi).take(page.limit_with_overhead()).collect()
     } else {
         // Graphql last syntax expects results to be in ascending order. If we are paginating backwards,
         // we reverse the results after applying limits.
         let mut results: Vec<_> = (pg_lo..pg_hi)
             .rev()
-            .take(page.limit() + PAGINATION_OVERHEAD)
+            .take(page.limit_with_overhead())
             .collect();
         results.reverse();
         results
