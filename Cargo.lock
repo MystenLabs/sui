@@ -2901,6 +2901,7 @@ dependencies = [
  "cfg-if",
  "consensus-config",
  "consensus-types",
+ "criterion",
  "dashmap",
  "enum_dispatch",
  "eyre",
