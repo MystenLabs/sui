@@ -13,6 +13,7 @@
   consensusCommitPrologueTransaction: transaction(digest: "@{digest_1}") {
     digest
     kind {
+      __typename
       ... on ConsensusCommitPrologueTransaction {
         epoch {
           epochId
