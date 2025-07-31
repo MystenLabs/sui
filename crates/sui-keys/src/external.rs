@@ -15,13 +15,13 @@ use jsonrpc::client::Endpoint;
 use mockall::{automock, predicate::*};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{json, Value as JsonValue};
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::process::Stdio;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{PublicKey, Signature, SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{PublicKey, Signature, SignatureScheme, SuiKeyPair, SuiSignature};
 use tokio::process::Command;
 
 #[derive(Debug)]
@@ -186,6 +186,7 @@ impl External {
             .ok_or_else(|| anyhow!("Key with id {} not found for signer {}", key_id, signer))?;
 
         self.keys.insert((&key.public_key).into(), key.clone());
+        self.save().await?;
         Ok(key)
     }
 
@@ -359,17 +360,16 @@ impl AccountKeystore for External {
             .ok_or_else(|| signature::Error::from_source(anyhow!("Key not found")))?
             .clone();
 
-        let msg = general_purpose::STANDARD.encode(msg);
         let sign_request: SignRequest = SignRequest {
-            key_id: key_id.clone(),
-            msg,
+            key_id,
+            msg: general_purpose::STANDARD.encode(msg),
             intent: None,
         };
         let result = self
             .exec(
                 &signer,
                 "sign_hashed",
-                serde_json::to_value(sign_request).map_err(|e| {
+                serde_json::to_value(&sign_request).map_err(|e| {
                     signature::Error::from_source(anyhow!(
                         "Failed to serialize sign request: {}",
                         e
@@ -398,20 +398,23 @@ impl AccountKeystore for External {
     where
         T: Serialize + Sync,
     {
-        let StoredKey { key_id, signer, .. } = self
+        let StoredKey {
+            key_id,
+            signer,
+            public_key,
+        } = self
             .keys
             .get(address)
             .ok_or_else(|| signature::Error::from_source(anyhow!("Key not found")))?
             .clone();
 
-        let msg = bcs::to_bytes(msg).map_err(|e| {
+        let msg_bcs = general_purpose::STANDARD.encode(&bcs::to_bytes(&msg).map_err(|e| {
             signature::Error::from_source(anyhow!("Failed to serialize message: {}", e))
-        })?;
-        let msg = general_purpose::STANDARD.encode(&msg);
+        })?);
 
         let sign_request = SignRequest {
-            key_id: key_id.clone(),
-            msg,
+            key_id,
+            msg: msg_bcs,
             intent: Some(intent),
         };
 
@@ -419,7 +422,7 @@ impl AccountKeystore for External {
             .exec(
                 &signer,
                 "sign",
-                serde_json::to_value(sign_request).map_err(|e| {
+                serde_json::to_value(&sign_request).map_err(|e| {
                     signature::Error::from_source(anyhow!(
                         "Failed to serialize sign request: {}",
                         e
@@ -434,6 +437,15 @@ impl AccountKeystore for External {
         })?;
 
         let signature = Signature::decode_base64(&result.signature).unwrap();
+
+        let intent_message = IntentMessage::new(sign_request.intent.unwrap(), msg);
+        if let Err(e) = signature.verify_secure(&intent_message, *address, public_key.scheme()) {
+            return Err(signature::Error::from_source(anyhow!(
+                "Signature verification failed: {}",
+                e
+            )));
+        }
+
         Ok(signature)
     }
 
@@ -502,7 +514,7 @@ mod tests {
     use rand::{thread_rng, SeedableRng};
     use serde_json::json;
     use serde_json::Value as JsonValue;
-    use shared_crypto::intent::Intent;
+    use shared_crypto::intent::{Intent, IntentMessage};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::str::FromStr;
@@ -687,7 +699,10 @@ mod tests {
                 ]
             }))
         });
-        let mut external = External::new_for_test(Box::new(mock), None);
+        let tmp_dir = TempDir::new().unwrap();
+        let tmp_keystore = tmp_dir.path().join("external.keystore");
+        let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
+        external.save().await.unwrap();
         external
             .add_existing("signer".to_string(), key_id.to_string())
             .await
@@ -825,32 +840,50 @@ mod tests {
 
     #[tokio::test]
     async fn test_sign_secure() {
+        let skp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
+
+        let msg = b"message";
+        let public_key = skp.public();
+        let address = SuiAddress::from(&public_key);
+
+        let stored_key = StoredKey {
+            public_key,
+            signer: "signer".to_string(),
+            key_id: "id".to_string(),
+        };
+
+        let intent = Intent::sui_transaction();
+        let intent_msg = IntentMessage::new(intent.clone(), msg);
+        let signature = Signature::new_secure(&intent_msg, &skp);
+
         let mut mock = MockCommandRunner::new();
-        mock.expect_run().returning(|_, _, _| {
-            let bytes = vec![0; 97];
-            let signature = Signature::from_bytes(&bytes).unwrap();
+        mock.expect_run().returning(move |_, _, _| {
             Ok(json!({
                 "signature": signature,
             }))
         });
 
         let mut external = External::new_for_test(Box::new(mock), None);
-        let address = SuiAddress::from_str(ADDRESS).unwrap();
+        external.keys.insert(address, stored_key.clone());
 
-        external.keys.insert(
-            address,
-            StoredKey {
-                public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
-                signer: "signer".to_string(),
-                key_id: "id".to_string(),
-            },
-        );
-
-        let message = b"message";
-        let intent = Intent::sui_transaction();
-        let result = external.sign_secure(&address, message, intent).await;
-
+        let result = external.sign_secure(&address, msg, intent.clone()).await;
         assert!(result.is_ok());
+
+        // invalid signature rejected
+        let mut mock = MockCommandRunner::new();
+        mock.expect_run().returning(move |_, _, _| {
+            let bytes = vec![0; 97];
+            let bad_signature = Signature::from_bytes(&bytes).unwrap();
+            Ok(json!({
+                "signature": bad_signature,
+            }))
+        });
+
+        let mut external = External::new_for_test(Box::new(mock), None);
+        external.keys.insert(address, stored_key);
+
+        let result = external.sign_secure(&address, msg, intent).await;
+        assert!(result.is_err());
     }
 
     #[test]
