@@ -14517,6 +14517,7 @@ dependencies = [
  "sui-indexer-alt-schema",
  "sui-protocol-config",
  "sui-synthetic-ingestion",
+ "sui-types",
  "telemetry-subscribers",
  "tempfile",
  "tokio",

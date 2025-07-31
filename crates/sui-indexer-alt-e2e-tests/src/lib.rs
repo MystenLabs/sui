@@ -14,7 +14,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
-use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
+use sui_indexer_alt::{config::IndexerConfig, setup_indexer, BootstrapGenesis};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
 };
@@ -131,6 +131,7 @@ pub struct OffchainClusterConfig {
     pub consistent_config: ConsistentConfig,
     pub jsonrpc_config: JsonRpcConfig,
     pub graphql_config: GraphQlConfig,
+    pub bootstrap_genesis: Option<BootstrapGenesis>,
 }
 
 impl FullCluster {
@@ -310,6 +311,7 @@ impl OffchainCluster {
             consistent_config,
             jsonrpc_config,
             graphql_config,
+            bootstrap_genesis,
         }: OffchainClusterConfig,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
@@ -349,14 +351,13 @@ impl OffchainCluster {
             .await
             .context("Failed to connect to database")?;
 
-        let with_genesis = true;
         let indexer = setup_indexer(
             database_url.clone(),
             DbArgs::default(),
             indexer_args,
             client_args.clone(),
             indexer_config,
-            with_genesis,
+            bootstrap_genesis,
             registry,
             cancel.child_token(),
         )
@@ -656,6 +657,7 @@ impl Default for OffchainClusterConfig {
             consistent_config: ConsistentConfig::for_test(),
             jsonrpc_config: Default::default(),
             graphql_config: Default::default(),
+            bootstrap_genesis: None,
         }
     }
 }
