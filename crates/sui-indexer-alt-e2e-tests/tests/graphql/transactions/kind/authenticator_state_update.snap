@@ -28,7 +28,7 @@ task 4, lines 16-18:
 Epoch advanced: 1
 
 task 5, line 19:
-//# authenticator-state-update --round 2 --jwk-iss https://accounts.google.com,https://login.microsoftonline.com
+//# authenticator-state-update --round 2 --jwk-iss https://accounts.google.com --jwk-iss https://login.microsoftonline.com
 AuthenticatorStateUpdate executed at epoch 1 round 2
 
 task 6, line 21:

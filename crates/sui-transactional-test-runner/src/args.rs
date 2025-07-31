@@ -232,9 +232,9 @@ pub struct SetRandomStateCommand {
 pub struct AuthenticatorStateUpdateCommand {
     #[clap(long = "round")]
     pub round: u64,
-    /// Comma-separated list of JWK issuers (e.g., "google.com,microsoft.com").
+    /// List of JWK issuers (e.g., "google.com,microsoft.com").
     /// Key IDs will be automatically generated as "key1", "key2", etc.
-    #[clap(long = "jwk-iss", value_delimiter = ',')]
+    #[clap(long = "jwk-iss", action = clap::ArgAction::Append)]
     pub jwk_iss: Vec<String>,
     #[clap(long = "authenticator-obj-initial-shared-version")]
     pub authenticator_obj_initial_shared_version: Option<u64>,
@@ -345,14 +345,14 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(AdvanceEpochCommand::command().name("advance-epoch"))
             .subcommand(AdvanceClockCommand::command().name("advance-clock"))
             .subcommand(SetRandomStateCommand::command().name("set-random-state"))
+            .subcommand(
+                AuthenticatorStateUpdateCommand::command().name("authenticator-state-update"),
+            )
             .subcommand(clap::Command::new("view-checkpoint"))
             .subcommand(RunGraphqlCommand::command().name("run-graphql"))
             .subcommand(RunJsonRpcCommand::command().name("run-jsonrpc"))
             .subcommand(
                 RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("bench"),
-            )
-            .subcommand(
-                AuthenticatorStateUpdateCommand::command().name("authenticator-state-update"),
             )
     }
 

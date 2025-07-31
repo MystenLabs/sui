@@ -16,7 +16,7 @@
 //# advance-epoch
 
 // Create an AuthenticatorStateUpdate transaction with multiple JWKs
-//# authenticator-state-update --round 2 --jwk-iss https://accounts.google.com,https://login.microsoftonline.com
+//# authenticator-state-update --round 2 --jwk-iss https://accounts.google.com --jwk-iss https://login.microsoftonline.com
 
 //# create-checkpoint
 
