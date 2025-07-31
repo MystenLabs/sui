@@ -291,16 +291,50 @@ type Checkpoint {
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection
 }
 
+type CheckpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+}
+
 """
-Filter for paginating packages published within a range of checkpoints.
+An edge in a connection.
 """
+type CheckpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 input CheckpointFilter {
 	"""
-	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	Limit query results to checkpoints at this epoch.
+	"""
+	atEpoch: UInt53
+	"""
+	Limit query results to checkpoints that occured strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
 	"""
-	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	Limit query results to checkpoints that occured at the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit query results to checkpoints that occured strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
 }
@@ -499,6 +533,10 @@ type Epoch {
 	The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
 	"""
 	epochId: UInt53!
+	"""
+	The epoch's corresponding checkpoints.
+	"""
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
 	"""
 	State of the Coin DenyList object (0x403) at the start of this epoch.
 	
@@ -1190,6 +1228,20 @@ type OwnedOrImmutable {
 }
 
 """
+Filter for paginating packages published within a range of checkpoints.
+"""
+input PackageCheckpointFilter {
+	"""
+	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	"""
+	afterCheckpoint: UInt53
+	"""
+	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	"""
+	beforeCheckpoint: UInt53
+}
+
+"""
 Identifies a specific version of a package.
 
 The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
@@ -1330,6 +1382,10 @@ type Query {
 	"""
 	checkpoint(sequenceNumber: UInt53): Checkpoint
 	"""
+	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
+	"""
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection!
+	"""
 	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
 	
 	Returns `null` if the epoch does not exist yet, or was pruned.
@@ -1412,7 +1468,7 @@ type Query {
 	"""
 	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
 	"""
-	packages(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): MovePackageConnection
+	packages(first: Int, after: String, last: Int, before: String, filter: PackageCheckpointFilter): MovePackageConnection
 	"""
 	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	
