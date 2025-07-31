@@ -359,7 +359,7 @@ pub struct CommittedSubDag {
     ///
     /// Indicates whether the commit was decided locally based on the local DAG.
     ///
-    /// If true, `CommitFinalizer` can then assume certificates of certificates are available
+    /// If true, `CommitFinalizer` can then assume a quorum of certificates are available
     /// for each transaction in the commit if there is no reject vote, and proceed with
     /// optimistic finalization of transactions.
     ///
