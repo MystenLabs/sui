@@ -60,7 +60,7 @@ pub async fn publish_basics_package(
     gas_price: u64,
 ) -> ObjectRef {
     let mut current_gas = gas;
-    let max_retries = 3;
+    let max_retries = 5;
 
     for retry in 1..=max_retries {
         let transaction = TestTransactionBuilder::new(sender, current_gas, gas_price)
