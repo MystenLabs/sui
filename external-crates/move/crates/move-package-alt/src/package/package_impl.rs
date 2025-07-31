@@ -349,8 +349,6 @@ impl<F: MoveFlavor> Package<F> {
 
 #[cfg(test)]
 mod tests {
-    use serde_spanned::Spanned;
-
     use super::*;
 
     #[derive(Debug)]
@@ -395,7 +393,7 @@ mod tests {
     #[test]
     /// We enable ALL implicit-deps.
     fn test_all_implicit_deps() {
-        let env = Environment::new("test".to_string(), "test".to_string());
+        let env = test_environment();
         let implicit_deps = ImplicitDepMode::Enabled(None);
 
         let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
@@ -409,7 +407,7 @@ mod tests {
     #[test]
     /// We enable implicit-deps, but specifying which ones we want.
     fn test_explicit_implicit_deps() {
-        let env = Environment::new("test".to_string(), "test".to_string());
+        let env = test_environment();
         let implicit_deps = ImplicitDepMode::Enabled(Some(vec!["foo".to_string()]));
 
         let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
@@ -421,9 +419,22 @@ mod tests {
     }
 
     #[test]
+    fn test_explicit_implicit_deps_with_invalid_names_are_ignored() {
+        let env = test_environment();
+        let implicit_deps =
+            ImplicitDepMode::Enabled(Some(vec!["ignore".to_string(), "foo".to_string()]));
+
+        let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
+        let dep_keys: Vec<_> = deps.keys().cloned().collect();
+
+        assert_eq!(dep_keys.len(), 1);
+        assert!(dep_keys.contains(&new_package_name("foo")));
+    }
+
+    #[test]
     /// We disable implicit deps.
     fn test_no_implicit_deps() {
-        let env = Environment::new("test".to_string(), "test".to_string());
+        let env = test_environment();
         let implicit_deps = ImplicitDepMode::Disabled;
 
         let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
@@ -435,12 +446,16 @@ mod tests {
     /// We disable implicit deps by providing empty array
     ///
     fn test_empty_implicit_deps() {
-        let env = Environment::new("test".to_string(), "test".to_string());
+        let env = test_environment();
         let implicit_deps = ImplicitDepMode::Enabled(Some(vec![]));
 
         let deps = Package::<TestFlavor>::implicit_deps(&env, implicit_deps).unwrap();
 
         assert_eq!(deps.len(), 0);
+    }
+
+    fn test_environment() -> Environment {
+        Environment::new("test".to_string(), "test".to_string())
     }
 
     fn new_package_name(name: &str) -> PackageName {
