@@ -109,6 +109,8 @@ mod checked {
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
         borrowed: HashMap<Arg, /* mut */ bool>,
+        /// Set of the by-value shared objects taken in the current command
+        per_command_by_value_shared_objects: BTreeSet<ObjectID>,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -255,6 +257,7 @@ mod checked {
                 new_packages: vec![],
                 user_events: vec![],
                 borrowed: HashMap::new(),
+                per_command_by_value_shared_objects: BTreeSet::new(),
             })
         }
 
@@ -475,6 +478,13 @@ mod checked {
             arg: Arg,
         ) -> Result<V, EitherError> {
             let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
+            let per_command_shared_object_transfer_rules = self
+                .protocol_config
+                .per_command_shared_object_transfer_rules();
+            // set to Some if it is a shared object
+            // and `per_command_shared_object_transfer_rules` is enabled
+            // This is tracked separately due to lifetime issues
+            let mut shared_object_id = None;
             let is_borrowed = self.arg_is_borrowed(&arg);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
             let is_copyable = if let Some(val) = val_opt {
@@ -504,17 +514,18 @@ mod checked {
             ) {
                 return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
-            if (
-                // this check can be removed after shared_object_deletion feature flag is removed
-                matches!(
-                    input_metadata_opt,
-                    Some(InputObjectMetadata::InputObject {
-                        owner: Owner::Shared { .. },
-                        ..
-                    })
-                ) && !shared_obj_deletion_enabled
-            ) {
-                return Err(CommandArgumentError::InvalidObjectByValue.into());
+            if let Some(InputObjectMetadata::InputObject {
+                owner: Owner::Shared { .. },
+                id,
+                ..
+            }) = input_metadata_opt
+            {
+                if !shared_obj_deletion_enabled {
+                    return Err(CommandArgumentError::InvalidObjectByValue.into());
+                }
+                if per_command_shared_object_transfer_rules {
+                    shared_object_id = Some(*id);
+                }
             }
 
             // Any input object taken by value must be mutable
@@ -533,6 +544,11 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
+            if let Some(id) = shared_object_id {
+                // Track the shared object ID if `per_command_shared_object_transfer_rules`
+                // is enabled
+                self.per_command_by_value_shared_objects.insert(id);
+            }
             Ok(V::try_from_value(val)?)
         }
 
@@ -704,6 +720,33 @@ mod checked {
             );
             // clear borrow state
             self.borrowed = HashMap::new();
+            if self
+                .protocol_config
+                .per_command_shared_object_transfer_rules()
+            {
+                let object_runtime = self.object_runtime()?;
+                // check each shared object taken by value this command
+                for id in &self.per_command_by_value_shared_objects {
+                    // valid if done deleted or re-shared
+                    let is_valid_usage = object_runtime.is_deleted(id)
+                        || matches!(
+                            object_runtime.is_transferred(id),
+                            Some(Owner::Shared { .. })
+                        );
+                    if !is_valid_usage {
+                        return Err(ExecutionError::new_with_source(
+                            ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                            format!(
+                                "Shared object operation on {} not allowed: \
+                                     cannot be frozen, transferred, or wrapped",
+                                id
+                            ),
+                        ));
+                    }
+                }
+                self.per_command_by_value_shared_objects.clear();
+            }
+
             self.results
                 .push(results.into_iter().map(ResultValue::new).collect());
             Ok(())
