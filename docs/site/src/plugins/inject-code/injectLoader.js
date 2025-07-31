@@ -107,6 +107,7 @@ const addCodeInject = async function (source) {
 
           const isMove = language === "move";
           const isTs = language === "ts" || language === "js";
+          const isRust = language === "rust";
 
           if (fs.existsSync(fullPath) || fullPath.match(/^https/)) {
             let injectFileContent;
@@ -156,6 +157,8 @@ const addCodeInject = async function (source) {
                     funStr = `^(\\s*)*?(pub(lic)? )?(entry )?fu?n \\b${fn}\\b.*?}\\n(\\s*?})?(?=\\n)?`;
                   } else if (isTs) {
                     funStr = `^(\\s*)(async )?(export (default )?)?function \\b${fn}\\b.*?\\n\\1}\\n`;
+                  } else if (isRust) {
+                    funStr = `^(\\s*)(pub\\s+)?(async\\s+)?(const\\s+)?(unsafe\\s+)?(extern\\s+("[^"]+"\\s*)?)?fn\\s+${fn}\\s*(<[^>]*>)?\\s*\\([^)]*\\)\\s*(->\\s*[^;{]+)?\\s*[;{]`;
                   }
                   const funRE = new RegExp(funStr, "msi");
                   const funMatch = funRE.exec(injectFileContent);

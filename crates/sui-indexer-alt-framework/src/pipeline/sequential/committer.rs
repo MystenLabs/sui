@@ -304,10 +304,12 @@ where
                         .with_label_values(&[H::NAME])
                         .set(watermark.timestamp_ms_hi_inclusive as i64);
 
+                    // docs::#send
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
                     let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive));
+                    // docs::/#send
 
                     let _ = std::mem::take(&mut batch);
                     pending_rows -= batch_rows;
