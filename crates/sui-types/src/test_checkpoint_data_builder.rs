@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-
 use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag},
 };
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk_types::CheckpointTimestamp;
 use tap::Pipe;
@@ -116,6 +115,7 @@ impl TransactionBuilder {
 pub struct AdvanceEpochConfig {
     pub safe_mode: bool,
     pub protocol_version: ProtocolVersion,
+    pub output_objects: Vec<Object>,
 }
 
 impl Default for AdvanceEpochConfig {
@@ -123,6 +123,7 @@ impl Default for AdvanceEpochConfig {
         Self {
             safe_mode: false,
             protocol_version: ProtocolVersion::MAX,
+            output_objects: vec![],
         }
     }
 }
@@ -634,6 +635,7 @@ impl TestCheckpointDataBuilder {
         AdvanceEpochConfig {
             safe_mode,
             protocol_version,
+            output_objects,
         }: AdvanceEpochConfig,
     ) -> CheckpointData {
         let (committee, _) = Committee::new_simple_test_committee();
@@ -693,7 +695,7 @@ impl TestCheckpointDataBuilder {
                 effects: Default::default(),
                 events: transaction_events,
                 input_objects: vec![],
-                output_objects: vec![],
+                output_objects,
             });
 
         // Call build_checkpoint() to finalize the checkpoint and then populate the checkpoint with

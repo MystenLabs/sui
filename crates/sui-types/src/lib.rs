@@ -207,6 +207,10 @@ pub fn resolve_address(addr: &str) -> Option<AccountAddress> {
 
 pub trait MoveTypeTagTrait {
     fn get_type_tag() -> TypeTag;
+
+    fn get_instance_type_tag(&self) -> TypeTag {
+        Self::get_type_tag()
+    }
 }
 
 impl MoveTypeTagTrait for u8 {

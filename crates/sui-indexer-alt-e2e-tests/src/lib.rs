@@ -3,7 +3,9 @@
 
 use std::{
     collections::HashMap,
+    fs,
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::Path,
     time::Duration,
 };
 
@@ -38,6 +40,8 @@ use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
 };
+use sui_storage::blob::{Blob, BlobEncoding};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -727,4 +731,13 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
         rpc_password: None,
     };
     (client_args, temp_dir)
+}
+
+/// Writes a checkpoint file to the given path.
+pub async fn write_checkpoint(path: &Path, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+    let file_path = path.join(file_name);
+    let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
+    fs::write(file_path, blob.to_bytes())?;
+    Ok(())
 }
