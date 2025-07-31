@@ -8,6 +8,8 @@ use std::{num::NonZeroUsize, path::Path, sync::Arc};
 use rand::rngs::OsRng;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::AuthorityOverloadConfig;
+#[cfg(msim)]
+use sui_config::node::ExecutionTimeObserverConfig;
 use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
@@ -79,6 +81,8 @@ pub struct ConfigBuilder<R = OsRng> {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: Option<GlobalStateHashV2EnabledConfig>,
+    #[cfg(msim)]
+    execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 }
 
 impl ConfigBuilder {
@@ -104,6 +108,8 @@ impl ConfigBuilder {
             max_submit_position: None,
             submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: None,
+            #[cfg(msim)]
+            execution_time_observer_config: None,
         }
     }
 
@@ -250,6 +256,12 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    #[cfg(msim)]
+    pub fn with_execution_time_observer_config(mut self, c: ExecutionTimeObserverConfig) -> Self {
+        self.execution_time_observer_config = Some(c);
+        self
+    }
+
     pub fn with_authority_overload_config(mut self, c: AuthorityOverloadConfig) -> Self {
         self.authority_overload_config = Some(c);
         self
@@ -303,6 +315,8 @@ impl<R> ConfigBuilder<R> {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
+            #[cfg(msim)]
+            execution_time_observer_config: self.execution_time_observer_config,
         }
     }
 
@@ -477,6 +491,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
                 if let Some(path) = &self.data_ingestion_dir {
                     builder = builder.with_data_ingestion_dir(path.clone());
+                }
+
+                #[cfg(msim)]
+                if let Some(execution_time_observer_config) = &self.execution_time_observer_config {
+                    builder = builder.with_execution_time_observer_config(
+                        execution_time_observer_config.clone(),
+                    );
                 }
 
                 if let Some(spvc) = &self.supported_protocol_versions_config {
