@@ -41,7 +41,6 @@ async fn get_sender_and_gas(context: &mut WalletContext) -> (SuiAddress, ObjectR
     (sender, gas)
 }
 
-#[ignore(reason = "currently panics")]
 #[sim_test]
 async fn test_deposits() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
@@ -178,7 +177,6 @@ async fn test_deposit_and_withdraw() {
     test_cluster.wait_for_epoch_all_nodes(1).await;
 }
 
-#[ignore(reason = "currently panics")]
 #[sim_test]
 async fn test_deposit_and_withdraw_with_larger_reservation() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
