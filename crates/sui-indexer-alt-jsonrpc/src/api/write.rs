@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::encoding::Base64;
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -11,8 +11,9 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
 use crate::{
+    client::HttpClient,
     config::NodeConfig,
-    error::{client_error_to_error_object, invalid_params},
+    error::{anyhow_error_to_error_object, invalid_params},
 };
 
 use super::rpc_module::RpcModule;
@@ -75,7 +76,7 @@ impl WriteApiServer for Write {
         self.0
             .execute_transaction_block(tx_bytes, signatures, options, request_type)
             .await
-            .map_err(client_error_to_error_object)
+            .map_err(anyhow_error_to_error_object)
     }
 
     async fn dry_run_transaction_block(
@@ -85,7 +86,7 @@ impl WriteApiServer for Write {
         self.0
             .dry_run_transaction_block(tx_bytes)
             .await
-            .map_err(client_error_to_error_object)
+            .map_err(anyhow_error_to_error_object)
     }
 }
 

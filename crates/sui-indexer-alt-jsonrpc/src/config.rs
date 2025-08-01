@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::mem;
+use std::time::Duration;
 
 use anyhow::Context as _;
-use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
+use reqwest::header::{HeaderMap, HeaderValue};
 use sui_default_config::DefaultConfig;
+
+use crate::client::HttpClient;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use tracing::warn;
@@ -327,11 +330,14 @@ impl NodeConfig {
             HeaderValue::from_str(&self.header_value)?,
         );
 
-        HttpClientBuilder::default()
-            .max_request_size(self.max_request_size)
-            .set_headers(headers.clone())
-            .build(&fullnode_rpc_url)
-            .context("Failed to initialize fullnode RPC client")
+        HttpClient::new(
+            fullnode_rpc_url.to_string(),
+            headers,
+            self.max_request_size,
+            Duration::from_secs(5),
+            Duration::from_secs(15),
+        )
+        .context("Failed to initialize fullnode RPC client")
     }
 }
 
