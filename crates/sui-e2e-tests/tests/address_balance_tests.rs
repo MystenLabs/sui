@@ -9,6 +9,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
+    effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Argument, Command, TransactionData, TransactionKind},
     SUI_FRAMEWORK_PACKAGE_ID,
@@ -56,6 +57,8 @@ async fn test_deposits() -> Result<(), anyhow::Error> {
 
     test_cluster.sign_and_execute_transaction(&tx).await;
 
+    test_cluster.trigger_reconfiguration().await;
+
     Ok(())
 }
 
@@ -79,6 +82,8 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
 
     let tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
     test_cluster.sign_and_execute_transaction(&tx).await;
+
+    test_cluster.trigger_reconfiguration().await;
 
     Ok(())
 }
@@ -105,11 +110,12 @@ async fn test_deposit_and_withdraw_with_larger_reservation() -> Result<(), anyho
     let tx = withdraw_from_balance_tx_with_reservation(800, 1000, sender, gas, rgp);
     test_cluster.sign_and_execute_transaction(&tx).await;
 
+    test_cluster.trigger_reconfiguration().await;
+
     Ok(())
 }
 
 #[sim_test]
-#[ignore(reason = "currently panics")]
 async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
@@ -124,7 +130,18 @@ async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
 
     // Settlement transaction fails with EInvalidSplitAmount because
     let tx = withdraw_from_balance_tx(1000, sender, gas, rgp);
-    test_cluster.sign_and_execute_transaction(&tx).await;
+    let signed_tx = test_cluster.sign_transaction(&tx);
+    let (effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await
+        .unwrap();
+
+    assert!(
+        effects.status().is_err(),
+        "Expected transaction to fail due to underflow"
+    );
+
+    test_cluster.trigger_reconfiguration().await;
 
     Ok(())
 }
@@ -150,7 +167,18 @@ async fn test_withdraw_underflow() -> Result<(), anyhow::Error> {
     // Withdraw 1001 from balance
     // Settlement transaction fails due to underflow (MovePrimitiveRuntimeError)
     let tx = withdraw_from_balance_tx(1001, sender, gas, rgp);
-    test_cluster.sign_and_execute_transaction(&tx).await;
+    let signed_tx = test_cluster.sign_transaction(&tx);
+    let (effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await
+        .unwrap();
+
+    assert!(
+        effects.status().is_err(),
+        "Expected transaction to fail due to underflow"
+    );
+
+    test_cluster.trigger_reconfiguration().await;
 
     Ok(())
 }
