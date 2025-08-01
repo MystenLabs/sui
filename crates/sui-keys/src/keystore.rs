@@ -25,6 +25,8 @@ use sui_types::crypto::{
     enum_dispatch, EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair,
 };
 
+pub const ALIASES_FILE_EXTENSION: &str = "aliases";
+
 #[derive(Serialize, Deserialize)]
 #[enum_dispatch(AccountKeystore)]
 pub enum Keystore {
@@ -54,6 +56,12 @@ impl Default for GenerateOptions {
     }
 }
 
+pub struct GeneratedKey {
+    pub address: SuiAddress,
+    pub public_key: PublicKey,
+    pub scheme: SignatureScheme,
+}
+
 #[async_trait]
 #[enum_dispatch]
 pub trait AccountKeystore: Send + Sync {
@@ -62,7 +70,7 @@ pub trait AccountKeystore: Send + Sync {
         &mut self,
         alias: Option<String>,
         generate_options: GenerateOptions,
-    ) -> Result<(SuiAddress, PublicKey, SignatureScheme), anyhow::Error> {
+    ) -> Result<GeneratedKey, anyhow::Error> {
         let (key_scheme, derivation_path, word_length) = match generate_options {
             GenerateOptions::Default => (SignatureScheme::ED25519, None, None),
             GenerateOptions::Local(opts) => {
@@ -79,10 +87,14 @@ pub trait AccountKeystore: Send + Sync {
             generate_new_key(key_scheme, derivation_path, word_length)?;
         let public_key = kp.public();
         self.import(alias, kp).await?;
-        Ok((address, public_key, scheme))
+        Ok(GeneratedKey {
+            address,
+            public_key,
+            scheme,
+        })
     }
 
-    /// Import a keypair into the keystore.
+    /// Import a keypair into the keystore from a `SuiKeyPair` and optional alias.
     async fn import(
         &mut self,
         alias: Option<String>,
@@ -249,7 +261,7 @@ impl<'de> Deserialize<'de> for FileBasedKeystore {
         D: Deserializer<'de>,
     {
         use serde::de::Error;
-        FileBasedKeystore::new(&PathBuf::from(String::deserialize(deserializer)?))
+        FileBasedKeystore::load_or_create(&PathBuf::from(String::deserialize(deserializer)?))
             .map_err(D::Error::custom)
     }
 }
@@ -377,7 +389,7 @@ impl AccountKeystore for FileBasedKeystore {
 }
 
 impl FileBasedKeystore {
-    pub fn new(path: &PathBuf) -> Result<Self, anyhow::Error> {
+    pub fn load_or_create(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
             let reader =
                 BufReader::new(std::fs::File::open(path).with_context(|| {
@@ -400,7 +412,7 @@ impl FileBasedKeystore {
 
         // check aliases
         let mut aliases_path = path.clone();
-        aliases_path.set_extension("aliases");
+        aliases_path.set_extension(ALIASES_FILE_EXTENSION);
 
         let aliases = if aliases_path.exists() {
             let reader = BufReader::new(std::fs::File::open(&aliases_path).with_context(|| {
@@ -484,7 +496,7 @@ impl FileBasedKeystore {
                     })?;
 
             let mut aliases_path = path.clone();
-            aliases_path.set_extension("aliases");
+            aliases_path.set_extension(ALIASES_FILE_EXTENSION);
             // no reactor for tokio::fs::write in simtest, so we use spawn_blocking
             tokio::task::spawn_blocking(move || std::fs::write(aliases_path, aliases_store))
                 .await?

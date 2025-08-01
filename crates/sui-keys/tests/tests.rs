@@ -9,7 +9,10 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use sui_keys::key_derive::generate_new_key;
 use tempfile::TempDir;
 
-use sui_keys::keystore::{AccountKeystore, Alias, FileBasedKeystore, InMemKeystore, Keystore};
+use sui_keys::keystore::{
+    AccountKeystore, Alias, FileBasedKeystore, GenerateOptions, GeneratedKey, InMemKeystore,
+    Keystore, ALIASES_FILE_EXTENSION,
+};
 use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
 use sui_types::{
     base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
@@ -20,9 +23,12 @@ use sui_types::{
 async fn alias_exists_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
     keystore
-        .generate(Some("my_alias_test".to_string()), Default::default())
+        .generate(
+            Some("my_alias_test".to_string()),
+            GenerateOptions::default(),
+        )
         .await
         .unwrap();
     let aliases = alias_names(keystore.aliases());
@@ -35,17 +41,23 @@ async fn alias_exists_test() {
 async fn create_alias_keystore_file_test() {
     let temp_dir = TempDir::new().unwrap();
     let mut keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    keystore.generate(None, Default::default()).await.unwrap();
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
+    keystore
+        .generate(None, GenerateOptions::default())
+        .await
+        .unwrap();
 
-    keystore_path.set_extension("aliases");
+    keystore_path.set_extension(ALIASES_FILE_EXTENSION);
     assert!(keystore_path.exists());
 
     keystore_path = temp_dir.path().join("myfile.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    keystore.generate(None, Default::default()).await.unwrap();
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
+    keystore
+        .generate(None, GenerateOptions::default())
+        .await
+        .unwrap();
 
-    keystore_path.set_extension("aliases");
+    keystore_path.set_extension(ALIASES_FILE_EXTENSION);
     assert!(keystore_path.exists());
 }
 
@@ -57,12 +69,16 @@ async fn check_reading_aliases_file_correctly() {
     let temp_dir = TempDir::new().unwrap();
     let mut keystore_path = temp_dir.path().join("sui.keystore");
     let keystore_path_keep = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    let (address, _, _) = keystore.generate(None, Default::default()).await.unwrap();
-    keystore_path.set_extension("aliases");
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
+    let GeneratedKey { address, .. } = keystore
+        .generate(None, GenerateOptions::default())
+        .await
+        .unwrap();
+    keystore_path.set_extension(ALIASES_FILE_EXTENSION);
     assert!(keystore_path.exists());
 
-    let new_keystore = Keystore::from(FileBasedKeystore::new(&keystore_path_keep).unwrap());
+    let new_keystore =
+        Keystore::from(FileBasedKeystore::load_or_create(&keystore_path_keep).unwrap());
     let addresses = new_keystore.addresses_with_alias();
     assert_eq!(address, *addresses.first().unwrap().0)
 }
@@ -71,11 +87,11 @@ async fn check_reading_aliases_file_correctly() {
 async fn create_alias_if_not_exists_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
 
     let alias = Some("my_alias_test".to_string());
     keystore
-        .generate(alias.clone(), Default::default())
+        .generate(alias.clone(), GenerateOptions::default())
         .await
         .unwrap();
     // test error first
@@ -92,7 +108,7 @@ async fn create_alias_if_not_exists_test() {
 
 #[test]
 fn keystore_no_aliases() {
-    // this tests if when calling FileBasedKeystore::new, it creates a
+    // this tests if when calling FileBasedKeystore::load_or_create(, it creates a
     // sui.aliases file with the existing address in the sui.keystore,
     // and a new alias for it.
     // This idea is to test the correct conversion
@@ -106,8 +122,8 @@ fn keystore_no_aliases() {
     let keystore_data = serde_json::to_string_pretty(&private_keys).unwrap();
     fs::write(&keystore_path, keystore_data).unwrap();
 
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
-    keystore_path.set_extension("aliases");
+    let keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
+    keystore_path.set_extension(ALIASES_FILE_EXTENSION);
     assert!(keystore_path.exists());
     assert_eq!(1, keystore.aliases().len());
 }
@@ -116,10 +132,13 @@ fn keystore_no_aliases() {
 async fn update_alias_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
 
     keystore
-        .generate(Some("my_alias_test".to_string()), Default::default())
+        .generate(
+            Some("my_alias_test".to_string()),
+            GenerateOptions::default(),
+        )
         .await
         .unwrap();
 
@@ -128,7 +147,7 @@ async fn update_alias_test() {
     assert_eq!(vec!["my_alias_test"], aliases);
 
     // read the alias file again and check if it was saved
-    let keystore1 = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let keystore1 = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
     let aliases1 = alias_names(keystore1.aliases());
     assert_eq!(vec!["my_alias_test"], aliases1);
 
@@ -164,7 +183,10 @@ async fn update_alias_test() {
 
     // check that updating alias does not allow duplicates
     keystore
-        .generate(Some("my_alias_test".to_string()), Default::default())
+        .generate(
+            Some("my_alias_test".to_string()),
+            GenerateOptions::default(),
+        )
         .await
         .unwrap();
 
@@ -178,7 +200,10 @@ async fn update_alias_test() {
 async fn update_alias_in_memory_test() {
     let mut keystore = Keystore::InMem(InMemKeystore::new_insecure_for_tests(0));
     keystore
-        .generate(Some("my_alias_test".to_string()), Default::default())
+        .generate(
+            Some("my_alias_test".to_string()),
+            GenerateOptions::default(),
+        )
         .await
         .unwrap();
     let aliases = alias_names(keystore.aliases());
@@ -206,7 +231,8 @@ async fn mnemonic_test() {
         generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
-    let mut keystore2 = Keystore::from(FileBasedKeystore::new(&keystore_path_2).unwrap());
+    let mut keystore2 =
+        Keystore::from(FileBasedKeystore::load_or_create(&keystore_path_2).unwrap());
     let imported_address = keystore2
         .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None, None)
         .await
@@ -224,7 +250,7 @@ async fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
 
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
 
     keystore
         .import_from_mnemonic(phrase, SignatureScheme::ED25519, None, None)
@@ -251,7 +277,7 @@ async fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
 fn keystore_display_test() -> Result<(), anyhow::Error> {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
     assert!(keystore.to_string().contains("sui.keystore"));
     assert!(!keystore.to_string().contains("keys:"));
     Ok(())
@@ -261,13 +287,13 @@ fn keystore_display_test() -> Result<(), anyhow::Error> {
 async fn get_alias_by_address_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
     let alias = "my_alias_test".to_string();
     let keypair = keystore
-        .generate(Some(alias.clone()), Default::default())
+        .generate(Some(alias.clone()), GenerateOptions::default())
         .await
         .unwrap();
-    assert_eq!(alias, keystore.get_alias(&keypair.0).unwrap());
+    assert_eq!(alias, keystore.get_alias(&keypair.address).unwrap());
 
     // Test getting an alias of an address that is not in keystore
     let address = generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
@@ -278,20 +304,20 @@ async fn get_alias_by_address_test() {
 async fn remove_key_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
 
-    let (addr, _, _) = keystore
-        .generate(Some("test_key".to_string()), Default::default())
+    let GeneratedKey { address, .. } = keystore
+        .generate(Some("test_key".to_string()), GenerateOptions::default())
         .await
         .unwrap();
 
     let mut aliases_path = keystore_path.clone();
-    aliases_path.set_extension("aliases");
+    aliases_path.set_extension(ALIASES_FILE_EXTENSION);
 
     let aliases_content = fs::read_to_string(&aliases_path).unwrap();
     assert!(aliases_content.contains("test_key"));
 
-    keystore.remove(addr).await.unwrap();
+    keystore.remove(address).await.unwrap();
 
     // Verify alias is removed from file
     let aliases_content = fs::read_to_string(&aliases_path).unwrap();

@@ -449,7 +449,8 @@ impl SuiCommand {
             } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
-                let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+                let mut keystore =
+                    Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
                 cmd.execute(&mut keystore).await?.print(!json);
                 Ok(())
             }
@@ -1025,7 +1026,8 @@ async fn start(
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
-            let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+            let mut keystore =
+                Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
             let address: SuiAddress = kp.public().into();
             keystore
                 .import(None, SuiKeyPair::Ed25519(kp))
@@ -1121,7 +1123,7 @@ async fn genesis(
     if write_config.is_none() && !files.is_empty() {
         if force {
             // check old keystore and client.yaml is compatible
-            let is_compatible = FileBasedKeystore::new(&keystore_path).is_ok()
+            let is_compatible = FileBasedKeystore::load_or_create(&keystore_path).is_ok()
                 && PersistedConfig::<SuiClientConfig>::read(&client_path).is_ok();
             // Keep keystore and client.yaml if they are compatible
             if is_compatible {
@@ -1162,7 +1164,7 @@ async fn genesis(
             if let Some(ips) = benchmark_ips {
                 // Make a keystore containing the key for the genesis gas object.
                 let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
-                let mut keystore = FileBasedKeystore::new(&path)?;
+                let mut keystore = FileBasedKeystore::load_or_create(&path)?;
                 for gas_key in GenesisConfig::benchmark_gas_keys(ips.len()) {
                     keystore.import(None, gas_key).await?;
                 }
@@ -1171,7 +1173,7 @@ async fn genesis(
                 // Make a new genesis config from the provided ip addresses.
                 GenesisConfig::new_for_benchmarks(&ips)
             } else if keystore_path.exists() {
-                let existing_keys = FileBasedKeystore::new(&keystore_path)?.addresses();
+                let existing_keys = FileBasedKeystore::load_or_create(&keystore_path)?.addresses();
                 GenesisConfig::for_local_testing_with_addresses(existing_keys)
             } else {
                 GenesisConfig::for_local_testing()
@@ -1216,7 +1218,7 @@ async fn genesis(
             .build()
     };
 
-    let mut keystore = FileBasedKeystore::new(&keystore_path)?;
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
     for key in &network_config.account_keys {
         keystore
             .import(None, SuiKeyPair::Ed25519(key.copy()))
@@ -1418,7 +1420,7 @@ async fn prompt_if_no_config(
             }
             .join(SUI_KEYSTORE_FILENAME);
 
-            let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+            let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {

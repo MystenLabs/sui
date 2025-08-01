@@ -439,7 +439,7 @@ async fn init_test_client() -> (SuiClient, Keystore, SuiAddress) {
         .unwrap();
 
     let keystore = Keystore::File(
-        FileBasedKeystore::new(
+        FileBasedKeystore::load_or_create(
             &dirs::home_dir()
                 .unwrap()
                 .join(".sui/sui_config/sui.keystore"),

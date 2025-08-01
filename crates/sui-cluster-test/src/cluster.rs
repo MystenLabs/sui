@@ -363,7 +363,7 @@ pub async fn new_wallet_context_from_cluster(
     let fullnode_url = cluster.fullnode_url();
     info!("Use RPC: {}", &fullnode_url);
     let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
     keystore
         .import(None, SuiKeyPair::Ed25519(key_pair))

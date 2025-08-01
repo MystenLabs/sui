@@ -174,7 +174,7 @@ async fn test_sui_operations_config() {
     let contents = vec![kp.encode_base64()];
     let res = std::fs::write(path, serde_json::to_string_pretty(&contents).unwrap());
     assert!(res.is_ok());
-    let read = FileBasedKeystore::new(&path1);
+    let read = FileBasedKeystore::load_or_create(&path1);
     assert!(read.is_ok());
     assert_eq!(
         SuiAddress::from_str("7d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b58e")
@@ -190,7 +190,7 @@ async fn test_sui_operations_config() {
     let contents = vec![kp.encode_base64()];
     let res = std::fs::write(path2, serde_json::to_string_pretty(&contents).unwrap());
     assert!(res.is_ok());
-    let read = FileBasedKeystore::new(&path3);
+    let read = FileBasedKeystore::load_or_create(&path3);
     assert_eq!(
         SuiAddress::from_str("160ef6ce4f395208a12119c5011bf8d8ceb760e3159307c819bd0197d154d384")
             .unwrap(),
@@ -211,7 +211,7 @@ async fn test_load_keystore_err() {
     assert!(res.is_ok());
 
     // cannot load keypair due to missing flag
-    assert!(FileBasedKeystore::new(&path2).is_err());
+    assert!(FileBasedKeystore::load_or_create(&path2).is_err());
 }
 
 #[test]

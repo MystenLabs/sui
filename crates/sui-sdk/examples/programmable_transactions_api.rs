@@ -75,7 +75,8 @@ async fn main() -> Result<(), anyhow::Error> {
     );
 
     // 4) sign transaction
-    let keystore = FileBasedKeystore::new(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
+    let keystore =
+        FileBasedKeystore::load_or_create(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
     let signature = keystore
         .sign_secure(&sender, &tx_data, Intent::sui_transaction())
         .await?;

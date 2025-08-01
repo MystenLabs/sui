@@ -24,7 +24,7 @@ pub fn get_ed25519_keypair_from_keystore(
     keystore_path: PathBuf,
     requested_address: &SuiAddress,
 ) -> Result<AccountKeyPair> {
-    let keystore = FileBasedKeystore::new(&keystore_path)?;
+    let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
     match keystore.export(requested_address) {
         Ok(SuiKeyPair::Ed25519(kp)) => Ok(kp.copy()),
         other => Err(anyhow::anyhow!("Invalid key type: {:?}", other)),

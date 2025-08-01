@@ -244,7 +244,7 @@ async fn test_read_keystore() {
 
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("sui.keystore");
-    let mut ks = Keystore::from(FileBasedKeystore::new(&path).unwrap());
+    let mut ks = Keystore::from(FileBasedKeystore::load_or_create(&path).unwrap());
     let key1 = ks
         .generate(
             None,
@@ -275,11 +275,11 @@ async fn test_read_keystore() {
         .collect::<BTreeMap<_, _>>();
 
     assert_eq!(2, acc_map.len());
-    assert!(acc_map.contains_key(&key1.0));
-    assert!(acc_map.contains_key(&key2.0));
+    assert!(acc_map.contains_key(&key1.address));
+    assert!(acc_map.contains_key(&key2.address));
 
-    let acc1 = acc_map[&key1.0].clone();
-    let acc2 = acc_map[&key2.0].clone();
+    let acc1 = acc_map[&key1.address].clone();
+    let acc2 = acc_map[&key2.address].clone();
 
     let schema1: SignatureScheme = acc1.curve_type.into();
     let schema2: SignatureScheme = acc2.curve_type.into();

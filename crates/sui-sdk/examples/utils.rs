@@ -9,7 +9,7 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME,
 };
 use sui_json_rpc_types::{Coin, SuiObjectDataOptions};
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, GenerateOptions};
 use sui_sdk::{
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
@@ -252,7 +252,8 @@ pub async fn split_coin_digest(
     );
 
     // sign & execute the transaction
-    let keystore = FileBasedKeystore::new(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
+    let keystore =
+        FileBasedKeystore::load_or_create(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
     let signature = keystore
         .sign_secure(sender, &tx_data, Intent::sui_transaction())
         .await?;
@@ -274,12 +275,12 @@ pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
 
     // check if a wallet exists and if not, create a wallet and a sui client config
     if !keystore_path.exists() {
-        let keystore = FileBasedKeystore::new(&keystore_path)?;
+        let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
         keystore.save().await?;
     }
 
     if !wallet_conf.exists() {
-        let keystore = FileBasedKeystore::new(&keystore_path)?;
+        let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
         let mut client_config = SuiClientConfig::new(keystore.into());
 
         client_config.add_env(SuiEnv::testnet());
@@ -294,17 +295,20 @@ pub async fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
         info!("Client config file is stored in {:?}.", &wallet_conf);
     }
 
-    let mut keystore = FileBasedKeystore::new(&keystore_path)?;
+    let mut keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
     let mut client_config: SuiClientConfig = PersistedConfig::read(&wallet_conf)?;
 
     let default_active_address = if let Some(address) = keystore.addresses().first() {
         *address
     } else {
-        keystore.generate(None, Default::default()).await?.0
+        keystore
+            .generate(None, GenerateOptions::default())
+            .await?
+            .address
     };
 
     if keystore.addresses().len() < 2 {
-        keystore.generate(None, Default::default()).await?;
+        keystore.generate(None, GenerateOptions::default()).await?;
     }
 
     client_config.active_address = Some(default_active_address);

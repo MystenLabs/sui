@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::keystore::{validate_alias, AccountKeystore, Alias, GenerateOptions};
+use crate::keystore::{
+    validate_alias, AccountKeystore, Alias, GenerateOptions, GeneratedKey, ALIASES_FILE_EXTENSION,
+};
 use crate::random_names::random_name;
 
 use anyhow::{anyhow, bail};
@@ -21,16 +23,15 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::process::Stdio;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{
-    PublicKey, Signature, SignatureScheme, SuiKeyPair, SuiSignature, SuiSignatureInner,
-};
+use sui_types::crypto::{PublicKey, Signature, SuiKeyPair, SuiSignature, SuiSignatureInner};
 use tokio::process::Command;
 
 #[derive(Debug)]
+/// External keystore for managing keys and aliases with an external signer.
 pub struct External {
-    /// alias to address mapping
+    /// Holds a map of addresses to aliases
     pub aliases: BTreeMap<SuiAddress, Alias>,
-    // address to (pubkey, ext_signer, key_id)
+    // Holds a map of addresses to [`StoredKey`]
     pub keys: BTreeMap<SuiAddress, StoredKey>,
     command_runner: Box<dyn CommandRunner>,
     path: Option<PathBuf>,
@@ -58,8 +59,11 @@ pub struct KeysResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+/// Request structure for signing a message with an external signer.
 pub struct SignRequest {
+    /// Key ID for the external signer, used to identify which key to use for signing.
     pub key_id: String,
+    /// base64 encoded message to sign
     pub msg: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub intent: Option<Intent>,
@@ -118,17 +122,17 @@ impl CommandRunner for StdCommandRunner {
 }
 
 impl External {
-    /// Load keys and aliases from a given path
-    pub fn new(path: &PathBuf) -> Result<Self, Error> {
-        let mut aliases_store_path = path.clone();
-        aliases_store_path.set_extension("aliases");
-        let aliases: BTreeMap<SuiAddress, Alias> = if aliases_store_path.exists() {
-            let aliases_store: String = std::fs::read_to_string(&aliases_store_path)
+    /// Load keys and aliases from a given path or creates a new External keystore.
+    pub fn load_or_create(path: &PathBuf) -> Result<Self, Error> {
+        let mut aliases_store_directory = path.clone();
+        aliases_store_directory.set_extension(ALIASES_FILE_EXTENSION);
+        let aliases: BTreeMap<SuiAddress, Alias> = if aliases_store_directory.exists() {
+            let aliases_store: String = std::fs::read_to_string(&aliases_store_directory)
                 .map_err(|e| anyhow!("Failed to read aliases file: {}", e))?;
             serde_json::from_str(&aliases_store)
                 .map_err(|e| anyhow!("Failed to parse aliases file: {}", e))?
         } else {
-            Default::default()
+            BTreeMap::default()
         };
 
         let keys: BTreeMap<SuiAddress, StoredKey> = if path.exists() {
@@ -137,7 +141,7 @@ impl External {
             serde_json::from_str(&keys_store)
                 .map_err(|e| anyhow!("Failed to parse keys file: {}", e))?
         } else {
-            Default::default()
+            BTreeMap::default()
         };
 
         Ok(Self {
@@ -160,8 +164,8 @@ impl External {
     /// Test function for mocked command runner
     pub fn new_for_test(command_runner: Box<dyn CommandRunner>, path: Option<PathBuf>) -> Self {
         Self {
-            aliases: Default::default(),
-            keys: Default::default(),
+            aliases: BTreeMap::default(),
+            keys: BTreeMap::default(),
             command_runner,
             path,
         }
@@ -229,13 +233,13 @@ impl External {
                 .map_err(|e| anyhow!("Serialization error: {}", e))?;
 
             let mut aliases_path = path.clone();
-            aliases_path.set_extension("aliases");
+            aliases_path.set_extension(ALIASES_FILE_EXTENSION);
             tokio::task::spawn_blocking(move || std::fs::write(aliases_path, aliases_store))
                 .await?
                 .with_context(|| {
                     format!(
                         "Cannot write aliases to file: {}",
-                        path.with_extension("aliases").display()
+                        path.with_extension(ALIASES_FILE_EXTENSION).display()
                     )
                 })?;
             Ok(())
@@ -287,7 +291,8 @@ impl<'de> Deserialize<'de> for External {
         D: Deserializer<'de>,
     {
         use serde::de::Error;
-        External::new(&PathBuf::from(String::deserialize(deserializer)?)).map_err(D::Error::custom)
+        External::load_or_create(&PathBuf::from(String::deserialize(deserializer)?))
+            .map_err(D::Error::custom)
     }
 }
 
@@ -297,7 +302,7 @@ impl AccountKeystore for External {
         &mut self,
         alias: Option<String>,
         opts: GenerateOptions,
-    ) -> Result<(SuiAddress, PublicKey, SignatureScheme), Error> {
+    ) -> Result<GeneratedKey, Error> {
         let GenerateOptions::ExternalSigner(ext_signer) = opts else {
             return Err(anyhow!("Signer must be provided for external keys."));
         };
@@ -325,9 +330,14 @@ impl AccountKeystore for External {
         );
 
         let scheme = public_key.scheme();
-        Ok((address, public_key, scheme))
+        Ok(GeneratedKey {
+            address,
+            public_key,
+            scheme,
+        })
     }
 
+    /// Import a keypair into the keystore.
     async fn import(&mut self, _alias: Option<String>, _keypair: SuiKeyPair) -> Result<(), Error> {
         Err(anyhow!("Import not supported for external keys."))
     }
@@ -347,13 +357,7 @@ impl AccountKeystore for External {
         keys
     }
 
-    fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
-        match self.aliases.get(address) {
-            Some(alias) => Ok(alias.alias.clone()),
-            None => bail!("Cannot find alias for address {address}"),
-        }
-    }
-
+    /// Export the key pair for the given address as a `SuiKeyPair`.
     fn export(&self, _address: &SuiAddress) -> Result<&SuiKeyPair, Error> {
         Err(anyhow!("Export not supported for external keys."))
     }
@@ -370,7 +374,9 @@ impl AccountKeystore for External {
         } = self
             .keys
             .get(address)
-            .ok_or_else(|| signature::Error::from_source(anyhow!("Key not found")))?
+            .ok_or_else(|| {
+                signature::Error::from_source(anyhow!("Key corresponding to {address} not found"))
+            })?
             .clone();
 
         let sign_request: SignRequest = SignRequest {
@@ -479,7 +485,9 @@ impl AccountKeystore for External {
         } = self
             .keys
             .get(address)
-            .ok_or_else(|| signature::Error::from_source(anyhow!("Key not found")))?
+            .ok_or_else(|| {
+                signature::Error::from_source(anyhow!("Key corresponding to {address} not found"))
+            })?
             .clone();
 
         let msg_bcs = general_purpose::STANDARD.encode(&bcs::to_bytes(&msg).map_err(|e| {
@@ -549,6 +557,13 @@ impl AccountKeystore for External {
         aliases
     }
 
+    fn get_alias(&self, address: &SuiAddress) -> Result<String, anyhow::Error> {
+        match self.aliases.get(address) {
+            Some(alias) => Ok(alias.alias.clone()),
+            None => bail!("Cannot find alias for address {address}"),
+        }
+    }
+
     fn create_alias(&self, alias: Option<String>) -> Result<String, Error> {
         match alias {
             Some(a) if self.alias_exists(&a) => {
@@ -580,7 +595,7 @@ impl AccountKeystore for External {
 mod tests {
     use super::{External, MockCommandRunner, StdCommandRunner, StoredKey};
     use crate::key_identity::KeyIdentity;
-    use crate::keystore::{AccountKeystore, GenerateOptions};
+    use crate::keystore::{AccountKeystore, GenerateOptions, GeneratedKey};
     use anyhow::anyhow;
     use fastcrypto::ed25519::Ed25519KeyPair;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
@@ -611,7 +626,7 @@ mod tests {
             .join("external_config")
             .join("external.keystore");
 
-        External::new(&cargo_dir).expect("Failed to load external keystore")
+        External::load_or_create(&cargo_dir).expect("Failed to load external keystore")
     }
 
     #[test]
@@ -621,7 +636,7 @@ mod tests {
             .join("fixtures")
             .join("external_config");
 
-        let external = External::new(&cargo_dir).unwrap();
+        let external = External::load_or_create(&cargo_dir).unwrap();
 
         assert!(external.aliases.is_empty());
         assert!(external.keys.is_empty());
@@ -634,8 +649,8 @@ mod tests {
         let path = tmp_dir.path().join("external.keystore");
 
         let mut external = External {
-            aliases: Default::default(),
-            keys: Default::default(),
+            aliases: BTreeMap::default(),
+            keys: BTreeMap::default(),
             command_runner: Box::new(StdCommandRunner),
             path: Some(path.clone()),
         };
@@ -679,7 +694,7 @@ mod tests {
                 .join("external_config")
                 .join("external_bad_keystore.keystore");
 
-        let external_bad = External::new(&external_bad_keystore_path);
+        let external_bad = External::load_or_create(&external_bad_keystore_path);
         assert!(
             external_bad.is_err(),
             "Expected error when loading from bad keystore path"
@@ -692,7 +707,7 @@ mod tests {
             .join("fixtures")
             .join("external_config")
             .join("external_bad_aliases.keystore");
-        let external_bad_aliases = External::new(&external_bad_aliases_path);
+        let external_bad_aliases = External::load_or_create(&external_bad_aliases_path);
         assert!(
             external_bad_aliases.is_err(),
             "Expected error when loading from bad aliases path"
@@ -738,7 +753,11 @@ mod tests {
             .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
             .await;
         assert!(result.is_ok());
-        let (address, public_key, scheme) = result.unwrap();
+        let GeneratedKey {
+            address,
+            public_key,
+            scheme,
+        } = result.unwrap();
         assert_eq!(scheme, ED25519);
         assert_eq!(address, SuiAddress::from_str(ADDRESS).unwrap());
         assert_eq!(public_key.encode_base64(), PUBLIC_KEY);
@@ -763,7 +782,7 @@ mod tests {
         let result = external
             .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
             .await;
-        let (_, _, scheme) = result.unwrap();
+        let GeneratedKey { scheme, .. } = result.unwrap();
         assert_eq!(scheme, Secp256k1);
     }
 
@@ -1052,8 +1071,8 @@ mod tests {
         let new_alias = "updated_alias".to_string();
 
         let mut external = External {
-            aliases: Default::default(),
-            keys: Default::default(),
+            aliases: BTreeMap::default(),
+            keys: BTreeMap::default(),
             command_runner: Box::new(StdCommandRunner),
             path: Some(path.clone()),
         };
