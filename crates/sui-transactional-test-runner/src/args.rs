@@ -218,6 +218,8 @@ pub struct AdvanceEpochCommand {
     pub create_random_state: bool,
     #[clap(long = "create-authenticator-state")]
     pub create_authenticator_state: bool,
+    #[clap(long = "create-authenticator-state-expire")]
+    pub create_authenticator_state_expire: bool,
     #[clap(long = "create-deny-list-state")]
     pub create_deny_list_state: bool,
     #[clap(long = "create-bridge-state")]

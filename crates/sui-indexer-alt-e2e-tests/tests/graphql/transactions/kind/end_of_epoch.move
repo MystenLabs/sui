@@ -3,7 +3,7 @@
 
 //# init --protocol-version 70 --simulator
 
-//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state --create-bridge-state --create-bridge-committee
+//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee
 
 //# create-checkpoint
 
@@ -46,6 +46,12 @@
               }
               ... on BridgeCommitteeInitTransaction {
                 bridgeObjectVersion
+              }
+              ... on AuthenticatorStateExpireTransaction {
+                minEpoch {
+                  epochId
+                }
+                authenticatorObjInitialSharedVersion
               }
             }
           }
