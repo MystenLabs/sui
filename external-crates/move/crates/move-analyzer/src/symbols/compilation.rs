@@ -25,20 +25,19 @@ use std::{
 };
 use tempfile::tempdir;
 use vfs::{
-    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
     VfsPath,
+    impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
 };
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    construct_pre_compiled_lib,
+    PASS_CFGIR, PASS_PARSER, PASS_TYPING, PreCompiledProgramInfo, construct_pre_compiled_lib,
     editions::{Edition, Flavor},
     expansion::ast::ModuleIdent,
     linters::LintLevel,
     parser::ast as P,
     shared::{files::MappedFiles, unique_map::UniqueMap},
     typing::ast::ModuleDefinition,
-    PreCompiledProgramInfo, PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::Loc;
 use move_package::{
