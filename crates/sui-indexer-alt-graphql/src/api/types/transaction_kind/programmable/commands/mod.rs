@@ -10,11 +10,11 @@ pub use move_call::MoveCallCommand;
 
 /// A single command in the programmable transaction.
 #[derive(Union, Clone)]
-pub enum ProgrammableCommand {
+pub enum Command {
     MoveCall(MoveCallCommand),
 }
 
-impl ProgrammableCommand {
+impl Command {
     pub fn from(command: sui_types::transaction::Command, _scope: Scope) -> Self {
         use sui_types::transaction::Command as NativeCommand;
 
