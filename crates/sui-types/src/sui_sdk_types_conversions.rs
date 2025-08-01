@@ -547,7 +547,7 @@ impl From<Bls12381PublicKey> for crate::crypto::AuthorityPublicKeyBytes {
     }
 }
 
-impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
+impl From<UnchangedSharedKind> for crate::effects::UnchangedConsensusKind {
     fn from(value: UnchangedSharedKind) -> Self {
         match value {
             UnchangedSharedKind::ReadOnlyRoot { version, digest } => {
@@ -566,29 +566,29 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
     }
 }
 
-impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
-    fn from(value: crate::effects::UnchangedSharedKind) -> Self {
+impl From<crate::effects::UnchangedConsensusKind> for UnchangedSharedKind {
+    fn from(value: crate::effects::UnchangedConsensusKind) -> Self {
         match value {
-            crate::effects::UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
+            crate::effects::UnchangedConsensusKind::ReadOnlyRoot((version, digest)) => {
                 Self::ReadOnlyRoot {
                     version: version.into(),
                     digest: digest.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::MutateConsensusStreamEnded(version) => {
+            crate::effects::UnchangedConsensusKind::MutateConsensusStreamEnded(version) => {
                 Self::MutateDeleted {
                     version: version.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::ReadConsensusStreamEnded(version) => {
+            crate::effects::UnchangedConsensusKind::ReadConsensusStreamEnded(version) => {
                 Self::ReadDeleted {
                     version: version.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Canceled {
+            crate::effects::UnchangedConsensusKind::Cancelled(version) => Self::Canceled {
                 version: version.into(),
             },
-            crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
+            crate::effects::UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
         }
     }
 }

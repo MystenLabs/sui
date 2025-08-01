@@ -55,7 +55,7 @@ pub(crate) mod transaction_block_kind;
 pub(crate) mod transaction_metadata;
 pub(crate) mod type_filter;
 pub(crate) mod uint53;
-pub(crate) mod unchanged_shared_object;
+pub(crate) mod unchanged_consensus_object;
 pub(crate) mod validator;
 pub(crate) mod validator_credentials;
 pub(crate) mod validator_set;

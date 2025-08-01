@@ -40,7 +40,7 @@ use super::{
     object_change::ObjectChange,
     transaction_block::{TransactionBlock, TransactionBlockInner},
     uint53::UInt53,
-    unchanged_shared_object::UnchangedSharedObject,
+    unchanged_consensus_object::UnchangedConsensusObject,
 };
 
 /// Wraps the actual transaction block effects data with the checkpoint sequence number at which the
@@ -90,7 +90,7 @@ pub enum ExecutionStatus {
 struct DependencyConnectionNames;
 
 type CDependencies = JsonCursor<ConsistentIndexCursor>;
-type CUnchangedSharedObject = JsonCursor<ConsistentIndexCursor>;
+type CUnchangedConsensusObject = JsonCursor<ConsistentIndexCursor>;
 type CObjectChange = JsonCursor<ConsistentIndexCursor>;
 type CBalanceChange = JsonCursor<ConsistentIndexCursor>;
 type CEvent = JsonCursor<ConsistentIndexCursor>;
@@ -309,22 +309,24 @@ impl TransactionBlockEffects {
         Some(GasEffects::from(self.native(), self.checkpoint_viewed_at))
     }
 
-    /// Shared objects that are referenced by but not changed by this transaction.
-    async fn unchanged_shared_objects(
+    /// Consensus objects that are referenced by but not changed by this transaction.
+    async fn unchanged_consensus_objects(
         &self,
         ctx: &Context<'_>,
         first: Option<u64>,
-        after: Option<CUnchangedSharedObject>,
+        after: Option<CUnchangedConsensusObject>,
         last: Option<u64>,
-        before: Option<CUnchangedSharedObject>,
-    ) -> Result<Connection<String, UnchangedSharedObject>> {
+        before: Option<CUnchangedConsensusObject>,
+    ) -> Result<Connection<String, UnchangedConsensusObject>> {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
 
-        let input_shared_objects = self.native().input_shared_objects();
+        let input_consensus_objects = self.native().input_consensus_objects();
 
-        let Some((prev, next, _, cs)) = page
-            .paginate_consistent_indices(input_shared_objects.len(), self.checkpoint_viewed_at)?
+        let Some((prev, next, _, cs)) = page.paginate_consistent_indices(
+            input_consensus_objects.len(),
+            self.checkpoint_viewed_at,
+        )?
         else {
             return Ok(connection);
         };
@@ -333,14 +335,15 @@ impl TransactionBlockEffects {
         connection.has_next_page = next;
 
         for c in cs {
-            let result = UnchangedSharedObject::try_from(input_shared_objects[c.ix].clone(), c.c);
+            let result =
+                UnchangedConsensusObject::try_from(input_consensus_objects[c.ix].clone(), c.c);
             match result {
-                Ok(unchanged_shared_object) => {
+                Ok(unchanged_consensus_object) => {
                     connection
                         .edges
-                        .push(Edge::new(c.encode_cursor(), unchanged_shared_object));
+                        .push(Edge::new(c.encode_cursor(), unchanged_consensus_object));
                 }
-                Err(_shared_object_changed) => continue, // Only add unchanged shared objects to the connection.
+                Err(_consensus_object_changed) => continue, // Only add unchanged consensus objects to the connection.
             }
         }
 
