@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use url::Url;
 
-use crate::metrics::ReaderMetrics;
+use crate::metrics::DbReaderMetrics;
 
 pub use sui_pg_db as db;
 
@@ -27,13 +27,13 @@ pub use sui_pg_db as db;
 #[derive(Clone)]
 pub struct PgReader {
     db: Option<db::Db>,
-    metrics: Arc<ReaderMetrics>,
+    metrics: Arc<DbReaderMetrics>,
     cancel: CancellationToken,
 }
 
 pub struct Connection<'p> {
     conn: db::Connection<'p>,
-    metrics: Arc<ReaderMetrics>,
+    metrics: Arc<DbReaderMetrics>,
 }
 
 impl PgReader {
@@ -65,7 +65,7 @@ impl PgReader {
             None
         };
 
-        let metrics = ReaderMetrics::new(prefix, registry);
+        let metrics = DbReaderMetrics::new(prefix, registry);
 
         Ok(Self {
             db,
@@ -115,8 +115,8 @@ impl Connection<'_> {
         let query_debug = diesel::debug_query(&query).to_string();
         debug!("{query_debug}");
 
-        self.metrics.db_requests_received.inc();
-        let _guard = self.metrics.db_latency.start_timer();
+        self.metrics.requests_received.inc();
+        let _guard = self.metrics.latency.start_timer();
 
         let res = query.get_result(&mut self.conn).await;
         if res.as_ref().is_err_and(is_timeout) {
@@ -124,9 +124,9 @@ impl Connection<'_> {
         }
 
         if res.is_ok() {
-            self.metrics.db_requests_succeeded.inc();
+            self.metrics.requests_succeeded.inc();
         } else {
-            self.metrics.db_requests_failed.inc();
+            self.metrics.requests_failed.inc();
         }
 
         Ok(res?)
@@ -143,8 +143,8 @@ impl Connection<'_> {
         let query_debug = diesel::debug_query(&query).to_string();
         debug!("{query_debug}");
 
-        self.metrics.db_requests_received.inc();
-        let _guard = self.metrics.db_latency.start_timer();
+        self.metrics.requests_received.inc();
+        let _guard = self.metrics.latency.start_timer();
 
         let res = query.get_results(&mut self.conn).await;
         if res.as_ref().is_err_and(is_timeout) {
@@ -152,9 +152,9 @@ impl Connection<'_> {
         }
 
         if res.is_ok() {
-            self.metrics.db_requests_succeeded.inc();
+            self.metrics.requests_succeeded.inc();
         } else {
-            self.metrics.db_requests_failed.inc();
+            self.metrics.requests_failed.inc();
         }
 
         Ok(res?)
