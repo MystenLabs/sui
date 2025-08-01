@@ -19,7 +19,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     parser::ast as P,
-    shared::{Identifier, Name, NamedAddressMap, NamedAddressMaps, files::MappedFiles},
+    shared::{Identifier, Name, NamedAddressMap, files::MappedFiles},
 };
 use move_ir_types::location::*;
 
@@ -74,21 +74,22 @@ impl<'a> ParsingAnalysisContext<'a> {
         prog: &'a P::Program,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
+        mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         prog.source_definitions.iter().for_each(|pkg_def| {
             self.pkg_symbols(
-                &prog.named_address_maps,
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
+                mod_named_address_maps,
             )
         });
         prog.lib_definitions.iter().for_each(|pkg_def| {
             self.pkg_symbols(
-                &prog.named_address_maps,
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
+                mod_named_address_maps,
             )
         });
     }
@@ -96,14 +97,16 @@ impl<'a> ParsingAnalysisContext<'a> {
     /// Get symbols for the whole package
     fn pkg_symbols(
         &mut self,
-        pkg_address_maps: &'a NamedAddressMaps,
         pkg_def: &P::PackageDefinition,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
+        mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
-            let pkg_addresses = pkg_address_maps.get(pkg_def.named_address_map);
-            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses);
+            // this unwrap is be safe as both `mod_named_address_maps` and `mod_def`
+            // are a result of the same compilation process
+            let pkg_addresses = mod_named_address_maps.get(&mod_def.loc).unwrap();
+            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses.clone());
             self.mod_symbols(mod_def, mod_use_defs, mod_to_alias_lengths);
             self.current_mod_ident_str = None;
             let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);

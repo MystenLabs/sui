@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 use crate::symbols::{
     Symbols,
@@ -325,15 +325,23 @@ pub fn compute_cursor(
     let mut symbols_computation_data = SymbolsComputationData::new();
     // we only compute cursor context and tag it on the existing symbols to avoid spending time
     // recomputing all symbols (saves quite a bit of time when running the test suite)
+    let mod_named_address_maps = compiled_pkg_info
+        .program
+        .typed_modules
+        .iter()
+        .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
+        .collect::<BTreeMap<_, _>>();
     let mut cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
         compiled_pkg_info,
         cursor_info,
+        &mod_named_address_maps,
     );
     cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
         compiled_pkg_info,
         cursor_context,
+        &mod_named_address_maps,
     );
     symbols.cursor_context = cursor_context;
 }

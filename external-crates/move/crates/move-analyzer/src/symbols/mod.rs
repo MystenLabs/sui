@@ -89,9 +89,7 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::{DatatypeTypeParameter, StructFields, Type, Type_, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
-    shared::{
-        Identifier, NamedAddressMap, NamedAddressMaps, files::MappedFiles, unique_map::UniqueMap,
-    },
+    shared::{Identifier, NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
     typing::ast::ModuleDefinition,
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
 };
@@ -206,15 +204,23 @@ pub fn compute_symbols(
         .map(|(fhash, fpath)| (*fhash, fpath.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
+    let mod_named_address_maps = compiled_pkg_info
+        .program
+        .typed_modules
+        .iter()
+        .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
+        .collect::<BTreeMap<_, _>>();
     let cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
         &mut compiled_pkg_info,
         cursor_info,
+        &mod_named_address_maps,
     );
     let cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
         &compiled_pkg_info,
         cursor_context,
+        &mod_named_address_maps,
     );
 
     let (symbols, deps_symbols_data_opt, program) =
@@ -253,11 +259,16 @@ pub fn compute_symbols_pre_process(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &mut CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
+    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) -> Option<CursorContext> {
     let mut fields_order_info = FieldOrderInfo::new();
     let parsed_program = &compiled_pkg_info.program.parsed;
     let typed_program_modules = &compiled_pkg_info.program.typed_modules;
-    pre_process_parsed_program(parsed_program, &mut fields_order_info);
+    pre_process_parsed_program(
+        parsed_program,
+        &mut fields_order_info,
+        mod_named_address_maps,
+    );
 
     let mut cursor_context = compute_cursor_context(&compiled_pkg_info.mapped_files, cursor_info);
     pre_process_typed_modules(
@@ -293,12 +304,14 @@ pub fn compute_symbols_parsed_program(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     mut cursor_context: Option<CursorContext>,
+    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) -> Option<CursorContext> {
     run_parsing_analysis(
         computation_data,
         compiled_pkg_info,
         cursor_context.as_mut(),
         &compiled_pkg_info.program.parsed,
+        mod_named_address_maps,
     );
     cursor_context
 }
@@ -464,25 +477,32 @@ fn compute_cursor_context(
 }
 
 /// Pre-process parsed program to get initial info before AST traversals
-fn pre_process_parsed_program(prog: &P::Program, fields_order_info: &mut FieldOrderInfo) {
+fn pre_process_parsed_program(
+    prog: &P::Program,
+    fields_order_info: &mut FieldOrderInfo,
+    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+) {
     prog.source_definitions.iter().for_each(|pkg_def| {
-        pre_process_parsed_pkg(pkg_def, &prog.named_address_maps, fields_order_info);
+        pre_process_parsed_pkg(pkg_def, fields_order_info, mod_named_address_maps);
     });
     prog.lib_definitions.iter().for_each(|pkg_def| {
-        pre_process_parsed_pkg(pkg_def, &prog.named_address_maps, fields_order_info);
+        pre_process_parsed_pkg(pkg_def, fields_order_info, mod_named_address_maps);
     });
 }
 
 /// Pre-process parsed package to get initial info before AST traversals
 fn pre_process_parsed_pkg(
     pkg_def: &P::PackageDefinition,
-    named_address_maps: &NamedAddressMaps,
     fields_order_info: &mut FieldOrderInfo,
+    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     if let P::Definition::Module(mod_def) = &pkg_def.def {
         for member in &mod_def.members {
-            let pkg_addresses = named_address_maps.get(pkg_def.named_address_map);
-            let Some(mod_ident_str) = parsing_mod_def_to_map_key(pkg_addresses, mod_def) else {
+            // this unwrap is be safe as both `mod_named_address_maps` and `mod_def`
+            // are a result of the same compilation process
+            let pkg_addresses = mod_named_address_maps.get(&mod_def.loc).unwrap();
+            let Some(mod_ident_str) = parsing_mod_def_to_map_key(pkg_addresses.clone(), mod_def)
+            else {
                 continue;
             };
             if let P::ModuleMember::Struct(sdef) = member {
