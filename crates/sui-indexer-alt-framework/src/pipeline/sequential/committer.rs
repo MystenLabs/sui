@@ -130,6 +130,7 @@ where
                     // writes by combining rows, but we will limit the number of checkpoints we try
                     // and batch together as a way to impose some limit on the size of the batch
                     // (and therefore the length of the write transaction).
+                    // docs::#batch
                     while batch_checkpoints < H::MAX_BATCH_CHECKPOINTS {
                         if !can_process_pending(next_checkpoint, checkpoint_lag, &pending) {
                             break;
@@ -166,6 +167,7 @@ where
                             }
                         }
                     }
+                    // docs::/#batch
 
                     let elapsed = guard.stop_and_record();
                     debug!(

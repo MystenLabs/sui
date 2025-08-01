@@ -133,6 +133,7 @@ const addCodeInject = async function (source) {
               const componentKey = "#component=";
               const enumKey = "#enum=";
               const typeKey = "#type=";
+              const traitKey = "#trait=";
               const getName = (mark, key) => {
                 return mark.indexOf(key, mark) >= 0
                   ? mark.substring(mark.indexOf(key) + key.length).trim()
@@ -146,6 +147,7 @@ const addCodeInject = async function (source) {
               const componentName = getName(marker, componentKey);
               const enumName = getName(marker, enumKey);
               const typeName = getName(marker, typeKey);
+              const traitName = getName(marker, traitKey);
               if (funName) {
                 const funs = funName.split(",");
                 let funContent = [];
@@ -195,7 +197,10 @@ const addCodeInject = async function (source) {
                 let structContent = [];
                 for (let struct of structs) {
                   struct = struct.trim();
-                  const structStr = `^(\\s*)*?(pub(lic)? )?struct \\b${struct}\\b.*?}`;
+                  let structStr = `^(\\s*)*?(pub(lic)? )?struct \\b${struct}\\b.*?}`;
+                  if (isRust) {
+                    structStr = `^(\\s*)\\b(pub(lic)?\\s+)?struct\\s+${struct}\\b`;
+                  }
                   const structRE = new RegExp(structStr, "msi");
                   const structMatch = structRE.exec(injectFileContent);
                   if (structMatch) {
@@ -212,6 +217,28 @@ const addCodeInject = async function (source) {
                   }
                 }
                 injectFileContent = structContent.join("\n").trim();
+              } else if (traitName) {
+                const traits = traitName.split(",");
+                let traitContent = [];
+                for (let trait of traits) {
+                  trait = trait.trim();
+                  let traitStr = `^(\\s*)*?(pub(lic)? )?trait \\b${trait}\\b[\\s\\S]*?^\\}`;
+                  const traitRE = new RegExp(traitStr, "msi");
+                  const traitMatch = traitRE.exec(injectFileContent);
+                  if (traitMatch) {
+                    let preTrait = utils.capturePrepend(
+                      traitMatch,
+                      injectFileContent,
+                    );
+                    traitContent.push(
+                      utils.removeLeadingSpaces(traitMatch[0], preTrait),
+                    );
+                  } else {
+                    injectFileContent =
+                      "Struct not found. If code is formatted correctly, consider using code comments instead.";
+                  }
+                }
+                injectFileContent = traitContent.join("\n").trim();
               } else if (variableName) {
                 const vs = variableName.split(",");
                 let temp = "";

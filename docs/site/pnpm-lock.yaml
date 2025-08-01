@@ -20,7 +20,7 @@ importers:
         version: 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/preset-classic':
         specifier: 3.1.1
-        version: 3.1.1(@algolia/client-search@5.25.0)(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)
+        version: 3.1.1(@algolia/client-search@5.25.0)(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)
       '@docusaurus/remark-plugin-npm2yarn':
         specifier: 3.1.1
         version: 3.1.1
@@ -32,13 +32,13 @@ importers:
         version: 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/theme-search-algolia':
         specifier: ^3.8.0
-        version: 3.8.0(@algolia/client-search@5.25.0)(@mdx-js/react@1.6.22(react@18.3.1))(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)
+        version: 3.8.0(@algolia/client-search@5.25.0)(@mdx-js/react@1.6.22(react@18.3.1))(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)
       '@emotion/react':
         specifier: ^11.11.4
-        version: 11.14.0(@types/react@19.0.3)(react@18.3.1)
+        version: 11.14.0(@types/react@19.1.9)(react@18.3.1)
       '@emotion/styled':
         specifier: ^11.11.0
-        version: 11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1)
+        version: 11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1)
       '@graphql-markdown/docusaurus':
         specifier: ^1.24.0
         version: 1.26.4(@docusaurus/logger@3.8.0)(acorn@8.14.0)(graphql-config@5.1.3(@types/node@22.10.5)(graphql@16.10.0)(typescript@4.9.5))(graphql@16.10.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -50,7 +50,7 @@ importers:
         version: 1.6.22(react@18.3.1)
       '@mui/material':
         specifier: ^5.14.8
-        version: 5.16.14(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 5.16.14(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       algoliasearch:
         specifier: ^5.25.0
         version: 5.25.0
@@ -160,6 +160,9 @@ importers:
       '@tsconfig/docusaurus':
         specifier: ^1.0.5
         version: 1.0.7
+      '@types/react':
+        specifier: ^19.1.9
+        version: 19.1.9
       typescript:
         specifier: ^4.7.4
         version: 4.9.5
@@ -2230,8 +2233,8 @@ packages:
     peerDependencies:
       '@types/react': '*'
 
-  '@types/react@19.0.3':
-    resolution: {integrity: sha512-UavfHguIjnnuq9O67uXfgy/h3SRJbidAYvNjLceB+2RIKVRBzVsh0QO+Pw6BCSQqFS9xwzKfwstXx0m6AbAREA==}
+  '@types/react@19.1.9':
+    resolution: {integrity: sha512-WmdoynAX8Stew/36uTSVMcLJJ1KRh6L3IZRx1PZ7qJtBqT3dYTgyDTx8H1qoRghErydW7xw9mSJ3wS//tCRpFA==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -8662,28 +8665,28 @@ snapshots:
 
   '@docsearch/css@3.9.0': {}
 
-  '@docsearch/react@3.8.2(@algolia/client-search@5.25.0)(@types/react@19.0.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)':
+  '@docsearch/react@3.8.2(@algolia/client-search@5.25.0)(@types/react@19.1.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)':
     dependencies:
       '@algolia/autocomplete-core': 1.17.7(@algolia/client-search@5.25.0)(algoliasearch@5.25.0)(search-insights@2.17.3)
       '@algolia/autocomplete-preset-algolia': 1.17.7(@algolia/client-search@5.25.0)(algoliasearch@5.25.0)
       '@docsearch/css': 3.8.2
       algoliasearch: 5.25.0
     optionalDependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       search-insights: 2.17.3
     transitivePeerDependencies:
       - '@algolia/client-search'
 
-  '@docsearch/react@3.9.0(@algolia/client-search@5.25.0)(@types/react@19.0.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)':
+  '@docsearch/react@3.9.0(@algolia/client-search@5.25.0)(@types/react@19.1.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)':
     dependencies:
       '@algolia/autocomplete-core': 1.17.9(@algolia/client-search@5.25.0)(algoliasearch@5.25.0)(search-insights@2.17.3)
       '@algolia/autocomplete-preset-algolia': 1.17.9(@algolia/client-search@5.25.0)(algoliasearch@5.25.0)
       '@docsearch/css': 3.9.0
       algoliasearch: 5.25.0
     optionalDependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       search-insights: 2.17.3
@@ -9161,7 +9164,7 @@ snapshots:
       '@docusaurus/react-loadable': 5.5.2(react@18.3.1)
       '@docusaurus/types': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       '@types/react-router-config': 5.0.11
       '@types/react-router-dom': 5.3.3
       react: 18.3.1
@@ -9180,7 +9183,7 @@ snapshots:
     dependencies:
       '@docusaurus/types': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       '@types/react-router-config': 5.0.11
       '@types/react-router-dom': 5.3.3
       react: 18.3.1
@@ -9199,7 +9202,7 @@ snapshots:
     dependencies:
       '@docusaurus/types': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       '@types/react-router-config': 5.0.11
       '@types/react-router-dom': 5.3.3
       react: 18.3.1
@@ -9507,7 +9510,7 @@ snapshots:
       - vue-template-compiler
       - webpack-cli
 
-  '@docusaurus/preset-classic@3.1.1(@algolia/client-search@5.25.0)(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)':
+  '@docusaurus/preset-classic@3.1.1(@algolia/client-search@5.25.0)(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)':
     dependencies:
       '@docusaurus/core': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/plugin-content-blog': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
@@ -9518,9 +9521,9 @@ snapshots:
       '@docusaurus/plugin-google-gtag': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/plugin-google-tag-manager': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/plugin-sitemap': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
-      '@docusaurus/theme-classic': 3.1.1(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
+      '@docusaurus/theme-classic': 3.1.1(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/theme-common': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
-      '@docusaurus/theme-search-algolia': 3.1.1(@algolia/client-search@5.25.0)(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)
+      '@docusaurus/theme-search-algolia': 3.1.1(@algolia/client-search@5.25.0)(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)
       '@docusaurus/types': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
@@ -9548,13 +9551,13 @@ snapshots:
 
   '@docusaurus/react-loadable@5.5.2(react@18.3.1)':
     dependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       prop-types: 15.8.1
       react: 18.3.1
 
   '@docusaurus/react-loadable@6.0.0(react@18.3.1)':
     dependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       react: 18.3.1
 
   '@docusaurus/remark-plugin-npm2yarn@3.1.1':
@@ -9567,7 +9570,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@docusaurus/theme-classic@3.1.1(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)':
+  '@docusaurus/theme-classic@3.1.1(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)':
     dependencies:
       '@docusaurus/core': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/mdx-loader': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -9581,7 +9584,7 @@ snapshots:
       '@docusaurus/utils': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       '@docusaurus/utils-common': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       '@docusaurus/utils-validation': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
-      '@mdx-js/react': 3.1.0(@types/react@19.0.3)(react@18.3.1)
+      '@mdx-js/react': 3.1.0(@types/react@19.1.9)(react@18.3.1)
       clsx: 2.1.1
       copy-text-to-clipboard: 3.2.0
       infima: 0.2.0-alpha.43
@@ -9626,7 +9629,7 @@ snapshots:
       '@docusaurus/utils': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       '@docusaurus/utils-common': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       '@types/react-router-config': 5.0.11
       clsx: 2.1.1
       parse-numeric-range: 1.3.0
@@ -9663,7 +9666,7 @@ snapshots:
       '@docusaurus/utils': 3.8.0(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@docusaurus/utils-common': 3.8.0(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       '@types/react-router-config': 5.0.11
       clsx: 2.1.1
       parse-numeric-range: 1.3.0
@@ -9710,9 +9713,9 @@ snapshots:
       - vue-template-compiler
       - webpack-cli
 
-  '@docusaurus/theme-search-algolia@3.1.1(@algolia/client-search@5.25.0)(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)':
+  '@docusaurus/theme-search-algolia@3.1.1(@algolia/client-search@5.25.0)(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)':
     dependencies:
-      '@docsearch/react': 3.8.2(@algolia/client-search@5.25.0)(@types/react@19.0.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
+      '@docsearch/react': 3.8.2(@algolia/client-search@5.25.0)(@types/react@19.1.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
       '@docusaurus/core': 3.1.1(@docusaurus/types@3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/logger': 3.1.1
       '@docusaurus/plugin-content-docs': 3.1.1(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
@@ -9753,9 +9756,9 @@ snapshots:
       - vue-template-compiler
       - webpack-cli
 
-  '@docusaurus/theme-search-algolia@3.8.0(@algolia/client-search@5.25.0)(@mdx-js/react@1.6.22(react@18.3.1))(@types/react@19.0.3)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)':
+  '@docusaurus/theme-search-algolia@3.8.0(@algolia/client-search@5.25.0)(@mdx-js/react@1.6.22(react@18.3.1))(@types/react@19.1.9)(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)(typescript@4.9.5)':
     dependencies:
-      '@docsearch/react': 3.9.0(@algolia/client-search@5.25.0)(@types/react@19.0.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
+      '@docsearch/react': 3.9.0(@algolia/client-search@5.25.0)(@types/react@19.1.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(search-insights@2.17.3)
       '@docusaurus/core': 3.8.0(@mdx-js/react@1.6.22(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
       '@docusaurus/logger': 3.8.0
       '@docusaurus/plugin-content-docs': 3.8.0(@mdx-js/react@1.6.22(react@18.3.1))(acorn@8.14.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@4.9.5)
@@ -9809,7 +9812,7 @@ snapshots:
     dependencies:
       '@mdx-js/mdx': 3.1.0(acorn@8.14.0)
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       commander: 5.1.0
       joi: 17.13.3
       react: 18.3.1
@@ -10068,7 +10071,7 @@ snapshots:
 
   '@emotion/memoize@0.9.0': {}
 
-  '@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1)':
+  '@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
       '@emotion/babel-plugin': 11.13.5
@@ -10080,7 +10083,7 @@ snapshots:
       hoist-non-react-statics: 3.3.2
       react: 18.3.1
     optionalDependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
     transitivePeerDependencies:
       - supports-color
 
@@ -10094,18 +10097,18 @@ snapshots:
 
   '@emotion/sheet@1.4.0': {}
 
-  '@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1)':
+  '@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
       '@emotion/babel-plugin': 11.13.5
       '@emotion/is-prop-valid': 1.3.1
-      '@emotion/react': 11.14.0(@types/react@19.0.3)(react@18.3.1)
+      '@emotion/react': 11.14.0(@types/react@19.1.9)(react@18.3.1)
       '@emotion/serialize': 1.3.3
       '@emotion/use-insertion-effect-with-fallbacks': 1.2.0(react@18.3.1)
       '@emotion/utils': 1.4.2
       react: 18.3.1
     optionalDependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
     transitivePeerDependencies:
       - supports-color
 
@@ -10472,10 +10475,10 @@ snapshots:
     dependencies:
       react: 18.3.1
 
-  '@mdx-js/react@3.1.0(@types/react@19.0.3)(react@18.3.1)':
+  '@mdx-js/react@3.1.0(@types/react@19.1.9)(react@18.3.1)':
     dependencies:
       '@types/mdx': 2.0.13
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       react: 18.3.1
 
   '@mdx-js/util@1.6.22': {}
@@ -10484,15 +10487,15 @@ snapshots:
 
   '@mui/core-downloads-tracker@5.16.14': {}
 
-  '@mui/material@5.16.14(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@mui/material@5.16.14(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
       '@mui/core-downloads-tracker': 5.16.14
-      '@mui/system': 5.16.14(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1)
-      '@mui/types': 7.2.21(@types/react@19.0.3)
-      '@mui/utils': 5.16.14(@types/react@19.0.3)(react@18.3.1)
+      '@mui/system': 5.16.14(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1)
+      '@mui/types': 7.2.21(@types/react@19.1.9)
+      '@mui/utils': 5.16.14(@types/react@19.1.9)(react@18.3.1)
       '@popperjs/core': 2.11.8
-      '@types/react-transition-group': 4.4.12(@types/react@19.0.3)
+      '@types/react-transition-group': 4.4.12(@types/react@19.1.9)
       clsx: 2.1.1
       csstype: 3.1.3
       prop-types: 15.8.1
@@ -10501,20 +10504,20 @@ snapshots:
       react-is: 19.0.0
       react-transition-group: 4.4.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     optionalDependencies:
-      '@emotion/react': 11.14.0(@types/react@19.0.3)(react@18.3.1)
-      '@emotion/styled': 11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1)
-      '@types/react': 19.0.3
+      '@emotion/react': 11.14.0(@types/react@19.1.9)(react@18.3.1)
+      '@emotion/styled': 11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1)
+      '@types/react': 19.1.9
 
-  '@mui/private-theming@5.16.14(@types/react@19.0.3)(react@18.3.1)':
+  '@mui/private-theming@5.16.14(@types/react@19.1.9)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
-      '@mui/utils': 5.16.14(@types/react@19.0.3)(react@18.3.1)
+      '@mui/utils': 5.16.14(@types/react@19.1.9)(react@18.3.1)
       prop-types: 15.8.1
       react: 18.3.1
     optionalDependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
 
-  '@mui/styled-engine@5.16.14(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1))(react@18.3.1)':
+  '@mui/styled-engine@5.16.14(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
       '@emotion/cache': 11.14.0
@@ -10522,40 +10525,40 @@ snapshots:
       prop-types: 15.8.1
       react: 18.3.1
     optionalDependencies:
-      '@emotion/react': 11.14.0(@types/react@19.0.3)(react@18.3.1)
-      '@emotion/styled': 11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1)
+      '@emotion/react': 11.14.0(@types/react@19.1.9)(react@18.3.1)
+      '@emotion/styled': 11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1)
 
-  '@mui/system@5.16.14(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1)':
+  '@mui/system@5.16.14(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
-      '@mui/private-theming': 5.16.14(@types/react@19.0.3)(react@18.3.1)
-      '@mui/styled-engine': 5.16.14(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1))(react@18.3.1)
-      '@mui/types': 7.2.21(@types/react@19.0.3)
-      '@mui/utils': 5.16.14(@types/react@19.0.3)(react@18.3.1)
+      '@mui/private-theming': 5.16.14(@types/react@19.1.9)(react@18.3.1)
+      '@mui/styled-engine': 5.16.14(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@emotion/styled@11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1))(react@18.3.1)
+      '@mui/types': 7.2.21(@types/react@19.1.9)
+      '@mui/utils': 5.16.14(@types/react@19.1.9)(react@18.3.1)
       clsx: 2.1.1
       csstype: 3.1.3
       prop-types: 15.8.1
       react: 18.3.1
     optionalDependencies:
-      '@emotion/react': 11.14.0(@types/react@19.0.3)(react@18.3.1)
-      '@emotion/styled': 11.14.0(@emotion/react@11.14.0(@types/react@19.0.3)(react@18.3.1))(@types/react@19.0.3)(react@18.3.1)
-      '@types/react': 19.0.3
+      '@emotion/react': 11.14.0(@types/react@19.1.9)(react@18.3.1)
+      '@emotion/styled': 11.14.0(@emotion/react@11.14.0(@types/react@19.1.9)(react@18.3.1))(@types/react@19.1.9)(react@18.3.1)
+      '@types/react': 19.1.9
 
-  '@mui/types@7.2.21(@types/react@19.0.3)':
+  '@mui/types@7.2.21(@types/react@19.1.9)':
     optionalDependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
 
-  '@mui/utils@5.16.14(@types/react@19.0.3)(react@18.3.1)':
+  '@mui/utils@5.16.14(@types/react@19.1.9)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
-      '@mui/types': 7.2.21(@types/react@19.0.3)
+      '@mui/types': 7.2.21(@types/react@19.1.9)
       '@types/prop-types': 15.7.14
       clsx: 2.1.1
       prop-types: 15.8.1
       react: 18.3.1
       react-is: 19.0.0
     optionalDependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -10885,25 +10888,25 @@ snapshots:
   '@types/react-router-config@5.0.11':
     dependencies:
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       '@types/react-router': 5.1.20
 
   '@types/react-router-dom@5.3.3':
     dependencies:
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
       '@types/react-router': 5.1.20
 
   '@types/react-router@5.1.20':
     dependencies:
       '@types/history': 4.7.11
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
 
-  '@types/react-transition-group@4.4.12(@types/react@19.0.3)':
+  '@types/react-transition-group@4.4.12(@types/react@19.1.9)':
     dependencies:
-      '@types/react': 19.0.3
+      '@types/react': 19.1.9
 
-  '@types/react@19.0.3':
+  '@types/react@19.1.9':
     dependencies:
       csstype: 3.1.3
 
