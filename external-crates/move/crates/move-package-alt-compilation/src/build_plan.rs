@@ -13,9 +13,14 @@ use crate::{
 use move_compiler::{
     Compiler,
     compiled_unit::AnnotatedCompiledUnit,
+    diagnostics::report_diagnostics_to_buffer_with_env_color,
     shared::{SaveFlag, SaveHook, files::MappedFiles},
 };
-use move_package_alt::{errors::PackageResult, flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{
+    errors::{PackageError, PackageResult},
+    flavor::MoveFlavor,
+    package::RootPackage,
+};
 
 #[derive(Debug)]
 pub struct BuildPlan<F: MoveFlavor> {
@@ -61,7 +66,7 @@ impl<F: MoveFlavor> BuildPlan<F> {
     }
 
     pub fn compile_with_driver<W: Write>(
-        self,
+        &self,
         writer: &mut W,
         compiler_driver: impl FnOnce(
             Compiler,
@@ -72,7 +77,7 @@ impl<F: MoveFlavor> BuildPlan<F> {
         let compiled = build_all::<W, F>(
             writer,
             self.compiler_vfs_root.clone(),
-            self.root_pkg,
+            &self.root_pkg,
             &self.build_config,
             |compiler| {
                 let compiler = compiler.add_save_hook(&program_info_hook);
@@ -89,6 +94,44 @@ impl<F: MoveFlavor> BuildPlan<F> {
         // )?;
 
         Ok(compiled)
+    }
+
+    /// Compilation process does not exit even if warnings/failures are encountered
+    pub fn compile_no_exit<W: Write>(
+        &self,
+        writer: &mut W,
+        modify_compiler: impl FnOnce(Compiler) -> Compiler,
+    ) -> PackageResult<CompiledPackage> {
+        let mut diags = None;
+        let res = self.compile_with_driver(writer, |compiler| {
+            let (files, units_res) = modify_compiler(compiler).build()?;
+            match units_res {
+                Ok((units, warning_diags)) => {
+                    diags = Some(report_diagnostics_to_buffer_with_env_color(
+                        &files,
+                        warning_diags,
+                    ));
+                    Ok((files, units))
+                }
+                Err(error_diags) => {
+                    assert!(!error_diags.is_empty());
+                    diags = Some(report_diagnostics_to_buffer_with_env_color(
+                        &files,
+                        error_diags,
+                    ));
+                    anyhow::bail!("Compilation error");
+                }
+            }
+        });
+        if let Some(diags) = diags {
+            if let Err(err) = std::io::stdout().write_all(&diags) {
+                return Err(PackageError::Generic(format!(
+                    "Cannot output compiler diagnostics: {}",
+                    err
+                )));
+            }
+        }
+        res
     }
 
     // Clean out old packages that are no longer used, or no longer used under the current

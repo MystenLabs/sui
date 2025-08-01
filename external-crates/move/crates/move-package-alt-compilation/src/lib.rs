@@ -13,6 +13,7 @@ pub mod build_plan;
 pub mod compiled_package;
 pub mod layout;
 pub mod lint_flag;
+pub mod model_builder;
 pub mod on_disk_package;
 
 pub async fn compile_package<W: Write, F: MoveFlavor>(
