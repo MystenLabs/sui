@@ -4,25 +4,37 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 processed 4 tasks
 
 task 1, line 6:
-//# advance-epoch
+//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state
 Epoch advanced: 1
 
 task 2, line 8:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 3, lines 10-41:
+task 3, lines 10-50:
 //# run-graphql
 Response: {
   "data": {
-    "recentTransactions": {
+    "endOfEpochTransaction": {
       "nodes": [
         {
-          "digest": "REZjsEkDFhaJ8jE4tJKn7JE8VxtATeZMYMY7bkcLv8f",
+          "digest": "EJ9xXBeLaq56gu3MrEh4dY5F49gRaVUrc7NVZtkhjbLi",
           "kind": {
             "__typename": "EndOfEpochTransaction",
             "transactions": {
               "nodes": [
+                {
+                  "__typename": "RandomnessStateCreateTransaction",
+                  "_": null
+                },
+                {
+                  "__typename": "AuthenticatorStateCreateTransaction",
+                  "_": null
+                },
+                {
+                  "__typename": "CoinDenyListStateCreateTransaction",
+                  "_": null
+                },
                 {
                   "__typename": "ChangeEpochTransaction",
                   "epoch": {

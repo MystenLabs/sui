@@ -767,9 +767,17 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand {
                 count,
                 create_random_state,
+                create_authenticator_state,
+                create_deny_list_state,
             }) => {
                 for _ in 0..count.unwrap_or(1) {
-                    self.executor.advance_epoch(create_random_state).await?;
+                    self.executor
+                        .advance_epoch(
+                            create_random_state,
+                            create_authenticator_state,
+                            create_deny_list_state,
+                        )
+                        .await?;
                 }
                 let epoch = self.get_latest_epoch_id()?;
                 Ok(Some(format!("Epoch advanced: {epoch}")))

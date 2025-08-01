@@ -239,7 +239,7 @@ pub async fn prep_executor_cluster() -> ExecutorCluster {
     sim.create_checkpoint();
     sim.create_checkpoint();
     sim.create_checkpoint();
-    sim.advance_epoch(true);
+    sim.advance_epoch(true, false, false);
     sim.create_checkpoint();
     sim.advance_clock(
         std::time::SystemTime::now()
