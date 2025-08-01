@@ -276,6 +276,7 @@ pub fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+        V::InferredString(vec) => format!("\"{}\"", String::from_utf8_lossy(vec)),
     }
 }
 
