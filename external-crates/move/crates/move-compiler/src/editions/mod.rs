@@ -314,7 +314,7 @@ impl FeatureGate {
             FeatureGate::Lambda => "lambda expressions are",
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
             FeatureGate::ModuleExtension => "module extensions are",
-            FeatureGate::StringLiterals => "string literals (without a trailing 'b') are",
+            FeatureGate::StringLiterals => "string literals (without a leading 'b' or 'x') are",
         }
     }
 }
