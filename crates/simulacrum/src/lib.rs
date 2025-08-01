@@ -24,7 +24,7 @@ use sui_storage::blob::{Blob, BlobEncoding};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, VersionNumber};
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair, AuthoritySignature};
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
@@ -262,6 +262,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         create_authenticator_state: bool,
         create_deny_list_state: bool,
         create_bridge_state: bool,
+        create_bridge_committee: bool,
     ) {
         let next_epoch = self.epoch_state.epoch() + 1;
         let next_epoch_protocol_version = self.epoch_state.protocol_version();
@@ -287,6 +288,14 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             // Use a default test chain identifier for bridge state creation
             let chain_id = ChainIdentifier::default();
             kinds.push(EndOfEpochTransactionKind::new_bridge_create(chain_id));
+        }
+
+        if create_bridge_committee {
+            // Use a default sequence number for bridge committee initialization
+            let bridge_version = SequenceNumber::from(1);
+            kinds.push(EndOfEpochTransactionKind::init_bridge_committee(
+                bridge_version,
+            ));
         }
 
         kinds.push(EndOfEpochTransactionKind::new_change_epoch(
@@ -743,6 +752,7 @@ mod tests {
             chain.advance_epoch(
                 /* create_random_state */ false, /* create_authenticator_state */ false,
                 /* create_deny_list_state */ false, /* create_bridge_state */ false,
+                /* create_bridge_committee */ false,
             );
             chain.advance_clock(Duration::from_millis(1));
             chain.create_checkpoint();

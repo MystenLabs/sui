@@ -9,7 +9,8 @@ use sui_types::{
 
 use crate::{
     api::{
-        scalars::cursor::JsonCursor, types::transaction_kind::change_epoch::ChangeEpochTransaction,
+        scalars::{cursor::JsonCursor, uint53::UInt53},
+        types::transaction_kind::change_epoch::ChangeEpochTransaction,
     },
     error::RpcError,
     pagination::{Page, PaginationConfig},
@@ -32,6 +33,7 @@ pub enum EndOfEpochTransactionKind {
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
     BridgeStateCreate(BridgeStateCreateTransaction),
+    BridgeCommitteeInit(BridgeCommitteeInitTransaction),
     AccumulatorRootCreate(AccumulatorRootCreateTransaction),
     // TODO: Add more complex transaction types incrementally
 }
@@ -81,6 +83,13 @@ impl BridgeStateCreateTransaction {
     async fn chain_identifier(&self) -> Option<String> {
         Some(self.native.to_string())
     }
+}
+
+/// System transaction for initializing bridge committee.
+#[derive(SimpleObject, Clone)]
+pub struct BridgeCommitteeInitTransaction {
+    /// The initial shared version of the bridge object.
+    bridge_object_version: Option<UInt53>,
 }
 
 /// System transaction for creating the accumulator root.
@@ -152,6 +161,11 @@ impl EndOfEpochTransactionKind {
             N::BridgeStateCreate(chain_id) => {
                 Some(K::BridgeStateCreate(BridgeStateCreateTransaction {
                     native: chain_id,
+                }))
+            }
+            N::BridgeCommitteeInit(bridge_version) => {
+                Some(K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
+                    bridge_object_version: Some(bridge_version.value().into()),
                 }))
             }
             N::AccumulatorRootCreate => {
