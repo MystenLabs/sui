@@ -2,12 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Context;
 use diesel::{ConnectionError, ConnectionResult};
 use diesel_async::AsyncPgConnection;
+use rustls::{
+    client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
+    pki_types::{CertificateDer, ServerName, UnixTime},
+    ClientConfig, DigitallySignedStruct, RootCertStore,
+};
 use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::error;
+use webpki_roots::TLS_SERVER_ROOTS;
 
 /// A custom verifier that skips all server certificate verification. This mirrors libpq default
 /// behavior of not doing any server verification.
@@ -16,38 +23,38 @@ pub(crate) struct SkipServerCertCheck;
 
 /// Implement the `ServerCertVerifier` trait for `SkipServerCertCheck` to always return valid. This
 /// skips all server certificate verification.
-impl rustls::client::danger::ServerCertVerifier for SkipServerCertCheck {
+impl ServerCertVerifier for SkipServerCertCheck {
     fn verify_server_cert(
         &self,
-        _end_entity: &rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
         _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
     }
 
     fn verify_tls12_signature(
         &self,
         _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
     }
 
     fn verify_tls13_signature(
         &self,
         _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::client::WebPkiServerVerifier::builder(std::sync::Arc::new(root_certs()))
+        rustls::client::WebPkiServerVerifier::builder(Arc::new(root_certs()))
             .build()
             .unwrap()
             .supported_verify_schemes()
@@ -64,7 +71,7 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerCertCheck {
 /// - If sslmode=disable in URL: no TLS attempted regardless of connector
 pub(crate) async fn establish_tls_connection(
     database_url: &str,
-    tls_config: rustls::ClientConfig,
+    tls_config: ClientConfig,
 ) -> ConnectionResult<AsyncPgConnection> {
     let tls = MakeRustlsConnect::new(tls_config);
     let (client, conn) = tokio_postgres::connect(database_url, tls)
@@ -92,11 +99,11 @@ pub(crate) async fn establish_tls_connection(
 pub(crate) fn build_tls_config(
     tls_verify_cert: bool,
     tls_ca_cert_path: Option<PathBuf>,
-) -> anyhow::Result<rustls::ClientConfig> {
+) -> anyhow::Result<ClientConfig> {
     if !tls_verify_cert {
-        return Ok(rustls::ClientConfig::builder()
+        return Ok(ClientConfig::builder()
             .dangerous()
-            .with_custom_certificate_verifier(std::sync::Arc::new(SkipServerCertCheck))
+            .with_custom_certificate_verifier(Arc::new(SkipServerCertCheck))
             .with_no_client_auth());
     }
 
@@ -122,7 +129,7 @@ pub(crate) fn build_tls_config(
                 })?
         } else {
             // Assume DER format for binary files
-            vec![rustls::pki_types::CertificateDer::from(ca_cert_bytes)]
+            vec![CertificateDer::from(ca_cert_bytes)]
         };
 
         // Add all certificates to the root store
@@ -133,13 +140,13 @@ pub(crate) fn build_tls_config(
         }
     }
 
-    Ok(rustls::ClientConfig::builder()
+    Ok(ClientConfig::builder()
         .with_root_certificates(root_certs)
         .with_no_client_auth())
 }
 
-fn root_certs() -> rustls::RootCertStore {
-    rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+fn root_certs() -> RootCertStore {
+    RootCertStore {
+        roots: TLS_SERVER_ROOTS.to_vec(),
     }
 }
