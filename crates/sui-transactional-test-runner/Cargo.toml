@@ -30,6 +30,7 @@ criterion.workspace = true
 tracing.workspace = true
 
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
