@@ -157,14 +157,14 @@ fn transaction_to_response(
             }
 
             if submask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
-                    let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectID>()
+                for unchanged_consensus_object in effects.unchanged_shared_objects.iter_mut() {
+                    let Ok(object_id) = unchanged_consensus_object.object_id().parse::<ObjectID>()
                     else {
                         continue;
                     };
 
                     if let Some(ty) = object_types.get(&object_id) {
-                        unchanged_shared_object.object_type = Some(match ty {
+                        unchanged_consensus_object.object_type = Some(match ty {
                             sui_types::base_types::ObjectType::Package => "package".to_owned(),
                             sui_types::base_types::ObjectType::Struct(struct_tag) => {
                                 struct_tag.to_canonical_string(true)
