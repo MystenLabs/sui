@@ -785,6 +785,16 @@ interface IObject {
 
 
 """
+A call to either an entry or a public Move function.
+"""
+type MoveCallTransaction {
+	"""
+	Placeholder field
+	"""
+	_: Boolean
+}
+
+"""
 A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 """
 type MovePackage implements IAddressable & IObject {
@@ -1096,6 +1106,51 @@ type PerEpochConfig {
 }
 
 """
+A single transaction, or command, in the programmable transaction block.
+"""
+union ProgrammableTransaction = MoveCallTransaction
+
+type ProgrammableTransactionBlock {
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
+}
+
+type ProgrammableTransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ProgrammableTransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ProgrammableTransaction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ProgrammableTransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ProgrammableTransaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 A protocol configuration that can hold an arbitrary value (or no value at all).
 """
 type ProtocolConfig {
@@ -1132,6 +1187,16 @@ type ProtocolConfigs {
 	List all available feature flags and their values.
 	"""
 	featureFlags: [FeatureFlag!]!
+}
+
+"""
+BCS encoded primitive value (not an object or Move struct).
+"""
+type Pure {
+	"""
+	BCS serialized and Base64 encoded primitive value.
+	"""
+	bytes: Base64
 }
 
 type Query {
@@ -1671,9 +1736,47 @@ input TransactionFilter {
 }
 
 """
+Input argument to a Programmable Transaction Block (PTB) command.
+"""
+union TransactionInput = Pure
+
+type TransactionInputConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionInputEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionInput!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionInputEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionInput!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 Different types of transactions that can be executed on the Sui network.
 """
+<<<<<<< HEAD
 union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction
+=======
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | ProgrammableTransactionBlock
+>>>>>>> 48cc5ca29b ([graphql-alt] Support Programmable for TransactionKind [1/n])
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
