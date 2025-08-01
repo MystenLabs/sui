@@ -8,6 +8,8 @@ include!("../../../generated/sui.rpc.consistent.v1alpha.rs");
 pub const FILE_DESCRIPTOR_SET: &[u8] =
     include_bytes!("../../../generated/sui.rpc.consistent.v1alpha.fds.bin");
 
+pub const CHECKPOINT_METADATA: &str = "x-sui-checkpoint";
+
 #[cfg(test)]
 mod tests {
     use super::FILE_DESCRIPTOR_SET;
