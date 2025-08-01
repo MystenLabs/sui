@@ -64,6 +64,42 @@ scalar BigInt
 
 
 """
+A system transaction that updates epoch information on-chain (increments the current epoch). Executed by the system once per epoch, without using gas. Epoch change transactions cannot be submitted by users, because validators will refuse to sign them.
+
+This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+"""
+type ChangeEpochTransaction {
+	"""
+	The next (to become) epoch.
+	"""
+	epoch: Epoch
+	"""
+	The epoch's corresponding protocol configuration.
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
+	The total amount of gas charged for storage during the epoch.
+	"""
+	storageCharge: UInt53
+	"""
+	The total amount of gas charged for computation during the epoch.
+	"""
+	computationCharge: UInt53
+	"""
+	The amount of storage rebate refunded to the transaction senders.
+	"""
+	storageRebate: UInt53
+	"""
+	The non-refundable storage fee.
+	"""
+	nonRefundableStorageFee: UInt53
+	"""
+	Unix timestamp when epoch started.
+	"""
+	epochStartTimestamp: DateTime
+}
+
+"""
 Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 """
 type Checkpoint {
@@ -1351,7 +1387,7 @@ input TransactionFilter {
 """
 Different types of transactions that can be executed on the Sui network.
 """
-union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | RandomnessStateUpdateTransaction
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
