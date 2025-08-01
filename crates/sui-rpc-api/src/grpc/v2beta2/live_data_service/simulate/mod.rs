@@ -167,8 +167,51 @@ pub fn simulate_transaction(
         message.effects = {
             let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;
             submask
-                .subtree(ExecutedTransaction::EFFECTS_FIELD.name)
-                .map(|mask| TransactionEffects::merge_from(&effects, &mask))
+                .subtree(ExecutedTransaction::EFFECTS_FIELD)
+                .map(|mask| {
+                    let mut effects = TransactionEffects::merge_from(&effects, &mask);
+
+                    if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
+                        for changed_object in effects.changed_objects.iter_mut() {
+                            let Ok(object_id) = changed_object.object_id().parse::<ObjectID>()
+                            else {
+                                continue;
+                            };
+
+                            if let Some(object) = input_objects
+                                .iter()
+                                .chain(&output_objects)
+                                .find(|o| o.id() == object_id)
+                            {
+                                changed_object.object_type = Some(match object.struct_tag() {
+                                    Some(struct_tag) => struct_tag.to_canonical_string(true),
+                                    None => "package".to_owned(),
+                                });
+                            }
+                        }
+                    }
+
+                    if mask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
+                        for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
+                            let Ok(object_id) =
+                                unchanged_shared_object.object_id().parse::<ObjectID>()
+                            else {
+                                continue;
+                            };
+
+                            if let Some(object) = input_objects.iter().find(|o| o.id() == object_id)
+                            {
+                                unchanged_shared_object.object_type =
+                                    Some(match object.struct_tag() {
+                                        Some(struct_tag) => struct_tag.to_canonical_string(true),
+                                        None => "package".to_owned(),
+                                    });
+                            }
+                        }
+                    }
+
+                    effects
+                })
         };
 
         message.events = submask
