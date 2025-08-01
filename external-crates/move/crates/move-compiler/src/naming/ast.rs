@@ -690,14 +690,6 @@ impl BuiltinTypeName_ {
         &BUILTIN_TYPE_ORDERED
     }
 
-    pub fn is_vector(&self) -> bool {
-        matches!(self, BuiltinTypeName_::Vector)
-    }
-
-    pub fn is_u8(&self) -> bool {
-        matches!(self, BuiltinTypeName_::U8)
-    }
-
     pub fn is_numeric(&self) -> bool {
         Self::numeric().contains(self)
     }
@@ -800,7 +792,9 @@ impl TypeName_ {
         }
     }
 
-    pub fn is_named(
+    /// Indicates this is a module type with address, module, and name matching the inputs as
+    /// `address::module::name`. Returns false if the address is does not have a symbol name.
+    pub fn named_address_is(
         &self,
         address: impl AsRef<str>,
         module: impl AsRef<str>,
@@ -809,7 +803,7 @@ impl TypeName_ {
         match self {
             TypeName_::Builtin(_) | TypeName_::Multiple(_) => false,
             TypeName_::ModuleType(mident, n) => {
-                mident.value.is_named(address, module) && n == name.as_ref()
+                mident.value.named_address_is(address, module) && n == name.as_ref()
             }
         }
     }

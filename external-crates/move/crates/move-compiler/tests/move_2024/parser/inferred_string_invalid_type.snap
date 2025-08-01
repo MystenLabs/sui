@@ -2,11 +2,11 @@
 source: crates/move-compiler/tests/move_check_testsuite.rs
 info:
   flavor: core
-  edition: legacy
+  edition: 2024.alpha
   lint: false
 ---
 error[E04007]: incompatible types
-  ┌─ tests/move_check/parser/inferred_string_invalid_type.move:4:26
+  ┌─ tests/move_2024/parser/inferred_string_invalid_type.move:4:26
   │
 4 │     fun test() { let _x: S = "inferred stringŻ"; }
   │                          ^   ------------------ Given: string

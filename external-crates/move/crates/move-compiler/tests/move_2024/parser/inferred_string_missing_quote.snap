@@ -2,11 +2,11 @@
 source: crates/move-compiler/tests/move_check_testsuite.rs
 info:
   flavor: core
-  edition: legacy
+  edition: 2024.alpha
   lint: false
 ---
 error[E01019]: invalid string literal
-  ┌─ tests/move_check/parser/inferred_string_missing_quote.move:3:9
+  ┌─ tests/move_2024/parser/inferred_string_missing_quote.move:3:9
   │
 3 │         "abcd
   │         ^^^^^ Missing closing quote (") after string

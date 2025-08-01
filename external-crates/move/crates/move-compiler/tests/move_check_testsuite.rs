@@ -109,10 +109,7 @@ impl TestKind {
     }
 }
 
-fn default_testing_addresses(
-    test_kind: &TestKind,
-    flavor: Flavor,
-) -> BTreeMap<String, NumericalAddress> {
+fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
     let mut mapping = vec![
         ("std", "0x1"),
         ("sui", "0x2"),
@@ -127,15 +124,10 @@ fn default_testing_addresses(
     if flavor == Flavor::Sui {
         mapping.extend([("sui", "0x2"), ("sui_system", "0x3")]);
     }
-    let mut mapping = mapping
+    mapping
         .into_iter()
         .map(|(name, addr)| (name.to_string(), NumericalAddress::parse_str(addr).unwrap()))
-        .collect::<BTreeMap<_, _>>();
-    if matches!(test_kind, TestKind::NoStd) {
-        mapping.remove("std");
-        mapping.remove("sui");
-    }
-    mapping
+        .collect::<BTreeMap<_, _>>()
 }
 
 fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
@@ -223,7 +215,7 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let out_path = out_path(path, test_name, &suffix);
     let flavor = package_config.flavor;
     let targets: Vec<String> = vec![move_path.to_str().unwrap().to_owned()];
-    let named_address_map = default_testing_addresses(&test_kind, flavor);
+    let named_address_map = default_testing_addresses(flavor);
     let deps = if matches!(test_kind, TestKind::NoStd) {
         vec![]
     } else {

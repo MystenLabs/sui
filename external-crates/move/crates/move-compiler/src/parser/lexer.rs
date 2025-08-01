@@ -734,33 +734,42 @@ fn find_token(
         'A'..='Z' | 'a'..='z' | '_' | '"' => {
             let is_hex = text.starts_with("x\"");
             let is_byte = text.starts_with("b\"");
-            if is_hex || is_byte || text.starts_with("\"") {
+            let is_string_literal = text.starts_with("\"");
+            if is_hex || is_byte || is_string_literal {
                 let line = if is_hex || is_byte {
                     &text.lines().next().unwrap()[2..]
                 } else {
                     &text.lines().next().unwrap()[1..]
                 };
                 let offset = if is_byte || is_hex { 2 } else { 1 };
-                match get_string_len(line) {
-                    Some(last_quote) => (Ok(Tok::StringValue), offset + last_quote + 1),
-                    None => {
-                        let diag = maybe_diag! {
-                            let kind = if is_hex { "hex " } else if is_byte { "byte "} else { "" };
-                            let loc =
-                                make_loc(file_hash, start_offset, start_offset + line.len() + offset);
-                            Box::new(diag!(
-                                if is_hex {
-                                    Syntax::InvalidHexString
-                                } else if is_byte {
-                                    Syntax::InvalidByteString
-                                } else {
-                                    Syntax::InvalidString
-                                },
-                                (loc, format!("Missing closing quote (\") after {}string", kind))
-                            ))
-                        };
-                        (Err(diag), line.len() + offset)
-                    }
+
+                if is_string_literal && !edition.supports(FeatureGate::StringLiterals) {
+                    let loc = make_loc(file_hash, start_offset, start_offset + 1);
+                    let diag = maybe_diag!(Box::new(create_feature_error(
+                        edition,
+                        FeatureGate::StringLiterals,
+                        loc
+                    )));
+                    (Err(diag), line.len() + 1)
+                } else if let Some(last_quote) = get_string_len(line) {
+                    (Ok(Tok::StringValue), offset + last_quote + 1)
+                } else {
+                    let diag = maybe_diag! {
+                        let kind = if is_hex { "hex " } else if is_byte { "byte "} else { "" };
+                        let loc =
+                            make_loc(file_hash, start_offset, start_offset + line.len() + offset);
+                        Box::new(diag!(
+                            if is_hex {
+                                Syntax::InvalidHexString
+                            } else if is_byte {
+                                Syntax::InvalidByteString
+                            } else {
+                                Syntax::InvalidString
+                            },
+                            (loc, format!("Missing closing quote (\") after {}string", kind))
+                        ))
+                    };
+                    (Err(diag), line.len() + offset)
                 }
             } else {
                 let len = get_name_len(text);

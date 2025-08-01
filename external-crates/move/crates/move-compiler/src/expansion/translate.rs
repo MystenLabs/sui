@@ -1374,6 +1374,12 @@ fn stdlib_definitions(context: &mut Context, mloc: Loc) -> StdlibDefinitions {
         };
     }
 
+    // TODO: This is not a satisfactory way to suppress these errors. The _correct_ thing is to
+    // revise legacy path resolution to unify it with the Move 2024 one to use a shared
+    // `AccessNameChainResult` form, and resolve to that here. This would allow us to elide errors
+    // without building them and emitting them into a dummy reporter (and also the awful memory
+    // manipulation here).
+
     // We don't want to report errors here if we can't find the thing.
     let cur_diag_reporter = std::mem::replace(
         &mut context.defn_context.reporter,

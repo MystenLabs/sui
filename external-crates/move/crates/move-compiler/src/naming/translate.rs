@@ -585,9 +585,19 @@ macro_rules! resolve_from_module_access {
     }};
 }
 
-macro_rules! resolve_from_module_access_no_errors {
+/// Like `resolve_from_module_access`, but does not produce diagnostics (or enforce they exist) in
+/// failure cases. This is because errors previously meant that expansion had errors, but here
+/// expansion may not have reported errors when failing to look up standard library bindings. We
+/// use this to continue ommitting those errors. when further resolving standard library bindings.
+macro_rules! resolve_from_module_access_without_diags {
     ($context:expr, $loc:expr, $mident:expr, $name:expr, $expected_pat:pat, $rhs:expr, $expected_kind:expr) => {{
-        match $context.resolve_module_access(&Some($expected_kind), $loc, $mident, $name) {
+        match $context.resolve_module_access_inner(
+            &Some($expected_kind),
+            $loc,
+            $mident,
+            $name,
+            /* report_errors */ false,
+        ) {
             Some($expected_pat) => $rhs,
             Some(_) | None => None,
         }
@@ -691,14 +701,28 @@ impl<'outer, 'env> Context<'outer, 'env> {
         m: &ModuleIdent,
         n: &Name,
     ) -> Option<ResolvedModuleMember> {
+        self.resolve_module_access_inner(kind, loc, m, n, /* report_errors */ true)
+    }
+
+    fn resolve_module_access_inner(
+        &mut self,
+        kind: &Option<ErrorKind>,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+        report_errors: bool,
+    ) -> Option<ResolvedModuleMember> {
         let Some(members) = self.outer.module_members.get(m) else {
-            self.add_diag(make_unbound_module_error(self, m.loc, m));
+            if report_errors {
+                self.add_diag(make_unbound_module_error(self, m.loc, m))
+            };
             return None;
         };
         let result = members.get(&n.value);
-        if result.is_none() {
-            let diag = make_unbound_module_member_error(self, kind, loc, *m, n.value);
-            self.add_diag(diag);
+        if result.is_none() && report_errors {
+            self.add_diag(make_unbound_module_member_error(
+                self, kind, loc, *m, n.value,
+            ))
         }
         result.map(|inner| {
             let mut result = inner.clone();
@@ -749,7 +773,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
         n: &Name,
         error_kind: ErrorKind,
     ) -> Option<Box<ResolvedDatatype>> {
-        resolve_from_module_access_no_errors!(
+        resolve_from_module_access_without_diags!(
             self,
             loc,
             m,
@@ -766,7 +790,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
         m: &ModuleIdent,
         n: &Name,
     ) -> Option<Box<ResolvedModuleFunction>> {
-        resolve_from_module_access_no_errors!(
+        resolve_from_module_access_without_diags!(
             self,
             loc,
             m,

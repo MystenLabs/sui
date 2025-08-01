@@ -3379,16 +3379,22 @@ fn check_num_tvar_(subst: &Subst, ty: &Type) -> bool {
 }
 
 fn check_string_tvar_(subst: &Subst, ty: &Type) -> bool {
+    use BuiltinTypeName_ as BT;
+    use N::TypeName_ as TN;
     use Type_::*;
     use stdlib_definitions as SD;
     match &ty.value {
         UnresolvedError | Anything => true,
-        Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args) => {
-            bt.is_vector() && args.len() == 1 && args[0].value.is_builtin(&BuiltinTypeName_::U8)
+        Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), args) => {
+            args.len() == 1
+                && matches!(
+                    args[0],
+                    sp!(_, Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U8))), _))
+                )
         }
         Apply(_, ty_name, args) if args.is_empty() => SD::STDLIB_STRING_TYPES
             .iter()
-            .any(|(pkg, module, name)| ty_name.value.is_named(pkg, module, name)),
+            .any(|(pkg, module, name)| ty_name.value.named_address_is(pkg, module, name)),
         Var(v) => {
             let last_tvar = forward_tvar(subst, *v);
             match subst.get(last_tvar) {

@@ -117,6 +117,14 @@ pub fn stdlib_type_definition(loc: Loc) -> Vec<(StdlibName, NameAccessChain)> {
 /// Indicates if the data is a valid ascii string
 pub fn is_ascii_string(value: &E::Value_) -> Result<(), String> {
     use E::Value_ as V;
+    // Checks that all bytes in the provided data slice are valid ASCII characters (0x00–0x7F). To
+    // do this, we scan through the input byte slice and ensures every byte is within the ASCII
+    // range. If we find an invalid (non-ASCII) byte, we build an error including:
+    // - Up to three ASCII characters immediately preceding the invalid byte (prepended with "..."
+    //   if there are earlier characters omitted).
+    // - The invalid byte itself, formatted as a hexadecimal escape (`\xHH`).
+    // - Up to three subsequent ASCII characters following the invalid byte (appended with "..." if
+    //   additional unseen characters remain).
     fn ensure_ascii(data: &[u8]) -> Result<(), String> {
         if let Some((i, &b)) = data.iter().enumerate().find(|&(_, &b)| !b.is_ascii()) {
             // ----- leading (up to 3 ASCII chars before i) -----
@@ -151,7 +159,7 @@ pub fn is_ascii_string(value: &E::Value_) -> Result<(), String> {
             }
 
             return Err(format!(
-                "string \"{}[{}]{}\". contains invalid ASCII entry at char '{}' at index '{}'",
+                "string \"{}{}{}\". contains invalid ASCII entry at char '{}' at index '{}'",
                 leading, offending, trailing, offending, i
             ));
         }
@@ -177,6 +185,14 @@ pub fn is_ascii_string(value: &E::Value_) -> Result<(), String> {
 pub fn is_utf8_string(value: &E::Value_) -> Result<(), String> {
     use E::Value_ as V;
 
+    // Checks that the provided data slice contains only valid UTF-8 encoded Unicode characters. To
+    // do this, we attempt to decode the entire byte slice as UTF-8. If we encounter an invalid
+    // UTF-8 byte sequence, we construct an error message including:
+    // - Up to three Unicode characters immediately before the invalid sequence (prepended with
+    //   "..." if there are earlier characters omitted).
+    // - The offending bytes themselves, formatted as hexadecimal escapes (`\xHH\xMM...`).
+    // - Up to three Unicode characters immediately after the invalid sequence (appended with
+    //   "..." if additional unseen characters remain).
     fn ensure_unicode(data: &[u8]) -> Result<(), String> {
         use std::fmt::Write;
         match std::str::from_utf8(data) {
@@ -235,7 +251,7 @@ pub fn is_utf8_string(value: &E::Value_) -> Result<(), String> {
                 }
 
                 Err(format!(
-                    "string \"{}[{}]{}\". contains invalid UTF-8 entry at bytes '{}' at index '{}'",
+                    "string \"{}{}{}\". contains invalid UTF-8 entry at bytes '{}' at index '{}'",
                     leading, offending, trailing, offending, i
                 ))
             }

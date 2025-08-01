@@ -524,10 +524,6 @@ impl CompilationEnv {
         )
     }
 
-    pub fn set_stdlib_definers(&self, m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>) {
-        self.prim_definers.set(m).unwrap()
-    }
-
     pub fn set_primitive_type_definers(&self, m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>) {
         self.prim_definers.set(m).unwrap()
     }

@@ -2,11 +2,11 @@
 source: crates/move-compiler/tests/move_check_testsuite.rs
 info:
   flavor: core
-  edition: legacy
+  edition: 2024.alpha
   lint: false
 ---
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/string_literal_invalid_type.move:2:23
+  ┌─ tests/move_2024/typing/string_literal_invalid_type.move:2:23
   │
 2 │     fun test(): u64 { "hello" }
   │                 ---   ^^^^^^^
