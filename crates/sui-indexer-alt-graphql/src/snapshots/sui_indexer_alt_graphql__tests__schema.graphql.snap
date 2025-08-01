@@ -306,6 +306,7 @@ input CheckpointFilter {
 }
 
 """
+<<<<<<< HEAD
 System transaction for creating the coin deny list state.
 """
 type CoinDenyListStateCreateTransaction {
@@ -313,6 +314,39 @@ type CoinDenyListStateCreateTransaction {
 	A workaround to define an empty variant of a GraphQL union.
 	"""
 	_: Boolean
+=======
+A single command in the programmable transaction.
+"""
+union Command = MoveCallCommand
+
+type CommandConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CommandEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Command!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CommandEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Command!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+>>>>>>> 18ce9967f8 (Update back to Command name)
 }
 
 """
@@ -1102,6 +1136,7 @@ type PageInfo {
 	endCursor: String
 }
 
+<<<<<<< HEAD
 type PerEpochConfig {
 	"""
 	The per-epoch configuration object as of the checkpoint when the transaction was executed.
@@ -1143,6 +1178,8 @@ type ProgrammableCommandEdge {
 	cursor: String!
 }
 
+=======
+>>>>>>> 18ce9967f8 (Update back to Command name)
 type ProgrammableTransaction {
 	"""
 	Input objects or primitive values.
@@ -1151,7 +1188,7 @@ type ProgrammableTransaction {
 	"""
 	The transaction commands, executed sequentially.
 	"""
-	commands(first: Int, after: String, last: Int, before: String): ProgrammableCommandConnection!
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
 }
 
 """

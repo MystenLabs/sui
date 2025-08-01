@@ -17,7 +17,7 @@ use crate::{
 pub mod commands;
 pub mod inputs;
 
-pub use commands::ProgrammableCommand;
+pub use commands::Command;
 pub use inputs::TransactionInput;
 
 type CInput = JsonCursor<usize>;
@@ -68,7 +68,7 @@ impl ProgrammableTransaction {
         after: Option<CCommand>,
         last: Option<u64>,
         before: Option<CCommand>,
-    ) -> Result<Connection<String, ProgrammableCommand>, RpcError> {
+    ) -> Result<Connection<String, Command>, RpcError> {
         let pagination = ctx.data::<PaginationConfig>()?;
         let limits = pagination.limits("ProgrammableTransaction", "commands");
         let page = Page::from_params(limits, first, after, last, before)?;
@@ -77,7 +77,7 @@ impl ProgrammableTransaction {
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
 
         for edge in cursors.edges {
-            let command = ProgrammableCommand::from(
+            let command = Command::from(
                 self.native.commands[*edge.cursor].clone(),
                 self.scope.clone(),
             );
