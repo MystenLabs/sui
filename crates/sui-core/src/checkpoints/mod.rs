@@ -83,6 +83,8 @@ use typed_store::{
     TypedStoreError,
 };
 
+const TRANSACTION_FORK_DETECTED_KEY: u8 = 0;
+
 pub type CheckpointHeight = u64;
 
 pub struct EpochStats {
@@ -1052,7 +1054,7 @@ impl CheckpointStore {
             "Recording transaction fork detection in database"
         );
         self.tables.transaction_fork_detected.insert(
-            &0u8, // Single key since we only expect one transaction fork at a time
+            &TRANSACTION_FORK_DETECTED_KEY,
             &(tx_digest, expected_effects_digest, actual_effects_digest),
         )
     }
@@ -1067,11 +1069,15 @@ impl CheckpointStore {
         )>,
         TypedStoreError,
     > {
-        self.tables.transaction_fork_detected.get(&0u8)
+        self.tables
+            .transaction_fork_detected
+            .get(&TRANSACTION_FORK_DETECTED_KEY)
     }
 
     pub fn clear_transaction_fork_detected(&self) -> Result<(), TypedStoreError> {
-        self.tables.transaction_fork_detected.remove(&0u8)
+        self.tables
+            .transaction_fork_detected
+            .remove(&TRANSACTION_FORK_DETECTED_KEY)
     }
 }
 
@@ -3216,8 +3222,9 @@ mod tests {
     use tokio::sync::mpsc;
 
     #[tokio::test]
-    async fn test_checkpoint_fork_detection_storage() {
+    async fn test_fork_detection_storage() {
         let store = CheckpointStore::new_for_tests();
+        // checkpoint fork
         let seq_num = 42;
         let digest = CheckpointDigest::random();
 
@@ -3235,6 +3242,27 @@ mod tests {
 
         store.clear_checkpoint_fork_detected().unwrap();
         assert!(store.get_checkpoint_fork_detected().unwrap().is_none());
+
+        // txn fork
+        let tx_digest = TransactionDigest::random();
+        let expected_effects = TransactionEffectsDigest::random();
+        let actual_effects = TransactionEffectsDigest::random();
+
+        assert!(store.get_transaction_fork_detected().unwrap().is_none());
+
+        store
+            .record_transaction_fork_detected(tx_digest, expected_effects, actual_effects)
+            .unwrap();
+
+        let retrieved = store.get_transaction_fork_detected().unwrap();
+        assert!(retrieved.is_some());
+        let (retrieved_tx, retrieved_expected, retrieved_actual) = retrieved.unwrap();
+        assert_eq!(retrieved_tx, tx_digest);
+        assert_eq!(retrieved_expected, expected_effects);
+        assert_eq!(retrieved_actual, actual_effects);
+
+        store.clear_transaction_fork_detected().unwrap();
+        assert!(store.get_transaction_fork_detected().unwrap().is_none());
     }
 
     #[sim_test]

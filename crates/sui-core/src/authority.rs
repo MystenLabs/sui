@@ -2126,7 +2126,7 @@ impl AuthorityState {
                     "Transaction {} is expected to have effects digest {}, but got {}!",
                     tx_digest,
                     expected_effects_digest,
-                    effects.digest(),
+                    effects.digest()
                 );
             }
         }
