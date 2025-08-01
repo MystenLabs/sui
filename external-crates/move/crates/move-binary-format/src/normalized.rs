@@ -513,6 +513,33 @@ impl<S> Datatype<S> {
         }
     }
 
+    /// Case for generating a `Datatype` to write down on a Struct or Enum definition
+    pub fn new_for_data_definition<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        idx: DatatypeHandleIndex,
+    ) -> Self {
+        let datatype_handle = m.datatype_handle_at(idx);
+        let defining_module_handle = m.module_handle_at(datatype_handle.module);
+        let datatype_name = pool.intern(m.identifier_at(datatype_handle.name));
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
+        let type_arguments = datatype_handle
+            .type_parameters
+            .iter()
+            .enumerate()
+            .map(|(ndx, _)| Type::TypeParameter(ndx as u16))
+            .collect();
+        Datatype {
+            module: ModuleId {
+                address: defining_module_address,
+                name: defining_module_name,
+            },
+            name: datatype_name,
+            type_arguments,
+        }
+    }
+
     pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> StructTag {
         let Datatype {
             module,
@@ -968,9 +995,9 @@ impl<S: Hash + Eq> Function<S> {
             is_entry,
             type_parameters,
             parameters,
+            locals,
             return_,
             code_included,
-            locals: _,
             jump_tables,
             code,
         } = self;
@@ -983,6 +1010,7 @@ impl<S: Hash + Eq> Function<S> {
             && is_entry == &other.is_entry
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
+            && locals == &other.locals
             && return_ == &other.return_
             && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
             && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
@@ -1004,7 +1032,6 @@ impl<S: Hash + Eq> Enum<S> {
         S: Clone,
     {
         let handle = m.datatype_handle_at(def.enum_handle);
-
         let name = pool.intern(m.identifier_at(handle.name));
 
         let defining_module_handle = m.module_handle_at(handle.module);
