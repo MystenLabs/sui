@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use base64;
 use base64::{engine::general_purpose, Engine as _};
 use bcs;
-use fastcrypto::traits::EncodeDecodeBase64;
+use fastcrypto::traits::{EncodeDecodeBase64, VerifyingKey};
 use jsonrpc::client::Endpoint;
 use mockall::{automock, predicate::*};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -21,7 +21,9 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::process::Stdio;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{PublicKey, Signature, SignatureScheme, SuiKeyPair, SuiSignature};
+use sui_types::crypto::{
+    PublicKey, Signature, SignatureScheme, SuiKeyPair, SuiSignature, SuiSignatureInner,
+};
 use tokio::process::Command;
 
 #[derive(Debug)]
@@ -362,7 +364,9 @@ impl AccountKeystore for External {
         msg: &[u8],
     ) -> Result<Signature, signature::Error> {
         let StoredKey {
-            key_id, ext_signer, ..
+            key_id,
+            ext_signer,
+            public_key,
         } = self
             .keys
             .get(address)
@@ -388,14 +392,75 @@ impl AccountKeystore for External {
             .await
             .map_err(signature::Error::from_source)?;
 
-        let signature = result["signature"]
-            .as_str()
-            .ok_or_else(|| signature::Error::from_source(anyhow!("Failed to parse signature")))?;
-
-        let signature = Signature::decode_base64(signature).map_err(|e| {
-            signature::Error::from_source(anyhow!("Failed to decode signature: {}", e))
+        let result: SignResponse = serde_json::from_value(result).map_err(|e| {
+            signature::Error::from_source(anyhow!("Failed to parse sign response: {}", e))
         })?;
-        Ok(signature)
+
+        let address = SuiAddress::from(&public_key);
+        match &result.signature {
+            Signature::Ed25519SuiSignature(s) => {
+                let (sig, pk) = s.get_verification_inputs().map_err(|e| {
+                    signature::Error::from_source(anyhow!(
+                        "Failed to get verification inputs: {}",
+                        e
+                    ))
+                })?;
+                let signature_address = SuiAddress::from(&pk);
+                if signature_address != address {
+                    return Err(signature::Error::from_source(anyhow!(
+                        "Signature address {} does not match expected address {}",
+                        signature_address,
+                        address
+                    )));
+                }
+
+                pk.verify(msg, &sig).map_err(|e| {
+                    signature::Error::from_source(anyhow!("Signature verification failed: {}", e))
+                })?;
+            }
+            Signature::Secp256k1SuiSignature(s) => {
+                let (sig, pk) = s.get_verification_inputs().map_err(|e| {
+                    signature::Error::from_source(anyhow!(
+                        "Failed to get verification inputs: {}",
+                        e
+                    ))
+                })?;
+                let signature_address = SuiAddress::from(&pk);
+                if signature_address != address {
+                    return Err(signature::Error::from_source(anyhow!(
+                        "Signature address {} does not match expected address {}",
+                        signature_address,
+                        address
+                    )));
+                }
+
+                pk.verify(msg, &sig).map_err(|e| {
+                    signature::Error::from_source(anyhow!("Signature verification failed: {}", e))
+                })?;
+            }
+            Signature::Secp256r1SuiSignature(s) => {
+                let (sig, pk) = s.get_verification_inputs().map_err(|e| {
+                    signature::Error::from_source(anyhow!(
+                        "Failed to get verification inputs: {}",
+                        e
+                    ))
+                })?;
+                let signature_address = SuiAddress::from(&pk);
+                if signature_address != address {
+                    return Err(signature::Error::from_source(anyhow!(
+                        "Signature address {} does not match expected address {}",
+                        signature_address,
+                        address
+                    )));
+                }
+
+                pk.verify(msg, &sig).map_err(|e| {
+                    signature::Error::from_source(anyhow!("Signature verification failed: {}", e))
+                })?;
+            }
+        }
+
+        Ok(result.signature)
     }
 
     async fn sign_secure<T>(
@@ -531,7 +596,7 @@ mod tests {
     use std::str::FromStr;
     use sui_types::base_types::SuiAddress;
     use sui_types::crypto::SignatureScheme::{Secp256k1, ED25519};
-    use sui_types::crypto::{Ed25519SuiSignature, PublicKey, Signature, SuiKeyPair};
+    use sui_types::crypto::{PublicKey, Signature, SuiKeyPair};
     use tempfile::TempDir;
 
     const PUBLIC_KEY: &str = "ALJ0GaLcBTTwTTh5dvyc6xaxwrjkG1spQzlL+W4CGLqG";
@@ -829,32 +894,49 @@ mod tests {
 
     #[tokio::test]
     async fn test_sign_hashed() {
+        let skp = SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
+
+        let msg = b"message";
+        let public_key = skp.public();
+        let address = SuiAddress::from(&public_key);
+
+        let stored_key = StoredKey {
+            public_key,
+            ext_signer: "signer".to_string(),
+            key_id: "id".to_string(),
+        };
+
+        let signature = Signature::new_hashed(msg, &skp);
+
         let mut mock = MockCommandRunner::new();
-        mock.expect_run().returning(|_, _, _| {
-            let bytes = vec![0; 97];
-            let signature = Signature::from_bytes(&bytes).unwrap();
+        mock.expect_run().returning(move |_, _, _| {
             Ok(json!({
                 "signature": signature,
             }))
         });
         let mut external = External::new_for_test(Box::new(mock), None);
-        let address = SuiAddress::from_str(ADDRESS).unwrap();
 
-        external.keys.insert(
-            address,
-            StoredKey {
-                public_key: PublicKey::decode_base64(PUBLIC_KEY).unwrap(),
-                ext_signer: "signer".to_string(),
-                key_id: "id".to_string(),
-            },
-        );
+        external.keys.insert(address, stored_key.clone());
 
         let message = b"message";
-        let result = external.sign_hashed(&address, message).await.unwrap();
-        assert_eq!(
-            result,
-            Signature::Ed25519SuiSignature(Ed25519SuiSignature::default())
-        )
+        let result = external.sign_hashed(&address, message).await;
+        assert!(result.is_ok());
+
+        // invalid signature rejected
+        let mut mock = MockCommandRunner::new();
+        mock.expect_run().returning(move |_, _, _| {
+            let bytes = vec![0; 97];
+            let bad_signature = Signature::from_bytes(&bytes).unwrap();
+            Ok(json!({
+                "signature": bad_signature,
+            }))
+        });
+
+        let mut external = External::new_for_test(Box::new(mock), None);
+        external.keys.insert(address, stored_key);
+
+        let result = external.sign_hashed(&address, message).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
