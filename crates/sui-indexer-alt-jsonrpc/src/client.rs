@@ -138,9 +138,8 @@ impl std::fmt::Display for JsonRpcError {
 
 impl std::error::Error for JsonRpcError {}
 
-// JSON-RPC API implementations for delegation
+// Direct method implementations that match the interface expected by the server implementations
 impl HttpClient {
-    // Coin API methods
     pub async fn get_all_balances(&self, owner: SuiAddress) -> Result<Vec<Balance>> {
         self.call("suix_getAllBalances", (owner,)).await
     }
@@ -149,7 +148,6 @@ impl HttpClient {
         self.call("suix_getBalance", (owner, coin_type)).await
     }
 
-    // Governance API methods
     pub async fn get_stakes_by_ids(&self, staked_sui_ids: Vec<ObjectID>) -> Result<Vec<DelegatedStake>> {
         self.call("suix_getStakesByIds", (staked_sui_ids,)).await
     }
@@ -162,7 +160,6 @@ impl HttpClient {
         self.call("suix_getValidatorsApy", ()).await
     }
 
-    // Write API methods  
     pub async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
