@@ -33,7 +33,7 @@ input_file: crates/move-docgen-tests/tests/move/code_block/Move.toml
 
 ### Explanation of the algorithm
 
-```
+```move
 code block
 ```
 then <code>inline code</code>
