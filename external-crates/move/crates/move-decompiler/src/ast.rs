@@ -23,63 +23,10 @@ pub struct Function {
     pub code: Exp,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Term {
     // TODO: This will eventually be removed as term structuring is completed.
     Untranslated(move_stackless_bytecode_2::stackless::ast::BasicBlock),
-
-    // Assignment operations
-    Assign {
-        target: Vec<RegId>,
-        value: Trivial,
-    },
-
-    // Primitive operations (arithmetic, comparison, etc.)
-    PrimitiveOp {
-        op: String, // For now, use string representation
-        args: Vec<Trivial>,
-        result: Vec<RegId>,
-    },
-
-    // Data operations (pack, unpack, etc.)
-    DataOp {
-        op: String, // For now, use string representation
-        args: Vec<Trivial>,
-        result: Vec<RegId>,
-    },
-
-    // Function calls
-    Call {
-        function: Symbol,
-        args: Vec<Trivial>,
-        result: Vec<RegId>,
-    },
-
-    // Local variable operations
-    LocalOp {
-        op: String, // "copy", "move", "store", "borrow_mut", "borrow_imm"
-        loc: usize,
-        value: Option<Trivial>, // Some for store, None for others
-        result: Vec<RegId>,
-    },
-
-    // Control flow and special operations
-    Drop(RegId),
-    Abort(Trivial),
-    Return(Vec<Trivial>),
-
-    // Constants
-    Constant {
-        // This could be changed in const index
-        value: Vec<u8>,
-        result: Vec<RegId>,
-    },
-
-    // No operation
-    Nop,
-
-    // Error/unhandled
-    NotImplemented(String),
 }
 
 #[derive(Debug, Clone)]
@@ -89,7 +36,38 @@ pub enum Exp {
     Block(Term),
     Loop(Box<Exp>),
     Seq(Vec<Exp>),
-    While(Term, Box<Exp>),
-    IfElse(Term, Box<Exp>, Box<Option<Exp>>),
-    Switch(Term, Vec<Exp>),
+    While(Box<Exp>, Box<Exp>),
+    IfElse(Box<Exp>, Box<Exp>, Box<Option<Exp>>),
+    Switch(Box<Exp>, Vec<Exp>),
+}
+
+impl std::fmt::Display for Exp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Exp::Break => write!(f, "Break"),
+            Exp::Continue => write!(f, "Continue"),
+            Exp::Block(term) => write!(f, "Block({})", term),
+            Exp::Loop(body) => write!(f, "Loop({})", body),
+            Exp::Seq(seq) => write!(f, "Seq({:?})", seq),
+            Exp::While(cond, body) => write!(f, "While({}, {})", cond, body),
+            Exp::IfElse(cond, conseq, alt) => write!(f, "IfElse({}, {}, {:?})", cond, conseq, alt),
+            Exp::Switch(term, cases) => write!(f, "Switch({}, {:?})", term, cases),
+        }
+    }
+}
+
+impl std::fmt::Display for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Term::Untranslated(bb) => write!(f, "<Untranslated>"),
+        }
+    }
+}
+
+impl std::fmt::Debug for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Term::Untranslated(bb) => write!(f, "<Untranslated>"),
+        }
+    }
 }

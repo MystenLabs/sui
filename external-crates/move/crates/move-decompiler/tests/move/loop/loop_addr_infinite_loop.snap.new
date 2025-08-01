@@ -1,5 +1,6 @@
 ---
 source: crates/move-decompiler/tests/tests.rs
+assertion_line: 68
 ---
 Module {
     name: "infinite_loop",
@@ -12,7 +13,6 @@ Module {
                         Block(
                             <Untranslated>,
                         ),
-                        Continue,
                     ],
                 ),
             ),
@@ -25,7 +25,6 @@ Module {
                         Block(
                             <Untranslated>,
                         ),
-                        Continue,
                     ],
                 ),
             ),

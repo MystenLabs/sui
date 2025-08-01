@@ -295,7 +295,12 @@ fn structure_acyclic_region(
         D::Input::Condition(_lbl, code, conseq, alt) => {
             assert!(ichildren.contains(&conseq));
 
-            let conseq_arm = structured_blocks.remove(&conseq).unwrap();
+            
+            let conseq_arm = if conseq != post_dominator {
+                structured_blocks.remove(&conseq).unwrap()
+            } else {
+                D::Structured::Jump(conseq)
+            };
             let alt = if ichildren.contains(&alt) && alt != post_dominator {
                 graph.update_latch_branch_nodes(start, vec![conseq, alt]);
                 let alt = structured_blocks.remove(&alt);

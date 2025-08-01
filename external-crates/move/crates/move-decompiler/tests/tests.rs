@@ -26,9 +26,6 @@ fn run_structuring_test(file_path: &Path) -> datatest_stable::Result<()> {
     Ok(())
 }
 
-// Hand in each stt path
-// datatest_stable::harness!(run_structuring_test, "tests/structuring", r"\.stt$");
-
 // -------------------------------------------------------------------------------------------------
 // Move Tests [disabled for now]
 
@@ -67,7 +64,7 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
                 let name = format!("{}_{}", pkg_name.expect("NO PACKAGE NAME"), module_name);
                 let module = decompile_module(module.clone());
                 // FIXME: DO not use debug printing for this
-                let decompiled = format!("{:?}", module);
+                let decompiled = format!("{:#?}", module);
                 insta_assert! {
                     input_path: file_path,
                     contents: decompiled,
@@ -81,4 +78,4 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
 }
 
 // Hand in each move path
-datatest_stable::harness!(run_move_test, "tests/move", r"modules\.txt$");
+datatest_stable::harness!(run_move_test, "tests/move", r"modules\.txt$", run_structuring_test, "tests/structuring", r"\.stt$");
