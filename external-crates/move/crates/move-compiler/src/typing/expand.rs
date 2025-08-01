@@ -382,15 +382,19 @@ fn inferred_string_value(
     value: Vec<u8>,
     ty: &Type,
 ) -> Option<T::Exp> {
+    use BuiltinTypeName_ as BT;
     use T::UnannotatedExp_ as E;
+    use TypeName_ as TN;
     let diag_note =
         || "String literals must be linked against the standard library to be constructed";
 
     match &ty.value {
-        Type_::Apply(_, sp!(_, TypeName_::Builtin(sp!(_, bt))), args)
-            if bt.is_vector()
-                && args.len() == 1
-                && args[0].value.is_builtin(&BuiltinTypeName_::U8) =>
+        Type_::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), args)
+            if args.len() == 1
+                && matches!(
+                    args[0],
+                    sp!(_, Type_::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U8))), _))
+                ) =>
         {
             Some(T::exp(
                 ty.clone(),
@@ -400,59 +404,64 @@ fn inferred_string_value(
         Type_::Apply(_, sp!(_, name), args) if args.is_empty() => {
             let possibles = context.outer.get_stdlib_string_info();
 
-            for (mut str_ty, str_ctor, validator) in possibles {
-                // Expand our type first, because unification inisits they are the same.
-                type_(context, &mut str_ty);
-                if core::subtype_check(&str_ty, ty) {
-                    let Some((module, ctor)) = str_ctor else {
-                        let msg = format!("Could not find constructor for type '{}'", name);
-                        let mut diag = diag!(TypeSafety::InvalidString, (value_loc, msg));
-                        diag.add_note(diag_note());
-                        context.add_diag(diag);
-                        return None;
-                    };
+            let possible = possibles
+                .iter()
+                .map(|(str_ty, ctor_opt, validator)| {
+                    let mut str_ty = str_ty.clone();
+                    type_(context, &mut str_ty);
+                    (str_ty, ctor_opt, validator)
+                })
+                .find(|(str_ty, _, _)| core::subtype_check(str_ty, ty));
 
-                    // Check the value format
-                    if let Err(err_msg) = validator(&Value_::InferredString(value.clone())) {
-                        let mut diag = diag!(TypeSafety::InvalidString, (value_loc, err_msg));
-                        diag.add_note(diag_note());
-                        context.add_diag(diag);
-                        return None;
-                    }
+            let Some((_, str_ctor_opt, validator)) = possible else {
+                let msg = format!("Could not find library definition for type '{}'", name);
+                let mut diag = diag!(TypeSafety::InvalidString, (value_loc, msg));
+                diag.add_note(diag_note());
+                context.add_diag(diag);
+                return None;
+            };
 
-                    // Build up the typed input value
-                    let value_ = Value_::Bytearray(value);
-                    let Some(mut bytearray_ty) = value_.type_(value_loc) else {
-                        context.add_diag(ice!((value_loc, "Could not get bytearray type")));
-                        return None;
-                    };
-                    type_(context, &mut bytearray_ty); // Expand the vector type
-                    let value = sp(value_loc, E::Value(sp(value_loc, value_)));
-                    let value_exp = T::Exp {
-                        ty: bytearray_ty.clone(),
-                        exp: value,
-                    };
+            let Some((module, ctor)) = *str_ctor_opt else {
+                let msg = format!("Could not find constructor for type '{}'", name);
+                let mut diag = diag!(TypeSafety::InvalidString, (value_loc, msg));
+                diag.add_note(diag_note());
+                context.add_diag(diag);
+                return None;
+            };
 
-                    // Create the call itself
-                    let module_call = T::ModuleCall {
-                        module,
-                        name: ctor,
-                        type_arguments: vec![],
-                        arguments: Box::new(value_exp),
-                        parameter_types: vec![bytearray_ty],
-                        method_name: None,
-                    };
-                    let call = T::UnannotatedExp_::ModuleCall(Box::new(module_call));
-                    let exp = T::exp(ty.clone(), sp(value_loc, call));
-                    return Some(exp);
-                }
+            // Check the value format
+            if let Err(err_msg) = validator(&Value_::InferredString(value.clone())) {
+                let mut diag = diag!(TypeSafety::InvalidString, (value_loc, err_msg));
+                diag.add_note(diag_note());
+                context.add_diag(diag);
+                return None;
             }
 
-            let msg = format!("Could not find library definition for type '{}'", name);
-            let mut diag = diag!(TypeSafety::InvalidString, (value_loc, msg));
-            diag.add_note(diag_note());
-            context.add_diag(diag);
-            None
+            // Build up the typed input value
+            let value_ = Value_::Bytearray(value);
+            let Some(mut bytearray_ty) = value_.type_(value_loc) else {
+                context.add_diag(ice!((value_loc, "Could not get bytearray type")));
+                return None;
+            };
+            type_(context, &mut bytearray_ty); // Expand the vector type
+            let value = sp(value_loc, E::Value(sp(value_loc, value_)));
+            let value_exp = T::Exp {
+                ty: bytearray_ty.clone(),
+                exp: value,
+            };
+
+            // Create the call itself
+            let module_call = T::ModuleCall {
+                module,
+                name: ctor,
+                type_arguments: vec![],
+                arguments: Box::new(value_exp),
+                parameter_types: vec![bytearray_ty],
+                method_name: None,
+            };
+            let call = T::UnannotatedExp_::ModuleCall(Box::new(module_call));
+            let exp = T::exp(ty.clone(), sp(value_loc, call));
+            Some(exp)
         }
         _ => panic!("ICE inferred string failed {:?}", &ty.value),
     }

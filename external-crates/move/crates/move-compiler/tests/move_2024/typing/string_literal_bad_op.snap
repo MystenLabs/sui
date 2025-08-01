@@ -2,11 +2,11 @@
 source: crates/move-compiler/tests/move_check_testsuite.rs
 info:
   flavor: core
-  edition: legacy
+  edition: 2024.alpha
   lint: false
 ---
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/string_literal_bad_op.move:2:39
+  ┌─ tests/move_2024/typing/string_literal_bad_op.move:2:39
   │
 2 │     fun test(): u64 { let x = "hi"; x + 10u64 }
   │                           -           ^ ----- Found: 'u64'. It is not compatible with the other type.

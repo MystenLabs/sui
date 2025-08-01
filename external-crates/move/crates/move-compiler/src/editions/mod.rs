@@ -52,6 +52,7 @@ pub enum FeatureGate {
     TypeHoles,
     Lambda,
     ModuleLabel,
+    StringLiterals,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -170,6 +171,7 @@ const E2024_FEATURES: &[FeatureGate] = &[
     FeatureGate::Lambda,
     FeatureGate::ModuleLabel,
     FeatureGate::Enums,
+    FeatureGate::StringLiterals,
 ];
 
 impl Edition {
@@ -310,6 +312,7 @@ impl FeatureGate {
             FeatureGate::TypeHoles => "'_' placeholders for type inference are",
             FeatureGate::Lambda => "lambda expressions are",
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
+            FeatureGate::StringLiterals => "string literals (without a trailing 'b') are",
         }
     }
 }
