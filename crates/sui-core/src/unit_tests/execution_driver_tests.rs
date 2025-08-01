@@ -500,14 +500,24 @@ async fn test_per_object_overload() {
         config
     });
 
-    // Initialize a network with 1 account and 2000 gas objects.
+    // Initialize a network with 1 account and gas objects.
     let (addr, key): (_, AccountKeyPair) = get_key_pair();
-    const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = 2000;
+    // Use a small threshold for testing to avoid creating too many objects
+    const TEST_PER_OBJECT_QUEUE_LENGTH: usize = 20;
+    const NUM_GAS_OBJECTS_PER_ACCOUNT: usize = TEST_PER_OBJECT_QUEUE_LENGTH + 10; // Some buffer
     let gas_objects = (0..NUM_GAS_OBJECTS_PER_ACCOUNT)
         .map(|_| Object::with_owner_for_testing(addr))
         .collect_vec();
     let (aggregator, authorities, _genesis, package) =
-        init_local_authorities(4, gas_objects.clone()).await;
+        init_local_authorities_with_overload_thresholds(
+            4,
+            gas_objects.clone(),
+            AuthorityOverloadConfig {
+                max_transaction_manager_per_object_queue_length: TEST_PER_OBJECT_QUEUE_LENGTH,
+                ..Default::default()
+            },
+        )
+        .await;
     let rgp = authorities
         .first()
         .unwrap()
