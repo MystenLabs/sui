@@ -122,6 +122,7 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
         create_random_state: bool,
         create_authenticator_state: bool,
         create_deny_list_state: bool,
+        create_bridge_state: bool,
     ) -> anyhow::Result<()>;
 
     async fn request_gas(
@@ -280,6 +281,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         _create_random_state: bool,
         _create_authenticator_state: bool,
         _create_deny_list_state: bool,
+        _create_bridge_state: bool,
     ) -> anyhow::Result<()> {
         self.validator.reconfigure_for_testing().await;
         self.fullnode.reconfigure_for_testing().await;
@@ -503,11 +505,13 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         create_random_state: bool,
         create_authenticator_state: bool,
         create_deny_list_state: bool,
+        create_bridge_state: bool,
     ) -> anyhow::Result<()> {
         self.advance_epoch(
             create_random_state,
             create_authenticator_state,
             create_deny_list_state,
+            create_bridge_state,
         );
         Ok(())
     }
