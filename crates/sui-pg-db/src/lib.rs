@@ -5,10 +5,10 @@ use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
-use diesel::{ConnectionError, ConnectionResult};
+use diesel::ConnectionError;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::pooled_connection::ManagerConfig;
 use diesel_async::{
@@ -19,10 +19,13 @@ use diesel_async::{
     AsyncPgConnection, RunQueryDsl,
 };
 use futures::FutureExt;
-use tracing::{error, info};
+use tracing::info;
 use url::Url;
 
+use tls::{build_tls_config, establish_tls_connection};
+
 mod model;
+mod tls;
 
 pub use sui_field_count::FieldCount;
 pub use sui_sql_macro::sql;
@@ -229,16 +232,15 @@ async fn pool(
     let statement_timeout = args.statement_timeout();
 
     // Build TLS configuration once
-    let tls_config = build_tls_config(&args)?;
+    let tls_config = build_tls_config(args.tls_verify_cert, args.tls_ca_cert_path.clone())?;
 
     let mut config = ManagerConfig::default();
 
     config.custom_setup = Box::new(move |url| {
         let tls_config = tls_config.clone();
-        let statement_timeout = statement_timeout;
 
         async move {
-            let mut conn = establish_connection_with_config(url, tls_config).await?;
+            let mut conn = establish_tls_connection(url, tls_config).await?;
 
             if let Some(timeout) = statement_timeout {
                 diesel::sql_query(format!("SET statement_timeout = {}", timeout.as_millis()))
@@ -268,82 +270,6 @@ async fn pool(
         .await?)
 }
 
-/// Builds a TLS configuration from the provided DbArgs. If tls_verify_cert is false, disable server
-/// certificate verification. If tls_ca_cert_path is provided, add the custom CA certificate to the
-/// root certificates.
-fn build_tls_config(args: &DbArgs) -> anyhow::Result<rustls::ClientConfig> {
-    if !args.tls_verify_cert {
-        return Ok(rustls::ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(std::sync::Arc::new(SkipServerCertCheck))
-            .with_no_client_auth());
-    }
-
-    let mut root_certs = root_certs();
-
-    // Add custom CA certificate if provided
-    if let Some(ca_cert_path) = &args.tls_ca_cert_path {
-        let ca_cert_bytes = std::fs::read(ca_cert_path).with_context(|| {
-            format!(
-                "Failed to read CA certificate from {}",
-                ca_cert_path.display()
-            )
-        })?;
-
-        let certs = if ca_cert_bytes.starts_with(b"-----BEGIN CERTIFICATE-----") {
-            rustls_pemfile::certs(&mut ca_cert_bytes.as_slice())
-                .collect::<Result<Vec<_>, _>>()
-                .with_context(|| {
-                    format!(
-                        "Failed to parse PEM certificates from {}",
-                        ca_cert_path.display()
-                    )
-                })?
-        } else {
-            // Assume DER format for binary files
-            vec![rustls::pki_types::CertificateDer::from(ca_cert_bytes)]
-        };
-
-        // Add all certificates to the root store
-        for cert in certs {
-            root_certs
-                .add(cert)
-                .with_context(|| format!("Failed to add CA certificate to root store"))?;
-        }
-    }
-
-    Ok(rustls::ClientConfig::builder()
-        .with_root_certificates(root_certs)
-        .with_no_client_auth())
-}
-
-/// Establish a PostgreSQL connection with custom TLS configuration using tokio-postgres. The
-/// returned connection is compatible with diesel-async. This is needed because diesel-async does
-/// not expose TLS configuration.
-async fn establish_connection_with_config(
-    database_url: &str,
-    tls_config: rustls::ClientConfig,
-) -> ConnectionResult<AsyncPgConnection> {
-    let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config);
-    let (client, conn) = tokio_postgres::connect(database_url, tls)
-        .await
-        .map_err(|e| ConnectionError::BadConnection(e.to_string()))?;
-
-    // The `conn` object performs actual IO with the database, and tokio-postgres suggests spawning
-    // it off to run in the background. This will resolve only when the connection is closed, either
-    // because of a fatal error or because its associated Client has dropped and all outstanding
-    // work has completed.
-    tokio::spawn(async move {
-        if let Err(e) = conn.await {
-            error!("Database connection terminated: {e}");
-        }
-    });
-
-    // Users interact with the database through the client object. We convert it into an
-    // AsyncPgConnection so it can be compatible with diesel.
-    AsyncPgConnection::try_from(client).await
-}
-
 /// Returns new migrations derived from the combination of provided migrations and migrations
 /// defined in this crate.
 pub fn merge_migrations(
@@ -362,55 +288,6 @@ pub fn merge_migrations(
 
     Migrations(migrations)
 }
-
-fn root_certs() -> rustls::RootCertStore {
-    rustls::RootCertStore {
-        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-    }
-}
-
-/// Skip server cert verification, as libpq skips it by default.
-#[derive(Debug)]
-struct SkipServerCertCheck;
-
-impl rustls::client::danger::ServerCertVerifier for SkipServerCertCheck {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::client::WebPkiServerVerifier::builder(std::sync::Arc::new(root_certs()))
-            .build()
-            .unwrap()
-            .supported_verify_schemes()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
