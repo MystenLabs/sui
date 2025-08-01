@@ -70,6 +70,7 @@ pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use mysten_service::server_timing::server_timing_middleware;
+use sui_config::node::ForkRecoveryConfig;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -485,10 +486,14 @@ impl SuiNode {
         ));
 
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
-
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
 
-        Self::check_and_handle_checkpoint_fork(&checkpoint_store, &checkpoint_metrics)?;
+        Self::check_and_recover_forks(
+            &checkpoint_store,
+            &checkpoint_metrics,
+            is_validator,
+            config.fork_recovery.as_ref(),
+        )?;
 
         let mut pruner_db = None;
         if config
@@ -2107,11 +2112,70 @@ impl SuiNode {
         self.randomness_handle.clone()
     }
 
-    /// Check for previously detected forks and block node startup if detected.
-    fn check_and_handle_checkpoint_fork(
+    /// Get a short prefix of a digest for metric labels
+    fn get_digest_prefix(digest: impl std::fmt::Debug) -> String {
+        let digest_str = format!("{:?}", digest);
+        if digest_str.len() >= 8 {
+            digest_str[0..8].to_string()
+        } else {
+            digest_str
+        }
+    }
+
+    /// Check for previously detected forks and handle them appropriately.
+    /// For validators with fork recovery config, clear the fork if it matches the recovery config.
+    /// For all other cases, block node startup if a fork is detected.
+    fn check_and_recover_forks(
         checkpoint_store: &CheckpointStore,
         checkpoint_metrics: &CheckpointMetrics,
+        is_validator: bool,
+        fork_recovery: Option<&ForkRecoveryConfig>,
     ) -> Result<()> {
+        // Fork detection and recovery is only relevant for validators
+        // Fullnodes should sync from validators and don't need fork checking
+        if !is_validator {
+            return Ok(());
+        }
+
+        // Fork recovery for validators with recovery config
+        if let Some(recovery) = fork_recovery {
+            // Handle transaction fork recovery
+            if !recovery.transaction_overrides.is_empty() {
+                if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()? {
+                    if recovery
+                        .transaction_overrides
+                        .contains_key(&tx_digest.to_string())
+                    {
+                        info!(
+                            "Fork recovery enabled for validator: clearing transaction fork for tx {:?}",
+                            tx_digest
+                        );
+                        checkpoint_store
+                            .clear_transaction_fork_detected()
+                            .expect("Failed to clear transaction fork detected marker");
+                    }
+                }
+            }
+
+            // Handle checkpoint fork recovery
+            if !recovery.checkpoint_overrides.is_empty() {
+                if let Some((checkpoint_seq, checkpoint_digest)) =
+                    checkpoint_store.get_checkpoint_fork_detected()?
+                {
+                    if recovery.checkpoint_overrides.contains_key(&checkpoint_seq) {
+                        info!(
+                            "Fork recovery enabled for validator: clearing checkpoint fork at seq {} with digest {:?}",
+                            checkpoint_seq, checkpoint_digest
+                        );
+                        checkpoint_store
+                            .clear_checkpoint_fork_detected()
+                            .expect("Failed to clear checkpoint fork detected marker");
+                    }
+                }
+            }
+        }
+
+        // After fork recovery (if applicable), check if any forks still exist and halt if so
         if let Some((checkpoint_seq, checkpoint_digest)) = checkpoint_store
             .get_checkpoint_fork_detected()
             .map_err(|e| {
@@ -2119,25 +2183,17 @@ impl SuiNode {
                 e
             })?
         {
-            let digest_str = format!("{:?}", checkpoint_digest);
-            let digest_prefix = if digest_str.len() >= 5 {
-                &digest_str[0..5]
-            } else {
-                &digest_str
-            };
-
             let detected_at = std::time::SystemTime::now()
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
 
             checkpoint_metrics
-                .fork_crash_mode
+                .checkpoint_fork_crash_mode
                 .with_label_values(&[
-                    "checkpoint",
                     &checkpoint_seq.to_string(),
+                    &Self::get_digest_prefix(checkpoint_digest),
                     &detected_at.to_string(),
-                    digest_prefix,
                 ])
                 .set(1);
 
@@ -2159,25 +2215,18 @@ impl SuiNode {
                 e
             })?
         {
-            let digest_str = format!("{:?}", tx_digest);
-            let digest_prefix = if digest_str.len() >= 5 {
-                &digest_str[0..5]
-            } else {
-                &digest_str
-            };
-
             let detected_at = std::time::SystemTime::now()
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
 
             checkpoint_metrics
-                .fork_crash_mode
+                .transaction_fork_crash_mode
                 .with_label_values(&[
-                    "transaction",
-                    &tx_digest.to_string(),
+                    &Self::get_digest_prefix(tx_digest),
+                    &Self::get_digest_prefix(expected_effects_digest),
+                    &Self::get_digest_prefix(actual_effects_digest),
                     &detected_at.to_string(),
-                    digest_prefix,
                 ])
                 .set(1);
 
