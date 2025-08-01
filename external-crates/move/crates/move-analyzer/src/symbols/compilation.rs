@@ -48,10 +48,17 @@ use move_package::{
 
 pub const MANIFEST_FILE_NAME: &str = "Move.toml";
 
+/// Information about parsed definitions
+#[derive(Clone)]
+pub struct ParsedDefinitions {
+    pub source_definitions: Vec<P::PackageDefinition>,
+    pub lib_definitions: Vec<P::PackageDefinition>,
+}
+
 /// Information about compiled program (ASTs at different levels)
 #[derive(Clone)]
 pub struct CompiledProgram {
-    pub parsed: P::Program,
+    pub parsed_definitions: ParsedDefinitions,
     pub typed_modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -417,8 +424,14 @@ pub fn get_compiled_pkg(
     }
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
-    let (parsed_program, typed_program_modules) = if full_compilation {
-        (parsed_ast.unwrap(), typed_ast.unwrap().modules)
+    let (parsed_definitions, typed_modules) = if full_compilation {
+        let parsed_program = parsed_ast.unwrap();
+        let parsed_definitions = ParsedDefinitions {
+            source_definitions: parsed_program.source_definitions,
+            lib_definitions: parsed_program.lib_definitions,
+        };
+        let typed_modules = typed_ast.unwrap().modules;
+        (parsed_definitions, typed_modules)
     } else if files_to_compile.is_empty() {
         // no compilation happened, so we get everything from the cache, and
         // the unwraps are safe because the cache is guaranteed to exist (otherwise
@@ -426,7 +439,7 @@ pub fn get_compiled_pkg(
         let cached_info = cached_info_opt.clone().unwrap();
         let compiled_program = cached_info.program.unwrap();
         (
-            compiled_program.parsed.clone(),
+            compiled_program.parsed_definitions.clone(),
             compiled_program.typed_modules.clone(),
         )
     } else {
@@ -459,8 +472,8 @@ pub fn get_compiled_pkg(
         deps_hash,
         cached_deps: cached_info_opt,
         program: CompiledProgram {
-            parsed: parsed_program,
-            typed_modules: typed_program_modules,
+            parsed_definitions,
+            typed_modules,
         },
         mapped_files,
         edition,
@@ -546,7 +559,7 @@ fn merge_user_programs(
     typed_program_modules_new: UniqueMap<ModuleIdent, ModuleDefinition>,
     file_paths_new: Arc<BTreeMap<FileHash, PathBuf>>,
     modified_files: BTreeSet<PathBuf>,
-) -> (P::Program, UniqueMap<ModuleIdent, ModuleDefinition>) {
+) -> (ParsedDefinitions, UniqueMap<ModuleIdent, ModuleDefinition>) {
     fn process_new_parsed_pkg(
         pkg_def: P::PackageDefinition,
         file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
@@ -583,16 +596,15 @@ fn merge_user_programs(
     let cached_info = cached_info_opt.unwrap();
     let compiled_program_cached = cached_info.program.unwrap();
     let file_paths_cached = cached_info.file_paths;
-    let mut result_parsed_program = compiled_program_cached.parsed.clone();
+    let mut result_parsed_definitions = compiled_program_cached.parsed_definitions.clone();
     let mut result_typed_modules = compiled_program_cached.typed_modules.clone();
-    // address maps might have changed - below we need to update named map indexes
-    // even for unmodified packages
-    result_parsed_program.named_address_maps = parsed_program_new.named_address_maps;
     // remove modules from user code that belong to modified files
-    result_parsed_program.source_definitions.retain(|pkg_def| {
-        !is_parsed_pkg_modified(pkg_def, &modified_files, file_paths_cached.clone())
-    });
-    result_parsed_program.lib_definitions.retain(|pkg_def| {
+    result_parsed_definitions
+        .source_definitions
+        .retain(|pkg_def| {
+            !is_parsed_pkg_modified(pkg_def, &modified_files, file_paths_cached.clone())
+        });
+    result_parsed_definitions.lib_definitions.retain(|pkg_def| {
         !is_parsed_pkg_modified(pkg_def, &modified_files, file_paths_cached.clone())
     });
     let mut typed_modules_cached_filtered = UniqueMap::new();
@@ -609,7 +621,7 @@ fn merge_user_programs(
             pkg_def,
             file_paths_new.clone(),
             &modified_files,
-            &mut result_parsed_program.source_definitions,
+            &mut result_parsed_definitions.source_definitions,
         );
     }
     for pkg_def in parsed_program_new.lib_definitions {
@@ -617,7 +629,7 @@ fn merge_user_programs(
             pkg_def,
             file_paths_new.clone(),
             &modified_files,
-            &mut result_parsed_program.lib_definitions,
+            &mut result_parsed_definitions.lib_definitions,
         );
     }
     for (mident, mdef) in typed_program_modules_new.into_iter() {
@@ -627,7 +639,7 @@ fn merge_user_programs(
         }
     }
 
-    (result_parsed_program, result_typed_modules)
+    (result_parsed_definitions, result_typed_modules)
 }
 
 /// Checks if a parsed module is modified by getting

@@ -4,6 +4,7 @@
 use crate::{
     analysis::{DefMap, add_member_use_def},
     symbols::{
+        compilation::ParsedDefinitions,
         cursor::{CursorContext, CursorDefinition, CursorPosition},
         ignored_function,
         mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs},
@@ -71,7 +72,7 @@ impl<'a> ParsingAnalysisContext<'a> {
     /// Get symbols for the whole program
     pub fn prog_symbols(
         &mut self,
-        prog: &'a P::Program,
+        prog: &'a ParsedDefinitions,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
         mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,

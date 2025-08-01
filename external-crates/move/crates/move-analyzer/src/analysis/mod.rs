@@ -4,7 +4,7 @@
 use crate::{
     compiler_info::CompilerInfo,
     symbols::{
-        compilation::{CompiledPkgInfo, SymbolsComputationData},
+        compilation::{CompiledPkgInfo, ParsedDefinitions, SymbolsComputationData},
         cursor::CursorContext,
         def_info::DefInfo,
         mod_defs::ModuleDefs,
@@ -19,7 +19,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     expansion::ast::ModuleIdent,
-    parser::ast as P,
     shared::{NamedAddressMap, files::MappedFiles, unique_map::UniqueMap},
     typing::{ast::ModuleDefinition, visitor::TypingVisitorContext},
 };
@@ -36,7 +35,7 @@ pub fn run_parsing_analysis(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     cursor_context: Option<&mut CursorContext>,
-    parsed_program: &P::Program,
+    parsed_program: &ParsedDefinitions,
     mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {

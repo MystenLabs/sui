@@ -59,8 +59,8 @@ use crate::{
     compiler_info::CompilerInfo,
     symbols::{
         compilation::{
-            CompiledPkgInfo, CompiledProgram, PrecomputedPkgInfo, SymbolsComputationData,
-            get_compiled_pkg,
+            CompiledPkgInfo, CompiledProgram, ParsedDefinitions, PrecomputedPkgInfo,
+            SymbolsComputationData, get_compiled_pkg,
         },
         cursor::CursorContext,
         def_info::{DefInfo, FunType, VariantInfo},
@@ -262,7 +262,7 @@ pub fn compute_symbols_pre_process(
     mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) -> Option<CursorContext> {
     let mut fields_order_info = FieldOrderInfo::new();
-    let parsed_program = &compiled_pkg_info.program.parsed;
+    let parsed_program = &compiled_pkg_info.program.parsed_definitions;
     let typed_program_modules = &compiled_pkg_info.program.typed_modules;
     pre_process_parsed_program(
         parsed_program,
@@ -310,7 +310,7 @@ pub fn compute_symbols_parsed_program(
         computation_data,
         compiled_pkg_info,
         cursor_context.as_mut(),
-        &compiled_pkg_info.program.parsed,
+        &compiled_pkg_info.program.parsed_definitions,
         mod_named_address_maps,
     );
     cursor_context
@@ -478,7 +478,7 @@ fn compute_cursor_context(
 
 /// Pre-process parsed program to get initial info before AST traversals
 fn pre_process_parsed_program(
-    prog: &P::Program,
+    prog: &ParsedDefinitions,
     fields_order_info: &mut FieldOrderInfo,
     mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
