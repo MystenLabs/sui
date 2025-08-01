@@ -985,8 +985,8 @@
       "index": "b1v",
       "roundness": null,
       "seed": 1060262398,
-      "version": 1136,
-      "versionNonce": 1033719486,
+      "version": 1137,
+      "versionNonce": 1346786530,
       "isDeleted": false,
       "boundElements": [
         {
@@ -998,16 +998,16 @@
           "type": "arrow"
         }
       ],
-      "updated": 1753835746313,
+      "updated": 1754027418466,
       "link": null,
       "locked": false,
-      "text": "Commiter",
+      "text": "Committer",
       "fontSize": 20,
       "fontFamily": 5,
       "textAlign": "center",
       "verticalAlign": "top",
       "containerId": null,
-      "originalText": "Commiter",
+      "originalText": "Committer",
       "autoResize": false,
       "lineHeight": 1.25
     },

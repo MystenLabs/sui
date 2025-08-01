@@ -202,7 +202,7 @@ As mentioned, there are two main components to sequential pipelines.
 
 `Committer`
 
-The sequential `Commiter` is the heart of the pipeline and your main customization point. At a high level, the `Commiter` performs the following actions:
+The sequential `Committer` is the heart of the pipeline and your main customization point. At a high level, the `Committer` performs the following actions:
 
 1. **Receives** out-of-order processed data from the processor.
 2. **Orders** the data by checkpoint sequence.
@@ -322,7 +322,7 @@ Database writes are expensive; batching dramatically improves throughput by redu
 
 `Committer` (parallel database writer)
 
-The `Commiter` primarily writes batched data to the database using parallel connections with retry logic. It does this by receiving optimized batches from `Collector`, then spawns up to `write_concurrency` parallel database writers.
+The `Committer` primarily writes batched data to the database using parallel connections with retry logic. It does this by receiving optimized batches from `Collector`, then spawns up to `write_concurrency` parallel database writers.
 
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/mod.rs#struct=CommitterConfig}
 
@@ -506,7 +506,7 @@ impl concurrent::Handler for MyHandler {
     // Minimum rows to trigger eager commit for committer (default: 50)
     const MIN_EAGER_ROWS: usize = 100;
     
-    // Backpressure threshold on commiter (default: 5000)
+    // Backpressure threshold on committer (default: 5000)
     const MAX_PENDING_ROWS: usize = 10000;
     
     // Maximum watermarks per batch (default: 10,000)
