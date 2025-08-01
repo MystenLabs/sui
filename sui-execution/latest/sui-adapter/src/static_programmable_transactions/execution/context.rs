@@ -222,7 +222,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         for object_input in object_inputs {
             let (i, m, v) = load_object_arg(gas_charger, env, &mut input_object_map, object_input)?;
             input_object_metadata.push((i, m));
-            object_values.push(v);
+            object_values.push(Some(v));
         }
         let object_inputs = Locals::new(object_values)?;
         let pure_inputs = Locals::new_invalid(pure_input_metadata.len())?;
@@ -238,7 +238,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                     true,
                     ty,
                 )?;
-                let mut gas_locals = Locals::new([gas_value])?;
+                let mut gas_locals = Locals::new([Some(gas_value)])?;
                 let gas_local = gas_locals.local(0)?;
                 let gas_ref = gas_local.borrow()?;
                 // We have already checked that the gas balance is enough to cover the gas budget
@@ -257,7 +257,8 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context.clone(),
         );
 
-        let tx_context_value = Locals::new(vec![Value::tx_context(tx_context.borrow().digest())?])?;
+        let tx_context_value =
+            Locals::new(vec![Some(Value::tx_context(tx_context.borrow().digest())?)])?;
         Ok(Self {
             env,
             metrics,
@@ -576,10 +577,10 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         args.into_iter().map(|arg| self.argument(arg)).collect()
     }
 
-    pub fn result(&mut self, result: Vec<CtxValue>) -> Result<(), ExecutionError> {
+    pub fn result(&mut self, result: Vec<Option<CtxValue>>) -> Result<(), ExecutionError> {
         self.locations
             .results
-            .push(Locals::new(result.into_iter().map(|v| v.0))?);
+            .push(Locals::new(result.into_iter().map(|v| v.map(|v| v.0)))?);
         Ok(())
     }
 
@@ -1242,7 +1243,7 @@ fn refund_max_gas_budget<OType>(
     };
     // replace with dummy value
     let value = std::mem::replace(value_ref, VMValue::u8(0));
-    let mut locals = Locals::new([value.into()])?;
+    let mut locals = Locals::new([Some(value.into())])?;
     let mut local = locals.local(0)?;
     let coin_value = local.borrow()?.coin_ref_value()?;
     let additional = gas_charger.gas_budget();

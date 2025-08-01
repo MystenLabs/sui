@@ -24,30 +24,30 @@ pub fn verify(env: &env::Env, tt: &T::Transaction) -> Result<(), ExecutionError>
         .try_for_each(|receiving_input| check_type(&receiving_input.ty))?;
 
     // Verify all types in commands are defining-id based.
-    tt.commands
-        .iter()
-        .try_for_each(|command| match &command.0.value {
-            T::Command_::Publish(_, _, _) => Ok(()),
-            T::Command_::Upgrade(_, _, _, sp!(_, (_, ty)), _) => check_type(ty),
-            T::Command_::SplitCoins(ty, sp!(_, (_, coin_ty)), amounts) => {
+    tt.commands.iter().try_for_each(|sp!(_, c)| {
+        c.result_type.iter().try_for_each(check_type)?;
+        match &c.command {
+            T::Command__::Publish(_, _, _) => Ok(()),
+            T::Command__::Upgrade(_, _, _, sp!(_, (_, ty)), _) => check_type(ty),
+            T::Command__::SplitCoins(ty, sp!(_, (_, coin_ty)), amounts) => {
                 check_type(ty)?;
                 check_type(coin_ty)?;
                 amounts.iter().try_for_each(check_arg)
             }
-            T::Command_::MergeCoins(ty, sp!(_, (_, target_ty)), coins) => {
+            T::Command__::MergeCoins(ty, sp!(_, (_, target_ty)), coins) => {
                 check_type(ty)?;
                 check_type(target_ty)?;
                 coins.iter().try_for_each(check_arg)
             }
-            T::Command_::MakeMoveVec(ty, args) => {
+            T::Command__::MakeMoveVec(ty, args) => {
                 check_type(ty)?;
                 args.iter().try_for_each(check_arg)
             }
-            T::Command_::TransferObjects(objs, sp!(_, (_, recipient_ty))) => {
+            T::Command__::TransferObjects(objs, sp!(_, (_, recipient_ty))) => {
                 objs.iter().try_for_each(check_arg)?;
                 check_type(recipient_ty)
             }
-            T::Command_::MoveCall(move_call) => {
+            T::Command__::MoveCall(move_call) => {
                 move_call
                     .function
                     .type_arguments
@@ -55,7 +55,8 @@ pub fn verify(env: &env::Env, tt: &T::Transaction) -> Result<(), ExecutionError>
                     .try_for_each(check_type)?;
                 move_call.arguments.iter().try_for_each(check_arg)
             }
-        })
+        }
+    })
 }
 
 fn ensure_type_defining_id_based(env: &env::Env, ty: &T::Type) -> Result<(), ExecutionError> {
