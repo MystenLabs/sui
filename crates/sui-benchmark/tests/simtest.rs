@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(msim)]
+// #[cfg(msim)]
 mod test {
     use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
     use std::collections::HashSet;
