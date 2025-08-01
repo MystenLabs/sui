@@ -16,20 +16,20 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 ];
 
 #[derive(Clone)]
-pub(crate) struct ReaderMetrics {
-    pub db_latency: Histogram,
-    pub db_requests_received: IntCounter,
-    pub db_requests_succeeded: IntCounter,
-    pub db_requests_failed: IntCounter,
+pub(crate) struct DbReaderMetrics {
+    pub latency: Histogram,
+    pub requests_received: IntCounter,
+    pub requests_succeeded: IntCounter,
+    pub requests_failed: IntCounter,
 }
 
-impl ReaderMetrics {
+impl DbReaderMetrics {
     pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("db");
         let name = |n| format!("{prefix}_{n}");
 
         Arc::new(Self {
-            db_latency: register_histogram_with_registry!(
+            latency: register_histogram_with_registry!(
                 name("latency"),
                 "Time taken by the database to respond to queries",
                 LATENCY_SEC_BUCKETS.to_vec(),
@@ -37,21 +37,21 @@ impl ReaderMetrics {
             )
             .unwrap(),
 
-            db_requests_received: register_int_counter_with_registry!(
+            requests_received: register_int_counter_with_registry!(
                 name("requests_received"),
                 "Number of database requests sent by the service",
                 registry,
             )
             .unwrap(),
 
-            db_requests_succeeded: register_int_counter_with_registry!(
+            requests_succeeded: register_int_counter_with_registry!(
                 name("requests_succeeded"),
                 "Number of database requests that completed successfully",
                 registry,
             )
             .unwrap(),
 
-            db_requests_failed: register_int_counter_with_registry!(
+            requests_failed: register_int_counter_with_registry!(
                 name("requests_failed"),
                 "Number of database requests that completed with an error",
                 registry,
