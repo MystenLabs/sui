@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // docs::#processordeps
 use std::sync::Arc;
 use anyhow::Result;
