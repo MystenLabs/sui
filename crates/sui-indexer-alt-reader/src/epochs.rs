@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use async_graphql::dataloader::Loader;
 use diesel::{
@@ -33,25 +30,24 @@ pub struct EpochEndKey(pub u64);
 #[async_trait::async_trait]
 impl Loader<EpochStartKey> for PgReader {
     type Value = StoredEpochStart;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[EpochStartKey],
-    ) -> Result<HashMap<EpochStartKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<EpochStartKey, Self::Value>, Error> {
         use kv_epoch_starts::dsl as s;
 
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|e| e.0 as i64).collect();
         let epochs: Vec<StoredEpochStart> = conn
             .results(s::kv_epoch_starts.filter(s::epoch.eq_any(ids)))
-            .await
-            .map_err(Arc::new)?;
+            .await?;
 
         Ok(epochs
             .into_iter()
@@ -63,17 +59,17 @@ impl Loader<EpochStartKey> for PgReader {
 #[async_trait::async_trait]
 impl Loader<CheckpointBoundedEpochStartKey> for PgReader {
     type Value = StoredEpochStart;
-    type Error = Arc<Error>;
+    type Error = Error;
 
     async fn load(
         &self,
         keys: &[CheckpointBoundedEpochStartKey],
-    ) -> Result<HashMap<CheckpointBoundedEpochStartKey, Self::Value>, Self::Error> {
+    ) -> Result<HashMap<CheckpointBoundedEpochStartKey, Self::Value>, Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let cps: Vec<_> = keys.iter().map(|e| e.0 as i64).collect();
         let query = diesel::sql_query(
@@ -104,7 +100,7 @@ impl Loader<CheckpointBoundedEpochStartKey> for PgReader {
         )
         .bind::<Array<BigInt>, _>(cps);
 
-        let stored_epochs: Vec<StoredEpochStart> = conn.results(query).await.map_err(Arc::new)?;
+        let stored_epochs: Vec<StoredEpochStart> = conn.results(query).await?;
 
         // A single data loader request may contain multiple keys for the same epoch. Store them in
         // an ordered map, so that we can find the latest version for each key.
@@ -126,25 +122,21 @@ impl Loader<CheckpointBoundedEpochStartKey> for PgReader {
 #[async_trait::async_trait]
 impl Loader<EpochEndKey> for PgReader {
     type Value = StoredEpochEnd;
-    type Error = Arc<Error>;
+    type Error = Error;
 
-    async fn load(
-        &self,
-        keys: &[EpochEndKey],
-    ) -> Result<HashMap<EpochEndKey, Self::Value>, Self::Error> {
+    async fn load(&self, keys: &[EpochEndKey]) -> Result<HashMap<EpochEndKey, Self::Value>, Error> {
         use kv_epoch_ends::dsl as e;
 
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let mut conn = self.connect().await.map_err(Arc::new)?;
+        let mut conn = self.connect().await?;
 
         let ids: Vec<_> = keys.iter().map(|e| e.0 as i64).collect();
         let epochs: Vec<StoredEpochEnd> = conn
             .results(e::kv_epoch_ends.filter(e::epoch.eq_any(ids)))
-            .await
-            .map_err(Arc::new)?;
+            .await?;
 
         Ok(epochs
             .into_iter()
