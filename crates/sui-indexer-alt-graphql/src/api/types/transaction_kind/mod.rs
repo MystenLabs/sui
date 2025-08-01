@@ -10,6 +10,7 @@ use self::{
     authenticator_state_update::AuthenticatorStateUpdateTransaction,
     change_epoch::ChangeEpochTransaction,
     consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
+    programmable::ProgrammableTransactionBlock,
     randomness_state_update::RandomnessStateUpdateTransaction,
 };
 
@@ -17,6 +18,7 @@ pub(crate) mod authenticator_state_update;
 pub(crate) mod change_epoch;
 pub(crate) mod consensus_commit_prologue;
 pub(crate) mod genesis;
+pub(crate) mod programmable;
 pub(crate) mod randomness_state_update;
 
 /// Different types of transactions that can be executed on the Sui network.
@@ -27,6 +29,7 @@ pub enum TransactionKind {
     ChangeEpoch(ChangeEpochTransaction),
     RandomnessStateUpdate(RandomnessStateUpdateTransaction),
     AuthenticatorStateUpdate(AuthenticatorStateUpdateTransaction),
+    Programmable(ProgrammableTransactionBlock),
 }
 
 impl TransactionKind {
@@ -59,6 +62,10 @@ impl TransactionKind {
             K::AuthenticatorStateUpdate(asu) => Some(T::AuthenticatorStateUpdate(
                 AuthenticatorStateUpdateTransaction { native: asu, scope },
             )),
+            K::ProgrammableTransaction(pt) => Some(T::Programmable(ProgrammableTransactionBlock {
+                native: pt,
+                scope,
+            })),
             // Other types will return None for now
             _ => None,
         }
