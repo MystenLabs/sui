@@ -405,10 +405,10 @@ impl std::fmt::Display for ResolvedModuleMember {
 pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Symbol, ResolvedModuleMember>>;
 
 /// Generic function to build resolved members from a module-like structure
-fn resolved_members<M: ResolvableModule>(
+fn resolved_members(
     env: &CompilationEnv,
     mident: ModuleIdent,
-    module: &M,
+    module: &dyn ResolvableModule,
 ) -> BTreeMap<Symbol, ResolvedModuleMember> {
     // NB: This checks if the element is present, and doesn't replace it if so. This is congruent
     // with how top-level definitions are handled for alias resolution, where a new definition will
@@ -501,9 +501,27 @@ pub fn build_member_map(
     pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &E::Program,
 ) -> ModuleMembers {
+    // Create chained iterator of (ModuleIdent, &dyn ResolvableModule)
+    let prog_modules = prog
+        .modules
+        .key_cloned_iter()
+        .map(|(mident, mdef)| (mident, mdef as &dyn ResolvableModule));
+
+    let precompiled_modules = pre_compiled_lib.as_ref().into_iter().flat_map(|lib| {
+        lib.iter().filter_map(|(mident, minfo)| {
+            if !prog.modules.contains_key(mident) {
+                Some((*mident, &minfo.info as &dyn ResolvableModule))
+            } else {
+                None
+            }
+        })
+    });
+
+    let all_modules = prog_modules.chain(precompiled_modules);
+
     let mut all_members = BTreeMap::new();
-    for (mident, mdef) in prog.modules.key_cloned_iter() {
-        let members = resolved_members(env, mident, mdef);
+    for (mident, module) in all_modules {
+        let members = resolved_members(env, mident, module);
         // Apply error checking for duplicate names (functions and constants are shadowed by datatypes)
         let mut checked_members = BTreeMap::new();
         for (name, member) in members {
@@ -514,16 +532,6 @@ pub fn build_member_map(
             }
         }
         assert!(all_members.insert(mident, checked_members).is_none());
-    }
-
-    if let Some(pre_compiled_lib) = pre_compiled_lib {
-        all_members.extend(pre_compiled_lib.iter().filter_map(|(mident, minfo)| {
-            if !prog.modules.contains_key(mident) {
-                Some((*mident, resolved_members(env, *mident, &minfo.info)))
-            } else {
-                None
-            }
-        }));
     }
 
     all_members
