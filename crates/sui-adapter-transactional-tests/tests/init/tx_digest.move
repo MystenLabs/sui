@@ -36,3 +36,6 @@ module b::m {
 //> 0: Publish(b, [a, std, sui]);
 //> 1: a::m::new();
 //> TransferObjects([Result(0), Result(1)], Input(0));
+
+//# programmable --sender A --inputs object(3,0) object(3,1)
+//> a::m::assert_same_digest(Input(0), Input(1));
