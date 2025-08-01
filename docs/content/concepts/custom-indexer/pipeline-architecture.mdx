@@ -1,5 +1,6 @@
 ---
 title: Indexer Pipeline Architecture
+description: The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand the differences between the sequential and concurrent pipelines that the `sui-indexer-alt-framework` provides to decide which best suits your project needs.
 ---
 
 The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understanding their differences is crucial for choosing the right approach, but deciding which one is best for a project can sometimes be difficult.
@@ -57,7 +58,7 @@ Beyond the decision of which pipeline to use, you also need to consider scaling.
 
 For each pipeline, the indexer minimally tracks the `checkpoint_hi_inclusive`, or highest checkpoint where all data up to that point is committed. Optionally, the pipeline tracks the `reader_lo` and `pruner_hi` if pruning is enabled. These watermarks are particularly crucial for concurrent pipelines to enable out-of-order processing while maintaining data integrity. Both concurrent and sequential pipelines rely on the `checkpoint_hi_inclusive` committer watermark to understand where to resume processing on restarts, while the `reader_lo` and `pruner_hi` define safe lower bounds for reading and pruning operations.
 
-### Scenario 1: Simple watermark (no pruning)
+### Scenario 1: Basic watermark (no pruning)
 
 With pruning disabled, the indexer reports each pipeline's committer `checkpoint_hi_inclusive` only. Consider the following timeline, where a number of checkpoints are being processed, with some checkpoints committed out of order.
 
@@ -580,3 +581,6 @@ Tuning guidelines:
 
 ## Related links
 
+- [Custom Indexing Framework](../custom-indexing-framework.mdx): The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui, providing customizable, production-ready components for data ingestion, processing, and storage.
+- [Life of a Transaction](../sui-architecture/transaction-lifecycle.mdx): The life of a transaction on the Sui network has some differences compared to those from other blockchains.
+- [Build a Custom Indexer](../../guides/developer/advanced/custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data. This guide walks you through the process.

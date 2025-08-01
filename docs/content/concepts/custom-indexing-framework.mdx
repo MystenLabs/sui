@@ -1,5 +1,6 @@
 ---
 title: Custom Indexing Framework
+description: The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui, providing customizable, production-ready components for data ingestion, processing, and storage.
 ---
 
 Sui's blockchain generates rich, complex data - transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing: tracking specific events, aggregating analytics, building dashboards, or creating specialized databases for their use cases.
@@ -19,6 +20,8 @@ What are checkpoints? Sui organizes blockchain data into checkpoints - batches o
 ![Overview](./custom-indexer/images/overview.png)
 
 ## Detailed architecture
+
+The following diagram details the custom indexer architecture.
 
 ![Custom indexer architecture](./custom-indexer/images/architecture.png)
 
@@ -48,8 +51,8 @@ Both the framework and your code manages the processing layer, which is where yo
 The framework then exposes specific interfaces that you implement to define your data processing logic. Some common APIs include:
 
 - `process()`: Transform raw checkpoint data (transactions, events, object changes) into your desired database rows. This is where you extract meaningful information, filter relevant data, and format it for storage.
-    
-    [https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/full_checkpoint_content.rs#L19-L23](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/full_checkpoint_content.rs#L19-L23)
+{@inject: crates/sui-types/src/full_checkpoint_content.rs#struct=CheckpointData}
+    [https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/full_checkpoint_content.rs#L19-L23](https://github.com/MystenLabs/sui/blob/main/#L19-L23)
     
 - `commit()`: Store your processed data to the database with proper transaction handling. The framework calls this with batches of processed data for efficient bulk operations.
 - `prune()`: Clean up old data based on your retention policies (optional). Useful for managing database size by removing outdated records while preserving recent data.
@@ -70,3 +73,4 @@ Your indexer runs as one executable program with multiple coordinated background
 
 - [Pipeline Architecture](./custom-indexer/pipeline-architecture.mdx): The structure of the available indexer pipelines (sequential and concurrent) and the advantages of using one over the other.
 - [Life of a Transaction](./sui-architecture/transaction-lifecycle.mdx): The life of a transaction on the Sui network has some differences compared to those from other blockchains.
+- [Build a Custom Indexer](../guides/developer/advanced/custom-indexer.mdx): Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data. This guide walks you through the process.

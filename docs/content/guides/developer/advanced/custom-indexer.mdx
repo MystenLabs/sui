@@ -1,10 +1,17 @@
 ---
-title: Custom Indexer
+title: Build a Custom Indexer
+description: Establishing a custom indexer helps improve latency, allows pruning the data of your Sui Full node, and provides efficient assemblage of checkpoint data.
 ---
+
+:::info
+
+{@include: ../../../snippets/data-serving-msg.mdx}
+
+:::
 
 This guide walks you through building a complete custom indexer using the `sui-indexer-alt-framework`. The guide instructs how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
 
-:::info
+:::tip
 
 While this guide uses PostgreSQL with [Diesel](https://diesel.rs/guides/getting-started) (a popular Rust ORM and query builder) for minimalism and out-of-the-box support, the `sui-indexer-alt-framework` is designed for flexible storage. You can {/*[**Bring Your Own Store (BYOS)**](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)*/} use different databases (such as [MongoDB](https://www.mongodb.com/), [CouchDB](https://couchdb.apache.org/), or similar) or utilize other database clients if you prefer not to use Diesel. To achieve this, implement the framework's `Store` and `Connection` traits and define your database write logic directly within your `Handler::commit()` method.
 
@@ -67,8 +74,16 @@ This guide demonstrates how to create an indexer that:
 
 In the end, you have a working indexer that demonstrates all core framework concepts and can serve as a foundation for more complex custom indexers.
 
-<Steps>
-<Step title="Project setup">
+:::info
+
+Sui provides checkpoint stores for both Mainnet and Testnet.
+
+- Testnet: `https://checkpoints.testnet.sui.io`
+- Mainnet: `https://checkpoints.mainnet.sui.io`
+
+:::
+
+##step Project setup
 
 First, open your terminal or console to the directory you want to store your indexer project. Use the `cargo new` command to create your Rust project and then navigate your terminal or console to its directory.
 
@@ -78,15 +93,16 @@ cargo new simple-sui-indexer
 ```sh
 cd simple-sui-indexer
 ```
-</Step>
-<Step title="Configure dependencies">
+
+##step Configure dependencies
 
 Replace your `Cargo.toml` with the following configuration and save. You can use an editor of your choice, but the instructions use Visual Studio Code (VS Code) for demonstration. Replace those instructions as needed for your environment.
 
 ```sh
 code Cargo.toml
 ```
-
+Replace the code in the manifest with the following:
+ 
 {@inject: examples/rust/basic-sui-indexer/Cargo.toml}
 
 The manifest now includes the following dependencies:
@@ -98,8 +114,7 @@ The manifest now includes the following dependencies:
 - `anyhow`: Error handling and async-trait for trait implementations.
 - `dotenvy`: Ingest .env file that stores your PostgreSQL URL. 
 
-</Step>
-<Step title="Create database">
+##step Create database
 
 Before configuring migrations, create and verify your local PostgreSQL database:
 
@@ -142,8 +157,7 @@ If successful, your console or terminal should respond with a message similar to
 (1 row)
 ```
 
-</Step>
-<Step title="Database setup">
+##step Database setup
 
 Before you start coding, you need to set up a local PostgreSQL database (created in the previous step) for the indexer to store the extracted transaction data.
 
@@ -153,7 +167,7 @@ The following steps have you:
 1. Use `Diesel` to manage the process.
 1. Generate Rust code that maps to the database table.
 
-<SubStep title="Configure Diesel">
+###substep Configure Diesel
 
 First, create a `diesel.toml` file (within the same folder as `cargo.toml`) to configure database migrations.
 
@@ -168,8 +182,7 @@ Update and save the file with the following code:
 
 {@inject: examples/rust/basic-sui-indexer/diesel.toml}
 
-</SubStep>
-<SubStep title="Create database table using Diesel migrations">
+###substep Create database table using Diesel migrations
 
 Diesel migrations are a way of creating and managing database tables using SQL files. Each migration has two files:
 
@@ -220,8 +233,7 @@ Replace the contents of the file with the following code and save it:
 
 {@inject: examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql}
 
-</SubStep>
-<SubStep title="Apply migration and generate Rust schema">
+###substep Apply migration and generate Rust schema
 
 From the root of your project, use the `diesel migration` command to create tables.
 
@@ -247,10 +259,7 @@ After running the previous commands, your project is set up for the next steps:
 
 The Diesel's migration system evolves the database schema over time in a structured and version-controlled way. For a complete walkthrough, see the official Diesel [Getting Started guide](https://diesel.rs/guides/getting-started).
 
-</SubStep>
-</Step>
-
-<Step title="Create data structure">
+##step Create data structure
 
 To simplify writes to Diesel, you can define a struct that represents a record on the `transaction_digests` table.
 
@@ -262,8 +271,7 @@ Key annotations:
 - `diesel(table_name = transaction_digests)`: Maps this Rust struct to the `transaction_digests` table, whose schema is generated in a previous step.
 - `Insertable`: Allows this struct to be inserted into the database using Diesel.
 
-</Step>
-<Step title="Define the Handler struct in handler.rs">
+##step Define the Handler struct in handler.rs
 
 Create a `handlers.rs` file in your `src` directory. 
 
@@ -283,8 +291,7 @@ and define a concrete struct to implement the `Processor` and `Handler` traits:
 
 Save the file but keep it open as the next steps add to its code.
 
-</Step>
-<Step title="Implement the Processor">
+##step Implement the Processor
 
 The `Processor` trait defines how to extract and transform data from checkpoints. The resulting data is then passed to `Handler::commit`.
 
@@ -298,9 +305,9 @@ After the `TransactionDigestHandler` struct, add the `Processor` code:
 
 Key concepts:
 
-- **NAME**: Unique identifier for this processor used in monitoring and logging.
-- **type Value**: Defines what data flows through the pipeline - ensures type safety.
-- **process()**: Core logic that transforms checkpoint data into your custom data structure.
+- `NAME`: Unique identifier for this processor used in monitoring and logging.
+- `type Value`: Defines what data flows through the pipeline - ensures type safety.
+- `process()`: Core logic that transforms checkpoint data into your custom data structure.
 
 Save the `handlers.rs` file.
 
@@ -310,8 +317,8 @@ Processor trait definition
 </summary>
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/processor.rs#trait=Processor}
 </details>
-</Step>
-<Step title="Implement the Handler">
+
+##step Implement the Handler
 
 The `Handler` trait defines how to commit data to the database. Add the dependencies and code after `Processor`.
 
@@ -331,7 +338,7 @@ You can override the default batch limits by implementing constants in your `Han
 
 :::
 
-The handlers.rs file is now complete. Save the file.
+The `handlers.rs` file is now complete. Save the file.
 
 <details>
 <summary>
@@ -347,8 +354,7 @@ Handler trait definition
 {@inject: crates/sui-indexer-alt-framework/src/pipeline/concurrent/mod.rs#trait=Handler}
 </details>
 
-</Step>
-<Step title="Create .env file">
+##step Create .env file
 
 The main function you create in the next step needs the value you stored to the shell variable `$PSQL_URL`. To make it available, create a `.env` file with that data.
 
@@ -372,8 +378,7 @@ echo "DATABASE_URL=$PSQL_URL" > .env
 
 After running the command for your environment, make sure the `.env` file exists at your project root with the correct data.
 
-</Step>
-<Step title="Create main function">
+##step Create main function
 
 Now to tie everything together in the main function. Open your `main.rs` file:
 
@@ -396,8 +401,7 @@ Key components explained:
 
 Your indexer is now complete. The next steps walk you through running the indexer and checking its functionality.
 
-</Step>
-<Step title="Run your indexer">
+##step Run your indexer
 
 Use the `cargo run` command to run your indexer against Testnet with remote checkpoint storage.
 
@@ -413,8 +417,7 @@ Allow incoming network requests if your operating system requests it for the `ba
 
 If successful, your console informs you that the indexer is running. 
 
-</Step>
-<Step title="Verify results">
+##step Verify results
 
 Open a new terminal or console and connect to your database to check the results:
 
@@ -438,9 +441,6 @@ SELECT * FROM transaction_digests LIMIT 5;
 
 To confirm your data is accurate, copy any transaction digest from your database and verify it on SuiScan: [https://suiscan.xyz/testnet/home](https://suiscan.xyz/testnet/home)
 
-</Step>
-</Steps>
-
 🎉 You've built a working custom indexer! The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
 
 {/*## Next stepsFrom here you can:
@@ -453,3 +453,9 @@ your indexer's health ([Metrics](https://www.notion.so/Metrics-2336d9dcb4e980aa8
 - **Use a different database**: Learn how to connect to other storage backends by implementing your own connector with [**Bring Your Own Store (BYOS)**](https://www.notion.so/Bring-Your-Own-Store-BYOS-2336d9dcb4e980db9a06c88248125910?pvs=21)
 - **Scale for performance**: If you need higher throughput and are willing to handle additional complexity, consider switching to concurrent pipelines ([Concurrent vs Sequential pipelines](https://www.notion.so/Concurrent-vs-Sequential-pipelines-2336d9dcb4e980f1a0a7c1e3c33071fa?pvs=21))
 */}
+
+## Related links
+
+- [Production example](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer/src): Sui Name Service custom indexer.
+- [Custom Indexing Framework](../../../concepts/custom-indexing-framework.mdx): The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui, providing customizable, production-ready components for data ingestion, processing, and storage.
+- [Indexer Pipeline Architecture](../../../concepts/custom-indexer/pipeline-architecture.mdx): The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand the differences between the sequential and concurrent pipelines that the `sui-indexer-alt-framework` provides to decide which best suits your project needs.

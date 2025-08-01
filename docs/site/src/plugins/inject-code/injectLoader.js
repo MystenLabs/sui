@@ -197,20 +197,37 @@ const addCodeInject = async function (source) {
                 let structContent = [];
                 for (let struct of structs) {
                   struct = struct.trim();
-                  let structStr = `^(\\s*)*?(pub(lic)? )?struct \\b${struct}\\b.*?}`;
-                  if (isRust) {
-                    structStr = `^(\\s*)\\b(pub(lic)?\\s+)?struct\\s+${struct}\\b`;
+                  // Check for Rust short version
+                  let structStr = `^(\\s*)\\b(pub(lic)?\\s+)?struct\\s+${struct}\\b;\n`;
+                  let structRE = new RegExp(structStr, "msi");
+                  let structMatch = structRE.exec(injectFileContent);
+                  // If no match, check for Move type or Rust long
+                  if (!structMatch) {
+                    structStr = `^(\\s*)*?(pub(lic)? )?struct \\b${struct}\\b.*?}`;
+                    structRE = new RegExp(structStr, "msi");
+                    structMatch = structRE.exec(injectFileContent);
                   }
-                  const structRE = new RegExp(structStr, "msi");
-                  const structMatch = structRE.exec(injectFileContent);
+                  let preStruct;
                   if (structMatch) {
-                    let preStruct = utils.capturePrepend(
+                    preStruct = utils.capturePrepend(
                       structMatch,
                       injectFileContent,
                     );
                     structContent.push(
                       utils.removeLeadingSpaces(structMatch[0], preStruct),
                     );
+                  } else if (isRust) {
+                    structRE = new RegExp(structStrLong, "msi");
+                    structMatch = structRE.exec(injectFileContent);
+                    if (structMatch) {
+                      preStruct = utils.capturePrepend(
+                        structMatch,
+                        injectFileContent,
+                      );
+                      structContent.push(
+                        utils.removeLeadingSpaces(structMatch[0], preStruct),
+                      );
+                    }
                   } else {
                     injectFileContent =
                       "Struct not found. If code is formatted correctly, consider using code comments instead.";
