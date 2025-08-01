@@ -585,6 +585,15 @@ macro_rules! resolve_from_module_access {
     }};
 }
 
+macro_rules! resolve_from_module_access_no_errors {
+    ($context:expr, $loc:expr, $mident:expr, $name:expr, $expected_pat:pat, $rhs:expr, $expected_kind:expr) => {{
+        match $context.resolve_module_access(&Some($expected_kind), $loc, $mident, $name) {
+            Some($expected_pat) => $rhs,
+            Some(_) | None => None,
+        }
+    }};
+}
+
 impl OuterContext {
     fn new(
         compilation_env: &CompilationEnv,
@@ -723,6 +732,41 @@ impl<'outer, 'env> Context<'outer, 'env> {
         n: &Name,
     ) -> Option<Box<ResolvedModuleFunction>> {
         resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleMember::Function(fun),
+            Some(fun),
+            ErrorKind::Function
+        )
+    }
+
+    fn resolve_stdlib_type(
+        &mut self,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+        error_kind: ErrorKind,
+    ) -> Option<Box<ResolvedDatatype>> {
+        resolve_from_module_access_no_errors!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleMember::Datatype(module_type),
+            Some(Box::new(module_type)),
+            error_kind
+        )
+    }
+
+    fn resolve_stdlib_function(
+        &mut self,
+        loc: Loc,
+        m: &ModuleIdent,
+        n: &Name,
+    ) -> Option<Box<ResolvedModuleFunction>> {
+        resolve_from_module_access_no_errors!(
             self,
             loc,
             m,
@@ -2085,36 +2129,39 @@ fn resolve_stdlib_function(
     context: &mut Context,
     ma: E::ModuleAccess_,
 ) -> Option<(ModuleIdent, FunctionName)> {
-    use ResolvedCallSubject as RC;
-    match context.resolve_call_subject(sp(Loc::invalid(), ma)) {
-        RC::Builtin(_) | RC::Constructor(_) | RC::Var(_) | RC::Unbound => None,
-        RC::Function(fun) => Some((fun.mident, fun.name)),
-    }
+    let E::ModuleAccess_::ModuleAccess(m, n) = ma else {
+        return None;
+    };
+    let Some(resolved_function) = context.resolve_stdlib_function(m.loc, &m, &n) else {
+        return None;
+    };
+    Some((resolved_function.mident, resolved_function.name))
 }
 
 fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N::Type> {
     use N::{Type_ as NT, TypeName_ as NN};
-    use ResolvedType as RT;
-    match context.resolve_type(sp(Loc::invalid(), ma)) {
-        RT::Unbound | RT::Hole | RT::BuiltinType(..) | RT::TParam(..) => None,
-        RT::ModuleType(mt) => {
-            let (decl_loc, tn, arity) = match mt {
-                ResolvedDatatype::Struct(stype) => {
-                    let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident, stype.name));
-                    let arity = stype.tyarg_arity;
-                    (stype.decl_loc, tn, arity)
-                }
-                ResolvedDatatype::Enum(etype) => {
-                    let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident, etype.name));
-                    let arity = etype.tyarg_arity;
-                    (etype.decl_loc, tn, arity)
-                }
-            };
-            assert!(arity == 0, "Cannot resolve stdlib types with arguments");
-            let tys = vec![];
-            Some(sp(decl_loc, NT::Apply(None, tn, tys)))
+
+    let E::ModuleAccess_::ModuleAccess(m, n) = ma else {
+        return None;
+    };
+    let Some(mt) = context.resolve_stdlib_type(m.loc, &m, &n, ErrorKind::Type) else {
+        return None;
+    };
+    let (decl_loc, tn, arity) = match *mt {
+        ResolvedDatatype::Struct(stype) => {
+            let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident, stype.name));
+            let arity = stype.tyarg_arity;
+            (stype.decl_loc, tn, arity)
         }
-    }
+        ResolvedDatatype::Enum(etype) => {
+            let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident, etype.name));
+            let arity = etype.tyarg_arity;
+            (etype.decl_loc, tn, arity)
+        }
+    };
+    assert!(arity == 0, "Cannot resolve stdlib types with arguments");
+    let tys = vec![];
+    Some(sp(decl_loc, NT::Apply(None, tn, tys)))
 }
 
 //**************************************************************************************************
