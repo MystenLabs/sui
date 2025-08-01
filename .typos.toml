@@ -8,5 +8,5 @@ groth = "groth"
 
 [default.files]
 extend-exclude = [
-  "*.excalidraw",
+  "**/*.excalidraw",
 ]
