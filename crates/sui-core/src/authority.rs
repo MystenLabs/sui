@@ -3910,7 +3910,7 @@ impl AuthorityState {
             None => {
                 debug_fatal!(
                     "Object with in parent_entry is missing from object store, datastore is \
-                     inconsistent",
+                     inconsistent"
                 );
                 Err(UserInputError::ObjectNotFound {
                     object_id: *object_id,

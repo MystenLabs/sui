@@ -451,7 +451,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     debug_fatal!(
                         "We should never enqueue certificate from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
-                        cert.0.epoch(),
+                        cert.0.epoch()
                     );
                     None
                 }

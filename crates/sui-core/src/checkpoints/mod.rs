@@ -2430,7 +2430,7 @@ impl CheckpointSignatureAggregator {
                 "Split brain detected in checkpoint signature aggregation for checkpoint {:?}. Remaining stake: {:?}, Digests by stake: {:?}",
                 self.summary.sequence_number,
                 self.signatures_by_digest.uncommitted_stake(),
-                digests_by_stake_messages,
+                digests_by_stake_messages
             );
             self.metrics.split_brain_checkpoint_forks.inc();
 
