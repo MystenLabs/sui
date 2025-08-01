@@ -545,38 +545,20 @@ fn merge_user_programs(
     parsed_program_new: P::Program,
     typed_program_modules_new: UniqueMap<ModuleIdent, ModuleDefinition>,
     file_paths_new: Arc<BTreeMap<FileHash, PathBuf>>,
-    files_to_compile: BTreeSet<PathBuf>,
+    modified_files: BTreeSet<PathBuf>,
 ) -> (P::Program, UniqueMap<ModuleIdent, ModuleDefinition>) {
-    // unraps are safe as this function only called when cached compiled program exists
-    let cached_info = cached_info_opt.unwrap();
-    let compiled_program = cached_info.program.unwrap();
-    let file_paths_cached = cached_info.file_paths;
-    let mut parsed_program_cached = compiled_program.parsed.clone();
-    let mut typed_modules_cached = compiled_program.typed_modules.clone();
-    // address maps might have changed - below we need to update named map indexes
-    // even for unmodified packages
-    parsed_program_cached.named_address_maps = parsed_program_new.named_address_maps;
-    // remove modules from user code that belong to modified files
-    parsed_program_cached.source_definitions.retain(|pkg_def| {
-        let pkg_modified =
-            is_parsed_pkg_modified(pkg_def, &files_to_compile, file_paths_cached.clone());
-        !pkg_modified
-    });
-    let mut typed_modules_cached_filtered = UniqueMap::new();
-    for (mident, mdef) in typed_modules_cached.into_iter() {
-        if !is_typed_mod_modified(&mdef, &mident, &files_to_compile, file_paths_cached.clone()) {
-            _ = typed_modules_cached_filtered.add(mident, mdef);
-        }
-    }
-    typed_modules_cached = typed_modules_cached_filtered;
-    // add new modules from user code, but even if nothing's changed we still
-    // need to update the named address map index)
-    for pkg_def in parsed_program_new.source_definitions {
-        let pkg_modified =
-            is_parsed_pkg_modified(&pkg_def, &files_to_compile, file_paths_new.clone());
+    fn process_new_parsed_pkg(
+        pkg_def: P::PackageDefinition,
+        file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
+        modified_files: &BTreeSet<PathBuf>,
+        unmodified_definitions: &mut Vec<P::PackageDefinition>,
+    ) {
+        // add new modules to `unmodified_definitions` (which become the result) if nothing's changed,
+        // but even if nothing's changed we still need to update the named address map index
+        let pkg_modified = is_parsed_pkg_modified(&pkg_def, &modified_files, file_paths);
 
         if pkg_modified {
-            parsed_program_cached.source_definitions.push(pkg_def);
+            unmodified_definitions.push(pkg_def);
         } else {
             // find cached package definition with the same hash
             // and update its named address map index
@@ -585,8 +567,7 @@ fn merge_user_programs(
                 P::Definition::Address(adef) => adef.loc.file_hash(),
             };
             let cached_pkg_def =
-                parsed_program_cached
-                    .source_definitions
+                unmodified_definitions
                     .iter_mut()
                     .find(|pkg_def| match &pkg_def.def {
                         P::Definition::Module(mdef) => mdef.loc.file_hash() == pkg_hash,
@@ -597,14 +578,56 @@ fn merge_user_programs(
             }
         }
     }
+
+    // unraps are safe as this function only called when cached compiled program exists
+    let cached_info = cached_info_opt.unwrap();
+    let compiled_program_cached = cached_info.program.unwrap();
+    let file_paths_cached = cached_info.file_paths;
+    let mut result_parsed_program = compiled_program_cached.parsed.clone();
+    let mut result_typed_modules = compiled_program_cached.typed_modules.clone();
+    // address maps might have changed - below we need to update named map indexes
+    // even for unmodified packages
+    result_parsed_program.named_address_maps = parsed_program_new.named_address_maps;
+    // remove modules from user code that belong to modified files
+    result_parsed_program.source_definitions.retain(|pkg_def| {
+        !is_parsed_pkg_modified(pkg_def, &modified_files, file_paths_cached.clone())
+    });
+    result_parsed_program.lib_definitions.retain(|pkg_def| {
+        !is_parsed_pkg_modified(pkg_def, &modified_files, file_paths_cached.clone())
+    });
+    let mut typed_modules_cached_filtered = UniqueMap::new();
+    for (mident, mdef) in result_typed_modules.into_iter() {
+        if !is_typed_mod_modified(&mdef, &mident, &modified_files, file_paths_cached.clone()) {
+            _ = typed_modules_cached_filtered.add(mident, mdef);
+        }
+    }
+    result_typed_modules = typed_modules_cached_filtered;
+    // add new modules from user code, but even if nothing's changed we still
+    // need to update the named address map index)
+    for pkg_def in parsed_program_new.source_definitions {
+        process_new_parsed_pkg(
+            pkg_def,
+            file_paths_new.clone(),
+            &modified_files,
+            &mut result_parsed_program.source_definitions,
+        );
+    }
+    for pkg_def in parsed_program_new.lib_definitions {
+        process_new_parsed_pkg(
+            pkg_def,
+            file_paths_new.clone(),
+            &modified_files,
+            &mut result_parsed_program.lib_definitions,
+        );
+    }
     for (mident, mdef) in typed_program_modules_new.into_iter() {
-        if is_typed_mod_modified(&mdef, &mident, &files_to_compile, file_paths_new.clone()) {
-            typed_modules_cached.remove(&mident); // in case new file has new definition of the module
-            _ = typed_modules_cached.add(mident, mdef);
+        if is_typed_mod_modified(&mdef, &mident, &modified_files, file_paths_new.clone()) {
+            result_typed_modules.remove(&mident); // in case new file has new definition of the module
+            _ = result_typed_modules.add(mident, mdef);
         }
     }
 
-    (parsed_program_cached, typed_modules_cached)
+    (result_parsed_program, result_typed_modules)
 }
 
 /// Checks if a parsed module is modified by getting
