@@ -115,7 +115,7 @@ impl Epoch {
         Ok(Some(DateTime::from_ms(contents.start_timestamp_ms)?))
     }
 
-    /// The transactions in this epoch, optional filtered by transaction filters.
+    /// The transactions in this epoch, optionally filtered by transaction filters.
     async fn transactions(
         &self,
         ctx: &Context<'_>,
