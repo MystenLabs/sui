@@ -48,7 +48,7 @@ fn make_input(
     fun: S::Function,
 ) -> (
     Symbol,
-    BTreeMap<D::Label, D::Block>,
+    BTreeMap<D::Label, Out::Exp>,
     BTreeMap<D::Label, D::Input>,
     D::Label,
 ) {
@@ -85,75 +85,8 @@ fn make_input(
     (name, terms, input, (entry_label as u32).into())
 }
 
-fn generate_term_block(block: &S::BasicBlock) -> D::Block {
-    D::Block{ body: vec![] }
-}
-
-fn extract_terms(block: &S::BasicBlock) -> Vec<Term> {
-    let mut terms = Vec::new();
-    for instr in &block.instructions {
-        let term = extract_term(instr);
-        terms.push(term);
-    }
-    terms
-}
-
-fn extract_term(instr: &S::Instruction) -> Term {
-    // FIXME
-    match instr {
-        S::Instruction::AssignReg { lhs, rhs } => match rhs {
-            S::RValue::Trivial(trivial) => Term::Assign {
-                target: lhs.clone(),
-                value: trivial.clone(),
-            },
-            S::RValue::Primitive { op, args } => Term::PrimitiveOp {
-                op: format!("{:?}", op),
-                args: args.clone(),
-                result: lhs.clone(),
-            },
-            S::RValue::Data { op, args } => Term::DataOp {
-                op: format!("{:?}", op),
-                args: args.clone(),
-                result: lhs.clone(),
-            },
-            S::RValue::Call { function, args } => Term::Call {
-                function: *function,
-                args: args.clone(),
-                result: lhs.clone(),
-            },
-            S::RValue::Local { op, arg } => Term::LocalOp {
-                op: format!("{:?}", op),
-                loc: *arg,
-                value: None,
-                result: lhs.clone(),
-            },
-            S::RValue::Constant(const_ref) => Term::Constant {
-                value: const_ref.data.clone(),
-                result: lhs.clone(),
-            },
-        },
-        S::Instruction::Drop(reg) => Term::Drop(*reg),
-        S::Instruction::StoreLoc { loc, value } => Term::LocalOp {
-            op: "store".to_string(),
-            loc: *loc,
-            value: Some(value.clone()),
-            result: vec![],
-        },
-        S::Instruction::Abort(trivial) => Term::Abort(trivial.clone()),
-        S::Instruction::Return(trivials) => Term::Return(trivials.clone()),
-        S::Instruction::Nop => Term::Nop,
-        S::Instruction::NotImplemented(msg) => Term::NotImplemented(msg.clone()),
-        // Handle other instruction types
-        S::Instruction::Jump(_)
-        | S::Instruction::JumpIf {
-            condition: _,
-            then_label: _,
-            else_label: _,
-        }
-        | S::Instruction::VariantSwitch { cases: _ } => {
-            Term::NotImplemented("Control flow instruction not implemented".to_string())
-        }
-    }
+fn generate_term_block(block: &S::BasicBlock) -> Out::Exp {
+    Out::Exp::Block(Term::Untranslated(block.clone()))
 }
 
 fn extract_input(block: &S::BasicBlock, next_block_label: Option<S::Label>) -> D::Input {
@@ -215,94 +148,37 @@ fn extract_input(block: &S::BasicBlock, next_block_label: Option<S::Label>) -> D
 }
 
 fn generate_output(
-    terms: BTreeMap<D::Label, D::Block>,
+    mut terms: BTreeMap<D::Label, Out::Exp>,
     structured: D::Structured,
 ) -> Exp {
-    Exp::Continue
-}
-fn generate_output_old(terms: BTreeMap<D::Label, Term>, structured: D::Structured) -> Exp {
-    // Convert the structured representation back to your Exp format
-    convert_structured_to_exp(&terms, structured)
-}
-
-fn convert_structured_to_exp(terms: &BTreeMap<D::Label, Term>, structured: D::Structured) -> Exp {
-    // FIXME
     match structured {
-        D::Structured::Break => Exp::Break,
-        D::Structured::Continue => Exp::Continue,
-        D::Structured::Block(label) => {
-            // You'll need to look up the block and convert its terms
-            // For now, create a placeholder
-            let blk = terms.get(&(label.0 as u32).into()).expect("Block not found");
-            Exp::Block(blk.clone())
-        }
-        D::Structured::Loop(body) => Exp::Loop(Box::new(convert_structured_to_exp(terms, *body))),
+        D::Structured::Break => Out::Exp::Break,
+        D::Structured::Continue => Out::Exp::Continue,
+        D::Structured::Block((lbl, _invert)) => {
+            terms.remove(&(lbl as u32).into()).unwrap()
+        },
+        D::Structured::Loop(body) => Out::Exp::Loop(Box::new(generate_output(terms, *body))),
         D::Structured::Seq(seq) => {
-            Exp::Seq(seq.into_iter().map(|s| convert_structured_to_exp(terms, s)).collect())
+            let seq = seq.into_iter().map(|s| generate_output(terms.clone(), s)).collect();
+            Out::Exp::Seq(seq)
         }
-        D::Structured::While(cond, body) => {
-            // You'll need to convert the condition to a Term
-            let cond_term =
-                Term::NotImplemented("Condition conversion not implemented".to_string());
-            Exp::While(cond_term, Box::new(convert_structured_to_exp(terms, *body)))
+        D::Structured::While((lbl, _invert), body) => {
+            let term = terms.remove(&(lbl as u32).into()).unwrap();
+            Out::Exp::While(Box::new(term), Box::new(generate_output(terms, *body)))
         }
-        D::Structured::IfElse(cond, then_branch, else_branch) => {
-            let cond_term =
-                Term::NotImplemented("Condition conversion not implemented".to_string());
-            let else_exp = else_branch.map(|e| convert_structured_to_exp(terms, e));
-            Exp::IfElse(
-                cond_term,
-                Box::new(convert_structured_to_exp(terms, *then_branch)),
-                Box::new(else_exp),
-            )
+        D::Structured::IfElse((lbl, _invert), conseq, alt) => {
+            let term = terms.remove(&(lbl as u32).into()).unwrap();
+            let alt_exp = alt.map(|a| generate_output(terms.clone(), a));
+            Out::Exp::IfElse(Box::new(term), Box::new(generate_output(terms.clone(), *conseq)), Box::new(alt_exp))
         }
-        D::Structured::Switch(cond, cases) => {
-            let cond_term =
-                Term::NotImplemented("Switch condition conversion not implemented".to_string());
-            let case_exps = cases.into_iter().map(|c| convert_structured_to_exp(terms, c)).collect();
-            Exp::Switch(cond_term, case_exps)
+        D::Structured::Switch((lbl, _invert), cases) => {
+            let term = terms.remove(&(lbl as u32).into()).unwrap();
+            let cases = cases.into_iter().map(|c| generate_output(terms.clone(), c)).collect();
+            Out::Exp::Switch(Box::new(term), cases)
         }
-        _ => Exp::Block(Term::NotImplemented(format!(
-            "Unhandled structured type: {:?}",
-            structured
-        ))),
+        D::Structured::Jump(_) 
+        | D::Structured::JumpIf { .. } => unreachable!("Jump nodes should not be present in the final output")
+
     }
 }
 
-fn into_term(term: Term) -> Exp {
-    // FIXME
-    match term {
-        Term::Assign { target, value } => Exp::Block(Term::Assign { target, value }),
-        Term::PrimitiveOp { op, args, result } => {
-            Exp::Block(Term::PrimitiveOp { op, args, result })
-        }
-        Term::DataOp { op, args, result } => Exp::Block(Term::DataOp { op, args, result }),
-        Term::Call {
-            function,
-            args,
-            result,
-        } => Exp::Block(Term::Call {
-            function,
-            args,
-            result,
-        }),
-        Term::LocalOp {
-            op,
-            loc,
-            value,
-            result,
-        } => Exp::Block(Term::LocalOp {
-            op,
-            loc,
-            value,
-            result,
-        }),
-        Term::Drop(reg) => Exp::Block(Term::Drop(reg)),
-        Term::Abort(trivial) => Exp::Block(Term::Abort(trivial)),
-        Term::Return(trivials) => Exp::Block(Term::Return(trivials)),
-        Term::Constant { value, result } => Exp::Block(Term::Constant { value, result }),
-        Term::Nop => Exp::Block(Term::Nop),
-        Term::NotImplemented(msg) => Exp::Block(Term::NotImplemented(msg)),
-        Term::Untranslated(basic_block) => todo!(),
-    }
-}

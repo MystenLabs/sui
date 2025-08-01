@@ -15,8 +15,9 @@ pub fn loop_type(loop_head: Structured) -> Structured {
                         let condition = seq.remove(0);
                         match condition {
                             Structured::IfElse(cond, conseq, alt) => {
+                                
                                 if matches!(*conseq, Structured::Break) {
-                                    Structured::While(cond, Box::new(alt.unwrap()))
+                                    Structured::While(cond, Box::new(alt))
                                 } else {
                                     Structured::While(cond, Box::new(*conseq))
                                 }
