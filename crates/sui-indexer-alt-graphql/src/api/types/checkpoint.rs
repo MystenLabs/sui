@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object};
+use async_graphql::{connection::Connection, Context, Object};
 
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
@@ -15,13 +15,18 @@ use crate::{
     api::{
         query::Query,
         scalars::{base64::Base64, date_time::DateTime, uint53::UInt53},
-        types::validator_aggregated_signature::ValidatorAggregatedSignature,
     },
     error::RpcError,
+    pagination::{Page, PaginationConfig},
     scope::Scope,
 };
 
-use super::{epoch::Epoch, gas::GasCostSummary};
+use super::{
+    epoch::Epoch,
+    gas::GasCostSummary,
+    transaction::{filter::TransactionFilter, CTransaction, Transaction},
+    validator_aggregated_signature::ValidatorAggregatedSignature,
+};
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -152,6 +157,35 @@ impl CheckpointContents {
             self.scope.clone(),
             authority_info.clone(),
         )))
+    }
+
+    // The transactions in this checkpoint.
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CTransaction>,
+        last: Option<u64>,
+        before: Option<CTransaction>,
+        filter: Option<TransactionFilter>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let Some((summary, _, _)) = &self.contents else {
+            return Ok(None);
+        };
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Checkpoint", "transactions");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+            at_checkpoint: Some(UInt53::from(summary.sequence_number)),
+            ..Default::default()
+        }) else {
+            return Ok(Some(Connection::new(false, false)));
+        };
+
+        Ok(Some(
+            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+        ))
     }
 }
 

@@ -1,0 +1,196 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 7-11:
+//# programmable --sender A --inputs 1000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+// Create an AuthenticatorStateUpdate transaction with a single JWK
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 12:
+//# authenticator-state-update --round 1 --jwk-iss https://accounts.google.com --authenticator-obj-initial-shared-version 111
+AuthenticatorStateUpdate executed at epoch 0 round 1
+
+task 3, line 14:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 16-18:
+//# advance-epoch
+Epoch advanced: 1
+
+task 5, line 19:
+//# authenticator-state-update --round 2 --jwk-iss https://accounts.google.com --jwk-iss https://login.microsoftonline.com
+AuthenticatorStateUpdate executed at epoch 1 round 2
+
+task 6, line 21:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 7, lines 23-51:
+//# run-graphql
+Response: {
+  "data": {
+    "nonAuthenticatorTransaction": {
+      "digest": "4naXncbBysxsttwyjJaLK35CTQQuHnqDAGJ8MPcwUsSP",
+      "kind": null
+    }
+  }
+}
+
+task 8, lines 53-89:
+//# run-graphql
+Response: {
+  "data": {
+    "singleJwkTransaction": {
+      "digest": "EuB2BT9d9bz6btCzRdwV3rmnrDNT2Po1HgDrBxWknwuc",
+      "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
+        "epoch": {
+          "epochId": 0
+        },
+        "round": 1,
+        "newActiveJwks": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "edges": [
+            {
+              "cursor": "MA==",
+              "node": {
+                "iss": "https://accounts.google.com",
+                "kid": "key1",
+                "kty": "RSA",
+                "e": "AQAB",
+                "n": "test_modulus_value",
+                "alg": "RS256",
+                "epoch": {
+                  "epochId": 0
+                }
+              }
+            }
+          ]
+        },
+        "authenticatorObjInitialSharedVersion": 111
+      }
+    }
+  }
+}
+
+task 9, lines 91-127:
+//# run-graphql
+Response: {
+  "data": {
+    "multipleJwksTransaction": {
+      "digest": "AUnxb6azkw5c9Q2LJT3j1oGubvmGCjt3DhdFc3BFNMbc",
+      "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
+        "epoch": {
+          "epochId": 1
+        },
+        "round": 2,
+        "newActiveJwks": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "edges": [
+            {
+              "cursor": "MA==",
+              "node": {
+                "iss": "https://accounts.google.com",
+                "kid": "key1",
+                "kty": "RSA",
+                "e": "AQAB",
+                "n": "test_modulus_value",
+                "alg": "RS256",
+                "epoch": {
+                  "epochId": 1
+                }
+              }
+            },
+            {
+              "cursor": "MQ==",
+              "node": {
+                "iss": "https://login.microsoftonline.com",
+                "kid": "key2",
+                "kty": "RSA",
+                "e": "AQAB",
+                "n": "test_modulus_value",
+                "alg": "RS256",
+                "epoch": {
+                  "epochId": 1
+                }
+              }
+            }
+          ]
+        },
+        "authenticatorObjInitialSharedVersion": 0
+      }
+    }
+  }
+}
+
+task 10, lines 129-181:
+//# run-graphql
+Response: {
+  "data": {
+    "paginationFirstJwk": {
+      "digest": "AUnxb6azkw5c9Q2LJT3j1oGubvmGCjt3DhdFc3BFNMbc",
+      "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
+        "round": 2,
+        "newActiveJwks": {
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false,
+            "startCursor": "MA==",
+            "endCursor": "MA=="
+          },
+          "edges": [
+            {
+              "cursor": "MA==",
+              "node": {
+                "iss": "https://accounts.google.com",
+                "kid": "key1"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "paginationLastJwk": {
+      "digest": "AUnxb6azkw5c9Q2LJT3j1oGubvmGCjt3DhdFc3BFNMbc",
+      "kind": {
+        "__typename": "AuthenticatorStateUpdateTransaction",
+        "round": 2,
+        "newActiveJwks": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": true,
+            "startCursor": "MQ==",
+            "endCursor": "MQ=="
+          },
+          "edges": [
+            {
+              "cursor": "MQ==",
+              "node": {
+                "iss": "https://login.microsoftonline.com",
+                "kid": "key2"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

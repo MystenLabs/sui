@@ -79,7 +79,7 @@ const SIZE_BUCKETS: &[f64] = &[
 // Because of indirect finalization, the round delay should be at most 3 rounds.
 const ROUND_DELAY_BUCKETS: &[f64] = &[0.0, 0.5, 1.0, 2.0, 3.0, 4.0];
 
-pub(crate) struct Metrics {
+pub struct Metrics {
     pub(crate) node_metrics: NodeMetrics,
     pub(crate) network_metrics: NetworkMetrics,
 }
@@ -94,7 +94,6 @@ pub(crate) fn initialise_metrics(registry: Registry) -> Arc<Metrics> {
     })
 }
 
-#[cfg(test)]
 pub(crate) fn test_metrics() -> Arc<Metrics> {
     initialise_metrics(Registry::new())
 }

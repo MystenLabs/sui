@@ -55,6 +55,34 @@ fragment E on Epoch {
     totalObjectStorageRebates
     nonRefundableBalance
   }
+  safeMode {
+    enabled
+    gasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+  }
+  systemStateVersion
+  systemParameters {
+    durationMs
+    stakeSubsidyStartEpoch
+    minValidatorCount
+    maxValidatorCount
+    minValidatorJoiningStake
+    validatorLowStakeThreshold
+    validatorVeryLowStakeThreshold
+    validatorLowStakeGracePeriod
+  }
+  systemStakeSubsidy {
+      balance
+      distributionCounter
+      currentDistributionAmount
+      periodLength
+      decreaseRate
+  }
+  liveObjectSetDigest
 }
 
 //# run-graphql
@@ -100,4 +128,32 @@ fragment E on Epoch {
     totalObjectStorageRebates
     nonRefundableBalance
   }
+  safeMode {
+    enabled
+    gasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+  }
+  systemStateVersion
+  systemParameters {
+    durationMs
+    stakeSubsidyStartEpoch
+    minValidatorCount
+    maxValidatorCount
+    minValidatorJoiningStake
+    validatorLowStakeThreshold
+    validatorVeryLowStakeThreshold
+    validatorLowStakeGracePeriod
+  }
+  systemStakeSubsidy {
+      balance
+      distributionCounter
+      currentDistributionAmount
+      periodLength
+      decreaseRate
+  }
+  liveObjectSetDigest
 }

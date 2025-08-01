@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{vector[1, 2, 3\"#)"
+---
+Error: Unexpected end-of-string, expected one of ',', or ']'

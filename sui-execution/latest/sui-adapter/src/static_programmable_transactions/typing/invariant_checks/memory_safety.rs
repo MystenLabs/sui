@@ -41,17 +41,20 @@ struct Path {
 #[derive(Debug)]
 struct PathSet(IndexSet<Path>);
 
+#[derive(Debug)]
 enum Value {
     NonRef,
     Ref { is_mut: bool, paths: Rc<PathSet> },
 }
 
+#[derive(Debug)]
 struct Location {
     // A singleton set pointing to the location itself
     self_path: Rc<PathSet>,
     value: Option<Value>,
 }
 
+#[derive(Debug)]
 struct Context {
     tx_context: Location,
     gas: Location,
@@ -146,17 +149,32 @@ impl PathSet {
         self.0.is_empty()
     }
 
-    /// Returns true if any path in `self` is non-`Disjoint` with any path in `other`.
-    /// Excludes `Aliases` if `allow_aliases` is true.
-    fn conflicts(&self, other: &Self, allow_aliases: bool) -> bool {
+    /// Returns true if any path in `self` `Extends` with any path in `other`.
+    /// Excludes `Aliases` if `ignore_aliases` is true.
+    fn extends(&self, other: &Self, ignore_aliases: bool) -> bool {
         self.0.iter().any(|self_path| {
             other
                 .0
                 .iter()
                 .any(|other_path| match self_path.compare(other_path) {
-                    PathComparison::Disjoint => false,
-                    PathComparison::Aliases => !allow_aliases,
-                    PathComparison::Prefix | PathComparison::Extends => true,
+                    PathComparison::Prefix | PathComparison::Disjoint => false,
+                    PathComparison::Aliases => !ignore_aliases,
+                    PathComparison::Extends => true,
+                })
+        })
+    }
+
+    /// Returns true if all paths in `self` are `Disjoint` with all paths in `other`.
+    fn is_disjoint(&self, other: &Self) -> bool {
+        self.0.iter().all(|self_path| {
+            other
+                .0
+                .iter()
+                .all(|other_path| match self_path.compare(other_path) {
+                    PathComparison::Disjoint => true,
+                    PathComparison::Prefix | PathComparison::Aliases | PathComparison::Extends => {
+                        false
+                    }
                 })
         })
     }
@@ -305,7 +323,7 @@ impl Context {
         self.results.len() as u16
     }
 
-    fn add_result_values(&mut self, results: impl IntoIterator<Item = Value>) {
+    fn add_result_values(&mut self, results: impl IntoIterator<Item = Option<Value>>) {
         let command = self.current_command();
         self.results.push(
             results
@@ -313,17 +331,10 @@ impl Context {
                 .enumerate()
                 .map(|(i, v)| Location {
                     self_path: Rc::new(PathSet::initial(T::Location::Result(command, i as u16))),
-                    value: Some(v),
+                    value: v,
                 })
                 .collect(),
         );
-    }
-
-    fn add_results(&mut self, results: &[T::Type]) {
-        self.add_result_values(results.iter().map(|t| {
-            debug_assert!(!matches!(t, T::Type::Reference(_, _)));
-            Value::NonRef
-        }));
     }
 
     fn location(&self, loc: T::Location) -> anyhow::Result<&Location> {
@@ -375,9 +386,9 @@ impl Context {
     }
 
     fn check_usage(&self, usage: &T::Usage, location: &Location) -> anyhow::Result<()> {
-        // by marking "allow alias" as `false`, we will also check for `Alias` paths, i.e. paths
+        // by marking "ignore alias" as `false`, we will also check for `Alias` paths, i.e. paths
         // that point to the location itself without any extensions.
-        let is_borrowed = self.any_conflicts(&location.self_path, /* allow alias */ false)
+        let is_borrowed = self.any_extends(&location.self_path, /* ignore alias */ false)
             || self.arg_roots.contains(&usage.location());
         match usage {
             T::Usage::Move(_) => {
@@ -460,11 +471,11 @@ impl Context {
             })
     }
 
-    /// Returns true if any of the references in a given `T::Location` conflict with the paths in
-    /// `paths`. Excludes `Aliases` if `allow_aliases` is true.
-    fn any_conflicts(&self, paths: &PathSet, allow_aliases: bool) -> bool {
+    /// Returns true if any of the references in a given `T::Location` extends a path in `paths`.
+    /// Excludes `Aliases` if `ignore_aliases` is true.
+    fn any_extends(&self, paths: &PathSet, ignore_aliases: bool) -> bool {
         self.all_references()
-            .any(|other| paths.conflicts(&other, allow_aliases))
+            .any(|other| other.extends(paths, ignore_aliases))
     }
 }
 
@@ -499,56 +510,78 @@ fn verify_(txn: &T::Transaction) -> anyhow::Result<()> {
         receiving: _,
         commands,
     } = txn;
-    for (c, result_tys) in commands {
-        debug_assert!(context.arg_roots.is_empty());
-        command(&mut context, c, result_tys)?;
-        context.arg_roots.clear();
+    for c in commands {
+        command(&mut context, c)?;
     }
     Ok(())
 }
 
-fn command(
-    context: &mut Context,
-    sp!(_, command): &T::Command,
-    result_tys: &[T::Type],
-) -> anyhow::Result<()> {
-    match command {
-        T::Command_::MoveCall(move_call) => {
+fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
+    // process the command
+    debug_assert!(context.arg_roots.is_empty());
+    let results = command_(context, c)?;
+    // drop unused result values by marking them as `None`
+    assert_invariant!(
+        results.len() == c.value.drop_values.len(),
+        "result length mismatch. expected {}, got {}",
+        c.value.drop_values.len(),
+        results.len()
+    );
+    context.add_result_values(
+        results
+            .into_iter()
+            .zip(c.value.drop_values.iter().copied())
+            .map(|(v, drop)| if drop { None } else { Some(v) }),
+    );
+    context.arg_roots.clear();
+    Ok(())
+}
+
+fn command_(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<Vec<Value>> {
+    let result_tys = &c.result_type;
+    let results = match &c.command {
+        T::Command__::MoveCall(move_call) => {
             let T::MoveCall {
                 function,
                 arguments,
             } = &**move_call;
             let arg_values = context.arguments(arguments)?;
-            call(context, &function.signature, arg_values)?;
+            call(context, &function.signature, arg_values)?
         }
-        T::Command_::TransferObjects(objs, recipient) => {
+        T::Command__::TransferObjects(objs, recipient) => {
             context.arguments(objs)?;
             context.argument(recipient)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)?
         }
-        T::Command_::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(_, coin, amounts) => {
             context.arguments(amounts)?;
             let coin_value = context.argument(coin)?;
             write_ref(context, coin_value)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)?
         }
-        T::Command_::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(_, target, coins) => {
             context.arguments(coins)?;
             let target_value = context.argument(target)?;
             write_ref(context, target_value)?;
+            non_ref_results(result_tys)?
         }
-        T::Command_::MakeMoveVec(_, arguments) => {
+        T::Command__::MakeMoveVec(_, arguments) => {
             context.arguments(arguments)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)?
         }
-        T::Command_::Publish(_, _, _) => context.add_results(result_tys),
-        T::Command_::Upgrade(_, _, _, ticket, _) => {
+        T::Command__::Publish(_, _, _) => non_ref_results(result_tys)?,
+        T::Command__::Upgrade(_, _, _, ticket, _) => {
             context.argument(ticket)?;
-            context.add_results(result_tys);
+            non_ref_results(result_tys)?
         }
-    }
-
-    Ok(())
+    };
+    assert_invariant!(
+        result_tys.len() == results.len(),
+        "result length mismatch. Expected {}, got {}",
+        result_tys.len(),
+        results.len()
+    );
+    Ok(results)
 }
 
 fn write_ref(context: &Context, value: Value) -> anyhow::Result<()> {
@@ -565,7 +598,7 @@ fn write_ref(context: &Context, value: Value) -> anyhow::Result<()> {
             paths,
         } => {
             anyhow::ensure!(
-                !context.any_conflicts(&paths, /* allow alias */ false),
+                !context.any_extends(&paths, /* ignore alias */ true),
                 "Cannot write to a mutable reference that has extensions"
             );
             Ok(())
@@ -577,7 +610,7 @@ fn call(
     context: &mut Context,
     signature: &T::LoadedFunctionInstantiation,
     arguments: Vec<Value>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<Value>> {
     let return_ = &signature.return_;
     let mut all_paths: PathSet = PathSet::empty();
     let mut imm_paths: PathSet = PathSet::empty();
@@ -591,14 +624,11 @@ fn call(
             } => {
                 // Allow alias conflicts with references not passed as arguments
                 anyhow::ensure!(
-                    !context.any_conflicts(&paths, /* allow alias */ true),
+                    !context.any_extends(&paths, /* ignore alias */ true),
                     "Cannot transfer a mutable ref with extensions"
                 );
                 // All mutable argument references must be disjoint from all other references
-                anyhow::ensure!(
-                    !mut_paths.conflicts(&paths, /* allow alias */ false),
-                    "Double mutable borrow"
-                );
+                anyhow::ensure!(mut_paths.is_disjoint(&paths), "Double mutable borrow");
                 all_paths.union(&paths);
                 mut_paths.union(&paths);
             }
@@ -613,7 +643,7 @@ fn call(
     }
     // All mutable references must be disjoint from all immutable references
     anyhow::ensure!(
-        !imm_paths.conflicts(&mut_paths, /* allow alias */ false),
+        imm_paths.is_disjoint(&mut_paths),
         "Mutable and immutable borrows cannot overlap"
     );
     let command = context.current_command();
@@ -627,7 +657,7 @@ fn call(
     } else {
         all_paths
     };
-    let result_values = return_
+    return_
         .iter()
         .enumerate()
         .map(|(i, ty)| {
@@ -645,7 +675,117 @@ fn call(
                 _ => Ok(Value::NonRef),
             }
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    context.add_result_values(result_values);
-    Ok(())
+        .collect::<anyhow::Result<Vec<_>>>()
+}
+
+fn non_ref_results(results: &[T::Type]) -> anyhow::Result<Vec<Value>> {
+    results
+        .iter()
+        .map(|t| {
+            anyhow::ensure!(
+                !matches!(t, T::Type::Reference(_, _)),
+                "attempted to create a non-reference result from a reference type",
+            );
+            Ok(Value::NonRef)
+        })
+        .collect()
+}
+
+//**************************************************************************************************
+// impl
+//**************************************************************************************************
+
+impl Path {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        print!("{:?}", self.root);
+        for ext in &self.extensions {
+            let Delta { command, result } = ext;
+            print!(".d{}_{}", command, result);
+        }
+        println!(",");
+    }
+}
+
+impl PathSet {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        println!("{{");
+        for path in &self.0 {
+            path.print();
+        }
+        println!("}}");
+    }
+}
+
+impl Value {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        match self {
+            Value::NonRef => print!("NonRef"),
+            Value::Ref { is_mut, paths } => {
+                if *is_mut {
+                    print!("mut ");
+                } else {
+                    print!("imm ");
+                }
+                paths.print();
+            }
+        }
+    }
+}
+
+impl Location {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        print!("{{ self_path: ");
+        self.self_path.print();
+        print!(", value: ");
+        if let Some(value) = &self.value {
+            value.print();
+        } else {
+            println!("_");
+        }
+        println!("}}");
+    }
+}
+
+impl Context {
+    #[cfg(debug_assertions)]
+    #[allow(unused)]
+    fn print(&self) {
+        println!("Context {{");
+        println!("  tx_context: ");
+        self.tx_context.print();
+        println!("  gas: ");
+        self.gas.print();
+        println!("  object_inputs: [");
+        for input in &self.object_inputs {
+            input.print();
+        }
+        println!("  ],");
+        println!("  pure_inputs: [");
+        for input in &self.pure_inputs {
+            input.print();
+        }
+        println!("  ],");
+        println!("  receiving_inputs: [");
+        for input in &self.receiving_inputs {
+            input.print();
+        }
+        println!("  ],");
+        println!("  results: [");
+        for result in &self.results {
+            for loc in result {
+                loc.print();
+            }
+            println!(",");
+        }
+        println!("  ],");
+        println!("}}");
+    }
 }

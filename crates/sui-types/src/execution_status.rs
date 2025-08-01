@@ -317,6 +317,28 @@ pub enum CommandArgumentError {
         "First argument to MakeMoveVec is not an object. If no type is specified for MakeMoveVec, all arguments must be the same object type."
     )]
     InvalidMakeMoveVecNonObjectArgument,
+    #[error("Specified argument location does not have a value and cannot be used")]
+    ArgumentWithoutValue,
+    #[error(
+        "Cannot move a borrowed value. The value's type does resulted in this argument usage \
+        being inferred as a move. This is likely due to the type not having the `copy` ability; \
+        although in rare cases, it could also be this is the last usage of a value without the \
+        `drop` ability."
+    )]
+    CannotMoveBorrowedValue,
+    #[error(
+        "Cannot write to an argument location that is still borrowed, and where that borrow \
+        is an extension of that reference. This is likely due to this argument being used in a \
+        Move call that returns a reference, and that reference is used in a later command."
+    )]
+    CannotWriteToExtendedReference,
+    #[error(
+        "The argument specified cannot be used as a reference argument in the Move call. Either \
+        the argument is a mutable reference and it conflicts with another argument to the call, \
+        or the argument is mutable and another reference extends it and will be used in a later \
+        command."
+    )]
+    InvalidReferenceArgument,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]

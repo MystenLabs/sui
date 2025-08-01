@@ -59,15 +59,70 @@ pub async fn publish_basics_package(
     keypair: &AccountKeyPair,
     gas_price: u64,
 ) -> ObjectRef {
-    let transaction = TestTransactionBuilder::new(sender, gas, gas_price)
-        .publish_examples("basics")
-        .build_and_sign(keypair);
-    let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
-    let effects = execution_result.unwrap();
-    effects
-        .created()
-        .iter()
-        .find(|(_, owner)| matches!(owner, Owner::Immutable))
-        .map(|(reference, _)| *reference)
-        .unwrap()
+    let mut current_gas = gas;
+    let max_retries = 5;
+
+    for retry in 1..=max_retries {
+        let transaction = TestTransactionBuilder::new(sender, current_gas, gas_price)
+            .publish_examples("basics")
+            .build_and_sign(keypair);
+        tracing::info!(
+            "Publishing basics package with tx digest {:?} (attempt {})",
+            transaction.digest(),
+            retry
+        );
+
+        let (client_type, execution_result) = proxy.execute_transaction_block(transaction).await;
+        tracing::debug!(
+            "Executed publish_basics_package transaction via {:?}",
+            client_type
+        );
+
+        match execution_result {
+            Ok(effects) => {
+                if let Some(package_ref) = effects
+                    .created()
+                    .iter()
+                    .find(|(_, owner)| matches!(owner, Owner::Immutable))
+                    .map(|(reference, _)| *reference)
+                {
+                    tracing::info!("Successfully published basics package: {:?}", package_ref);
+                    return package_ref;
+                } else {
+                    tracing::error!("Transaction succeeded but no package was created");
+                }
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Attempt {}: Failed to execute publish_basics_package transaction: {:?}",
+                    retry,
+                    e
+                );
+            }
+        }
+
+        // Small delay before retrying.
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Get fresh gas object version in case gas object was used.
+        match proxy.get_object(current_gas.0).await {
+            Ok(gas_obj) => {
+                current_gas = gas_obj.compute_object_reference();
+                tracing::info!(
+                    "Retry {}: Using updated gas object version {:?}",
+                    retry,
+                    current_gas
+                );
+            }
+            Err(e) => {
+                tracing::error!("Retry {}: Failed to get updated gas object: {:?}", retry, e);
+                // Continue with existing gas reference, hoping it works
+            }
+        }
+    }
+
+    panic!(
+        "publish_basics_package failed to create package after {} attempts",
+        max_retries
+    );
 }

@@ -5,7 +5,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
     digests::ObjectDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
@@ -1095,7 +1095,7 @@ async fn test_tto_valid_dependencies() {
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), child.0)
+                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(child.0, &child.1))
                         .unwrap();
                     builder.finish()
                 },
@@ -1195,7 +1195,7 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), child.0)
+                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(child.0, &child.1))
                         .unwrap();
                     builder.finish()
                 },
@@ -1291,7 +1291,7 @@ async fn test_tto_dependencies_dont_receive() {
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), old_child.0)
+                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
                         .unwrap();
                     builder.finish()
                 },
@@ -1389,7 +1389,7 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), old_child.0)
+                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
                         .unwrap();
                     builder.finish()
                 },
@@ -1485,7 +1485,7 @@ async fn test_tto_dependencies_receive_and_abort() {
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), old_child.0)
+                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
                         .unwrap();
                     builder.finish()
                 },
@@ -1580,7 +1580,7 @@ async fn test_tto_dependencies_receive_and_type_mismatch() {
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     builder
-                        .transfer_object(SuiAddress::from(parent.0 .0), old_child.0)
+                        .transfer_object(SuiAddress::from(parent.0 .0), FullObjectRef::from_object_ref_and_owner(old_child.0, &old_child.1))
                         .unwrap();
                     builder.finish()
                 },

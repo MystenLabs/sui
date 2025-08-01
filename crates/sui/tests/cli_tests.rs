@@ -19,6 +19,7 @@ use sui::client_commands::{GasDataArgs, PaymentArgs, TxProcessingArgs};
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::IndexerArgs;
 use sui_keys::key_identity::KeyIdentity;
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -5402,5 +5403,95 @@ async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
     let output = String::from_utf8_lossy(&cmd.stdout);
     assert!(!output.contains("dependencies: []"));
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_party_transfer() -> Result<(), anyhow::Error> {
+    // TODO: this test override can be removed when party objects are enabled on mainnet.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_party_transfer_for_testing(true);
+        config
+    });
+
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+
+    let party_transfer = SuiClientCommands::PartyTransfer {
+        to: recipient1.clone(),
+        object_id: object_id1,
+        payment: PaymentArgs::default(),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = party_transfer else {
+        panic!("PartyTransfer test failed");
+    };
+
+    assert!(response.status_ok().unwrap());
+    assert_eq!(
+        response.effects.as_ref().unwrap().gas_object().object_id(),
+        object_id2
+    );
+
+    let object_read = client
+        .read_api()
+        .get_object_with_options(object_id1, SuiObjectDataOptions::full_content())
+        .await?;
+
+    let object_data = object_read.data.unwrap();
+    let owner = object_data.owner.unwrap();
+
+    let Owner::ConsensusAddressOwner {
+        owner: owner_addr, ..
+    } = owner
+    else {
+        panic!("Expected ConsensusAddressOwner but got different owner type");
+    };
+
+    assert_eq!(owner_addr, address2);
+    Ok(())
+}
+
+#[sim_test]
+async fn test_party_transfer_gas_object_as_transfer_object() -> Result<(), anyhow::Error> {
+    // TODO: this test override can be removed when party objects are enabled on mainnet.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_enable_party_transfer_for_testing(true);
+        config
+    });
+
+    let (mut test_cluster, _client, rgp, objects, _recipients, addresses) =
+        test_cluster_helper().await;
+    let object_id1 = objects[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+
+    let party_transfer = SuiClientCommands::PartyTransfer {
+        to: KeyIdentity::Address(address2),
+        object_id: object_id1,
+        payment: PaymentArgs {
+            gas: vec![object_id1],
+        },
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await;
+
+    assert!(party_transfer.is_err());
     Ok(())
 }

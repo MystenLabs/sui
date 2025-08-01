@@ -4,7 +4,7 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
-import toml from 'toml';
+import toml from '@iarna/toml';
 import {
     createFileInfo,
     IFileInfo,
@@ -1776,7 +1776,7 @@ async function findPkgRoot(active_file_path: string): Promise<string | undefined
  */
 function getPkgNameFromManifest(pkgRoot: string): string | undefined {
     const manifest = fs.readFileSync(pkgRoot, 'utf8');
-    const parsedManifest = toml.parse(manifest);
+    const parsedManifest = toml.parse(manifest) as any;
     const packageName = parsedManifest.package.name;
     return packageName;
 }

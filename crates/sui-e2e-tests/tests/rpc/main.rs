@@ -17,7 +17,10 @@ async fn transfer_coin(
     let object_to_send = accounts_and_objs[0].1[1];
     let txn = context.sign_transaction(
         &sui_test_transaction_builder::TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .transfer(object_to_send, receiver)
+            .transfer(
+                sui_types::base_types::FullObjectRef::from_fastpath_ref(object_to_send),
+                receiver,
+            )
             .build(),
     );
     let resp = context.execute_transaction_must_succeed(txn).await;

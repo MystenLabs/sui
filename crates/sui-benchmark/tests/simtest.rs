@@ -1056,10 +1056,12 @@ mod test {
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
     ) -> TestClusterBuilder {
-        let mut builder = TestClusterBuilder::new().with_num_validators(get_var(
-            "SIM_STRESS_TEST_NUM_VALIDATORS",
-            default_num_validators,
-        ));
+        let mut builder = TestClusterBuilder::new()
+            .with_num_validators(get_var(
+                "SIM_STRESS_TEST_NUM_VALIDATORS",
+                default_num_validators,
+            ))
+            .with_synthetic_execution_time_injection();
         if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
             eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
         }

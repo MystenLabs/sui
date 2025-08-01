@@ -16,10 +16,7 @@ use crate::{
     schema::LocalDepInfo,
 };
 
-use super::{
-    Dependency, PinnedDependencyInfo,
-    pin::{Pinned, PinnedGitDependency},
-};
+use super::{Dependency, PinnedDependencyInfo, pin::Pinned};
 
 /// Once a dependency has been fetched, it is simply represented by a [PackagePath]
 type Fetched = PackagePath;
@@ -42,38 +39,11 @@ impl FetchedDependency {
     pub async fn fetch(pinned: &PinnedDependencyInfo) -> FetchResult<Self> {
         // TODO: need to actually fetch local dep
         let path = match &pinned.0.dep_info {
-            Pinned::Git(dep) => dep.fetch().await?,
-            Pinned::Local(dep) => dep.absolute_path(pinned.0.containing_file.path()),
-            Pinned::OnChain(_) => todo!(),
+            Pinned::Git(dep) => dep.inner.fetch().await?,
+            _ => pinned.unfetched_path(),
         };
         let path = PackagePath::new(path)?;
         Ok(Self(pinned.0.clone().map(|_| path)))
-    }
-
-    /// Return the absolute path to the directory that this package would be fetched into, without
-    /// actually fetching it
-    pub fn unfetched_path(pinned: &PinnedDependencyInfo) -> PathBuf {
-        match &pinned.0.dep_info {
-            Pinned::Git(dep) => dep.unfetched_path(),
-            Pinned::Local(dep) => dep.absolute_path(pinned.0.containing_file.path()),
-            Pinned::OnChain(dep) => todo!(),
-        }
-    }
-
-    pub fn path(&self) -> &PackagePath {
-        &self.0.dep_info
-    }
-}
-
-impl PinnedGitDependency {
-    /// Fetch the given git dependency and return the path to the checked out repo
-    pub async fn fetch(&self) -> FetchResult<PathBuf> {
-        Ok(self.inner.fetch().await?)
-    }
-
-    /// Return the path that `fetch` would return without actually fetching the data
-    pub fn unfetched_path(&self) -> PathBuf {
-        self.inner.path_to_tree()
     }
 }
 

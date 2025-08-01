@@ -8,6 +8,7 @@ use std::{
     process::Stdio,
 };
 
+use path_clean::PathClean;
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -51,7 +52,8 @@ pub struct GitTree {
     /// Commit-ish (branch, tag, or SHA)
     sha: GitSha,
 
-    /// relative path inside the repository to use for sparse checkout
+    /// relative path inside the repository to use for sparse checkout. Guaranteed to not begin
+    /// with `..`
     path_in_repo: PathBuf,
 
     /// Absolute path to the root of the repository
@@ -91,7 +93,7 @@ impl GitCache {
         path_in_repo: Option<PathBuf>,
     ) -> GitResult<GitTree> {
         let sha = Self::find_sha(repo, rev).await?;
-        Ok(self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone()))
+        self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone())
     }
 
     /// Construct a tree in `self` for the repository `repo` with the provided `sha` and
@@ -101,17 +103,21 @@ impl GitCache {
         repo: String,
         sha: GitSha,
         path_in_repo: Option<PathBuf>,
-    ) -> GitTree {
+    ) -> GitResult<GitTree> {
         let filename = url_to_file_name(repo.as_str());
         let path_to_repo = self.root_dir.join(format!("{filename}_{sha}"));
-        let path_in_repo = path_in_repo.unwrap_or_default();
+        let path_in_repo = path_in_repo.unwrap_or_default().clean();
 
-        GitTree {
+        if path_in_repo.starts_with("..") {
+            return Err(GitError::BadPath { path: path_in_repo });
+        }
+
+        Ok(GitTree {
             repo,
             sha,
             path_in_repo,
             path_to_repo,
-        }
+        })
     }
 }
 
@@ -148,6 +154,21 @@ impl GitTree {
     /// The git sha for the tree
     pub fn sha(&self) -> &GitSha {
         &self.sha
+    }
+
+    /// A new tree in the same repository with `path_in_repo` set to
+    /// `self.path_in_repo.join(relative_path)`.
+    pub fn relative_tree(&self, relative_path: impl AsRef<Path>) -> GitResult<Self> {
+        let mut result = self.clone();
+
+        result.path_in_repo = self.path_in_repo.join(relative_path).clean();
+        if result.path_in_repo.to_string_lossy().starts_with("..") {
+            Err(GitError::BadPath {
+                path: result.path_in_repo,
+            })
+        } else {
+            Ok(result)
+        }
     }
 
     /// Checkout the directory using a sparse checkout. It will try to clone without checkout, set
@@ -268,7 +289,7 @@ fn url_to_file_name(url: &str) -> String {
 }
 
 /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
-/// `repo` to a commit SHA. This will make a remote call so network is required.
+/// `repo` to a 40-character commit SHA. This will make a remote call so network is required.
 async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
     if let Some(r) = rev {
         if let Ok(sha) = GitSha::try_from(r.to_string()) {
@@ -416,26 +437,37 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
         return Ok(None);
     }
 
-    let temp_dir = tempfile::tempdir().map_err(GitError::TempDirectory)?;
-    let path_to_clone = temp_dir.path().to_path_buf().join(url_to_file_name(repo));
-    let path_to_clone_str = path_to_clone.to_string_lossy();
-    debug!(
-        "downloading temporary git repo with full history to {}",
-        path_to_clone_str
-    );
-    let mut args = vec![
-        "-c",
-        "advice.detachedHead=false",
-        "clone",
-        "--quiet",
-        "--sparse",
-        "--filter=blob:none",
-        "--no-checkout",
-        repo,
-        &path_to_clone_str,
-    ];
+    let git_cache_path = PathBuf::from(get_cache_path());
+    let lookup_path = git_cache_path.join("lookups");
 
-    run_git_cmd_with_args(&args, None).await?;
+    std::fs::create_dir_all(&lookup_path).map_err(GitError::TempDirectory)?;
+
+    let path_to_clone = lookup_path.join(url_to_file_name(repo));
+    let path_to_clone_str = path_to_clone.to_string_lossy();
+
+    if path_to_clone.exists() {
+        debug!("Repository is already in the cache for lookups, fetching the list of new history.");
+        // We are fetching the "latest" history for that repository.
+        run_git_cmd_with_args(&["fetch", "--filter=blob:none"], Some(&path_to_clone)).await?;
+    } else {
+        debug!(
+            "downloading temporary git repo with full history to {}",
+            path_to_clone_str
+        );
+        let mut args = vec![
+            "-c",
+            "advice.detachedHead=false",
+            "clone",
+            "--quiet",
+            "--sparse",
+            "--filter=blob:none",
+            "--no-checkout",
+            repo,
+            &path_to_clone_str,
+        ];
+
+        run_git_cmd_with_args(&args, None).await?;
+    }
 
     let full_sha = run_git_cmd_with_args(&["rev-parse", rev], Some(&path_to_clone))
         .await?
@@ -819,7 +851,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_try_find_full_sha() {
-        let project_with_git = git::new("pkg_git", |project| {
+        let (project_with_git, repository) = git::new_repo("pkg_git", |project| {
             project.file("Move.toml", &basic_manifest("pkg_git", "0.0.1"))
         });
 
@@ -834,6 +866,20 @@ mod tests {
                 .unwrap()
                 .to_string(),
             commit
+        );
+
+        // change a file and verify "fetch" works.
+        project_with_git.change_file("Move.toml", "new content");
+        let sha = repository.commit().to_string();
+        let new_short_sha = sha[..7].to_string();
+
+        assert_eq!(
+            &try_find_full_sha(project_with_git.root_path_str(), &new_short_sha)
+                .await
+                .unwrap()
+                .unwrap()
+                .to_string(),
+            &sha
         );
     }
 }

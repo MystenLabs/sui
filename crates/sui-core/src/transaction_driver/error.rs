@@ -260,3 +260,10 @@ impl std::fmt::Display for AggregatedEffectsDigests {
         Ok(())
     }
 }
+
+impl AggregatedEffectsDigests {
+    #[cfg(test)]
+    pub fn total_stake(&self) -> StakeUnit {
+        self.digests.iter().map(|(_, _, stake)| stake).sum()
+    }
+}

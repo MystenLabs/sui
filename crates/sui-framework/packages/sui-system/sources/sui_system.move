@@ -106,6 +106,7 @@ public(package) fun create(
 
 // ==== entry functions ====
 
+#[allow(lint(public_entry))]
 /// Can be called by anyone who wishes to become a validator candidate and starts accruing delegated
 /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_JOINING_STAKE` amount of stake they
 /// can call `request_add_validator` to officially become an active validator at the next epoch.
@@ -151,6 +152,7 @@ public entry fun request_add_validator_candidate(
         )
 }
 
+#[allow(lint(public_entry))]
 /// Called by a validator candidate to remove themselves from the candidacy. After this call
 /// their staking pool becomes deactivate.
 public entry fun request_remove_validator_candidate(
@@ -160,6 +162,7 @@ public entry fun request_remove_validator_candidate(
     wrapper.load_system_state_mut().request_remove_validator_candidate(ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Called by a validator candidate to add themselves to the active validator set beginning next epoch.
 /// Aborts if the validator is a duplicate with one of the pending or active validators, or if the amount of
 /// stake the validator has doesn't meet the min threshold, or if the number of new validators for the next
@@ -168,6 +171,7 @@ public entry fun request_add_validator(wrapper: &mut SuiSystemState, ctx: &mut T
     wrapper.load_system_state_mut().request_add_validator(ctx)
 }
 
+#[allow(lint(public_entry))]
 /// A validator can call this function to request a removal in the next epoch.
 /// We use the sender of `ctx` to look up the validator
 /// (i.e. sender must match the sui_address in the validator).
@@ -177,6 +181,7 @@ public entry fun request_remove_validator(wrapper: &mut SuiSystemState, ctx: &mu
     wrapper.load_system_state_mut().request_remove_validator(ctx)
 }
 
+#[allow(lint(public_entry))]
 /// A validator can call this entry function to submit a new gas price quote, to be
 /// used for the reference gas price calculation at the end of the epoch.
 public entry fun request_set_gas_price(
@@ -187,6 +192,7 @@ public entry fun request_set_gas_price(
     wrapper.load_system_state_mut().request_set_gas_price(cap, new_gas_price)
 }
 
+#[allow(lint(public_entry))]
 /// This entry function is used to set new gas price for candidate validators
 public entry fun set_candidate_validator_gas_price(
     wrapper: &mut SuiSystemState,
@@ -196,6 +202,7 @@ public entry fun set_candidate_validator_gas_price(
     wrapper.load_system_state_mut().set_candidate_validator_gas_price(cap, new_gas_price)
 }
 
+#[allow(lint(public_entry))]
 /// A validator can call this entry function to set a new commission rate, updated at the end of
 /// the epoch.
 public entry fun request_set_commission_rate(
@@ -206,6 +213,7 @@ public entry fun request_set_commission_rate(
     wrapper.load_system_state_mut().request_set_commission_rate(new_commission_rate, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// This entry function is used to set new commission rate for candidate validators
 public entry fun set_candidate_validator_commission_rate(
     wrapper: &mut SuiSystemState,
@@ -217,6 +225,7 @@ public entry fun set_candidate_validator_commission_rate(
         .set_candidate_validator_commission_rate(new_commission_rate, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Add stake to a validator's staking pool.
 public entry fun request_add_stake(
     wrapper: &mut SuiSystemState,
@@ -238,6 +247,7 @@ public fun request_add_stake_non_entry(
     wrapper.load_system_state_mut().request_add_stake(stake, validator_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Add stake to a validator's staking pool using multiple coins.
 public entry fun request_add_stake_mul_coin(
     wrapper: &mut SuiSystemState,
@@ -253,6 +263,7 @@ public entry fun request_add_stake_mul_coin(
     transfer::public_transfer(staked_sui, ctx.sender());
 }
 
+#[allow(lint(public_entry))]
 /// Withdraw stake from a validator's staking pool.
 public entry fun request_withdraw_stake(
     wrapper: &mut SuiSystemState,
@@ -290,6 +301,7 @@ public fun request_withdraw_stake_non_entry(
     wrapper.load_system_state_mut().request_withdraw_stake(staked_sui, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Report a validator as a bad or non-performant actor in the system.
 /// Succeeds if all the following are satisfied:
 /// 1. both the reporter in `cap` and the input `reportee_addr` are active validators.
@@ -304,6 +316,7 @@ public entry fun report_validator(
     wrapper.load_system_state_mut().report_validator(cap, reportee_addr)
 }
 
+#[allow(lint(public_entry))]
 /// Undo a `report_validator` action. Aborts if
 /// 1. the reportee is not a currently active validator or
 /// 2. the sender has not previously reported the `reportee_addr`, or
@@ -318,12 +331,14 @@ public entry fun undo_report_validator(
 
 // ==== validator metadata management functions ====
 
+#[allow(lint(public_entry))]
 /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
 /// validator and registers it. The original object is thus revoked.
 public entry fun rotate_operation_cap(self: &mut SuiSystemState, ctx: &mut TxContext) {
     self.load_system_state_mut().rotate_operation_cap(ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's name.
 public entry fun update_validator_name(
     self: &mut SuiSystemState,
@@ -333,6 +348,7 @@ public entry fun update_validator_name(
     self.load_system_state_mut().update_validator_name(name, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's description
 public entry fun update_validator_description(
     self: &mut SuiSystemState,
@@ -342,6 +358,7 @@ public entry fun update_validator_description(
     self.load_system_state_mut().update_validator_description(description, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's image url
 public entry fun update_validator_image_url(
     self: &mut SuiSystemState,
@@ -351,6 +368,7 @@ public entry fun update_validator_image_url(
     self.load_system_state_mut().update_validator_image_url(image_url, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's project url
 public entry fun update_validator_project_url(
     self: &mut SuiSystemState,
@@ -360,6 +378,7 @@ public entry fun update_validator_project_url(
     self.load_system_state_mut().update_validator_project_url(project_url, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's network address.
 /// The change will only take effects starting from the next epoch.
 public entry fun update_validator_next_epoch_network_address(
@@ -370,6 +389,7 @@ public entry fun update_validator_next_epoch_network_address(
     self.load_system_state_mut().update_validator_next_epoch_network_address(network_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update candidate validator's network address.
 public entry fun update_candidate_validator_network_address(
     self: &mut SuiSystemState,
@@ -379,6 +399,7 @@ public entry fun update_candidate_validator_network_address(
     self.load_system_state_mut().update_candidate_validator_network_address(network_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's p2p address.
 /// The change will only take effects starting from the next epoch.
 public entry fun update_validator_next_epoch_p2p_address(
@@ -389,6 +410,7 @@ public entry fun update_validator_next_epoch_p2p_address(
     self.load_system_state_mut().update_validator_next_epoch_p2p_address(p2p_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update candidate validator's p2p address.
 public entry fun update_candidate_validator_p2p_address(
     self: &mut SuiSystemState,
@@ -398,6 +420,7 @@ public entry fun update_candidate_validator_p2p_address(
     self.load_system_state_mut().update_candidate_validator_p2p_address(p2p_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's narwhal primary address.
 /// The change will only take effects starting from the next epoch.
 public entry fun update_validator_next_epoch_primary_address(
@@ -408,6 +431,7 @@ public entry fun update_validator_next_epoch_primary_address(
     self.load_system_state_mut().update_validator_next_epoch_primary_address(primary_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update candidate validator's narwhal primary address.
 public entry fun update_candidate_validator_primary_address(
     self: &mut SuiSystemState,
@@ -417,6 +441,7 @@ public entry fun update_candidate_validator_primary_address(
     self.load_system_state_mut().update_candidate_validator_primary_address(primary_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's narwhal worker address.
 /// The change will only take effects starting from the next epoch.
 public entry fun update_validator_next_epoch_worker_address(
@@ -427,6 +452,7 @@ public entry fun update_validator_next_epoch_worker_address(
     self.load_system_state_mut().update_validator_next_epoch_worker_address(worker_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update candidate validator's narwhal worker address.
 public entry fun update_candidate_validator_worker_address(
     self: &mut SuiSystemState,
@@ -436,6 +462,7 @@ public entry fun update_candidate_validator_worker_address(
     self.load_system_state_mut().update_candidate_validator_worker_address(worker_address, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's public key of protocol key and proof of possession.
 /// The change will only take effects starting from the next epoch.
 public entry fun update_validator_next_epoch_protocol_pubkey(
@@ -449,6 +476,7 @@ public entry fun update_validator_next_epoch_protocol_pubkey(
         .update_validator_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update candidate validator's public key of protocol key and proof of possession.
 public entry fun update_candidate_validator_protocol_pubkey(
     self: &mut SuiSystemState,
@@ -461,6 +489,7 @@ public entry fun update_candidate_validator_protocol_pubkey(
         .update_candidate_validator_protocol_pubkey(protocol_pubkey, proof_of_possession, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's public key of worker key.
 /// The change will only take effects starting from the next epoch.
 public entry fun update_validator_next_epoch_worker_pubkey(
@@ -471,6 +500,7 @@ public entry fun update_validator_next_epoch_worker_pubkey(
     self.load_system_state_mut().update_validator_next_epoch_worker_pubkey(worker_pubkey, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update candidate validator's public key of worker key.
 public entry fun update_candidate_validator_worker_pubkey(
     self: &mut SuiSystemState,
@@ -480,6 +510,7 @@ public entry fun update_candidate_validator_worker_pubkey(
     self.load_system_state_mut().update_candidate_validator_worker_pubkey(worker_pubkey, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update a validator's public key of network key.
 /// The change will only take effects starting from the next epoch.
 public entry fun update_validator_next_epoch_network_pubkey(
@@ -490,6 +521,7 @@ public entry fun update_validator_next_epoch_network_pubkey(
     self.load_system_state_mut().update_validator_next_epoch_network_pubkey(network_pubkey, ctx)
 }
 
+#[allow(lint(public_entry))]
 /// Update candidate validator's public key of network key.
 public entry fun update_candidate_validator_network_pubkey(
     self: &mut SuiSystemState,
@@ -733,7 +765,7 @@ public fun inner_mut_for_testing(wrapper: &mut SuiSystemState): &mut SuiSystemSt
 // candidate validator - bypassing the proof of possession check and other metadata validation
 // in the process.
 #[test_only]
-public entry fun request_add_validator_candidate_for_testing(
+public fun request_add_validator_candidate_for_testing(
     wrapper: &mut SuiSystemState,
     pubkey_bytes: vector<u8>,
     network_pubkey_bytes: vector<u8>,

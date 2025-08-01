@@ -42,6 +42,7 @@ insta.workspace = true
 test-log.workspace = true
 url.workspace = true
 walkdir.workspace = true
+heck.workspace = true
 
 [[bin]]
 name = "mock-resolver"

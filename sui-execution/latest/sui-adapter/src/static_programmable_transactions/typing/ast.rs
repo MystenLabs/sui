@@ -60,7 +60,7 @@ pub struct ReceivingInput {
     pub constraint: BytesConstraint,
 }
 
-pub type Commands = Vec<(Command, ResultType)>;
+pub type Commands = Vec<Command>;
 
 pub type ObjectArg = L::ObjectArg;
 
@@ -80,7 +80,20 @@ pub type ResultType = Vec<Type>;
 pub type Command = Spanned<Command_>;
 
 #[derive(Debug)]
-pub enum Command_ {
+pub struct Command_ {
+    /// The command
+    pub command: Command__,
+    /// The type of the return values of the command
+    pub result_type: ResultType,
+    /// Markers to drop unused results from the command. These are inferred based on any usage
+    /// of the given result `Result(i,j)` after this command. This is leveraged by the borrow
+    /// checker to remove unused references to allow potentially reuse of parent references.
+    /// The value at result `j` is unused and can be dropped if `drop_value[j]` is true.
+    pub drop_values: Vec</* drop value */ bool>,
+}
+
+#[derive(Debug)]
+pub enum Command__ {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
     SplitCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),

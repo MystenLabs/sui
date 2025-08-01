@@ -7,7 +7,6 @@ use std::{
 };
 
 use consensus_config::{AuthorityIndex, DIGEST_LENGTH};
-
 use fastcrypto::hash::Digest;
 use serde::{Deserialize, Serialize};
 

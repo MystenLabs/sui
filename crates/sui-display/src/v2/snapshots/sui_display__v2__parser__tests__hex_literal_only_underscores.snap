@@ -1,0 +1,5 @@
+---
+source: crates/sui-display/src/v2/parser.rs
+expression: "strands(r#\"{0x___u8}\"#)"
+---
+Error: Invalid 'u8': cannot parse integer from empty string

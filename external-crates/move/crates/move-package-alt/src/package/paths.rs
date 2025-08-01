@@ -43,11 +43,15 @@ impl PackagePath {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
         }
 
-        if !dir.join("Move.toml").exists() {
-            return Err(PackagePathError::InvalidPackage { path: dir.clone() });
+        let result = Self(path);
+
+        if !result.manifest_path().exists() {
+            return Err(PackagePathError::InvalidPackage {
+                path: result.manifest_path(),
+            });
         }
 
-        Ok(Self(path))
+        Ok(result)
     }
 
     pub fn path(&self) -> &Path {

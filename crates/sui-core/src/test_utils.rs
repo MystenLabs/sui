@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_macros::nondeterministic;
-use sui_types::base_types::{random_object_ref, ObjectID};
+use sui_types::base_types::{random_object_ref, FullObjectRef, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::{AccountKeyPair, AuthorityPublicKeyBytes, Signer};
 use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
@@ -117,7 +117,7 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&[digest]),
+            .notify_read_executed_effects("", &[digest]),
     )
     .await
     {
@@ -134,7 +134,7 @@ pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<Autho
         WAIT_FOR_TX_TIMEOUT,
         state
             .get_transaction_cache_reader()
-            .notify_read_executed_effects(&digests),
+            .notify_read_executed_effects("", &digests),
     )
     .await
     {
@@ -225,7 +225,7 @@ pub fn make_transfer_object_transaction(
 ) -> Transaction {
     let data = TransactionData::new_transfer(
         recipient,
-        object_ref,
+        FullObjectRef::from_fastpath_ref(object_ref),
         sender,
         gas_object,
         gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
@@ -275,7 +275,7 @@ pub fn make_dummy_tx(
     Transaction::from_data_and_signer(
         TransactionData::new_transfer(
             receiver,
-            random_object_ref(),
+            FullObjectRef::from_fastpath_ref(random_object_ref()),
             sender,
             random_object_ref(),
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,

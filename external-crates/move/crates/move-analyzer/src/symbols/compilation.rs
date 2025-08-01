@@ -96,8 +96,8 @@ pub struct PrecomputedPkgInfo {
     pub deps_symbols_data: Arc<SymbolsComputationData>,
     /// Compiled user program
     pub program: Arc<CompiledProgram>,
-    /// Mapping from file paths to file hashes
-    pub file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+    /// Mapping from file hashes to file paths
+    pub file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
     /// Edition of the compiler used to build this package
     pub edition: Option<Edition>,
     /// Compiler info
@@ -115,8 +115,8 @@ pub struct AnalyzedPkgInfo {
     pub symbols_data: Option<Arc<SymbolsComputationData>>,
     /// Compiled user program
     pub program: Option<Arc<CompiledProgram>>,
-    /// Mapping from file paths to file hashes
-    pub file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+    /// Mapping from file hashes to file paths
+    pub file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
 }
 
 /// Data used during symbols computation
@@ -208,11 +208,11 @@ pub fn get_compiled_pkg(
     // Hash dependencies so we can check if something has changed.
     let (mapped_files, deps_hash) =
         compute_mapped_files(&resolution_graph, overlay_fs_root.clone());
-    let file_hashes: Arc<BTreeMap<PathBuf, FileHash>> = Arc::new(
+    let file_paths: Arc<BTreeMap<FileHash, PathBuf>> = Arc::new(
         mapped_files
             .file_name_mapping()
             .iter()
-            .map(|(fhash, fpath)| (fpath.clone(), *fhash))
+            .map(|(fhash, fpath)| (*fhash, fpath.clone()))
             .collect(),
     );
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
@@ -255,7 +255,7 @@ pub fn get_compiled_pkg(
                             program_deps: d.deps.clone(),
                             symbols_data: Some(d.deps_symbols_data.clone()),
                             program: Some(d.program.clone()),
-                            file_hashes: d.file_hashes.clone(),
+                            file_paths: d.file_paths.clone(),
                         }),
                         d.edition,
                         d.compiler_info.clone(),
@@ -276,7 +276,7 @@ pub fn get_compiled_pkg(
                             program_deps: Arc::new(libs),
                             symbols_data: None,
                             program: None,
-                            file_hashes: file_hashes.clone(),
+                            file_paths: file_paths.clone(),
                         }
                     }),
                     None,
@@ -425,7 +425,7 @@ pub fn get_compiled_pkg(
             cached_info_opt.clone(),
             parsed_ast.unwrap(),
             typed_ast.unwrap().modules,
-            file_hashes,
+            file_paths,
             files_to_compile,
         )
     };
@@ -533,13 +533,13 @@ fn merge_user_programs(
     cached_info_opt: Option<AnalyzedPkgInfo>,
     parsed_program_new: P::Program,
     typed_program_modules_new: UniqueMap<ModuleIdent, ModuleDefinition>,
-    file_hashes_new: Arc<BTreeMap<PathBuf, FileHash>>,
+    file_paths_new: Arc<BTreeMap<FileHash, PathBuf>>,
     files_to_compile: BTreeSet<PathBuf>,
 ) -> (P::Program, UniqueMap<ModuleIdent, ModuleDefinition>) {
     // unraps are safe as this function only called when cached compiled program exists
     let cached_info = cached_info_opt.unwrap();
     let compiled_program = cached_info.program.unwrap();
-    let file_hashes_cached = cached_info.file_hashes;
+    let file_paths_cached = cached_info.file_paths;
     let mut parsed_program_cached = compiled_program.parsed.clone();
     let mut typed_modules_cached = compiled_program.typed_modules.clone();
     // address maps might have changed but all would be computed in full during
@@ -549,11 +549,11 @@ fn merge_user_programs(
     // file hashes - if cached module's hash is on the list of new file hashes, it means
     // that nothing changed)
     parsed_program_cached.source_definitions.retain(|pkg_def| {
-        !is_parsed_pkg_modified(pkg_def, &files_to_compile, file_hashes_new.clone())
+        !is_parsed_pkg_modified(pkg_def, &files_to_compile, file_paths_cached.clone())
     });
     let mut typed_modules_cached_filtered = UniqueMap::new();
     for (mident, mdef) in typed_modules_cached.into_iter() {
-        if !is_typed_mod_modified(&mdef, &files_to_compile, file_hashes_new.clone()) {
+        if !is_typed_mod_modified(&mdef, &mident, &files_to_compile, file_paths_cached.clone()) {
             _ = typed_modules_cached_filtered.add(mident, mdef);
         }
     }
@@ -561,12 +561,12 @@ fn merge_user_programs(
     // add new modules from user code (use cached file hashes - if new module's hash is on the list of
     // cached file hashes, it means that nothing' changed)
     for pkg_def in parsed_program_new.source_definitions {
-        if is_parsed_pkg_modified(&pkg_def, &files_to_compile, file_hashes_cached.clone()) {
+        if is_parsed_pkg_modified(&pkg_def, &files_to_compile, file_paths_new.clone()) {
             parsed_program_cached.source_definitions.push(pkg_def);
         }
     }
     for (mident, mdef) in typed_program_modules_new.into_iter() {
-        if is_typed_mod_modified(&mdef, &files_to_compile, file_hashes_cached.clone()) {
+        if is_typed_mod_modified(&mdef, &mident, &files_to_compile, file_paths_new.clone()) {
             typed_modules_cached.remove(&mident); // in case new file has new definition of the module
             _ = typed_modules_cached.add(mident, mdef);
         }
@@ -575,65 +575,50 @@ fn merge_user_programs(
     (parsed_program_cached, typed_modules_cached)
 }
 
-/// Checks if a parsed module has been modified by comparing
-/// file hash in the module with the file hashes provided
-/// as an argument to see if module hash is included in the
-/// hashes provided. We only consider file hashes from modified
-/// files.
+/// Checks if a parsed module is modified by getting
+/// the module's file path and checking if it's included
+/// in the set of modified file paths.
 fn is_parsed_mod_modified(
     mdef: &P::ModuleDefinition,
     modified_files: &BTreeSet<PathBuf>,
-    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+    file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
 ) -> bool {
-    !hash_included_in_file_hashes(mdef.loc.file_hash(), modified_files, file_hashes)
+    let Some(mod_file_path) = file_paths.get(&mdef.loc.file_hash()) else {
+        eprintln!("no file path for parse module {}", mdef.name);
+        debug_assert!(false);
+        return false;
+    };
+    modified_files.contains(mod_file_path)
 }
 
-/// Checks if a typed module has been modified by comparing
-/// file hash in the module with the file hashes provided
-/// as an argument to see if module hash is included in the
-/// hashes provided. We only consider file hashes from modified
-/// files.
+/// Checks if a parsed module is modified by getting
+/// the module's file path and checking if it's included
+/// in the set of modified file paths.
 fn is_typed_mod_modified(
     mdef: &ModuleDefinition,
+    mident: &ModuleIdent,
     modified_files: &BTreeSet<PathBuf>,
-    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+    file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
 ) -> bool {
-    !hash_included_in_file_hashes(mdef.loc.file_hash(), modified_files, file_hashes)
+    let Some(mod_file_path) = file_paths.get(&mdef.loc.file_hash()) else {
+        eprintln!("no file path for typed module {}", mident.value.module);
+        debug_assert!(false);
+        return false;
+    };
+    modified_files.contains(mod_file_path)
 }
 
-/// Checks if a parsed package has been modified by comparing
-/// file hash in the package's modules with the file hashes provided
-/// as an argument to see if all module hashes are included
-/// in the hashes provided. We only consider file hashes from modified
-/// files.
+/// Checks if any of the package modules's were modified.
 fn is_parsed_pkg_modified(
     pkg_def: &P::PackageDefinition,
     modified_files: &BTreeSet<PathBuf>,
-    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+    file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
 ) -> bool {
     match &pkg_def.def {
-        P::Definition::Module(mdef) => is_parsed_mod_modified(mdef, modified_files, file_hashes),
+        P::Definition::Module(mdef) => is_parsed_mod_modified(mdef, modified_files, file_paths),
         P::Definition::Address(adef) => adef
             .modules
             .iter()
-            .any(|mdef| is_parsed_mod_modified(mdef, modified_files, file_hashes.clone())),
+            .any(|mdef| is_parsed_mod_modified(mdef, modified_files, file_paths.clone())),
     }
-}
-
-/// Checks if a hash is included in the file hashes list.
-/// We only consider file hashes from files.
-fn hash_included_in_file_hashes(
-    hash: FileHash,
-    modified_files: &BTreeSet<PathBuf>,
-    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
-) -> bool {
-    modified_files.iter().any(|fpath| {
-        file_hashes.get(fpath).map_or_else(
-            || {
-                debug_assert!(false);
-                false
-            },
-            |fhash| hash == *fhash,
-        )
-    })
 }

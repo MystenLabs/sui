@@ -196,7 +196,10 @@ impl ExecutionScheduler {
                         enqueue_time,
                     );
                 }
-            _ = self.transaction_cache_read.notify_read_executed_effects_digests(&digests) => {
+            _ = self.transaction_cache_read.notify_read_executed_effects_digests(
+                "ExecutionScheduler::notify_read_executed_effects_digests",
+                &digests,
+            ) => {
                 debug!(?tx_digest, "Transaction already executed");
             }
         };
@@ -448,7 +451,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     debug_fatal!(
                         "We should never enqueue certificate from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
-                        cert.0.epoch(),
+                        cert.0.epoch()
                     );
                     None
                 }

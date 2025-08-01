@@ -291,6 +291,14 @@ pub struct ExecutionTimeObserverConfig {
     ///
     /// If unspecified, this will default to `20`.
     pub weighted_moving_average_window_size: Option<usize>,
+
+    /// Whether to inject synthetic execution time for testing in simtest.
+    /// When enabled, synthetic timings will be generated for execution time observations
+    /// to enable deterministic testing of congestion control features.
+    ///
+    /// If unspecified, this will default to `false`.
+    #[cfg(msim)]
+    pub inject_synthetic_execution_time: Option<bool>,
 }
 
 impl ExecutionTimeObserverConfig {
@@ -348,6 +356,11 @@ impl ExecutionTimeObserverConfig {
 
     pub fn weighted_moving_average_window_size(&self) -> usize {
         self.weighted_moving_average_window_size.unwrap_or(20)
+    }
+
+    #[cfg(msim)]
+    pub fn inject_synthetic_execution_time(&self) -> bool {
+        self.inject_synthetic_execution_time.unwrap_or(false)
     }
 }
 
@@ -1233,7 +1246,7 @@ pub struct AuthorityOverloadConfig {
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
-    Duration::from_millis(500)
+    Duration::from_millis(1000)
 }
 
 fn default_overload_monitor_interval() -> Duration {
@@ -1269,7 +1282,7 @@ fn default_max_transaction_manager_queue_length() -> usize {
 }
 
 fn default_max_transaction_manager_per_object_queue_length() -> usize {
-    20
+    2000
 }
 
 impl Default for AuthorityOverloadConfig {

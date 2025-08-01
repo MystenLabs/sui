@@ -199,11 +199,11 @@ pub fn compute_symbols(
     let edition = compiled_pkg_info.edition;
     let compiler_info = compiled_pkg_info.compiler_info.clone();
     let lsp_diags = compiled_pkg_info.lsp_diags.clone();
-    let file_hashes = compiled_pkg_info
+    let file_paths = compiled_pkg_info
         .mapped_files
         .file_name_mapping()
         .iter()
-        .map(|(fhash, fpath)| (fpath.clone(), *fhash))
+        .map(|(fhash, fpath)| (*fhash, fpath.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
     let mut symbols_computation_data_deps = SymbolsComputationData::new();
@@ -244,7 +244,7 @@ pub fn compute_symbols(
                     deps: cached_deps.program_deps.clone(),
                     deps_symbols_data,
                     program: Arc::new(program),
-                    file_hashes: Arc::new(file_hashes),
+                    file_paths: Arc::new(file_paths),
                     edition,
                     compiler_info,
                     lsp_diags,

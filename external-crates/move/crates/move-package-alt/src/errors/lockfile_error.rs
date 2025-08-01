@@ -61,7 +61,7 @@ impl LockfileError {
         };
 
         let diagnostic = self.to_diagnostic();
-        let e = term::emit(&mut writer.lock(), &config, &files, &diagnostic);
-        e
+
+        term::emit(&mut writer.lock(), &config, &files, &diagnostic)
     }
 }

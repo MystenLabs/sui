@@ -41,14 +41,14 @@ impl Build {
 
         let root_pkg = RootPackage::<Vanilla>::load(&path, environment).await?;
 
-        for pkg in root_pkg.packages() {
+        for pkg in root_pkg.packages()? {
             println!("Package {}", pkg.name());
             if pkg.is_root() {
                 println!("  (root package)");
             }
             println!("  path: {:?}", pkg.path());
             println!("  named addresses:");
-            for (name, addr) in pkg.named_addresses() {
+            for (name, addr) in pkg.named_addresses()? {
                 println!("    {name}: {addr:?}");
             }
             println!();

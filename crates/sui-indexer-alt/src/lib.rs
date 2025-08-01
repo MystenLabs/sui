@@ -106,11 +106,13 @@ pub async fn setup_indexer(
         store.clone(),
     )))?;
 
+    let metrics_prefix = None;
     let mut indexer = Indexer::new(
         store,
         indexer_args,
         client_args,
         ingestion,
+        metrics_prefix,
         registry,
         cancel.clone(),
     )

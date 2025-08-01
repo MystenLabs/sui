@@ -117,6 +117,9 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
     let manifest = Manifest::read_from_file(input_path).unwrap();
     let env = default_environment();
 
+    // This is the "root's" source.
+    let source = PinnedDependencyInfo::root_dependency(*manifest.file_handle(), env.name().clone());
+
     let deps = CombinedDependency::combine_deps(
         manifest.file_handle(),
         &env,
@@ -132,7 +135,7 @@ async fn run_pinning_tests(input_path: &Path) -> datatest_stable::Result<String>
 
     add_bindir();
 
-    let pinned = PinnedDependencyInfo::pin::<Vanilla>(deps.clone(), env.id())
+    let pinned = PinnedDependencyInfo::pin::<Vanilla>(&source, deps.clone(), env.id())
         .await
         .map_err(|e| e.to_string())?;
     for (name, dep) in pinned {
