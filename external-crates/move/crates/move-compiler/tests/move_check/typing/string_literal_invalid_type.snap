@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_check/typing/string_literal_invalid_type.move:2:23
+  │
+2 │     fun test(): u64 { "hello" }
+  │                 ---   ^^^^^^^
+  │                 │     │
+  │                 │     Invalid return expression
+  │                 │     Given: string
+  │                 Expected: 'u64'
