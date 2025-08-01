@@ -2461,7 +2461,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
             || mask.contains(Self::GAS_OBJECT_FIELD.name)
         {
             let mut changed_objects = Vec::new();
-            let mut unchanged_shared_objects = Vec::new();
+            let mut unchanged_consensus_objects = Vec::new();
 
             for ((id, version, digest), owner) in value.created() {
                 let change = ChangedObject {
@@ -2594,7 +2594,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                     changed_object.input_version = Some(version);
                     changed_object.input_digest = Some(digest);
                 } else {
-                    let unchanged_shared_object = UnchangedSharedObject {
+                    let unchanged_consensus_object = UnchangedSharedObject {
                         kind: Some(
                             unchanged_shared_object::UnchangedSharedObjectKind::ReadOnlyRoot.into(),
                         ),
@@ -2604,7 +2604,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                         object_type: None,
                     };
 
-                    unchanged_shared_objects.push(unchanged_shared_object);
+                    unchanged_consensus_objects.push(unchanged_consensus_object);
                 }
             }
 
@@ -2621,7 +2621,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
             }
 
             if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                self.unchanged_shared_objects = unchanged_shared_objects;
+                self.unchanged_shared_objects = unchanged_consensus_objects;
             }
         }
     }
@@ -2644,7 +2644,7 @@ impl Merge<&crate::effects::TransactionEffectsV2> for TransactionEffects {
             dependencies,
             lamport_version,
             changed_objects,
-            unchanged_shared_objects,
+            unchanged_consensus_objects,
             aux_data_digest,
         }: &crate::effects::TransactionEffectsV2,
         mask: &FieldMaskTree,
@@ -2715,7 +2715,7 @@ impl Merge<&crate::effects::TransactionEffectsV2> for TransactionEffects {
         }
 
         if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-            self.unchanged_shared_objects = unchanged_shared_objects
+            self.unchanged_shared_objects = unchanged_consensus_objects
                 .clone()
                 .into_iter()
                 .map(|(id, unchanged)| {
@@ -2800,9 +2800,9 @@ impl From<crate::effects::IDOperation> for changed_object::IdOperation {
 // UnchangedSharedObject
 //
 
-impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedObject {
-    fn from(value: crate::effects::UnchangedSharedKind) -> Self {
-        use crate::effects::UnchangedSharedKind as K;
+impl From<crate::effects::UnchangedConsensusKind> for UnchangedSharedObject {
+    fn from(value: crate::effects::UnchangedConsensusKind) -> Self {
+        use crate::effects::UnchangedConsensusKind as K;
         use unchanged_shared_object::UnchangedSharedObjectKind;
 
         let mut message = Self::default();
