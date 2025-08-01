@@ -2128,43 +2128,54 @@ impl SuiNode {
 
         // Fork recovery for validators with recovery config
         if let Some(recovery) = fork_recovery {
-            // Handle transaction fork recovery
-            if !recovery.transaction_overrides.is_empty() {
-                if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()? {
-                    if recovery
-                        .transaction_overrides
-                        .contains_key(&tx_digest.to_string())
-                    {
-                        info!(
-                            "Fork recovery enabled for validator: clearing transaction fork for tx {:?}",
-                            tx_digest
-                        );
-                        checkpoint_store
-                            .clear_transaction_fork_detected()
-                            .expect("Failed to clear transaction fork detected marker");
-                    }
-                }
+            if recovery.clear_checkpoint_fork {
+                checkpoint_store
+                    .clear_checkpoint_fork_detected()
+                    .expect("Failed to clear checkpoint fork detected marker");
+            }
+            if recovery.clear_transaction_fork {
+                checkpoint_store
+                    .clear_transaction_fork_detected()
+                    .expect("Failed to clear transaction fork detected marker");
             }
 
-            // Handle checkpoint fork recovery
-            if !recovery.checkpoint_overrides.is_empty() {
-                if let Some((checkpoint_seq, checkpoint_digest)) =
-                    checkpoint_store.get_checkpoint_fork_detected()?
-                {
-                    if recovery.checkpoint_overrides.contains_key(&checkpoint_seq) {
-                        info!(
-                            "Fork recovery enabled for validator: clearing checkpoint fork at seq {} with digest {:?}",
-                            checkpoint_seq, checkpoint_digest
-                        );
-                        checkpoint_store
-                            .clear_checkpoint_fork_detected()
-                            .expect("Failed to clear checkpoint fork detected marker");
-                    }
-                }
-            }
+            // TODO: when transaction fork recovery is implemented, this is how recovery will be done
+            // Handle transaction fork recovery
+            // if !recovery.transaction_overrides.is_empty() {
+            //     if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()? {
+            //         if recovery
+            //             .transaction_overrides
+            //             .contains_key(&tx_digest.to_string())
+            //         {
+            //             info!(
+            //                 "Fork recovery enabled for validator: clearing transaction fork for tx {:?}",
+            //                 tx_digest
+            //             );
+            //             checkpoint_store
+            //                 .clear_transaction_fork_detected()
+            //                 .expect("Failed to clear transaction fork detected marker");
+            //         }
+            //     }
+            // }
+
+            // // Handle checkpoint fork recovery
+            // if !recovery.checkpoint_overrides.is_empty() {
+            //     if let Some((checkpoint_seq, checkpoint_digest)) =
+            //         checkpoint_store.get_checkpoint_fork_detected()?
+            //     {
+            //         if recovery.checkpoint_overrides.contains_key(&checkpoint_seq) {
+            //             info!(
+            //                 "Fork recovery enabled for validator: clearing checkpoint fork at seq {} with digest {:?}",
+            //                 checkpoint_seq, checkpoint_digest
+            //             );
+            //             checkpoint_store
+            //                 .clear_checkpoint_fork_detected()
+            //                 .expect("Failed to clear checkpoint fork detected marker");
+            //         }
+            //     }
+            // }
         }
 
-        // After fork recovery (if applicable), check if any forks still exist and halt if so
         if let Some((checkpoint_seq, checkpoint_digest)) = checkpoint_store
             .get_checkpoint_fork_detected()
             .map_err(|e| {
@@ -2204,7 +2215,6 @@ impl SuiNode {
             }
         }
 
-        // Check for transaction fork
         if let Some((tx_digest, expected_effects_digest, actual_effects_digest)) = checkpoint_store
             .get_transaction_fork_detected()
             .map_err(|e| {
