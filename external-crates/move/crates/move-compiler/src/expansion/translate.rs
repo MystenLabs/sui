@@ -877,7 +877,7 @@ fn module(
     if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
         duplicate_module(context, module_map, mident, old_loc)
     }
-    context.address = None;
+    context.address = None
 }
 
 fn set_module_address(
