@@ -288,7 +288,19 @@ where
             tokio::select! {
                 // Execution result returned
                 execution_result = &mut execution_future => {
-                    return execution_result.map(|resp| (resp, false));
+                    match execution_result {
+                        Err(QuorumDriverError::TransactionPendingExecution) => {
+                            debug!(
+                                ?tx_digest,
+                                "Transaction already being processed, disabling execution branch and waiting for local effects"
+                            );
+                            // Disable this branch similar to how we disable local_effects_future
+                            execution_future = futures::future::pending().boxed();
+                        }
+                        other_result => {
+                            return other_result.map(|resp| (resp, false));
+                        }
+                    }
                 }
                 // Local effects might be available
                 local_effects_result = &mut local_effects_future => {
@@ -447,20 +459,28 @@ where
     ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
         debug!("Using TransactionDriver for transaction {:?}", tx_digest);
         // Add transaction to WAL log for TransactionDriver path
-        if self
+        let is_new_transaction = self
             .pending_tx_log
             .write_pending_transaction_maybe(verified_transaction)
             .await
             .map_err(|e| {
                 warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
                 QuorumDriverError::QuorumDriverInternalError(e)
-            })?
-        {
+            })?;
+
+        if !is_new_transaction {
             debug!(
                 ?tx_digest,
-                "Added transaction to WAL log for TransactionDriver"
+                "Transaction already in pending_tx_log, returning TransactionPendingExecution"
             );
+            // Return the special error to signal that we should wait for effects
+            return Err(QuorumDriverError::TransactionPendingExecution);
         }
+
+        debug!(
+            ?tx_digest,
+            "Added transaction to WAL log for TransactionDriver"
+        );
 
         let td_response = td
             .drive_transaction(

@@ -283,6 +283,14 @@ impl From<Error> for ErrorObjectOwned {
                             None::<()>,
                         )
                     }
+                    QuorumDriverError::TransactionPendingExecution => {
+                        // TODO(fastpath): Remove once traffic is 100% TD
+                        ErrorObject::owned(
+                            TRANSIENT_ERROR_CODE,
+                            "[MFP experimental]: Transaction already being processed (most likely by QD), wait for results",
+                            None::<()>,
+                        )
+                    }
                 }
             }
             _ => failed(e),
