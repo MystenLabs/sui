@@ -551,28 +551,28 @@ fn command_(context: &mut Context, sp!(_, c): &T::Command) -> anyhow::Result<Vec
         T::Command__::TransferObjects(objs, recipient) => {
             context.arguments(objs)?;
             context.argument(recipient)?;
-            non_ref_results(result_tys)
+            non_ref_results(result_tys)?
         }
         T::Command__::SplitCoins(_, coin, amounts) => {
             context.arguments(amounts)?;
             let coin_value = context.argument(coin)?;
             write_ref(context, coin_value)?;
-            non_ref_results(result_tys)
+            non_ref_results(result_tys)?
         }
         T::Command__::MergeCoins(_, target, coins) => {
             context.arguments(coins)?;
             let target_value = context.argument(target)?;
             write_ref(context, target_value)?;
-            non_ref_results(result_tys)
+            non_ref_results(result_tys)?
         }
         T::Command__::MakeMoveVec(_, arguments) => {
             context.arguments(arguments)?;
-            non_ref_results(result_tys)
+            non_ref_results(result_tys)?
         }
-        T::Command__::Publish(_, _, _) => non_ref_results(result_tys),
+        T::Command__::Publish(_, _, _) => non_ref_results(result_tys)?,
         T::Command__::Upgrade(_, _, _, ticket, _) => {
             context.argument(ticket)?;
-            non_ref_results(result_tys)
+            non_ref_results(result_tys)?
         }
     };
     assert_invariant!(
@@ -678,12 +678,15 @@ fn call(
         .collect::<anyhow::Result<Vec<_>>>()
 }
 
-fn non_ref_results(results: &[T::Type]) -> Vec<Value> {
+fn non_ref_results(results: &[T::Type]) -> anyhow::Result<Vec<Value>> {
     results
         .iter()
         .map(|t| {
-            debug_assert!(!matches!(t, T::Type::Reference(_, _)));
-            Value::NonRef
+            anyhow::ensure!(
+                !matches!(t, T::Type::Reference(_, _)),
+                "attempted to create a non-reference result from a reference type",
+            );
+            Ok(Value::NonRef)
         })
         .collect()
 }
