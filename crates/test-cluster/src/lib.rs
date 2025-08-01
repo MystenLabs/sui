@@ -857,6 +857,9 @@ pub struct TestClusterBuilder {
     chain_override: Option<Chain>,
 
     transaction_driver_percentage: Option<u8>,
+
+    #[cfg(msim)]
+    inject_synthetic_execution_time: bool,
 }
 
 impl TestClusterBuilder {
@@ -892,6 +895,8 @@ impl TestClusterBuilder {
             ),
             indexer_backed_rpc: false,
             transaction_driver_percentage: None,
+            #[cfg(msim)]
+            inject_synthetic_execution_time: false,
         }
     }
 
@@ -1114,6 +1119,12 @@ impl TestClusterBuilder {
         self
     }
 
+    #[cfg(msim)]
+    pub fn with_synthetic_execution_time_injection(mut self) -> Self {
+        self.inject_synthetic_execution_time = true;
+        self
+    }
+
     /// Percentage of transactions going through TransactionDriver, instead of QuorumDriver.
     /// Can be overridden by setting the TRANSACTION_DRIVER environment variable.
     pub fn transaction_driver_percentage(mut self, percent: u8) -> Self {
@@ -1299,6 +1310,15 @@ impl TestClusterBuilder {
 
         if self.disable_fullnode_pruning {
             builder = builder.with_disable_fullnode_pruning();
+        }
+
+        #[cfg(msim)]
+        if self.inject_synthetic_execution_time {
+            use sui_config::node::ExecutionTimeObserverConfig;
+
+            let mut config = ExecutionTimeObserverConfig::default();
+            config.inject_synthetic_execution_time = Some(true);
+            builder = builder.with_execution_time_observer_config(config);
         }
 
         let mut swarm = builder.build();
