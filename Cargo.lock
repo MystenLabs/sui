@@ -14805,6 +14805,7 @@ dependencies = [
  "diesel-async",
  "move-core-types",
  "prometheus",
+ "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
  "sui-kvstore",

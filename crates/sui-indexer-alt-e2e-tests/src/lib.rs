@@ -31,8 +31,8 @@ use sui_indexer_alt_jsonrpc::{
     RpcArgs as JsonRpcArgs,
 };
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, full_node_client::FullNodeArgs,
-    system_package_task::SystemPackageTaskArgs,
+    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
+    full_node_client::FullNodeArgs, system_package_task::SystemPackageTaskArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
@@ -398,12 +398,20 @@ impl OffchainCluster {
         .await
         .context("Failed to start JSON-RPC server")?;
 
+        let consistent_reader_args = ConsistentReaderArgs {
+            consistent_store_url: Some(
+                Url::parse(&format!("http://{consistent_listen_address}")).unwrap(),
+            ),
+            consistent_store_statement_timeout_ms: None,
+        };
+
         let graphql = start_graphql(
             Some(database_url.clone()),
             None,
             FullNodeArgs::default(),
             DbArgs::default(),
             BigtableArgs::default(),
+            consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
             "0.0.0",
