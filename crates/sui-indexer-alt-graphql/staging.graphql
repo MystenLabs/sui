@@ -1,3 +1,13 @@
+"""
+System transaction for creating the accumulator root.
+"""
+type AccumulatorRootCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 type ActiveJwk {
 	"""
 	The string (Issuing Authority) that identifies the OIDC provider.
@@ -63,6 +73,16 @@ type Address implements IAddressable {
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
 	address: SuiAddress!
+}
+
+"""
+System transaction for creating the on-chain state used by zkLogin.
+"""
+type AuthenticatorStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 type AuthenticatorStateUpdateTransaction {
@@ -248,6 +268,16 @@ input CheckpointFilter {
 }
 
 """
+System transaction for creating the coin deny list state.
+"""
+type CoinDenyListStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
 """
 type ConsensusCommitPrologueTransaction {
@@ -349,7 +379,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | AccumulatorRootCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -1202,6 +1232,16 @@ type Query {
 }
 
 """
+System transaction for creating the on-chain randomness state.
+"""
+type RandomnessStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
 System transaction to update the source of on-chain randomness.
 """
 type RandomnessStateUpdateTransaction {
@@ -1390,6 +1430,16 @@ type StorageFund {
 	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
+}
+
+"""
+System transaction for storing execution time observations.
+"""
+type StoreExecutionTimeObservationsTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 

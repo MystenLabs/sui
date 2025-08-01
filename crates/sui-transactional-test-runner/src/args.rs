@@ -216,6 +216,10 @@ pub struct AdvanceEpochCommand {
     pub count: Option<u64>,
     #[clap(long = "create-random-state")]
     pub create_random_state: bool,
+    #[clap(long = "create-authenticator-state")]
+    pub create_authenticator_state: bool,
+    #[clap(long = "create-deny-list-state")]
+    pub create_deny_list_state: bool,
 }
 
 #[derive(Debug, clap::Parser)]
