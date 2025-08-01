@@ -14,8 +14,8 @@ use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::quorum_driver::{QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics};
 use crate::transaction_driver::{
-    QuorumTransactionResponse, SubmitTransactionOptions, SubmitTxRequest, TransactionDriver,
-    TransactionDriverMetrics,
+    choose_transaction_driver_percentage, QuorumTransactionResponse, SubmitTransactionOptions,
+    SubmitTxRequest, TransactionDriver, TransactionDriverMetrics,
 };
 use futures::future::{select, Either, Future};
 use futures::FutureExt;
@@ -29,7 +29,6 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, Registry,
 };
 use rand::Rng;
-use std::env;
 use std::net::SocketAddr;
 use std::ops::Deref;
 use std::path::Path;
@@ -131,12 +130,12 @@ where
         };
         Self::schedule_txes_in_log(pending_tx_log.clone(), quorum_driver_handler.clone());
 
-        // TODO(fastpath): Plumb in transaction driver percentage from TransactionOrchestrator init instead of env var
-        let td_percentage = env::var("TRANSACTION_DRIVER")
-            .ok()
-            .and_then(|s| s.parse::<u8>().ok())
-            .filter(|&p| p <= 100) // Ensure percentage is between 0-100
-            .unwrap_or(0);
+        let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+        let td_percentage = if !epoch_store.protocol_config().mysticeti_fastpath() {
+            0
+        } else {
+            choose_transaction_driver_percentage()
+        };
 
         let transaction_driver = if td_percentage > 0 {
             let td_metrics = Arc::new(TransactionDriverMetrics::new(prometheus_registry));
