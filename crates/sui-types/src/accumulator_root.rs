@@ -24,6 +24,8 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
+pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metadata");
+pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");
 pub const ACCUMULATOR_ROOT_CREATE_FUNC: &IdentStr = ident_str!("create");
 pub const ACCUMULATOR_ROOT_SETTLE_U128_FUNC: &IdentStr = ident_str!("settle_u128");
 pub const ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC: &IdentStr = ident_str!("settlement_prologue");
@@ -79,7 +81,7 @@ impl MoveTypeTagTraitGeneric for MetadataKey {
     fn get_type_tag(type_params: &[TypeTag]) -> TypeTag {
         TypeTag::Struct(Box::new(StructTag {
             address: SUI_FRAMEWORK_PACKAGE_ID.into(),
-            module: ACCUMULATOR_ROOT_MODULE.to_owned(),
+            module: ACCUMULATOR_METADATA_MODULE.to_owned(),
             name: ACCUMULATOR_METADATA_KEY_TYPE.to_owned(),
             type_params: type_params.to_vec(),
         }))
@@ -101,7 +103,7 @@ impl MoveTypeTagTrait for OwnerKey {
     fn get_type_tag() -> TypeTag {
         TypeTag::Struct(Box::new(StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            module: ACCUMULATOR_ROOT_MODULE.to_owned(),
+            module: ACCUMULATOR_METADATA_MODULE.to_owned(),
             name: ACCUMULATOR_OWNER_KEY_TYPE.to_owned(),
             type_params: vec![],
         }))
@@ -112,7 +114,7 @@ impl AccumulatorOwner {
     pub fn type_() -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
-            module: ACCUMULATOR_ROOT_MODULE.to_owned(),
+            module: ACCUMULATOR_METADATA_MODULE.to_owned(),
             name: ACCUMULATOR_OWNER_TYPE.to_owned(),
             type_params: vec![],
         }
