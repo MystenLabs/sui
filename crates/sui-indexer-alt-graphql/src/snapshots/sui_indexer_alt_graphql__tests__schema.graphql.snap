@@ -791,7 +791,7 @@ interface IObject {
 """
 A call to either an entry or a public Move function.
 """
-type MoveCallTransaction {
+type MoveCallCommand {
 	"""
 	Placeholder field
 	"""
@@ -1110,22 +1110,11 @@ type PerEpochConfig {
 }
 
 """
-A single transaction, or command, in the programmable transaction block.
+A single command in the programmable transaction.
 """
-union ProgrammableTransaction = MoveCallTransaction
+union ProgrammableCommand = MoveCallCommand
 
-type ProgrammableTransactionBlock {
-	"""
-	Input objects or primitive values.
-	"""
-	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
-	"""
-	The transaction commands, executed sequentially.
-	"""
-	transactions(first: Int, after: String, last: Int, before: String): ProgrammableTransactionConnection!
-}
-
-type ProgrammableTransactionConnection {
+type ProgrammableCommandConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -1133,25 +1122,36 @@ type ProgrammableTransactionConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [ProgrammableTransactionEdge!]!
+	edges: [ProgrammableCommandEdge!]!
 	"""
 	A list of nodes.
 	"""
-	nodes: [ProgrammableTransaction!]!
+	nodes: [ProgrammableCommand!]!
 }
 
 """
 An edge in a connection.
 """
-type ProgrammableTransactionEdge {
+type ProgrammableCommandEdge {
 	"""
 	The item at the end of the edge
 	"""
-	node: ProgrammableTransaction!
+	node: ProgrammableCommand!
 	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+type ProgrammableTransaction {
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	commands(first: Int, after: String, last: Int, before: String): ProgrammableCommandConnection!
 }
 
 """
@@ -1777,10 +1777,14 @@ type TransactionInputEdge {
 Different types of transactions that can be executed on the Sui network.
 """
 <<<<<<< HEAD
+<<<<<<< HEAD
 union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction
 =======
 union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | ProgrammableTransactionBlock
 >>>>>>> 48cc5ca29b ([graphql-alt] Support Programmable for TransactionKind [1/n])
+=======
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | ProgrammableTransaction
+>>>>>>> e53cba6748 (rename and restructure)
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.

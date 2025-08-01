@@ -9,13 +9,10 @@ use crate::scope::Scope;
 use self::{
     authenticator_state_update::AuthenticatorStateUpdateTransaction,
     change_epoch::ChangeEpochTransaction,
-<<<<<<< HEAD
     consensus_commit_prologue::ConsensusCommitPrologueTransaction,
     end_of_epoch::EndOfEpochTransaction, genesis::GenesisTransaction,
-=======
     consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
-    programmable::ProgrammableTransactionBlock,
->>>>>>> 48cc5ca29b ([graphql-alt] Support Programmable for TransactionKind [1/n])
+    programmable::ProgrammableTransaction,
     randomness_state_update::RandomnessStateUpdateTransaction,
 };
 
@@ -36,7 +33,7 @@ pub enum TransactionKind {
     RandomnessStateUpdate(RandomnessStateUpdateTransaction),
     AuthenticatorStateUpdate(AuthenticatorStateUpdateTransaction),
     EndOfEpoch(EndOfEpochTransaction),
-    Programmable(ProgrammableTransactionBlock),
+    Programmable(ProgrammableTransaction),
 }
 
 impl TransactionKind {
@@ -69,16 +66,13 @@ impl TransactionKind {
             K::AuthenticatorStateUpdate(asu) => Some(T::AuthenticatorStateUpdate(
                 AuthenticatorStateUpdateTransaction { native: asu, scope },
             )),
-<<<<<<< HEAD
             K::EndOfEpochTransaction(eoe) => {
                 Some(T::EndOfEpoch(EndOfEpochTransaction { native: eoe, scope }))
             }
-=======
-            K::ProgrammableTransaction(pt) => Some(T::Programmable(ProgrammableTransactionBlock {
+            K::ProgrammableTransaction(pt) => Some(T::Programmable(ProgrammableTransaction {
                 native: pt,
                 scope,
             })),
->>>>>>> 48cc5ca29b ([graphql-alt] Support Programmable for TransactionKind [1/n])
             // Other types will return None for now
             _ => None,
         }
