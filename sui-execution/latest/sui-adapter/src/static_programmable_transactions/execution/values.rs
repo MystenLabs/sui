@@ -227,7 +227,9 @@ impl Value {
         Ok(Self(vec))
     }
 
-    pub fn tx_context(digest: TransactionDigest) -> Result<Self, ExecutionError> {
+    /// Should be called once at the start of a transaction to populate the location with the
+    /// transaction context.
+    pub fn new_tx_context(digest: TransactionDigest) -> Result<Self, ExecutionError> {
         // public struct TxContext has drop {
         //     sender: address,
         //     tx_hash: vector<u8>,

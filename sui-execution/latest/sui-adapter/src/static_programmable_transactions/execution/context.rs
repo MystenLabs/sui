@@ -257,8 +257,9 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
             tx_context.clone(),
         );
 
-        let tx_context_value =
-            Locals::new(vec![Some(Value::tx_context(tx_context.borrow().digest())?)])?;
+        let tx_context_value = Locals::new(vec![Some(Value::new_tx_context(
+            tx_context.borrow().digest(),
+        )?)])?;
         Ok(Self {
             env,
             metrics,
@@ -796,11 +797,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 "init function should have at most 2 parameters"
             );
             let has_otw = fparameters.0.len() == 2;
-            let tx_context = CtxValue(Value::tx_context(self.tx_context.borrow().digest())?);
+            let tx_context = self
+                .location(UsageKind::Borrow, T::Location::TxContext)
+                .map_err(|e| {
+                    make_invariant_violation!("Failed to get tx context for init function: {}", e)
+                })?;
             let args = if has_otw {
-                vec![CtxValue(Value::one_time_witness()?), tx_context]
+                vec![CtxValue(Value::one_time_witness()?), CtxValue(tx_context)]
             } else {
-                vec![tx_context]
+                vec![CtxValue(tx_context)]
             };
             let return_values = self.execute_function_bypass_visibility(
                 &module.self_id(),
