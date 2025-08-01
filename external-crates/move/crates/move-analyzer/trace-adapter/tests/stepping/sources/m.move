@@ -3,7 +3,7 @@
 // - step out of a function
 // - step over a function
 module stepping::m;
-
+// non-ascii character: 𝑥 (to test if debug name of `foo` is read correctly from debug info)
 fun foo(p: u64): u64 {
     p + p
 }
