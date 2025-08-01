@@ -15572,6 +15572,8 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "futures",
+ "rustls 0.23.25",
+ "rustls-pemfile 2.1.2",
  "scoped-futures",
  "sui-field-count",
  "sui-indexer-alt-framework-store-traits",
@@ -15579,8 +15581,11 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
+ "tokio-postgres",
+ "tokio-postgres-rustls",
  "tracing",
  "url",
+ "webpki-roots 0.26.3",
 ]
 
 [[package]]
