@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
-use sui_types::transaction::EndOfEpochTransactionKind as NativeEndOfEpochTransactionKind;
+use sui_types::{
+    digests::ChainIdentifier as NativeChainIdentifier,
+    transaction::EndOfEpochTransactionKind as NativeEndOfEpochTransactionKind,
+};
 
 use crate::{
     api::{
@@ -28,6 +31,7 @@ pub enum EndOfEpochTransactionKind {
     RandomnessStateCreate(RandomnessStateCreateTransaction),
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
+    BridgeStateCreate(BridgeStateCreateTransaction),
     AccumulatorRootCreate(AccumulatorRootCreateTransaction),
     // TODO: Add more complex transaction types incrementally
 }
@@ -62,6 +66,21 @@ pub struct StoreExecutionTimeObservationsTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
+}
+
+/// System transaction for creating bridge state.
+#[derive(Clone)]
+pub struct BridgeStateCreateTransaction {
+    pub native: NativeChainIdentifier,
+}
+
+/// System transaction for creating bridge state for cross-chain operations.
+#[Object]
+impl BridgeStateCreateTransaction {
+    /// The chain identifier for which this bridge state is being created.
+    async fn chain_identifier(&self) -> Option<String> {
+        Some(self.native.to_string())
+    }
 }
 
 /// System transaction for creating the accumulator root.
@@ -130,6 +149,11 @@ impl EndOfEpochTransactionKind {
             N::StoreExecutionTimeObservations(_) => Some(K::StoreExecutionTimeObservations(
                 StoreExecutionTimeObservationsTransaction { dummy: None },
             )),
+            N::BridgeStateCreate(chain_id) => {
+                Some(K::BridgeStateCreate(BridgeStateCreateTransaction {
+                    native: chain_id,
+                }))
+            }
             N::AccumulatorRootCreate => {
                 Some(K::AccumulatorRootCreate(AccumulatorRootCreateTransaction {
                     dummy: None,
