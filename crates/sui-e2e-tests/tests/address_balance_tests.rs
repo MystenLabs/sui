@@ -228,7 +228,6 @@ async fn test_withdraw_non_existent_balance() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-#[ignore(reason = "currently panics")]
 async fn test_withdraw_underflow() -> Result<(), anyhow::Error> {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
