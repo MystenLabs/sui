@@ -3,6 +3,7 @@
 
 use crate::{
     FullyCompiledProgram,
+    expansion::ast as E,
     parser::ast::{self as P, NameAccessChain},
 };
 
@@ -84,6 +85,9 @@ pub const STDLIB_STRING_TYPES: [(Symbol, Symbol, Symbol); 2] = [
     ),
 ];
 
+pub const ASCII_STRING_VALIDATOR: fn(&E::Value_) -> Result<(), String> = is_ascii_string;
+pub const STRING_STRING_VALIDATOR: fn(&E::Value_) -> Result<(), String> = is_utf8_string;
+
 // -------------------------------------------------------------------------------------------------
 // Functions
 // -------------------------------------------------------------------------------------------------
@@ -104,6 +108,153 @@ pub fn stdlib_type_definition(loc: Loc) -> Vec<(StdlibName, NameAccessChain)> {
         .iter()
         .map(|(qualified, module, name)| (*qualified, name_access_chain(loc, *module, *name)))
         .collect::<Vec<_>>()
+}
+
+// -----------------------------------------------
+// String Utilities
+// -----------------------------------------------
+
+/// Indicates if the data is a valid ascii string
+pub fn is_ascii_string(value: &E::Value_) -> Result<(), String> {
+    use E::Value_ as V;
+    fn ensure_ascii(data: &[u8]) -> Result<(), String> {
+        if let Some((i, &b)) = data.iter().enumerate().find(|&(_, &b)| !b.is_ascii()) {
+            // ----- leading (up to 3 ASCII chars before i) -----
+            let lead_start = i.saturating_sub(3);
+            let mut leading = std::str::from_utf8(&data[lead_start..i])
+                .unwrap()
+                .to_string();
+            if lead_start > 0 {
+                leading.insert_str(0, "...");
+            }
+
+            // ----- offending (single non-ASCII byte) -----
+            let offending = format!("\\x{:02X}", b);
+
+            // ----- trailing (next up to 3 ASCII chars *after* the invalid byte, skipping non-ASCII) -----
+            let mut trail_bytes = Vec::with_capacity(3);
+            let mut pos = i + 1;
+            while pos < data.len() && trail_bytes.len() < 3 {
+                let nb = data[pos];
+                if nb.is_ascii() {
+                    trail_bytes.push(nb);
+                }
+                pos += 1;
+            }
+            let mut trailing = String::new();
+            if !trail_bytes.is_empty() {
+                trailing = std::str::from_utf8(&trail_bytes).unwrap().to_string();
+            }
+            if pos < data.len() {
+                // There are still bytes (ASCII or not) after what we showed
+                trailing.push_str("...");
+            }
+
+            return Err(format!(
+                "string \"{}[{}]{}\". contains invalid ASCII entry at char '{}' at index '{}'",
+                leading, offending, trailing, offending, i
+            ));
+        }
+        Ok(())
+    }
+
+    match value {
+        V::Address(_)
+        | V::InferredNum(_)
+        | V::U8(_)
+        | V::U16(_)
+        | V::U32(_)
+        | V::U64(_)
+        | V::U128(_)
+        | V::U256(_)
+        | V::Bool(_)
+        | V::Bytearray(_) => Err("value is not a string".to_owned()),
+        V::InferredString(data) => ensure_ascii(data),
+    }
+}
+
+/// Indicates if the data is a valid UTF8 string
+pub fn is_utf8_string(value: &E::Value_) -> Result<(), String> {
+    use E::Value_ as V;
+
+    fn ensure_unicode(data: &[u8]) -> Result<(), String> {
+        use std::fmt::Write;
+        match std::str::from_utf8(data) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let i = e.valid_up_to();
+                let remaining = data.len().saturating_sub(i);
+                let seq_len = e.error_len().unwrap_or(remaining);
+                let end = i + seq_len.min(remaining);
+
+                // offending bytes as "\xNN\xMM..."
+                let offending =
+                    data[i..end]
+                        .iter()
+                        .fold(String::with_capacity((end - i) * 4), |mut s, &b| {
+                            let _ = write!(s, "\\x{:02X}", b);
+                            s
+                        });
+
+                // ----- leading (last up to 3 Unicode chars before i) -----
+                // Safe: up to `i` is valid UTF-8.
+                let prefix = unsafe { std::str::from_utf8_unchecked(&data[..i]) };
+                let lead_start = prefix
+                    .char_indices()
+                    .rev()
+                    .nth(2) // 3rd-from-end -> start of last 3 chars
+                    .map(|(p, _)| p)
+                    .unwrap_or(0);
+                let mut leading = prefix[lead_start..].to_string();
+                if lead_start > 0 {
+                    leading.insert_str(0, "...");
+                }
+
+                // ----- trailing (first up to 3 Unicode chars after the invalid seq) -----
+                let trailing_start = end;
+                let mut trailing = String::new();
+                let mut consumed_bytes = 0usize;
+
+                if trailing_start < data.len() {
+                    if let Ok(suffix) = std::str::from_utf8(&data[trailing_start..]) {
+                        for (j, ch) in suffix.char_indices() {
+                            if trailing.chars().count() >= 3 {
+                                break;
+                            }
+                            trailing.push(ch);
+                            consumed_bytes = j + ch.len_utf8();
+                        }
+                        // ellipsis if there are more bytes after what we showed
+                        if trailing_start + consumed_bytes < data.len() {
+                            trailing.push_str("...");
+                        }
+                    } else {
+                        // can't decode any trailing chars; still show ellipsis if bytes remain
+                        trailing.push_str("...");
+                    }
+                }
+
+                Err(format!(
+                    "string \"{}[{}]{}\". contains invalid UTF-8 entry at bytes '{}' at index '{}'",
+                    leading, offending, trailing, offending, i
+                ))
+            }
+        }
+    }
+
+    match value {
+        V::Address(_)
+        | V::InferredNum(_)
+        | V::U8(_)
+        | V::U16(_)
+        | V::U32(_)
+        | V::U64(_)
+        | V::U128(_)
+        | V::U256(_)
+        | V::Bool(_)
+        | V::Bytearray(_) => Err("value is not a string".to_owned()),
+        V::InferredString(data) => ensure_unicode(data),
+    }
 }
 
 // -----------------------------------------------
