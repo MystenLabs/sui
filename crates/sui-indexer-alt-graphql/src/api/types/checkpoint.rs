@@ -230,16 +230,15 @@ impl Checkpoint {
 
         let mut conn = Connection::new(false, false);
 
-        let checkpoint_viewed_at = scope.checkpoint_viewed_at();
         let watermarks: &Arc<Watermarks> = ctx.data()?;
-
-        let reader_lo = watermarks
+        let cp_lo = watermarks
             .pipeline_lo_watermark("cp_sequence_numbers")?
             .checkpoint();
+        let cp_hi_inclusive = scope.checkpoint_viewed_at();
 
         let mut query = cp::cp_sequence_numbers
-            .filter(cp::cp_sequence_number.ge(reader_lo as i64))
-            .filter(cp::cp_sequence_number.le(checkpoint_viewed_at as i64))
+            .filter(cp::cp_sequence_number.ge(cp_lo as i64))
+            .filter(cp::cp_sequence_number.le(cp_hi_inclusive as i64))
             .limit(page.limit_with_overhead() as i64)
             .into_boxed();
 
