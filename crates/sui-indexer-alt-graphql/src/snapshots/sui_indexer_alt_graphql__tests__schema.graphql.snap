@@ -167,6 +167,16 @@ scalar BigInt
 
 
 """
+System transaction for initializing bridge committee.
+"""
+type BridgeCommitteeInitTransaction {
+	"""
+	The initial shared version of the bridge object.
+	"""
+	bridgeObjectVersion: UInt53
+}
+
+"""
 System transaction for creating bridge state for cross-chain operations.
 """
 type BridgeStateCreateTransaction {
@@ -388,12 +398,12 @@ System transaction that supersedes `ChangeEpochTransaction` as the new way to ru
 """
 type EndOfEpochTransaction {
 	"""
-	The list of system transactions that did run at the end of the epoch.
+	The list of system transactions that are allowed to run at the end of the epoch.
 	"""
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | AccumulatorRootCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""

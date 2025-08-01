@@ -3,7 +3,7 @@
 
 //# init --protocol-version 70 --simulator
 
-//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state --create-bridge-state
+//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state --create-bridge-state --create-bridge-committee
 
 //# create-checkpoint
 
@@ -43,6 +43,9 @@
               }
               ... on BridgeStateCreateTransaction {
                 chainIdentifier
+              }
+              ... on BridgeCommitteeInitTransaction {
+                bridgeObjectVersion
               }
             }
           }
