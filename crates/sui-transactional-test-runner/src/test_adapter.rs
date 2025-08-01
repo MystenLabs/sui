@@ -768,6 +768,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 count,
                 create_random_state,
                 create_authenticator_state,
+                create_authenticator_state_expire,
                 create_deny_list_state,
                 create_bridge_state,
                 create_bridge_committee,
@@ -777,6 +778,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         .advance_epoch(
                             create_random_state,
                             create_authenticator_state,
+                            create_authenticator_state_expire,
                             create_deny_list_state,
                             create_bridge_state,
                             create_bridge_committee,

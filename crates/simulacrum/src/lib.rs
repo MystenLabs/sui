@@ -260,6 +260,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &mut self,
         create_random_state: bool,
         create_authenticator_state: bool,
+        create_authenticator_state_expire: bool,
         create_deny_list_state: bool,
         create_bridge_state: bool,
         create_bridge_committee: bool,
@@ -278,6 +279,14 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
 
         if create_authenticator_state {
             kinds.push(EndOfEpochTransactionKind::new_authenticator_state_create());
+        }
+
+        if create_authenticator_state_expire {
+            let current_epoch = self.epoch_state.epoch();
+            kinds.push(EndOfEpochTransactionKind::new_authenticator_state_expire(
+                current_epoch,
+                SequenceNumber::from(1),
+            ));
         }
 
         if create_deny_list_state {
@@ -751,6 +760,7 @@ mod tests {
         for i in 0..steps {
             chain.advance_epoch(
                 /* create_random_state */ false, /* create_authenticator_state */ false,
+                /* create_authenticator_state_expire */ false,
                 /* create_deny_list_state */ false, /* create_bridge_state */ false,
                 /* create_bridge_committee */ false,
             );
