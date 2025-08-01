@@ -400,7 +400,7 @@ fn inferred_string_value(
         Type_::Apply(_, sp!(_, name), args) if args.is_empty() => {
             let possibles = context.outer.get_stdlib_string_info();
 
-            for (mut str_ty, str_ctor) in possibles {
+            for (mut str_ty, str_ctor, validator) in possibles {
                 // Expand our type first, because unification inisits they are the same.
                 type_(context, &mut str_ty);
                 if core::subtype_check(&str_ty, ty) {
@@ -412,7 +412,15 @@ fn inferred_string_value(
                         return None;
                     };
 
-                    // Create the value for the call
+                    // Check the value format
+                    if let Err(err_msg) = validator(&Value_::InferredString(value.clone())) {
+                        let mut diag = diag!(TypeSafety::InvalidString, (value_loc, err_msg));
+                        diag.add_note(diag_note());
+                        context.add_diag(diag);
+                        return None;
+                    }
+
+                    // Build up the typed input value
                     let value_ = Value_::Bytearray(value);
                     let Some(mut bytearray_ty) = value_.type_(value_loc) else {
                         context.add_diag(ice!((value_loc, "Could not get bytearray type")));

@@ -10,7 +10,7 @@ use crate::{
         warning_filters::WarningFilters,
     },
     editions::FeatureGate,
-    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
+    expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
@@ -679,24 +679,44 @@ impl<'env> ModuleContext<'env> {
         fields_info
     }
 
-    pub fn get_stdlib_string_info(&self) -> Vec<(N::Type, Option<(ModuleIdent, FunctionName)>)> {
+    pub fn get_stdlib_string_info(
+        &self,
+    ) -> Vec<(
+        N::Type,
+        Option<(ModuleIdent, FunctionName)>,
+        fn(&E::Value_) -> Result<(), String>,
+    )> {
         use stdlib_definitions as SD;
-        let mut possibles: Vec<(N::Type, Option<(ModuleIdent, FunctionName)>)> = vec![];
+        let mut possibles: Vec<(
+            N::Type,
+            Option<(ModuleIdent, FunctionName)>,
+            fn(&E::Value_) -> Result<(), String>,
+        )> = vec![];
 
-        let (ascii_string_ty, ascii_string_ctor) = (
+        let (ascii_string_ty, ascii_string_ctor, ascii_string_value_validator) = (
             self.stdlib_types.get(&SD::ASCII_STRING_TYPE),
             self.stdlib_functions.get(&SD::ASCII_STRING_CTOR),
+            SD::ASCII_STRING_VALIDATOR,
         );
         if let Some(ty) = ascii_string_ty {
-            possibles.push((ty.clone(), ascii_string_ctor.copied()))
+            possibles.push((
+                ty.clone(),
+                ascii_string_ctor.copied(),
+                ascii_string_value_validator,
+            ))
         }
 
-        let (string_string_ty, string_string_ctor) = (
+        let (string_string_ty, string_string_ctor, string_string_value_validator) = (
             self.stdlib_types.get(&SD::STRING_STRING_TYPE),
             self.stdlib_functions.get(&SD::STRING_STRING_CTOR),
+            SD::STRING_STRING_VALIDATOR,
         );
         if let Some(ty) = string_string_ty {
-            possibles.push((ty.clone(), string_string_ctor.copied()))
+            possibles.push((
+                ty.clone(),
+                string_string_ctor.copied(),
+                string_string_value_validator,
+            ))
         }
 
         possibles
