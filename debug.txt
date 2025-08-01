@@ -26,3 +26,63 @@ Checkpoint 27 is certified, meaning we reached quorum
 2022-01-02T14:31:48.489631Z  INFO node{id=8 name="k#b3fd5efb.."}: sui_core::checkpoints: crates/sui-core/src/checkpoints/mod.rs:2405: Checkpoint certified (digest: CheckpointDigest(233Yx3LcDN89pjt71b8dC9CdmVxPsVzhhej9Khsf3iMS)) checkpoint_seq=27
 
 Updated the test to include checkpoint_fork_dump in logs
+
+
+There's exactly ONE difference in the end_of_epoch_data.epoch_commitments field:
+Team A (4mPbTcAb...):
+epoch_commitments: [ECMHLiveObjectSetDigest { digest: Hc9VXES9C9P5uaxbohqbDpaqu3V52YC6NrqDK7ZRY2V7 }]
+Team B (EfcRcpJ9...):
+epoch_commitments: [ECMHLiveObjectSetDigest { digest: EhFhumUCDqPwjuuXvbeGirjPgocuxnp3z7Z3BF8Qg2B5 }]
+What This Means
+ECMHLiveObjectSetDigest = Elliptic Curve Multiset Hash of the Live Object Set
+This represents a cryptographic commitment to all live objects in the system at the end of epoch 0. The fact that these differ means:
+Two validator groups have different views of the live object set at epoch boundary
+The fork recovery restart interrupted the epoch transition process mid-flight
+Some validators included different objects or object states in their final epoch commitment
+Why This Happened
+Remember the timeline:
+14:31:15: Checkpoint 28 (epoch boundary) creation started
+14:31:40-46: Fork recovery restarts interrupted the process
+14:31:51: Validators resumed and completed checkpoint 28 with different object set views
+The validators essentially "froze" different snapshots of the object set during the restart, leading to different ECMHLiveObjectSetDigest values.
+This explains why your transaction times out - the network can't reach consensus on checkpoint 28 because validators have fundamentally different views of what objects exist at the epoch boundary. The system is deadlocked until this is resolved.
+
+ECMH -> hash of a set of objects -> two hashes can be added together
+Final checkpoint of the epoch has the hash of all the live objects in the epoch
+Every time a transaction runs -> add/delete items from the set -> maintain incrementally
+Remove all the input digests and add all the output digests for each transaction
+We do it at the checkpoint level -> once we've built a checkpoint, this is the set of transaction effects
+We can have duplicates - and we can have negative quantity of the items in the set.
+Checkpoint hashes are incremental - they get summed
+Once we have the final set of effects fo rthe checkpoint - we send to another thread that does the hashing
+create_checkpoint::send_to_hasher -> async
+
+How to run test: 
+
+cd sui && MSIM_TEST_SEED=1753925814191 RUST_BACKTRACE=1 cargo simtest --nocapture --test simtest test_fork_recovery_transaction_effects_simulation 2>&1 | sed 's/\x1b\[[0-9;]*m//g' > ../issue.log
+
+
+
+Discussion with Mark:
+epoch_store .insert_state_hash... write to disk -> potential race
+
+At the end of the epoch -> we don't want to go through the whole table of checkpoint hashes.
+
+2 ways to fix -> 
+1. quarantine the state -> most checkpoint output is -> builder summary  is quarantined -> in memory state that's lost on restart.
+    we'd need to have a separate queue just for the state hasher -> flush when we 
+    insert_state_hash_for_checkpoint -> write to consensus_quarantine
+    commit_with_batch -> 
+        while self.
+2. when we start checkpointbuilder, we get last_built_checkpoint_builder_summary -> last checkpoint that was committed
+    - delete all state hashes computed after checkpoint
+
+
+reason for preferring 
+
+mental model for quarantining vs not
+    -> anythign that is computed as a a result of infomration that we get from consensus should be quarantined
+    -> things it directly writes or things that it indirectly writes
+
+
+if I go quarantining - can't go in the existing queue because it's computed asynchronously

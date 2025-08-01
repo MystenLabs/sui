@@ -1493,10 +1493,12 @@ mod test {
                     config.fork_recovery = Some(fork_recovery_config.clone());
                     info!("Override applied for validator {}", validator_name.concise());
                 }
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 test_cluster.start_node(&validator_name).await;
             }
         }
+
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
         clear_fail_point("kill_checkpoint_fork_node");
         clear_fail_point("kill_transaction_fork_node");
