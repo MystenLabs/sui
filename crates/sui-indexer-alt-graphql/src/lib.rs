@@ -30,6 +30,7 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_indexer_alt_reader::{
     bigtable_reader::{BigtableArgs, BigtableReader},
+    consistent_reader::{ConsistentReader, ConsistentReaderArgs},
     full_node_client::{FullNodeArgs, FullNodeClient},
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache},
@@ -269,6 +270,7 @@ pub async fn start_rpc(
     full_node_args: FullNodeArgs,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
+    consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
     version: &'static str,
@@ -305,6 +307,14 @@ pub async fn start_rpc(
     } else {
         None
     };
+
+    let consistent_reader = ConsistentReader::new(
+        Some("graphql_consistent"),
+        consistent_reader_args,
+        registry,
+        cancel.child_token(),
+    )
+    .await?;
 
     let pg_loader = Arc::new(pg_reader.as_data_loader());
     let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
@@ -357,6 +367,7 @@ pub async fn start_rpc(
         .data(config.limits)
         .data(chain_identifier)
         .data(pg_reader)
+        .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
         .data(package_resolver)

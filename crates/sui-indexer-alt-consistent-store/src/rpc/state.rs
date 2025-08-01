@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::CHECKPOINT_METADATA;
 use tonic::metadata::AsciiMetadataValue;
 
 use crate::config::{ConsistencyConfig, RpcConfig};
@@ -11,8 +12,6 @@ use crate::schema::Schema;
 use crate::store::Store;
 
 use super::error::{RpcError, StatusCode};
-
-pub(super) const CHECKPOINT_METADATA: &str = "x-sui-checkpoint";
 
 /// State exposed to RPC service implementations.
 #[derive(Clone)]

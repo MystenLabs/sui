@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
-    Registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, Registry,
 };
 
 /// Histogram buckets for the distribution of latency (time between sending a DB request and
@@ -21,6 +22,14 @@ pub(crate) struct DbReaderMetrics {
     pub requests_received: IntCounter,
     pub requests_succeeded: IntCounter,
     pub requests_failed: IntCounter,
+}
+
+#[derive(Clone)]
+pub(crate) struct ConsistentReaderMetrics {
+    pub latency: HistogramVec,
+    pub requests_received: IntCounterVec,
+    pub requests_succeeded: IntCounterVec,
+    pub requests_failed: IntCounterVec,
 }
 
 impl DbReaderMetrics {
@@ -54,6 +63,48 @@ impl DbReaderMetrics {
             requests_failed: register_int_counter_with_registry!(
                 name("requests_failed"),
                 "Number of database requests that completed with an error",
+                registry,
+            )
+            .unwrap(),
+        })
+    }
+}
+
+impl ConsistentReaderMetrics {
+    pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("consistent_store");
+        let name = |n| format!("{prefix}_{n}");
+
+        Arc::new(Self {
+            latency: register_histogram_vec_with_registry!(
+                name("latency"),
+                "Time taken by the consistent store to respond to queries",
+                &["method"],
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            requests_received: register_int_counter_vec_with_registry!(
+                name("requests_received"),
+                "Number of consistent store requests sent by the service",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_succeeded: register_int_counter_vec_with_registry!(
+                name("requests_succeeded"),
+                "Number of consistent store requests that completed successfully",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+
+            requests_failed: register_int_counter_vec_with_registry!(
+                name("requests_failed"),
+                "Number of consistent store requests that completed with an error",
+                &["method"],
                 registry,
             )
             .unwrap(),
