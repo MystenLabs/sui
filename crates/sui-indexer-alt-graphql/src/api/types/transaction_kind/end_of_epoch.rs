@@ -4,13 +4,16 @@
 use async_graphql::{connection::Connection, *};
 use sui_types::{
     digests::ChainIdentifier as NativeChainIdentifier,
-    transaction::EndOfEpochTransactionKind as NativeEndOfEpochTransactionKind,
+    transaction::{
+        AuthenticatorStateExpire as NativeAuthenticatorStateExpire,
+        EndOfEpochTransactionKind as NativeEndOfEpochTransactionKind,
+    },
 };
 
 use crate::{
     api::{
         scalars::{cursor::JsonCursor, uint53::UInt53},
-        types::transaction_kind::change_epoch::ChangeEpochTransaction,
+        types::{epoch::Epoch, transaction_kind::change_epoch::ChangeEpochTransaction},
     },
     error::RpcError,
     pagination::{Page, PaginationConfig},
@@ -29,6 +32,7 @@ pub struct EndOfEpochTransaction {
 pub enum EndOfEpochTransactionKind {
     ChangeEpoch(ChangeEpochTransaction),
     AuthenticatorStateCreate(AuthenticatorStateCreateTransaction),
+    AuthenticatorStateExpire(AuthenticatorStateExpireTransaction),
     RandomnessStateCreate(RandomnessStateCreateTransaction),
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
@@ -44,6 +48,31 @@ pub struct AuthenticatorStateCreateTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
+}
+
+#[derive(Clone)]
+pub struct AuthenticatorStateExpireTransaction {
+    pub native: NativeAuthenticatorStateExpire,
+    pub scope: Scope,
+}
+
+/// System transaction that is executed at the end of an epoch to expire JSON Web Keys (JWKs) that are no longer valid, based on their associated epoch. This is part of the on-chain state management for zkLogin and authentication.
+#[Object]
+impl AuthenticatorStateExpireTransaction {
+    /// Expire JWKs that have a lower epoch than this.
+    async fn min_epoch(&self) -> Option<Epoch> {
+        Some(Epoch::with_id(self.scope.clone(), self.native.min_epoch))
+    }
+
+    /// The initial version that the AuthenticatorStateUpdate was shared at.
+    async fn authenticator_obj_initial_shared_version(&self) -> Option<UInt53> {
+        Some(
+            self.native
+                .authenticator_obj_initial_shared_version
+                .value()
+                .into(),
+        )
+    }
 }
 
 /// System transaction for creating the on-chain randomness state.
@@ -120,15 +149,14 @@ impl EndOfEpochTransaction {
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
 
         for edge in cursors.edges {
-            if let Some(tx_kind) = EndOfEpochTransactionKind::from(
+            let tx_kind = EndOfEpochTransactionKind::from(
                 self.native[*edge.cursor].clone(),
                 self.scope.clone(),
-            ) {
-                conn.edges.push(async_graphql::connection::Edge::new(
-                    edge.cursor.to_string(),
-                    tx_kind,
-                ));
-            }
+            );
+            conn.edges.push(async_graphql::connection::Edge::new(
+                edge.cursor.to_string(),
+                tx_kind,
+            ));
         }
 
         Ok(conn)
@@ -136,45 +164,49 @@ impl EndOfEpochTransaction {
 }
 
 impl EndOfEpochTransactionKind {
-    pub fn from(kind: NativeEndOfEpochTransactionKind, scope: Scope) -> Option<Self> {
+    pub fn from(kind: NativeEndOfEpochTransactionKind, scope: Scope) -> Self {
         use EndOfEpochTransactionKind as K;
         use NativeEndOfEpochTransactionKind as N;
 
         match kind {
             N::ChangeEpoch(ce) => {
-                Some(K::ChangeEpoch(ChangeEpochTransaction { native: ce, scope }))
+                K::ChangeEpoch(ChangeEpochTransaction { native: ce, scope })
             }
-            N::AuthenticatorStateCreate => Some(K::AuthenticatorStateCreate(
+            N::AuthenticatorStateCreate => K::AuthenticatorStateCreate(
                 AuthenticatorStateCreateTransaction { dummy: None },
-            )),
+            ),
+            N::AuthenticatorStateExpire(expire_data) => K::AuthenticatorStateExpire(
+                AuthenticatorStateExpireTransaction {
+                    native: expire_data,
+                    scope,
+                },
+            ),
             N::RandomnessStateCreate => {
-                Some(K::RandomnessStateCreate(RandomnessStateCreateTransaction {
+                K::RandomnessStateCreate(RandomnessStateCreateTransaction {
                     dummy: None,
-                }))
+                })
             }
-            N::DenyListStateCreate => Some(K::CoinDenyListStateCreate(
+            N::DenyListStateCreate => K::CoinDenyListStateCreate(
                 CoinDenyListStateCreateTransaction { dummy: None },
-            )),
-            N::StoreExecutionTimeObservations(_) => Some(K::StoreExecutionTimeObservations(
+            ),
+            N::StoreExecutionTimeObservations(_) => K::StoreExecutionTimeObservations(
                 StoreExecutionTimeObservationsTransaction { dummy: None },
-            )),
+            ),
             N::BridgeStateCreate(chain_id) => {
-                Some(K::BridgeStateCreate(BridgeStateCreateTransaction {
+                K::BridgeStateCreate(BridgeStateCreateTransaction {
                     native: chain_id,
-                }))
+                })
             }
             N::BridgeCommitteeInit(bridge_version) => {
-                Some(K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
+                K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
                     bridge_object_version: Some(bridge_version.value().into()),
-                }))
+                })
             }
             N::AccumulatorRootCreate => {
-                Some(K::AccumulatorRootCreate(AccumulatorRootCreateTransaction {
+                K::AccumulatorRootCreate(AccumulatorRootCreateTransaction {
                     dummy: None,
-                }))
+                })
             }
-            // TODO: Handle more complex transaction types incrementally
-            _ => None,
         }
     }
 }
