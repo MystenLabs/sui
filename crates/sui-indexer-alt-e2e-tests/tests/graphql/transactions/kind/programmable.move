@@ -40,7 +40,7 @@ module test::simple {
     digest
     kind {
       __typename
-      ... on ProgrammableTransactionBlock {
+      ... on ProgrammableTransaction {
         inputs(first: 5) {
           pageInfo {
             hasNextPage
@@ -53,14 +53,14 @@ module test::simple {
             }
           }
         }
-        transactions(first: 5) {
+        commands(first: 5) {
           pageInfo {
             hasNextPage
             hasPreviousPage
           }
           nodes {
             __typename
-            ... on MoveCallTransaction {
+            ... on MoveCallCommand {
               _
             }
           }
@@ -75,10 +75,10 @@ module test::simple {
   # Test pagination on the same transaction - limiting results to show pagination working
   paginationTest: transaction(digest: "@{digest_2}") {
     digest
-    kind {
-      __typename
-      ... on ProgrammableTransactionBlock {
-        inputs(first: 2) {
+          kind {
+        __typename
+        ... on ProgrammableTransaction {
+          inputs(first: 2) {
           pageInfo {
             hasNextPage
             hasPreviousPage
@@ -90,14 +90,14 @@ module test::simple {
             }
           }
         }
-        transactions(first: 2) {
+        commands(first: 2) {
           pageInfo {
             hasNextPage
             hasPreviousPage
           }
           nodes {
             __typename
-            ... on MoveCallTransaction {
+            ... on MoveCallCommand {
               _
             }
           }

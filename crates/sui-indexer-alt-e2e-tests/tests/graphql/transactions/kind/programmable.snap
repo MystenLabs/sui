@@ -31,7 +31,7 @@ Response: {
     "programmableTransaction": {
       "digest": "Cb4FEv3L9zJvp1dKq9LETDYhwNyp6XQHKDm4XqRqET8q",
       "kind": {
-        "__typename": "ProgrammableTransactionBlock",
+        "__typename": "ProgrammableTransaction",
         "inputs": {
           "pageInfo": {
             "hasNextPage": false,
@@ -52,22 +52,22 @@ Response: {
             }
           ]
         },
-        "transactions": {
+        "commands": {
           "pageInfo": {
             "hasNextPage": false,
             "hasPreviousPage": false
           },
           "nodes": [
             {
-              "__typename": "MoveCallTransaction",
+              "__typename": "MoveCallCommand",
               "_": null
             },
             {
-              "__typename": "MoveCallTransaction",
+              "__typename": "MoveCallCommand",
               "_": null
             },
             {
-              "__typename": "MoveCallTransaction",
+              "__typename": "MoveCallCommand",
               "_": null
             }
           ]
@@ -84,7 +84,7 @@ Response: {
     "paginationTest": {
       "digest": "Cb4FEv3L9zJvp1dKq9LETDYhwNyp6XQHKDm4XqRqET8q",
       "kind": {
-        "__typename": "ProgrammableTransactionBlock",
+        "__typename": "ProgrammableTransaction",
         "inputs": {
           "pageInfo": {
             "hasNextPage": true,
@@ -101,18 +101,18 @@ Response: {
             }
           ]
         },
-        "transactions": {
+        "commands": {
           "pageInfo": {
             "hasNextPage": true,
             "hasPreviousPage": false
           },
           "nodes": [
             {
-              "__typename": "MoveCallTransaction",
+              "__typename": "MoveCallCommand",
               "_": null
             },
             {
-              "__typename": "MoveCallTransaction",
+              "__typename": "MoveCallCommand",
               "_": null
             }
           ]

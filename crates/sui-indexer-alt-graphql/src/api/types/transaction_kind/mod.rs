@@ -10,7 +10,7 @@ use self::{
     authenticator_state_update::AuthenticatorStateUpdateTransaction,
     change_epoch::ChangeEpochTransaction,
     consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
-    programmable::ProgrammableTransactionBlock,
+    programmable::ProgrammableTransaction,
     randomness_state_update::RandomnessStateUpdateTransaction,
 };
 
@@ -29,7 +29,7 @@ pub enum TransactionKind {
     ChangeEpoch(ChangeEpochTransaction),
     RandomnessStateUpdate(RandomnessStateUpdateTransaction),
     AuthenticatorStateUpdate(AuthenticatorStateUpdateTransaction),
-    Programmable(ProgrammableTransactionBlock),
+    Programmable(ProgrammableTransaction),
 }
 
 impl TransactionKind {
@@ -62,7 +62,7 @@ impl TransactionKind {
             K::AuthenticatorStateUpdate(asu) => Some(T::AuthenticatorStateUpdate(
                 AuthenticatorStateUpdateTransaction { native: asu, scope },
             )),
-            K::ProgrammableTransaction(pt) => Some(T::Programmable(ProgrammableTransactionBlock {
+            K::ProgrammableTransaction(pt) => Some(T::Programmable(ProgrammableTransaction {
                 native: pt,
                 scope,
             })),
