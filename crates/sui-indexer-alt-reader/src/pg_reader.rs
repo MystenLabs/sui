@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{bail, Context};
 use async_graphql::dataloader::DataLoader;
 use diesel::deserialize::FromSqlRow;
 use diesel::expression::QueryMetadata;
@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use url::Url;
 
-use crate::{error::Error, metrics::ReaderMetrics};
+use crate::metrics::ReaderMetrics;
 
 pub use sui_pg_db as db;
 
@@ -47,18 +47,18 @@ impl PgReader {
         db_args: db::DbArgs,
         registry: &Registry,
         cancel: CancellationToken,
-    ) -> Result<Self, Error> {
+    ) -> anyhow::Result<Self> {
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
                 .await
-                .map_err(Error::PgCreate)?;
+                .context("Failed to create database for reading")?;
 
             registry
                 .register(Box::new(DbConnectionStatsCollector::new(
                     prefix,
                     db.clone(),
                 )))
-                .map_err(|e| Error::PgCreate(e.into()))?;
+                .context("Failed to register database connection stats collector")?;
 
             Some(db)
         } else {
@@ -81,19 +81,19 @@ impl PgReader {
 
     /// Acquire a connection to the database. This can potentially fail if the service is cancelled
     /// while the connection is being acquired.
-    pub async fn connect(&self) -> Result<Connection<'_>, Error> {
+    pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {
         let Some(db) = &self.db else {
-            return Err(Error::PgConnect(anyhow!("No database to connect to")));
+            bail!("No database to connect to");
         };
 
         tokio::select! {
             _ = self.cancel.cancelled() => {
-                Err(Error::PgConnect(anyhow!("Cancelled while connecting to the database")))
+                bail!("Cancelled while connecting to the database");
             }
 
             conn = db.connect() => {
                 Ok(Connection {
-                    conn: conn.map_err(Error::PgConnect)?,
+                    conn: conn.context("Failed to connect to database")?,
                     metrics: self.metrics.clone(),
                 })
             }
@@ -102,7 +102,7 @@ impl PgReader {
 }
 
 impl Connection<'_> {
-    pub async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, Error>
+    pub async fn first<'q, Q, ST, U>(&mut self, query: Q) -> anyhow::Result<U>
     where
         Q: LimitDsl,
         Q::Output: Query + QueryFragment<Pg> + QueryId + Send + 'q,
@@ -132,7 +132,7 @@ impl Connection<'_> {
         Ok(res?)
     }
 
-    pub async fn results<'q, Q, ST, U>(&mut self, query: Q) -> Result<Vec<U>, Error>
+    pub async fn results<'q, Q, ST, U>(&mut self, query: Q) -> anyhow::Result<Vec<U>>
     where
         Q: Query + QueryFragment<Pg> + QueryId + Send + 'q,
         Q::SqlType: CompatibleType<U, Pg, SqlType = ST>,

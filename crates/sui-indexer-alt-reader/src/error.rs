@@ -1,25 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::result::Error as DieselError;
+use std::sync::Arc;
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error(transparent)]
-    PgCreate(anyhow::Error),
+/// Error type for DataLoader implementations that wraps Arc<anyhow::Error>
+/// for efficient cloning while preserving ergonomic error handling.
+#[derive(Debug, Clone, thiserror::Error)]
+#[error(transparent)]
+pub struct Error(#[from] Arc<anyhow::Error>);
 
-    #[error(transparent)]
-    PgConnect(anyhow::Error),
-
-    #[error(transparent)]
-    PgRunQuery(#[from] DieselError),
-
-    #[error(transparent)]
-    BigtableCreate(anyhow::Error),
-
-    #[error(transparent)]
-    BigtableRead(anyhow::Error),
-
-    #[error(transparent)]
-    Serde(anyhow::Error),
+impl From<anyhow::Error> for Error {
+    fn from(error: anyhow::Error) -> Self {
+        Error(Arc::new(error))
+    }
 }
