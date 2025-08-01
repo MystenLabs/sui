@@ -568,7 +568,7 @@ fn merge_user_programs(
     ) {
         // add new modules to `unmodified_definitions` (which become the result) if nothing's changed,
         // but even if nothing's changed we still need to update the named address map index
-        let pkg_modified = is_parsed_pkg_modified(&pkg_def, &modified_files, file_paths);
+        let pkg_modified = is_parsed_pkg_modified(&pkg_def, modified_files, file_paths);
 
         if pkg_modified {
             unmodified_definitions.push(pkg_def);
