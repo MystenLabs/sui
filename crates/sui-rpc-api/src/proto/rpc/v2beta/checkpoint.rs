@@ -332,6 +332,10 @@ impl From<sui_sdk_types::CheckpointCommitment> for super::CheckpointCommitment {
                 message.digest = Some(digest.to_string());
                 CheckpointCommitmentKind::EcmhLiveObjectSet
             }
+            sui_sdk_types::CheckpointCommitment::CheckpointArtifactsDigest { digest } => {
+                message.digest = Some(digest.to_string());
+                CheckpointCommitmentKind::CheckpointArtifactsDigest
+            }
         };
 
         message.set_kind(kind);
@@ -357,6 +361,14 @@ impl TryFrom<&super::CheckpointCommitment> for sui_sdk_types::CheckpointCommitme
                     .parse()
                     .map_err(TryFromProtoError::from_error)?,
             },
+            CheckpointCommitmentKind::CheckpointArtifactsDigest => {
+                Self::CheckpointArtifactsDigest {
+                    digest: value
+                        .digest()
+                        .parse()
+                        .map_err(TryFromProtoError::from_error)?,
+                }
+            }
         }
         .pipe(Ok)
     }
