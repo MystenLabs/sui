@@ -1474,35 +1474,50 @@ has_child_object_with_ty
 AccumulatorRoot
 	public struct
 	0x2::accumulator
-Key
+U128
 	public struct
 	0x2::accumulator
-U128
+Key
 	public struct
 	0x2::accumulator
 create
 	fun
 	0x2::accumulator
+root_id
+	public(package) fun
+	0x2::accumulator
+root_id_mut
+	public(package) fun
+	0x2::accumulator
+create_u128
+	public(package) fun
+	0x2::accumulator
+destroy_u128
+	public(package) fun
+	0x2::accumulator
+update_u128
+	public(package) fun
+	0x2::accumulator
+is_zero_u128
+	public(package) fun
+	0x2::accumulator
+accumulator_key
+	public(package) fun
+	0x2::accumulator
 accumulator_address
 	public(package) fun
 	0x2::accumulator
 root_has_accumulator
-	fun
+	public(package) fun
 	0x2::accumulator
 root_add_accumulator
-	fun
+	public(package) fun
 	0x2::accumulator
 root_borrow_accumulator_mut
-	fun
+	public(package) fun
 	0x2::accumulator
 root_remove_accumulator
-	fun
-	0x2::accumulator
-settlement_prologue
-	fun
-	0x2::accumulator
-settle_u128
-	fun
+	public(package) fun
 	0x2::accumulator
 emit_deposit_event
 	public(package) fun
@@ -1510,6 +1525,84 @@ emit_deposit_event
 emit_withdraw_event
 	public(package) fun
 	0x2::accumulator
+Bag
+	public struct
+	0x2::bag
+new
+	public fun
+	0x2::bag
+add
+	public fun
+	0x2::bag
+borrow
+	public fun
+	0x2::bag
+borrow_mut
+	public fun
+	0x2::bag
+remove
+	public fun
+	0x2::bag
+contains
+	public fun
+	0x2::bag
+contains_with_type
+	public fun
+	0x2::bag
+length
+	public fun
+	0x2::bag
+is_empty
+	public fun
+	0x2::bag
+destroy_empty
+	public fun
+	0x2::bag
+OwnerKey
+	public struct
+	0x2::accumulator_metadata
+Owner
+	public struct
+	0x2::accumulator_metadata
+MetadataKey
+	public struct
+	0x2::accumulator_metadata
+Metadata
+	public struct
+	0x2::accumulator_metadata
+accumulator_root_owner_exists
+	fun
+	0x2::accumulator_metadata
+accumulator_root_borrow_owner_mut
+	fun
+	0x2::accumulator_metadata
+accumulator_root_attach_owner
+	fun
+	0x2::accumulator_metadata
+accumulator_root_detach_owner
+	fun
+	0x2::accumulator_metadata
+create_accumulator_metadata
+	public(package) fun
+	0x2::accumulator_metadata
+remove_accumulator_metadata
+	public(package) fun
+	0x2::accumulator_metadata
+accumulator_owner_attach_metadata
+	fun
+	0x2::accumulator_metadata
+accumulator_owner_detach_metadata
+	fun
+	0x2::accumulator_metadata
+accumulator_owner_destroy
+	fun
+	0x2::accumulator_metadata
+settlement_prologue
+	fun
+	0x2::accumulator_settlement
+settle_u128
+	fun
+	0x2::accumulator_settlement
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1564,39 +1657,6 @@ expire_jwks
 get_active_jwks
 	fun
 	0x2::authenticator_state
-Bag
-	public struct
-	0x2::bag
-new
-	public fun
-	0x2::bag
-add
-	public fun
-	0x2::bag
-borrow
-	public fun
-	0x2::bag
-borrow_mut
-	public fun
-	0x2::bag
-remove
-	public fun
-	0x2::bag
-contains
-	public fun
-	0x2::bag
-contains_with_type
-	public fun
-	0x2::bag
-length
-	public fun
-	0x2::bag
-is_empty
-	public fun
-	0x2::bag
-destroy_empty
-	public fun
-	0x2::bag
 Supply
 	public struct
 	0x2::balance
