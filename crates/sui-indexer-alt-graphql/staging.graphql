@@ -316,16 +316,21 @@ type CheckpointEdge {
 	cursor: String!
 }
 
-"""
-Filter for paginating packages published within a range of checkpoints.
-"""
 input CheckpointFilter {
 	"""
-	Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
+	Limit query results to checkpoints at this epoch.
+	"""
+	atEpoch: UInt53
+	"""
+	Limit query results to checkpoints that occured strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
 	"""
-	Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
+	Limit query results to checkpoints that occured at the given checkpoint.
+	"""
+	atCheckpoint: UInt53
+	"""
+	Limit query results to checkpoints that occured strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
 }
@@ -527,7 +532,7 @@ type Epoch {
 	"""
 	The epoch's corresponding checkpoints.
 	"""
-	checkpoints(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection
 	"""
 	State of the Coin DenyList object (0x403) at the start of this epoch.
 	
@@ -626,13 +631,6 @@ type Epoch {
 	This can be used to verify state snapshots.
 	"""
 	liveObjectSetDigest: String
-}
-
-input EpochFilter {
-	"""
-	Filter to checkpoints at this epoch.
-	"""
-	atEpoch: Int
 }
 
 type Event {
@@ -1304,7 +1302,7 @@ type Query {
 	"""
 	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
 	"""
-	checkpoints(first: Int, after: String, last: Int, before: String, filter: EpochFilter): CheckpointConnection!
+	checkpoints(first: Int, after: String, last: Int, before: String, filter: CheckpointFilter): CheckpointConnection!
 	"""
 	Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
 	
