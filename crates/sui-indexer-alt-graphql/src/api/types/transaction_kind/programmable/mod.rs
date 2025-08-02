@@ -78,8 +78,8 @@ impl ProgrammableTransaction {
 
         for edge in cursors.edges {
             let command = Command::from(
-                self.native.commands[*edge.cursor].clone(),
                 self.scope.clone(),
+                self.native.commands[*edge.cursor].clone(),
             );
 
             conn.edges

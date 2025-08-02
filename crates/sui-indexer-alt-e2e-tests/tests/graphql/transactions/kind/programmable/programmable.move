@@ -61,7 +61,7 @@ module test::simple {
           nodes {
             __typename
             ... on MoveCallCommand {
-              _
+              functionName
             }
           }
         }
@@ -98,7 +98,7 @@ module test::simple {
           nodes {
             __typename
             ... on MoveCallCommand {
-              _
+              functionName
             }
           }
         }
