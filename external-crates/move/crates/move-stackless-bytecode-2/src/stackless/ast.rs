@@ -30,7 +30,7 @@ pub struct Module {
 pub struct Function {
     pub name: Symbol,
     pub entry_label: Label,
-    pub basic_blocks: BTreeMap<Label, BasicBlock>,
+    pub basic_blocks: BasicBlocks,
 }
 
 #[derive(Debug, Clone)]
@@ -181,6 +181,7 @@ pub enum Value {
     Vector(Vec<Value>), // Added to represent vector values
 }
 
+pub type BasicBlocks = BTreeMap<Label, BasicBlock>;
 pub type Label = usize;
 pub type RegId = usize;
 pub type LocalId = usize;
