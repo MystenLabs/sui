@@ -7,7 +7,7 @@ use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use futures::future;
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_reader::coin_metadata::CoinMetadataKey;
@@ -24,10 +24,11 @@ use sui_types::{
 };
 
 use crate::{
+    client::HttpClient,
     config::NodeConfig,
     context::Context,
     data::load_live,
-    error::{client_error_to_error_object, invalid_params, InternalContext, RpcError},
+    error::{anyhow_error_to_error_object, invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };
 
@@ -178,7 +179,7 @@ impl DelegationCoinsApiServer for DelegationCoins {
         client
             .get_all_balances(owner)
             .await
-            .map_err(client_error_to_error_object)
+            .map_err(anyhow_error_to_error_object)
     }
 
     async fn get_balance(
@@ -191,7 +192,7 @@ impl DelegationCoinsApiServer for DelegationCoins {
         client
             .get_balance(owner, coin_type)
             .await
-            .map_err(client_error_to_error_object)
+            .map_err(anyhow_error_to_error_object)
     }
 }
 
