@@ -59,15 +59,14 @@ Response: {
           "nodes": [
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "increment"
             },
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "add"
             },
             {
-              "__typename": "MoveCallCommand",
-              "_": null
+              "__typename": "OtherCommand"
             }
           ]
         }
@@ -107,11 +106,11 @@ Response: {
           "nodes": [
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "increment"
             },
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "add"
             }
           ]
         }
