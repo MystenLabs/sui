@@ -11,6 +11,7 @@ pub(crate) mod gas;
 pub(crate) mod gas_effects;
 pub(crate) mod gas_input;
 pub(crate) mod move_package;
+pub(crate) mod move_type;
 pub(crate) mod object;
 pub(crate) mod object_change;
 pub(crate) mod protocol_configs;
