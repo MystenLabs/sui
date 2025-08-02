@@ -6,6 +6,7 @@ use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
 
 use crate::{
+    api::types::checkpoint::{CCheckpoint, EpochFilter},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -61,6 +62,26 @@ impl Query {
             .unwrap_or(scope.checkpoint_viewed_at());
 
         Ok(Checkpoint::with_sequence_number(scope, sequence_number))
+    }
+
+    /// Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
+    async fn checkpoints(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CCheckpoint>,
+        last: Option<u64>,
+        before: Option<CCheckpoint>,
+        filter: Option<EpochFilter>,
+    ) -> Result<Connection<String, Checkpoint>, RpcError> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "checkpoints");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let filter = filter.unwrap_or_default();
+
+        Checkpoint::paginate(ctx, scope, page, filter).await
     }
 
     /// Fetch an epoch by its ID, or fetch the latest epoch if no ID is provided.
