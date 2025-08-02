@@ -1201,6 +1201,38 @@ type ObjectEdge {
 }
 
 """
+A filter over the live object set, the filter can be one of:
+
+- A filter on type (all live objects whose type matches that filter).
+- Fetching all objects owned by an address or object, optionally filtered by type.
+- Fetching all shared or immutable objects, filtered by type.
+"""
+input ObjectFilter {
+	"""
+	Filter on whether the object is address-owned, object-owned, shared, or immutable.
+	
+	- If this field is set to "ADDRESS" or "OBJECT", then an owner filter must also be provided.
+	- If this field is set to "SHARED" or "IMMUTABLE", then a type filter must also be provided.
+	"""
+	ownerKind: OwnerKind
+	"""
+	Specifies the address of the owning address or object.
+	
+	This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
+	"""
+	owner: SuiAddress
+	"""
+	Filter on the object's type. The filter can be one of:
+	
+	- A package address: `0x2`,
+	- A module: `0x2::coin`,
+	- A fully-qualified name: `0x2::coin::Coin`,
+	- A type instantiation: `0x2::coin::Coin<0x2::sui::SUI>`.
+	"""
+	type: String
+}
+
+"""
 Identifies a specific version of an object.
 
 The `address` field must be specified, as well as at most one of `version`, `rootVersion`, or `atCheckpoint`. If none are provided, the object is fetched at the current checkpoint.
@@ -1247,6 +1279,28 @@ A Move object, either immutable, or owned mutable.
 """
 type OwnedOrImmutable {
 	object: Object
+}
+
+"""
+Filter on who owns an object.
+"""
+enum OwnerKind {
+	"""
+	Object is owned by an address.
+	"""
+	ADDRESS
+	"""
+	Object is a child of another object (e.g. a dynamic field or dynamic object field).
+	"""
+	OBJECT
+	"""
+	Object is shared among multiple owners.
+	"""
+	SHARED
+	"""
+	Object is frozen.
+	"""
+	IMMUTABLE
 }
 
 """
@@ -1469,6 +1523,14 @@ type Query {
 	Returns `null` if an object cannot be found that meets this criteria.
 	"""
 	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
+	"""
+	Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
+	
+	- A filter on type (all live objects whose type matches that filter).
+	- Fetching all objects owned by an address or object, optionally filtered by type.
+	- Fetching all shared or immutable objects, filtered by type.
+	"""
+	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter!): ObjectConnection
 	"""
 	Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	"""
