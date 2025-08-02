@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
     dataloader::DataLoader,
@@ -12,6 +12,7 @@ use async_graphql::{
 use diesel::{sql_types::Bool, ExpressionMethods, QueryDsl};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
+    consistent_reader::{self, ConsistentReader},
     kv_loader::KvLoader,
     object_versions::{
         CheckpointBoundedObjectVersionKey, VersionBoundedObjectVersionKey,
@@ -30,8 +31,14 @@ use sui_types::{
 use tokio::join;
 
 use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor, sui_address::SuiAddress, uint53::UInt53},
-    error::{bad_user_input, RpcError},
+    api::scalars::{
+        base64::Base64,
+        cursor::{BcsCursor, JsonCursor},
+        owner_kind::OwnerKind,
+        sui_address::SuiAddress,
+        uint53::UInt53,
+    },
+    error::{bad_user_input, not_available, RpcError},
     intersect,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -40,6 +47,7 @@ use crate::{
 use super::{
     address::{Address, AddressableImpl},
     move_package::MovePackage,
+    object_filter::ObjectFilter,
     transaction::Transaction,
 };
 
@@ -150,13 +158,20 @@ pub(crate) struct VersionFilter {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum Error {
+    #[error("Cursors are pinned to different checkpoints: {0} vs {1}")]
+    CursorInconsistency(u64, u64),
+
     #[error("At most one of a version, a root version, or a checkpoint bound can be specified when fetching an object")]
     OneBound,
+
+    #[error("Request is outside consistent range")]
+    OutOfRange(u64),
 
     #[error("Checkpoint {0} in the future")]
     Future(u64),
 }
 
+pub(crate) type CLive = BcsCursor<(u64, Vec<u8>)>;
 pub(crate) type CVersion = JsonCursor<u64>;
 
 /// An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
@@ -251,12 +266,12 @@ impl Object {
     /// does not check whether the object exists, so should not be used to "fetch" an object based
     /// on an address and/or version provided as user input.
     pub(crate) fn with_ref(
-        addressable: Address,
+        address: Address,
         version: SequenceNumber,
         digest: ObjectDigest,
     ) -> Self {
         Self {
-            super_: addressable,
+            super_: address,
             version,
             digest,
             contents: None,
@@ -510,6 +525,103 @@ impl Object {
             if let Some(object) = Self::from_stored_version(scope.clone(), stored)? {
                 conn.edges.push(Edge::new(cursor.encode_cursor(), object));
             }
+        }
+
+        Ok(conn)
+    }
+
+    /// Paginate through objects in the live object set.
+    pub(crate) async fn paginate_live(
+        ctx: &Context<'_>,
+        scope: Scope,
+        page: Page<CLive>,
+        filter: ObjectFilter,
+    ) -> Result<Connection<String, Object>, RpcError<Error>> {
+        let consistent_reader: &ConsistentReader = ctx.data()?;
+
+        // Figure out which checkpoint to pin results to, based on the pagination cursors and
+        // defaulting to the current scope. If both cursors are provided, they must agree on the
+        // checkpoint they are pinning, and this checkpoint must be at or below the scope's latest
+        // checkpoint.
+        let checkpoint = match (page.after(), page.before()) {
+            (Some(a), Some(b)) if a.0 != b.0 => {
+                return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
+            }
+
+            (None, None) => scope.checkpoint_viewed_at(),
+            (Some(c), _) | (_, Some(c)) => c.0,
+        };
+
+        // Set the checkpoint being viewed to the one calculated from the cursors, so that
+        // nested queries about the resulting objects also treat this checkpoint as latest.
+        let Some(scope) = scope.with_checkpoint_viewed_at(checkpoint) else {
+            return Err(bad_user_input(Error::Future(checkpoint)));
+        };
+
+        let refs = match filter {
+            ObjectFilter {
+                owner_kind: None | Some(OwnerKind::Address | OwnerKind::Object),
+                owner: Some(_),
+                type_: _,
+            } => return Err(not_available("'ADDRESS' and 'OBJECT' owner kinds")),
+
+            ObjectFilter {
+                owner_kind: Some(OwnerKind::Shared | OwnerKind::Immutable),
+                owner: None,
+                type_: Some(_),
+            } => return Err(not_available("'SHARED' and 'IMMUTABLE' owner kinds")),
+
+            ObjectFilter {
+                owner_kind: None,
+                owner: None,
+                type_: Some(type_),
+            } => {
+                consistent_reader
+                    .list_objects_by_type(
+                        checkpoint,
+                        type_.to_string(),
+                        Some(page.limit() as u32),
+                        page.after().map(|c| c.1.clone()),
+                        page.before().map(|c| c.1.clone()),
+                        page.is_from_front(),
+                    )
+                    .await
+            }
+            _ => {
+                return Err(
+                    anyhow!("Invalid ObjectFilter not caught by validation: {filter:?}").into(),
+                )
+            }
+        }
+        .map_err(|e| match e {
+            consistent_reader::Error::NotConfigured => {
+                not_available("paginating the live object set")
+            }
+
+            consistent_reader::Error::OutOfRange(_) => {
+                bad_user_input(Error::OutOfRange(checkpoint))
+            }
+
+            consistent_reader::Error::Internal(error) => {
+                error.context("Failed to fetch live objects").into()
+            }
+        })?;
+
+        let mut conn = Connection::new(false, false);
+        if refs.results.is_empty() {
+            return Ok(conn);
+        }
+
+        conn.has_previous_page = refs.has_previous_page;
+        conn.has_next_page = refs.has_next_page;
+
+        for edge in refs.results {
+            let (id, version, digest) = edge.value;
+
+            let cursor = CLive::new((checkpoint, edge.token));
+            let address = Address::with_address(scope.clone(), id.into());
+            let object = Object::with_ref(address, version, digest);
+            conn.edges.push(Edge::new(cursor.encode_cursor(), object));
         }
 
         Ok(conn)

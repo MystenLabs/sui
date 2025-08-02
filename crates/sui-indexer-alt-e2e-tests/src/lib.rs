@@ -292,6 +292,16 @@ impl FullCluster {
             .await
     }
 
+    /// Waits until GraphQL has caught up to the given `checkpoint`, or the `timeout` is
+    /// reached (an error).
+    pub async fn wait_for_graphql(
+        &self,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        self.offchain.wait_for_graphql(checkpoint, timeout).await
+    }
+
     /// Triggers cancellation of all downstream services, waits for them to stop, cleans up the
     /// temporary database, and the temporary directory used for ingestion.
     pub async fn stopped(self) {
