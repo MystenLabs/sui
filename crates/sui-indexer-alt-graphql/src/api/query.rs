@@ -20,6 +20,7 @@ use super::{
         move_package::PackageCheckpointFilter,
         move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey, VersionFilter},
+        object_filter::{ObjectFilter, Validator as OFValidator},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{filter::TransactionFilter, CTransaction, Transaction},
@@ -227,6 +228,29 @@ impl Query {
             },
         )
         .await
+    }
+
+    /// Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
+    ///
+    /// - A filter on type (all live objects whose type matches that filter).
+    /// - Fetching all objects owned by an address or object, optionally filtered by type.
+    /// - Fetching all shared or immutable objects, filtered by type.
+    async fn objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<object::CLive>,
+        last: Option<u64>,
+        before: Option<object::CLive>,
+        #[graphql(validator(custom = "OFValidator::default()"))] filter: ObjectFilter,
+    ) -> Result<Option<Connection<String, Object>>, RpcError<object::Error>> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "objects");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Ok(Some(
+            Object::paginate_live(ctx, self.scope(ctx)?, page, filter).await?,
+        ))
     }
 
     /// Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
