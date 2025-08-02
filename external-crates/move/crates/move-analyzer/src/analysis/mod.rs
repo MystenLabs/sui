@@ -36,7 +36,7 @@ pub fn run_parsing_analysis(
     compiled_pkg_info: &CompiledPkgInfo,
     cursor_context: Option<&mut CursorContext>,
     parsed_program: &ParsedDefinitions,
-    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
@@ -54,7 +54,7 @@ pub fn run_parsing_analysis(
         parsed_program,
         &mut computation_data.mod_use_defs,
         &mut computation_data.mod_to_alias_lengths,
-        mod_named_address_maps,
+        typed_mod_named_address_maps,
     );
 }
 

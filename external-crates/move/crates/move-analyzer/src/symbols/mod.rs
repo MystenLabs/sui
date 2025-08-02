@@ -204,23 +204,26 @@ pub fn compute_symbols(
         .map(|(fhash, fpath)| (*fhash, fpath.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
-    let mod_named_address_maps = compiled_pkg_info
+    let typed_mod_named_address_maps = compiled_pkg_info
         .program
         .typed_modules
         .iter()
-        .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
+        .map(|(_, mident, mdef)| {
+            eprintln!("mdef loc: {:?} for module {:?}", mdef.loc, mident);
+            (mdef.loc, mdef.named_address_map.clone())
+        })
         .collect::<BTreeMap<_, _>>();
     let cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
         &mut compiled_pkg_info,
         cursor_info,
-        &mod_named_address_maps,
+        &typed_mod_named_address_maps,
     );
     let cursor_context = compute_symbols_parsed_program(
         &mut symbols_computation_data,
         &compiled_pkg_info,
         cursor_context,
-        &mod_named_address_maps,
+        &typed_mod_named_address_maps,
     );
 
     let (symbols, deps_symbols_data_opt, program) =
@@ -259,7 +262,7 @@ pub fn compute_symbols_pre_process(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &mut CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
-    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) -> Option<CursorContext> {
     let mut fields_order_info = FieldOrderInfo::new();
     let parsed_program = &compiled_pkg_info.program.parsed_definitions;
@@ -267,7 +270,7 @@ pub fn compute_symbols_pre_process(
     pre_process_parsed_program(
         parsed_program,
         &mut fields_order_info,
-        mod_named_address_maps,
+        typed_mod_named_address_maps,
     );
 
     let mut cursor_context = compute_cursor_context(&compiled_pkg_info.mapped_files, cursor_info);
@@ -304,14 +307,14 @@ pub fn compute_symbols_parsed_program(
     computation_data: &mut SymbolsComputationData,
     compiled_pkg_info: &CompiledPkgInfo,
     mut cursor_context: Option<CursorContext>,
-    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) -> Option<CursorContext> {
     run_parsing_analysis(
         computation_data,
         compiled_pkg_info,
         cursor_context.as_mut(),
         &compiled_pkg_info.program.parsed_definitions,
-        mod_named_address_maps,
+        typed_mod_named_address_maps,
     );
     cursor_context
 }
@@ -416,7 +419,6 @@ pub fn compute_symbols_typed_program(
 
     let mut file_mods: FileModules = BTreeMap::new();
     for d in computation_data.mod_outer_defs.into_values() {
-        //        eprintln!("Adding module {:?} to file_mods: {:?}", d.ident, d.fhash);
         let path = compiled_pkg_info.mapped_files.file_path(&d.fhash.clone());
         file_mods.entry(path.to_path_buf()).or_default().insert(d);
     }
@@ -480,13 +482,13 @@ fn compute_cursor_context(
 fn pre_process_parsed_program(
     prog: &ParsedDefinitions,
     fields_order_info: &mut FieldOrderInfo,
-    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     prog.source_definitions.iter().for_each(|pkg_def| {
-        pre_process_parsed_pkg(pkg_def, fields_order_info, mod_named_address_maps);
+        pre_process_parsed_pkg(pkg_def, fields_order_info, typed_mod_named_address_maps);
     });
     prog.lib_definitions.iter().for_each(|pkg_def| {
-        pre_process_parsed_pkg(pkg_def, fields_order_info, mod_named_address_maps);
+        pre_process_parsed_pkg(pkg_def, fields_order_info, typed_mod_named_address_maps);
     });
 }
 
@@ -494,17 +496,24 @@ fn pre_process_parsed_program(
 fn pre_process_parsed_pkg(
     pkg_def: &P::PackageDefinition,
     fields_order_info: &mut FieldOrderInfo,
-    mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+    typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
 ) {
     if let P::Definition::Module(mod_def) = &pkg_def.def {
+        // when doing full standalone compilation (vs. pre-compiling dependencies)
+        // we may have a module at parsing but no longer at typing
+        // in case there is a name conflict with a dependency (and
+        // mod_named_address_maps comes from typing modules)
+        let Some(pkg_addresses) = typed_mod_named_address_maps.get(&mod_def.loc) else {
+            eprintln!(
+                "no typing-level named address maps for module {}",
+                mod_def.name.value(),
+            );
+            return;
+        };
+        let Some(mod_ident_str) = parsing_mod_def_to_map_key(pkg_addresses.clone(), mod_def) else {
+            return;
+        };
         for member in &mod_def.members {
-            // this unwrap is be safe as both `mod_named_address_maps` and `mod_def`
-            // are a result of the same compilation process
-            let pkg_addresses = mod_named_address_maps.get(&mod_def.loc).unwrap();
-            let Some(mod_ident_str) = parsing_mod_def_to_map_key(pkg_addresses.clone(), mod_def)
-            else {
-                continue;
-            };
             if let P::ModuleMember::Struct(sdef) = member {
                 if let P::StructFields::Named(fields) = &sdef.fields {
                     let indexed_fields = fields

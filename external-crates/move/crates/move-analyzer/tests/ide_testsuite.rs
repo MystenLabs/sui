@@ -263,7 +263,7 @@ impl CursorTest {
         let cursor_path = path.to_path_buf();
         let cursor_info = Some((&cursor_path, Position { line, character }));
         let mut symbols_computation_data = SymbolsComputationData::new();
-        let mod_named_address_maps = compiled_pkg_info
+        let typed_mod_named_address_maps = compiled_pkg_info
             .program
             .typed_modules
             .iter()
@@ -273,13 +273,13 @@ impl CursorTest {
             &mut symbols_computation_data,
             &mut compiled_pkg_info,
             cursor_info,
-            &mod_named_address_maps,
+            &typed_mod_named_address_maps,
         );
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
             &compiled_pkg_info,
             cursor_context,
-            &mod_named_address_maps,
+            &typed_mod_named_address_maps,
         );
         symbols.cursor_context = cursor_context.clone();
 

@@ -75,14 +75,14 @@ impl<'a> ParsingAnalysisContext<'a> {
         prog: &'a ParsedDefinitions,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
-        mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         prog.source_definitions.iter().for_each(|pkg_def| {
             self.pkg_symbols(
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
-                mod_named_address_maps,
+                typed_mod_named_address_maps,
             )
         });
         prog.lib_definitions.iter().for_each(|pkg_def| {
@@ -90,7 +90,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
-                mod_named_address_maps,
+                typed_mod_named_address_maps,
             )
         });
     }
@@ -101,12 +101,20 @@ impl<'a> ParsingAnalysisContext<'a> {
         pkg_def: &P::PackageDefinition,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
-        mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
+        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
-            // this unwrap is be safe as both `mod_named_address_maps` and `mod_def`
-            // are a result of the same compilation process
-            let pkg_addresses = mod_named_address_maps.get(&mod_def.loc).unwrap();
+            // when doing full standalone compilation (vs. pre-compiling dependencies)
+            // we may have a module at parsing but no longer at typing
+            // in case there is a name conflict with a dependency (and
+            // mod_named_address_maps comes from typing modules)
+            let Some(pkg_addresses) = typed_mod_named_address_maps.get(&mod_def.loc) else {
+                eprintln!(
+                    "no typing-level named address maps for module {}",
+                    mod_def.name.value()
+                );
+                return;
+            };
             let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses.clone());
             self.mod_symbols(mod_def, mod_use_defs, mod_to_alias_lengths);
             self.current_mod_ident_str = None;

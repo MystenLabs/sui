@@ -651,14 +651,14 @@ fn is_parsed_mod_modified(
     file_paths: Arc<BTreeMap<FileHash, PathBuf>>,
 ) -> bool {
     let Some(mod_file_path) = file_paths.get(&mdef.loc.file_hash()) else {
-        eprintln!("no file path for parse module {}", mdef.name);
+        eprintln!("no file path for parsed module {}", mdef.name);
         debug_assert!(false);
         return false;
     };
     modified_files.contains(mod_file_path)
 }
 
-/// Checks if a parsed module is modified by getting
+/// Checks if a typed module is modified by getting
 /// the module's file path and checking if it's included
 /// in the set of modified file paths.
 fn is_typed_mod_modified(
