@@ -1,9 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context as AnyhowContext;
 use async_graphql::*;
+use move_binary_format::file_format::Ability;
 use move_core_types::language_storage::TypeTag;
 use serde::{Deserialize, Serialize};
+use sui_indexer_alt_reader::package_resolver::PackageResolver;
 use sui_types::{base_types::MoveObjectType, type_input::TypeInput};
 
 use crate::error::RpcError;
@@ -57,6 +60,19 @@ pub(crate) enum MoveTypeSignature {
     },
 }
 
+/// Abilities are keywords in Sui Move that define how types behave at the compiler level.
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+pub(crate) enum MoveAbility {
+    /// Enables values to be copied.
+    Copy,
+    /// Enables values to be popped/dropped.
+    Drop,
+    /// Enables values to be held directly in global storage.
+    Key,
+    /// Enables values to be held inside a struct in global storage.
+    Store,
+}
+
 /// Represents concrete types (no type parameters, no references).
 #[Object]
 impl MoveType {
@@ -69,6 +85,30 @@ impl MoveType {
     async fn signature(&self) -> Result<Option<MoveTypeSignature>, RpcError> {
         // Factor out into its own non-GraphQL, non-async function for better testability
         Ok(Some(self.signature_impl()?))
+    }
+
+    /// The abilities this concrete type has.
+    async fn abilities(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveAbility>>, RpcError> {
+        let resolver: &PackageResolver = ctx.data()?;
+
+        let Ok(tag) = self.native.to_type_tag() else {
+            return Ok(None);
+        };
+
+        let abilities = resolver
+            .abilities(tag)
+            .await
+            .with_context(|| {
+                format!(
+                    "Error calculating abilities for {}",
+                    self.native.to_canonical_string(/* with_prefix */ true)
+                )
+            })?
+            .into_iter()
+            .map(MoveAbility::from)
+            .collect();
+
+        Ok(Some(abilities))
     }
 }
 
@@ -129,6 +169,17 @@ impl TryFrom<TypeInput> for MoveTypeSignature {
                     .collect::<Result<Vec<_>, _>>()?,
             },
         })
+    }
+}
+
+impl From<Ability> for MoveAbility {
+    fn from(ability: Ability) -> Self {
+        match ability {
+            Ability::Copy => MoveAbility::Copy,
+            Ability::Drop => MoveAbility::Drop,
+            Ability::Store => MoveAbility::Store,
+            Ability::Key => MoveAbility::Key,
+        }
     }
 }
 
@@ -278,5 +329,13 @@ mod tests {
         let move_type = MoveType::from(tag);
         let result = move_type.signature_impl();
         assert!(matches!(result, Err(RpcError::InternalError(_))));
+    }
+
+    #[test]
+    fn test_move_ability_from_ability() {
+        assert_eq!(MoveAbility::from(Ability::Copy), MoveAbility::Copy);
+        assert_eq!(MoveAbility::from(Ability::Drop), MoveAbility::Drop);
+        assert_eq!(MoveAbility::from(Ability::Store), MoveAbility::Store);
+        assert_eq!(MoveAbility::from(Ability::Key), MoveAbility::Key);
     }
 }

@@ -45,6 +45,7 @@ tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 
+move-binary-format.workspace = true
 move-core-types.workspace = true
 
 bin-version.workspace = true
