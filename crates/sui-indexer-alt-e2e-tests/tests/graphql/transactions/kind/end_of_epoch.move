@@ -3,14 +3,14 @@
 
 //# init --protocol-version 70 --simulator
 
-//# advance-epoch
+//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state
 
 //# create-checkpoint
 
 //# run-graphql
 {
-  # Test finding EndOfEpochTransaction in recent transactions
-  recentTransactions: transactions(last: 1) {
+  # Test EndOfEpochTransaction with multiple transaction types
+  endOfEpochTransaction: transactions(last: 1) {
     nodes {
       digest
       kind {
@@ -31,6 +31,15 @@
                 storageRebate
                 nonRefundableStorageFee
                 epochStartTimestamp
+              }
+              ... on RandomnessStateCreateTransaction {
+                _
+              }
+              ... on AuthenticatorStateCreateTransaction {
+                _
+              }
+              ... on CoinDenyListStateCreateTransaction {
+                _
               }
             }
           }

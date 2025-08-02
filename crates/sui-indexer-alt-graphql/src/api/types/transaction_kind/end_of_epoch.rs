@@ -24,7 +24,52 @@ pub struct EndOfEpochTransaction {
 #[derive(Union, Clone)]
 pub enum EndOfEpochTransactionKind {
     ChangeEpoch(ChangeEpochTransaction),
-    // TODO: Add more transaction types incrementally
+    AuthenticatorStateCreate(AuthenticatorStateCreateTransaction),
+    RandomnessStateCreate(RandomnessStateCreateTransaction),
+    CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
+    StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
+    AccumulatorRootCreate(AccumulatorRootCreateTransaction),
+    // TODO: Add more complex transaction types incrementally
+}
+
+/// System transaction for creating the on-chain state used by zkLogin.
+#[derive(SimpleObject, Clone)]
+pub struct AuthenticatorStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// System transaction for creating the on-chain randomness state.
+#[derive(SimpleObject, Clone)]
+pub struct RandomnessStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// System transaction for creating the coin deny list state.
+#[derive(SimpleObject, Clone)]
+pub struct CoinDenyListStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// System transaction for storing execution time observations.
+#[derive(SimpleObject, Clone)]
+pub struct StoreExecutionTimeObservationsTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// System transaction for creating the accumulator root.
+#[derive(SimpleObject, Clone)]
+pub struct AccumulatorRootCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
 }
 
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
@@ -71,7 +116,26 @@ impl EndOfEpochTransactionKind {
             N::ChangeEpoch(ce) => {
                 Some(K::ChangeEpoch(ChangeEpochTransaction { native: ce, scope }))
             }
-            // TODO: Handle other transaction types incrementally
+            N::AuthenticatorStateCreate => Some(K::AuthenticatorStateCreate(
+                AuthenticatorStateCreateTransaction { dummy: None },
+            )),
+            N::RandomnessStateCreate => {
+                Some(K::RandomnessStateCreate(RandomnessStateCreateTransaction {
+                    dummy: None,
+                }))
+            }
+            N::DenyListStateCreate => Some(K::CoinDenyListStateCreate(
+                CoinDenyListStateCreateTransaction { dummy: None },
+            )),
+            N::StoreExecutionTimeObservations(_) => Some(K::StoreExecutionTimeObservations(
+                StoreExecutionTimeObservationsTransaction { dummy: None },
+            )),
+            N::AccumulatorRootCreate => {
+                Some(K::AccumulatorRootCreate(AccumulatorRootCreateTransaction {
+                    dummy: None,
+                }))
+            }
+            // TODO: Handle more complex transaction types incrementally
             _ => None,
         }
     }
