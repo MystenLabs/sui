@@ -15,11 +15,11 @@ use jsonrpsee::{
     types::{error::INTERNAL_ERROR_CODE, Request},
     MethodResponse,
 };
-use pin_project_lite::pin_project;
+use pin_project::{pin_project, pinned_drop};
 use prometheus::{HistogramTimer, IntCounterVec};
 use serde_json::value::RawValue;
 use tower_layer::Layer;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use super::RpcMetrics;
 
@@ -41,17 +41,17 @@ struct RequestMetrics {
     timer: HistogramTimer,
     succeeded: IntCounterVec,
     failed: IntCounterVec,
+    cancelled: IntCounterVec,
 }
 
-pin_project! {
-    pub(crate) struct MetricsFuture<'a, F> {
-        metrics: Option<RequestMetrics>,
-        method: Cow<'a, str>,
-        // RPC request params for logging
-        params: Option<Cow<'a, RawValue>>,
-        #[pin]
-        inner: F,
-    }
+#[pin_project(PinnedDrop)]
+pub(crate) struct MetricsFuture<'a, F> {
+    metrics: Option<RequestMetrics>,
+    method: Cow<'a, str>,
+    // RPC request params for logging
+    params: Option<Cow<'a, RawValue>>,
+    #[pin]
+    inner: F,
 }
 
 impl MetricsLayer {
@@ -111,6 +111,7 @@ where
                 timer,
                 succeeded: self.layer.metrics.requests_succeeded.clone(),
                 failed: self.layer.metrics.requests_failed.clone(),
+                cancelled: self.layer.metrics.requests_cancelled.clone(),
             }),
             method,
             params: request.params.clone(),
@@ -172,5 +173,30 @@ where
         }
 
         Poll::Ready(resp)
+    }
+}
+
+#[pinned_drop]
+impl<F> PinnedDrop for MetricsFuture<'_, F> {
+    fn drop(self: Pin<&mut Self>) {
+        let this = self.project();
+
+        if let Some(metrics) = this.metrics.take() {
+            let method = this.method.as_ref();
+            let elapsed_ms = metrics.timer.stop_and_record() * 1000.0;
+
+            metrics.cancelled.with_label_values(&[method]).inc();
+
+            info!(method, elapsed_ms, "Request cancelled");
+
+            // TODO: make this configurable
+            if elapsed_ms > 5000.0 {
+                let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
+                warn!(
+                    method,
+                    params, elapsed_ms, "Cancelled request took a long time"
+                );
+            }
+        }
     }
 }
