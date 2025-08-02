@@ -172,6 +172,10 @@ impl ConsensusTxStatusCache {
         let _ = self.last_committed_leader_round_tx.send(Some(leader_round));
     }
 
+    pub fn get_last_committed_leader_round(&self) -> Option<u32> {
+        *self.last_committed_leader_round_rx.borrow()
+    }
+
     /// Returns true if the position is too far ahead of the last committed round.
     pub fn check_position_too_ahead(&self, position: &ConsensusPosition) -> SuiResult<()> {
         if let Some(last_committed_leader_round) = *self.last_committed_leader_round_rx.borrow() {

@@ -349,3 +349,84 @@ pub struct HandleSoftBundleCertificatesRequestV3 {
     pub include_output_objects: bool,
     pub include_auxiliary_data: bool,
 }
+
+/// Raw protobuf request for validator health information (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorHealthRequest {}
+
+/// Raw protobuf response with validator health metrics (evolvable)
+#[derive(Clone, prost::Message)]
+pub struct RawValidatorHealthResponse {
+    /// Number of pending certificates
+    #[prost(uint64, optional, tag = "1")]
+    pub pending_certificates: Option<u64>,
+    /// Number of in-flight consensus messages
+    #[prost(uint64, optional, tag = "2")]
+    pub inflight_consensus_messages: Option<u64>,
+    /// Current consensus round
+    #[prost(uint64, optional, tag = "3")]
+    pub consensus_round: Option<u64>,
+    /// Current checkpoint sequence number
+    #[prost(uint64, optional, tag = "4")]
+    pub checkpoint_sequence: Option<u64>,
+}
+
+/// Request for validator health information (used for latency measurement)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorHealthRequest {}
+
+/// Response with validator health metrics (data collected but not used for scoring yet)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidatorHealthResponse {
+    /// Number of in-flight execution transactions from execution scheduler
+    pub num_inflight_execution_transactions: u64,
+    /// Number of in-flight consensus transactions
+    pub num_inflight_consensus_transactions: u64,
+    /// Last committed leader round from Mysticeti consensus
+    pub last_committed_leader_round: u32,
+    /// Last locally built checkpoint sequence number
+    pub last_locally_built_checkpoint: u64,
+}
+
+impl TryFrom<ValidatorHealthRequest> for RawValidatorHealthRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(_value: ValidatorHealthRequest) -> Result<Self, Self::Error> {
+        Ok(Self {})
+    }
+}
+
+impl TryFrom<RawValidatorHealthRequest> for ValidatorHealthRequest {
+    type Error = crate::error::SuiError;
+
+    fn try_from(_value: RawValidatorHealthRequest) -> Result<Self, Self::Error> {
+        // Empty request - ignore reserved field for now
+        Ok(Self {})
+    }
+}
+
+impl TryFrom<ValidatorHealthResponse> for RawValidatorHealthResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: ValidatorHealthResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            pending_certificates: Some(value.num_inflight_execution_transactions),
+            inflight_consensus_messages: Some(value.num_inflight_consensus_transactions),
+            consensus_round: Some(value.last_committed_leader_round as u64),
+            checkpoint_sequence: Some(value.last_locally_built_checkpoint),
+        })
+    }
+}
+
+impl TryFrom<RawValidatorHealthResponse> for ValidatorHealthResponse {
+    type Error = crate::error::SuiError;
+
+    fn try_from(value: RawValidatorHealthResponse) -> Result<Self, Self::Error> {
+        Ok(Self {
+            num_inflight_consensus_transactions: value.inflight_consensus_messages.unwrap_or(0),
+            num_inflight_execution_transactions: value.pending_certificates.unwrap_or(0),
+            last_locally_built_checkpoint: value.checkpoint_sequence.unwrap_or(0),
+            last_committed_leader_round: value.consensus_round.unwrap_or(0) as u32,
+        })
+    }
+}
