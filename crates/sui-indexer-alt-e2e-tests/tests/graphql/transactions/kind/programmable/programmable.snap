@@ -1,0 +1,123 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-27:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 7235200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 29-32:
+//# programmable --sender A --inputs object(1,0) 42 @B
+//> 0: test::simple::increment(Input(0));
+//> 1: test::simple::add(Input(0), Input(1));
+//> 2: TransferObjects([Gas], Input(2))
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 1339272, non_refundable_storage_fee: 13528
+
+task 3, line 34:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 36-71:
+//# run-graphql
+Response: {
+  "data": {
+    "programmableTransaction": {
+      "digest": "Cb4FEv3L9zJvp1dKq9LETDYhwNyp6XQHKDm4XqRqET8q",
+      "kind": {
+        "__typename": "ProgrammableTransaction",
+        "inputs": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "nodes": [
+            {
+              "__typename": "Pure",
+              "bytes": "VE9ETzogVW5zdXBwb3J0ZWQgaW5wdXQgdHlwZQ=="
+            },
+            {
+              "__typename": "Pure",
+              "bytes": "KgAAAAAAAAA="
+            },
+            {
+              "__typename": "Pure",
+              "bytes": "p7AycDh4qnTDEmk1eJ/R1NfhEdWRGwkkfWljBhwxK1o="
+            }
+          ]
+        },
+        "commands": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "nodes": [
+            {
+              "__typename": "MoveCallCommand",
+              "_": null
+            },
+            {
+              "__typename": "MoveCallCommand",
+              "_": null
+            },
+            {
+              "__typename": "MoveCallCommand",
+              "_": null
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 5, lines 73-108:
+//# run-graphql
+Response: {
+  "data": {
+    "paginationTest": {
+      "digest": "Cb4FEv3L9zJvp1dKq9LETDYhwNyp6XQHKDm4XqRqET8q",
+      "kind": {
+        "__typename": "ProgrammableTransaction",
+        "inputs": {
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false
+          },
+          "nodes": [
+            {
+              "__typename": "Pure",
+              "bytes": "VE9ETzogVW5zdXBwb3J0ZWQgaW5wdXQgdHlwZQ=="
+            },
+            {
+              "__typename": "Pure",
+              "bytes": "KgAAAAAAAAA="
+            }
+          ]
+        },
+        "commands": {
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false
+          },
+          "nodes": [
+            {
+              "__typename": "MoveCallCommand",
+              "_": null
+            },
+            {
+              "__typename": "MoveCallCommand",
+              "_": null
+            }
+          ]
+        }
+      }
+    }
+  }
+}
