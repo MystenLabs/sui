@@ -33,6 +33,7 @@ use crate::{
 
 use super::{
     address::Address,
+    checkpoint::filter::checkpoint_bounds,
     epoch::Epoch,
     gas_input::GasInput,
     transaction::filter::TransactionFilter,
@@ -215,9 +216,13 @@ impl Transaction {
 
         let global_tx_hi = watermarks.high_watermark().transaction();
 
-        let tx_digest_keys = if let Some(cp_bounds) =
-            filter.checkpoint_bounds(reader_lo, scope.checkpoint_viewed_at())
-        {
+        let tx_digest_keys = if let Some(cp_bounds) = checkpoint_bounds(
+            filter.after_checkpoint,
+            filter.at_checkpoint,
+            filter.before_checkpoint,
+            reader_lo,
+            scope.checkpoint_viewed_at(),
+        ) {
             tx_unfiltered(ctx, &cp_bounds, &page, global_tx_hi).await?
         } else {
             return Ok(Connection::new(false, false));

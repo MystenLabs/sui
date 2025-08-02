@@ -6,7 +6,6 @@ use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
 
 use crate::{
-    api::types::checkpoint::{filter::CheckpointFilter, CCheckpoint},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -16,7 +15,7 @@ use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
         address::Address,
-        checkpoint::Checkpoint,
+        checkpoint::{filter::CheckpointFilter, CCheckpoint, Checkpoint},
         epoch::Epoch,
         move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey, VersionFilter},
