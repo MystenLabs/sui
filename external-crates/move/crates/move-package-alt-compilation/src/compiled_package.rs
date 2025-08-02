@@ -30,6 +30,7 @@ use move_compiler::{
     shared::{
         PackageConfig, PackagePaths, SaveFlag, SaveHook,
         files::{FileName, MappedFiles},
+        known_attributes::ModeAttribute,
     },
     sui_mode,
 };
@@ -441,15 +442,17 @@ fn check_filepaths_ok(
 }
 
 fn compiler_flags(build_config: &BuildConfig) -> Flags {
-    let flags = if build_config.test_mode {
-        Flags::testing()
-    } else {
-        Flags::empty()
-    };
+    let flags =
+        if build_config.test_mode || build_config.modes.contains(&ModeAttribute::TEST.into()) {
+            Flags::testing()
+        } else {
+            Flags::empty()
+        };
     flags
         .set_warnings_are_errors(build_config.warnings_are_errors)
         .set_json_errors(build_config.json_errors)
         .set_silence_warnings(build_config.silence_warnings)
+        .set_modes(build_config.modes.clone())
 }
 
 pub fn build_all<W: Write, F: MoveFlavor>(
