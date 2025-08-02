@@ -170,21 +170,20 @@ Response: {
 task 15, lines 88-109:
 //# run-graphql
 Response: {
-  "data": null,
-  "errors": [
-    {
-      "message": "Unknown argument \"filter\" on field \"checkpoints\" of type \"Epoch\".",
-      "locations": [
-        {
-          "line": 5,
-          "column": 28
-        }
-      ],
-      "extensions": {
-        "code": "GRAPHQL_VALIDATION_FAILED"
+  "data": {
+    "epoch": {
+      "totalCheckpoints": 4,
+      "checkpoints": {
+        "pageInfo": {
+          "startCursor": null,
+          "endCursor": null,
+          "hasPreviousPage": false,
+          "hasNextPage": false
+        },
+        "edges": []
       }
     }
-  ]
+  }
 }
 
 task 16, lines 111-132:

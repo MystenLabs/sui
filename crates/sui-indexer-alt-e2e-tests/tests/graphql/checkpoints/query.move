@@ -113,7 +113,7 @@ fragment State on Query {
 //# run-graphql
 {
   # Fetch checkpoints at an epoch filter, should have next page
-  checkpoints(first: 5, filter: {atEpoch: 1}) {
+  checkpoints(first: 2, filter: {atEpoch: 1}) {
     pageInfo {
       startCursor
       endCursor
@@ -130,10 +130,10 @@ fragment State on Query {
   }
 }
 
-//# run-graphql --cursors 0
+//# run-graphql
 {
-  # Fetch checkpoints at an epoch that appear after a cursor
-  checkpoints(first: 10, after: "@{cursor_0}", filter: {atEpoch: 0}) {
+  # Fetch checkpoints at an epoch filter, and after checkpoint 1
+  checkpoints(first: 5, filter: {atEpoch: 0, afterCheckpoint: 1}) {
     pageInfo {
       startCursor
       endCursor
@@ -150,10 +150,10 @@ fragment State on Query {
   }
 }
 
-//# run-graphql  --cursors 3
+//# run-graphql
 {
-  # Fetch checkpoints at an epoch that appear before a cursor
-  checkpoints(first: 10, filter: {atEpoch: 0}, before: "@{cursor_0}") {
+  # Fetch checkpoints at an epoch filter, and before checkpoint 1
+  checkpoints(first: 5, filter: {atEpoch: 0, beforeCheckpoint: 2}) {
     pageInfo {
       startCursor
       endCursor
@@ -170,50 +170,10 @@ fragment State on Query {
   }
 }
 
-//# run-graphql  --cursors 0 3
+//# run-graphql
 {
-  # Fetch checkpoints at an epoch that appear between two cursors, page from the front
-  checkpoints(first: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
-    pageInfo {
-      startCursor
-      endCursor
-      hasPreviousPage
-      hasNextPage
-    }
-    edges {
-      node {
-        sequenceNumber
-        digest
-        epoch {epochId}
-      }
-    }
-  }
-}
-
-//# run-graphql  --cursors 0 3
-{
-  # Fetch checkpoints at an epoch that appear between two cursors, page from the back
-  checkpoints(last: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
-    pageInfo {
-      startCursor
-      endCursor
-      hasPreviousPage
-      hasNextPage
-    }
-    edges {
-      node {
-        sequenceNumber
-        digest
-        epoch {epochId}
-      }
-    }
-  }
-}
-
-//# run-graphql  --cursors 6
-{
-  # Fetch checkpoints at an epoch that appear before a cursor, page from the back
-  checkpoints(last: 10, filter: {atEpoch: 1}, before: "@{cursor_0}") {
+  # Fetch checkpoints at an epoch before a checkpoint not in the epoch
+  checkpoints(first: 5, filter: {atEpoch: 1, beforeCheckpoint: 1}) {
     pageInfo {
       startCursor
       endCursor
@@ -247,5 +207,34 @@ fragment State on Query {
         epoch {epochId}
       }
     }
+  }
+}
+
+//# run-graphql
+{ # Test all filters together (at_epoch + after_checkpoint + before_checkpoint).
+  checkpoints(
+    first: 10, 
+    filter: {
+      atEpoch: 1, 
+      afterCheckpoint: 2, 
+      beforeCheckpoint: 5
+    }
+  ) {
+    edges { node { sequenceNumber } }
+  }
+}
+
+//# run-graphql
+{ # Test at_checkpoint filter on a checkpoint not in the epoch filter (should override other filters).
+  checkpoints(
+    first: 10,
+    filter: {
+      atEpoch: 1,
+      afterCheckpoint: 2,
+      beforeCheckpoint: 5,
+      atCheckpoint: 3
+    }
+  ) {
+    edges { node { sequenceNumber } }
   }
 }

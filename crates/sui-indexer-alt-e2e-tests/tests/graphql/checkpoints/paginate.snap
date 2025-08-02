@@ -73,103 +73,7 @@ task 12, line 40:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 13, lines 42-66:
-//# run-graphql
-Response: {
-  "data": {
-    "checkpoint": {
-      "sequenceNumber": 6
-    },
-    "object": {
-      "version": 7
-    },
-    "genesis": {
-      "query": {
-        "checkpoint": {
-          "sequenceNumber": 0
-        },
-        "object": null
-      }
-    },
-    "created": {
-      "query": {
-        "checkpoint": {
-          "sequenceNumber": 1
-        },
-        "object": {
-          "version": 2
-        }
-      }
-    },
-    "modified": {
-      "query": {
-        "checkpoint": {
-          "sequenceNumber": 2
-        },
-        "object": {
-          "version": 4
-        }
-      }
-    },
-    "untouched": {
-      "query": {
-        "checkpoint": {
-          "sequenceNumber": 3
-        },
-        "object": {
-          "version": 4
-        }
-      }
-    },
-    "nonexistent": null
-  }
-}
-
-task 14, lines 68-80:
-//# run-graphql
-Response: {
-  "data": {
-    "checkpoint": {
-      "query": {
-        "latest": {
-          "version": 2
-        },
-        "byVersion": null
-      }
-    }
-  }
-}
-
-task 15, lines 82-92:
-//# run-graphql
-Response: {
-  "data": {
-    "checkpoint": {
-      "query": null
-    }
-  },
-  "errors": [
-    {
-      "message": "Checkpoint 4 in the future",
-      "locations": [
-        {
-          "line": 6,
-          "column": 7
-        }
-      ],
-      "path": [
-        "checkpoint",
-        "query",
-        "atCheckpoint"
-      ],
-      "extensions": {
-        "code": "BAD_USER_INPUT"
-      }
-    }
-  ]
-}
-
-task 16, lines 94-111:
+task 13, lines 42-59:
 //# run-graphql
 Response: {
   "data": {
@@ -249,16 +153,32 @@ Response: {
   }
 }
 
-task 17, lines 113-131:
+task 14, lines 61-78:
+//# run-graphql --cursors 4
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 15, lines 80-98:
 //# run-graphql
 Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
         "startCursor": "NA==",
-        "endCursor": "NQ==",
+        "endCursor": "Ng==",
         "hasPreviousPage": false,
-        "hasNextPage": true
+        "hasNextPage": false
       },
       "edges": [
         {
@@ -278,24 +198,42 @@ Response: {
               "epochId": 1
             }
           }
+        },
+        {
+          "node": {
+            "sequenceNumber": 6,
+            "digest": "3VFpuqFaqvvCVLjkJcupWiMyqGE3hjHfr2Yq2hkau6N1",
+            "epoch": {
+              "epochId": 1
+            }
+          }
         }
       ]
     }
   }
 }
 
-task 18, lines 133-151:
-//# run-graphql
+task 16, lines 100-118:
+//# run-graphql --cursors 0
 Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
-        "startCursor": "Mg==",
+        "startCursor": "MQ==",
         "endCursor": "Mw==",
-        "hasPreviousPage": false,
+        "hasPreviousPage": true,
         "hasNextPage": false
       },
       "edges": [
+        {
+          "node": {
+            "sequenceNumber": 1,
+            "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
+            "epoch": {
+              "epochId": 0
+            }
+          }
+        },
         {
           "node": {
             "sequenceNumber": 2,
@@ -319,14 +257,14 @@ Response: {
   }
 }
 
-task 19, lines 153-171:
-//# run-graphql
+task 17, lines 120-138:
+//# run-graphql  --cursors 3
 Response: {
   "data": {
     "checkpoints": {
       "pageInfo": {
         "startCursor": "MA==",
-        "endCursor": "MQ==",
+        "endCursor": "Mg==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -348,53 +286,14 @@ Response: {
               "epochId": 0
             }
           }
-        }
-      ]
-    }
-  }
-}
-
-task 20, lines 173-191:
-//# run-graphql
-Response: {
-  "data": {
-    "checkpoints": {
-      "pageInfo": {
-        "startCursor": null,
-        "endCursor": null,
-        "hasPreviousPage": false,
-        "hasNextPage": false
-      },
-      "edges": []
-    }
-  }
-}
-
-task 21, lines 193-211:
-//# run-graphql
-Response: {
-  "data": {
-    "checkpoints": {
-      "pageInfo": {
-        "startCursor": null,
-        "endCursor": null,
-        "hasPreviousPage": false,
-        "hasNextPage": false
-      },
-      "edges": []
-    }
-  }
-}
-
-task 22, lines 213-225:
-//# run-graphql
-Response: {
-  "data": {
-    "checkpoints": {
-      "edges": [
+        },
         {
           "node": {
-            "sequenceNumber": 4
+            "sequenceNumber": 2,
+            "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
+            "epoch": {
+              "epochId": 0
+            }
           }
         }
       ]
@@ -402,11 +301,113 @@ Response: {
   }
 }
 
-task 23, lines 227-240:
+task 18, lines 140-158:
+//# run-graphql  --cursors 0 3
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "startCursor": "MQ==",
+        "endCursor": "MQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "node": {
+            "sequenceNumber": 1,
+            "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
+            "epoch": {
+              "epochId": 0
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 160-178:
+//# run-graphql  --cursors 0 3
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 20, lines 180-198:
+//# run-graphql  --cursors 6
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 21, lines 200-218:
 //# run-graphql
 Response: {
   "data": {
     "checkpoints": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 22, lines 220-235:
+//# run-graphql --cursors 1
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "startCursor": "MA==",
+        "endCursor": "MA==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "node": {
+            "sequenceNumber": 0
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 23, lines 237-252:
+//# run-graphql --cursors 0
+Response: {
+  "data": {
+    "checkpoints": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
       "edges": []
     }
   }

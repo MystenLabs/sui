@@ -6,7 +6,7 @@ use futures::future::try_join_all;
 use sui_types::digests::ChainIdentifier;
 
 use crate::{
-    api::types::checkpoint::{CCheckpoint, EpochFilter},
+    api::types::checkpoint::{filter::CheckpointFilter, CCheckpoint},
     error::RpcError,
     pagination::{Page, PaginationConfig},
     scope::Scope,
@@ -18,7 +18,7 @@ use super::{
         address::Address,
         checkpoint::Checkpoint,
         epoch::Epoch,
-        move_package::{self, CheckpointFilter, MovePackage, PackageKey},
+        move_package::{self, MovePackage, PackageKey},
         object::{self, Object, ObjectKey, VersionFilter},
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
@@ -72,7 +72,7 @@ impl Query {
         after: Option<CCheckpoint>,
         last: Option<u64>,
         before: Option<CCheckpoint>,
-        filter: Option<EpochFilter>,
+        filter: Option<CheckpointFilter>,
     ) -> Result<Connection<String, Checkpoint>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;

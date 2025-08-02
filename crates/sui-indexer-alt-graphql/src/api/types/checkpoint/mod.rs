@@ -6,14 +6,10 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
-    Context, InputObject, Object,
-};
-use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer_alt_reader::{kv_loader::KvLoader, pg_reader::PgReader};
-use sui_indexer_alt_schema::{
-    cp_sequence_numbers::StoredCpSequenceNumbers, schema::cp_sequence_numbers,
+    Context, Object,
 };
 
+use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     crypto::AuthorityStrongQuorumSignInfo,
     message_envelope::Message,
@@ -32,11 +28,14 @@ use crate::{
 };
 
 use super::{
+    checkpoint::filter::{checkpoint_bounds, cp_by_epoch, cp_unfiltered, CheckpointFilter},
     epoch::Epoch,
     gas::GasCostSummary,
     transaction::{filter::TransactionFilter, CTransaction, Transaction},
     validator_aggregated_signature::ValidatorAggregatedSignature,
 };
+
+pub(crate) mod filter;
 
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
@@ -56,13 +55,6 @@ struct CheckpointContents {
 }
 
 pub(crate) type CCheckpoint = JsonCursor<u64>;
-
-// Filter for paginating checkpoints at a given epoch.
-#[derive(InputObject, Debug, Default, Clone)]
-pub(crate) struct EpochFilter {
-    /// Filter to checkpoints at this epoch.
-    pub at_epoch: Option<u64>,
-}
 
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
@@ -224,68 +216,43 @@ impl Checkpoint {
         ctx: &Context<'_>,
         scope: Scope,
         page: Page<CCheckpoint>,
-        filter: EpochFilter,
+        filter: CheckpointFilter,
     ) -> Result<Connection<String, Checkpoint>, RpcError> {
-        use cp_sequence_numbers::dsl as cp;
-
         let mut conn = Connection::new(false, false);
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;
+
         let cp_lo = watermarks
             .pipeline_lo_watermark("cp_sequence_numbers")?
             .checkpoint();
         let cp_hi_inclusive = scope.checkpoint_viewed_at();
 
-        let mut query = cp::cp_sequence_numbers
-            .filter(cp::cp_sequence_number.ge(cp_lo as i64))
-            .filter(cp::cp_sequence_number.le(cp_hi_inclusive as i64))
-            .limit(page.limit_with_overhead() as i64)
-            .into_boxed();
-
-        if let Some(epoch) = filter.at_epoch {
-            query = query.filter(cp::epoch.eq(epoch as i64));
-        }
-
-        query = if page.is_from_front() {
-            query.order_by(cp::cp_sequence_number)
-        } else {
-            query.order_by(cp::cp_sequence_number.desc())
+        let cp_bounds = match checkpoint_bounds(
+            filter.after_checkpoint,
+            filter.at_checkpoint,
+            filter.before_checkpoint,
+            cp_lo,
+            cp_hi_inclusive,
+        ) {
+            Some(bounds) => bounds,
+            None => return Ok(Connection::new(false, false)),
         };
 
-        if let Some(after) = page.after() {
-            query = query.filter(cp::cp_sequence_number.ge(**after as i64));
-        }
-        if let Some(before) = page.before() {
-            query = query.filter(cp::cp_sequence_number.le(**before as i64));
-        }
+        let results = if let Some(epoch) = filter.at_epoch {
+            cp_by_epoch(ctx, &page, &cp_bounds, epoch.into()).await?
+        } else {
+            cp_unfiltered(&cp_bounds, &page)
+        };
 
-        let pg_reader: &PgReader = ctx.data()?;
-
-        let mut c = pg_reader
-            .connect()
-            .await
-            .context("Failed to connect to database")?;
-
-        let mut results: Vec<StoredCpSequenceNumbers> = c
-            .results(query)
-            .await
-            .context("Failed to read from database")?;
-
-        if !page.is_from_front() {
-            results.reverse();
-        }
-
-        let (prev, next, results) =
-            page.paginate_results(results, |c| JsonCursor::new(c.cp_sequence_number as u64));
+        let (prev, next, results) = page.paginate_results(results, |c| JsonCursor::new(*c));
 
         conn.has_previous_page = prev;
         conn.has_next_page = next;
 
-        for (cursor, stored) in results {
+        for (cursor, cp_sequence_number) in results {
             conn.edges.push(Edge::new(
                 cursor.encode_cursor(),
-                Self::with_sequence_number(scope.clone(), stored.cp_sequence_number as u64)
-                    .unwrap(),
+                Self::with_sequence_number(scope.clone(), cp_sequence_number).unwrap(),
             ));
         }
 
