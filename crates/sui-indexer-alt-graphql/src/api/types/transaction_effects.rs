@@ -39,6 +39,7 @@ use super::{
     gas_effects::GasEffects,
     object_change::ObjectChange,
     transaction::{Transaction, TransactionContents},
+    unchanged_consensus_object::UnchangedConsensusObject,
 };
 
 /// The execution status of this transaction: success or failure.
@@ -65,6 +66,7 @@ pub(crate) struct EffectsContents {
 type CObjectChange = JsonCursor<usize>;
 type CEvent = JsonCursor<usize>;
 type CBalanceChange = JsonCursor<usize>;
+type CUnchangedConsensusObject = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -316,6 +318,43 @@ impl EffectsContents {
 
         let effects = content.effects()?;
         Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
+    }
+
+    /// The unchanged consensus-managed objects that were referenced by this transaction.
+    async fn unchanged_consensus_objects(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CUnchangedConsensusObject>,
+        last: Option<u64>,
+        before: Option<CUnchangedConsensusObject>,
+    ) -> Result<Option<Connection<CUnchangedConsensusObject, UnchangedConsensusObject>>, RpcError>
+    {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let unchanged_consensus_objects = content.effects()?.unchanged_shared_objects();
+        let cursors = page.paginate_indices(unchanged_consensus_objects.len());
+
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        for edge in cursors.edges {
+            let execution_checkpoint = content.cp_sequence_number();
+            let unchanged_consensus_object = UnchangedConsensusObject::from_native(
+                self.scope.clone(),
+                unchanged_consensus_objects[*edge.cursor].clone(),
+                execution_checkpoint,
+            );
+
+            conn.edges
+                .push(Edge::new(edge.cursor, unchanged_consensus_object))
+        }
+
+        Ok(Some(conn))
     }
 }
 
