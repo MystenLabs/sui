@@ -10,6 +10,7 @@ use sui_types::{
 };
 
 mod balance_read;
+mod eager_scheduler;
 mod naive_scheduler;
 pub(crate) mod scheduler;
 #[cfg(test)]
@@ -17,6 +18,15 @@ mod tests;
 
 #[cfg(test)]
 mod e2e_tests;
+
+#[cfg(test)]
+mod eager_stress_tests;
+
+#[cfg(test)]
+mod eager_integration_test;
+
+#[cfg(test)]
+mod simple_eager_test;
 
 /// The status of scheduling the withdraw reservations for a transaction.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -43,6 +53,7 @@ pub(crate) struct ScheduleResult {
 
 /// Details regarding a balance settlement, generated when a settlement transaction has been executed
 /// and committed to the writeback cache.
+#[derive(Clone)]
 pub struct BalanceSettlement {
     /// The accumulator version at which the settlement was committed.
     /// i.e. the root accumulator object is now at this version after the settlement.
