@@ -3628,6 +3628,10 @@ impl AuthorityPerEpochStore {
             all_certs,
             cancelled_txns,
         )?;
+        debug!(
+            "Assigned versions from consensus processing: {:?}",
+            assigned_versions
+        );
 
         output.set_next_shared_object_versions(shared_input_next_versions);
         Ok(assigned_versions)
