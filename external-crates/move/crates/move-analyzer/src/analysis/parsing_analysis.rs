@@ -4,6 +4,7 @@
 use crate::{
     analysis::{DefMap, add_member_use_def},
     symbols::{
+        compilation::ParsedDefinitions,
         cursor::{CursorContext, CursorDefinition, CursorPosition},
         ignored_function,
         mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, ModuleDefs},
@@ -15,11 +16,11 @@ use crate::{
 
 use lsp_types::Position;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use move_compiler::{
     parser::ast as P,
-    shared::{Identifier, Name, NamedAddressMap, NamedAddressMaps, files::MappedFiles},
+    shared::{Identifier, Name, NamedAddressMap, files::MappedFiles},
 };
 use move_ir_types::location::*;
 
@@ -45,7 +46,7 @@ pub struct ParsingAnalysisContext<'a> {
     pub alias_lengths: BTreeMap<Position, usize>,
     /// A per-package mapping from package names to their addresses (needs to be appropriately set
     /// before the package processint starts)
-    pub pkg_addresses: &'a NamedAddressMap,
+    pub pkg_addresses: Arc<NamedAddressMap>,
     /// Cursor contextual information, computed as part of the traversal.
     pub cursor: Option<&'a mut CursorContext>,
 }
@@ -71,24 +72,25 @@ impl<'a> ParsingAnalysisContext<'a> {
     /// Get symbols for the whole program
     pub fn prog_symbols(
         &mut self,
-        prog: &'a P::Program,
+        prog: &'a ParsedDefinitions,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
+        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         prog.source_definitions.iter().for_each(|pkg_def| {
             self.pkg_symbols(
-                &prog.named_address_maps,
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
+                typed_mod_named_address_maps,
             )
         });
         prog.lib_definitions.iter().for_each(|pkg_def| {
             self.pkg_symbols(
-                &prog.named_address_maps,
                 pkg_def,
                 mod_use_defs,
                 mod_to_alias_lengths,
+                typed_mod_named_address_maps,
             )
         });
     }
@@ -96,14 +98,24 @@ impl<'a> ParsingAnalysisContext<'a> {
     /// Get symbols for the whole package
     fn pkg_symbols(
         &mut self,
-        pkg_address_maps: &'a NamedAddressMaps,
         pkg_def: &P::PackageDefinition,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
+        typed_mod_named_address_maps: &BTreeMap<Loc, Arc<NamedAddressMap>>,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
-            let pkg_addresses = pkg_address_maps.get(pkg_def.named_address_map);
-            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses);
+            // when doing full standalone compilation (vs. pre-compiling dependencies)
+            // we may have a module at parsing but no longer at typing
+            // in case there is a name conflict with a dependency (and
+            // mod_named_address_maps comes from typing modules)
+            let Some(pkg_addresses) = typed_mod_named_address_maps.get(&mod_def.loc) else {
+                eprintln!(
+                    "no typing-level named address maps for module {}",
+                    mod_def.name.value()
+                );
+                return;
+            };
+            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses.clone());
             self.mod_symbols(mod_def, mod_use_defs, mod_to_alias_lengths);
             self.current_mod_ident_str = None;
             let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
@@ -189,11 +201,20 @@ impl<'a> ParsingAnalysisContext<'a> {
             }
         }
         // parsing symbolicator is currently only responsible for processing use declarations
-        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses, mod_def) else {
+        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses.clone(), mod_def)
+        else {
             return;
         };
         assert!(self.current_mod_ident_str.is_none());
         self.current_mod_ident_str = Some(mod_ident_str.clone());
+
+        if mod_use_defs.get(&mod_ident_str).is_none() {
+            // when doing full standalone compilation (vs. pre-compiling dependencies)
+            // we may have a module at parsing but no longer at typing
+            // in case there is a name conflict with a dependency
+            eprintln!("no typing-level module for {:?}", mod_ident_str);
+            return;
+        }
 
         let use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         let old_defs = std::mem::replace(&mut self.use_defs, use_defs);
@@ -704,14 +725,14 @@ impl<'a> ParsingAnalysisContext<'a> {
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str =
-                    parsing_mod_ident_to_map_key(self.pkg_addresses, &mod_ident.value);
+                    parsing_mod_ident_to_map_key(self.pkg_addresses.clone(), &mod_ident.value);
                 self.mod_name_symbol(&mod_ident.value.module, &mod_ident_str);
                 self.mod_use_symbols(mod_use, &mod_ident_str);
             }
             P::Use::NestedModuleUses(leading_name, uses) => {
                 for (mod_name, mod_use) in uses {
                     let mod_ident_str = parsing_leading_and_mod_names_to_map_key(
-                        self.pkg_addresses,
+                        self.pkg_addresses.clone(),
                         *leading_name,
                         *mod_name,
                     );
@@ -952,7 +973,7 @@ impl<'a> ParsingAnalysisContext<'a> {
 /// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST.
 pub fn parsing_mod_def_to_map_key(
-    pkg_addresses: &NamedAddressMap,
+    pkg_addresses: Arc<NamedAddressMap>,
     mod_def: &P::ModuleDefinition,
 ) -> Option<String> {
     // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
@@ -969,7 +990,7 @@ pub fn parsing_mod_def_to_map_key(
 /// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST.
 fn parsing_leading_and_mod_names_to_map_key(
-    pkg_addresses: &NamedAddressMap,
+    pkg_addresses: Arc<NamedAddressMap>,
     ln: P::LeadingNameAccess,
     name: P::ModuleName,
 ) -> String {
@@ -980,7 +1001,7 @@ fn parsing_leading_and_mod_names_to_map_key(
 /// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST,
 fn parsing_mod_ident_to_map_key(
-    pkg_addresses: &NamedAddressMap,
+    pkg_addresses: Arc<NamedAddressMap>,
     mod_ident: &P::ModuleIdent_,
 ) -> String {
     format!(

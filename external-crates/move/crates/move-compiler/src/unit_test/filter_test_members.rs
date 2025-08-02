@@ -6,9 +6,9 @@ use move_ir_types::location::{Loc, sp};
 use move_symbol_pool::Symbol;
 
 use crate::{
-    command_line::compiler::FullyCompiledProgram,
-    diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::DiagnosticReporter,
+    expansion::ast::Address,
     parser::{
         ast::{self as P, DocComment, NamePath, PathEntry},
         filter::{FilterContext, filter_program},
@@ -17,6 +17,7 @@ use crate::{
         CompilationEnv,
         known_attributes::{self, AttributeKind_},
     },
+    sui_mode::STD_ADDR_VALUE,
 };
 
 use std::sync::Arc;
@@ -91,7 +92,7 @@ pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 // a test plan is created for use by the testing framework.
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: P::Program,
 ) -> P::Program {
     let reporter = compilation_env.diagnostic_reporter_at_top_level();
@@ -104,7 +105,7 @@ pub fn program(
     filter_program(&mut context, prog)
 }
 
-fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
+fn stdlib_unit_test_module_in_program(prog: &P::Program) -> bool {
     prog.lib_definitions
         .iter()
         .chain(prog.source_definitions.iter())
@@ -125,14 +126,32 @@ fn has_stdlib_unit_test_module(prog: &P::Program) -> bool {
         })
 }
 
+fn stdlib_unit_test_module_in_pre_compiled_lib(
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
+) -> bool {
+    pre_compiled_lib.is_some_and(|module_info| {
+        module_info.iter().any(|(sp!(_, mident), _)| {
+            mident.module.0.value == UNIT_TEST_MODULE_NAME
+                && match mident.address {
+                    Address::Numerical {
+                        value: sp!(_, addr),
+                        ..
+                    } => addr == STD_ADDR_VALUE,
+                    Address::NamedUnassigned(_) => false,
+                }
+        })
+    })
+}
+
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
     reporter: &DiagnosticReporter,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &P::Program,
 ) -> bool {
-    let has_unit_test_module = has_stdlib_unit_test_module(prog)
-        || pre_compiled_lib.is_some_and(|p| has_stdlib_unit_test_module(&p.parser));
+    let has_unit_test_module = stdlib_unit_test_module_in_program(prog)
+        || stdlib_unit_test_module_in_pre_compiled_lib(pre_compiled_lib);
+
     if !has_unit_test_module && compilation_env.test_mode() {
         if let Some(P::PackageDefinition { def, .. }) = prog
             .source_definitions
