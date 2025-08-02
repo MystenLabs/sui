@@ -28,8 +28,8 @@ impl TransactionEffects {
     pub const DEPENDENCIES_FIELD: &'static MessageField = &MessageField::new("dependencies");
     pub const LAMPORT_VERSION_FIELD: &'static MessageField = &MessageField::new("lamport_version");
     pub const CHANGED_OBJECTS_FIELD: &'static MessageField = &MessageField::new("changed_objects");
-    pub const UNCHANGED_SHARED_OBJECTS_FIELD: &'static MessageField =
-        &MessageField::new("unchanged_shared_objects");
+    pub const UNCHANGED_CONSENSUS_OBJECTS_FIELD: &'static MessageField =
+        &MessageField::new("unchanged_consensus_objects");
     pub const AUXILIARY_DATA_DIGEST_FIELD: &'static MessageField =
         &MessageField::new("auxiliary_data_digest");
 }
@@ -48,7 +48,7 @@ impl MessageFields for TransactionEffects {
         Self::DEPENDENCIES_FIELD,
         Self::LAMPORT_VERSION_FIELD,
         Self::CHANGED_OBJECTS_FIELD,
-        Self::UNCHANGED_SHARED_OBJECTS_FIELD,
+        Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD,
         Self::AUXILIARY_DATA_DIGEST_FIELD,
     ];
 }
@@ -96,7 +96,7 @@ impl Merge<&TransactionEffects> for TransactionEffects {
             dependencies,
             lamport_version,
             changed_objects,
-            unchanged_shared_objects,
+            unchanged_consensus_objects,
             auxiliary_data_digest,
         }: &TransactionEffects,
         mask: &FieldMaskTree,
@@ -148,8 +148,8 @@ impl Merge<&TransactionEffects> for TransactionEffects {
             self.changed_objects = changed_objects.clone();
         }
 
-        if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-            self.unchanged_shared_objects = unchanged_shared_objects.clone();
+        if mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+            self.unchanged_consensus_objects = unchanged_consensus_objects.clone();
         }
 
         if mask.contains(Self::AUXILIARY_DATA_DIGEST_FIELD.name) {
@@ -198,7 +198,7 @@ impl Merge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
         mask: &FieldMaskTree,
     ) {
         use super::ChangedObject;
-        use super::UnchangedSharedObject;
+        use super::UnchangedConsensusObject;
 
         if mask.contains(Self::VERSION_FIELD.name) {
             self.version = Some(1);
@@ -229,11 +229,11 @@ impl Merge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
         }
 
         if mask.contains(Self::CHANGED_OBJECTS_FIELD.name)
-            || mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name)
+            || mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name)
             || mask.contains(Self::GAS_OBJECT_FIELD.name)
         {
             let mut changed_objects = Vec::new();
-            let mut unchanged_shared_objects = Vec::new();
+            let mut unchanged_consensus_objects = Vec::new();
 
             for object in created {
                 let change = ChangedObject {
@@ -378,9 +378,9 @@ impl Merge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
                     changed_object.input_version = Some(version);
                     changed_object.input_digest = Some(digest);
                 } else {
-                    let unchanged_shared_object = UnchangedSharedObject {
+                    let unchanged_consensus_object = UnchangedConsensusObject {
                         kind: Some(
-                            super::unchanged_shared_object::UnchangedSharedObjectKind::ReadOnlyRoot
+                            super::unchanged_consensus_object::UnchangedConsensusObjectKind::ReadOnlyRoot
                                 .into(),
                         ),
                         object_id: Some(object_id),
@@ -389,7 +389,7 @@ impl Merge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
                         object_type: None,
                     };
 
-                    unchanged_shared_objects.push(unchanged_shared_object);
+                    unchanged_consensus_objects.push(unchanged_consensus_object);
                 }
             }
 
@@ -405,8 +405,8 @@ impl Merge<&sui_sdk_types::TransactionEffectsV1> for TransactionEffects {
                 self.changed_objects = changed_objects;
             }
 
-            if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                self.unchanged_shared_objects = unchanged_shared_objects;
+            if mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                self.unchanged_consensus_objects = unchanged_consensus_objects;
             }
         }
     }
@@ -486,8 +486,8 @@ impl Merge<&sui_sdk_types::TransactionEffectsV2> for TransactionEffects {
             }
         }
 
-        if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-            self.unchanged_shared_objects = unchanged_shared_objects
+        if mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+            self.unchanged_consensus_objects = unchanged_shared_objects
                 .clone()
                 .into_iter()
                 .map(Into::into)
@@ -669,9 +669,9 @@ impl TryFrom<super::changed_object::IdOperation> for sui_sdk_types::IdOperation 
 // UnchangedSharedObject
 //
 
-impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedSharedObject {
+impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedConsensusObject {
     fn from(value: sui_sdk_types::UnchangedSharedObject) -> Self {
-        use super::unchanged_shared_object::UnchangedSharedObjectKind;
+        use super::unchanged_consensus_object::UnchangedConsensusObjectKind;
         use sui_sdk_types::UnchangedSharedKind::*;
 
         let mut message = Self {
@@ -683,21 +683,21 @@ impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedSharedObject
             ReadOnlyRoot { version, digest } => {
                 message.version = Some(version);
                 message.digest = Some(digest.to_string());
-                UnchangedSharedObjectKind::ReadOnlyRoot
+                UnchangedConsensusObjectKind::ReadOnlyRoot
             }
             MutateDeleted { version } => {
                 message.version = Some(version);
-                UnchangedSharedObjectKind::MutateDeleted
+                UnchangedConsensusObjectKind::MutateConsensusStreamEnded
             }
             ReadDeleted { version } => {
                 message.version = Some(version);
-                UnchangedSharedObjectKind::ReadDeleted
+                UnchangedConsensusObjectKind::ReadConsensusStreamEnded
             }
             Canceled { version } => {
                 message.version = Some(version);
-                UnchangedSharedObjectKind::Canceled
+                UnchangedConsensusObjectKind::Cancelled
             }
-            PerEpochConfig => UnchangedSharedObjectKind::PerEpochConfig,
+            PerEpochConfig => UnchangedConsensusObjectKind::PerEpochConfig,
             PerEpochConfigWithSequenceNumber { .. } => todo!(),
         };
 
@@ -706,11 +706,11 @@ impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedSharedObject
     }
 }
 
-impl TryFrom<&super::UnchangedSharedObject> for sui_sdk_types::UnchangedSharedObject {
+impl TryFrom<&super::UnchangedConsensusObject> for sui_sdk_types::UnchangedSharedObject {
     type Error = TryFromProtoError;
 
-    fn try_from(value: &super::UnchangedSharedObject) -> Result<Self, Self::Error> {
-        use super::unchanged_shared_object::UnchangedSharedObjectKind;
+    fn try_from(value: &super::UnchangedConsensusObject) -> Result<Self, Self::Error> {
+        use super::unchanged_consensus_object::UnchangedConsensusObjectKind;
         use sui_sdk_types::UnchangedSharedKind;
 
         let object_id = value
@@ -721,11 +721,11 @@ impl TryFrom<&super::UnchangedSharedObject> for sui_sdk_types::UnchangedSharedOb
             .map_err(TryFromProtoError::from_error)?;
 
         let kind = match value.kind() {
-            UnchangedSharedObjectKind::Unknown => {
+            UnchangedConsensusObjectKind::Unknown => {
                 return Err(TryFromProtoError::from_error("unknown InputKind"))
             }
 
-            UnchangedSharedObjectKind::ReadOnlyRoot => UnchangedSharedKind::ReadOnlyRoot {
+            UnchangedConsensusObjectKind::ReadOnlyRoot => UnchangedSharedKind::ReadOnlyRoot {
                 version: value
                     .version
                     .ok_or_else(|| TryFromProtoError::missing("version"))?,
@@ -737,22 +737,26 @@ impl TryFrom<&super::UnchangedSharedObject> for sui_sdk_types::UnchangedSharedOb
                     .parse()
                     .map_err(TryFromProtoError::from_error)?,
             },
-            UnchangedSharedObjectKind::MutateDeleted => UnchangedSharedKind::MutateDeleted {
+            UnchangedConsensusObjectKind::MutateConsensusStreamEnded => {
+                UnchangedSharedKind::MutateDeleted {
+                    version: value
+                        .version
+                        .ok_or_else(|| TryFromProtoError::missing("version"))?,
+                }
+            }
+            UnchangedConsensusObjectKind::ReadConsensusStreamEnded => {
+                UnchangedSharedKind::ReadDeleted {
+                    version: value
+                        .version
+                        .ok_or_else(|| TryFromProtoError::missing("version"))?,
+                }
+            }
+            UnchangedConsensusObjectKind::Cancelled => UnchangedSharedKind::Canceled {
                 version: value
                     .version
                     .ok_or_else(|| TryFromProtoError::missing("version"))?,
             },
-            UnchangedSharedObjectKind::ReadDeleted => UnchangedSharedKind::ReadDeleted {
-                version: value
-                    .version
-                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
-            },
-            UnchangedSharedObjectKind::Canceled => UnchangedSharedKind::Canceled {
-                version: value
-                    .version
-                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
-            },
-            UnchangedSharedObjectKind::PerEpochConfig => UnchangedSharedKind::PerEpochConfig,
+            UnchangedConsensusObjectKind::PerEpochConfig => UnchangedSharedKind::PerEpochConfig,
         };
 
         Ok(Self { object_id, kind })

@@ -235,10 +235,10 @@ impl SharedObjVerManager {
         cache_reader: &dyn ObjectCacheRead,
     ) -> AssignedTxAndVersions {
         // We don't care about the results since we can use effects to assign versions.
-        // But we must call it to make sure whenever a shared object is touched the first time
+        // But we must call it to make sure whenever a consensus object is touched the first time
         // during an epoch, either through consensus or through checkpoint executor,
         // its next version must be initialized. This is because we initialize the next version
-        // of a shared object in an epoch by reading the current version from the object store.
+        // of a consensus object in an epoch by reading the current version from the object store.
         // This must be done before we mutate it the first time, otherwise we would be initializing
         // it with the wrong version.
         let _ = get_or_init_versions(
@@ -257,7 +257,7 @@ impl SharedObjVerManager {
                 .map(|input| input.into_id_and_version())
                 .collect();
             let cert_assigned_versions: Vec<_> = effects
-                .input_shared_objects()
+                .input_consensus_objects()
                 .into_iter()
                 .map(|iso| {
                     let (id, version) = iso.id_and_version();
@@ -271,7 +271,7 @@ impl SharedObjVerManager {
             trace!(
                 ?tx_key,
                 ?cert_assigned_versions,
-                "assigned shared object versions from effects"
+                "assigned consensus object versions from effects"
             );
             assigned_versions.push((tx_key, cert_assigned_versions));
         }

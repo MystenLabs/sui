@@ -51,11 +51,11 @@ message TransactionEffects {
   // Objects whose state are changed by this transaction.
   repeated ChangedObject changed_objects = 12;
 
-  // Shared objects that are not mutated in this transaction. Unlike owned objects,
-  // read-only shared objects' version are not committed in the transaction,
+  // Consensus objects that are not mutated in this transaction. Unlike owned objects,
+  // read-only consensus objects' version are not committed in the transaction,
   // and in order for a node to catch up and execute it without consensus sequencing,
   // the version needs to be committed in the effects.
-  repeated UnchangedSharedObject unchanged_shared_objects = 13;
+  repeated UnchangedConsensusObject unchanged_consensus_objects = 13;
 
   // Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
   // Storing it separately allows us to avoid bloating the effects with data that are not critical.
@@ -113,37 +113,36 @@ message ChangedObject {
   optional string object_type = 11;
 }
 
-// A shared object that wasn't changed during execution.
-message UnchangedSharedObject {
-  enum UnchangedSharedObjectKind {
-    UNCHANGED_SHARED_OBJECT_KIND_UNKNOWN = 0;
+// A consensus object that wasn't changed during execution.
+message UnchangedConsensusObject {
+  enum UnchangedConsensusObjectKind {
+    UNCHANGED_CONSENSUS_OBJECT_KIND_UNKNOWN = 0;
 
-    // Read-only shared object from the input.
+    // Read-only consensus objects from the input.
     READ_ONLY_ROOT = 1;
 
-    // Deleted shared objects that appear mutably/owned in the input.
-    MUTATE_DELETED = 2;
+    // Objects with ended consensus streams that appear mutably/owned in the input.
+    MUTATE_CONSENSUS_STREAM_ENDED = 2;
 
-    // Deleted shared objects that appear as read-only in the input.
-    READ_DELETED = 3;
+    // Objects with ended consensus streams that appear as read-only in the input.
+    READ_CONSENSUS_STREAM_ENDED = 3;
 
-    // Shared objects that was congested and resulted in this transaction being
-    // canceled.
-    CANCELED = 4;
+    // Consensus objects in cancelled transaction. The sequence number embed cancellation reason.
+    CANCELLED = 4;
 
     // Read of a per-epoch config object that should remain the same during an epoch.
     PER_EPOCH_CONFIG = 5;
   }
 
-  optional UnchangedSharedObjectKind kind = 1;
+  optional UnchangedConsensusObjectKind kind = 1;
 
-  // ObjectId of the shared object.
+  // ObjectId of the consensus object.
   optional string object_id = 2;
 
-  // Version of the shared object.
+  // Version of the consensus object.
   optional uint64 version = 3;
 
-  // Digest of the shared object.
+  // Digest of the consensus object.
   optional string digest = 4;
 
   // Type information is not provided by the effects structure but is instead

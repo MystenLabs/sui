@@ -315,12 +315,12 @@ pub struct TransactionEffects {
     /// Objects whose state are changed by this transaction.
     #[prost(message, repeated, tag = "12")]
     pub changed_objects: ::prost::alloc::vec::Vec<ChangedObject>,
-    /// Shared objects that are not mutated in this transaction. Unlike owned objects,
-    /// read-only shared objects' version are not committed in the transaction,
+    /// Consensus objects that are not mutated in this transaction. Unlike owned objects,
+    /// read-only consensus objects' version are not committed in the transaction,
     /// and in order for a node to catch up and execute it without consensus sequencing,
     /// the version needs to be committed in the effects.
     #[prost(message, repeated, tag = "13")]
-    pub unchanged_shared_objects: ::prost::alloc::vec::Vec<UnchangedSharedObject>,
+    pub unchanged_consensus_objects: ::prost::alloc::vec::Vec<UnchangedConsensusObject>,
     /// Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
     /// Storing it separately allows us to avoid bloating the effects with data that are not critical.
     /// It also provides more flexibility on the format and type of the data.
@@ -489,22 +489,22 @@ pub mod changed_object {
         }
     }
 }
-/// A shared object that wasn't changed during execution.
+/// A consensus object that wasn't changed during execution.
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UnchangedSharedObject {
+pub struct UnchangedConsensusObject {
     #[prost(
-        enumeration = "unchanged_shared_object::UnchangedSharedObjectKind",
+        enumeration = "unchanged_consensus_object::UnchangedConsensusObjectKind",
         optional,
         tag = "1"
     )]
     pub kind: ::core::option::Option<i32>,
-    /// ObjectId of the shared object.
+    /// ObjectId of the consensus object.
     #[prost(string, optional, tag = "2")]
     pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Version of the shared object.
+    /// Version of the consensus object.
     #[prost(uint64, optional, tag = "3")]
     pub version: ::core::option::Option<u64>,
-    /// Digest of the shared object.
+    /// Digest of the consensus object.
     #[prost(string, optional, tag = "4")]
     pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// Type information is not provided by the effects structure but is instead
@@ -512,8 +512,8 @@ pub struct UnchangedSharedObject {
     #[prost(string, optional, tag = "5")]
     pub object_type: ::core::option::Option<::prost::alloc::string::String>,
 }
-/// Nested message and enum types in `UnchangedSharedObject`.
-pub mod unchanged_shared_object {
+/// Nested message and enum types in `UnchangedConsensusObject`.
+pub mod unchanged_consensus_object {
     #[derive(
         Clone,
         Copy,
@@ -526,43 +526,42 @@ pub mod unchanged_shared_object {
         ::prost::Enumeration
     )]
     #[repr(i32)]
-    pub enum UnchangedSharedObjectKind {
+    pub enum UnchangedConsensusObjectKind {
         Unknown = 0,
-        /// Read-only shared object from the input.
+        /// Read-only consensus objects from the input.
         ReadOnlyRoot = 1,
-        /// Deleted shared objects that appear mutably/owned in the input.
-        MutateDeleted = 2,
-        /// Deleted shared objects that appear as read-only in the input.
-        ReadDeleted = 3,
-        /// Shared objects that was congested and resulted in this transaction being
-        /// canceled.
-        Canceled = 4,
+        /// Objects with ended consensus streams that appear mutably/owned in the input.
+        MutateConsensusStreamEnded = 2,
+        /// Objects with ended consensus streams that appear as read-only in the input.
+        ReadConsensusStreamEnded = 3,
+        /// Consensus objects in cancelled transaction. The sequence number embed cancellation reason.
+        Cancelled = 4,
         /// Read of a per-epoch config object that should remain the same during an epoch.
         PerEpochConfig = 5,
     }
-    impl UnchangedSharedObjectKind {
+    impl UnchangedConsensusObjectKind {
         /// String value of the enum field names used in the ProtoBuf definition.
         ///
         /// The values are not transformed in any way and thus are considered stable
         /// (if the ProtoBuf definition does not change) and safe for programmatic use.
         pub fn as_str_name(&self) -> &'static str {
             match self {
-                Self::Unknown => "UNCHANGED_SHARED_OBJECT_KIND_UNKNOWN",
+                Self::Unknown => "UNCHANGED_CONSENSUS_OBJECT_KIND_UNKNOWN",
                 Self::ReadOnlyRoot => "READ_ONLY_ROOT",
-                Self::MutateDeleted => "MUTATE_DELETED",
-                Self::ReadDeleted => "READ_DELETED",
-                Self::Canceled => "CANCELED",
+                Self::MutateConsensusStreamEnded => "MUTATE_CONSENSUS_STREAM_ENDED",
+                Self::ReadConsensusStreamEnded => "READ_CONSENSUS_STREAM_ENDED",
+                Self::Cancelled => "CANCELLED",
                 Self::PerEpochConfig => "PER_EPOCH_CONFIG",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
         pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
             match value {
-                "UNCHANGED_SHARED_OBJECT_KIND_UNKNOWN" => Some(Self::Unknown),
+                "UNCHANGED_CONSENSUS_OBJECT_KIND_UNKNOWN" => Some(Self::Unknown),
                 "READ_ONLY_ROOT" => Some(Self::ReadOnlyRoot),
-                "MUTATE_DELETED" => Some(Self::MutateDeleted),
-                "READ_DELETED" => Some(Self::ReadDeleted),
-                "CANCELED" => Some(Self::Canceled),
+                "MUTATE_CONSENSUS_STREAM_ENDED" => Some(Self::MutateConsensusStreamEnded),
+                "READ_CONSENSUS_STREAM_ENDED" => Some(Self::ReadConsensusStreamEnded),
+                "CANCELLED" => Some(Self::Cancelled),
                 "PER_EPOCH_CONFIG" => Some(Self::PerEpochConfig),
                 _ => None,
             }
