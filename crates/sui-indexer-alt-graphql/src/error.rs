@@ -15,6 +15,7 @@ pub(crate) mod code {
     pub const GRAPHQL_PARSE_FAILED: &str = "GRAPHQL_PARSE_FAILED";
     pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
+    pub const NOT_AVAILABLE: &str = "NOT_AVAILABLE";
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
 }
 
@@ -32,6 +33,10 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
 
     /// An error produced by the internal workings of the service (our fault).
     InternalError(Arc<anyhow::Error>),
+
+    /// This feature is not available, because GraphQL does not have access to the underlying
+    /// store.
+    NotAvailable { what: &'static str },
 
     /// The request took too long to process.
     RequestTimeout { kind: &'static str, limit: Duration },
@@ -67,6 +72,12 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 top.to_string().extend_with(|_, ext| {
                     ext.set("code", code::INTERNAL_SERVER_ERROR);
                     ext.set("chain", chain);
+                })
+            }
+
+            RpcError::NotAvailable { what } => {
+                format!("{what} not available").extend_with(|_, ext| {
+                    ext.set("code", code::NOT_AVAILABLE);
                 })
             }
 
@@ -124,6 +135,11 @@ impl<E: std::error::Error> From<bcs::Error> for RpcError<E> {
 /// Signal an error that is the user's fault.
 pub(crate) fn bad_user_input<E: std::error::Error>(err: E) -> RpcError<E> {
     RpcError::BadUserInput(Arc::new(err))
+}
+
+/// Signal that feature `what` is not available.
+pub(crate) fn not_available<E: std::error::Error>(what: &'static str) -> RpcError<E> {
+    RpcError::NotAvailable { what }
 }
 
 /// Signal a timeout. `kind` specifies what operation timed out and is included in the error

@@ -1,0 +1,968 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 49 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 7-9:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 11-13:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 15-17:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 19-21:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 23-25:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 27-29:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 31-33:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, lines 34-36:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(8,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 9, lines 38-40:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, lines 42-44:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, lines 46-48:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 50-52:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, lines 54-56:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(13,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 58-60:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 15, lines 61-63:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, lines 65-67:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(16,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17, lines 69-71:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u8, u8>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(17,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 18, lines 73-75:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(18,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 19, lines 77-79:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(19,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 20, lines 81-83:
+//# programmable --sender A --inputs @A
+//> 0: sui::table::new<u64, u64>();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(20,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2333200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 21, line 85:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 22, lines 87-120:
+//# run-graphql
+Response: {
+  "data": {
+    "cp1": [
+      {
+        "address": "0xf3dea4ac2b78bf9ae57c9a808a238ade445fefa380fd1ad454cfc4c3d14e11db",
+        "version": 2
+      },
+      {
+        "address": "0x58be0973494f238789431e11b9f296d07c4b1963852609e2201e466d7309cb8d",
+        "version": 3
+      },
+      {
+        "address": "0x621f6686fbffd1c54a9260d64624d5a323fd14c8246e0280bf29524fcc93cc2c",
+        "version": 4
+      },
+      {
+        "address": "0x466e672da3b6745a98f60b2f6c70141d8334b5b1a2633c264080aa0b9df9ec85",
+        "version": 5
+      },
+      {
+        "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+        "version": 6
+      },
+      {
+        "address": "0xfc3767913d945459287e827ced082e675ed3bff41c82e1674e39488085cd2f0c",
+        "version": 7
+      }
+    ],
+    "cp2": [
+      {
+        "address": "0xd7cc781d4b14a566d5abb3cd1b184d1db799a98897d9b8b79f77c29e737e2aa7",
+        "version": 8
+      },
+      {
+        "address": "0x1483b9c5c3197ab884a6a71780e5bc6038acfbc200a998ce74e7a4cd291ac98b",
+        "version": 9
+      },
+      {
+        "address": "0x4eef2f9096463469c91017c7b0c97a7bbed7fb19ad73f87155a88fd59c253f7f",
+        "version": 10
+      },
+      {
+        "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+        "version": 11
+      },
+      {
+        "address": "0x5fc301b684838df81e13bb5f3fcb38a9d043cba757aa6a29dc1fb0572069a609",
+        "version": 12
+      },
+      {
+        "address": "0xb7eb2b7b1dcd8a8c45c2648f4eecf7d8da40309cdaf3305b098b4f160633cb2c",
+        "version": 13
+      }
+    ],
+    "cp3": [
+      {
+        "address": "0x8846e39dc2df3ad0baf6b783435d9706f169eb3304722563f0dec03b4b68d2ec",
+        "version": 14
+      },
+      {
+        "address": "0x0cf01d18b2d9914e67e590405d8d5edbfb24c00e08480216f27c40c27b6c94af",
+        "version": 15
+      },
+      {
+        "address": "0x71fd9efe68aa39aa3b840dc29dfca85f374ed8f0d9b5e6bd85bc0045829d5bbe",
+        "version": 16
+      },
+      {
+        "address": "0x180ead3093b94e2ff35c9bbe0c5dc5462d464c2fa5490f3f867cf241d98339d7",
+        "version": 17
+      },
+      {
+        "address": "0x111bc03f75084056c48cd746ef28172a5fdd58a8701c9630da74ddba8f68f53c",
+        "version": 18
+      },
+      {
+        "address": "0x230c72eeab098f245d94b193f2adfff333536ba8796e14054b014f9ee530e143",
+        "version": 19
+      }
+    ]
+  }
+}
+
+task 23, lines 122-131:
+//# run-graphql
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0cf01d18b2d9914e67e590405d8d5edbfb24c00e08480216f27c40c27b6c94af",
+          "version": 15
+        },
+        {
+          "address": "0x1483b9c5c3197ab884a6a71780e5bc6038acfbc200a998ce74e7a4cd291ac98b",
+          "version": 9
+        },
+        {
+          "address": "0x4eef2f9096463469c91017c7b0c97a7bbed7fb19ad73f87155a88fd59c253f7f",
+          "version": 10
+        },
+        {
+          "address": "0x58be0973494f238789431e11b9f296d07c4b1963852609e2201e466d7309cb8d",
+          "version": 3
+        },
+        {
+          "address": "0x621f6686fbffd1c54a9260d64624d5a323fd14c8246e0280bf29524fcc93cc2c",
+          "version": 4
+        },
+        {
+          "address": "0x71fd9efe68aa39aa3b840dc29dfca85f374ed8f0d9b5e6bd85bc0045829d5bbe",
+          "version": 16
+        },
+        {
+          "address": "0x8846e39dc2df3ad0baf6b783435d9706f169eb3304722563f0dec03b4b68d2ec",
+          "version": 14
+        },
+        {
+          "address": "0xd7cc781d4b14a566d5abb3cd1b184d1db799a98897d9b8b79f77c29e737e2aa7",
+          "version": 8
+        },
+        {
+          "address": "0xf3dea4ac2b78bf9ae57c9a808a238ade445fefa380fd1ad454cfc4c3d14e11db",
+          "version": 2
+        },
+        {
+          "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+          "version": 11
+        },
+        {
+          "address": "0x111bc03f75084056c48cd746ef28172a5fdd58a8701c9630da74ddba8f68f53c",
+          "version": 18
+        },
+        {
+          "address": "0x180ead3093b94e2ff35c9bbe0c5dc5462d464c2fa5490f3f867cf241d98339d7",
+          "version": 17
+        },
+        {
+          "address": "0x230c72eeab098f245d94b193f2adfff333536ba8796e14054b014f9ee530e143",
+          "version": 19
+        },
+        {
+          "address": "0x466e672da3b6745a98f60b2f6c70141d8334b5b1a2633c264080aa0b9df9ec85",
+          "version": 5
+        },
+        {
+          "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+          "version": 6
+        },
+        {
+          "address": "0x5fc301b684838df81e13bb5f3fcb38a9d043cba757aa6a29dc1fb0572069a609",
+          "version": 12
+        },
+        {
+          "address": "0xb7eb2b7b1dcd8a8c45c2648f4eecf7d8da40309cdaf3305b098b4f160633cb2c",
+          "version": 13
+        },
+        {
+          "address": "0xfc3767913d945459287e827ced082e675ed3bff41c82e1674e39488085cd2f0c",
+          "version": 7
+        }
+      ]
+    }
+  }
+}
+
+task 24, lines 133-145:
+//# run-graphql
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0cf01d18b2d9914e67e590405d8d5edbfb24c00e08480216f27c40c27b6c94af",
+          "version": 15
+        },
+        {
+          "address": "0x1483b9c5c3197ab884a6a71780e5bc6038acfbc200a998ce74e7a4cd291ac98b",
+          "version": 9
+        },
+        {
+          "address": "0x4eef2f9096463469c91017c7b0c97a7bbed7fb19ad73f87155a88fd59c253f7f",
+          "version": 10
+        },
+        {
+          "address": "0x58be0973494f238789431e11b9f296d07c4b1963852609e2201e466d7309cb8d",
+          "version": 3
+        },
+        {
+          "address": "0x621f6686fbffd1c54a9260d64624d5a323fd14c8246e0280bf29524fcc93cc2c",
+          "version": 4
+        }
+      ]
+    }
+  }
+}
+
+task 25, lines 147-163:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_1_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+          "version": 11
+        },
+        {
+          "address": "0x111bc03f75084056c48cd746ef28172a5fdd58a8701c9630da74ddba8f68f53c",
+          "version": 18
+        },
+        {
+          "address": "0x180ead3093b94e2ff35c9bbe0c5dc5462d464c2fa5490f3f867cf241d98339d7",
+          "version": 17
+        }
+      ]
+    }
+  }
+}
+
+task 26, lines 165-181:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_8_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+          "version": 6
+        },
+        {
+          "address": "0x5fc301b684838df81e13bb5f3fcb38a9d043cba757aa6a29dc1fb0572069a609",
+          "version": 12
+        },
+        {
+          "address": "0xb7eb2b7b1dcd8a8c45c2648f4eecf7d8da40309cdaf3305b098b4f160633cb2c",
+          "version": 13
+        },
+        {
+          "address": "0xfc3767913d945459287e827ced082e675ed3bff41c82e1674e39488085cd2f0c",
+          "version": 7
+        }
+      ]
+    }
+  }
+}
+
+task 27, lines 183-199:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_17_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0cf01d18b2d9914e67e590405d8d5edbfb24c00e08480216f27c40c27b6c94af",
+          "version": 15
+        },
+        {
+          "address": "0x1483b9c5c3197ab884a6a71780e5bc6038acfbc200a998ce74e7a4cd291ac98b",
+          "version": 9
+        },
+        {
+          "address": "0x4eef2f9096463469c91017c7b0c97a7bbed7fb19ad73f87155a88fd59c253f7f",
+          "version": 10
+        }
+      ]
+    }
+  }
+}
+
+task 28, lines 201-217:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_13_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x230c72eeab098f245d94b193f2adfff333536ba8796e14054b014f9ee530e143",
+          "version": 19
+        },
+        {
+          "address": "0x466e672da3b6745a98f60b2f6c70141d8334b5b1a2633c264080aa0b9df9ec85",
+          "version": 5
+        },
+        {
+          "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+          "version": 6
+        },
+        {
+          "address": "0x5fc301b684838df81e13bb5f3fcb38a9d043cba757aa6a29dc1fb0572069a609",
+          "version": 12
+        }
+      ]
+    }
+  }
+}
+
+task 29, lines 219-235:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_3_0})) bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_11_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x71fd9efe68aa39aa3b840dc29dfca85f374ed8f0d9b5e6bd85bc0045829d5bbe",
+          "version": 16
+        },
+        {
+          "address": "0x8846e39dc2df3ad0baf6b783435d9706f169eb3304722563f0dec03b4b68d2ec",
+          "version": 14
+        },
+        {
+          "address": "0xd7cc781d4b14a566d5abb3cd1b184d1db799a98897d9b8b79f77c29e737e2aa7",
+          "version": 8
+        },
+        {
+          "address": "0xf3dea4ac2b78bf9ae57c9a808a238ade445fefa380fd1ad454cfc4c3d14e11db",
+          "version": 2
+        }
+      ]
+    }
+  }
+}
+
+task 30, lines 237-253:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_2_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x621f6686fbffd1c54a9260d64624d5a323fd14c8246e0280bf29524fcc93cc2c",
+          "version": 4
+        },
+        {
+          "address": "0x71fd9efe68aa39aa3b840dc29dfca85f374ed8f0d9b5e6bd85bc0045829d5bbe",
+          "version": 16
+        },
+        {
+          "address": "0x8846e39dc2df3ad0baf6b783435d9706f169eb3304722563f0dec03b4b68d2ec",
+          "version": 14
+        }
+      ]
+    }
+  }
+}
+
+task 31, lines 255-271:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_1_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 32, lines 273-289:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_17_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0cf01d18b2d9914e67e590405d8d5edbfb24c00e08480216f27c40c27b6c94af",
+          "version": 15
+        },
+        {
+          "address": "0x1483b9c5c3197ab884a6a71780e5bc6038acfbc200a998ce74e7a4cd291ac98b",
+          "version": 9
+        }
+      ]
+    }
+  }
+}
+
+task 33, lines 291-307:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_16_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 34, lines 309-326:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_1_0})) bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_10_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 35, lines 328-344:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_5_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x5fc301b684838df81e13bb5f3fcb38a9d043cba757aa6a29dc1fb0572069a609",
+          "version": 12
+        },
+        {
+          "address": "0xb7eb2b7b1dcd8a8c45c2648f4eecf7d8da40309cdaf3305b098b4f160633cb2c",
+          "version": 13
+        },
+        {
+          "address": "0xfc3767913d945459287e827ced082e675ed3bff41c82e1674e39488085cd2f0c",
+          "version": 7
+        }
+      ]
+    }
+  }
+}
+
+task 36, lines 346-362:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_4_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0xb7eb2b7b1dcd8a8c45c2648f4eecf7d8da40309cdaf3305b098b4f160633cb2c",
+          "version": 13
+        },
+        {
+          "address": "0xfc3767913d945459287e827ced082e675ed3bff41c82e1674e39488085cd2f0c",
+          "version": 7
+        }
+      ]
+    }
+  }
+}
+
+task 37, lines 364-380:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_20_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+          "version": 11
+        },
+        {
+          "address": "0x111bc03f75084056c48cd746ef28172a5fdd58a8701c9630da74ddba8f68f53c",
+          "version": 18
+        }
+      ]
+    }
+  }
+}
+
+task 38, lines 382-398:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_19_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+          "version": 11
+        }
+      ]
+    }
+  }
+}
+
+task 39, lines 400-417:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_4_0})) bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_13_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+          "version": 6
+        },
+        {
+          "address": "0x5fc301b684838df81e13bb5f3fcb38a9d043cba757aa6a29dc1fb0572069a609",
+          "version": 12
+        }
+      ]
+    }
+  }
+}
+
+task 40, lines 419-434:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_8_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0xf3dea4ac2b78bf9ae57c9a808a238ade445fefa380fd1ad454cfc4c3d14e11db",
+          "version": 2
+        }
+      ]
+    }
+  }
+}
+
+task 41, lines 436-451:
+//# run-graphql --cursors bcs(3,bin(0x2::table::Table<u64,u64>,@{obj_12_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+          "version": 11
+        },
+        {
+          "address": "0x111bc03f75084056c48cd746ef28172a5fdd58a8701c9630da74ddba8f68f53c",
+          "version": 18
+        },
+        {
+          "address": "0x180ead3093b94e2ff35c9bbe0c5dc5462d464c2fa5490f3f867cf241d98339d7",
+          "version": 17
+        },
+        {
+          "address": "0x230c72eeab098f245d94b193f2adfff333536ba8796e14054b014f9ee530e143",
+          "version": 19
+        },
+        {
+          "address": "0x466e672da3b6745a98f60b2f6c70141d8334b5b1a2633c264080aa0b9df9ec85",
+          "version": 5
+        },
+        {
+          "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+          "version": 6
+        }
+      ]
+    }
+  }
+}
+
+task 42, lines 453-469:
+//# run-graphql
+Response: {
+  "data": {
+    "checkpoint": {
+      "query": {
+        "objects": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          },
+          "nodes": [
+            {
+              "address": "0x1483b9c5c3197ab884a6a71780e5bc6038acfbc200a998ce74e7a4cd291ac98b",
+              "version": 9
+            },
+            {
+              "address": "0x4eef2f9096463469c91017c7b0c97a7bbed7fb19ad73f87155a88fd59c253f7f",
+              "version": 10
+            },
+            {
+              "address": "0x58be0973494f238789431e11b9f296d07c4b1963852609e2201e466d7309cb8d",
+              "version": 3
+            },
+            {
+              "address": "0x621f6686fbffd1c54a9260d64624d5a323fd14c8246e0280bf29524fcc93cc2c",
+              "version": 4
+            },
+            {
+              "address": "0xd7cc781d4b14a566d5abb3cd1b184d1db799a98897d9b8b79f77c29e737e2aa7",
+              "version": 8
+            },
+            {
+              "address": "0xf3dea4ac2b78bf9ae57c9a808a238ade445fefa380fd1ad454cfc4c3d14e11db",
+              "version": 2
+            },
+            {
+              "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+              "version": 11
+            },
+            {
+              "address": "0x466e672da3b6745a98f60b2f6c70141d8334b5b1a2633c264080aa0b9df9ec85",
+              "version": 5
+            },
+            {
+              "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+              "version": 6
+            },
+            {
+              "address": "0x5fc301b684838df81e13bb5f3fcb38a9d043cba757aa6a29dc1fb0572069a609",
+              "version": 12
+            },
+            {
+              "address": "0xb7eb2b7b1dcd8a8c45c2648f4eecf7d8da40309cdaf3305b098b4f160633cb2c",
+              "version": 13
+            },
+            {
+              "address": "0xfc3767913d945459287e827ced082e675ed3bff41c82e1674e39488085cd2f0c",
+              "version": 7
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 43, lines 471-487:
+//# run-graphql --cursors bcs(2,bin(0x2::table::Table<u8,u8>,@{obj_2_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": true
+      },
+      "nodes": [
+        {
+          "address": "0x621f6686fbffd1c54a9260d64624d5a323fd14c8246e0280bf29524fcc93cc2c",
+          "version": 4
+        },
+        {
+          "address": "0xd7cc781d4b14a566d5abb3cd1b184d1db799a98897d9b8b79f77c29e737e2aa7",
+          "version": 8
+        },
+        {
+          "address": "0xf3dea4ac2b78bf9ae57c9a808a238ade445fefa380fd1ad454cfc4c3d14e11db",
+          "version": 2
+        }
+      ]
+    }
+  }
+}
+
+task 44, lines 489-505:
+//# run-graphql --cursors bcs(2,bin(0x2::table::Table<u64,u64>,@{obj_11_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 45, lines 507-524:
+//# run-graphql --cursors bcs(2,bin(0x2::table::Table<u8,u8>,@{obj_1_0})) bcs(2,bin(0x2::table::Table<u64,u64>,@{obj_11_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 46, lines 526-542:
+//# run-graphql --cursors bcs(2,bin(0x2::table::Table<u8,u8>,@{obj_1_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "hasPreviousPage": false
+      },
+      "nodes": []
+    }
+  }
+}
+
+task 47, lines 544-560:
+//# run-graphql --cursors bcs(2,bin(0x2::table::Table<u64,u64>,@{obj_12_0}))
+Response: {
+  "data": {
+    "objects": {
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": false
+      },
+      "nodes": [
+        {
+          "address": "0x0ea959df2eda0dfe761d41d2e962f8479ccb3a36e24b3d1827f55ad788bfe5d6",
+          "version": 11
+        },
+        {
+          "address": "0x466e672da3b6745a98f60b2f6c70141d8334b5b1a2633c264080aa0b9df9ec85",
+          "version": 5
+        },
+        {
+          "address": "0x5f6e5ec32e4ed2cace5fd4b3303b70d9750325460e4841ad66331e8ffb297790",
+          "version": 6
+        }
+      ]
+    }
+  }
+}
+
+task 48, lines 562-578:
+//# run-graphql --cursors bcs(2,bin(0x2::table::Table<u8,u8>,@{obj_1_0})) bcs(3,bin(0x2::table::Table<u8,u8>,@{obj_17_0}))
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Cursors are pinned to different checkpoints: 2 vs 3",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
+        }
+      ],
+      "path": [
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
