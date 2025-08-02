@@ -80,6 +80,29 @@ impl BalanceWithdrawScheduler {
         scheduler
     }
 
+    pub fn new_naive(
+        balance_read: Arc<dyn AccountBalanceRead>,
+        starting_accumulator_version: SequenceNumber,
+    ) -> Arc<Self> {
+        let inner = NaiveBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version);
+        let (withdraw_sender, withdraw_receiver) =
+            unbounded_channel("withdraw_scheduler_withdraws");
+        let (settlement_sender, settlement_receiver) =
+            unbounded_channel("withdraw_scheduler_settlements");
+        let scheduler = Arc::new(Self {
+            inner: inner as Arc<dyn BalanceWithdrawSchedulerTrait>,
+            withdraw_sender,
+            settlement_sender,
+        });
+        tokio::spawn(scheduler.clone().process_withdraw_task(withdraw_receiver));
+        tokio::spawn(
+            scheduler
+                .clone()
+                .process_settlement_task(settlement_receiver, starting_accumulator_version),
+        );
+        scheduler
+    }
+
     pub fn new_eager(
         balance_read: Arc<dyn AccountBalanceRead>,
         starting_accumulator_version: SequenceNumber,

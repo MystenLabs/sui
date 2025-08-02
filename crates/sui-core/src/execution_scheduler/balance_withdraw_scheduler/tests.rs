@@ -23,10 +23,29 @@ struct TestScheduler {
     scheduler: Arc<BalanceWithdrawScheduler>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum SchedulerType {
+    Naive,
+    Eager,
+}
+
 impl TestScheduler {
     fn new(init_version: SequenceNumber, init_balances: BTreeMap<ObjectID, u64>) -> Self {
+        Self::new_with_type(init_version, init_balances, SchedulerType::Eager)
+    }
+
+    fn new_with_type(
+        init_version: SequenceNumber,
+        init_balances: BTreeMap<ObjectID, u64>,
+        scheduler_type: SchedulerType,
+    ) -> Self {
         let mock_read = Arc::new(MockBalanceRead::new(init_version, init_balances));
-        let scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), init_version);
+        let scheduler = match scheduler_type {
+            SchedulerType::Naive => {
+                BalanceWithdrawScheduler::new_naive(mock_read.clone(), init_version)
+            }
+            SchedulerType::Eager => BalanceWithdrawScheduler::new(mock_read.clone(), init_version),
+        };
         Self {
             mock_read,
             scheduler,
@@ -59,11 +78,33 @@ async fn wait_for_results(
     .unwrap();
 }
 
-#[tokio::test]
-async fn test_basic_sufficient_balance() {
+// Macro to generate tests for both scheduler types
+macro_rules! test_with_both_schedulers {
+    ($test_name:ident, $test_fn:ident) => {
+        mod $test_name {
+            use super::*;
+
+            #[tokio::test]
+            async fn naive() {
+                $test_fn(SchedulerType::Naive).await;
+            }
+
+            #[tokio::test]
+            async fn eager() {
+                $test_fn(SchedulerType::Eager).await;
+            }
+        }
+    };
+}
+
+async fn test_basic_sufficient_balance_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(
+        init_version,
+        BTreeMap::from([(account, 100)]),
+        scheduler_type,
+    );
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
@@ -80,11 +121,19 @@ async fn test_basic_sufficient_balance() {
     .await;
 }
 
-#[tokio::test]
-async fn test_basic_insufficient_balance() {
+test_with_both_schedulers!(
+    test_basic_sufficient_balance,
+    test_basic_sufficient_balance_impl
+);
+
+async fn test_basic_insufficient_balance_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(
+        init_version,
+        BTreeMap::from([(account, 100)]),
+        scheduler_type,
+    );
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
@@ -101,11 +150,19 @@ async fn test_basic_insufficient_balance() {
     .await;
 }
 
-#[tokio::test]
-async fn test_already_executed() {
+test_with_both_schedulers!(
+    test_basic_insufficient_balance,
+    test_basic_insufficient_balance_impl
+);
+
+async fn test_already_executed_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(
+        init_version,
+        BTreeMap::from([(account, 100)]),
+        scheduler_type,
+    );
 
     // Settle multiple versions to advance the accumulator
     let v1 = init_version.next();
@@ -150,14 +207,16 @@ async fn test_already_executed() {
     .await;
 }
 
-#[tokio::test]
-async fn test_already_executed_multiple_transactions() {
+test_with_both_schedulers!(test_already_executed, test_already_executed_impl);
+
+async fn test_already_executed_multiple_transactions_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account1 = ObjectID::random();
     let account2 = ObjectID::random();
-    let test = TestScheduler::new(
+    let test = TestScheduler::new_with_type(
         init_version,
         BTreeMap::from([(account1, 100), (account2, 200)]),
+        scheduler_type,
     );
 
     // Advance the accumulator version
@@ -189,11 +248,15 @@ async fn test_already_executed_multiple_transactions() {
     .await;
 }
 
-#[tokio::test]
-async fn test_already_executed_after_out_of_order_settlement() {
+test_with_both_schedulers!(
+    test_already_executed_multiple_transactions,
+    test_already_executed_multiple_transactions_impl
+);
+
+async fn test_already_executed_after_out_of_order_settlement_impl(scheduler_type: SchedulerType) {
     let v0 = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(v0, BTreeMap::from([(account, 100)]), scheduler_type);
 
     let v1 = v0.next();
     let v2 = v1.next();
@@ -238,11 +301,19 @@ async fn test_already_executed_after_out_of_order_settlement() {
     .await;
 }
 
-#[tokio::test]
-async fn test_not_already_executed_exact_version() {
+test_with_both_schedulers!(
+    test_already_executed_after_out_of_order_settlement,
+    test_already_executed_after_out_of_order_settlement_impl
+);
+
+async fn test_not_already_executed_exact_version_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(
+        init_version,
+        BTreeMap::from([(account, 100)]),
+        scheduler_type,
+    );
 
     // Settle the next version
     let next_version = init_version.next();
@@ -266,11 +337,15 @@ async fn test_not_already_executed_exact_version() {
     .await;
 }
 
-#[tokio::test]
-async fn test_already_executed_with_sequential_settlements() {
+test_with_both_schedulers!(
+    test_not_already_executed_exact_version,
+    test_not_already_executed_exact_version_impl
+);
+
+async fn test_already_executed_with_sequential_settlements_impl(scheduler_type: SchedulerType) {
     let v0 = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(v0, BTreeMap::from([(account, 100)]), scheduler_type);
 
     let v1 = v0.next();
     let v2 = v1.next();
@@ -302,11 +377,19 @@ async fn test_already_executed_with_sequential_settlements() {
     .await;
 }
 
-#[tokio::test]
-async fn test_basic_settlement() {
+test_with_both_schedulers!(
+    test_already_executed_with_sequential_settlements,
+    test_already_executed_with_sequential_settlements_impl
+);
+
+async fn test_basic_settlement_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(
+        init_version,
+        BTreeMap::from([(account, 100)]),
+        scheduler_type,
+    );
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
@@ -335,11 +418,12 @@ async fn test_basic_settlement() {
     .await;
 }
 
-#[tokio::test]
-async fn test_out_of_order_settlements() {
+test_with_both_schedulers!(test_basic_settlement, test_basic_settlement_impl);
+
+async fn test_out_of_order_settlements_impl(scheduler_type: SchedulerType) {
     let v0 = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(v0, BTreeMap::from([(account, 100)]), scheduler_type);
 
     let v1 = v0.next();
     let v2 = v1.next();
@@ -377,14 +461,19 @@ async fn test_out_of_order_settlements() {
     .await;
 }
 
-#[tokio::test]
-async fn test_multi_accounts() {
+test_with_both_schedulers!(
+    test_out_of_order_settlements,
+    test_out_of_order_settlements_impl
+);
+
+async fn test_multi_accounts_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account1 = ObjectID::random();
     let account2 = ObjectID::random();
-    let test = TestScheduler::new(
+    let test = TestScheduler::new_with_type(
         init_version,
         BTreeMap::from([(account1, 100), (account2, 100)]),
+        scheduler_type,
     );
 
     let reservations1 = BTreeMap::from([
@@ -427,11 +516,16 @@ async fn test_multi_accounts() {
     .await;
 }
 
-#[tokio::test]
-async fn test_multi_settlements() {
+test_with_both_schedulers!(test_multi_accounts, test_multi_accounts_impl);
+
+async fn test_multi_settlements_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(
+        init_version,
+        BTreeMap::from([(account, 100)]),
+        scheduler_type,
+    );
 
     let withdraw = TxBalanceWithdraw {
         tx_digest: TransactionDigest::random(),
@@ -472,11 +566,12 @@ async fn test_multi_settlements() {
     .await;
 }
 
-#[tokio::test]
-async fn test_settlement_far_ahead_of_schedule() {
+test_with_both_schedulers!(test_multi_settlements, test_multi_settlements_impl);
+
+async fn test_settlement_far_ahead_of_schedule_impl(scheduler_type: SchedulerType) {
     let v0 = SequenceNumber::from_u64(0);
     let account = ObjectID::random();
-    let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(v0, BTreeMap::from([(account, 100)]), scheduler_type);
     let v1 = v0.next();
     let v2 = v1.next();
     let v3 = v2.next();
@@ -530,12 +625,20 @@ async fn test_settlement_far_ahead_of_schedule() {
     .await;
 }
 
-#[tokio::test]
-async fn test_withdraw_entire_balance() {
+test_with_both_schedulers!(
+    test_settlement_far_ahead_of_schedule,
+    test_settlement_far_ahead_of_schedule_impl
+);
+
+async fn test_withdraw_entire_balance_impl(scheduler_type: SchedulerType) {
     let init_version = SequenceNumber::from_u64(0);
     let next_version = init_version.next();
     let account = ObjectID::random();
-    let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
+    let test = TestScheduler::new_with_type(
+        init_version,
+        BTreeMap::from([(account, 100)]),
+        scheduler_type,
+    );
 
     let withdraws1 = vec![
         TxBalanceWithdraw {
@@ -598,8 +701,18 @@ async fn test_withdraw_entire_balance() {
     .await;
 }
 
+test_with_both_schedulers!(
+    test_withdraw_entire_balance,
+    test_withdraw_entire_balance_impl
+);
+
+// Stress test runs only once with the default (eager) scheduler since it's testing general behavior
 #[tokio::test]
 async fn stress_test() {
+    stress_test_impl(SchedulerType::Eager).await;
+}
+
+async fn stress_test_impl(scheduler_type: SchedulerType) {
     let num_accounts = 5;
     let num_transactions = 10000;
 
@@ -668,7 +781,7 @@ async fn stress_test() {
         let withdraws = withdraws.clone();
 
         let handle = tokio::spawn(async move {
-            let test = TestScheduler::new(version, init_balances);
+            let test = TestScheduler::new_with_type(version, init_balances, scheduler_type);
 
             // Start a separate thread to run all settlements on the scheduler.
             let test_clone = test.clone();

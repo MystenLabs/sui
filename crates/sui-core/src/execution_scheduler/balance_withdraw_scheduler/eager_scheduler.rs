@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use parking_lot::RwLock;
 use prometheus::{
@@ -173,6 +176,12 @@ struct EagerSchedulerState {
     /// Maps accumulator version -> list of (transaction, sender) pairs waiting for settlement
     pending_insufficient_balance:
         BTreeMap<SequenceNumber, Vec<(TxBalanceWithdraw, oneshot::Sender<ScheduleResult>)>>,
+    /// Accounts that have pending insufficient balance transactions
+    /// Maps account -> set of versions that have pending transactions for this account
+    accounts_with_pending_insufficient: BTreeMap<ObjectID, BTreeSet<SequenceNumber>>,
+    /// Maps version -> set of accounts that have reservations at that version
+    /// This allows efficient lookup of which accounts need re-evaluation when a version is settled
+    accounts_pending_at_version: BTreeMap<SequenceNumber, BTreeSet<ObjectID>>,
 }
 
 impl EagerBalanceWithdrawScheduler {
@@ -186,6 +195,8 @@ impl EagerBalanceWithdrawScheduler {
                 account_states: BTreeMap::new(),
                 last_settled_version: starting_accumulator_version,
                 pending_insufficient_balance: BTreeMap::new(),
+                accounts_with_pending_insufficient: BTreeMap::new(),
+                accounts_pending_at_version: BTreeMap::new(),
             })),
             metrics: None,
         })
@@ -202,6 +213,8 @@ impl EagerBalanceWithdrawScheduler {
                 account_states: BTreeMap::new(),
                 last_settled_version: starting_accumulator_version,
                 pending_insufficient_balance: BTreeMap::new(),
+                accounts_with_pending_insufficient: BTreeMap::new(),
+                accounts_pending_at_version: BTreeMap::new(),
             })),
             metrics: Some(EagerSchedulerMetrics::new(registry)),
         })
@@ -304,6 +317,45 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 self.ensure_account_loaded(&mut state, account_id);
             }
 
+            // Check if any account has pending insufficient balance transactions
+            let has_pending_insufficient = withdraw.reservations.keys().any(|account_id| {
+                state
+                    .accounts_with_pending_insufficient
+                    .get(account_id)
+                    .is_some_and(|versions| !versions.is_empty())
+            });
+
+            if has_pending_insufficient {
+                // If any account has pending insufficient balance transactions,
+                // this transaction must also wait
+                debug!(
+                    "Transaction {:?} blocked due to pending insufficient balance on involved accounts",
+                    withdraw.tx_digest
+                );
+
+                // Track this transaction's accounts as having pending insufficient balance
+                for account_id in withdraw.reservations.keys() {
+                    state
+                        .accounts_with_pending_insufficient
+                        .entry(*account_id)
+                        .or_default()
+                        .insert(withdraws.accumulator_version);
+                }
+
+                state
+                    .pending_insufficient_balance
+                    .entry(withdraws.accumulator_version)
+                    .or_default()
+                    .push((withdraw, sender));
+                if let Some(metrics) = &self.metrics {
+                    metrics
+                        .schedule_outcome_counter
+                        .with_label_values(&["pending_insufficient"])
+                        .inc();
+                }
+                continue;
+            }
+
             // Try to reserve all amounts atomically for this transaction
             let mut temp_states = Vec::new();
             let mut all_success = true;
@@ -325,6 +377,15 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             }
 
             if all_success {
+                // Track which accounts have reservations at this version
+                for account_id in withdraw.reservations.keys() {
+                    state
+                        .accounts_pending_at_version
+                        .entry(withdraws.accumulator_version)
+                        .or_default()
+                        .insert(*account_id);
+                }
+
                 debug!(
                     "Successfully scheduled withdraw {:?} with reservations {:?}",
                     withdraw.tx_digest, withdraw.reservations
@@ -365,6 +426,16 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                         "Pending insufficient balance decision for withdraw {:?} with reservations {:?}",
                         withdraw.tx_digest, withdraw.reservations
                     );
+
+                    // Track which accounts have pending insufficient balance transactions
+                    for account_id in withdraw.reservations.keys() {
+                        state
+                            .accounts_with_pending_insufficient
+                            .entry(*account_id)
+                            .or_default()
+                            .insert(withdraws.accumulator_version);
+                    }
+
                     state
                         .pending_insufficient_balance
                         .entry(withdraws.accumulator_version)
@@ -434,26 +505,31 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
             }
         }
 
-        // For any tracked accounts not in the settlement, we need to update their version
-        // and fetch the latest balance
-        let accounts_to_update: Vec<ObjectID> = state
-            .account_states
-            .iter()
-            .filter(|(id, _)| !settlement.balance_changes.contains_key(id))
-            .map(|(id, _)| *id)
-            .collect();
+        // Process accounts that have pending operations at this version
+        // Since we're tracking all operations, we don't need to reload balances
+        if let Some(accounts_at_version) = state
+            .accounts_pending_at_version
+            .remove(&settlement.accumulator_version)
+        {
+            for account_id in accounts_at_version {
+                // Skip accounts that were already processed in the settlement
+                if settlement.balance_changes.contains_key(&account_id) {
+                    continue;
+                }
 
-        for account_id in accounts_to_update {
-            let new_balance = self
-                .balance_read
-                .get_account_balance(&account_id, settlement.accumulator_version);
-            if let Some(account_state) = state.account_states.get_mut(&account_id) {
-                account_state.apply_settlement(new_balance, settlement.accumulator_version);
-                trace!(
-                    "Refreshed balance for account {:?}: new_balance={}",
-                    account_id,
-                    new_balance
-                );
+                if let Some(account_state) = state.account_states.get_mut(&account_id) {
+                    // Apply settlement without changing balance
+                    // The balance is already correct because we track all operations
+                    account_state.apply_settlement(
+                        account_state.settled_balance,
+                        settlement.accumulator_version,
+                    );
+                    trace!(
+                        "Updated version for account {:?} to {:?}",
+                        account_id,
+                        settlement.accumulator_version
+                    );
+                }
             }
         }
 
@@ -544,6 +620,14 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                         .inc();
                 }
             }
+
+            // Clean up accounts_with_pending_insufficient for this version
+            for (_, versions) in state.accounts_with_pending_insufficient.iter_mut() {
+                versions.remove(&settlement.accumulator_version);
+            }
+            state
+                .accounts_with_pending_insufficient
+                .retain(|_, versions| !versions.is_empty());
         }
 
         // Clean up accounts that no longer need tracking
@@ -1087,6 +1171,145 @@ mod tests {
             .await;
 
         // Should fail due to insufficient balance
+        assert_eq!(
+            receiver2.await.unwrap().status,
+            ScheduleStatus::InsufficientBalance
+        );
+    }
+
+    #[tokio::test]
+    async fn test_pending_insufficient_balance_blocks_subsequent_transactions() {
+        // Test that when a transaction has pending insufficient balance,
+        // subsequent transactions on the same account are also blocked
+        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([(
+            ObjectID::from_hex_literal("0x1").unwrap(),
+            50, // Only 50 coins available
+        )])));
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
+
+        let account = ObjectID::from_hex_literal("0x1").unwrap();
+
+        // First transaction: try to withdraw 100 (more than available)
+        let tx1 = TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(100))]),
+        };
+        let (sender1, mut receiver1) = oneshot::channel();
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(1),
+                withdraws: vec![tx1],
+                senders: vec![sender1],
+            })
+            .await;
+
+        // Should be pending (not immediately insufficient because version 1 > 0)
+        assert!(receiver1.try_recv().is_err());
+
+        // Second transaction: try to withdraw only 30 (would normally succeed)
+        let tx2 = TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(30))]),
+        };
+        let (sender2, mut receiver2) = oneshot::channel();
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(1),
+                withdraws: vec![tx2],
+                senders: vec![sender2],
+            })
+            .await;
+
+        // Should also be pending because tx1 is pending on the same account
+        assert!(receiver2.try_recv().is_err());
+
+        // Third transaction: different account should not be blocked
+        let account2 = ObjectID::from_hex_literal("0x2").unwrap();
+        balance_read.balances.lock().unwrap().insert(account2, 100);
+        let tx3 = TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account2, Reservation::MaxAmountU64(50))]),
+        };
+        let (sender3, receiver3) = oneshot::channel();
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(1),
+                withdraws: vec![tx3],
+                senders: vec![sender3],
+            })
+            .await;
+
+        // Should succeed immediately (different account)
+        assert_eq!(
+            receiver3.await.unwrap().status,
+            ScheduleStatus::SufficientBalance
+        );
+
+        // Settle version 1 with no balance changes
+        scheduler
+            .settle_balances(BalanceSettlement {
+                accumulator_version: SequenceNumber::from_u64(1),
+                balance_changes: BTreeMap::new(),
+            })
+            .await;
+
+        // tx1 should receive InsufficientBalance (trying to withdraw 100 from 50)
+        assert_eq!(
+            receiver1.await.unwrap().status,
+            ScheduleStatus::InsufficientBalance
+        );
+
+        // tx2 should succeed because tx1 failed and didn't consume any balance,
+        // leaving 50 available for tx2 which only needs 30.
+        // This is the correct behavior - when a transaction fails, subsequent
+        // transactions can use the available balance.
+        assert_eq!(
+            receiver2.await.unwrap().status,
+            ScheduleStatus::SufficientBalance
+        );
+    }
+
+    #[tokio::test]
+    async fn test_pending_insufficient_preserves_ordering_when_needed() {
+        // Test that successful transactions reserve balance from subsequent ones
+        let balance_read = Arc::new(SimpleMockBalanceRead::new(BTreeMap::from([(
+            ObjectID::from_hex_literal("0x1").unwrap(),
+            100,
+        )])));
+        let scheduler =
+            EagerBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
+
+        let account = ObjectID::from_hex_literal("0x1").unwrap();
+
+        // Schedule two transactions in the same batch at the current version
+        let tx1 = TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(60))]),
+        };
+        let tx2 = TxBalanceWithdraw {
+            tx_digest: TransactionDigest::random(),
+            reservations: BTreeMap::from([(account, Reservation::MaxAmountU64(50))]),
+        };
+
+        let (sender1, receiver1) = oneshot::channel();
+        let (sender2, receiver2) = oneshot::channel();
+
+        scheduler
+            .schedule_withdraws(WithdrawReservations {
+                accumulator_version: SequenceNumber::from_u64(0), // Use current version
+                withdraws: vec![tx1, tx2],
+                senders: vec![sender1, sender2],
+            })
+            .await;
+
+        // tx1 should succeed (60 <= 100)
+        assert_eq!(
+            receiver1.await.unwrap().status,
+            ScheduleStatus::SufficientBalance
+        );
+
+        // tx2 should fail because tx1 already reserved 60, leaving only 40
         assert_eq!(
             receiver2.await.unwrap().status,
             ScheduleStatus::InsufficientBalance

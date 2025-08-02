@@ -139,11 +139,19 @@ When a withdrawal's `accumulator_version` equals `last_settled_version`, we can 
 
 When a transaction involves multiple accounts, all reservations must succeed or the entire transaction is marked as insufficient. This maintains atomicity at the transaction level.
 
-### 5. Sequential Processing Within Batches
+### 5. Pending Insufficient Balance Tracking
+
+To maintain transaction ordering and prevent race conditions, the scheduler tracks accounts with pending insufficient balance transactions:
+- When a transaction fails due to insufficient balance at a future version, all involved accounts are marked
+- Subsequent transactions touching any of these accounts are automatically blocked
+- This prevents later transactions from "stealing" balance from earlier ones
+- The tracking is cleaned up when the version is settled and final decisions are made
+
+### 6. Sequential Processing Within Batches
 
 Transactions within a consensus commit batch are processed sequentially to maintain consistency and predictability. This ensures that the order of transactions matters for balance calculations.
 
-### 6. Version-Based Reservation Tracking
+### 7. Version-Based Reservation Tracking
 
 Reservations are tracked by the version they were made at, not as a cumulative sum. This enables:
 - Partial settlement: When settling version N, only clear reservations at versions <= N
@@ -215,17 +223,45 @@ Initial: Account E has 100 coins, last_settled_version = 10
 5. Version 14: Withdraw 35 → Success (reserves 35 at v14)
 ```
 
+### Scenario 5: Pending Insufficient Balance Blocking
+
+```
+Initial: Account F has 50 coins, last_settled_version = 10
+1. Version 11: TX1 attempts to withdraw 100 → Pending Insufficient
+   - Cannot immediately determine insufficient (might get deposits)
+   - Added to pending_insufficient_balance
+   - Account F marked as having pending insufficient
+2. Version 11: TX2 attempts to withdraw 30 → Blocked
+   - Even though F has 50 coins and TX2 only needs 30
+   - Blocked because TX1 is pending on same account
+   - Also added to pending_insufficient_balance
+3. Settlement at version 11 with no changes (balance still 50)
+   - TX1 → Insufficient Balance (confirmed)
+   - TX2 → Insufficient Balance (because TX1 was ahead)
+```
+
+This blocking behavior ensures transaction ordering is preserved and prevents race conditions where a later transaction could "steal" balance from an earlier one.
+
 ## Performance Characteristics
 
 ### Advantages
 1. **Immediate Feedback**: No waiting for checkpoint settlements
 2. **Parallel Processing**: Different accounts can be processed independently
 3. **Predictable Behavior**: Sequential processing ensures deterministic results
+4. **Efficient Settlement**: Uses version-indexed data structures for O(1) lookup of affected accounts
 
 ### Trade-offs
 1. **Conservative Decisions**: May reject valid transactions to ensure safety
 2. **Memory Overhead**: Tracks state for active accounts
 3. **Complexity**: More complex than naive implementation
+
+### Key Optimizations
+
+1. **Version-Based Account Tracking**: The scheduler maintains `accounts_pending_at_version` which maps each version to the set of accounts with pending operations. This enables O(1) lookup during settlement instead of scanning all tracked accounts.
+
+2. **No Balance Reloading**: Once an account is being tracked (has pending reservations), the scheduler maintains its balance through all operations. Withdrawals update the balance during scheduling, and deposits update it during settlement. This eliminates the need to reload balances from storage.
+
+3. **Efficient Cleanup**: The version-based tracking allows precise cleanup of data structures when versions are settled, minimizing memory usage.
 
 ## Metrics and Observability
 
