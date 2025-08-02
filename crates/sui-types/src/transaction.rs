@@ -2363,6 +2363,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
                         error: e.to_string(),
                     })?;
+            dbg!(&account_id, self.sender());
             let entry = withdraw_map.entry(account_id);
             match entry {
                 Entry::Vacant(vacant) => {
