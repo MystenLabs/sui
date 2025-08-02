@@ -85,7 +85,17 @@ impl AuthorityAPI for LocalAuthorityClient {
         }
         let state = self.state.clone();
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transaction)
+        // TODO(fastpath): handle multiple transactions.
+        if request.transactions.len() != 1 {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: format!(
+                    "Expected exactly 1 transaction in request, got {}",
+                    request.transactions.len()
+                ),
+            });
+        }
+
+        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transactions[0])
             .map_err(|e| SuiError::TransactionDeserializationError {
                 error: e.to_string(),
             })?;
