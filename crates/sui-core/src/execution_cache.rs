@@ -153,10 +153,12 @@ pub trait ExecutionCacheCommit: Send + Sync {
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
     /// written durably before marking a checkpoint as finalized.
-    fn commit_transaction_outputs(
+    fn write_db_batch(&self, batch: DBBatch, digests: &[TransactionDigest]);
+
+    fn flush_cache(
         &self,
         epoch: EpochId,
-        batch: Batch,
+        all_outputs: Vec<Arc<TransactionOutputs>>,
         digests: &[TransactionDigest],
     );
 
