@@ -746,6 +746,13 @@ impl<S: Hash + Eq> Module<S> {
             && map_keyed_equivalent(functions, &other.functions, |f1, f2| f1.equivalent(f2))
             && vec_ordered_equivalent(constants, &other.constants, |c1, c2| c1.equivalent(c2))
     }
+
+    #[cfg(test)]
+    pub(crate) fn update_table_signatures(&mut self, signatures: Vec<Signature<S>>) {
+        let old_signatures = std::mem::take(&mut self.tables.signatures);
+        let signatures = [old_signatures, signatures].concat();
+        let _ = std::mem::replace(&mut self.tables.signatures, signatures);
+    }
 }
 
 impl<S> Constant<S> {
