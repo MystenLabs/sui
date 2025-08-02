@@ -3,7 +3,7 @@
 
 //# init --protocol-version 70 --simulator
 
-//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state
+//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state --create-bridge-state
 
 //# create-checkpoint
 
@@ -40,6 +40,9 @@
               }
               ... on CoinDenyListStateCreateTransaction {
                 _
+              }
+              ... on BridgeStateCreateTransaction {
+                chainIdentifier
               }
             }
           }
