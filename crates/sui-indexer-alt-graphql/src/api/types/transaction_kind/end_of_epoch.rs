@@ -169,33 +169,29 @@ impl EndOfEpochTransactionKind {
         use NativeEndOfEpochTransactionKind as N;
 
         match kind {
-            N::ChangeEpoch(ce) => {
-                K::ChangeEpoch(ChangeEpochTransaction { native: ce, scope })
+            N::ChangeEpoch(ce) => K::ChangeEpoch(ChangeEpochTransaction { native: ce, scope }),
+            N::AuthenticatorStateCreate => {
+                K::AuthenticatorStateCreate(AuthenticatorStateCreateTransaction { dummy: None })
             }
-            N::AuthenticatorStateCreate => K::AuthenticatorStateCreate(
-                AuthenticatorStateCreateTransaction { dummy: None },
-            ),
-            N::AuthenticatorStateExpire(expire_data) => K::AuthenticatorStateExpire(
-                AuthenticatorStateExpireTransaction {
+            N::AuthenticatorStateExpire(expire_data) => {
+                K::AuthenticatorStateExpire(AuthenticatorStateExpireTransaction {
                     native: expire_data,
                     scope,
-                },
-            ),
+                })
+            }
             N::RandomnessStateCreate => {
-                K::RandomnessStateCreate(RandomnessStateCreateTransaction {
+                K::RandomnessStateCreate(RandomnessStateCreateTransaction { dummy: None })
+            }
+            N::DenyListStateCreate => {
+                K::CoinDenyListStateCreate(CoinDenyListStateCreateTransaction { dummy: None })
+            }
+            N::StoreExecutionTimeObservations(_) => {
+                K::StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction {
                     dummy: None,
                 })
             }
-            N::DenyListStateCreate => K::CoinDenyListStateCreate(
-                CoinDenyListStateCreateTransaction { dummy: None },
-            ),
-            N::StoreExecutionTimeObservations(_) => K::StoreExecutionTimeObservations(
-                StoreExecutionTimeObservationsTransaction { dummy: None },
-            ),
             N::BridgeStateCreate(chain_id) => {
-                K::BridgeStateCreate(BridgeStateCreateTransaction {
-                    native: chain_id,
-                })
+                K::BridgeStateCreate(BridgeStateCreateTransaction { native: chain_id })
             }
             N::BridgeCommitteeInit(bridge_version) => {
                 K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
@@ -203,9 +199,7 @@ impl EndOfEpochTransactionKind {
                 })
             }
             N::AccumulatorRootCreate => {
-                K::AccumulatorRootCreate(AccumulatorRootCreateTransaction {
-                    dummy: None,
-                })
+                K::AccumulatorRootCreate(AccumulatorRootCreateTransaction { dummy: None })
             }
         }
     }
