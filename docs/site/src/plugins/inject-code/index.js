@@ -53,6 +53,9 @@ const injectCode = (context, opts) => {
               include: docsPluginInclude,
               use: [
                 {
+                  loader: path.resolve(__dirname, "./stepLoader.js"),
+                },
+                {
                   loader: path.resolve(__dirname, "./injectLoader.js"),
                   options: loaderOptions,
                 },
