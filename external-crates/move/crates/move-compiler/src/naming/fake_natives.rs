@@ -16,10 +16,10 @@ use crate::{
     shared::{
         Identifier,
         known_attributes::{AttributeKind_, BytecodeInstructionAttribute},
+        stdlib_definitions::STDLIB_ADDRESS_NAME,
     },
 };
 use move_ir_types::ast as IR;
-use move_symbol_pool::symbol;
 
 /// verify fake native attribute usage usage
 pub fn function(
@@ -78,7 +78,7 @@ pub fn resolve_builtin(
             ..
         }
         | Address::NamedUnassigned(sp!(_, n))
-            if *n == symbol!("std") => {}
+            if *n == STDLIB_ADDRESS_NAME => {}
         _ => return None,
     };
     Some(match (module.value().as_str(), function.value().as_str()) {

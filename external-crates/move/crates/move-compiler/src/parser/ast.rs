@@ -548,6 +548,8 @@ pub enum Value_ {
     HexString(Symbol),
     // b"(<ascii> | \n | \r | \t | \\ | \0 | \" | \x[0..9A..F][0..9A..F])+"
     ByteString(Symbol),
+    // "(<ascii> | \n | \r | \t | \\ | \0 | \" | \x[0..9A..F][0..9A..F])+"
+    String(Symbol),
 }
 pub type Value = Spanned<Value_>;
 
@@ -1478,6 +1480,7 @@ impl fmt::Display for Value_ {
             Value_::Bool(value) => write!(f, "{value}"),
             Value_::HexString(symbol) => write!(f, "{}", symbol.as_ref()),
             Value_::ByteString(symbol) => write!(f, "{}", symbol.as_ref()),
+            Value_::String(symbol) => write!(f, "{}", symbol.as_ref()),
         }
     }
 }
@@ -2661,6 +2664,7 @@ impl AstDebug for Value_ {
             V::Bool(b) => format!("{}", b),
             V::HexString(s) => format!("x\"{}\"", s),
             V::ByteString(s) => format!("b\"{}\"", s),
+            V::String(s) => format!("\"{}\"", s),
         })
     }
 }
