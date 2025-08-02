@@ -177,7 +177,7 @@ async fn test_wait_for_effects_post_commit_rejected() {
             // TODO(fastpath): Test reject reason.
             assert!(matches!(
                 error,
-                SuiError::TransactionRejectReasonNotFound { .. }
+                Some(SuiError::TransactionRejectReasonNotFound { .. })
             ));
         }
         _ => panic!("Expected Rejected response"),
@@ -281,11 +281,11 @@ async fn test_wait_for_effects_quorum_rejected() {
         WaitForEffectsResponse::Rejected { error } => {
             assert_eq!(
                 error,
-                SuiError::UserInputError {
+                Some(SuiError::UserInputError {
                     error: UserInputError::TransactionDenied {
                         error: "object denied".to_string(),
                     },
-                }
+                })
             );
         }
         _ => panic!("Expected Rejected response"),

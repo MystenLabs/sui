@@ -335,12 +335,12 @@ async fn test_transaction_rejected_non_retriable() {
 
     // Set up rejected responses from all authorities
     let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: SuiError::UserInputError {
+        error: Some(SuiError::UserInputError {
             error: UserInputError::ObjectVersionUnavailableForConsumption {
                 provided_obj_ref: random_object_ref(),
                 current_version: 1.into(),
             },
-        },
+        }),
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -403,12 +403,12 @@ async fn test_transaction_rejected_retriable() {
     let options = SubmitTransactionOptions::default();
 
     let retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: SuiError::UserInputError {
+        error: Some(SuiError::UserInputError {
             error: UserInputError::ObjectNotFound {
                 object_id: random_object_ref().0,
                 version: None,
             },
-        },
+        }),
     };
 
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
@@ -528,12 +528,12 @@ async fn test_mixed_rejected_and_expired() {
     };
 
     let non_retriable_rejected_response = WaitForEffectsResponse::Rejected {
-        error: SuiError::UserInputError {
+        error: Some(SuiError::UserInputError {
             error: UserInputError::ObjectVersionUnavailableForConsumption {
                 provided_obj_ref: random_object_ref(),
                 current_version: 1.into(),
             },
-        },
+        }),
     };
 
     tracing::debug!("Case #1: Test mixed rejected and expired responses - non-retriable");
@@ -730,12 +730,12 @@ async fn test_full_effects_retry_loop() {
         if i == 0 {
             // First authority fails to get full effects
             let failed_response = WaitForEffectsResponse::Rejected {
-                error: SuiError::UserInputError {
+                error: Some(SuiError::UserInputError {
                     error: UserInputError::ObjectNotFound {
                         object_id: random_object_ref().0,
                         version: None,
                     },
-                },
+                }),
             };
             client.set_full_response(tx_digest, failed_response);
         } else {
@@ -882,12 +882,12 @@ async fn test_request_retrier_exhaustion() {
     for (_, safe_client) in authority_aggregator.authority_clients.iter() {
         let client = safe_client.authority_client();
         let failed_response = WaitForEffectsResponse::Rejected {
-            error: SuiError::UserInputError {
+            error: Some(SuiError::UserInputError {
                 error: UserInputError::ObjectNotFound {
                     object_id: random_object_ref().0,
                     version: None,
                 },
-            },
+            }),
         };
         client.set_full_response(tx_digest, failed_response);
     }
