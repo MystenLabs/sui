@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["query"],"struct":["Base64","MultiGetObjectsQuery","MultiGetObjectsVars","MultiGetObjectsVarsFields","ObjectFragment","ObjectKey","SuiAddress"]};

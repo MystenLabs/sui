@@ -1,0 +1,1 @@
+searchState.loadedDescShard("bin_version", 0, "Hidden reexports for the bin_version macro\nDefine constants that hold the git revision and package …\nDefines constant that holds the git revision at build time.\nConcatenates values into a string slice.\nGet the git version for the source code.")
