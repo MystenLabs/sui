@@ -9,16 +9,15 @@ use anyhow::{anyhow, Result};
 use move_cli::base;
 use shared_crypto::intent::Intent;
 use sui_json_rpc_types::{
-    ObjectChange, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponseQuery, SuiRawData,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    ObjectChange, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_move_build::BuildConfig;
+use sui_rosetta::grpc_client::GrpcClient;
 
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::COIN_MODULE_NAME;
-use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -27,6 +26,7 @@ use sui_types::transaction::{
 };
 use sui_types::{Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID};
 use test_cluster::TestClusterBuilder;
+use url::Url;
 
 use tracing::debug;
 
@@ -39,7 +39,8 @@ pub struct GasRet {
 }
 
 pub async fn select_gas(
-    client: &SuiClient,
+    _client: &SuiClient,
+    grpc_client: &GrpcClient,
     signer_addr: SuiAddress,
     input_gas: Option<ObjectID>,
     budget: Option<u64>,
@@ -50,7 +51,11 @@ pub async fn select_gas(
         Some(p) => p,
         None => {
             debug!("No gas price given, fetching from fullnode");
-            client.read_api().get_reference_gas_price().await?
+            // Get reference gas price from current epoch
+            let epoch = grpc_client.get_epoch(None).await?;
+            epoch
+                .reference_gas_price
+                .ok_or_else(|| anyhow!("No reference gas price in epoch"))?
         }
     };
     let budget = budget.unwrap_or_else(|| {
@@ -66,12 +71,12 @@ pub async fn select_gas(
     }
 
     if let Some(gas) = input_gas {
-        let read_api = client.read_api();
-        let object = read_api
-            .get_object_with_options(gas, SuiObjectDataOptions::new())
-            .await?
-            .object_ref_if_exists()
-            .ok_or(anyhow!("No object-ref"))?;
+        // Get object reference using GRPC
+        let object_refs = grpc_client.get_object_refs(vec![gas]).await?;
+        let object = object_refs
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("No object-ref"))?;
         return Ok(GasRet {
             object,
             budget,
@@ -79,45 +84,21 @@ pub async fn select_gas(
         });
     }
 
-    let read_api = client.read_api();
-    let gas_objs = read_api
-        .get_owned_objects(
-            signer_addr,
-            Some(SuiObjectResponseQuery {
-                filter: Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
-                options: Some(SuiObjectDataOptions::new().with_bcs()),
-            }),
-            None,
-            None,
-        )
-        .await?
-        .data;
+    // Get gas coins using GRPC - use SUI coin type
+    let gas_coins = grpc_client
+        .get_all_coins(signer_addr, Some("0x2::sui::SUI".to_string()))
+        .await?;
 
-    for obj in gas_objs {
-        let SuiRawData::MoveObject(raw_obj) = &obj
-            .data
-            .as_ref()
-            .ok_or_else(|| anyhow!("data field is unexpectedly empty"))?
-            .bcs
-            .as_ref()
-            .ok_or_else(|| anyhow!("bcs field is unexpectedly empty"))?
-        else {
-            continue;
-        };
-
-        let gas: GasCoin = bcs::from_bytes(&raw_obj.bcs_bytes)?;
-
-        let Some(obj_ref) = obj.object_ref_if_exists() else {
-            continue;
-        };
-        if !exclude_objects.contains(&obj_ref.0) && gas.value() >= budget {
+    for (object_id, balance, object_ref) in gas_coins {
+        if !exclude_objects.contains(&object_id) && balance >= budget {
             return Ok(GasRet {
-                object: obj_ref,
+                object: object_ref,
                 budget,
                 price,
             });
         }
     }
+
     Err(anyhow!("Cannot find gas coin for signer address [{signer_addr}] with amount sufficient for the required gas amount [{budget}]."))
 }
 
@@ -129,6 +110,7 @@ pub struct InitRet {
 }
 pub async fn init_package(
     client: &SuiClient,
+    grpc_client: &GrpcClient,
     keystore: &Keystore,
     sender: SuiAddress,
     path: &Path,
@@ -151,7 +133,7 @@ pub async fn init_package(
         )
         .await?;
 
-    let gas_data = select_gas(client, sender, None, None, vec![], None).await?;
+    let gas_data = select_gas(client, grpc_client, sender, None, None, vec![], None).await?;
     let tx_data = TransactionData::new_with_gas_coins_allow_sponsor(
         tx_kind,
         sender,
@@ -205,12 +187,22 @@ pub async fn init_package(
 
 pub async fn mint(
     client: &SuiClient,
+    grpc_client: &GrpcClient,
     keystore: &Keystore,
     init_ret: InitRet,
     balances_to: Vec<(u64, SuiAddress)>,
 ) -> Result<SuiTransactionBlockResponse> {
     let treasury_cap_owner = init_ret.owner;
-    let gas_data = select_gas(client, treasury_cap_owner, None, None, vec![], None).await?;
+    let gas_data = select_gas(
+        client,
+        grpc_client,
+        treasury_cap_owner,
+        None,
+        None,
+        vec![],
+        None,
+    )
+    .await?;
 
     let mut ptb = ProgrammableTransactionBuilder::new();
 
@@ -262,12 +254,20 @@ async fn test_mint() {
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
+    // Create GRPC client for test
+    let grpc_client =
+        GrpcClient::new(Url::parse(test_cluster.rpc_url()).unwrap(), None, None).unwrap();
+
     let sender = test_cluster.get_address_0();
     let init_ret = init_package(
         &client,
+        &grpc_client,
         keystore,
         sender,
-        Path::new("tests/custom_coins/test_coin"),
+        Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/custom_coins/test_coin"
+        )),
     )
     .await
     .unwrap();
@@ -276,7 +276,7 @@ async fn test_mint() {
     let address2 = test_cluster.get_address_2();
     let balances_to = vec![(COIN1_BALANCE, address1), (COIN2_BALANCE, address2)];
 
-    let mint_res = mint(&client, keystore, init_ret, balances_to)
+    let mint_res = mint(&client, &grpc_client, keystore, init_ret, balances_to)
         .await
         .unwrap();
     let coins = mint_res
