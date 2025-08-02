@@ -208,10 +208,7 @@ pub fn compute_symbols(
         .program
         .typed_modules
         .iter()
-        .map(|(_, mident, mdef)| {
-            eprintln!("mdef loc: {:?} for module {:?}", mdef.loc, mident);
-            (mdef.loc, mdef.named_address_map.clone())
-        })
+        .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
         .collect::<BTreeMap<_, _>>();
     let cursor_context = compute_symbols_pre_process(
         &mut symbols_computation_data,
