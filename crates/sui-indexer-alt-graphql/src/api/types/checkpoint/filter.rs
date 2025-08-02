@@ -53,9 +53,9 @@ pub(crate) struct CpBounds {
     cp_hi_inclusive: i64,
 }
 
-/// The bounds on checkpoint sequence number, imposed by filters. The
-/// outermost bounds are determined by the lowest checkpoint that is safe to read from (reader_lo) and
-/// the highest checkpoint that has been processed based on the context's watermark(checkpoint_viewed_at).
+/// The bounds on checkpoint sequence number, imposed by filters. The outermost bounds are
+/// determined by the lowest checkpoint that is safe to read from (reader_lo) and the highest
+/// checkpoint that has been processed based on the context's watermark(checkpoint_viewed_at).
 ///
 /// ```ignore
 ///     reader_lo                                                     checkpoint_viewed_at
