@@ -30,7 +30,7 @@ pub enum EndOfEpochTransactionKind {
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
-    /// The list of system transactions that are allowed to run at the end of the epoch.
+    /// The list of system transactions that did run at the end of the epoch.
     async fn transactions(
         &self,
         ctx: &Context<'_>,
