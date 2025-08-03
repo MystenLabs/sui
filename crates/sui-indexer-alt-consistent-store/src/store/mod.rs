@@ -247,6 +247,13 @@ mod tests {
         .await
     }
 
+    fn has_range(store: &Store<TestSchema>, lo: Option<u64>, hi: Option<u64>) -> bool {
+        store.db().snapshot_range().is_some_and(|s| {
+            lo.is_none_or(|lo| lo == s.start().checkpoint_hi_inclusive)
+                && hi.is_none_or(|hi| hi == s.end().checkpoint_hi_inclusive)
+        })
+    }
+
     async fn write<M>(
         store: &Store<TestSchema>,
         pipeline: &'static str,
@@ -324,7 +331,7 @@ mod tests {
         .await
         .unwrap();
 
-        wait_until(|| async { store.db().snapshot_range().is_some_and(|s| s.end() == &0) })
+        wait_until(|| async { has_range(&store, None, Some(0)) })
             .await
             .unwrap();
 
@@ -367,7 +374,7 @@ mod tests {
 
         // There are two pipelines, so the synchronizer will not take a snapshot until both have
         // been written to.
-        wait_until(|| async { store.db().snapshot_range().is_some() })
+        wait_until(|| async { has_range(&store, None, None) })
             .await
             .unwrap_err();
 
@@ -378,7 +385,7 @@ mod tests {
         .await
         .unwrap();
 
-        wait_until(|| async { store.db().snapshot_range().is_some_and(|s| s.end() == &0) })
+        wait_until(|| async { has_range(&store, None, Some(0)) })
             .await
             .unwrap();
 
@@ -435,7 +442,7 @@ mod tests {
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
         // before the store sees any writes.
-        wait_until(|| async { store.db().snapshot_range().is_some_and(|s| s.end() == &0) })
+        wait_until(|| async { has_range(&store, None, Some(0)) })
             .await
             .unwrap();
 
@@ -494,7 +501,7 @@ mod tests {
 
         // When there is existing data, the synchronizer will take a snapshot to make it available
         // before the store sees any writes.
-        wait_until(|| async { store.db().snapshot_range().is_some_and(|s| s.end() == &0) })
+        wait_until(|| async { has_range(&store, None, Some(0)) })
             .await
             .unwrap();
 
@@ -548,7 +555,7 @@ mod tests {
 
         // The pipelines are not in sync to begin with, so the synchronizer is waiting for the
         // writes for the other pipeline in order to take a snapshot.
-        wait_until(|| async { store.db().snapshot_range().is_some() })
+        wait_until(|| async { has_range(&store, None, None) })
             .await
             .unwrap_err();
 
@@ -561,7 +568,7 @@ mod tests {
         .unwrap();
 
         // Further writes to the pipeline that is ahead will be held back.
-        wait_until(|| async { store.db().snapshot_range().is_some() })
+        wait_until(|| async { has_range(&store, None, None) })
             .await
             .unwrap_err();
 
@@ -574,7 +581,7 @@ mod tests {
 
         // After the other pipeline was caught up, the synchronizer will take the snapshot, but it
         // will not yet make the subsequent write to the other pipeline available.
-        wait_until(|| async { store.db().snapshot_range().is_some_and(|s| s.end() == &0) })
+        wait_until(|| async { has_range(&store, None, Some(0)) })
             .await
             .unwrap();
 
@@ -584,7 +591,7 @@ mod tests {
 
         // Catch up the first pipeline without writing any further data.
         write(&store, "a", 1, |_, _| Ok(())).await.unwrap();
-        wait_until(|| async { store.db().snapshot_range().is_some_and(|s| s.end() == &1) })
+        wait_until(|| async { has_range(&store, None, Some(1)) })
             .await
             .unwrap();
 
@@ -607,7 +614,7 @@ mod tests {
         let buffer_size = 10;
         let first_checkpoint = None;
         let cancel = CancellationToken::new();
-        let sync = Synchronizer::new(
+        let mut sync = Synchronizer::new(
             store.db().clone(),
             stride,
             buffer_size,
@@ -615,6 +622,8 @@ mod tests {
             cancel.clone(),
         );
 
+        // Register a different pipeline, but not "test"
+        sync.register_pipeline("other").unwrap();
         let h_sync = store.sync(sync).unwrap();
 
         let err = write(&store, "test", 0, |_, _| Ok(()))
@@ -628,6 +637,33 @@ mod tests {
 
         cancel.cancel();
         h_sync.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_no_pipelines() {
+        let d = tempfile::tempdir().unwrap();
+
+        let store: Store<TestSchema> =
+            Store::open(d.path().join("db"), DbConfig::default(), 4).unwrap();
+
+        let stride = 1;
+        let buffer_size = 10;
+        let first_checkpoint = None;
+        let cancel = CancellationToken::new();
+        let sync = Synchronizer::new(
+            store.db().clone(),
+            stride,
+            buffer_size,
+            first_checkpoint,
+            cancel.clone(),
+        );
+
+        // Don't register any pipelines
+        let err = store.sync(sync).unwrap_err().to_string();
+        assert!(
+            err.contains("No pipelines registered with the synchronizer"),
+            "{err}"
+        );
     }
 
     #[tokio::test]
@@ -660,20 +696,13 @@ mod tests {
         .await
         .unwrap();
 
-        // The synchronizer will take a snapshot for the checkpoint before the first, if the first
-        // checkpoint is not 0.
-        wait_until(|| async {
-            store
-                .db()
-                .snapshot_range()
-                .is_some_and(|s| s.start() == &99 && s.end() == &100)
-        })
-        .await
-        .unwrap();
+        // With the fix, no snapshot is taken until after the first checkpoint is written.
+        // The first snapshot will be at checkpoint 100, not 99.
+        wait_until(|| async { has_range(&store, Some(100), Some(100)) })
+            .await
+            .unwrap();
 
         let s = store.schema();
-        assert_eq!(s.a.get(99, "x".to_owned()).unwrap(), None);
-        assert_eq!(s.b.get(99, 42).unwrap(), None);
         assert_eq!(s.a.get(100, "x".to_owned()).unwrap(), Some(42));
         assert_eq!(s.b.get(100, 42).unwrap(), Some("x".to_owned()));
 
@@ -715,14 +744,9 @@ mod tests {
         }
 
         // The synchronizer will take a snapshot before every `stride`-th checkpoint.
-        wait_until(|| async {
-            store
-                .db()
-                .snapshot_range()
-                .is_some_and(|s| s.start() == &2 && s.end() == &8)
-        })
-        .await
-        .unwrap();
+        wait_until(|| async { has_range(&store, Some(2), Some(8)) })
+            .await
+            .unwrap();
 
         let s = store.schema();
         assert_eq!(store.db().snapshots(), 3);
@@ -826,7 +850,10 @@ mod tests {
         let s = store.schema();
         let db = store.db();
         assert_eq!(db.snapshots(), 1);
-        assert_eq!(db.snapshot_range().map(|s| *s.end()), Some(0));
+        assert_eq!(
+            db.snapshot_range().map(|s| s.end().checkpoint_hi_inclusive),
+            Some(0)
+        );
         assert_eq!(s.a.get(0, "x".to_owned()).unwrap(), Some(42));
         assert_eq!(s.a.get(0, "y".to_owned()).unwrap(), None);
     }

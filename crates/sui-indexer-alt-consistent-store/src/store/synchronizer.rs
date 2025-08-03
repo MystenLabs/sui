@@ -3,7 +3,7 @@
 
 use std::{cmp::Ordering, collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use futures::future;
 use sui_indexer_alt_framework::task::with_slow_future_monitor;
 use tokio::{
@@ -25,9 +25,9 @@ const SLOW_SYNC_WARNING_THRESHOLD: Duration = Duration::from_secs(60);
 pub(crate) struct Synchronizer {
     db: Arc<Db>,
 
-    /// The last checkpoint written to the database for each registered pipeline. The value is
+    /// The last watermark written to the database for each registered pipeline. The value is
     /// `None` if the database has not yet seen a write for that pipeline.
-    last_checkpoints: HashMap<&'static str, Option<u64>>,
+    last_watermarks: HashMap<&'static str, Option<Watermark>>,
 
     /// The first checkpoint to be fetched across any pipeline.
     first_checkpoint: u64,
@@ -66,7 +66,7 @@ impl Synchronizer {
     ) -> Self {
         Self {
             db,
-            last_checkpoints: HashMap::new(),
+            last_watermarks: HashMap::new(),
             first_checkpoint: first_checkpoint.unwrap_or(0),
             stride,
             buffer_size,
@@ -84,10 +84,9 @@ impl Synchronizer {
         let watermark = self
             .db
             .watermark(pipeline)
-            .with_context(|| format!("Failed to get {pipeline} initial watermark"))?
-            .map(|w| w.checkpoint_hi_inclusive);
+            .with_context(|| format!("Failed to get {pipeline} initial watermark"))?;
 
-        self.last_checkpoints.insert(pipeline, watermark);
+        self.last_watermarks.insert(pipeline, watermark);
         Ok(())
     }
 
@@ -99,28 +98,35 @@ impl Synchronizer {
         let mut queue = Queue::new();
         let mut tasks = Vec::new();
 
-        let pre_snap = Arc::new(Barrier::new(self.last_checkpoints.len()));
-        let post_snap = Arc::new(Barrier::new(self.last_checkpoints.len()));
+        let pre_snap = Arc::new(Barrier::new(self.last_watermarks.len()));
+        let post_snap = Arc::new(Barrier::new(self.last_watermarks.len()));
 
-        // All tasks will arrange to take a snapshot before writing the next checkpoint that is new
-        // to all pipelines (allowing all pipelines to catch up with each other).
-        let mut next_snapshot_checkpoint = 0;
-        for (pipeline, last_checkpoint) in self.last_checkpoints {
+        // Calculate the first checkpoint we will have data for, across all pipelines.
+        let Some(init_checkpoint) = self
+            .last_watermarks
+            .values()
+            .map(|w| w.map_or(self.first_checkpoint, |w| w.checkpoint_hi_inclusive))
+            .max()
+        else {
+            bail!("No pipelines registered with the synchronizer");
+        };
+
+        // The next snapshot should be taken at the next stride boundary after that initial
+        // checkpoint.
+        let next_snapshot_checkpoint = ((init_checkpoint / self.stride) + 1) * self.stride;
+
+        for (pipeline, last_watermark) in self.last_watermarks {
             let (tx, rx) = mpsc::channel(self.buffer_size);
-            let next_checkpoint = last_checkpoint
-                .map(|v| v + 1)
-                .unwrap_or(self.first_checkpoint);
-
-            next_snapshot_checkpoint = next_snapshot_checkpoint.max(next_checkpoint);
 
             queue.insert(pipeline, tx);
             tasks.push(synchronizer(
                 self.db.clone(),
                 rx,
                 pipeline,
+                self.first_checkpoint,
                 self.stride,
                 next_snapshot_checkpoint,
-                next_checkpoint,
+                last_watermark,
                 pre_snap.clone(),
                 post_snap.clone(),
                 self.cancel.child_token(),
@@ -142,7 +148,6 @@ impl Synchronizer {
 ///
 /// Data arrives as a batch-per-checkpoint on `rx`, and must arrive in checkpoint sequence number
 /// order (the synchronizer will report an error and stop if it detects an out-of-order batch).
-/// starting with `next_checkpoint`.
 ///
 /// `pre_snap` and `post_snap` are barriers shared among all synchronizers -- synchronizers wait on
 /// `pre_snap` before a snapshot is to be taken, and on `post_snap` after the snapshot is taken
@@ -154,20 +159,21 @@ fn synchronizer(
     db: Arc<Db>,
     mut rx: mpsc::Receiver<(Watermark, rocksdb::WriteBatch)>,
     pipeline: &'static str,
+    first_checkpoint: u64,
     stride: u64,
     mut next_snapshot_checkpoint: u64,
-    mut next_checkpoint: u64,
+    mut current_watermark: Option<Watermark>,
     pre_snap: Arc<Barrier>,
     post_snap: Arc<Barrier>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
-    if next_snapshot_checkpoint == 0 {
-        // Ignore a snapshot before checkpoint zero.
-        next_snapshot_checkpoint += stride;
-    }
-
     tokio::spawn(async move {
         loop {
+            let next_checkpoint = current_watermark
+                .as_ref()
+                .map(|w| w.checkpoint_hi_inclusive + 1)
+                .unwrap_or(first_checkpoint);
+
             match next_snapshot_checkpoint.cmp(&next_checkpoint) {
                 // The next checkpoint should be included in the next snapshot, so allow it to be
                 // written.
@@ -193,7 +199,12 @@ fn synchronizer(
                         w = with_slow_future_monitor(pre_snap.wait(), SLOW_SYNC_WARNING_THRESHOLD, || {
                             warn!(pipeline, "Synchronizer stuck, pre-snapshot")
                         }) => if w.is_leader() {
-                            db.snapshot(next_snapshot_checkpoint - 1);
+                            if let Some(watermark) = current_watermark {
+                                db.snapshot(watermark);
+                            } else {
+                                error!(pipeline, next_snapshot_checkpoint, "No watermark available for snapshot");
+                                break;
+                            }
                         },
 
                         _ = cancel.cancelled() => {
@@ -233,14 +244,14 @@ fn synchronizer(
                         break;
                     }
 
-                    next_checkpoint += 1;
+                    current_watermark = Some(watermark);
                 }
             }
         }
 
         info!(
             pipeline,
-            next_snapshot_checkpoint, next_checkpoint, "Stopping sync"
+            next_snapshot_checkpoint, watermark = ?current_watermark, "Stopping sync"
         );
     })
 }
