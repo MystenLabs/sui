@@ -51,8 +51,13 @@ impl State {
     ) -> Result<u64, RpcError<Error>> {
         let Some(checkpoint) = request.metadata().get(CHECKPOINT_METADATA) else {
             // If a checkpoint hasn't been supplied default to the latest snapshot.
-            let range = self.store.db().snapshot_range().ok_or(Error::NoSnapshots)?;
-            return Ok(range.end().checkpoint_hi_inclusive);
+            return Ok(self
+                .store
+                .db()
+                .snapshot_range(u64::MAX)
+                .ok_or(Error::NoSnapshots)?
+                .end()
+                .checkpoint_hi_inclusive);
         };
 
         Ok(checkpoint

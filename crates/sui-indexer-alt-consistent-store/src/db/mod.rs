@@ -208,12 +208,13 @@ impl Db {
         self.0.read().expect("poisoned").with_snapshots(|s| s.len())
     }
 
-    /// The range of checkpoints that the database has snapshots for, or `None` if there are no
-    /// snapshots. Returns the watermark range.
-    pub(crate) fn snapshot_range(&self) -> Option<RangeInclusive<Watermark>> {
+    /// The range of checkpoints that the database has snapshots for, at or below
+    /// `cp_hi_inclusive`, or `None` if there are no snapshots. Returns the watermark range.
+    pub(crate) fn snapshot_range(&self, cp_hi_inclusive: u64) -> Option<RangeInclusive<Watermark>> {
         self.0.read().expect("poisoned").with_snapshots(|s| {
             let (_, lo_s) = s.first_key_value()?;
-            let (_, hi_s) = s.last_key_value()?;
+            let (_, hi_s) = s.range(..=cp_hi_inclusive).next_back()?;
+
             Some(lo_s.watermark..=hi_s.watermark)
         })
     }
