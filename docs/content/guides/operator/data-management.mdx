@@ -78,7 +78,7 @@ To learn more about transaction pruning policies, see [Transaction pruning](#tra
 
 To enable historic data queries for the Sui Full nodes that prune old transactional data, Full node RPC implementation is configured to fallback for querying missing transactional data from a remote store.
 
-If the information about the transaction digest, effects, events, or checkpoints is not available locally, a Full node automatically retrieves the historical data from a cloud-based key-value store (currently managed by MystenLabs). Note that the current key-value store implementation keeps historic transactional data only: we plan to provide support for a similar setup for retrieving the historic object versions in a future release.
+If the information about the transaction digest, effects, events, or checkpoints is not available locally, a Full node automatically retrieves the historical data from a cloud-based key-value store managed by Sui Foundation. The current key-value store implementation keeps historic transactional data only, but future releases might support retrieving the historic object versions.
 
 ## Object pruning {#object-pruning}
 
