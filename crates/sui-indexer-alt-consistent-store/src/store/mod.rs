@@ -248,7 +248,7 @@ mod tests {
     }
 
     fn has_range(store: &Store<TestSchema>, lo: Option<u64>, hi: Option<u64>) -> bool {
-        store.db().snapshot_range().is_some_and(|s| {
+        store.db().snapshot_range(u64::MAX).is_some_and(|s| {
             lo.is_none_or(|lo| lo == s.start().checkpoint_hi_inclusive)
                 && hi.is_none_or(|hi| hi == s.end().checkpoint_hi_inclusive)
         })
@@ -748,12 +748,30 @@ mod tests {
             .await
             .unwrap();
 
+        let d = store.db();
         let s = store.schema();
-        assert_eq!(store.db().snapshots(), 3);
+
+        assert_eq!(d.snapshots(), 3);
         for cp in (2..10).step_by(stride as usize) {
             assert_eq!(s.a.get(cp, "x".to_owned()).unwrap(), Some(cp * 3));
             assert_eq!(s.b.get(cp, cp * 3).unwrap(), Some("x".to_owned()));
         }
+
+        // Querying the snapshot range at the latest checkpoint does the same thing as an unbounded
+        // range request.
+        assert_eq!(
+            Some(8),
+            d.snapshot_range(8).map(|r| r.end().checkpoint_hi_inclusive)
+        );
+
+        // Going one checkpoint back causes the range to drop back by the stride.
+        assert_eq!(
+            Some(5),
+            d.snapshot_range(7).map(|r| r.end().checkpoint_hi_inclusive)
+        );
+
+        // Going back beyond the first checkpoint results in an empty range.
+        assert_eq!(None, d.snapshot_range(1));
 
         cancel.cancel();
         h_sync.await.unwrap();
@@ -851,7 +869,8 @@ mod tests {
         let db = store.db();
         assert_eq!(db.snapshots(), 1);
         assert_eq!(
-            db.snapshot_range().map(|s| s.end().checkpoint_hi_inclusive),
+            db.snapshot_range(u64::MAX)
+                .map(|s| s.end().checkpoint_hi_inclusive),
             Some(0)
         );
         assert_eq!(s.a.get(0, "x".to_owned()).unwrap(), Some(42));
