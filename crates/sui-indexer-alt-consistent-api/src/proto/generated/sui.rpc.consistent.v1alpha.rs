@@ -9,10 +9,21 @@ pub struct AvailableRangeResponse {
     pub min_checkpoint: ::core::option::Option<u64>,
     /// The (inclusive) maximum checkpoint sequence number that the service can
     /// answer questions for.
-    #[prost(uint64, optional, tag = "2")]
+    #[prost(uint64, optional, tag = "100")]
     pub max_checkpoint: ::core::option::Option<u64>,
+    /// The (inclusive) maximum epoch that the service can answer questions for.
+    #[prost(uint64, optional, tag = "101")]
+    pub max_epoch: ::core::option::Option<u64>,
+    /// The (exclusive) transaction upperbound (by sequence number) that the
+    /// service can answer questions for.
+    #[prost(uint64, optional, tag = "102")]
+    pub max_transaction: ::core::option::Option<u64>,
+    /// The (inclusive) maximum timestamp that the service can answer questions
+    /// for, in milliseconds since the Unix epoch.
+    #[prost(uint64, optional, tag = "103")]
+    pub max_timestamp_ms: ::core::option::Option<u64>,
     /// The gaps between snapshots taken by the service, measured in checkpoints.
-    #[prost(uint64, optional, tag = "3")]
+    #[prost(uint64, optional, tag = "200")]
     pub stride: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
