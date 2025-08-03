@@ -982,7 +982,7 @@ impl StructData {
 }
 
 impl EnumData {
-    fn new(module: &file_format::CompiledModule, def: &file_format::EnumDefinition) -> Self {
+    fn new(module: &CompiledModule, def: &file_format::EnumDefinition) -> Self {
         let mut variants = BTreeMap::new();
         for variant in &def.variants {
             let name = Symbol::from(module.identifier_at(variant.variant_name).as_str());

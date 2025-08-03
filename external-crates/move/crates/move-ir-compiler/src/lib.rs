@@ -12,7 +12,7 @@ mod unit_tests;
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::account_address::AccountAddress;
 use move_ir_to_bytecode::{compiler::compile_module, parser::parse_module_with_named_addresses};

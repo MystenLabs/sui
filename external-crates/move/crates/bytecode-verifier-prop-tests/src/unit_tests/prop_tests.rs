@@ -9,7 +9,7 @@ use invalid_mutations::{
     signature::{FieldRefMutation, SignatureRefMutation},
 };
 use move_binary_format::{
-    check_bounds::BoundsChecker, file_format::CompiledModule,
+    check_bounds::BoundsChecker, CompiledModule,
     proptest_types::CompiledModuleStrategyGen,
 };
 use move_bytecode_verifier::{

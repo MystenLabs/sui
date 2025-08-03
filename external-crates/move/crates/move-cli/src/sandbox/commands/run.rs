@@ -10,7 +10,7 @@ use crate::{
     NativeFunctionRecord,
 };
 use anyhow::{anyhow, bail, Result};
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_command_line_common::files::try_exists;
 use move_core_types::{
     identifier::IdentStr,

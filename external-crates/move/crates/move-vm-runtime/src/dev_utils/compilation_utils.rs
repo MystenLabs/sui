@@ -4,7 +4,7 @@
 
 use crate::{dev_utils::storage::StoredPackage, shared::types::OriginalId};
 use anyhow::Result;
-use move_binary_format::{file_format::CompiledModule, file_format_common::VERSION_MAX};
+use move_binary_format::{CompiledModule, file_format_common::VERSION_MAX};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::warning_filters::WarningFiltersBuilder,

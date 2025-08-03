@@ -6,7 +6,7 @@
 
 use anyhow::Context;
 use clap::Parser;
-use move_binary_format::{errors::VMError, file_format::CompiledModule};
+use move_binary_format::{errors::VMError, CompiledModule};
 use move_bytecode_verifier::{dependencies, verify_module_unmetered};
 use move_command_line_common::files::{
     DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_IR_EXTENSION,

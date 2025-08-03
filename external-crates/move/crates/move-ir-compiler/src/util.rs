@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_bytecode_source_map::source_map::SourceMap;
 use move_ir_to_bytecode::{compiler::compile_module, parser::parse_module};
 use std::{fs, path::Path};

@@ -3,7 +3,7 @@
 
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 
 fuzz_target!(|module: CompiledModule| {
     let _ = move_bytecode_verifier::verify_module_unmetered(&module);

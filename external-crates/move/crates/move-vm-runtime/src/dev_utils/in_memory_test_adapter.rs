@@ -17,7 +17,7 @@ use crate::{
     validation::verification::ast as verif_ast,
 };
 use move_binary_format::errors::{Location, PartialVMError, VMResult};
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_core_types::{
     account_address::AccountAddress,
     resolver::{ModuleResolver, SerializedPackage},

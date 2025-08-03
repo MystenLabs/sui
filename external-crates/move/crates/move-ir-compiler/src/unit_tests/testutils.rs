@@ -5,7 +5,7 @@
 use anyhow::Result;
 use move_binary_format::{
     errors::{Location, VMError},
-    file_format::CompiledModule,
+    CompiledModule,
 };
 use move_bytecode_verifier::verify_module_unmetered;
 use move_ir_to_bytecode::{compiler::compile_module, parser::parse_module};
