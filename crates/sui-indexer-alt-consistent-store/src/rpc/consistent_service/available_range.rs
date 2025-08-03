@@ -13,8 +13,8 @@ pub(super) fn available_range(
 ) -> Result<grpc::AvailableRangeResponse, RpcError> {
     let range = state.store.db().snapshot_range();
     Ok(grpc::AvailableRangeResponse {
-        min_checkpoint: range.as_ref().map(|r| *r.start()),
-        max_checkpoint: range.as_ref().map(|r| *r.end()),
+        min_checkpoint: range.as_ref().map(|r| r.start().checkpoint_hi_inclusive),
+        max_checkpoint: range.as_ref().map(|r| r.end().checkpoint_hi_inclusive),
         stride: Some(state.consistency_config.stride),
     })
 }
