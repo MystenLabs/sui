@@ -8,7 +8,7 @@ pub(crate) const TRACING_ENABLED: bool = false;
 
 #[macro_export]
 macro_rules! open_initial_frame {
-    ($tracer: expr, $args: expr, $ty_args: expr, $function: expr, $loader: expr, $gas_meter: expr, $link_context: expr) => {
+    ($tracer: expr, $args: expr, $ty_args: expr, $function: expr, $loader: expr, $gas_meter: expr, $link_context: expr, $interp: expr) => {
         if $crate::tracing2::TRACING_ENABLED {
             $tracer.as_mut().map(|tracer| {
                 tracer.open_initial_frame(
@@ -18,6 +18,7 @@ macro_rules! open_initial_frame {
                     $loader,
                     $gas_meter.remaining_gas().into(),
                     $link_context,
+                    $interp,
                 )
             });
             move_vm_profiler::profile_open_frame!($gas_meter, $function.pretty_string());
@@ -27,10 +28,10 @@ macro_rules! open_initial_frame {
 
 #[macro_export]
 macro_rules! close_initial_native_frame {
-    ($tracer: expr, $function: expr, $return_values: expr, $gas_meter: expr) => {
+    ($tracer: expr, $function: expr, $return_values: expr, $gas_meter: expr, $interp: expr) => {
         if $crate::tracing2::TRACING_ENABLED {
             $tracer.as_mut().map(|tracer| {
-                tracer.close_initial_native_frame($return_values, $gas_meter.remaining_gas().into())
+                tracer.close_initial_native_frame($return_values, $gas_meter.remaining_gas().into(), $interp)
             });
             move_vm_profiler::profile_close_frame!($gas_meter, $function.pretty_string());
         }

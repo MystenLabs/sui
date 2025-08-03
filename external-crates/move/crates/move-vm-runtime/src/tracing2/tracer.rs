@@ -1742,6 +1742,7 @@ impl<'a> VMTracer<'a> {
         loader: &Loader,
         remaining_gas: u64,
         link_context: AccountAddress,
+        interpreter: &Interpreter
     ) {
         let opt =
             self.open_initial_frame_(args, ty_args, function, loader, remaining_gas, link_context);
@@ -1752,6 +1753,7 @@ impl<'a> VMTracer<'a> {
         &mut self,
         return_values: &VMResult<SmallVec<[Value; 1]>>,
         remaining_gas: u64,
+        interpreter: &Interpreter
     ) {
         let return_values = match return_values {
             Ok(values) => values,

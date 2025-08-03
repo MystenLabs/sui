@@ -72,11 +72,11 @@ enum InstrRet {
 ///
 /// An `Interpreter` instance is a stand alone execution context for a function.
 /// It mimics execution on a single thread, with an call stack and an operand stack.
-pub(crate) struct Interpreter {
+pub struct Interpreter {
     /// Operand stack, where Move `Value`s are stored for stack operations.
-    pub(crate) operand_stack: Stack,
+    pub operand_stack: Stack,
     /// The stack of active functions.
-    pub(crate) call_stack: CallStack,
+    pub call_stack: CallStack,
     /// Limits imposed at runtime
     runtime_limits_config: VMRuntimeLimitsConfig,
 }
@@ -125,7 +125,8 @@ impl Interpreter {
             &function,
             loader,
             gas_meter,
-            link_context
+            link_context,
+            &interpreter
         );
 
         if function.is_native() {
@@ -153,7 +154,7 @@ impl Interpreter {
                         .finish(Location::Module(function.module_id().clone()))
                 });
 
-            close_initial_native_frame!(tracer, &function, &return_values, gas_meter);
+            close_initial_native_frame!(tracer, &function, &return_values, gas_meter, &interpreter);
 
             Ok(return_values?.into_iter().collect())
         } else {
