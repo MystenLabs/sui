@@ -217,9 +217,9 @@ impl Transaction {
         let global_tx_hi = watermarks.high_watermark().transaction();
 
         let tx_digest_keys = if let Some(cp_bounds) = checkpoint_bounds(
-            filter.after_checkpoint,
-            filter.at_checkpoint,
-            filter.before_checkpoint,
+            filter.after_checkpoint.map(u64::from),
+            filter.at_checkpoint.map(u64::from),
+            filter.before_checkpoint.map(u64::from),
             reader_lo,
             scope.checkpoint_viewed_at(),
         ) {

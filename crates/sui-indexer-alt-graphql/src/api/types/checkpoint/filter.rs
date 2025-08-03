@@ -74,16 +74,12 @@ pub(crate) struct CpBounds {
 /// ```
 ///
 pub(crate) fn checkpoint_bounds(
-    after_checkpoint: Option<UInt53>,
-    at_checkpoint: Option<UInt53>,
-    before_checkpoint: Option<UInt53>,
+    cp_after: Option<u64>,
+    cp_at: Option<u64>,
+    cp_before: Option<u64>,
     reader_lo: u64,
     checkpoint_viewed_at: u64,
 ) -> Option<RangeInclusive<u64>> {
-    let cp_after = after_checkpoint.map(u64::from);
-    let cp_at = at_checkpoint.map(u64::from);
-    let cp_before = before_checkpoint.map(u64::from);
-
     let cp_after_inclusive = match cp_after.map(|x| x.checked_add(1)) {
         Some(Some(after)) => Some(after),
         Some(None) => return None,
@@ -215,7 +211,7 @@ mod tests {
     #[test]
     fn test_checkpoint_bounds_after_checkpoint() {
         assert_eq!(
-            checkpoint_bounds(Some(UInt53::from(10)), None, None, 5, 200).unwrap(),
+            checkpoint_bounds(Some(10), None, None, 5, 200).unwrap(),
             11..=200
         );
     }
@@ -223,7 +219,7 @@ mod tests {
     #[test]
     fn test_checkpoint_bounds_before_checkpoint() {
         assert_eq!(
-            checkpoint_bounds(None, None, Some(UInt53::from(100)), 5, 200).unwrap(),
+            checkpoint_bounds(None, None, Some(100), 5, 200).unwrap(),
             5..=99
         );
     }
@@ -231,7 +227,7 @@ mod tests {
     #[test]
     fn test_checkpoint_bounds_at_checkpoint() {
         assert_eq!(
-            checkpoint_bounds(None, Some(UInt53::from(50)), None, 5, 200).unwrap(),
+            checkpoint_bounds(None, Some(50), None, 5, 200).unwrap(),
             50..=50
         );
     }
@@ -239,14 +235,7 @@ mod tests {
     #[test]
     fn test_checkpoint_bounds_combined_filters() {
         assert_eq!(
-            checkpoint_bounds(
-                Some(UInt53::from(10)),
-                None,
-                Some(UInt53::from(100)),
-                5,
-                200
-            )
-            .unwrap(),
+            checkpoint_bounds(Some(10), None, Some(100), 5, 200).unwrap(),
             11..=99
         );
     }
@@ -254,14 +243,7 @@ mod tests {
     #[test]
     fn test_checkpoint_bounds_at_checkpoint_precedence() {
         assert_eq!(
-            checkpoint_bounds(
-                Some(UInt53::from(10)),
-                Some(UInt53::from(50)),
-                Some(UInt53::from(100)),
-                5,
-                200
-            )
-            .unwrap(),
+            checkpoint_bounds(Some(10), Some(50), Some(100), 5, 200).unwrap(),
             50..=50
         );
     }
@@ -277,7 +259,7 @@ mod tests {
     #[test]
     fn test_checkpoint_bounds_reader_lo_override() {
         assert_eq!(
-            checkpoint_bounds(Some(UInt53::from(10)), None, None, 50, 200).unwrap(),
+            checkpoint_bounds(Some(10), None, None, 50, 200).unwrap(),
             50..=200
         );
     }
@@ -285,31 +267,24 @@ mod tests {
     #[test]
     fn test_checkpoint_bounds_viewed_at_override() {
         assert_eq!(
-            checkpoint_bounds(None, None, Some(UInt53::from(100)), 5, 80).unwrap(),
+            checkpoint_bounds(None, None, Some(100), 5, 80).unwrap(),
             5..=80
         );
     }
 
     #[test]
     fn test_checkpoint_bounds_overflow() {
-        assert!(checkpoint_bounds(Some(UInt53::from(u64::MAX)), None, None, 5, 200).is_none());
+        assert!(checkpoint_bounds(Some(u64::MAX), None, None, 5, 200).is_none());
     }
 
     #[test]
     fn test_checkpoint_bounds_underflow() {
-        assert!(checkpoint_bounds(None, None, Some(UInt53::from(0)), 5, 200).is_none());
+        assert!(checkpoint_bounds(None, None, Some(0), 5, 200).is_none());
     }
 
     #[test]
     fn test_checkpoint_bounds_invalid_range() {
-        assert!(checkpoint_bounds(
-            Some(UInt53::from(100)),
-            None,
-            Some(UInt53::from(50)),
-            5,
-            200
-        )
-        .is_none());
+        assert!(checkpoint_bounds(Some(100), None, Some(50), 5, 200).is_none());
     }
 
     #[test]
