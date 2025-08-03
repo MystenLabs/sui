@@ -8346,6 +8346,7 @@ version = "0.0.1"
 dependencies = [
  "move-binary-format",
  "move-core-types",
+ "move-vm-stack",
  "serde",
  "serde_json",
  "zstd 0.13.2",
@@ -8445,6 +8446,7 @@ dependencies = [
  "move-trace-format",
  "move-vm-config",
  "move-vm-profiler",
+ "move-vm-stack",
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
@@ -8504,6 +8506,14 @@ dependencies = [
  "parking_lot 0.11.2",
  "smallvec",
  "tracing",
+]
+
+[[package]]
+name = "move-vm-stack"
+version = "0.1.0"
+dependencies = [
+ "move-bytecode-verifier",
+ "move-vm-types",
 ]
 
 [[package]]

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::format::{MoveTrace, TraceEvent, TraceVersion};
+use move_vm_stack::Stack;
 use serde::Serialize;
 
 /// This is meant to be an internal tracing interface for the VM, and should only be implemented
@@ -12,12 +13,12 @@ use serde::Serialize;
 pub trait Tracer {
     /// Notify the tracer of a new event in the VM. This is called for every event that is emitted,
     /// and immediatlye _after_ the `event` has been added to the trace held inside of the `writer`.
-    fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>);
+    fn notify(&mut self, event: &TraceEvent, writer: Writer<'_>, stack: &Stack);
 }
 
 pub struct NopTracer;
 impl Tracer for NopTracer {
-    fn notify(&mut self, _event: &TraceEvent, _writer: Writer<'_>) {}
+    fn notify(&mut self, _event: &TraceEvent, _writer: Writer<'_>, _stack: &Stack) {}
 }
 
 /// A writer that allows you to push custom events to the trace but encapsulates the trace so that

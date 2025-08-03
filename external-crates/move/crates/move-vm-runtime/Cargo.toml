@@ -28,6 +28,7 @@ move-vm-types = { path = "../move-vm-types" }
 move-binary-format.workspace = true
 move-vm-profiler.workspace = true
 move-trace-format.workspace = true
+move-vm-stack.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

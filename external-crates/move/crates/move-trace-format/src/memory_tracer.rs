@@ -11,6 +11,8 @@
 //! The memory tracer is useful for debugging, and  as an example of how to build up this
 //! state for more advanced analysis and also using the custom tracing trait.
 
+use move_vm_stack::Stack;
+
 use crate::{
     format::{DataLoad, Effect, Location, Read, TraceEvent, TraceIndex, TraceValue, Write},
     interface::{Tracer, Writer},
@@ -145,7 +147,7 @@ impl Default for TraceState {
 }
 
 impl Tracer for TraceState {
-    fn notify(&mut self, event: &TraceEvent, mut write: Writer<'_>) {
+    fn notify(&mut self, event: &TraceEvent, mut write: Writer<'_>, _stack: &Stack) {
         self.apply_event(event);
         // We only emit the state when we hit a non-effect internal event. This coincides with
         // emitting the current state of the VM before each instruction/function call.
