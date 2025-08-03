@@ -52,7 +52,7 @@ impl State {
         let Some(checkpoint) = request.metadata().get(CHECKPOINT_METADATA) else {
             // If a checkpoint hasn't been supplied default to the latest snapshot.
             let range = self.store.db().snapshot_range().ok_or(Error::NoSnapshots)?;
-            return Ok(*range.end());
+            return Ok(range.end().checkpoint_hi_inclusive);
         };
 
         Ok(checkpoint
