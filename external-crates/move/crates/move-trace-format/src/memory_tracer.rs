@@ -147,7 +147,7 @@ impl Default for TraceState {
 }
 
 impl Tracer for TraceState {
-    fn notify(&mut self, event: &TraceEvent, mut write: Writer<'_>, _stack: &Stack) {
+    fn notify(&mut self, event: &TraceEvent, mut write: Writer<'_>, _stack: Option<&Stack>) {
         self.apply_event(event);
         // We only emit the state when we hit a non-effect internal event. This coincides with
         // emitting the current state of the VM before each instruction/function call.

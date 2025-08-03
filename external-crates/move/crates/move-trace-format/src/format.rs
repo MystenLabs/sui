@@ -358,16 +358,16 @@ impl MoveTraceBuilder {
             locals_types,
             is_native,
         });
-        self.push_event(TraceEvent::OpenFrame { frame, gas_left }, stack);
+        self.push_event_runtime(TraceEvent::OpenFrame { frame, gas_left }, Some(stack));
     }
 
     /// Record a `CloseFrame` event in the trace.
     pub fn close_frame(&mut self, frame_id: TraceIndex, return_: Vec<TraceValue>, gas_left: u64, stack: &Stack) {
-        self.push_event(TraceEvent::CloseFrame {
+        self.push_event_runtime(TraceEvent::CloseFrame {
             frame_id,
             return_,
             gas_left,
-        }, stack);
+        }, Some(stack));
     }
 
     /// Record an `Instruction` event in the trace along with the effects of the instruction.
@@ -380,25 +380,30 @@ impl MoveTraceBuilder {
         pc: u16,
         stack: &Stack
     ) {
-        self.push_event(TraceEvent::Instruction {
+        self.push_event_runtime(TraceEvent::Instruction {
             type_parameters,
             pc,
             gas_left,
             instruction: Box::new(format!("{:?}", instruction_opcode(instruction))),
-        }, stack);
+        }, Some(stack));
         for effect in effects {
-            self.push_event(TraceEvent::Effect(Box::new(effect)), stack);
+            self.push_event_runtime(TraceEvent::Effect(Box::new(effect)), Some(stack));
         }
     }
 
     /// Push an `Effect` event to the trace.
     pub fn effect(&mut self, effect: Effect, stack: &Stack) {
-        self.push_event(TraceEvent::Effect(Box::new(effect)), stack);
+        self.push_event_runtime(TraceEvent::Effect(Box::new(effect)), Some(stack));
     }
 
     // All events pushed to the trace are first pushed, and then the tracer is notified of the
     // event.
-    pub fn push_event(&mut self, event: TraceEvent, stack: &Stack) {
+    pub fn push_event(&mut self, event: TraceEvent) {
+        self.push_event_runtime(event, None);
+    }
+
+    /// Push an `Event` with `Stack` during runtime
+    pub fn push_event_runtime(&mut self, event: TraceEvent, stack: Option<&Stack>) {
         self.trace.push_event(event.clone());
         self.tracer.notify(&event, Writer(&mut self.trace), stack);
     }
@@ -528,12 +533,11 @@ impl<R: std::io::Read> Iterator for MoveTraceReader<'_, R> {
 #[test]
 fn emit_trace() {
     let mut builder = MoveTraceBuilder::new();
-    let mut stack = Stack::new();
     for i in 0..10 {
         builder.push_event(TraceEvent::External(Box::new(serde_json::json!({
             "event": "external",
             "data": i,
-        }))), &stack);
+        }))));
     }
 
     let bytes = builder.into_trace().into_compressed_json_bytes();
@@ -573,7 +577,7 @@ fn large_numeric_values_in_trace() {
     ];
 
     for eff in effects {
-        builder.push_event(TraceEvent::Effect(Box::new(eff)), &stack);
+        builder.push_event(TraceEvent::Effect(Box::new(eff)));
     }
 
     let bytes = builder.into_trace().into_compressed_json_bytes();
