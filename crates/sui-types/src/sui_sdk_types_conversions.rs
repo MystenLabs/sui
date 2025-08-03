@@ -1030,6 +1030,11 @@ impl From<crate::messages_checkpoint::CheckpointCommitment> for CheckpointCommit
                     digest: digest.digest.into(),
                 }
             }
+            crate::messages_checkpoint::CheckpointCommitment::CheckpointArtifactsDigest(digest) => {
+                Self::CheckpointArtifactsDigest {
+                    digest: digest.digest.into(),
+                }
+            }
         }
     }
 }
