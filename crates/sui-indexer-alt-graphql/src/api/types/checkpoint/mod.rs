@@ -228,9 +228,9 @@ impl Checkpoint {
         let cp_hi_inclusive = scope.checkpoint_viewed_at();
 
         let cp_bounds = match checkpoint_bounds(
-            filter.after_checkpoint,
-            filter.at_checkpoint,
-            filter.before_checkpoint,
+            filter.after_checkpoint.map(u64::from),
+            filter.at_checkpoint.map(u64::from),
+            filter.before_checkpoint.map(u64::from),
             cp_lo,
             cp_hi_inclusive,
         ) {
