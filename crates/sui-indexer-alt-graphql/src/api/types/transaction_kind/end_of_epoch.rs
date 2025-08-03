@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, *};
+use async_graphql::{
+    connection::{Connection, Edge},
+    *,
+};
 use sui_types::{
     digests::ChainIdentifier as NativeChainIdentifier,
     transaction::{
@@ -153,10 +156,7 @@ impl EndOfEpochTransaction {
                 self.native[*edge.cursor].clone(),
                 self.scope.clone(),
             );
-            conn.edges.push(async_graphql::connection::Edge::new(
-                edge.cursor.to_string(),
-                tx_kind,
-            ));
+            conn.edges.push(Edge::new(edge.cursor.to_string(), tx_kind));
         }
 
         Ok(conn)
