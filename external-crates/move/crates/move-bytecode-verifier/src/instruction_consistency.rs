@@ -9,10 +9,11 @@
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        Bytecode, CodeOffset, CodeUnit, CompiledModule, DatatypeHandleIndex, EnumDefinitionIndex,
+        Bytecode, CodeOffset, CodeUnit, DatatypeHandleIndex, EnumDefinitionIndex,
         FieldHandleIndex, FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex,
         TableIndex,
     },
+    CompiledModule,
 };
 use move_core_types::vm_status::StatusCode;
 

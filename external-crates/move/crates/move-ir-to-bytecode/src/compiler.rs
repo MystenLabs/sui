@@ -6,7 +6,7 @@ use crate::context::{CompiledDependency, Context, MaterializedPools, TABLE_MAX_S
 use anyhow::{bail, format_err, Result};
 use move_binary_format::{
     file_format::{
-        Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant,
+        Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, Constant,
         ConstantPoolIndex, DatatypeHandleIndex, DatatypeTyParameter, EnumDefinition,
         EnumDefinitionIndex, FieldDefinition, FunctionDefinition, FunctionSignature,
         JumpTableInner, ModuleHandle, Signature, SignatureToken, StructDefinition,
@@ -14,6 +14,7 @@ use move_binary_format::{
         TypeSignature, VariantDefinition, VariantJumpTable, VariantJumpTableIndex, Visibility,
     },
     file_format_common::VERSION_MAX,
+    CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
 use move_command_line_common::{

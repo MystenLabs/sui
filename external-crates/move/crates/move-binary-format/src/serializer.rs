@@ -15,7 +15,7 @@
 //! not all of the newer language constructs might be supported for older versions, leading to
 //! serialization errors.
 
-use crate::{file_format::*, file_format_common::*};
+use crate::{file_format::*, file_format_common::*, CompiledModule};
 use anyhow::{anyhow, bail, Result};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,

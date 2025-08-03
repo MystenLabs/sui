@@ -2,14 +2,18 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::file_format::{
-    AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, DatatypeTyParameter,
-    EnumDefinition, FieldDefinition, FieldHandle, FieldHandleIndex, FieldInstantiation,
-    FieldInstantiationIndex, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
-    FunctionInstantiation, JumpTableInner, LocalIndex, SignatureIndex, SignatureToken,
-    StructDefInstantiation, StructDefInstantiationIndex, StructDefinition, StructDefinitionIndex,
-    StructFieldInformation, TypeParameterIndex, VariantDefinition, VariantHandleIndex,
-    VariantInstantiationHandleIndex, VariantJumpTable as FFVariantJumpTable, Visibility,
+use crate::{
+    file_format::{
+        AbilitySet, Bytecode as FBytecode, CodeOffset, DatatypeTyParameter, EnumDefinition,
+        FieldDefinition, FieldHandle, FieldHandleIndex, FieldInstantiation,
+        FieldInstantiationIndex, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
+        FunctionInstantiation, JumpTableInner, LocalIndex, SignatureIndex, SignatureToken,
+        StructDefInstantiation, StructDefInstantiationIndex, StructDefinition,
+        StructDefinitionIndex, StructFieldInformation, TypeParameterIndex, VariantDefinition,
+        VariantHandleIndex, VariantInstantiationHandleIndex,
+        VariantJumpTable as FFVariantJumpTable, Visibility,
+    },
+    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress,

@@ -5,10 +5,11 @@
 use move_binary_format::{
     errors::{bounds_error, PartialVMError},
     file_format::{
-        AddressIdentifierIndex, CompiledModule, DatatypeHandleIndex, FunctionHandleIndex,
+        AddressIdentifierIndex, DatatypeHandleIndex, FunctionHandleIndex,
         IdentifierIndex, ModuleHandleIndex, SignatureIndex, StructDefinitionIndex, TableIndex,
     },
     internals::ModuleIndex,
+    CompiledModule,
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;

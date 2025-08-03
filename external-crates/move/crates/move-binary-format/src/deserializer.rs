@@ -8,6 +8,7 @@ use crate::{
     errors::*,
     file_format::*,
     file_format_common::*,
+    CompiledModule,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,

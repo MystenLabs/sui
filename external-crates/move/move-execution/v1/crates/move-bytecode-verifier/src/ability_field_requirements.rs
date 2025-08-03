@@ -6,8 +6,8 @@
 //! abilities required by the struct's abilities
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMResult, VMResult},
-    file_format::{AbilitySet, CompiledModule, StructFieldInformation, TableIndex},
-    IndexKind,
+    file_format::{AbilitySet, StructFieldInformation, TableIndex},
+    CompiledModule, IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 

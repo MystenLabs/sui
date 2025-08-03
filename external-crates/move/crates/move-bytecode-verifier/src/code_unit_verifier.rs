@@ -13,9 +13,9 @@ use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::Con
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
+        FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
     },
-    IndexKind,
+    CompiledModule, IndexKind,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;

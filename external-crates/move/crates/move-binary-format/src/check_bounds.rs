@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    CompiledModule,
     errors::{
         bounds_error, offset_out_of_bounds as offset_out_of_bounds_error, verification_error,
         PartialVMError, PartialVMResult,
     },
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, DatatypeHandle,
+        AbilitySet, Bytecode, CodeOffset, CodeUnit, Constant, DatatypeHandle,
         EnumDefInstantiation, EnumDefinition, FieldHandle, FieldInstantiation, FunctionDefinition,
         FunctionDefinitionIndex, FunctionHandle, FunctionInstantiation, JumpTableInner, LocalIndex,
         ModuleHandle, Signature, SignatureToken, StructDefInstantiation, StructDefinition,

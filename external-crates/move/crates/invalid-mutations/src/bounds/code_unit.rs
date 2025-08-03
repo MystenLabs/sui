@@ -5,13 +5,14 @@
 use move_binary_format::{
     errors::{offset_out_of_bounds, PartialVMError},
     file_format::{
-        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
+        Bytecode, CodeOffset, ConstantPoolIndex, FieldHandleIndex,
         FieldInstantiationIndex, FunctionDefinitionIndex, FunctionHandleIndex,
         FunctionInstantiationIndex, LocalIndex, SignatureIndex, StructDefInstantiationIndex,
         StructDefinitionIndex, TableIndex, VariantHandleIndex, VariantInstantiationHandleIndex,
         VariantJumpTableIndex,
     },
     internals::ModuleIndex,
+    CompiledModule,
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
