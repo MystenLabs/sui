@@ -15,6 +15,9 @@ pub(super) fn available_range(
     Ok(grpc::AvailableRangeResponse {
         min_checkpoint: range.as_ref().map(|r| r.start().checkpoint_hi_inclusive),
         max_checkpoint: range.as_ref().map(|r| r.end().checkpoint_hi_inclusive),
+        max_epoch: range.as_ref().map(|r| r.end().epoch_hi_inclusive),
+        max_transaction: range.as_ref().map(|r| r.end().tx_hi),
+        max_timestamp_ms: range.as_ref().map(|r| r.end().timestamp_ms_hi_inclusive),
         stride: Some(state.consistency_config.stride),
     })
 }
