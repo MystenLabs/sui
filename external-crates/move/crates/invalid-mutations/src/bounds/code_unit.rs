@@ -12,8 +12,7 @@ use move_binary_format::{
         VariantJumpTableIndex,
     },
     internals::ModuleIndex,
-    CompiledModule,
-    IndexKind,
+    CompiledModule, IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 use proptest::{prelude::*, sample::Index as PropIndex};

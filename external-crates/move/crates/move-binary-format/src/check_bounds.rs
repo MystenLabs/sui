@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    CompiledModule,
     errors::{
         bounds_error, offset_out_of_bounds as offset_out_of_bounds_error, verification_error,
         PartialVMError, PartialVMResult,
@@ -17,7 +16,7 @@ use crate::{
         VariantInstantiationHandle, VariantJumpTable,
     },
     internals::ModuleIndex,
-    IndexKind,
+    CompiledModule, IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 

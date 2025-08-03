@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![no_main]
-use move_binary_format::file_format::{
-    empty_module, AbilitySet, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex,
+use move_binary_format::{
+    file_format::{
+    AbilitySet, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex,
     FieldDefinition, FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
     ModuleHandleIndex, Signature, SignatureIndex,
     SignatureToken::{Address, Bool, U128, U64},
     StructDefinition, StructFieldInformation, TypeSignature, Visibility,
+    },
+    CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::str::FromStr;
@@ -15,7 +18,7 @@ use std::str::FromStr;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|code_unit: CodeUnit| {
-    let mut module = empty_module();
+    let mut module = CompiledModule::empty_module();
     module.version = 5;
 
     module.datatype_handles.push(DatatypeHandle {
