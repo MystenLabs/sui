@@ -250,7 +250,7 @@ input CheckpointFilter {
 """
 A single command in the programmable transaction.
 """
-union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | OtherCommand
+union Command = MergeCoinsCommand | MoveCallCommand | PublishCommand | SplitCoinsCommand | TransferObjectsCommand | UpgradeCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -1716,6 +1716,28 @@ type TxResult {
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Upgrades a Move Package.
+"""
+type UpgradeCommand {
+	"""
+	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
+	"""
+	modules: [Base64!]!
+	"""
+	IDs of the transitive dependencies of the package to be published.
+	"""
+	dependencies: [SuiAddress!]!
+	"""
+	ID of the package being upgraded.
+	"""
+	currentPackage: SuiAddress
+	"""
+	The `UpgradeTicket` authorizing the upgrade.
+	"""
+	upgradeTicket: TransactionArgument
+}
 
 type UserSignature {
 	"""
