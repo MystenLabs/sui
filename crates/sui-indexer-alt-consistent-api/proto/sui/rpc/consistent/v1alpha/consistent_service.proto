@@ -31,10 +31,21 @@ message AvailableRangeResponse {
 
   // The (inclusive) maximum checkpoint sequence number that the service can
   // answer questions for.
-  optional uint64 max_checkpoint = 2;
+  optional uint64 max_checkpoint = 100;
+
+  // The (inclusive) maximum epoch that the service can answer questions for.
+  optional uint64 max_epoch = 101;
+
+  // The (exclusive) transaction upperbound (by sequence number) that the
+  // service can answer questions for.
+  optional uint64 max_transaction = 102;
+
+  // The (inclusive) maximum timestamp that the service can answer questions
+  // for, in milliseconds since the Unix epoch.
+  optional uint64 max_timestamp_ms = 103;
 
   // The gaps between snapshots taken by the service, measured in checkpoints.
-  optional uint64 stride = 3;
+  optional uint64 stride = 200;
 }
 
 message BatchGetBalancesRequest { repeated GetBalanceRequest requests = 1; }
