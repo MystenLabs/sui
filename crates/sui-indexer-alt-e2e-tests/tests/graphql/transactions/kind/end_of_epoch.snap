@@ -4,21 +4,21 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 processed 4 tasks
 
 task 1, line 6:
-//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state --create-bridge-state
+//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state --create-bridge-state --create-bridge-committee
 Epoch advanced: 1
 
 task 2, line 8:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 3, lines 10-53:
+task 3, lines 10-56:
 //# run-graphql
 Response: {
   "data": {
     "endOfEpochTransaction": {
       "nodes": [
         {
-          "digest": "HbgooKodztrd2bWKVgBrJL68pvEew5hjd14W5vfV18Lq",
+          "digest": "Ap4cKQqRE7qqcoFFgdDMrj8P7StogBouS3ThBREXGqDS",
           "kind": {
             "__typename": "EndOfEpochTransaction",
             "transactions": {
@@ -38,6 +38,10 @@ Response: {
                 {
                   "__typename": "BridgeStateCreateTransaction",
                   "chainIdentifier": "00000000"
+                },
+                {
+                  "__typename": "BridgeCommitteeInitTransaction",
+                  "bridgeObjectVersion": 1
                 },
                 {
                   "__typename": "ChangeEpochTransaction",

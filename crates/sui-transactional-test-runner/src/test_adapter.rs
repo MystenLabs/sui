@@ -770,6 +770,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 create_authenticator_state,
                 create_deny_list_state,
                 create_bridge_state,
+                create_bridge_committee,
             }) => {
                 for _ in 0..count.unwrap_or(1) {
                     self.executor
@@ -778,6 +779,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             create_authenticator_state,
                             create_deny_list_state,
                             create_bridge_state,
+                            create_bridge_committee,
                         )
                         .await?;
                 }

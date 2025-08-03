@@ -9,7 +9,8 @@ use sui_types::{
 
 use crate::{
     api::{
-        scalars::cursor::JsonCursor, types::transaction_kind::change_epoch::ChangeEpochTransaction,
+        scalars::{cursor::JsonCursor, uint53::UInt53},
+        types::transaction_kind::change_epoch::ChangeEpochTransaction,
     },
     error::RpcError,
     pagination::{Page, PaginationConfig},
@@ -32,6 +33,7 @@ pub enum EndOfEpochTransactionKind {
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
     StoreExecutionTimeObservations(StoreExecutionTimeObservationsTransaction),
     BridgeStateCreate(BridgeStateCreateTransaction),
+    BridgeCommitteeInit(BridgeCommitteeInitTransaction),
     AccumulatorRootCreate(AccumulatorRootCreateTransaction),
     // TODO: Add more complex transaction types incrementally
 }
@@ -83,6 +85,13 @@ impl BridgeStateCreateTransaction {
     }
 }
 
+/// System transaction for initializing bridge committee.
+#[derive(SimpleObject, Clone)]
+pub struct BridgeCommitteeInitTransaction {
+    /// The initial shared version of the bridge object.
+    bridge_object_version: Option<UInt53>,
+}
+
 /// System transaction for creating the accumulator root.
 #[derive(SimpleObject, Clone)]
 pub struct AccumulatorRootCreateTransaction {
@@ -94,7 +103,7 @@ pub struct AccumulatorRootCreateTransaction {
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
-    /// The list of system transactions that did run at the end of the epoch.
+    /// The list of system transactions that are allowed to run at the end of the epoch.
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -152,6 +161,11 @@ impl EndOfEpochTransactionKind {
             N::BridgeStateCreate(chain_id) => {
                 Some(K::BridgeStateCreate(BridgeStateCreateTransaction {
                     native: chain_id,
+                }))
+            }
+            N::BridgeCommitteeInit(bridge_version) => {
+                Some(K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
+                    bridge_object_version: Some(bridge_version.value().into()),
                 }))
             }
             N::AccumulatorRootCreate => {
