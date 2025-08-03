@@ -16,10 +16,10 @@
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
+        FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
     },
     file_format_common::{VERSION_1, VERSION_5},
-    IndexKind,
+CompiledModule, IndexKind,
 };
 use move_core_types::{identifier::IdentStr, vm_status::StatusCode};
 

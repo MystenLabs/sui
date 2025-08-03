@@ -8,10 +8,10 @@
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, TableIndex,
+        DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, TableIndex,
     },
     internals::ModuleIndex,
-    IndexKind,
+CompiledModule, IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 use petgraph::{algo::toposort, graphmap::DiGraphMap};

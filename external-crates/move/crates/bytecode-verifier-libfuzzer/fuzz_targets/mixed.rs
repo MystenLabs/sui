@@ -8,7 +8,7 @@ use move_binary_format::{file_format::{
     ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
     SignatureToken::{Address, Bool},
     StructDefinition, StructFieldInformation, TypeSignature, Visibility},
-    CompiledModule::empty_module,
+    CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::str::FromStr;
@@ -25,7 +25,7 @@ struct Mixed {
 }
 
 fuzz_target!(|mix: Mixed| {
-    let mut module = empty_module();
+    let mut module = CompiledModule::empty_module();
     module.version = 5;
 
     module.datatype_handles.push(DatatypeHandle {

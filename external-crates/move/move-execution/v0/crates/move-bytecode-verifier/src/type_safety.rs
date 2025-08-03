@@ -13,11 +13,11 @@ use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CompiledModule, DatatypeHandleIndex, FieldHandleIndex,
+        AbilitySet, Bytecode, CodeOffset, DatatypeHandleIndex, FieldHandleIndex,
         FunctionDefinitionIndex, FunctionHandle, LocalIndex, Signature, SignatureToken,
         SignatureToken as ST, StructDefinition, StructDefinitionIndex, StructFieldInformation,
     },
-    safe_unwrap_err,
+    safe_unwrap_err, CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;

@@ -10,7 +10,6 @@ use move_binary_format::{
     SignatureToken::{Address, Bool, U128, U64},
     StructDefinition, StructFieldInformation, TypeSignature, Visibility,
     },
-    CompiledModule,
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::str::FromStr;
@@ -18,7 +17,7 @@ use std::str::FromStr;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|code_unit: CodeUnit| {
-    let mut module = CompiledModule::empty_module();
+    let mut module = compiled_module::empty_module();
     module.version = 5;
 
     module.datatype_handles.push(DatatypeHandle {
