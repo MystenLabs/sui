@@ -553,14 +553,9 @@ Kiosk trades will not be possible.
     request: <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;,
 ): (ID, u64, ID) {
     <b>let</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a> { <a href="../sui/transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_from">from</a>, receipts } = request;
-    <b>let</b> <b>mut</b> completed = receipts.into_keys();
-    <b>let</b> <b>mut</b> total = completed.length();
-    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
-    <b>while</b> (total &gt; 0) {
-        <b>let</b> rule_type = completed.pop_back();
-        <b>assert</b>!(self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="../sui/transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>);
-        total = total - 1;
-    };
+    <b>let</b> completed = receipts.into_keys();
+    <b>assert</b>!(completed.length() == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
+    completed.destroy!(|rule_type| <b>assert</b>!(self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="../sui/transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>));
     (<a href="../sui/transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_from">from</a>)
 }
 </code></pre>

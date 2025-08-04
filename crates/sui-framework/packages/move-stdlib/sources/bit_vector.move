@@ -25,16 +25,10 @@ public struct BitVector has copy, drop, store {
 public fun new(length: u64): BitVector {
     assert!(length > 0, ELENGTH);
     assert!(length < MAX_SIZE, ELENGTH);
-    let mut counter = 0;
-    let mut bit_field = vector::empty();
-    while (counter < length) {
-        bit_field.push_back(false);
-        counter = counter + 1;
-    };
 
     BitVector {
         length,
-        bit_field,
+        bit_field: vector::tabulate!(length, |_| false)
     }
 }
 
@@ -55,30 +49,13 @@ public fun unset(bitvector: &mut BitVector, bit_index: u64) {
 /// Shift the `bitvector` left by `amount`. If `amount` is greater than the
 /// bitvector's length the bitvector will be zeroed out.
 public fun shift_left(bitvector: &mut BitVector, amount: u64) {
-    if (amount >= bitvector.length) {
-        let len = bitvector.bit_field.length();
-        let mut i = 0;
-        while (i < len) {
-            let elem = &mut bitvector.bit_field[i];
-            *elem = false;
-            i = i + 1;
+    bitvector.length.do!(|i| {
+        if (i + amount < bitvector.length && bitvector.is_index_set(i + amount)) {
+            bitvector.set(i);
+        } else {
+            bitvector.unset(i);
         };
-    } else {
-        let mut i = amount;
-
-        while (i < bitvector.length) {
-            if (bitvector.is_index_set(i)) bitvector.set(i - amount)
-            else bitvector.unset(i - amount);
-            i = i + 1;
-        };
-
-        i = bitvector.length - amount;
-
-        while (i < bitvector.length) {
-            unset(bitvector, i);
-            i = i + 1;
-        };
-    }
+    });
 }
 
 /// Return the value of the bit at `bit_index` in the `bitvector`. `true`
@@ -98,15 +75,11 @@ public fun length(bitvector: &BitVector): u64 {
 /// sequence, then `0` is returned.
 public fun longest_set_sequence_starting_at(bitvector: &BitVector, start_index: u64): u64 {
     assert!(start_index < bitvector.length, EINDEX);
-    let mut index = start_index;
 
-    // Find the greatest index in the vector such that all indices less than it are set.
-    while (index < bitvector.length) {
-        if (!bitvector.is_index_set(index)) break;
-        index = index + 1;
-    };
-
-    index - start_index
+    'longest: {
+        (bitvector.length - start_index).do!(|i| if (!bitvector.is_index_set(start_index + i)) return 'longest i);
+        bitvector.length - start_index
+    }
 }
 
 #[test_only]

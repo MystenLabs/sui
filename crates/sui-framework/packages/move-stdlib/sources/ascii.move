@@ -140,16 +140,18 @@ public fun to_lowercase(string: &String): String {
 /// Returns the length of the `string` if the `substr` is not found.
 /// Returns 0 if the `substr` is empty.
 public fun index_of(string: &String, substr: &String): u64 {
-    let mut i = 0;
     let (n, m) = (string.length(), substr.length());
     if (n < m) return n;
-    while (i <= n - m) {
-        let mut j = 0;
-        while (j < m && string.bytes[i + j] == substr.bytes[j]) j = j + 1;
-        if (j == m) return i;
-        i = i + 1;
-    };
-    n
+    'index: {
+        (n - m + 1).do!(|i| {
+            let matched = 'matched: {
+                m.do!(|j| if (string.bytes[i + j] != substr.bytes[j]) return 'matched false);
+                true
+            };
+            if (matched) return 'index i;
+        });
+        n
+    }
 }
 
 /// Convert a `char` to its uppercase equivalent.

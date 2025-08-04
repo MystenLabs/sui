@@ -609,16 +609,18 @@ Returns 0 if the <code>substr</code> is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_index_of">index_of</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">String</a>, substr: &<a href="../std/ascii.md#std_ascii_String">String</a>): <a href="../std/u64.md#std_u64">u64</a> {
-    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> (n, m) = (<a href="../std/string.md#std_string">string</a>.<a href="../std/ascii.md#std_ascii_length">length</a>(), substr.<a href="../std/ascii.md#std_ascii_length">length</a>());
     <b>if</b> (n &lt; m) <b>return</b> n;
-    <b>while</b> (i &lt;= n - m) {
-        <b>let</b> <b>mut</b> j = 0;
-        <b>while</b> (j &lt; m && <a href="../std/string.md#std_string">string</a>.bytes[i + j] == substr.bytes[j]) j = j + 1;
-        <b>if</b> (j == m) <b>return</b> i;
-        i = i + 1;
-    };
-    n
+    'index: {
+        (n - m + 1).do!(|i| {
+            <b>let</b> matched = 'matched: {
+                m.do!(|j| <b>if</b> (<a href="../std/string.md#std_string">string</a>.bytes[i + j] != substr.bytes[j]) <b>return</b> 'matched <b>false</b>);
+                <b>true</b>
+            };
+            <b>if</b> (matched) <b>return</b> 'index i;
+        });
+        n
+    }
 }
 </code></pre>
 

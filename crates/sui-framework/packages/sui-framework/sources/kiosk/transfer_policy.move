@@ -185,16 +185,11 @@ public fun confirm_request<T>(
     request: TransferRequest<T>,
 ): (ID, u64, ID) {
     let TransferRequest { item, paid, from, receipts } = request;
-    let mut completed = receipts.into_keys();
-    let mut total = completed.length();
+    let completed = receipts.into_keys();
 
-    assert!(total == self.rules.size(), EPolicyNotSatisfied);
+    assert!(completed.length() == self.rules.size(), EPolicyNotSatisfied);
 
-    while (total > 0) {
-        let rule_type = completed.pop_back();
-        assert!(self.rules.contains(&rule_type), EIllegalRule);
-        total = total - 1;
-    };
+    completed.destroy!(|rule_type| assert!(self.rules.contains(&rule_type), EIllegalRule));
 
     (item, paid, from)
 }

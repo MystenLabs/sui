@@ -234,13 +234,11 @@ or if an invalid character is encountered.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_from_ascii_bytes">from_ascii_bytes</a>(bytes: &vector&lt;u8&gt;): <b>address</b> {
     <b>assert</b>!(bytes.<a href="../sui/address.md#sui_address_length">length</a>() == 64, <a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a>);
     <b>let</b> <b>mut</b> hex_bytes = vector[];
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; 64) {
-        <b>let</b> hi = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[i]);
-        <b>let</b> lo = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[i+1]);
+    32u64.do!(|i| {
+        <b>let</b> hi = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[2 * i]);
+        <b>let</b> lo = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[2 * i + 1]);
         hex_bytes.push_back((hi &lt;&lt; 4) | lo);
-        i = i + 2;
-    };
+    });
     <a href="../sui/address.md#sui_address_from_bytes">from_bytes</a>(hex_bytes)
 }
 </code></pre>

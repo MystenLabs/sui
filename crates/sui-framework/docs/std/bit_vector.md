@@ -116,15 +116,9 @@ Create a new <code><a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVe
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_new">new</a>(<a href="../std/bit_vector.md#std_bit_vector_length">length</a>: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a> {
     <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &gt; 0, <a href="../std/bit_vector.md#std_bit_vector_ELENGTH">ELENGTH</a>);
     <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &lt; <a href="../std/bit_vector.md#std_bit_vector_MAX_SIZE">MAX_SIZE</a>, <a href="../std/bit_vector.md#std_bit_vector_ELENGTH">ELENGTH</a>);
-    <b>let</b> <b>mut</b> counter = 0;
-    <b>let</b> <b>mut</b> bit_field = <a href="../std/vector.md#std_vector_empty">vector::empty</a>();
-    <b>while</b> (counter &lt; <a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {
-        bit_field.push_back(<b>false</b>);
-        counter = counter + 1;
-    };
     <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a> {
         <a href="../std/bit_vector.md#std_bit_vector_length">length</a>,
-        bit_field,
+        bit_field: <a href="../std/vector.md#std_vector_tabulate">vector::tabulate</a>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a>, |_| <b>false</b>)
     }
 }
 </code></pre>
@@ -205,27 +199,13 @@ bitvector's length the bitvector will be zeroed out.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_shift_left">shift_left</a>(bitvector: &<b>mut</b> <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a>, amount: <a href="../std/u64.md#std_u64">u64</a>) {
-    <b>if</b> (amount &gt;= bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {
-        <b>let</b> len = bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>();
-        <b>let</b> <b>mut</b> i = 0;
-        <b>while</b> (i &lt; len) {
-            <b>let</b> elem = &<b>mut</b> bitvector.bit_field[i];
-            *elem = <b>false</b>;
-            i = i + 1;
+    bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>.do!(|i| {
+        <b>if</b> (i + amount &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a> && bitvector.<a href="../std/bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(i + amount)) {
+            bitvector.<a href="../std/bit_vector.md#std_bit_vector_set">set</a>(i);
+        } <b>else</b> {
+            bitvector.<a href="../std/bit_vector.md#std_bit_vector_unset">unset</a>(i);
         };
-    } <b>else</b> {
-        <b>let</b> <b>mut</b> i = amount;
-        <b>while</b> (i &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {
-            <b>if</b> (bitvector.<a href="../std/bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(i)) bitvector.<a href="../std/bit_vector.md#std_bit_vector_set">set</a>(i - amount)
-            <b>else</b> bitvector.<a href="../std/bit_vector.md#std_bit_vector_unset">unset</a>(i - amount);
-            i = i + 1;
-        };
-        i = bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a> - amount;
-        <b>while</b> (i &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {
-            <a href="../std/bit_vector.md#std_bit_vector_unset">unset</a>(bitvector, i);
-            i = i + 1;
-        };
-    }
+    });
 }
 </code></pre>
 
@@ -305,13 +285,10 @@ sequence, then <code>0</code> is returned.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_longest_set_sequence_starting_at">longest_set_sequence_starting_at</a>(bitvector: &<a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a>, start_index: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/u64.md#std_u64">u64</a> {
     <b>assert</b>!(start_index &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>, <a href="../std/bit_vector.md#std_bit_vector_EINDEX">EINDEX</a>);
-    <b>let</b> <b>mut</b> index = start_index;
-    // Find the greatest index in the <a href="../std/vector.md#std_vector">vector</a> such that all indices less than it are <a href="../std/bit_vector.md#std_bit_vector_set">set</a>.
-    <b>while</b> (index &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {
-        <b>if</b> (!bitvector.<a href="../std/bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(index)) <b>break</b>;
-        index = index + 1;
-    };
-    index - start_index
+    'longest: {
+        (bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a> - start_index).do!(|i| <b>if</b> (!bitvector.<a href="../std/bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(start_index + i)) <b>return</b> 'longest i);
+        bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a> - start_index
+    }
 }
 </code></pre>
 

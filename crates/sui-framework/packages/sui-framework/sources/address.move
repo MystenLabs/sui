@@ -59,13 +59,11 @@ public fun to_string(a: address): string::String {
 public fun from_ascii_bytes(bytes: &vector<u8>): address {
     assert!(bytes.length() == 64, EAddressParseError);
     let mut hex_bytes = vector[];
-    let mut i = 0;
-    while (i < 64) {
-        let hi = hex_char_value(bytes[i]);
-        let lo = hex_char_value(bytes[i+1]);
+    32u64.do!(|i| {
+        let hi = hex_char_value(bytes[2 * i]);
+        let lo = hex_char_value(bytes[2 * i + 1]);
         hex_bytes.push_back((hi << 4) | lo);
-        i = i + 2;
-    };
+    });
     from_bytes(hex_bytes)
 }
 

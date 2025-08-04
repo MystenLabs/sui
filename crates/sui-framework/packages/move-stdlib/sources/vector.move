@@ -518,9 +518,9 @@ public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): boo
     }
 }
 
-/// Return a new vector containing the elements of `v` except the first `n` elements
-/// that satisfy the predicate `p`. If all elements satisfy the predicate, returns an
-/// empty vector.
+/// Return a new vector containing the elements of `v` include the first `n` elements
+/// that satisfy the predicate `p`. If all elements satisfy the predicate, returns a
+/// new vector containing the same elements.
 public macro fun take_while<$T: drop>($v: vector<$T>, $p: |&$T| -> bool): vector<$T> {
     let v = $v;
     'take: {

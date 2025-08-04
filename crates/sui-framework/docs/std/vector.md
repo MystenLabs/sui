@@ -1436,9 +1436,9 @@ function <code>le</code> (les). Returns <code><b>true</b></code> if the vector i
 
 ## Macro function `take_while`
 
-Return a new vector containing the elements of <code>v</code> except the first <code>n</code> elements
-that satisfy the predicate <code>p</code>. If all elements satisfy the predicate, returns an
-empty vector.
+Return a new vector containing the elements of <code>v</code> include the first <code>n</code> elements
+that satisfy the predicate <code>p</code>. If all elements satisfy the predicate, returns a
+new vector containing the same elements.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_take_while">take_while</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $p: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;
