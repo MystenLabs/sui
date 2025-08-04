@@ -1367,6 +1367,7 @@
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,
+                "per_command_shared_object_transfer_rules": false,
                 "prepend_prologue_tx_in_consensus_commit_in_checkpoints": false,
                 "random_beacon": false,
                 "receive_objects": false,
