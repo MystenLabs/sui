@@ -4,6 +4,7 @@
 pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
+#[allow(clippy::type_complexity)]
 mod checked {
     use crate::{
         adapter::new_native_extensions,
