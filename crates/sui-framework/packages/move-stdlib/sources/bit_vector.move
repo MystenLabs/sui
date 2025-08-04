@@ -13,11 +13,15 @@ const WORD_SIZE: u64 = 1;
 /// The maximum allowed bitvector size
 const MAX_SIZE: u64 = 1024;
 
+/// The `BitVector` structure contains a length parameter and a vector of boolean values.
+/// This is a special vector that uses `true` to indicate that the bit is "1",
+/// and `false` to indicate that the bit is "0".
 public struct BitVector has copy, drop, store {
     length: u64,
     bit_field: vector<bool>,
 }
 
+/// Create a new `BitVector` of the corresponding length with all `false` in the vector.
 public fun new(length: u64): BitVector {
     assert!(length > 0, ELENGTH);
     assert!(length < MAX_SIZE, ELENGTH);
@@ -78,7 +82,7 @@ public fun shift_left(bitvector: &mut BitVector, amount: u64) {
 }
 
 /// Return the value of the bit at `bit_index` in the `bitvector`. `true`
-/// represents "1" and `false` represents a 0
+/// represents "1" and `false` represents "0".
 public fun is_index_set(bitvector: &BitVector, bit_index: u64): bool {
     assert!(bit_index < bitvector.bit_field.length(), EINDEX);
     bitvector.bit_field[bit_index]

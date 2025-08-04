@@ -11,7 +11,9 @@ public struct TableVec<phantom Element: store> has store {
     contents: Table<u64, Element>,
 }
 
+/// Trying to access an out-of-bounds subscript.
 const EIndexOutOfBound: u64 = 0;
+/// Trying to destroy a `TableVec` contains elements.
 const ETableNonEmpty: u64 = 1;
 
 /// Create an empty TableVec.
@@ -63,7 +65,7 @@ public fun borrow_mut<Element: store>(t: &mut TableVec<Element>, i: u64): &mut E
 /// Pop an element from the end of TableVec `t`.
 /// Aborts if `t` is empty.
 public fun pop_back<Element: store>(t: &mut TableVec<Element>): Element {
-    let length = length(t);
+    let length = t.length();
     assert!(length > 0, EIndexOutOfBound);
     t.contents.remove(length - 1)
 }
@@ -71,7 +73,7 @@ public fun pop_back<Element: store>(t: &mut TableVec<Element>): Element {
 /// Destroy the TableVec `t`.
 /// Aborts if `t` is not empty.
 public fun destroy_empty<Element: store>(t: TableVec<Element>) {
-    assert!(length(&t) == 0, ETableNonEmpty);
+    assert!(t.length() == 0, ETableNonEmpty);
     let TableVec { contents } = t;
     contents.destroy_empty();
 }
@@ -109,7 +111,7 @@ public fun swap_remove<Element: store>(t: &mut TableVec<Element>, i: u64): Eleme
 
 #[test]
 fun test_swap() {
-    let ctx = &mut sui::tx_context::dummy();
+    let ctx = &mut tx_context::dummy();
     let mut tv = singleton(0, ctx);
     tv.push_back(1);
     tv.push_back(2);

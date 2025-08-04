@@ -7,13 +7,13 @@
 /// keys and values.
 /// Note that this means that `Bag` values with exactly the same key-value mapping will not be
 /// equal, with `==`, at runtime. For example
-/// ```
-/// let bag1 = bag::new();
-/// let bag2 = bag::new();
-/// bag::add(&mut bag1, 0, false);
-/// bag::add(&mut bag1, 1, true);
-/// bag::add(&mut bag2, 0, false);
-/// bag::add(&mut bag2, 1, true);
+/// ```move
+/// let mut bag1 = bag::new(ctx);
+/// let mut bag2 = bag::new(ctx);
+/// bag1.add(0, false);
+/// bag1.add(1, true);
+/// bag2.add(0, false);
+/// bag2.add(1, true);
 /// // bag1 does not equal bag2, despite having the same entries
 /// assert!(&bag1 != &bag2);
 /// ```
@@ -71,7 +71,7 @@ public fun borrow_mut<K: copy + drop + store, V: store>(bag: &mut Bag, k: K): &m
     field::borrow_mut(&mut bag.id, k)
 }
 
-/// Mutably borrows the key-value pair in the bag `bag: &mut Bag` and returns the value.
+/// Removes the key-value pair in the bag `bag: &mut Bag` and returns the value.
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
 /// that key `k: K`.
 /// Aborts with `sui::dynamic_field::EFieldTypeMismatch` if the bag has an entry for the key, but

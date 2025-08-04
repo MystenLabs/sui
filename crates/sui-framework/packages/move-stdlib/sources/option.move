@@ -105,7 +105,7 @@ public fun swap_or_fill<Element>(t: &mut Option<Element>, e: Element): Option<El
     old_value
 }
 
-/// Destroys `t.` If `t` holds a value, return it. Returns `default` otherwise
+/// Destroys `t`. If `t` holds a value, return it. Returns `default` otherwise
 public fun destroy_with_default<Element: drop>(t: Option<Element>, default: Element): Element {
     let Option { mut vec } = t;
     if (vec.is_empty()) default else vec.pop_back()

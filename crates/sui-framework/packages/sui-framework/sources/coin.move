@@ -34,6 +34,7 @@ const ENotEnough: u64 = 2;
 // #[error]
 // const EGlobalPauseNotAllowed: vector<u8> =
 //    b"Kill switch was not allowed at the creation of the DenyCapV2";
+/// Trying to pause or resume a coin that does not allow configuration of global state.
 const EGlobalPauseNotAllowed: u64 = 3;
 
 /// A coin of type `T` worth `value`. Transferable and storable
@@ -80,7 +81,7 @@ public struct TreasuryCap<phantom T> has key, store {
 
 /// Capability allowing the bearer to deny addresses from using the currency's coins--
 /// immediately preventing those addresses from interacting with the coin as an input to a
-/// transaction and at the start of the next preventing them from receiving the coin.
+/// transaction and at the start of the next epoch preventing them from receiving the coin.
 /// If `allow_global_pause` is true, the bearer can enable a global pause that behaves as if
 /// all addresses were added to the deny list.
 public struct DenyCapV2<phantom T> has key, store {
@@ -155,7 +156,7 @@ public fun take<T>(balance: &mut Balance<T>, value: u64, ctx: &mut TxContext): C
 
 /// Put a `Coin<T>` to the `Balance<T>`.
 public fun put<T>(balance: &mut Balance<T>, coin: Coin<T>) {
-    balance.join(into_balance(coin));
+    balance.join(coin.into_balance());
 }
 
 // === Base Coin functionality ===
@@ -170,7 +171,7 @@ public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
 }
 
 /// Split coin `self` to two coins, one with balance `split_amount`,
-/// and the remaining balance is left is `self`.
+/// and the remaining balance is left in `self`.
 public fun split<T>(self: &mut Coin<T>, split_amount: u64, ctx: &mut TxContext): Coin<T> {
     take(&mut self.balance, split_amount, ctx)
 }
@@ -352,7 +353,7 @@ public fun deny_list_v2_contains_current_epoch<T>(
 }
 
 /// Check if the deny list contains the given address for the next epoch. Denied addresses in
-/// the next epoch will immediately be unable to use objects of this coin type as inputs. At the
+/// the current epoch will immediately be unable to use objects of this coin type as inputs. At the
 /// start of the next epoch, the address will be unable to receive objects of this coin type.
 public fun deny_list_v2_contains_next_epoch<T>(deny_list: &DenyList, addr: address): bool {
     let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
@@ -388,6 +389,7 @@ public fun deny_list_v2_disable_global_pause<T>(
 }
 
 /// Check if the global pause is enabled for the given coin type in the current epoch.
+/// All addresses in the current epoch will be unable to receive objects of this coin type.
 public fun deny_list_v2_is_global_pause_enabled_current_epoch<T>(
     deny_list: &DenyList,
     ctx: &TxContext,
@@ -397,6 +399,9 @@ public fun deny_list_v2_is_global_pause_enabled_current_epoch<T>(
 }
 
 /// Check if the global pause is enabled for the given coin type in the next epoch.
+/// All addresses in the current epoch will immediately be unable to use objects of this
+/// coin type as inputs. At the start of the next epoch, all addresses will be unable to
+/// receive objects of this coin type.
 public fun deny_list_v2_is_global_pause_enabled_next_epoch<T>(deny_list: &DenyList): bool {
     let ty = type_name::get_with_original_ids<T>().into_string().into_bytes();
     deny_list.v2_is_global_pause_enabled_next_epoch(DENY_LIST_COIN_INDEX, ty)

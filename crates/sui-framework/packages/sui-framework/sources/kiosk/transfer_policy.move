@@ -13,7 +13,7 @@
 /// hot potato or transaction will fail.
 ///
 /// - Type owner (creator) can set any Rules as long as the ecosystem supports
-/// them. All of the Rules need to be resolved within a single transaction (eg
+/// them. All of the Rules need to be resolved within a single transaction (e.g.
 /// pay royalty and pay fixed commission). Once required actions are performed,
 /// the `TransferRequest` can be "confirmed" via `confirm_request` call.
 ///

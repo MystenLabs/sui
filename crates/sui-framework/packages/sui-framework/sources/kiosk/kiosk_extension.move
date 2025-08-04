@@ -15,7 +15,7 @@
 /// - An extension can only be installed by the Kiosk Owner and requires an
 /// authorization via the `KioskOwnerCap`.
 /// - When installed, the extension is given a permission bitmap that allows it
-/// to perform certain protected actions (eg `place`, `lock`). However, it is
+/// to perform certain protected actions (e.g. `place`, `lock`). However, it is
 /// possible to install an extension that does not have any permissions.
 /// - Kiosk Owner can `disable` the extension at any time, which prevents it
 /// from performing any protected actions. The storage is still available to the
@@ -66,7 +66,7 @@ const LOCK: u128 = 2;
 public struct Extension has store {
     /// Storage for the extension, an isolated Bag. By putting the extension
     /// into a single dynamic field, we reduce the amount of fields on the
-    /// top level (eg items / listings) while giving extension developers
+    /// top level (e.g. items / listings) while giving extension developers
     /// the ability to store any data they want.
     storage: Bag,
     /// Bitmap of permissions that the extension has (can be revoked any
@@ -77,8 +77,8 @@ public struct Extension has store {
     /// 2nd bit - `lock` and `place` - allows to lock items (and place)
     ///
     /// For example:
-    /// - `10` - allows to place items and lock them.
-    /// - `11` - allows to place items and lock them (`lock` includes `place`).
+    /// - `10` - allows to place items and lock them (`lock` includes `place`).
+    /// - `11` - allows to place items and lock them.
     /// - `01` - allows to place items, but not lock them.
     /// - `00` - no permissions.
     permissions: u128,
@@ -128,7 +128,7 @@ public fun disable<Ext: drop>(self: &mut Kiosk, cap: &KioskOwnerCap) {
     extension_mut<Ext>(self).is_enabled = false;
 }
 
-/// Re-enable the extension allowing it to call protected actions (eg
+/// Re-enable the extension allowing it to call protected actions (e.g.
 /// `place`, `lock`). By default, all added extensions are enabled. Kiosk
 /// owner can disable them via `disable` call.
 public fun enable<Ext: drop>(self: &mut Kiosk, cap: &KioskOwnerCap) {
@@ -169,7 +169,7 @@ public fun storage<Ext: drop>(_ext: Ext, self: &Kiosk): &Bag {
 /// therefore never really allowing the KioskOwner to remove the extension.
 /// However, it is the case with any other solution (1) and this way we
 /// prevent intentional extension freeze when the owner wants to ruin a
-/// trade (2) - eg locking extension while an auction is in progress.
+/// trade (2) - e.g. locking extension while an auction is in progress.
 ///
 /// Extensions should be crafted carefully, and the KioskOwner should be
 /// aware of the risks.

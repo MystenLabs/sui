@@ -13,17 +13,16 @@
 ///  - transaction digest
 ///
 /// Example:
-/// ```
-/// module my::marketplace {
-///    use sui::event;
-///    /* ... */
-///    struct ItemPurchased has copy, drop {
-///      item_id: ID, buyer: address
-///    }
-///    entry fun buy(/* .... */) {
-///       /* ... */
-///       event::emit(ItemPurchased { item_id: ..., buyer: .... })
-///    }
+/// ```move
+/// module my::marketplace;
+/// use sui::event;
+/// /* ... */
+/// public struct ItemPurchased has copy, drop {
+///     item_id: ID, buyer: address
+/// }
+/// entry fun buy(/* .... */) {
+///     /* ... */
+///     event::emit(ItemPurchased { item_id: ..., buyer: .... })
 /// }
 /// ```
 module sui::event;
@@ -34,7 +33,7 @@ module sui::event;
 /// activity in a way that suits a specific application the most.
 ///
 /// The type `T` is the main way to index the event, and can contain
-/// phantom parameters, eg `emit(MyEvent<phantom T>)`.
+/// phantom parameters, e.g. `emit(MyEvent<phantom T>)`.
 public native fun emit<T: copy + drop>(event: T);
 
 #[test_only]

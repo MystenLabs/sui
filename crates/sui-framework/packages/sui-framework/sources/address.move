@@ -18,8 +18,9 @@ const LENGTH: u64 = 32;
 // The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
 const MAX: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
 
-#[allow(unused_const)]
 /// Error from `from_bytes` when it is supplied too many or too few bytes.
+/// Error from `from_ascii_bytes` when it is supplied incorrect length of bytes or
+/// an invalid character is encountered.
 const EAddressParseError: u64 = 0;
 
 /// Convert `a` into a u256 by interpreting `a` as the bytes of a big-endian integer
@@ -53,7 +54,7 @@ public fun to_string(a: address): string::String {
 /// string must be Base16 encoded, and thus exactly 64 characters long.
 /// For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
 /// will be converted to the address @0xDEADB33F.
-/// Aborts with `EAddressParseError` if the length of `s` is not 64,
+/// Aborts with `EAddressParseError` if the length of `bytes` is not 64,
 /// or if an invalid character is encountered.
 public fun from_ascii_bytes(bytes: &vector<u8>): address {
     assert!(bytes.length() == 64, EAddressParseError);

@@ -120,7 +120,7 @@ const EItemLocked: u64 = 8;
 const EItemIsListed: u64 = 9;
 /// Item does not match `Borrow` in `return_val`.
 const EItemMismatch: u64 = 10;
-/// An is not found while trying to borrow.
+/// Item is not found while trying to borrow.
 const EItemNotFound: u64 = 11;
 /// Delisting an item that is not listed.
 const ENotListed: u64 = 12;
