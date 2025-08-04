@@ -6,7 +6,7 @@ use crate::static_programmable_transactions::{
 };
 use indexmap::IndexSet;
 use move_vm_types::values::VectorSpecialization;
-use std::cell::OnceCell;
+use std::{cell::OnceCell, collections::BTreeSet};
 use sui_types::base_types::{ObjectID, ObjectRef};
 
 //**************************************************************************************************
@@ -90,6 +90,9 @@ pub struct Command_ {
     /// checker to remove unused references to allow potentially reuse of parent references.
     /// The value at result `j` is unused and can be dropped if `drop_value[j]` is true.
     pub drop_values: Vec</* drop value */ bool>,
+    /// The set of object shared object IDs that are consumed by this command.
+    /// After this command is executed, these objects must be either reshared or deleted.
+    pub consumed_shared_objects: Vec<ObjectID>,
 }
 
 #[derive(Debug)]
