@@ -7,7 +7,7 @@ use fastcrypto::traits::KeyPair;
 use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::{
     compiled_module::empty_module,
-    file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
+    file_format::{AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
 use move_core_types::identifier::IdentStr;
