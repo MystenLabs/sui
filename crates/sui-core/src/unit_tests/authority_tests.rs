@@ -6,6 +6,7 @@ use bcs;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::{
+    compiled_module::empty_module,
     file_format::{self, AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
@@ -1639,7 +1640,7 @@ async fn test_objected_owned_gas() {
 
 /// Create a `CompiledModule` that depends on `m`
 fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
-    let mut dependent_module = file_format::empty_module();
+    let mut dependent_module = empty_module();
     dependent_module
         .identifiers
         .push(m.self_id().name().to_owned());
@@ -1738,7 +1739,7 @@ async fn test_publish_module_no_dependencies_ok() {
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
     authority.insert_genesis_object(gas_payment_object).await;
 
-    let module = file_format::empty_module();
+    let module = empty_module();
     let mut module_bytes = Vec::new();
     module
         .serialize_with_version(module.version, &mut module_bytes)
@@ -1855,7 +1856,7 @@ async fn test_package_size_limit() {
     // too large by adding more module bytes
     let max_move_package_size = ProtocolConfig::get_for_min_version().max_move_package_size();
     while modules_size <= max_move_package_size {
-        let mut module = file_format::empty_module();
+        let mut module = empty_module();
         // generate unique name
         module.identifiers[0] =
             Identifier::new(format!("TestModule{:0>21000?}", modules_size)).unwrap();

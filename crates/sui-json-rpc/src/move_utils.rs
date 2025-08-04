@@ -285,7 +285,7 @@ mod tests {
 
     mod get_normalized_move_module_tests {
         use super::super::*;
-        use move_binary_format::file_format::basic_test_module;
+        use move_binary_format::compiled_module::basic_test_module;
 
         fn setup() -> (ObjectID, String) {
             (ObjectID::random(), String::from("test_module"))
