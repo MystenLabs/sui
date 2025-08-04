@@ -7,14 +7,18 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{ensure, Context as _};
+use anyhow::{anyhow, bail, ensure, Context as _};
 use chrono::{DateTime, Utc};
 use diesel::{
     sql_types::{BigInt, Text},
     QueryableByName,
 };
 use futures::future::OptionFuture;
-use sui_indexer_alt_reader::{bigtable_reader::BigtableReader, pg_reader::PgReader};
+use sui_indexer_alt_reader::{
+    bigtable_reader::BigtableReader,
+    consistent_reader::{self, AvailableRangeResponse, ConsistentReader},
+    pg_reader::PgReader,
+};
 use sui_sql_macro::query;
 use tokio::{join, sync::RwLock, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
@@ -37,6 +41,9 @@ pub(crate) struct WatermarkTask {
 
     /// Access to Bigtable.
     bigtable_reader: Option<BigtableReader>,
+
+    /// Access to the Consistent Store
+    consistent_reader: ConsistentReader,
 
     /// How long to wait between updating the watermark.
     interval: Duration,
@@ -108,6 +115,7 @@ impl WatermarkTask {
         pg_pipelines: Vec<String>,
         pg_reader: PgReader,
         bigtable_reader: Option<BigtableReader>,
+        consistent_reader: ConsistentReader,
         metrics: Arc<RpcMetrics>,
         cancel: CancellationToken,
     ) -> Self {
@@ -119,6 +127,7 @@ impl WatermarkTask {
             watermarks: Default::default(),
             pg_reader,
             bigtable_reader,
+            consistent_reader,
             interval: watermark_polling_interval,
             pg_pipelines,
             metrics,
@@ -141,6 +150,7 @@ impl WatermarkTask {
                 watermarks,
                 pg_reader,
                 bigtable_reader,
+                consistent_reader,
                 interval,
                 pg_pipelines,
                 metrics,
@@ -169,36 +179,23 @@ impl WatermarkTask {
 
                         let mut w = Watermarks::default();
                         for row in rows {
-                            metrics.watermark_epoch
-                                .with_label_values(&[&row.pipeline])
-                                .set(row.epoch_hi_inclusive);
-
-                            metrics.watermark_checkpoint
-                                .with_label_values(&[&row.pipeline])
-                                .set(row.checkpoint_hi_inclusive);
-
-                            metrics.watermark_transaction
-                                .with_label_values(&[&row.pipeline])
-                                .set(row.tx_hi);
-
-                            metrics.watermark_timestamp_ms
-                                .with_label_values(&[&row.pipeline])
-                                .set(row.timestamp_ms_hi_inclusive);
-
-                            metrics.watermark_reader_epoch_lo
-                                .with_label_values(&[&row.pipeline])
-                                .set(row.epoch_lo);
-
-                            metrics.watermark_reader_checkpoint_lo
-                                .with_label_values(&[&row.pipeline])
-                                .set(row.checkpoint_lo);
-
-                            metrics.watermark_reader_transaction_lo
-                                .with_label_values(&[&row.pipeline])
-                                .set(row.tx_lo);
-
+                            row.record_metrics(&metrics);
                             w.merge(row);
                         }
+
+                        match watermark_from_consistent(&consistent_reader, w.global_hi.checkpoint as u64).await {
+                            Ok(None) => {}
+                            Ok(Some(consistent_row)) => {
+                                // Merge the consistent store watermark
+                                consistent_row.record_metrics(&metrics);
+                                w.merge(consistent_row);
+                            }
+
+                            Err(e) => {
+                                warn!("Failed to get consistent store watermark: {e:#}");
+                                continue;
+                            }
+                        };
 
                         debug!(
                             epoch = w.global_hi.epoch,
@@ -227,7 +224,7 @@ impl Watermarks {
     pub(crate) fn pipeline_lo_watermark(&self, pipeline: &str) -> anyhow::Result<&Watermark> {
         self.pipeline_lo
             .get(pipeline)
-            .ok_or_else(|| anyhow::anyhow!("'{}' not found in pipeline_lo watermarks", pipeline))
+            .ok_or_else(|| anyhow!("'{pipeline}' not found in pipeline_lo watermarks"))
     }
 
     /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
@@ -282,6 +279,43 @@ impl WatermarkRow {
 
         rows.extend(last);
         Ok(rows)
+    }
+
+    fn record_metrics(&self, metrics: &Arc<RpcMetrics>) {
+        metrics
+            .watermark_epoch
+            .with_label_values(&[&self.pipeline])
+            .set(self.epoch_hi_inclusive);
+
+        metrics
+            .watermark_checkpoint
+            .with_label_values(&[&self.pipeline])
+            .set(self.checkpoint_hi_inclusive);
+
+        metrics
+            .watermark_transaction
+            .with_label_values(&[&self.pipeline])
+            .set(self.tx_hi);
+
+        metrics
+            .watermark_timestamp_ms
+            .with_label_values(&[&self.pipeline])
+            .set(self.timestamp_ms_hi_inclusive);
+
+        metrics
+            .watermark_reader_epoch_lo
+            .with_label_values(&[&self.pipeline])
+            .set(self.epoch_lo);
+
+        metrics
+            .watermark_reader_checkpoint_lo
+            .with_label_values(&[&self.pipeline])
+            .set(self.checkpoint_lo);
+
+        metrics
+            .watermark_reader_transaction_lo
+            .with_label_values(&[&self.pipeline])
+            .set(self.tx_lo);
     }
 }
 
@@ -367,4 +401,33 @@ async fn watermarks_from_pg(
     );
 
     Ok(rows)
+}
+
+async fn watermark_from_consistent(
+    consistent_reader: &ConsistentReader,
+    checkpoint: u64,
+) -> anyhow::Result<Option<WatermarkRow>> {
+    match consistent_reader.available_range(checkpoint).await {
+        Ok(AvailableRangeResponse {
+            min_checkpoint: Some(min_checkpoint),
+            max_checkpoint: Some(max_checkpoint),
+            max_epoch: Some(max_epoch),
+            total_transactions: Some(total_transactions),
+            max_timestamp_ms: Some(max_timestamp_ms),
+            stride: _,
+        }) => Ok(Some(WatermarkRow {
+            pipeline: "consistent".to_owned(),
+            epoch_hi_inclusive: max_epoch as i64,
+            checkpoint_hi_inclusive: max_checkpoint as i64,
+            tx_hi: total_transactions as i64,
+            timestamp_ms_hi_inclusive: max_timestamp_ms as i64,
+            epoch_lo: 0,
+            checkpoint_lo: min_checkpoint as i64,
+            tx_lo: 0,
+        })),
+
+        Ok(_) => bail!("Missing data in consistent watermark"),
+        Err(consistent_reader::Error::NotConfigured) => Ok(None),
+        Err(e) => Err(anyhow!(e).context("Failed to get consistent store watermarks")),
+    }
 }

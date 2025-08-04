@@ -9,13 +9,15 @@ use anyhow::{anyhow, Context};
 use prometheus::Registry;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
-    AvailableRangeResponse, ListObjectsByTypeRequest, Object, CHECKPOINT_METADATA,
+    ListObjectsByTypeRequest, Object, CHECKPOINT_METADATA,
 };
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::instrument;
 use url::Url;
+
+pub use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::AvailableRangeResponse;
 
 use crate::metrics::ConsistentReaderMetrics;
 
@@ -69,6 +71,9 @@ pub enum Error {
 
     #[error("{}", .0.message())]
     OutOfRange(#[source] tonic::Status),
+
+    #[error("Consistent store client not configured")]
+    NotConfigured,
 }
 
 impl ConsistentReaderArgs {
@@ -179,7 +184,7 @@ impl ConsistentReader {
         Fut: Future<Output = Result<tonic::Response<O>, tonic::Status>>,
     {
         let Some(client) = self.client.clone() else {
-            bail!("No consistent store client configured");
+            return Err(Error::NotConfigured);
         };
 
         self.metrics
