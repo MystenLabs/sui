@@ -11,13 +11,14 @@ use move_binary_format::{
     StructDefinition, StructFieldInformation, TypeSignature, Visibility,
     },
 };
+use move_binary_format::compiled_module::empty_module;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::str::FromStr;
 
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|code_unit: CodeUnit| {
-    let mut module = compiled_module::empty_module();
+    let mut module = empty_module();
     module.version = 5;
 
     module.datatype_handles.push(DatatypeHandle {
