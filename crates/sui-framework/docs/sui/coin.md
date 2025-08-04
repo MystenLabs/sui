@@ -264,7 +264,7 @@ coins of type <code>T</code>. Transferable
 
 Capability allowing the bearer to deny addresses from using the currency's coins--
 immediately preventing those addresses from interacting with the coin as an input to a
-transaction and at the start of the next preventing them from receiving the coin.
+transaction and at the start of the next epoch preventing them from receiving the coin.
 If <code>allow_global_pause</code> is true, the bearer can enable a global pause that behaves as if
 all addresses were added to the deny list.
 
@@ -385,6 +385,7 @@ Trying to split a coin more times than its balance allows.
 
 <a name="sui_coin_EGlobalPauseNotAllowed"></a>
 
+Trying to pause or resume a coin that does not allow configuration of global state.
 
 
 <pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>: u64 = 3;
@@ -680,7 +681,7 @@ Put a <code><a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;</code> to t
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_put">put</a>&lt;T&gt;(<a href="../sui/balance.md#sui_balance">balance</a>: &<b>mut</b> Balance&lt;T&gt;, <a href="../sui/coin.md#sui_coin">coin</a>: <a href="../sui/coin.md#sui_coin_Coin">Coin</a>&lt;T&gt;) {
-    <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/coin.md#sui_coin_join">join</a>(<a href="../sui/coin.md#sui_coin_into_balance">into_balance</a>(<a href="../sui/coin.md#sui_coin">coin</a>));
+    <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/coin.md#sui_coin_join">join</a>(<a href="../sui/coin.md#sui_coin">coin</a>.<a href="../sui/coin.md#sui_coin_into_balance">into_balance</a>());
 }
 </code></pre>
 
@@ -721,7 +722,7 @@ Aborts if <code>c.<a href="../sui/coin.md#sui_coin_value">value</a> + self.<a hr
 ## Function `split`
 
 Split coin <code>self</code> to two coins, one with balance <code>split_amount</code>,
-and the remaining balance is left is <code>self</code>.
+and the remaining balance is left in <code>self</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;T&gt;
@@ -1158,7 +1159,7 @@ in the current epoch will be unable to receive objects of this coin type.
 ## Function `deny_list_v2_contains_next_epoch`
 
 Check if the deny list contains the given address for the next epoch. Denied addresses in
-the next epoch will immediately be unable to use objects of this coin type as inputs. At the
+the current epoch will immediately be unable to use objects of this coin type as inputs. At the
 start of the next epoch, the address will be unable to receive objects of this coin type.
 
 
@@ -1252,6 +1253,7 @@ type will still be paused until the start of the next epoch.
 ## Function `deny_list_v2_is_global_pause_enabled_current_epoch`
 
 Check if the global pause is enabled for the given coin type in the current epoch.
+All addresses in the current epoch will be unable to receive objects of this coin type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_is_global_pause_enabled_current_epoch">deny_list_v2_is_global_pause_enabled_current_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
@@ -1281,6 +1283,9 @@ Check if the global pause is enabled for the given coin type in the current epoc
 ## Function `deny_list_v2_is_global_pause_enabled_next_epoch`
 
 Check if the global pause is enabled for the given coin type in the next epoch.
+All addresses in the current epoch will immediately be unable to use objects of this
+coin type as inputs. At the start of the next epoch, all addresses will be unable to
+receive objects of this coin type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/coin.md#sui_coin_deny_list_v2_is_global_pause_enabled_next_epoch">deny_list_v2_is_global_pause_enabled_next_epoch</a>&lt;T&gt;(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">sui::deny_list::DenyList</a>): bool

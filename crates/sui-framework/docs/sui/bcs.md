@@ -561,7 +561,7 @@ Peel a vector of <code><b>address</b></code> from serialized bytes.
 
 ## Function `peel_vec_bool`
 
-Peel a vector of <code><b>address</b></code> from serialized bytes.
+Peel a vector of <code>bool</code> from serialized bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec_bool">peel_vec_bool</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): vector&lt;bool&gt;
@@ -586,7 +586,7 @@ Peel a vector of <code><b>address</b></code> from serialized bytes.
 
 ## Function `peel_vec_u8`
 
-Peel a vector of <code>u8</code> (eg string) from serialized bytes.
+Peel a vector of <code>u8</code> (e.g. string) from serialized bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec_u8">peel_vec_u8</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): vector&lt;u8&gt;
@@ -611,7 +611,7 @@ Peel a vector of <code>u8</code> (eg string) from serialized bytes.
 
 ## Function `peel_vec_vec_u8`
 
-Peel a <code>vector&lt;vector&lt;u8&gt;&gt;</code> (eg vec of string) from serialized bytes.
+Peel a <code>vector&lt;vector&lt;u8&gt;&gt;</code> (e.g. vec of string) from serialized bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/bcs.md#sui_bcs_peel_vec_vec_u8">peel_vec_vec_u8</a>(<a href="../sui/bcs.md#sui_bcs">bcs</a>: &<b>mut</b> <a href="../sui/bcs.md#sui_bcs_BCS">sui::bcs::BCS</a>): vector&lt;vector&lt;u8&gt;&gt;
@@ -766,7 +766,7 @@ the corresponding enum variant. Move enums are limited to 127 variants,
 however the tag can be any <code>u32</code> value.
 
 Example:
-```rust
+```move
 let my_enum = match (bcs.peel_enum_tag()) {
 0 => Enum::Empty,
 1 => Enum::U8(bcs.peel_u8()),

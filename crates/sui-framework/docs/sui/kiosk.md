@@ -692,7 +692,7 @@ Item does not match <code><a href="../sui/kiosk.md#sui_kiosk_Borrow">Borrow</a><
 
 <a name="sui_kiosk_EItemNotFound"></a>
 
-An is not found while trying to borrow.
+Item is not found while trying to borrow.
 
 
 <pre><code><b>const</b> <a href="../sui/kiosk.md#sui_kiosk_EItemNotFound">EItemNotFound</a>: u64 = 11;

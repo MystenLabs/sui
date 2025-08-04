@@ -174,7 +174,7 @@ public fun share_policy<T>(policy: TokenPolicy<T>) {
 /// "transfer" action. The `ActionRequest` contains the `recipient` field
 /// to be used in verification.
 public fun transfer<T>(t: Token<T>, recipient: address, ctx: &mut TxContext): ActionRequest<T> {
-    let amount = t.balance.value();
+    let amount = t.value();
     transfer::transfer(t, recipient);
 
     new_request(
@@ -257,7 +257,7 @@ public fun join<T>(token: &mut Token<T>, another: Token<T>) {
 /// Split a `Token` with `amount`.
 /// Aborts if the `Token.balance` is lower than `amount`.
 public fun split<T>(token: &mut Token<T>, amount: u64, ctx: &mut TxContext): Token<T> {
-    assert!(token.balance.value() >= amount, EBalanceTooLow);
+    assert!(token.value() >= amount, EBalanceTooLow);
     Token {
         id: object::new(ctx),
         balance: token.balance.split(amount),
@@ -337,15 +337,7 @@ public fun confirm_request<T>(
 
     spent_balance.destroy_none();
 
-    let rules = &(*policy.rules.get(&name)).into_keys();
-    let rules_len = rules.length();
-    let mut i = 0;
-
-    while (i < rules_len) {
-        let rule = &rules[i];
-        assert!(approvals.contains(rule), ENotApproved);
-        i = i + 1;
-    };
+    (*policy.rules.get(&name)).into_keys().do!(|rule| assert!(approvals.contains(&rule), ENotApproved));
 
     (name, amount, sender, recipient)
 }
@@ -465,7 +457,7 @@ public fun add_rule_config<T, Rule: drop, Config: store>(
 ///
 /// Aborts if the Config is not present.
 public fun rule_config<T, Rule: drop, Config: store>(_rule: Rule, self: &TokenPolicy<T>): &Config {
-    assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
+    assert!(self.has_rule_config_with_type<T, Rule, Config>(), ENoConfig);
     df::borrow(&self.id, key<Rule>())
 }
 
@@ -482,7 +474,7 @@ public fun rule_config_mut<T, Rule: drop, Config: store>(
     self: &mut TokenPolicy<T>,
     cap: &TokenPolicyCap<T>,
 ): &mut Config {
-    assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
+    assert!(self.has_rule_config_with_type<T, Rule, Config>(), ENoConfig);
     assert!(object::id(self) == cap.`for`, ENotAuthorized);
     df::borrow_mut(&mut self.id, key<Rule>())
 }
@@ -502,7 +494,7 @@ public fun remove_rule_config<T, Rule, Config: store>(
     cap: &TokenPolicyCap<T>,
     _ctx: &mut TxContext,
 ): Config {
-    assert!(has_rule_config_with_type<T, Rule, Config>(self), ENoConfig);
+    assert!(self.has_rule_config_with_type<T, Rule, Config>(), ENoConfig);
     assert!(object::id(self) == cap.`for`, ENotAuthorized);
     df::remove(&mut self.id, key<Rule>())
 }
@@ -603,8 +595,7 @@ public fun flush<T>(
     cap: &mut TreasuryCap<T>,
     _ctx: &mut TxContext,
 ): u64 {
-    let amount = self.spent_balance.value();
-    let balance = self.spent_balance.split(amount);
+    let balance = self.spent_balance.withdraw_all();
     cap.supply_mut().decrease_supply(balance)
 }
 

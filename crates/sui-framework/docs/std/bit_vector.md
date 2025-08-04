@@ -23,6 +23,9 @@ title: Module `std::bit_vector`
 
 ## Struct `BitVector`
 
+The <code><a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a></code> structure contains a length parameter and a vector of boolean values.
+This is a special vector that uses <code><b>true</b></code> to indicate that the bit is "1",
+and <code><b>false</b></code> to indicate that the bit is "0".
 
 
 <pre><code><b>public</b> <b>struct</b> <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a> <b>has</b> <b>copy</b>, drop, store
@@ -98,6 +101,7 @@ The maximum allowed bitvector size
 
 ## Function `new`
 
+Create a new <code><a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a></code> of the corresponding length with all <code><b>false</b></code> in the vector.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_new">new</a>(<a href="../std/bit_vector.md#std_bit_vector_length">length</a>: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>
@@ -234,7 +238,7 @@ bitvector's length the bitvector will be zeroed out.
 ## Function `is_index_set`
 
 Return the value of the bit at <code>bit_index</code> in the <code>bitvector</code>. <code><b>true</b></code>
-represents "1" and <code><b>false</b></code> represents a 0
+represents "1" and <code><b>false</b></code> represents "0".
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(bitvector: &<a href="../std/bit_vector.md#std_bit_vector_BitVector">std::bit_vector::BitVector</a>, bit_index: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/bool.md#std_bool">bool</a>

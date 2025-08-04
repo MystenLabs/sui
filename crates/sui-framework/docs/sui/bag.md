@@ -8,13 +8,13 @@ object system. The <code><a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> stru
 keys and values.
 Note that this means that <code><a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> values with exactly the same key-value mapping will not be
 equal, with <code>==</code>, at runtime. For example
-```
-let bag1 = bag::new();
-let bag2 = bag::new();
-bag::add(&mut bag1, 0, false);
-bag::add(&mut bag1, 1, true);
-bag::add(&mut bag2, 0, false);
-bag::add(&mut bag2, 1, true);
+```move
+let mut bag1 = bag::new(ctx);
+let mut bag2 = bag::new(ctx);
+bag1.add(0, false);
+bag1.add(1, true);
+bag2.add(0, false);
+bag2.add(1, true);
 // bag1 does not equal bag2, despite having the same entries
 assert!(&bag1 != &bag2);
 ```
@@ -217,7 +217,7 @@ the value does not have the specified type.
 
 ## Function `remove`
 
-Mutably borrows the key-value pair in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> and returns the value.
+Removes the key-value pair in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">Bag</a></code> and returns the value.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">sui::dynamic_field::EFieldDoesNotExist</a></code> if the bag does not have an entry with
 that key <code>k: K</code>.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">sui::dynamic_field::EFieldTypeMismatch</a></code> if the bag has an entry for the key, but

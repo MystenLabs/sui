@@ -54,6 +54,8 @@ The length of an address, in bytes
 <a name="sui_address_EAddressParseError"></a>
 
 Error from <code><a href="../sui/address.md#sui_address_from_bytes">from_bytes</a></code> when it is supplied too many or too few bytes.
+Error from <code><a href="../sui/address.md#sui_address_from_ascii_bytes">from_ascii_bytes</a></code> when it is supplied incorrect length of bytes or
+an invalid character is encountered.
 
 
 <pre><code><b>const</b> <a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a>: u64 = 0;
@@ -216,7 +218,7 @@ Converts an ASCII string to an address, taking the numerical value for each char
 string must be Base16 encoded, and thus exactly 64 characters long.
 For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
 will be converted to the address @0xDEADB33F.
-Aborts with <code><a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>s</code> is not 64,
+Aborts with <code><a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>bytes</code> is not 64,
 or if an invalid character is encountered.
 
 

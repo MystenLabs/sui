@@ -14,7 +14,7 @@ type <code>T</code> becomes tradable in <code>Kiosk</code>s. On every purchase o
 hot potato or transaction will fail.
 
 - Type owner (creator) can set any Rules as long as the ecosystem supports
-them. All of the Rules need to be resolved within a single transaction (eg
+them. All of the Rules need to be resolved within a single transaction (e.g.
 pay royalty and pay fixed commission). Once required actions are performed,
 the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> can be "confirmed" via <code><a href="../sui/transfer_policy.md#sui_transfer_policy_confirm_request">confirm_request</a></code> call.
 

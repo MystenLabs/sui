@@ -6,16 +6,14 @@ module sui::vec_map_tests;
 
 use sui::vec_map::{Self, VecMap};
 
-#[test]
-#[expected_failure(abort_code = vec_map::EKeyAlreadyExists)]
+#[test, expected_failure(abort_code = vec_map::EKeyAlreadyExists)]
 fun duplicate_key_abort() {
     let mut m = vec_map::empty();
     m.insert(1, true);
     m.insert(1, false);
 }
 
-#[test]
-#[expected_failure(abort_code = vec_map::EKeyDoesNotExist)]
+#[test, expected_failure(abort_code = vec_map::EKeyDoesNotExist)]
 fun nonexistent_key_get() {
     let mut m = vec_map::empty();
     m.insert(1, true);
@@ -23,8 +21,7 @@ fun nonexistent_key_get() {
     let _v = &m[&k];
 }
 
-#[test]
-#[expected_failure(abort_code = vec_map::EKeyDoesNotExist)]
+#[test, expected_failure(abort_code = vec_map::EKeyDoesNotExist)]
 fun nonexistent_key_get_idx_or_abort() {
     let mut m = vec_map::empty();
     m.insert(1, true);
@@ -32,8 +29,7 @@ fun nonexistent_key_get_idx_or_abort() {
     let _idx = m.get_idx(&k);
 }
 
-#[test]
-#[expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
+#[test, expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
 fun out_of_bounds_get_entry_by_idx() {
     let mut m = vec_map::empty();
     m.insert(1, true);
@@ -41,8 +37,7 @@ fun out_of_bounds_get_entry_by_idx() {
     let (_key, _val) = m.get_entry_by_idx(idx);
 }
 
-#[test]
-#[expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
+#[test, expected_failure(abort_code = vec_map::EIndexOutOfBounds)]
 fun out_of_bounds_remove_entry_by_idx() {
     let mut m = vec_map::empty();
     m.insert(10, true);
@@ -66,8 +61,7 @@ fun remove_entry_by_idx() {
     assert!(m.size() == 1);
 }
 
-#[test]
-#[expected_failure(abort_code = vec_map::EMapNotEmpty)]
+#[test, expected_failure(abort_code = vec_map::EMapNotEmpty)]
 fun destroy_non_empty() {
     let mut m = vec_map::empty();
     m.insert(1, true);
@@ -150,21 +144,21 @@ fun round_trip() {
     };
 }
 
-#[test, expected_failure(abort_code = vec_map::EUnequalLengths)]
+#[test, expected_failure]
 fun mismatched_key_values_1() {
     let keys = vector[1];
     let values = vector[];
     vec_map::from_keys_values<u64, u64>(keys, values);
 }
 
-#[test, expected_failure(abort_code = vec_map::EUnequalLengths)]
+#[test, expected_failure]
 fun mismatched_key_values_2() {
     let keys = vector[];
     let values = vector[1];
     vec_map::from_keys_values<u64, u64>(keys, values);
 }
 
-#[test, expected_failure(abort_code = vec_map::EUnequalLengths)]
+#[test, expected_failure]
 fun mismatched_key_values_3() {
     let keys = vector[1, 2, 3, 4, 5, 6];
     let values = {

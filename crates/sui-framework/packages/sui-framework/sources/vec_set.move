@@ -43,10 +43,7 @@ public fun remove<K: copy + drop>(self: &mut VecSet<K>, key: &K) {
 
 /// Return true if `self` contains an entry for `key`, false otherwise
 public fun contains<K: copy + drop>(self: &VecSet<K>, key: &K): bool {
-    'search: {
-        self.contents.do_ref!(|k| if (k == key) return 'search true);
-        false
-    }
+    self.contents.find_index!(|k| k == key).is_some()
 }
 
 /// Return the number of entries in `self`
@@ -56,7 +53,7 @@ public fun size<K: copy + drop>(self: &VecSet<K>): u64 {
 
 /// Return true if `self` has 0 elements, false otherwise
 public fun is_empty<K: copy + drop>(self: &VecSet<K>): bool {
-    size(self) == 0
+    self.size() == 0
 }
 
 /// Unpack `self` into vectors of keys.
@@ -69,10 +66,9 @@ public fun into_keys<K: copy + drop>(self: VecSet<K>): vector<K> {
 /// Construct a new `VecSet` from a vector of keys.
 /// The keys are stored in insertion order (the original `keys` ordering)
 /// and are *not* sorted.
-public fun from_keys<K: copy + drop>(mut keys: vector<K>): VecSet<K> {
-    keys.reverse();
+public fun from_keys<K: copy + drop>(keys: vector<K>): VecSet<K> {
     let mut set = empty();
-    while (keys.length() != 0) set.insert(keys.pop_back());
+    keys.do!(|key| set.insert(key));
     set
 }
 

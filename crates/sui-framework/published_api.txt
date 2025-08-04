@@ -3151,6 +3151,9 @@ create_entries
 restore_heap_recursive
 	fun
 	0x2::priority_queue
+restore_heap_iterative
+	fun
+	0x2::priority_queue
 max_heapify_recursive
 	fun
 	0x2::priority_queue

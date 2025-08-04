@@ -6,16 +6,14 @@ module sui::vec_set_tests;
 
 use sui::vec_set;
 
-#[test]
-#[expected_failure(abort_code = vec_set::EKeyAlreadyExists)]
+#[test, expected_failure(abort_code = vec_set::EKeyAlreadyExists)]
 fun duplicate_key_abort() {
     let mut m = vec_set::empty();
     m.insert(1);
     m.insert(1);
 }
 
-#[test]
-#[expected_failure(abort_code = vec_set::EKeyDoesNotExist)]
+#[test, expected_failure(abort_code = vec_set::EKeyDoesNotExist)]
 fun nonexistent_key_remove() {
     let mut m = vec_set::empty();
     m.insert(1);

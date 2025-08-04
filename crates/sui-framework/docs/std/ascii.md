@@ -207,8 +207,8 @@ characters. Otherwise returns <code>None</code>.
 
 ## Function `all_characters_printable`
 
-Returns <code><b>true</b></code> if all characters in <code><a href="../std/string.md#std_string">string</a></code> are printable characters
-Returns <code><b>false</b></code> otherwise. Not all <code><a href="../std/ascii.md#std_ascii_String">String</a></code>s are printable strings.
+Returns <code><b>true</b></code> if all characters in <code><a href="../std/string.md#std_string">string</a></code> are printable.
+Returns <code><b>false</b></code> otherwise, not all characters are printable.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_all_characters_printable">all_characters_printable</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>): <a href="../std/bool.md#std_bool">bool</a>
@@ -359,7 +359,7 @@ Insert the <code>other</code> string at the <code>at</code> index of <code><a hr
 
 ## Function `substring`
 
-Copy the slice of the <code><a href="../std/string.md#std_string">string</a></code> from <code>i</code> to <code>j</code> into a new <code><a href="../std/ascii.md#std_ascii_String">String</a></code>.
+Copy the slice of the <code><a href="../std/string.md#std_string">string</a></code> from <code>i</code> to <code>j</code> (exclusive) into a new <code><a href="../std/ascii.md#std_ascii_String">String</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_substring">substring</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>
@@ -630,7 +630,7 @@ Returns 0 if the <code>substr</code> is empty.
 
 ## Function `char_to_uppercase`
 
-Convert a <code><a href="../std/ascii.md#std_ascii_char">char</a></code> to its lowercase equivalent.
+Convert a <code><a href="../std/ascii.md#std_ascii_char">char</a></code> to its uppercase equivalent.
 
 
 <pre><code><b>fun</b> <a href="../std/ascii.md#std_ascii_char_to_uppercase">char_to_uppercase</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/u8.md#std_u8">u8</a>

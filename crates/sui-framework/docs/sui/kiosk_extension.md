@@ -20,7 +20,7 @@ as the storage for any type of data / assets.
 - An extension can only be installed by the Kiosk Owner and requires an
 authorization via the <code>KioskOwnerCap</code>.
 - When installed, the extension is given a permission bitmap that allows it
-to perform certain protected actions (eg <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code>, <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code>). However, it is
+to perform certain protected actions (e.g. <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code>, <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code>). However, it is
 possible to install an extension that does not have any permissions.
 - Kiosk Owner can <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_disable">disable</a></code> the extension at any time, which prevents it
 from performing any protected actions. The storage is still available to the
@@ -135,7 +135,7 @@ dynamic field.
 <dd>
  Storage for the extension, an isolated Bag. By putting the extension
  into a single dynamic field, we reduce the amount of fields on the
- top level (eg items / listings) while giving extension developers
+ top level (e.g. items / listings) while giving extension developers
  the ability to store any data they want.
 </dd>
 <dt>
@@ -148,8 +148,8 @@ dynamic field.
  1st bit - <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code> - allows to place items for sale
  2nd bit - <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> and <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code> - allows to lock items (and place)
  For example:
- - <code>10</code> - allows to place items and lock them.
- - <code>11</code> - allows to place items and lock them (<code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> includes <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code>).
+ - <code>10</code> - allows to place items and lock them (<code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code> includes <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code>).
+ - <code>11</code> - allows to place items and lock them.
  - <code>01</code> - allows to place items, but not lock them.
  - <code>00</code> - no permissions.
 </dd>
@@ -323,7 +323,7 @@ The storage is still available to the extension (until it's removed).
 
 ## Function `enable`
 
-Re-enable the extension allowing it to call protected actions (eg
+Re-enable the extension allowing it to call protected actions (e.g.
 <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code>, <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_lock">lock</a></code>). By default, all added extensions are enabled. Kiosk
 owner can disable them via <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_disable">disable</a></code> call.
 
@@ -420,7 +420,7 @@ Potentially dangerous: extension developer can keep data in a Bag
 therefore never really allowing the KioskOwner to remove the extension.
 However, it is the case with any other solution (1) and this way we
 prevent intentional extension freeze when the owner wants to ruin a
-trade (2) - eg locking extension while an auction is in progress.
+trade (2) - e.g. locking extension while an auction is in progress.
 
 Extensions should be crafted carefully, and the KioskOwner should be
 aware of the risks.

@@ -574,7 +574,7 @@ to be used in verification.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer">transfer</a>&lt;T&gt;(t: <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_recipient">recipient</a>: <b>address</b>, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt; {
-    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = t.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>();
+    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = t.<a href="../sui/token.md#sui_token_value">value</a>();
     <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(t, <a href="../sui/token.md#sui_token_recipient">recipient</a>);
     <a href="../sui/token.md#sui_token_new_request">new_request</a>(
         <a href="../sui/token.md#sui_token_transfer_action">transfer_action</a>(),
@@ -751,7 +751,7 @@ Aborts if the <code><a href="../sui/token.md#sui_token_Token">Token</a>.<a href=
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_split">split</a>&lt;T&gt;(<a href="../sui/token.md#sui_token">token</a>: &<b>mut</b> <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt;, <a href="../sui/token.md#sui_token_amount">amount</a>: u64, ctx: &<b>mut</b> TxContext): <a href="../sui/token.md#sui_token_Token">Token</a>&lt;T&gt; {
-    <b>assert</b>!(<a href="../sui/token.md#sui_token">token</a>.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>() &gt;= <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_EBalanceTooLow">EBalanceTooLow</a>);
+    <b>assert</b>!(<a href="../sui/token.md#sui_token">token</a>.<a href="../sui/token.md#sui_token_value">value</a>() &gt;= <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_EBalanceTooLow">EBalanceTooLow</a>);
     <a href="../sui/token.md#sui_token_Token">Token</a> {
         id: <a href="../sui/object.md#sui_object_new">object::new</a>(ctx),
         <a href="../sui/balance.md#sui_balance">balance</a>: <a href="../sui/token.md#sui_token">token</a>.<a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_split">split</a>(<a href="../sui/token.md#sui_token_amount">amount</a>),
@@ -925,14 +925,7 @@ Aborts if:
         <a href="../sui/token.md#sui_token_recipient">recipient</a>,
     } = request;
     <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.destroy_none();
-    <b>let</b> <a href="../sui/token.md#sui_token_rules">rules</a> = &(*policy.<a href="../sui/token.md#sui_token_rules">rules</a>.get(&name)).into_keys();
-    <b>let</b> rules_len = <a href="../sui/token.md#sui_token_rules">rules</a>.length();
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; rules_len) {
-        <b>let</b> rule = &<a href="../sui/token.md#sui_token_rules">rules</a>[i];
-        <b>assert</b>!(<a href="../sui/token.md#sui_token_approvals">approvals</a>.contains(rule), <a href="../sui/token.md#sui_token_ENotApproved">ENotApproved</a>);
-        i = i + 1;
-    };
+    (*policy.<a href="../sui/token.md#sui_token_rules">rules</a>.get(&name)).into_keys().do!(|rule| <b>assert</b>!(<a href="../sui/token.md#sui_token_approvals">approvals</a>.contains(&rule), <a href="../sui/token.md#sui_token_ENotApproved">ENotApproved</a>));
     (name, <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_sender">sender</a>, <a href="../sui/token.md#sui_token_recipient">recipient</a>)
 }
 </code></pre>
@@ -1162,7 +1155,7 @@ Aborts if the Config is not present.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_rule_config">rule_config</a>&lt;T, Rule: drop, Config: store&gt;(_rule: Rule, self: &<a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;): &Config {
-    <b>assert</b>!(<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(self), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
+    <b>assert</b>!(self.<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
     df::borrow(&self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;())
 }
 </code></pre>
@@ -1199,7 +1192,7 @@ Aborts if:
     self: &<b>mut</b> <a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;,
     cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a>&lt;T&gt;,
 ): &<b>mut</b> Config {
-    <b>assert</b>!(<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(self), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
+    <b>assert</b>!(self.<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
     df::borrow_mut(&<b>mut</b> self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;())
 }
@@ -1239,7 +1232,7 @@ Aborts if:
     cap: &<a href="../sui/token.md#sui_token_TokenPolicyCap">TokenPolicyCap</a>&lt;T&gt;,
     _ctx: &<b>mut</b> TxContext,
 ): Config {
-    <b>assert</b>!(<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(self), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
+    <b>assert</b>!(self.<a href="../sui/token.md#sui_token_has_rule_config_with_type">has_rule_config_with_type</a>&lt;T, Rule, Config&gt;(), <a href="../sui/token.md#sui_token_ENoConfig">ENoConfig</a>);
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.`<b>for</b>`, <a href="../sui/token.md#sui_token_ENotAuthorized">ENotAuthorized</a>);
     df::remove(&<b>mut</b> self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;())
 }
@@ -1514,8 +1507,7 @@ action is only available to the <code>TreasuryCap</code> owner.
     cap: &<b>mut</b> TreasuryCap&lt;T&gt;,
     _ctx: &<b>mut</b> TxContext,
 ): u64 {
-    <b>let</b> <a href="../sui/token.md#sui_token_amount">amount</a> = self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.<a href="../sui/token.md#sui_token_value">value</a>();
-    <b>let</b> <a href="../sui/balance.md#sui_balance">balance</a> = self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.<a href="../sui/token.md#sui_token_split">split</a>(<a href="../sui/token.md#sui_token_amount">amount</a>);
+    <b>let</b> <a href="../sui/balance.md#sui_balance">balance</a> = self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.withdraw_all();
     cap.supply_mut().decrease_supply(<a href="../sui/balance.md#sui_balance">balance</a>)
 }
 </code></pre>

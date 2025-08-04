@@ -70,6 +70,7 @@ A basic scalable vector library implemented using <code>Table</code>.
 
 <a name="sui_table_vec_EIndexOutOfBound"></a>
 
+Trying to access an out-of-bounds subscript.
 
 
 <pre><code><b>const</b> <a href="../sui/table_vec.md#sui_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>: u64 = 0;
@@ -79,6 +80,7 @@ A basic scalable vector library implemented using <code>Table</code>.
 
 <a name="sui_table_vec_ETableNonEmpty"></a>
 
+Trying to destroy a <code><a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a></code> contains elements.
 
 
 <pre><code><b>const</b> <a href="../sui/table_vec.md#sui_table_vec_ETableNonEmpty">ETableNonEmpty</a>: u64 = 1;
@@ -288,7 +290,7 @@ Aborts if <code>t</code> is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/table_vec.md#sui_table_vec_pop_back">pop_back</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a>&lt;Element&gt;): Element {
-    <b>let</b> <a href="../sui/table_vec.md#sui_table_vec_length">length</a> = <a href="../sui/table_vec.md#sui_table_vec_length">length</a>(t);
+    <b>let</b> <a href="../sui/table_vec.md#sui_table_vec_length">length</a> = t.<a href="../sui/table_vec.md#sui_table_vec_length">length</a>();
     <b>assert</b>!(<a href="../sui/table_vec.md#sui_table_vec_length">length</a> &gt; 0, <a href="../sui/table_vec.md#sui_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     t.contents.remove(<a href="../sui/table_vec.md#sui_table_vec_length">length</a> - 1)
 }
@@ -316,7 +318,7 @@ Aborts if <code>t</code> is not empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/table_vec.md#sui_table_vec_destroy_empty">destroy_empty</a>&lt;Element: store&gt;(t: <a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a>&lt;Element&gt;) {
-    <b>assert</b>!(<a href="../sui/table_vec.md#sui_table_vec_length">length</a>(&t) == 0, <a href="../sui/table_vec.md#sui_table_vec_ETableNonEmpty">ETableNonEmpty</a>);
+    <b>assert</b>!(t.<a href="../sui/table_vec.md#sui_table_vec_length">length</a>() == 0, <a href="../sui/table_vec.md#sui_table_vec_ETableNonEmpty">ETableNonEmpty</a>);
     <b>let</b> <a href="../sui/table_vec.md#sui_table_vec_TableVec">TableVec</a> { contents } = t;
     contents.<a href="../sui/table_vec.md#sui_table_vec_destroy_empty">destroy_empty</a>();
 }

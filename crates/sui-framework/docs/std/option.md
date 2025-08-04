@@ -451,7 +451,7 @@ Different from swap(), swap_or_fill() allows for <code>t</code> not holding a va
 
 ## Function `destroy_with_default`
 
-Destroys <code>t.</code> If <code>t</code> holds a value, return it. Returns <code>default</code> otherwise
+Destroys <code>t</code>. If <code>t</code> holds a value, return it. Returns <code>default</code> otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_destroy_with_default">destroy_with_default</a>&lt;Element: drop&gt;(t: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, default: Element): Element
