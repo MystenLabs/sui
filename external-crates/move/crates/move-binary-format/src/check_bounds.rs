@@ -8,8 +8,8 @@ use crate::{
         PartialVMError, PartialVMResult,
     },
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, Constant, DatatypeHandle,
-        EnumDefInstantiation, EnumDefinition, FieldHandle, FieldInstantiation, FunctionDefinition,
+        AbilitySet, Bytecode, CodeOffset, CodeUnit, Constant, DatatypeHandle, EnumDefInstantiation,
+        EnumDefinition, FieldHandle, FieldInstantiation, FunctionDefinition,
         FunctionDefinitionIndex, FunctionHandle, FunctionInstantiation, JumpTableInner, LocalIndex,
         ModuleHandle, Signature, SignatureToken, StructDefInstantiation, StructDefinition,
         StructFieldInformation, TableIndex, VariantDefinition, VariantHandle,

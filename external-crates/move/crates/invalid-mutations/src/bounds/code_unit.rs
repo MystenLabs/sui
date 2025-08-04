@@ -5,11 +5,10 @@
 use move_binary_format::{
     errors::{offset_out_of_bounds, PartialVMError},
     file_format::{
-        Bytecode, CodeOffset, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionDefinitionIndex, FunctionHandleIndex,
-        FunctionInstantiationIndex, LocalIndex, SignatureIndex, StructDefInstantiationIndex,
-        StructDefinitionIndex, TableIndex, VariantHandleIndex, VariantInstantiationHandleIndex,
-        VariantJumpTableIndex,
+        Bytecode, CodeOffset, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
+        FunctionDefinitionIndex, FunctionHandleIndex, FunctionInstantiationIndex, LocalIndex,
+        SignatureIndex, StructDefInstantiationIndex, StructDefinitionIndex, TableIndex,
+        VariantHandleIndex, VariantInstantiationHandleIndex, VariantJumpTableIndex,
     },
     internals::ModuleIndex,
     CompiledModule, IndexKind,

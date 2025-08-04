@@ -20,9 +20,7 @@ use getrandom::getrandom;
 use module_generation::generate_module;
 use move_binary_format::{
     errors::VMError,
-    file_format::{
-        AbilitySet, DatatypeHandleIndex, FunctionDefinitionIndex, SignatureToken,
-    },
+    file_format::{AbilitySet, DatatypeHandleIndex, FunctionDefinitionIndex, SignatureToken},
     CompiledModule,
 };
 use move_bytecode_verifier::verify_module_unmetered;

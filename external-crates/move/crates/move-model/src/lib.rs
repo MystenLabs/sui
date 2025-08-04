@@ -16,9 +16,10 @@ use log::warn;
 use num::{BigUint, Num};
 
 use builder::module_builder::ModuleBuilder;
-use move_binary_format::{file_format::{
-    EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex,
-}, CompiledModule};
+use move_binary_format::{
+    file_format::{EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex},
+    CompiledModule,
+};
 use move_compiler::{
     self,
     compiled_unit::{self, AnnotatedCompiledUnit},

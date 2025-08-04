@@ -15,7 +15,7 @@ use move_binary_format::{
         FunctionInstantiationIndex, SignatureIndex, SignatureToken, StructDefInstantiationIndex,
         StructDefinitionIndex, StructFieldInformation, TableIndex, TypeParameterIndex,
     },
-CompiledModule, IndexKind,
+    CompiledModule, IndexKind,
 };
 use move_bytecode_verifier::{self, cyclic_dependencies, dependencies};
 use move_core_types::{

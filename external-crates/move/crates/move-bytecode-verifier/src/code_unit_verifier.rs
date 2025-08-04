@@ -12,9 +12,7 @@ use crate::{
 use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
-    },
+    file_format::{FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex},
     CompiledModule, IndexKind,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};

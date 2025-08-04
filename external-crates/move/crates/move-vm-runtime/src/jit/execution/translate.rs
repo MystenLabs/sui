@@ -27,8 +27,8 @@ use crate::{
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        self as FF, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
+        self as FF, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
+        SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
     },
     CompiledModule,
 };

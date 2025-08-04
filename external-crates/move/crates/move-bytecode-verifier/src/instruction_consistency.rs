@@ -9,9 +9,8 @@
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        Bytecode, CodeOffset, CodeUnit, DatatypeHandleIndex, EnumDefinitionIndex,
-        FieldHandleIndex, FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex,
-        TableIndex,
+        Bytecode, CodeOffset, CodeUnit, DatatypeHandleIndex, EnumDefinitionIndex, FieldHandleIndex,
+        FunctionDefinitionIndex, FunctionHandleIndex, StructDefinitionIndex, TableIndex,
     },
     CompiledModule,
 };

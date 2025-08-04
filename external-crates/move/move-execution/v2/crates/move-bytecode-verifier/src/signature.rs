@@ -8,9 +8,9 @@
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeUnit, DatatypeTyParameter, FunctionDefinition,
-        FunctionHandle, Signature, SignatureIndex, SignatureToken, StructDefinition,
-        StructFieldInformation, TableIndex,
+        AbilitySet, Bytecode, CodeUnit, DatatypeTyParameter, FunctionDefinition, FunctionHandle,
+        Signature, SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation,
+        TableIndex,
     },
     file_format_common::VERSION_6,
     CompiledModule, IndexKind,

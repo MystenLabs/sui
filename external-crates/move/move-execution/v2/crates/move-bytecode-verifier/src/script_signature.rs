@@ -15,9 +15,7 @@
 
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
-    },
+    file_format::{FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex},
     file_format_common::{VERSION_1, VERSION_5},
     CompiledModule, IndexKind,
 };

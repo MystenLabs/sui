@@ -1,13 +1,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::{file_format::{
-    self, AbilitySet, CodeOffset, CodeUnit, ConstantPoolIndex, DatatypeHandleIndex,
-    DatatypeTyParameter, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinition,
-    FunctionDefinitionIndex, FunctionHandleIndex, IdentifierIndex, LocalIndex, MemberCount,
-    SignatureIndex, SignatureToken, StructDefInstantiationIndex, StructDefinition,
-    StructDefinitionIndex, StructFieldInformation, TypeParameterIndex, VariantHandleIndex,
-    VariantInstantiationHandleIndex, VariantJumpTable, VariantTag, Visibility,},
+use move_binary_format::{
+    file_format::{
+        self, AbilitySet, CodeOffset, CodeUnit, ConstantPoolIndex, DatatypeHandleIndex,
+        DatatypeTyParameter, EnumDefinitionIndex, FieldHandleIndex, FunctionDefinition,
+        FunctionDefinitionIndex, FunctionHandleIndex, IdentifierIndex, LocalIndex, MemberCount,
+        SignatureIndex, SignatureToken, StructDefInstantiationIndex, StructDefinition,
+        StructDefinitionIndex, StructFieldInformation, TypeParameterIndex, VariantHandleIndex,
+        VariantInstantiationHandleIndex, VariantJumpTable, VariantTag, Visibility,
+    },
     CompiledModule,
 };
 use move_core_types::{

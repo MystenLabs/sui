@@ -16,8 +16,8 @@ use std::collections::{BTreeSet, HashMap};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
-        Bytecode, CodeOffset, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandle, FunctionHandleIndex, StructDefinitionIndex,
+        Bytecode, CodeOffset, FunctionDefinition, FunctionDefinitionIndex, FunctionHandle,
+        FunctionHandleIndex, StructDefinitionIndex,
     },
     safe_unwrap, CompiledModule,
 };

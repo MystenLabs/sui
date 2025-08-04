@@ -7,11 +7,9 @@
 //! each module in isolation guarantees that there is no structural recursion globally.
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, TableIndex,
-    },
+    file_format::{DatatypeHandleIndex, SignatureToken, StructDefinitionIndex, TableIndex},
     internals::ModuleIndex,
-CompiledModule, IndexKind,
+    CompiledModule, IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 use petgraph::{algo::toposort, graphmap::DiGraphMap};

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![no_main]
-use move_binary_format::{file_format::{
-    AbilitySet, Bytecode, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex,
-    FieldDefinition, FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
-    ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
-    SignatureToken::{Address, Bool},
-    StructDefinition, StructFieldInformation, TypeSignature, Visibility},
-};
 use move_binary_format::compiled_module::empty_module;
+use move_binary_format::file_format::{
+    AbilitySet, Bytecode, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex, FieldDefinition,
+    FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex,
+    Signature, SignatureIndex, SignatureToken,
+    SignatureToken::{Address, Bool},
+    StructDefinition, StructFieldInformation, TypeSignature, Visibility,
+};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::str::FromStr;
 

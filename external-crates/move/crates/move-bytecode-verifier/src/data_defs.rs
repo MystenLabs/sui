@@ -8,8 +8,7 @@
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        DatatypeHandleIndex, EnumDefinitionIndex, SignatureToken,
-        StructDefinitionIndex, TableIndex,
+        DatatypeHandleIndex, EnumDefinitionIndex, SignatureToken, StructDefinitionIndex, TableIndex,
     },
     internals::ModuleIndex,
     CompiledModule, IndexKind,

@@ -14,8 +14,8 @@ use crate::{
 use move_binary_format::{
     check_bounds::BoundsChecker,
     errors::{Location, VMResult},
-    CompiledModule,
     file_format_common::VERSION_6,
+    CompiledModule,
 };
 use move_bytecode_verifier_meter::{dummy::DummyMeter, Meter};
 use move_vm_config::verifier::VerifierConfig;

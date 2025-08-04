@@ -5,8 +5,8 @@
 use move_binary_format::{
     errors::{bounds_error, PartialVMError},
     file_format::{
-        AddressIdentifierIndex, DatatypeHandleIndex, FunctionHandleIndex,
-        IdentifierIndex, ModuleHandleIndex, SignatureIndex, StructDefinitionIndex, TableIndex,
+        AddressIdentifierIndex, DatatypeHandleIndex, FunctionHandleIndex, IdentifierIndex,
+        ModuleHandleIndex, SignatureIndex, StructDefinitionIndex, TableIndex,
     },
     internals::ModuleIndex,
     CompiledModule, IndexKind,
