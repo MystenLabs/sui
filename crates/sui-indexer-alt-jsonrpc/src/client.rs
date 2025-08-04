@@ -73,6 +73,8 @@ impl HttpClient {
             .default_headers(headers)
             .timeout(connection_timeout)
             .pool_idle_timeout(Some(connection_idle_timeout))
+            .tcp_keepalive(Duration::from_secs(30))
+            .http2_keep_alive_interval(Duration::from_secs(10))
             .build()
             .context("Failed to create reqwest client")?;
 

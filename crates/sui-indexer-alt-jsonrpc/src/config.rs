@@ -335,7 +335,7 @@ impl NodeConfig {
             headers,
             self.max_request_size,
             Duration::from_secs(5),
-            Duration::from_secs(15),
+            Duration::from_secs(30),
         )
         .context("Failed to initialize fullnode RPC client")
     }
