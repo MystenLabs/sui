@@ -85,6 +85,20 @@ type AuthenticatorStateCreateTransaction {
 	_: Boolean
 }
 
+"""
+System transaction that is executed at the end of an epoch to expire JSON Web Keys (JWKs) that are no longer valid, based on their associated epoch. This is part of the on-chain state management for zkLogin and authentication.
+"""
+type AuthenticatorStateExpireTransaction {
+	"""
+	Expire JWKs that have a lower epoch than this.
+	"""
+	minEpoch: Epoch
+	"""
+	The initial version that the AuthenticatorStateUpdate was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
+}
+
 type AuthenticatorStateUpdateTransaction {
 	"""
 	Epoch of the authenticator state update transaction.
@@ -399,7 +413,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""

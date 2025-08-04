@@ -8,6 +8,7 @@ use crate::config::Version;
 use crate::server::graphiql_server::start_graphiql_server;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use simulacrum::AdvanceEpochConfig;
 use simulacrum::Simulacrum;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -239,7 +240,10 @@ pub async fn prep_executor_cluster() -> ExecutorCluster {
     sim.create_checkpoint();
     sim.create_checkpoint();
     sim.create_checkpoint();
-    sim.advance_epoch(true, false, false, false, false);
+    sim.advance_epoch(AdvanceEpochConfig {
+        create_random_state: true,
+        ..Default::default()
+    });
     sim.create_checkpoint();
     sim.advance_clock(
         std::time::SystemTime::now()

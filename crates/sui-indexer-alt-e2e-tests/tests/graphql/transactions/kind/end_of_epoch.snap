@@ -4,21 +4,21 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 processed 4 tasks
 
 task 1, line 6:
-//# advance-epoch --create-random-state --create-authenticator-state --create-deny-list-state --create-bridge-state --create-bridge-committee
+//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee
 Epoch advanced: 1
 
 task 2, line 8:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 3, lines 10-56:
+task 3, lines 10-62:
 //# run-graphql
 Response: {
   "data": {
     "endOfEpochTransaction": {
       "nodes": [
         {
-          "digest": "Ap4cKQqRE7qqcoFFgdDMrj8P7StogBouS3ThBREXGqDS",
+          "digest": "2i1FFQCQUT1Cxs5csj1qZCxxx6ehxEfotT9sXXjvEutd",
           "kind": {
             "__typename": "EndOfEpochTransaction",
             "transactions": {
@@ -30,6 +30,13 @@ Response: {
                 {
                   "__typename": "AuthenticatorStateCreateTransaction",
                   "_": null
+                },
+                {
+                  "__typename": "AuthenticatorStateExpireTransaction",
+                  "minEpoch": {
+                    "epochId": 0
+                  },
+                  "authenticatorObjInitialSharedVersion": 1
                 },
                 {
                   "__typename": "CoinDenyListStateCreateTransaction",

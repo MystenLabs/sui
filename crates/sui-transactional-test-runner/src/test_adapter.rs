@@ -764,24 +764,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
             }
-            SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand {
-                count,
-                create_random_state,
-                create_authenticator_state,
-                create_deny_list_state,
-                create_bridge_state,
-                create_bridge_committee,
-            }) => {
-                for _ in 0..count.unwrap_or(1) {
-                    self.executor
-                        .advance_epoch(
-                            create_random_state,
-                            create_authenticator_state,
-                            create_deny_list_state,
-                            create_bridge_state,
-                            create_bridge_committee,
-                        )
-                        .await?;
+            SuiSubcommand::AdvanceEpoch(cmd) => {
+                for _ in 0..cmd.count.unwrap_or(1) {
+                    self.executor.advance_epoch((&cmd).into()).await?;
                 }
                 let epoch = self.get_latest_epoch_id()?;
                 Ok(Some(format!("Epoch advanced: {epoch}")))

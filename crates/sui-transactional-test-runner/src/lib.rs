@@ -14,6 +14,7 @@ pub use move_transactional_test_runner::framework::{
     create_adapter, run_tasks_with_adapter, run_test_impl,
 };
 use rand::rngs::StdRng;
+use simulacrum::AdvanceEpochConfig;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulator_persisted_store::PersistedStore;
@@ -117,14 +118,7 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
         duration: std::time::Duration,
     ) -> anyhow::Result<TransactionEffects>;
 
-    async fn advance_epoch(
-        &mut self,
-        create_random_state: bool,
-        create_authenticator_state: bool,
-        create_deny_list_state: bool,
-        create_bridge_state: bool,
-        create_bridge_committee: bool,
-    ) -> anyhow::Result<()>;
+    async fn advance_epoch(&mut self, config: AdvanceEpochConfig) -> anyhow::Result<()>;
 
     async fn request_gas(
         &mut self,
@@ -277,14 +271,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
         unimplemented!("advance_clock not supported")
     }
 
-    async fn advance_epoch(
-        &mut self,
-        _create_random_state: bool,
-        _create_authenticator_state: bool,
-        _create_deny_list_state: bool,
-        _create_bridge_state: bool,
-        _create_bridge_committee: bool,
-    ) -> anyhow::Result<()> {
+    async fn advance_epoch(&mut self, _config: AdvanceEpochConfig) -> anyhow::Result<()> {
         self.validator.reconfigure_for_testing().await;
         self.fullnode.reconfigure_for_testing().await;
         Ok(())
@@ -502,21 +489,8 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         Ok(self.advance_clock(duration))
     }
 
-    async fn advance_epoch(
-        &mut self,
-        create_random_state: bool,
-        create_authenticator_state: bool,
-        create_deny_list_state: bool,
-        create_bridge_state: bool,
-        create_bridge_committee: bool,
-    ) -> anyhow::Result<()> {
-        self.advance_epoch(
-            create_random_state,
-            create_authenticator_state,
-            create_deny_list_state,
-            create_bridge_state,
-            create_bridge_committee,
-        );
+    async fn advance_epoch(&mut self, config: AdvanceEpochConfig) -> anyhow::Result<()> {
+        self.advance_epoch(config);
         Ok(())
     }
 

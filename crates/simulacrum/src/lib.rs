@@ -57,6 +57,26 @@ use sui_types::{
     transaction::{GasData, TransactionData, TransactionKind},
 };
 
+/// Configuration for advancing epochs in the Simulacrum.
+///
+/// Controls which special end-of-epoch transactions are created during epoch transitions.
+#[derive(Debug, Clone, Default)]
+pub struct AdvanceEpochConfig {
+    /// Controls whether a `RandomStateCreate` end-of-epoch transaction is included
+    /// (to initialise on-chain randomness for the first time).
+    pub create_random_state: bool,
+    /// Controls whether to create authenticator state.
+    pub create_authenticator_state: bool,
+    /// Controls whether to expire authenticator state.
+    pub create_authenticator_state_expire: bool,
+    /// Controls whether to create deny list state.
+    pub create_deny_list_state: bool,
+    /// Controls whether to create bridge state.
+    pub create_bridge_state: bool,
+    /// Controls whether to create bridge committee.
+    pub create_bridge_committee: bool,
+}
+
 mod epoch_state;
 pub mod store;
 
@@ -250,20 +270,12 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// epoch. Since it is required to be the final transaction in an epoch, the final checkpoint in
     /// the epoch is also created.
     ///
-    /// create_random_state controls whether a `RandomStateCreate` end of epoch transaction is
-    /// included as part of this epoch change (to initialise on-chain randomness for the first
-    /// time).
+    /// The `config` parameter controls which special end-of-epoch transactions are created
+    /// as part of this epoch change.
     ///
     /// NOTE: This function does not currently support updating the protocol version or the system
     /// packages
-    pub fn advance_epoch(
-        &mut self,
-        create_random_state: bool,
-        create_authenticator_state: bool,
-        create_deny_list_state: bool,
-        create_bridge_state: bool,
-        create_bridge_committee: bool,
-    ) {
+    pub fn advance_epoch(&mut self, config: AdvanceEpochConfig) {
         let next_epoch = self.epoch_state.epoch() + 1;
         let next_epoch_protocol_version = self.epoch_state.protocol_version();
         let gas_cost_summary = self.checkpoint_builder.epoch_rolling_gas_cost_summary();
@@ -272,25 +284,33 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
 
         let mut kinds = vec![];
 
-        if create_random_state {
+        if config.create_random_state {
             kinds.push(EndOfEpochTransactionKind::new_randomness_state_create());
         }
 
-        if create_authenticator_state {
+        if config.create_authenticator_state {
             kinds.push(EndOfEpochTransactionKind::new_authenticator_state_create());
         }
 
-        if create_deny_list_state {
+        if config.create_authenticator_state_expire {
+            let current_epoch = self.epoch_state.epoch();
+            kinds.push(EndOfEpochTransactionKind::new_authenticator_state_expire(
+                current_epoch,
+                SequenceNumber::from(1),
+            ));
+        }
+
+        if config.create_deny_list_state {
             kinds.push(EndOfEpochTransactionKind::new_deny_list_state_create());
         }
 
-        if create_bridge_state {
+        if config.create_bridge_state {
             // Use a default test chain identifier for bridge state creation
             let chain_id = ChainIdentifier::default();
             kinds.push(EndOfEpochTransactionKind::new_bridge_create(chain_id));
         }
 
-        if create_bridge_committee {
+        if config.create_bridge_committee {
             // Use a default sequence number for bridge committee initialization
             let bridge_version = SequenceNumber::from(1);
             kinds.push(EndOfEpochTransactionKind::init_bridge_committee(
@@ -749,11 +769,7 @@ mod tests {
 
         let start_epoch = chain.store.get_highest_checkpint().unwrap().epoch;
         for i in 0..steps {
-            chain.advance_epoch(
-                /* create_random_state */ false, /* create_authenticator_state */ false,
-                /* create_deny_list_state */ false, /* create_bridge_state */ false,
-                /* create_bridge_committee */ false,
-            );
+            chain.advance_epoch(AdvanceEpochConfig::default());
             chain.advance_clock(Duration::from_millis(1));
             chain.create_checkpoint();
             println!("{i}");
