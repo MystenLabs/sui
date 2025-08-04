@@ -8,7 +8,7 @@
 // in the transitive closure of the root package.
 
 use crate::{
-    cache::identifier_interner::{intern_identifier, resolve_interned, IdentifierKey},
+    cache::identifier_interner::{self, intern_identifier, resolve_interned, IdentifierKey},
     jit::execution::ast::{
         ArenaType, Datatype, DatatypeDescriptor, Function, Module, Package, Type, TypeNodeCount,
         TypeSubst,
@@ -177,9 +177,10 @@ impl VMDispatchTables {
             PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Package {} not found", package))
         })?;
+        let interned = identifier_interner::intern_identifier(module_id).unwrap();
         package
             .loaded_modules
-            .get(module_id)
+            .get(&interned)
             .map(VMPointer::from_ref)
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)

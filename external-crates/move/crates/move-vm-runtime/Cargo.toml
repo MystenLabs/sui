@@ -18,6 +18,7 @@ better_any.workspace = true
 bumpalo.workspace = true
 fail.workspace = true
 hex.workspace = true
+indexmap.workspace = true
 lasso.workspace = true
 once_cell.workspace = true
 parking_lot.workspace = true

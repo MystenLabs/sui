@@ -6,8 +6,8 @@ use crate::{
     cache::{
         arena::{Arena, ArenaBox, ArenaVec},
         identifier_interner::{
-            intern_ident_str, intern_identifier, intern_identifier_with_msg, resolve_interned,
-            IdentifierKey,
+            self, intern_ident_str, intern_identifier, intern_identifier_with_msg,
+            resolve_interned, IdentifierKey,
         },
     },
     dbg_println,
@@ -24,6 +24,7 @@ use crate::{
         vm_pointer::VMPointer,
     },
 };
+use indexmap::IndexMap;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -46,7 +47,7 @@ struct PackageContext<'natives> {
     pub original_id: OriginalId,
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
-    pub loaded_modules: BTreeMap<Identifier, Module>,
+    pub loaded_modules: IndexMap<IdentifierKey, Module>,
 
     // NB: All things except for types are allocated into this arena.
     pub package_arena: Arena,
@@ -195,7 +196,7 @@ pub fn package(
         natives,
         version_id,
         original_id,
-        loaded_modules: BTreeMap::new(),
+        loaded_modules: IndexMap::new(),
         package_arena: Arena::new(),
         vtable_funs: DefinitionMap::empty(),
         vtable_types: DefinitionMap::empty(),
@@ -216,9 +217,8 @@ pub fn package(
         // If we haven't processed the immediate dependencies yet, push the module back onto
         // the front and process other modules first.
         if !immediate_dependencies.all(|dep| {
-            package_context
-                .loaded_modules
-                .contains_key(&dep.name().to_owned())
+            let key = identifier_interner::intern_ident_str(dep.name()).unwrap();
+            package_context.loaded_modules.contains_key(&key)
         }) {
             package_modules.insert(0, input_module);
             continue;
@@ -231,9 +231,10 @@ pub fn package(
             &mut input_module,
         )?;
 
+        let key = identifier_interner::intern_ident_str(loaded_module.id.name()).unwrap();
         assert!(package_context
             .loaded_modules
-            .insert(loaded_module.id.name().to_owned(), loaded_module)
+            .insert(key, loaded_module)
             .is_none());
     }
 

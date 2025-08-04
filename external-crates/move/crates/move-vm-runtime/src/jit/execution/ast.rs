@@ -18,6 +18,7 @@ use crate::{
     },
 };
 
+use indexmap::IndexMap;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -30,7 +31,6 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::AbstractMemorySize, identifier::Identifier,
     language_storage::ModuleId, vm_status::StatusCode,
 };
-use std::collections::BTreeMap;
 
 // -------------------------------------------------------------------------------------------------
 // Package / Module Type Definitions
@@ -43,8 +43,7 @@ pub struct Package {
 
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
-    // TODO(vm-rewrite): IdentifierKey
-    pub loaded_modules: BTreeMap<Identifier, Module>,
+    pub loaded_modules: IndexMap<IdentifierKey, Module>,
 
     // NB: Package functions and code are allocated into this arena.
     pub package_arena: Arena,

@@ -2589,6 +2589,7 @@ dependencies = [
  "bumpalo",
  "fail",
  "hex",
+ "indexmap 2.8.0",
  "lasso",
  "memory-stats",
  "move-abstract-interpreter",
