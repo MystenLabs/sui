@@ -790,25 +790,10 @@ mod checked {
                 } else {
                     // For all other commands, we check the shared objects taken by value
                     // are deleted or re-shared
-                    let object_runtime = self.object_runtime()?;
-                    for id in &self.per_command_by_value_shared_objects {
-                        // valid if done deleted or re-shared
-                        let is_valid_usage = object_runtime.is_deleted(id)
-                            || matches!(
-                                object_runtime.is_transferred(id),
-                                Some(Owner::Shared { .. })
-                            );
-                        if !is_valid_usage {
-                            return Err(ExecutionError::new_with_source(
-                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
-                                format!(
-                                    "Shared object operation on {} not allowed: \
-                                     cannot be frozen, transferred, or wrapped",
-                                    id
-                                ),
-                            ));
-                        }
-                    }
+                    check_shared_object_usage(
+                        self.object_runtime()?,
+                        &self.per_command_by_value_shared_objects,
+                    )?;
                     self.per_command_by_value_shared_objects.clear();
                     results.into_iter().map(ResultValue::new).collect()
                 }
@@ -1407,6 +1392,32 @@ mod checked {
                 .with_message(format!("Error loading {package_id} from store: {err}"))
                 .finish(Location::Undefined)),
         }
+    }
+
+    /// Check for valid shared object usage, either deleted or re-shared, at the end of a command
+    pub fn check_shared_object_usage<'a>(
+        object_runtime: &ObjectRuntime,
+        consumed_shared_objects: impl IntoIterator<Item = &'a ObjectID>,
+    ) -> Result<(), ExecutionError> {
+        for id in consumed_shared_objects {
+            // valid if done deleted or re-shared
+            let is_valid_usage = object_runtime.is_deleted(id)
+                || matches!(
+                    object_runtime.is_transferred(id),
+                    Some(Owner::Shared { .. })
+                );
+            if !is_valid_usage {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                    format!(
+                        "Shared object operation on {} not allowed: \
+                        cannot be frozen, transferred, or wrapped",
+                        id
+                    ),
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub fn finish(

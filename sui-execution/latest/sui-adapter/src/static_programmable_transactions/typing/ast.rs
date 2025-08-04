@@ -6,7 +6,7 @@ use crate::static_programmable_transactions::{
 };
 use indexmap::IndexSet;
 use move_vm_types::values::VectorSpecialization;
-use std::{cell::OnceCell, collections::BTreeSet};
+use std::cell::OnceCell;
 use sui_types::base_types::{ObjectID, ObjectRef};
 
 //**************************************************************************************************

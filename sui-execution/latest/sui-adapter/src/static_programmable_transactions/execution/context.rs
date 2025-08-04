@@ -997,6 +997,15 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         Ok(())
     }
 
+    /// Check for valid shared object usage, either deleted or re-shared, at the end of a command
+    pub fn check_shared_object_usage(
+        &mut self,
+        consumed_shared_objects: Vec<ObjectID>,
+    ) -> Result<(), ExecutionError> {
+        let object_runtime = self.object_runtime()?;
+        legacy_ptb::context::check_shared_object_usage(object_runtime, &consumed_shared_objects)
+    }
+
     //
     // Dev Inspect tracking
     //
