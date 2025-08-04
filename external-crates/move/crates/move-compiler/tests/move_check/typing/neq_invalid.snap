@@ -208,7 +208,7 @@ error[E04005]: expected a single type
 33 │         (0, 1) != (0, 1);
    │         ^^^^^^^^^^^^^^^^
    │         │         │
-   │         │         Expected a single type, but found expression list type: '(u64, u64)'
+   │         │         Expected a single type, but found expression list type: '({integer}, {integer})'
    │         Incompatible arguments to '!='
 
 error[E04007]: incompatible types

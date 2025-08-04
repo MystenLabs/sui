@@ -1,0 +1,88 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04038]: invalid string after type inference
+  ┌─ tests/move_2024/typing/string_literal_no_ctor.move:4:36
+  │
+4 │     fun t0(): std::ascii::String { "hello" }
+  │                                    ^^^^^^^ Could not find constructor for type 'std::ascii::String'
+  │
+  = String literals must be linked against the standard library to be constructed
+
+error[E04038]: invalid string after type inference
+  ┌─ tests/move_2024/typing/string_literal_no_ctor.move:5:37
+  │
+5 │     fun t1(): std::string::String { "hello" }
+  │                                     ^^^^^^^ Could not find constructor for type 'std::string::String'
+  │
+  = String literals must be linked against the standard library to be constructed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/type_name.move:37:11
+   │
+37 │     name: String,
+   │           ^^^^^^
+   │           │
+   │           Invalid field type. The struct was declared with the ability 'copy' so all fields require the ability 'copy'
+   │           The type 'std::ascii::String' does not have the ability 'copy'
+   │
+   ┌─ tests/move_2024/typing/string_literal_no_ctor.move:1:35
+   │
+ 1 │ module std::ascii { public struct String {} }
+   │                                   ------ To satisfy the constraint, the 'copy' ability would need to be added here
+
+error[E05001]: ability constraint not satisfied
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/type_name.move:37:11
+   │
+37 │     name: String,
+   │           ^^^^^^
+   │           │
+   │           Invalid field type. The struct was declared with the ability 'drop' so all fields require the ability 'drop'
+   │           The type 'std::ascii::String' does not have the ability 'drop'
+   │
+   ┌─ tests/move_2024/typing/string_literal_no_ctor.move:1:35
+   │
+ 1 │ module std::ascii { public struct String {} }
+   │                                   ------ To satisfy the constraint, the 'drop' ability would need to be added here
+
+error[E05001]: ability constraint not satisfied
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/type_name.move:37:11
+   │
+37 │     name: String,
+   │           ^^^^^^
+   │           │
+   │           Invalid field type. The struct was declared with the ability 'store' so all fields require the ability 'store'
+   │           The type 'std::ascii::String' does not have the ability 'store'
+   │
+   ┌─ tests/move_2024/typing/string_literal_no_ctor.move:1:35
+   │
+ 1 │ module std::ascii { public struct String {} }
+   │                                   ------ To satisfy the constraint, the 'store' ability would need to be added here
+
+error[E03003]: unbound module member
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/vector.move:10:16
+   │
+10 │ public use fun std::string::utf8 as vector.to_string;
+   │                ^^^^^^^^^^^^^^^^^ Invalid module access. Unbound function 'utf8' in module 'std::string'
+
+error[E03003]: unbound module member
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/vector.move:14:16
+   │
+14 │ public use fun std::string::try_utf8 as vector.try_to_string;
+   │                ^^^^^^^^^^^^^^^^^^^^^ Invalid module access. Unbound function 'try_utf8' in module 'std::string'
+
+error[E03003]: unbound module member
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/vector.move:17:16
+   │
+17 │ public use fun std::ascii::string as vector.to_ascii_string;
+   │                ^^^^^^^^^^^^^^^^^^ Invalid module access. Unbound function 'string' in module 'std::ascii'
+
+error[E03003]: unbound module member
+   ┌─ /Users/cgswords/sui-main/external-crates/move/crates/move-stdlib/sources/vector.move:21:16
+   │
+21 │ public use fun std::ascii::try_string as vector.try_to_ascii_string;
+   │                ^^^^^^^^^^^^^^^^^^^^^^ Invalid module access. Unbound function 'try_string' in module 'std::ascii'
