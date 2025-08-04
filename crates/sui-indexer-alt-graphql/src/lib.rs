@@ -348,6 +348,7 @@ pub async fn start_rpc(
         pg_pipelines,
         pg_reader.clone(),
         bigtable_reader,
+        consistent_reader.clone(),
         metrics.clone(),
         cancel.child_token(),
     );
