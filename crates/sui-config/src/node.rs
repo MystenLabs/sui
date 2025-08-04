@@ -553,7 +553,7 @@ impl ExecutionCacheConfig {
                 ExecutionCacheConfig::WritebackCache {
                     backpressure_threshold,
                     ..
-                } => backpressure_threshold.unwrap_or(100_000),
+                } => backpressure_threshold.unwrap_or(200_000),
             })
     }
 
