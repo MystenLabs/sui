@@ -29,15 +29,12 @@
 
 use crate::{
     errors::{PartialVMError, PartialVMResult},
-    file_format_common,
     internals::ModuleIndex,
     IndexKind, SignatureTokenKind,
 };
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::ModuleId,
-    metadata::Metadata,
     vm_status::StatusCode,
 };
 #[cfg(any(test, feature = "fuzzing"))]
