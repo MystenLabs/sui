@@ -1,12 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
-
 use anyhow::{bail, ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
@@ -14,6 +8,11 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
+use std::{
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
@@ -129,14 +128,7 @@ impl FullCluster {
     pub async fn new() -> anyhow::Result<Self> {
         Self::new_with_configs(
             Simulacrum::new(),
-            IndexerArgs::default(),
-            IndexerArgs::default(),
-            IndexerConfig::for_test(),
-            ConsistentConfig::for_test(),
-            JsonRpcConfig::default(),
-            GraphQlConfig::default(),
-            &prometheus::Registry::new(),
-            CancellationToken::new(),
+            OffchainClusterConfig::with_local_ingestion(),
         )
         .await
     }
@@ -146,39 +138,18 @@ impl FullCluster {
     /// `jsonrpc_config`, and the GraphQL server is configured using `graphql_config`.
     pub async fn new_with_configs(
         mut executor: Simulacrum,
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
-        registry: &prometheus::Registry,
-        cancel: CancellationToken,
+        offchain_cluster_config: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
-        let temp_dir = tempfile::tempdir().context("Failed to create data ingestion path")?;
-        executor.set_data_ingestion_path(temp_dir.path().to_owned());
+        let ingestion_path = offchain_cluster_config
+            .client_args
+            .local_ingestion_path
+            .as_ref()
+            .unwrap();
+        executor.set_data_ingestion_path(ingestion_path.to_owned());
 
-        let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
-            remote_store_url: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
-        };
-
-        let offchain = OffchainCluster::new(
-            indexer_args,
-            consistent_indexer_args,
-            client_args,
-            indexer_config,
-            consistent_config,
-            jsonrpc_config,
-            graphql_config,
-            registry,
-            cancel,
-        )
-        .await
-        .context("Failed to create off-chain cluster")?;
+        let offchain = OffchainCluster::new(offchain_cluster_config)
+            .await
+            .context("Failed to create off-chain cluster")?;
 
         Ok(Self {
             executor,
@@ -298,6 +269,44 @@ impl FullCluster {
     }
 }
 
+pub struct OffchainClusterConfig {
+    pub indexer_args: IndexerArgs,
+    pub consistent_indexer_args: IndexerArgs,
+    pub client_args: ClientArgs,
+    pub indexer_config: IndexerConfig,
+    pub consistent_config: ConsistentConfig,
+    pub jsonrpc_config: JsonRpcConfig,
+    pub graphql_config: GraphQlConfig,
+    pub registry: prometheus::Registry,
+    pub cancel: CancellationToken,
+}
+
+impl OffchainClusterConfig {
+    pub fn with_local_ingestion() -> Self {
+        let temp_dir = tempfile::tempdir()
+            .context("Failed to create data ingestion path")
+            .unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(temp_dir.path().to_owned()),
+            remote_store_url: None,
+            rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
+        };
+        Self {
+            indexer_args: IndexerArgs::default(),
+            consistent_indexer_args: IndexerArgs::default(),
+            client_args,
+            indexer_config: IndexerConfig::for_test(),
+            consistent_config: ConsistentConfig::for_test(),
+            jsonrpc_config: JsonRpcConfig::default(),
+            graphql_config: GraphQlConfig::default(),
+            registry: prometheus::Registry::new(),
+            cancel: CancellationToken::new(),
+        }
+    }
+}
+
 impl OffchainCluster {
     /// Construct a new off-chain cluster and spin up its constituent services.
     ///
@@ -307,15 +316,17 @@ impl OffchainCluster {
     /// - `graphql_config` controls the GraphQL server.
     /// - `registry` is used to register metrics for the indexer, JSON-RPC, and GraphQL servers.
     pub async fn new(
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
-        client_args: ClientArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
-        registry: &prometheus::Registry,
-        cancel: CancellationToken,
+        OffchainClusterConfig {
+            indexer_args,
+            consistent_indexer_args,
+            client_args,
+            indexer_config,
+            consistent_config,
+            jsonrpc_config,
+            graphql_config,
+            registry,
+            cancel,
+        }: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
         let consistent_port = get_available_port();
         let consistent_listen_address =
@@ -360,7 +371,7 @@ impl OffchainCluster {
             client_args.clone(),
             indexer_config,
             with_genesis,
-            registry,
+            &registry,
             cancel.child_token(),
         )
         .await
@@ -376,7 +387,7 @@ impl OffchainCluster {
             consistent_args,
             "0.0.0",
             consistent_config,
-            registry,
+            &registry,
             cancel.child_token(),
         )
         .await
@@ -391,7 +402,7 @@ impl OffchainCluster {
             JsonRpcNodeArgs::default(),
             SystemPackageTaskArgs::default(),
             jsonrpc_config,
-            registry,
+            &registry,
             cancel.child_token(),
         )
         .await
@@ -407,7 +418,7 @@ impl OffchainCluster {
             "0.0.0",
             graphql_config,
             pipelines.iter().map(|p| p.to_string()).collect(),
-            registry,
+            &registry,
             cancel.child_token(),
         )
         .await
