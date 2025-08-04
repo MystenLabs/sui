@@ -9,11 +9,7 @@ use move_core_types::ident_str;
 use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
-use sui_indexer_alt::config::IndexerConfig;
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::{find_immutable, find_shared, FullCluster};
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_e2e_tests::{find_immutable, find_shared, FullCluster, OffchainClusterConfig};
 use sui_indexer_alt_jsonrpc::config::{NameServiceConfig, RpcConfig as JsonRpcConfig};
 use sui_move_build::BuildConfig;
 use sui_types::{
@@ -22,7 +18,6 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{ObjectArg, Transaction, TransactionData},
 };
-use tokio_util::sync::CancellationToken;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -436,14 +431,10 @@ impl SuiNSCluster {
         // (8) Spin up the rest of the cluster.
         let cluster = FullCluster::new_with_configs(
             sim,
-            IndexerArgs::default(),
-            IndexerArgs::default(),
-            IndexerConfig::for_test(),
-            ConsistentConfig::for_test(),
-            jsonrpc_config,
-            GraphQlConfig::default(),
-            &prometheus::Registry::new(),
-            CancellationToken::new(),
+            OffchainClusterConfig {
+                jsonrpc_config,
+                ..OffchainClusterConfig::default()
+            },
         )
         .await
         .expect("Failed to set-up cluster");

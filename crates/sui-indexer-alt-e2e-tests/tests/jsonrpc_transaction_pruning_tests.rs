@@ -11,11 +11,7 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
-use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
-use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
-use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
+use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster, OffchainClusterConfig};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},
@@ -24,7 +20,6 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Transaction, TransactionData},
 };
-use tokio_util::sync::CancellationToken;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -213,17 +208,13 @@ async fn test_digests_pruned() {
 async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
-        IndexerArgs::default(),
-        IndexerArgs::default(),
-        IndexerConfig {
-            pipeline,
-            ..IndexerConfig::for_test()
+        OffchainClusterConfig {
+            indexer_config: IndexerConfig {
+                pipeline,
+                ..IndexerConfig::for_test()
+            },
+            ..OffchainClusterConfig::default()
         },
-        ConsistentConfig::for_test(),
-        JsonRpcConfig::default(),
-        GraphQlConfig::default(),
-        &prometheus::Registry::new(),
-        CancellationToken::new(),
     )
     .await
     .expect("Failed to create cluster")

@@ -1,12 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
-
 use anyhow::{bail, ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
@@ -14,6 +8,11 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
+use std::{
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
@@ -128,18 +127,7 @@ impl FullCluster {
     /// Creates a cluster with a fresh executor where the off-chain services are set up with a
     /// default configuration.
     pub async fn new() -> anyhow::Result<Self> {
-        Self::new_with_configs(
-            Simulacrum::new(),
-            IndexerArgs::default(),
-            IndexerArgs::default(),
-            IndexerConfig::for_test(),
-            ConsistentConfig::for_test(),
-            JsonRpcConfig::default(),
-            GraphQlConfig::default(),
-            &prometheus::Registry::new(),
-            CancellationToken::new(),
-        )
-        .await
+        Self::new_with_configs(Simulacrum::new(), OffchainClusterConfig::default()).await
     }
 
     /// Creates a new cluster executing transactions using `executor`. The indexer is configured
@@ -147,39 +135,14 @@ impl FullCluster {
     /// `jsonrpc_config`, and the GraphQL server is configured using `graphql_config`.
     pub async fn new_with_configs(
         mut executor: Simulacrum,
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
-        registry: &prometheus::Registry,
-        cancel: CancellationToken,
+        offchain_cluster_config: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
-        let temp_dir = tempfile::tempdir().context("Failed to create data ingestion path")?;
+        let (client_args, temp_dir) = local_ingestion_client_args();
         executor.set_data_ingestion_path(temp_dir.path().to_owned());
 
-        let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
-            remote_store_url: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
-        };
-
-        let offchain = OffchainCluster::new(
-            indexer_args,
-            consistent_indexer_args,
-            client_args,
-            indexer_config,
-            consistent_config,
-            jsonrpc_config,
-            graphql_config,
-            registry,
-            cancel,
-        )
-        .await
-        .context("Failed to create off-chain cluster")?;
+        let offchain = OffchainCluster::new(client_args, offchain_cluster_config)
+            .await
+            .context("Failed to create off-chain cluster")?;
 
         Ok(Self {
             executor,
@@ -312,6 +275,42 @@ impl FullCluster {
     }
 }
 
+pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
+    let temp_dir = tempfile::tempdir()
+        .context("Failed to create data ingestion path")
+        .unwrap();
+    let client_args = ClientArgs {
+        local_ingestion_path: Some(temp_dir.path().to_owned()),
+        remote_store_url: None,
+        rpc_api_url: None,
+        rpc_username: None,
+        rpc_password: None,
+    };
+    (client_args, temp_dir)
+}
+
+pub struct OffchainClusterConfig {
+    pub indexer_args: IndexerArgs,
+    pub consistent_indexer_args: IndexerArgs,
+    pub indexer_config: IndexerConfig,
+    pub consistent_config: ConsistentConfig,
+    pub jsonrpc_config: JsonRpcConfig,
+    pub graphql_config: GraphQlConfig,
+}
+
+impl Default for OffchainClusterConfig {
+    fn default() -> Self {
+        Self {
+            indexer_args: IndexerArgs::default(),
+            consistent_indexer_args: IndexerArgs::default(),
+            indexer_config: IndexerConfig::for_test(),
+            consistent_config: ConsistentConfig::for_test(),
+            jsonrpc_config: JsonRpcConfig::default(),
+            graphql_config: GraphQlConfig::default(),
+        }
+    }
+}
+
 impl OffchainCluster {
     /// Construct a new off-chain cluster and spin up its constituent services.
     ///
@@ -321,15 +320,15 @@ impl OffchainCluster {
     /// - `graphql_config` controls the GraphQL server.
     /// - `registry` is used to register metrics for the indexer, JSON-RPC, and GraphQL servers.
     pub async fn new(
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
         client_args: ClientArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
-        registry: &prometheus::Registry,
-        cancel: CancellationToken,
+        OffchainClusterConfig {
+            indexer_args,
+            consistent_indexer_args,
+            indexer_config,
+            consistent_config,
+            jsonrpc_config,
+            graphql_config,
+        }: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
         let consistent_port = get_available_port();
         let consistent_listen_address =
@@ -366,6 +365,8 @@ impl OffchainCluster {
             .await
             .context("Failed to connect to database")?;
 
+        let registry = &prometheus::Registry::new();
+        let cancel = CancellationToken::new();
         let with_genesis = true;
         let indexer = setup_indexer(
             database_url.clone(),
