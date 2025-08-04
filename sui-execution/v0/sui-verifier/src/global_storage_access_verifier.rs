@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::verification_failure;
-use move_binary_format::file_format::{Bytecode, CompiledModule};
+use move_binary_format::{file_format::Bytecode, CompiledModule};
 use sui_types::error::ExecutionError;
 
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {

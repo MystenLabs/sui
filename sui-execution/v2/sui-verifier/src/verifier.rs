@@ -3,7 +3,7 @@
 
 //! This module contains the public APIs supported by the bytecode verifier.
 
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_vm_config::verifier::VerifierConfig;
 use sui_types::{error::ExecutionError, move_package::FnInfoMap};
 

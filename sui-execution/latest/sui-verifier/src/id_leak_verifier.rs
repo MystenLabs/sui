@@ -19,9 +19,10 @@ use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     errors::PartialVMError,
     file_format::{
-        Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex, FunctionHandle, LocalIndex,
+        Bytecode, CodeOffset, FunctionDefinitionIndex, FunctionHandle, LocalIndex,
         StructDefinition, StructFieldInformation,
     },
+    CompiledModule,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{
