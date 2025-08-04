@@ -4,7 +4,7 @@
 
 use crate::{DEFAULT_BUILD_DIR, DEFAULT_STORAGE_DIR};
 use anyhow::{anyhow, bail, Result};
-use move_binary_format::file_format::{CompiledModule, FunctionDefinitionIndex};
+use move_binary_format::{file_format::FunctionDefinitionIndex, CompiledModule};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{

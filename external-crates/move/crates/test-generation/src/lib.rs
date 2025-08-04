@@ -21,8 +21,9 @@ use module_generation::generate_module;
 use move_binary_format::{
     errors::VMError,
     file_format::{
-        AbilitySet, CompiledModule, DatatypeHandleIndex, FunctionDefinitionIndex, SignatureToken,
+        AbilitySet, DatatypeHandleIndex, FunctionDefinitionIndex, SignatureToken,
     },
+    CompiledModule,
 };
 use move_bytecode_verifier::verify_module_unmetered;
 use move_compiler::Compiler;

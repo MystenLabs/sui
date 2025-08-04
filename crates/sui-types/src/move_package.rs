@@ -12,9 +12,9 @@ use crate::{
 };
 use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
-use move_binary_format::file_format::CompiledModule;
 use move_binary_format::file_format_common::VERSION_6;
 use move_binary_format::normalized;
+use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::SerializedPackage;
 use move_core_types::{

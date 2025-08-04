@@ -6,7 +6,8 @@ use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{bail, Result};
 use move_binary_format::{
     errors::{Location, VMError},
-    file_format::{AbilitySet, CompiledModule, SignatureToken},
+    file_format::{AbilitySet, SignatureToken},
+    CompiledModule,
 };
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{

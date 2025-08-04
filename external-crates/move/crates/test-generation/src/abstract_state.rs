@@ -3,12 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{borrow_graph::BorrowGraph, error::VMError};
-use move_binary_format::file_format::{
-    empty_module, Ability, AbilitySet, CompiledModule, FieldInstantiation, FieldInstantiationIndex,
+use move_binary_format::{file_format::{
+    Ability, AbilitySet, FieldInstantiation, FieldInstantiationIndex,
     FunctionHandleIndex, FunctionInstantiation, FunctionInstantiationIndex, Signature,
     SignatureIndex, SignatureToken, StructDefInstantiation, StructDefInstantiationIndex,
-    StructDefinitionIndex, TableIndex,
+    StructDefinitionIndex, TableIndex},
+    compiled_module::empty_module,
+    CompiledModule,
 };
+
 use std::{
     collections::{HashMap, HashSet},
     fmt,
