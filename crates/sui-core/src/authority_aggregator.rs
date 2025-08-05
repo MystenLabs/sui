@@ -7,6 +7,8 @@ use crate::authority_client::{
     AuthorityAPI, NetworkAuthorityClient,
 };
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
+#[cfg(test)]
+use crate::test_authority_clients::MockAuthorityApi;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard, MonitorCancellation};
 use mysten_network::config::Config;
@@ -585,6 +587,13 @@ impl<A: Clone> AuthorityAggregator<A> {
             .into_iter()
             .map(|(k, v)| (k, (*v).clone()))
             .collect()
+    }
+
+    pub fn get_display_name(&self, name: &AuthorityName) -> String {
+        self.validator_display_names
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.concise().to_string())
     }
 }
 
@@ -1833,6 +1842,12 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         }
     }
 
+    #[cfg(test)]
+    pub fn from_committee_size(committee_size: usize) -> Self {
+        let (committee, _keypairs) = Committee::new_simple_test_committee_of_size(committee_size);
+        Self::from_committee(committee)
+    }
+
     pub fn with_committee_store(mut self, committee_store: Arc<CommitteeStore>) -> Self {
         self.committee_store = Some(committee_store);
         self
@@ -1906,5 +1921,23 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             Arc::new(HashMap::new()),
             timeouts_config,
         )
+    }
+
+    #[cfg(test)]
+    pub fn build_mock_authority_aggregator(self) -> AuthorityAggregator<MockAuthorityApi> {
+        let committee = self.get_committee();
+        let clients = committee
+            .names()
+            .map(|name| {
+                (
+                    *name,
+                    MockAuthorityApi::new(
+                        Duration::from_millis(100),
+                        Arc::new(std::sync::Mutex::new(30)),
+                    ),
+                )
+            })
+            .collect();
+        self.build_custom_clients(clients)
     }
 }

@@ -1567,6 +1567,54 @@ impl ValidatorService {
         Ok((tonic::Response::new(response), Weight::one()))
     }
 
+    async fn validator_health_impl(
+        &self,
+        _request: tonic::Request<sui_types::messages_grpc::RawValidatorHealthRequest>,
+    ) -> WrappedServiceResponse<sui_types::messages_grpc::RawValidatorHealthResponse> {
+        let state = &self.state;
+
+        // Get epoch store once for both metrics
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Get in-flight execution transactions from execution scheduler
+        let num_inflight_execution_transactions =
+            state.execution_scheduler().num_pending_certificates() as u64;
+
+        // Get in-flight consensus transactions from consensus adapter
+        let num_inflight_consensus_transactions =
+            self.consensus_adapter.num_inflight_transactions();
+
+        // Get last committed leader round from epoch store
+        let last_committed_leader_round = epoch_store
+            .consensus_tx_status_cache
+            .as_ref()
+            .and_then(|cache| cache.get_last_committed_leader_round())
+            .unwrap_or(0);
+
+        // Get last locally built checkpoint sequence
+        let last_locally_built_checkpoint = epoch_store
+            .last_built_checkpoint_summary()
+            .ok()
+            .flatten()
+            .map(|(_, summary)| summary.sequence_number)
+            .unwrap_or(0);
+
+        let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+            num_inflight_consensus_transactions,
+            num_inflight_execution_transactions,
+            last_locally_built_checkpoint,
+            last_committed_leader_round,
+        };
+
+        let raw_response = typed_response
+            .try_into()
+            .map_err(|e: sui_types::error::SuiError| {
+                tonic::Status::internal(format!("Failed to serialize health response: {}", e))
+            })?;
+
+        Ok((tonic::Response::new(raw_response), Weight::one()))
+    }
+
     fn get_client_ip_addr<T>(
         &self,
         request: &tonic::Request<T>,
@@ -1882,5 +1930,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
         handle_with_decoration!(self, get_system_state_object_impl, request)
+    }
+
+    async fn validator_health(
+        &self,
+        request: tonic::Request<sui_types::messages_grpc::RawValidatorHealthRequest>,
+    ) -> Result<tonic::Response<sui_types::messages_grpc::RawValidatorHealthResponse>, tonic::Status>
+    {
+        handle_with_decoration!(self, validator_health_impl, request)
     }
 }
