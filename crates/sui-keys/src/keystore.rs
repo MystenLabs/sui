@@ -17,6 +17,7 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -324,6 +325,13 @@ impl AccountKeystore for FileBasedKeystore {
 impl FileBasedKeystore {
     pub fn new(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
+            if !has_reduced_file_permissions(path)? {
+                bail!(
+                    "Keystore file must have reduced file permissions (600). Please set the \
+                    permissions to 600 for the file: {}",
+                    path.display()
+                );
+            }
             let reader =
                 BufReader::new(File::open(path).with_context(|| {
                     format!("Cannot open the keystore file: {}", path.display())
@@ -448,6 +456,15 @@ impl FileBasedKeystore {
             )
             .with_context(|| format!("Cannot serialize keystore to file: {}", path.display()))?;
             fs::write(path, store)?;
+            // REVIEW: consider whether to fail this operation. For now I think just warning is
+            // sufficient.
+            let _ = set_reduced_file_permissions(path).inspect_err(|error| {
+                eprintln!(
+                    "While attempting to set reduced file permissions on '{}'. Cannot set \
+                    permissions for keystore file. Error: {error}",
+                    path.display()
+                );
+            });
         }
         Ok(())
     }
@@ -461,6 +478,26 @@ impl FileBasedKeystore {
     pub fn key_pairs(&self) -> Vec<&SuiKeyPair> {
         self.keys.values().collect()
     }
+}
+
+fn has_reduced_file_permissions(path: impl AsRef<Path>) -> Result<bool, anyhow::Error> {
+    let path = path.as_ref();
+    let metadata = fs::metadata(path)?;
+    let mode = metadata.permissions().mode();
+    Ok(mode & 0o777 == 0o600)
+}
+
+fn set_reduced_file_permissions(path: impl AsRef<Path>) -> Result<(), anyhow::Error> {
+    let path = path.as_ref();
+    if !has_reduced_file_permissions(path)? {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).with_context(|| {
+            format!(
+                "Cannot set permissions for keystore file: {}.",
+                path.display(),
+            )
+        })?;
+    }
+    Ok(())
 }
 
 #[derive(Default, Serialize, Deserialize)]
