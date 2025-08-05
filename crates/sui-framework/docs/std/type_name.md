@@ -456,7 +456,7 @@ Convert <code>self</code> into its inner String
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_address">get_address</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): String {
-   self.<a href="../std/type_name.md#std_type_name_address_string">address_string</a>()
+    self.<a href="../std/type_name.md#std_type_name_address_string">address_string</a>()
 }
 </code></pre>
 
