@@ -411,7 +411,7 @@ public macro fun zip_map_ref<$T1, $T2, $U>(
 /// Please, note that the comparison function `le` expects less or equal, not less.
 ///
 /// Example:
-/// ```
+/// ```move
 /// let mut v = vector[2, 1, 3];
 /// v.insertion_sort_by(|a, b| a <= b);
 /// assert!(v == vector[1, 2, 3]);
@@ -442,7 +442,7 @@ public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> b
 /// Please, note that the comparison function `le` expects less or equal, not less.
 ///
 /// Example:
-/// ```
+/// ```move
 /// let mut v = vector[2, 1, 3];
 /// v.merge_sort_by(|a, b| a <= b);
 /// assert!(v == vector[1, 2, 3]);
