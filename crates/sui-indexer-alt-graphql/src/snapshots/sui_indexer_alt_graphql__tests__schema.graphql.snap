@@ -234,6 +234,10 @@ type ChangeEpochTransaction {
 	Unix timestamp when epoch started.
 	"""
 	epochStartTimestamp: DateTime
+	"""
+	System packages (specifically framework and move stdlib) that are written before the new epoch starts, to upgrade them on-chain. Validators write these packages out when running the transaction.
+	"""
+	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection!
 }
 
 """
