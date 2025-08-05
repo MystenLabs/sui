@@ -1,5 +1,33 @@
 use crate::structuring::ast::{Code, Structured};
 
+// pub fn refine_loop(structured: Structured) -> Structured {
+//   let structured = refine_while(structured);
+//   // TODO
+//   // let structured = refine_do_while(structured);
+//   structured
+// }
+
+// fn refine_while(structured: Structured) -> Structured {
+//   use Structured as S;
+
+//   let S::Loop(body) = structured else { return structured };
+//   let S::Seq(mut seq) = *body else { return S::Loop(body) };
+//   let Some(S::IfElse(cond, conseq, alt_opt)) = seq.first() else { return S::Loop(Box::new(S::Seq(seq))) };
+//   match (**conseq, **alt_opt) {
+//     (S::Break, _) => {
+//         let strctrd = seq.remove(0);
+//         let seq = if let Some(strcrd) = **alt_opt { seq.insert(0, strcrd); seq } else { seq };
+//         S::While(*cond, Box::new(S::Seq(seq)))
+//     }
+//     (_, Some(S::Break)) => {
+//       /* alt case */
+//       Structured::While(*cond, Box::new(**conseq))
+//     }
+//     _ => S::Loop(Box::new(S::Seq(seq))),
+//   }
+// }
+
+
 pub fn loop_type(loop_head: Structured) -> Structured {
     match loop_head {
         Structured::Loop(body) => {
@@ -17,7 +45,7 @@ pub fn loop_type(loop_head: Structured) -> Structured {
                             Structured::IfElse(cond, conseq, alt) => {
                                 
                                 if matches!(*conseq, Structured::Break) {
-                                    Structured::While(cond, Box::new(alt))
+                                    Structured::While(cond, Box::new(alt.unwrap()))
                                 } else {
                                     Structured::While(cond, Box::new(*conseq))
                                 }
