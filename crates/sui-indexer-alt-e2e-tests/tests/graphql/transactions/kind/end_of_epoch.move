@@ -31,6 +31,13 @@
                 storageRebate
                 nonRefundableStorageFee
                 epochStartTimestamp
+                systemPackages {
+                  nodes {
+                    address
+                    version
+                    digest
+                  }
+                }
               }
               ... on RandomnessStateCreateTransaction {
                 _

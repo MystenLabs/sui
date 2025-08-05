@@ -46,6 +46,7 @@ url.workspace = true
 uuid.workspace = true
 
 move-core-types.workspace = true
+move-binary-format.workspace = true
 
 bin-version.workspace = true
 sui-default-config.workspace = true

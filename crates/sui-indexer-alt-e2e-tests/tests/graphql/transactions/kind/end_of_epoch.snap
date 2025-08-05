@@ -11,7 +11,7 @@ task 2, line 8:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 3, lines 10-62:
+task 3, lines 10-69:
 //# run-graphql
 Response: {
   "data": {
@@ -62,7 +62,10 @@ Response: {
                   "computationCharge": 0,
                   "storageRebate": 0,
                   "nonRefundableStorageFee": 0,
-                  "epochStartTimestamp": "1970-01-01T00:00:00Z"
+                  "epochStartTimestamp": "1970-01-01T00:00:00Z",
+                  "systemPackages": {
+                    "nodes": []
+                  }
                 }
               ]
             }
