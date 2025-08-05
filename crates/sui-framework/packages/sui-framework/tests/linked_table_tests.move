@@ -101,8 +101,7 @@ fun push_back_singleton() {
     table.drop()
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
 fun push_front_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -112,8 +111,7 @@ fun push_front_duplicate() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
 fun push_back_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -123,8 +121,7 @@ fun push_back_duplicate() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
 fun push_mixed_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -134,8 +131,7 @@ fun push_mixed_duplicate() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -144,8 +140,7 @@ fun borrow_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_mut_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -154,8 +149,7 @@ fun borrow_mut_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun remove_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -164,8 +158,7 @@ fun remove_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = linked_table::ETableIsEmpty)]
+#[test, expected_failure(abort_code = linked_table::ETableIsEmpty)]
 fun pop_front_empty() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -174,8 +167,7 @@ fun pop_front_empty() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = linked_table::ETableIsEmpty)]
+#[test, expected_failure(abort_code = linked_table::ETableIsEmpty)]
 fun pop_back_empty() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -184,8 +176,7 @@ fun pop_back_empty() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = linked_table::ETableNotEmpty)]
+#[test, expected_failure(abort_code = linked_table::ETableNotEmpty)]
 fun destroy_non_empty() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);

@@ -42,15 +42,6 @@ The length of an address, in bytes
 
 
 
-<a name="sui_address_MAX"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/address.md#sui_address_MAX">MAX</a>: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
-</code></pre>
-
-
-
 <a name="sui_address_EAddressParseError"></a>
 
 Error from <code><a href="../sui/address.md#sui_address_from_bytes">from_bytes</a></code> when it is supplied too many or too few bytes.
@@ -316,7 +307,8 @@ Largest possible address
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_max">max</a>(): u256 {
-    <a href="../sui/address.md#sui_address_MAX">MAX</a>
+    // The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
+    <a href="../std/u256.md#std_u256_max_value">std::u256::max_value</a>!()
 }
 </code></pre>
 

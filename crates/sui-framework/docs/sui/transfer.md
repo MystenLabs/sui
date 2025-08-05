@@ -413,7 +413,7 @@ referencing an object of type <code>T</code> owned by <code>parent</code> use th
 argument to receive and return the referenced owned object of type <code>T</code>.
 This function has custom rules performed by the Sui Move bytecode verifier that ensures
 that <code>T</code> is an object defined in the module where <code><a href="../sui/transfer.md#sui_transfer_receive">receive</a></code> is invoked. Use
-<code><a href="../sui/transfer.md#sui_transfer_public_receive">public_receive</a></code> to receivne an object with <code>store</code> outside of its module.
+<code><a href="../sui/transfer.md#sui_transfer_public_receive">public_receive</a></code> to receive an object with <code>store</code> outside of its module.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer.md#sui_transfer_receive">receive</a>&lt;T: key&gt;(parent: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, to_receive: <a href="../sui/transfer.md#sui_transfer_Receiving">sui::transfer::Receiving</a>&lt;T&gt;): T

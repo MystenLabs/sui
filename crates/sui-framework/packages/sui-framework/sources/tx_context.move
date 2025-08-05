@@ -54,7 +54,7 @@ public fun epoch_timestamp_ms(_self: &TxContext): u64 {
 }
 native fun native_epoch_timestamp_ms(): u64;
 
-/// Return the adress of the transaction sponsor or `None` if there was no sponsor.
+/// Return the address of the transaction sponsor or `None` if there was no sponsor.
 public fun sponsor(_self: &TxContext): Option<address> {
     option_sponsor()
 }

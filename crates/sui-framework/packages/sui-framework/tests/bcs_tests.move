@@ -30,16 +30,14 @@ public struct Info has copy, drop {
     s: address,
 }
 
-#[test]
-#[expected_failure(abort_code = bcs::ELenOutOfRange)]
+#[test, expected_failure(abort_code = bcs::ELenOutOfRange)]
 fun test_uleb_len_fail() {
     let mut bytes = new(vector[0xff, 0xff, 0xff, 0xff, 0x80]);
     let _fail = bytes.peel_vec_length();
     abort 0
 }
 
-#[test]
-#[expected_failure(abort_code = bcs::ENotBool)]
+#[test, expected_failure(abort_code = bcs::ENotBool)]
 fun test_bool_fail() {
     let mut bytes = new(to_bytes(&10u8));
     let _fail = bytes.peel_bool();
@@ -67,7 +65,7 @@ fun test_bool() {
 
 #[test]
 fun test_u8() {
-    cases!(num_cases!(U8_MAX), |bytes| bytes.peel_u8());
+    cases!(num_cases!(std::u8::max_value!()), |bytes| bytes.peel_u8());
 }
 
 #[test]
@@ -114,7 +112,7 @@ fun test_vec() {
     cases!(bool_cases, |bytes| bytes.peel_vec_bool());
     cases!(bool_cases, |bytes| bytes.peel_vec!(|bytes| bytes.peel_bool()));
 
-    let u8_cases = vector[vector[], vector[1], vector[0, 2, U8_MAX]];
+    let u8_cases = vector[vector[], vector[1], vector[0, 2, std::u8::max_value!()]];
     cases!(u8_cases, |bytes| bytes.peel_vec_u8());
     cases!(u8_cases, |bytes| bytes.peel_vec!(|bytes| bytes.peel_u8()));
 
@@ -149,7 +147,7 @@ fun test_option() {
     cases!(bool_cases, |bytes| bytes.peel_option_bool());
     cases!(bool_cases, |bytes| bytes.peel_option!(|bytes| bytes.peel_bool()));
 
-    let u8_cases = vector[option::none(), option::some(0), option::some(U8_MAX)];
+    let u8_cases = vector[option::none(), option::some(0), option::some(std::u8::max_value!())];
     cases!(u8_cases, |bytes| bytes.peel_option_u8());
     cases!(u8_cases, |bytes| bytes.peel_option!(|bytes| bytes.peel_u8()));
 
@@ -209,7 +207,7 @@ fun test_complex() {
         option::none(),
         option::some(vector[]),
         option::some(vector[1]),
-        option::some(vector[1, 2, U8_MAX]),
+        option::some(vector[1, 2, std::u8::max_value!()]),
     ];
     cases!(opt_vec_u8_cases, |b| b.peel_option!(|b| b.peel_vec_u8()));
     cases!(opt_vec_u8_cases, |b| b.peel_option!(|b| b.peel_vec!(|b| b.peel_u8())));
@@ -217,7 +215,7 @@ fun test_complex() {
     let vec_opt_u8_cases = vector[
         vector[option::none()],
         vector[option::some(1)],
-        vector[option::some(1), option::none(), option::some(U8_MAX)],
+        vector[option::some(1), option::none(), option::some(std::u8::max_value!())],
     ];
     cases!(vec_opt_u8_cases, |b| b.peel_vec!(|b| b.peel_option_u8()));
     cases!(vec_opt_u8_cases, |b| b.peel_vec!(|b| b.peel_option!(|b| b.peel_u8())));

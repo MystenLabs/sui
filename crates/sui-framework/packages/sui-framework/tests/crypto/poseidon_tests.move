@@ -128,8 +128,7 @@ fun test_poseidon_bn254_canonical_input() {
     assert!(actual == expected);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::poseidon::ENonCanonicalInput)]
+#[test, expected_failure(abort_code = sui::poseidon::ENonCanonicalInput)]
 fun test_poseidon_bn254_non_canonical_input() {
     // Scalar field size.
     let msg = vector[
@@ -138,8 +137,7 @@ fun test_poseidon_bn254_non_canonical_input() {
     poseidon_bn254(&msg);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::poseidon::EEmptyInput)]
+#[test, expected_failure(abort_code = sui::poseidon::EEmptyInput)]
 fun test_poseidon_bn254_empty_input() {
     let msg = vector[];
     poseidon_bn254(&msg);

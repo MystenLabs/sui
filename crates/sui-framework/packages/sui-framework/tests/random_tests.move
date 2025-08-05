@@ -543,8 +543,7 @@ fun random_tests_in_range() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = random::EInvalidRange)]
+#[test, expected_failure(abort_code = random::EInvalidRange)]
 fun random_tests_invalid_range() {
     let mut scenario = test_scenario::begin(@0x0);
 
@@ -595,8 +594,7 @@ fun random_tests_update_after_epoch_change() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
+#[test, expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
 fun random_tests_duplicate() {
     let mut scenario = test_scenario::begin(@0x0);
     random::create_for_testing(scenario.ctx());
@@ -618,8 +616,7 @@ fun random_tests_duplicate() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
+#[test, expected_failure(abort_code = random::EInvalidRandomnessUpdate)]
 fun random_tests_out_of_order() {
     let mut scenario = test_scenario::begin(@0x0);
     random::create_for_testing(scenario.ctx());

@@ -15,9 +15,6 @@ public use fun sui::object::id_from_address as address.to_id;
 /// The length of an address, in bytes
 const LENGTH: u64 = 32;
 
-// The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
-const MAX: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
-
 /// Error from `from_bytes` when it is supplied too many or too few bytes.
 /// Error from `from_ascii_bytes` when it is supplied incorrect length of bytes or
 /// an invalid character is encountered.
@@ -81,5 +78,6 @@ public fun length(): u64 {
 
 /// Largest possible address
 public fun max(): u256 {
-    MAX
+    // The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
+    std::u256::max_value!()
 }

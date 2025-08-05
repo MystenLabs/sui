@@ -15,8 +15,7 @@ fun test_valid_utf8() {
     assert!(s.length() == 4);
 }
 
-#[test]
-#[expected_failure(abort_code = string::EInvalidUTF8)]
+#[test, expected_failure(abort_code = string::EInvalidUTF8)]
 fun test_invalid_utf8() {
     let no_sparkle_heart = vector[0, 159, 146, 150];
     let s = no_sparkle_heart.to_string();
@@ -30,16 +29,14 @@ fun test_substring() {
     assert!(sub == b"cd".to_string())
 }
 
-#[test]
-#[expected_failure(abort_code = string::EInvalidIndex)]
+#[test, expected_failure(abort_code = string::EInvalidIndex)]
 fun test_substring_invalid_boundary() {
     let sparkle_heart = vector[240, 159, 146, 150];
     let s = sparkle_heart.to_string();
     let _sub = s.substring(1, 4);
 }
 
-#[test]
-#[expected_failure(abort_code = string::EInvalidIndex)]
+#[test, expected_failure(abort_code = string::EInvalidIndex)]
 fun test_substring_invalid_index() {
     let s = b"abcd".to_string();
     let _sub = s.substring(4, 5);

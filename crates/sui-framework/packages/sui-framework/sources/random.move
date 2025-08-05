@@ -17,7 +17,6 @@ const EInvalidLength: u64 = 4;
 
 const CURRENT_VERSION: u64 = 1;
 const RAND_OUTPUT_LEN: u16 = 32;
-const U16_MAX: u64 = 0xFFFF;
 
 /// Singleton shared object which stores the global randomness state.
 /// The actual state is stored in a versioned inner field.
@@ -281,7 +280,7 @@ public fun shuffle<T>(g: &mut RandomGenerator, v: &mut vector<T>) {
     let n = v.length();
     if (n == 0) return;
 
-    assert!(n <= U16_MAX, EInvalidLength);
+    assert!(n <= (std::u16::max_value!() as u64), EInvalidLength);
     let n = n as u16;
     let end = n - 1;
     end.do!(|i| {

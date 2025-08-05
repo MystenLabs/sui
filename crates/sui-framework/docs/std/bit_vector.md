@@ -58,22 +58,22 @@ and <code><b>false</b></code> to indicate that the bit is "0".
 ## Constants
 
 
-<a name="std_bit_vector_EINDEX"></a>
+<a name="std_bit_vector_EIndex"></a>
 
 The provided index is out of bounds
 
 
-<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_EINDEX">EINDEX</a>: <a href="../std/u64.md#std_u64">u64</a> = 131072;
+<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_EIndex">EIndex</a>: <a href="../std/u64.md#std_u64">u64</a> = 131072;
 </code></pre>
 
 
 
-<a name="std_bit_vector_ELENGTH"></a>
+<a name="std_bit_vector_ELength"></a>
 
 An invalid length of bitvector was given
 
 
-<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_ELENGTH">ELENGTH</a>: <a href="../std/u64.md#std_u64">u64</a> = 131073;
+<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_ELength">ELength</a>: <a href="../std/u64.md#std_u64">u64</a> = 131073;
 </code></pre>
 
 
@@ -114,8 +114,8 @@ Create a new <code><a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVe
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_new">new</a>(<a href="../std/bit_vector.md#std_bit_vector_length">length</a>: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a> {
-    <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &gt; 0, <a href="../std/bit_vector.md#std_bit_vector_ELENGTH">ELENGTH</a>);
-    <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &lt; <a href="../std/bit_vector.md#std_bit_vector_MAX_SIZE">MAX_SIZE</a>, <a href="../std/bit_vector.md#std_bit_vector_ELENGTH">ELENGTH</a>);
+    <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &gt; 0, <a href="../std/bit_vector.md#std_bit_vector_ELength">ELength</a>);
+    <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &lt; <a href="../std/bit_vector.md#std_bit_vector_MAX_SIZE">MAX_SIZE</a>, <a href="../std/bit_vector.md#std_bit_vector_ELength">ELength</a>);
     <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a> {
         <a href="../std/bit_vector.md#std_bit_vector_length">length</a>,
         bit_field: <a href="../std/vector.md#std_vector_tabulate">vector::tabulate</a>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a>, |_| <b>false</b>)
@@ -144,7 +144,7 @@ Set the bit at <code>bit_index</code> in the <code>bitvector</code> regardless o
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_set">set</a>(bitvector: &<b>mut</b> <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a>, bit_index: <a href="../std/u64.md#std_u64">u64</a>) {
-    <b>assert</b>!(bit_index &lt; bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>(), <a href="../std/bit_vector.md#std_bit_vector_EINDEX">EINDEX</a>);
+    <b>assert</b>!(bit_index &lt; bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>(), <a href="../std/bit_vector.md#std_bit_vector_EIndex">EIndex</a>);
     <b>let</b> x = &<b>mut</b> bitvector.bit_field[bit_index];
     *x = <b>true</b>;
 }
@@ -171,7 +171,7 @@ Unset the bit at <code>bit_index</code> in the <code>bitvector</code> regardless
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_unset">unset</a>(bitvector: &<b>mut</b> <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a>, bit_index: <a href="../std/u64.md#std_u64">u64</a>) {
-    <b>assert</b>!(bit_index &lt; bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>(), <a href="../std/bit_vector.md#std_bit_vector_EINDEX">EINDEX</a>);
+    <b>assert</b>!(bit_index &lt; bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>(), <a href="../std/bit_vector.md#std_bit_vector_EIndex">EIndex</a>);
     <b>let</b> x = &<b>mut</b> bitvector.bit_field[bit_index];
     *x = <b>false</b>;
 }
@@ -231,7 +231,7 @@ represents "1" and <code><b>false</b></code> represents "0".
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(bitvector: &<a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a>, bit_index: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/bool.md#std_bool">bool</a> {
-    <b>assert</b>!(bit_index &lt; bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>(), <a href="../std/bit_vector.md#std_bit_vector_EINDEX">EINDEX</a>);
+    <b>assert</b>!(bit_index &lt; bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>(), <a href="../std/bit_vector.md#std_bit_vector_EIndex">EIndex</a>);
     bitvector.bit_field[bit_index]
 }
 </code></pre>
@@ -284,7 +284,7 @@ sequence, then <code>0</code> is returned.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_longest_set_sequence_starting_at">longest_set_sequence_starting_at</a>(bitvector: &<a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a>, start_index: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/u64.md#std_u64">u64</a> {
-    <b>assert</b>!(start_index &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>, <a href="../std/bit_vector.md#std_bit_vector_EINDEX">EINDEX</a>);
+    <b>assert</b>!(start_index &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>, <a href="../std/bit_vector.md#std_bit_vector_EIndex">EIndex</a>);
     'longest: {
         (bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a> - start_index).do!(|i| <b>if</b> (!bitvector.<a href="../std/bit_vector.md#std_bit_vector_is_index_set">is_index_set</a>(start_index + i)) <b>return</b> 'longest i);
         bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a> - start_index

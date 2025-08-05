@@ -64,12 +64,12 @@ vectors are growable. This module has many native functions.
 ## Constants
 
 
-<a name="std_vector_EINDEX_OUT_OF_BOUNDS"></a>
+<a name="std_vector_EIndexOutOfBounds"></a>
 
 The index into the vector is out of bounds
 
 
-<pre><code><b>const</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>: <a href="../std/u64.md#std_u64">u64</a> = 131072;
+<pre><code><b>const</b> <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>: <a href="../std/u64.md#std_u64">u64</a> = 131072;
 </code></pre>
 
 
@@ -391,13 +391,7 @@ Otherwise, returns false.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_contains">contains</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): <a href="../std/bool.md#std_bool">bool</a> {
-    <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
-    <b>while</b> (i &lt; len) {
-        <b>if</b> (&v[i] == e) <b>return</b> <b>true</b>;
-        i = i + 1;
-    };
-    <b>false</b>
+    v.<a href="../std/vector.md#std_vector_any">any</a>!(|elem| elem == e)
 }
 </code></pre>
 
@@ -458,7 +452,7 @@ Aborts if <code>i</code> is out of bounds.
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_remove">remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, <b>mut</b> i: <a href="../std/u64.md#std_u64">u64</a>): Element {
     <b>let</b> <b>mut</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
     // i out of bounds; <b>abort</b>
-    <b>if</b> (i &gt;= len) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    <b>if</b> (i &gt;= len) <b>abort</b> <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>;
     len = len - 1;
     <b>while</b> (i &lt; len) {
         v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, { i = i + 1; i });
@@ -494,7 +488,7 @@ Aborts if <code>i &gt; v.<a href="../std/vector.md#std_vector_length">length</a>
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_insert">insert</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: Element, <b>mut</b> i: <a href="../std/u64.md#std_u64">u64</a>) {
     <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
     // i too big <b>abort</b>
-    <b>if</b> (i &gt; len) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    <b>if</b> (i &gt; len) <b>abort</b> <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>;
     v.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e);
     <b>while</b> (i &lt; len) {
         v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, len);
@@ -526,7 +520,7 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_swap_remove">swap_remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>): Element {
-    <b>assert</b>!(v.<a href="../std/vector.md#std_vector_length">length</a>() != 0, <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>);
+    <b>assert</b>!(v.<a href="../std/vector.md#std_vector_length">length</a>() != 0, <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> last_idx = v.<a href="../std/vector.md#std_vector_length">length</a>() - 1;
     v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, last_idx);
     v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()

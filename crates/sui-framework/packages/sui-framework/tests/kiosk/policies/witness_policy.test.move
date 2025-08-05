@@ -67,8 +67,7 @@ module sui::witness_policy_tests {
         test::wrapup(policy, cap, ctx);
     }
 
-    #[test]
-    #[expected_failure(abort_code = sui::transfer_policy::EPolicyNotSatisfied)]
+    #[test, expected_failure(abort_code = sui::transfer_policy::EPolicyNotSatisfied)]
     fun test_no_proof() {
         let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = test::prepare(ctx);
@@ -81,8 +80,7 @@ module sui::witness_policy_tests {
         test::wrapup(policy, cap, ctx);
     }
 
-    #[test]
-    #[expected_failure(abort_code = sui::witness_policy::ERuleNotFound)]
+    #[test, expected_failure(abort_code = sui::witness_policy::ERuleNotFound)]
     fun test_wrong_proof() {
         let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = test::prepare(ctx);

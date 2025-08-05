@@ -37,8 +37,7 @@ fun simple_all_functions() {
     bag.destroy_empty();
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
 fun add_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -48,8 +47,7 @@ fun add_duplicate() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
 fun add_duplicate_mismatched_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -59,8 +57,7 @@ fun add_duplicate_mismatched_type() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -69,8 +66,7 @@ fun borrow_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun borrow_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -80,8 +76,7 @@ fun borrow_wrong_type() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_mut_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -90,8 +85,7 @@ fun borrow_mut_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun borrow_mut_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -101,8 +95,7 @@ fun borrow_mut_wrong_type() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun remove_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -111,8 +104,7 @@ fun remove_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun remove_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -122,8 +114,7 @@ fun remove_wrong_type() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::bag::EBagNotEmpty)]
+#[test, expected_failure(abort_code = sui::bag::EBagNotEmpty)]
 fun destroy_non_empty() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);

@@ -12,10 +12,10 @@ public struct Option<Element> has copy, drop, store {
 
 /// The `Option` is in an invalid state for the operation attempted.
 /// The `Option` is `Some` while it should be `None`.
-const EOPTION_IS_SET: u64 = 0x40000;
+const EOptionIsSet: u64 = 0x40000;
 /// The `Option` is in an invalid state for the operation attempted.
 /// The `Option` is `None` while it should be `Some`.
-const EOPTION_NOT_SET: u64 = 0x40001;
+const EOptionNotSet: u64 = 0x40001;
 
 /// Return an empty `Option`
 public fun none<Element>(): Option<Element> {
@@ -46,7 +46,7 @@ public fun contains<Element>(t: &Option<Element>, e_ref: &Element): bool {
 /// Return an immutable reference to the value inside `t`
 /// Aborts if `t` does not hold a value
 public fun borrow<Element>(t: &Option<Element>): &Element {
-    assert!(t.is_some(), EOPTION_NOT_SET);
+    assert!(t.is_some(), EOptionNotSet);
     &t.vec[0]
 }
 
@@ -68,27 +68,27 @@ public fun get_with_default<Element: copy + drop>(t: &Option<Element>, default: 
 /// Aborts if `t` already holds a value
 public fun fill<Element>(t: &mut Option<Element>, e: Element) {
     let vec_ref = &mut t.vec;
-    if (vec_ref.is_empty()) vec_ref.push_back(e) else abort EOPTION_IS_SET
+    if (vec_ref.is_empty()) vec_ref.push_back(e) else abort EOptionIsSet
 }
 
 /// Convert a `some` option to a `none` by removing and returning the value stored inside `t`
 /// Aborts if `t` does not hold a value
 public fun extract<Element>(t: &mut Option<Element>): Element {
-    assert!(t.is_some(), EOPTION_NOT_SET);
+    assert!(t.is_some(), EOptionNotSet);
     t.vec.pop_back()
 }
 
 /// Return a mutable reference to the value inside `t`
 /// Aborts if `t` does not hold a value
 public fun borrow_mut<Element>(t: &mut Option<Element>): &mut Element {
-    assert!(t.is_some(), EOPTION_NOT_SET);
+    assert!(t.is_some(), EOptionNotSet);
     &mut t.vec[0]
 }
 
 /// Swap the old value inside `t` with `e` and return the old value
 /// Aborts if `t` does not hold a value
 public fun swap<Element>(t: &mut Option<Element>, e: Element): Element {
-    assert!(t.is_some(), EOPTION_NOT_SET);
+    assert!(t.is_some(), EOptionNotSet);
     let vec_ref = &mut t.vec;
     let old_value = vec_ref.pop_back();
     vec_ref.push_back(e);
@@ -114,7 +114,7 @@ public fun destroy_with_default<Element: drop>(t: Option<Element>, default: Elem
 /// Unpack `t` and return its contents
 /// Aborts if `t` does not hold a value
 public fun destroy_some<Element>(t: Option<Element>): Element {
-    assert!(t.is_some(), EOPTION_NOT_SET);
+    assert!(t.is_some(), EOptionNotSet);
     let Option { mut vec } = t;
     let elem = vec.pop_back();
     vec.destroy_empty();
@@ -124,7 +124,7 @@ public fun destroy_some<Element>(t: Option<Element>): Element {
 /// Unpack `t`
 /// Aborts if `t` holds a value
 public fun destroy_none<Element>(t: Option<Element>) {
-    assert!(t.is_none(), EOPTION_IS_SET);
+    assert!(t.is_none(), EOptionIsSet);
     let Option { vec } = t;
     vec.destroy_empty()
 }

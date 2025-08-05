@@ -231,15 +231,6 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<a name="sui_random_U16_MAX"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_U16_MAX">U16_MAX</a>: u64 = 65535;
-</code></pre>
-
-
-
 <a name="sui_random_create"></a>
 
 ## Function `create`
@@ -882,7 +873,7 @@ Shuffle a vector using the random generator (Fisher–Yates/Knuth shuffle).
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_shuffle">shuffle</a>&lt;T&gt;(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, v: &<b>mut</b> vector&lt;T&gt;) {
     <b>let</b> n = v.length();
     <b>if</b> (n == 0) <b>return</b>;
-    <b>assert</b>!(n &lt;= <a href="../sui/random.md#sui_random_U16_MAX">U16_MAX</a>, <a href="../sui/random.md#sui_random_EInvalidLength">EInvalidLength</a>);
+    <b>assert</b>!(n &lt;= (<a href="../std/u16.md#std_u16_max_value">std::u16::max_value</a>!() <b>as</b> u64), <a href="../sui/random.md#sui_random_EInvalidLength">EInvalidLength</a>);
     <b>let</b> n = n <b>as</b> u16;
     <b>let</b> end = n - 1;
     end.do!(|i| {

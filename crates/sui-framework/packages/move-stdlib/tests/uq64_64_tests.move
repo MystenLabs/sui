@@ -33,23 +33,20 @@ fun from_quotient_max_numerator_denominator() {
     assert_eq!(one, 1 << 64); // 0x1.00000000
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EDenominator)]
+#[test, expected_failure(abort_code = uq64_64::EDenominator)]
 fun from_quotient_div_zero() {
     // A denominator of zero should cause an arithmetic error.
     from_quotient(2, 0);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EQuotientTooLarge)]
+#[test, expected_failure(abort_code = uq64_64::EQuotientTooLarge)]
 fun from_quotient_ratio_too_large() {
     // The maximum value is 2^64 - 1. Check that anything larger aborts
     // with an overflow.
     from_quotient(1 << 64, 1); // 2^64
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EQuotientTooSmall)]
+#[test, expected_failure(abort_code = uq64_64::EQuotientTooSmall)]
 fun from_quotient_ratio_too_small() {
     // The minimum non-zero value is 2^-64. Check that anything smaller
     // aborts.
@@ -76,8 +73,7 @@ fun test_add() {
     assert!(from_int(1) == c);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun test_add_overflow() {
     let a = from_int(1 << 63);
     let b = from_int(1 << 63);
@@ -94,8 +90,7 @@ fun test_sub() {
     assert_eq!(from_int(1), c);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun test_sub_underflow() {
     let a = from_int(3);
     let b = from_int(5);
@@ -114,8 +109,7 @@ fun test_mul() {
     assert_eq!(c, expected);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun test_mul_overflow() {
     let a = from_int(1 << 32);
     let b = from_int(1 << 32);
@@ -133,16 +127,14 @@ fun test_div() {
     assert_eq!(c, expected);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EDivisionByZero)]
+#[test, expected_failure(abort_code = uq64_64::EDivisionByZero)]
 fun test_div_by_zero() {
     let a = from_int(7);
     let b = from_int(0);
     let _ = a.div(b);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun test_div_overflow() {
     let a = from_int(1 << 63);
     let b = from_quotient(1, 2);
@@ -156,24 +148,21 @@ fun exact_int_div() {
     assert_eq!(twelve, 12);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EDivisionByZero)]
+#[test, expected_failure(abort_code = uq64_64::EDivisionByZero)]
 fun int_div_by_zero() {
     let f = from_raw(0); // 0
     // Dividing by zero should cause an arithmetic error.
     int_div(1, f);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun int_div_overflow_small_divisor() {
     let f = from_raw(1); // 0x0.00000001
     // Divide 2^64 by the minimum fractional value. This should overflow.
     int_div(1 << 64, f);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun int_div_overflow_large_numerator() {
     let f = from_quotient(1, 2); // 0.5
     // Divide the maximum u128 value by 0.5. This should overflow.
@@ -201,16 +190,14 @@ fun int_mul_truncates() {
     assert_eq!(three, 3);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun int_mul_overflow_small_multiplier() {
     let f = from_quotient(3, 2); // 1.5
     // Multiply the maximum u128 value by 1.5. This should overflow.
     int_mul(std::u128::max_value!(), f);
 }
 
-#[test]
-#[expected_failure(abort_code = uq64_64::EOverflow)]
+#[test, expected_failure(abort_code = uq64_64::EOverflow)]
 fun int_mul_overflow_large_multiplier() {
     let f = from_raw(std::u128::max_value!());
     // Multiply 2^64 + 1 by the maximum fixed-point value. This should overflow.

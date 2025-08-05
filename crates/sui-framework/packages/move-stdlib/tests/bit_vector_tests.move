@@ -37,19 +37,19 @@ fun test_bitvector_set_unset_of_size(k: u64) {
     };
 }
 
-#[test, expected_failure(abort_code = bit_vector::EINDEX)]
+#[test, expected_failure(abort_code = bit_vector::EIndex)]
 fun set_bit_out_of_bounds() {
     let mut bitvector = bit_vector::new(bit_vector::word_size());
     bitvector.set(bit_vector::word_size());
 }
 
-#[test, expected_failure(abort_code = bit_vector::EINDEX)]
+#[test, expected_failure(abort_code = bit_vector::EIndex)]
 fun unset_bit_out_of_bounds() {
     let mut bitvector = bit_vector::new(bit_vector::word_size());
     bitvector.unset(bit_vector::word_size());
 }
 
-#[test, expected_failure(abort_code = bit_vector::EINDEX)]
+#[test, expected_failure(abort_code = bit_vector::EIndex)]
 fun index_bit_out_of_bounds() {
     let bitvector = bit_vector::new(bit_vector::word_size());
     bitvector.is_index_set(bit_vector::word_size());
@@ -212,7 +212,7 @@ fun shift_left_more_than_size() {
     bitvector.shift_left(bitlen);
 }
 
-#[test, expected_failure(abort_code = bit_vector::ELENGTH)]
+#[test, expected_failure(abort_code = bit_vector::ELength)]
 fun empty_bitvector() {
     bit_vector::new(0);
 }

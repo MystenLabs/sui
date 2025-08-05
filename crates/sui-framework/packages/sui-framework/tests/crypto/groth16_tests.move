@@ -34,15 +34,13 @@ fun test_prepare_verifying_key_bls12381() {
     assert!(vk_bytes == expected_vk_bytes);
 }
 
-#[test]
-#[expected_failure(abort_code = groth16::EInvalidVerifyingKey)]
+#[test, expected_failure(abort_code = groth16::EInvalidVerifyingKey)]
 fun test_prepare_verifying_key_invalid_bls12381() {
     let invalid_vk = x"";
     groth16::prepare_verifying_key(&bls12381(), &invalid_vk);
 }
 
-#[test]
-#[expected_failure(abort_code = groth16::EInvalidScalar)]
+#[test, expected_failure(abort_code = groth16::EInvalidScalar)]
 fun test_invalid_public_inputs() {
     let public_inputs_too_short = vector[
         x"440758042e68b76a376f2fecf3a5a8105edb194c3e774e5a760140305aec8849",
@@ -85,8 +83,7 @@ fun test_verify_groth_16_proof_bls12381() {
     assert!(groth16::verify_groth16_proof(&curve, &pvk, &inputs, &invalid_proof) == false);
 }
 
-#[test]
-#[expected_failure(abort_code = groth16::ETooManyPublicInputs)]
+#[test, expected_failure(abort_code = groth16::ETooManyPublicInputs)]
 fun test_too_many_public_inputs() {
     // We give 9 inputs which exceeds the limit of 8
     let inputs_bytes = vector[
@@ -131,15 +128,13 @@ fun test_prepare_verifying_key_bn254() {
     assert!(vk_bytes == expected_vk_bytes);
 }
 
-#[test]
-#[expected_failure(abort_code = groth16::EInvalidVerifyingKey)]
+#[test, expected_failure(abort_code = groth16::EInvalidVerifyingKey)]
 fun test_prepare_verifying_key_invalid_bn254() {
     let invalid_vk = x"";
     groth16::prepare_verifying_key(&bn254(), &invalid_vk);
 }
 
-#[test]
-#[expected_failure(abort_code = groth16::EInvalidScalar)]
+#[test, expected_failure(abort_code = groth16::EInvalidScalar)]
 fun test_invalid_public_inputs_bn254() {
     let public_inputs_too_short = vector[
         x"3fd7c445c6845a9399d1a7b8394c16373399a037786c169f16219359d3be840a",

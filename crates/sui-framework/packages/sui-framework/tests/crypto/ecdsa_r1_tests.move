@@ -25,8 +25,7 @@ fun test_ecrecover_pubkey() {
     assert!(pubkey == pubkey_bytes);
 }
 
-#[test]
-#[expected_failure(abort_code = ecdsa_r1::EInvalidSignature)]
+#[test, expected_failure(abort_code = ecdsa_r1::EInvalidSignature)]
 fun test_ecrecover_pubkey_invalid_sig() {
     let msg = b"Hello, world!";
     let sig =

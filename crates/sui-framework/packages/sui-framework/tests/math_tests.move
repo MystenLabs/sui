@@ -28,8 +28,7 @@ fun test_pow() {
     assert!(math::pow(10, 6) == 1000000);
 }
 
-#[test]
-#[expected_failure]
+#[test, expected_failure]
 fun test_pow_overflow() {
     math::pow(10, 100);
 }

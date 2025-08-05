@@ -28,8 +28,7 @@ fun test_ecvrf_invalid() {
     assert!(!ecvrf::ecvrf_verify(&output, &alpha_string, &public_key, &proof));
 }
 
-#[test]
-#[expected_failure(abort_code = ecvrf::EInvalidHashLength)]
+#[test, expected_failure(abort_code = ecvrf::EInvalidHashLength)]
 fun test_invalid_length() {
     let output = b"invalid hash";
     let alpha_string = b"Hello, world!";
@@ -39,8 +38,7 @@ fun test_invalid_length() {
     ecvrf::ecvrf_verify(&output, &alpha_string, &public_key, &proof);
 }
 
-#[test]
-#[expected_failure(abort_code = ecvrf::EInvalidPublicKeyEncoding)]
+#[test, expected_failure(abort_code = ecvrf::EInvalidPublicKeyEncoding)]
 fun test_invalid_public_key() {
     let output =
         x"4fad431c7402fa1d4a7652e975aeb9a2b746540eca0b1b1e59c8d19c14a7701918a8249136e355455b8bc73851f7fc62c84f2e39f685b281e681043970026ed8";
@@ -51,8 +49,7 @@ fun test_invalid_public_key() {
     ecvrf::ecvrf_verify(&output, &alpha_string, &public_key, &proof);
 }
 
-#[test]
-#[expected_failure(abort_code = ecvrf::EInvalidProofEncoding)]
+#[test, expected_failure(abort_code = ecvrf::EInvalidProofEncoding)]
 fun test_invalid_proof() {
     let output =
         x"4fad431c7402fa1d4a7652e975aeb9a2b746540eca0b1b1e59c8d19c14a7701918a8249136e355455b8bc73851f7fc62c84f2e39f685b281e681043970026ed8";

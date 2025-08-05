@@ -21,7 +21,7 @@ public use fun std::ascii::string as vector.to_ascii_string;
 public use fun std::ascii::try_string as vector.try_to_ascii_string;
 
 /// The index into the vector is out of bounds
-const EINDEX_OUT_OF_BOUNDS: u64 = 0x20000;
+const EIndexOutOfBounds: u64 = 0x20000;
 
 #[bytecode_instruction]
 /// Create an empty vector.
@@ -96,13 +96,7 @@ public fun is_empty<Element>(v: &vector<Element>): bool {
 /// Return true if `e` is in the vector `v`.
 /// Otherwise, returns false.
 public fun contains<Element>(v: &vector<Element>, e: &Element): bool {
-    let mut i = 0;
-    let len = v.length();
-    while (i < len) {
-        if (&v[i] == e) return true;
-        i = i + 1;
-    };
-    false
+    v.any!(|elem| elem == e)
 }
 
 /// Return `(true, i)` if `e` is in the vector `v` at index `i`.
@@ -123,7 +117,7 @@ public fun index_of<Element>(v: &vector<Element>, e: &Element): (bool, u64) {
 public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
     let mut len = v.length();
     // i out of bounds; abort
-    if (i >= len) abort EINDEX_OUT_OF_BOUNDS;
+    if (i >= len) abort EIndexOutOfBounds;
 
     len = len - 1;
     while (i < len) {
@@ -140,7 +134,7 @@ public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
 public fun insert<Element>(v: &mut vector<Element>, e: Element, mut i: u64) {
     let len = v.length();
     // i too big abort
-    if (i > len) abort EINDEX_OUT_OF_BOUNDS;
+    if (i > len) abort EIndexOutOfBounds;
 
     v.push_back(e);
     while (i < len) {
@@ -153,7 +147,7 @@ public fun insert<Element>(v: &mut vector<Element>, e: Element, mut i: u64) {
 /// This is O(1), but does not preserve ordering of elements in the vector.
 /// Aborts if `i` is out of bounds.
 public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
-    assert!(v.length() != 0, EINDEX_OUT_OF_BOUNDS);
+    assert!(v.length() != 0, EIndexOutOfBounds);
     let last_idx = v.length() - 1;
     v.swap(i, last_idx);
     v.pop_back()
