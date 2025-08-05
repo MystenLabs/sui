@@ -142,7 +142,7 @@ public fun borrow_string(self: &TypeName): &String {
 
 #[deprecated(note = b"Renamed to `address_string` for consistency.")]
 public fun get_address(self: &TypeName): String {
-   self.address_string()
+    self.address_string()
 }
 
 #[deprecated(note = b"Renamed to `module_string` for consistency.")]

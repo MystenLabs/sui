@@ -25,7 +25,9 @@ fun test_primitive_types() {
     assert!(with_defining_ids<u256>().as_string().as_bytes() == b"u256");
     assert!(with_defining_ids<address>().as_string().as_bytes() == b"address");
     assert!(with_defining_ids<vector<u8>>().as_string().as_bytes() == b"vector<u8>");
-    assert!(with_defining_ids<vector<vector<u8>>>().as_string().as_bytes() == b"vector<vector<u8>>");
+    assert!(
+        with_defining_ids<vector<vector<u8>>>().as_string().as_bytes() == b"vector<vector<u8>>",
+    );
     assert!(
         with_defining_ids<vector<vector<std::string::String>>>().as_string().as_bytes() == b"vector<vector<0000000000000000000000000000000000000000000000000000000000000001::string::String>>",
     );
@@ -104,7 +106,9 @@ fun test_get_address() {
 fun test_get_module() {
     assert!(with_defining_ids<std::ascii::String>().module_string().as_bytes() == b"ascii");
     assert!(with_defining_ids<TestStruct>().module_string().as_bytes() ==  b"type_name_tests");
-    assert!(with_defining_ids<TestGenerics<std::string::String>>().module_string().as_bytes()==  b"type_name_tests");
+    assert!(
+        with_defining_ids<TestGenerics<std::string::String>>().module_string().as_bytes()==  b"type_name_tests",
+    );
 }
 
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]

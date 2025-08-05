@@ -191,7 +191,8 @@ fun test_add_token_malformed_2() {
         false,
         vector[test_token_id()],
         vector[
-            type_name::with_defining_ids<TEST_TOKEN>().into_string(), type_name::with_defining_ids<BTC>().into_string(),
+            type_name::with_defining_ids<TEST_TOKEN>().into_string(),
+            type_name::with_defining_ids<BTC>().into_string(),
         ],
         vector[10],
     );
