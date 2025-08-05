@@ -14653,6 +14653,7 @@ dependencies = [
  "futures",
  "headers",
  "insta",
+ "move-binary-format",
  "move-core-types",
  "prometheus",
  "serde",
