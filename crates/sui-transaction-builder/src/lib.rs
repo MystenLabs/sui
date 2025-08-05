@@ -1044,4 +1044,25 @@ impl TransactionBuilder {
 
         Ok((object.object_ref(), object.object_type()?))
     }
+
+    pub async fn get_full_object_ref_and_type(
+        &self,
+        object_id: ObjectID,
+    ) -> anyhow::Result<(FullObjectRef, ObjectType)> {
+        let object_data = self
+            .0
+            .get_object_with_options(
+                object_id,
+                SuiObjectDataOptions::new().with_owner().with_type(),
+            )
+            .await?
+            .into_object()?;
+
+        let object_ref = object_data.object_ref();
+        let object_type = object_data.object_type()?;
+        let owner = object_data.owner.unwrap();
+
+        let full_object_ref = FullObjectRef::from_object_ref_and_owner(object_ref, &owner);
+        Ok((full_object_ref, object_type))
+    }
 }

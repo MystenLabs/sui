@@ -36,6 +36,10 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+#[path = "unit_tests/effects_certifier_tests.rs"]
+mod effects_certifier_tests;
+
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) struct EffectsCertifier {
@@ -205,6 +209,9 @@ impl EffectsCertifier {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        // Track that we're attempting certified effects ack
+        self.metrics.certified_effects_ack_attempts.inc();
+        let timer = tokio::time::Instant::now();
         let clients = authority_aggregator
             .authority_clients
             .iter()
@@ -299,6 +306,11 @@ impl EffectsCertifier {
                                 self.metrics.effects_digest_mismatches.inc();
                             }
                         }
+                        // Record success and latency
+                        self.metrics.certified_effects_ack_successes.inc();
+                        self.metrics
+                            .certified_effects_ack_latency
+                            .observe(timer.elapsed().as_secs_f64());
                         return Ok(effects_digest);
                     }
                 }
@@ -459,5 +471,3 @@ impl EffectsCertifier {
         }
     }
 }
-
-// TODO(fastpath): Add tests for EffectsCertifier

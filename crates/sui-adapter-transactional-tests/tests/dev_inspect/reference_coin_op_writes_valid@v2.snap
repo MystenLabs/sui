@@ -30,8 +30,8 @@ task 3, lines 28-35:
 //> 3: TransferObjects([Result(2)], Input(1));
 //> 4: test::m::borrow_mut(Result(1));
 //> TransferObjects([Result(0)], Input(1))
-Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue } in command 5
-Execution Error: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue } in command 5
+Error: Transaction Effects Status: InsufficientCoinBalance in command 2
+Execution Error: InsufficientCoinBalance in command 2
 
 task 4, lines 37-43:
 //# programmable --dev-inspect --inputs 10 @A object(2,0)
@@ -41,8 +41,10 @@ task 4, lines 37-43:
 //> 2: MergeCoins(Result(1), [Input(2)]);
 //> 3: test::m::borrow_mut(Result(1));
 //> TransferObjects([Result(0)], Input(1))
-Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue } in command 4
-Execution Error: CommandArgumentError { arg_idx: 0, kind: CannotMoveBorrowedValue } in command 4
+created: object(4,0)
+mutated: object(_)
+deleted: object(2,0)
+gas summary: computation_cost: 500000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 45-52:
 //# programmable --dev-inspect --inputs 10 @A
@@ -53,8 +55,8 @@ task 5, lines 45-52:
 //> 3: TransferObjects([Result(2)], Input(1));
 //> 4: test::m::borrow_mut(Result(0));
 //> TransferObjects([Result(0)], Input(1))
-Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference } in command 2
-Execution Error: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference } in command 2
+Error: Transaction Effects Status: InsufficientCoinBalance in command 2
+Execution Error: InsufficientCoinBalance in command 2
 
 task 6, lines 54-60:
 //# programmable --dev-inspect --inputs 10 @A object(2,0)
@@ -64,5 +66,7 @@ task 6, lines 54-60:
 //> 2: MergeCoins(Result(0), [Input(2)]);
 //> 3: test::m::borrow_mut(Result(0));
 //> TransferObjects([Result(0)], Input(1))
-Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference } in command 2
-Execution Error: CommandArgumentError { arg_idx: 0, kind: CannotWriteToExtendedReference } in command 2
+created: object(6,0)
+mutated: object(_)
+deleted: object(2,0)
+gas summary: computation_cost: 500000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

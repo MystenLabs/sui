@@ -211,24 +211,6 @@ pub struct NodeConfig {
     /// override this value on production networks will result in an error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain_override_for_testing: Option<Chain>,
-
-    /// Fork recovery configuration for handling validator equivocation after forks
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fork_recovery: Option<ForkRecoveryConfig>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct ForkRecoveryConfig {
-    /// Map of transaction digest to effects digest overrides
-    /// Used to repoint transactions to correct effects after a fork
-    #[serde(default)]
-    pub transaction_overrides: BTreeMap<String, String>,
-
-    /// Map of checkpoint sequence number to checkpoint digest overrides
-    /// Used to repoint checkpoints to correct versions after a fork
-    #[serde(default)]
-    pub checkpoint_overrides: BTreeMap<u64, String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -309,6 +291,14 @@ pub struct ExecutionTimeObserverConfig {
     ///
     /// If unspecified, this will default to `20`.
     pub weighted_moving_average_window_size: Option<usize>,
+
+    /// Whether to inject synthetic execution time for testing in simtest.
+    /// When enabled, synthetic timings will be generated for execution time observations
+    /// to enable deterministic testing of congestion control features.
+    ///
+    /// If unspecified, this will default to `false`.
+    #[cfg(msim)]
+    pub inject_synthetic_execution_time: Option<bool>,
 }
 
 impl ExecutionTimeObserverConfig {
@@ -366,6 +356,11 @@ impl ExecutionTimeObserverConfig {
 
     pub fn weighted_moving_average_window_size(&self) -> usize {
         self.weighted_moving_average_window_size.unwrap_or(20)
+    }
+
+    #[cfg(msim)]
+    pub fn inject_synthetic_execution_time(&self) -> bool {
+        self.inject_synthetic_execution_time.unwrap_or(false)
     }
 }
 
@@ -1251,7 +1246,7 @@ pub struct AuthorityOverloadConfig {
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
-    Duration::from_millis(500)
+    Duration::from_millis(1000)
 }
 
 fn default_overload_monitor_interval() -> Duration {
@@ -1287,7 +1282,7 @@ fn default_max_transaction_manager_queue_length() -> usize {
 }
 
 fn default_max_transaction_manager_per_object_queue_length() -> usize {
-    20
+    2000
 }
 
 impl Default for AuthorityOverloadConfig {

@@ -2,11 +2,124 @@
 source: crates/sui-indexer-alt-graphql/src/lib.rs
 expression: sdl
 ---
+"""
+System transaction for creating the accumulator root.
+"""
+type AccumulatorRootCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+type ActiveJwk {
+	"""
+	The string (Issuing Authority) that identifies the OIDC provider.
+	"""
+	iss: String
+	"""
+	The string (Key ID) that identifies the JWK among a set of JWKs, (RFC 7517, Section 4.5).
+	"""
+	kid: String
+	"""
+	The JWK key type parameter, (RFC 7517, Section 4.1).
+	"""
+	kty: String
+	"""
+	The JWK RSA public exponent, (RFC 7517, Section 9.3).
+	"""
+	e: String
+	"""
+	The JWK RSA modulus, (RFC 7517, Section 9.3).
+	"""
+	n: String
+	"""
+	The JWK algorithm parameter, (RFC 7517, Section 4.4).
+	"""
+	alg: String
+	"""
+	The most recent epoch in which the JWK was validated.
+	"""
+	epoch: Epoch
+}
+
+type ActiveJwkConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ActiveJwkEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ActiveJwk!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ActiveJwkEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ActiveJwk!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Address implements IAddressable {
 	"""
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
 	address: SuiAddress!
+}
+
+"""
+System transaction for creating the on-chain state used by zkLogin.
+"""
+type AuthenticatorStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction that is executed at the end of an epoch to expire JSON Web Keys (JWKs) that are no longer valid, based on their associated epoch. This is part of the on-chain state management for zkLogin and authentication.
+"""
+type AuthenticatorStateExpireTransaction {
+	"""
+	Expire JWKs that have a lower epoch than this.
+	"""
+	minEpoch: Epoch
+	"""
+	The initial version that the AuthenticatorStateUpdate was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
+}
+
+type AuthenticatorStateUpdateTransaction {
+	"""
+	Epoch of the authenticator state update transaction.
+	"""
+	epoch: Epoch
+	"""
+	Consensus round of the authenticator state update.
+	"""
+	round: UInt53
+	"""
+	Newly active JWKs (JSON Web Keys).
+	"""
+	newActiveJwks(first: Int, after: String, last: Int, before: String): ActiveJwkConnection!
+	"""
+	The initial version of the authenticator object that it was shared at.
+	"""
+	authenticatorObjInitialSharedVersion: UInt53
 }
 
 """
@@ -66,6 +179,62 @@ String representation of an arbitrary width, possibly signed integer
 """
 scalar BigInt
 
+
+"""
+System transaction for initializing bridge committee.
+"""
+type BridgeCommitteeInitTransaction {
+	"""
+	The initial shared version of the bridge object.
+	"""
+	bridgeObjectVersion: UInt53
+}
+
+"""
+System transaction for creating bridge state for cross-chain operations.
+"""
+type BridgeStateCreateTransaction {
+	"""
+	The chain identifier for which this bridge state is being created.
+	"""
+	chainIdentifier: String
+}
+
+"""
+A system transaction that updates epoch information on-chain (increments the current epoch). Executed by the system once per epoch, without using gas. Epoch change transactions cannot be submitted by users, because validators will refuse to sign them.
+
+This transaction kind is deprecated in favour of `EndOfEpochTransaction`.
+"""
+type ChangeEpochTransaction {
+	"""
+	The next (to become) epoch.
+	"""
+	epoch: Epoch
+	"""
+	The epoch's corresponding protocol configuration.
+	"""
+	protocolConfigs: ProtocolConfigs
+	"""
+	The total amount of gas charged for storage during the epoch.
+	"""
+	storageCharge: UInt53
+	"""
+	The total amount of gas charged for computation during the epoch.
+	"""
+	computationCharge: UInt53
+	"""
+	The amount of storage rebate refunded to the transaction senders.
+	"""
+	storageRebate: UInt53
+	"""
+	The non-refundable storage fee.
+	"""
+	nonRefundableStorageFee: UInt53
+	"""
+	Unix timestamp when epoch started.
+	"""
+	epochStartTimestamp: DateTime
+}
 
 """
 Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
@@ -137,9 +306,147 @@ input CheckpointFilter {
 }
 
 """
+System transaction for creating the coin deny list state.
+"""
+type CoinDenyListStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
+"""
+type ConsensusCommitPrologueTransaction {
+	"""
+	Epoch of the commit prologue transaction.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	epoch: Epoch
+	"""
+	Consensus round of the commit.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	round: UInt53
+	"""
+	Unix timestamp from consensus.
+	
+	Present in V1, V2, V3, V4.
+	"""
+	commitTimestamp: DateTime
+	"""
+	Digest of consensus output, encoded as a Base58 string.
+	
+	Present in V2, V3, V4.
+	"""
+	consensusCommitDigest: String
+	"""
+	The sub DAG index of the consensus commit. This field is populated if there
+	are multiple consensus commits per round.
+	
+	Present in V3, V4.
+	"""
+	subDagIndex: UInt53
+	"""
+	Digest of any additional state computed by the consensus handler.
+	Used to detect forking bugs as early as possible.
+	
+	Present in V4.
+	"""
+	additionalStateDigest: String
+}
+
+"""
+Reason why a transaction that attempted to access a consensus-managed object was cancelled.
+"""
+enum ConsensusObjectCancellationReason {
+	"""
+	Read operation was cancelled.
+	"""
+	CANCELLED_READ
+	"""
+	Object congestion prevented execution.
+	"""
+	CONGESTED
+	"""
+	Randomness service was unavailable.
+	"""
+	RANDOMNESS_UNAVAILABLE
+	"""
+	Internal use only.
+	"""
+	UNKNOWN
+}
+
+"""
+A transaction that was cancelled before it could access the consensus-managed object, so the object was an input but remained unchanged.
+"""
+type ConsensusObjectCancelled {
+	"""
+	The ID of the consensus-managed object that the transaction intended to access.
+	"""
+	address: SuiAddress
+	"""
+	Reason why the transaction was cancelled.
+	"""
+	cancellationReason: ConsensusObjectCancellationReason
+}
+
+type ConsensusObjectRead {
+	"""
+	The version of the consensus-managed object that was read by this transaction.
+	"""
+	object: Object
+}
+
+"""
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
+
+"""
+System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
+"""
+type EndOfEpochTransaction {
+	"""
+	The list of system transactions that are allowed to run at the end of the epoch.
+	"""
+	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection!
+}
+
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction
+
+type EndOfEpochTransactionKindConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EndOfEpochTransactionKindEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [EndOfEpochTransactionKind!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EndOfEpochTransactionKindEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: EndOfEpochTransactionKind!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 """
 Activity on Sui is partitioned in time, into epochs.
@@ -393,6 +700,20 @@ type GasCostSummary {
 	nonRefundableStorageFee: UInt53
 }
 
+"""
+Effects related to gas (costs incurred and the identity of the smashed gas object returned).
+"""
+type GasEffects {
+	"""
+	The gas object used to pay for this transaction. If multiple gas coins were provided, this represents the combined coin after smashing.
+	"""
+	gasObject: Object
+	"""
+	Breakdown of the gas costs for this transaction.
+	"""
+	gasSummary: GasCostSummary
+}
+
 type GasInput {
 	"""
 	Address of the owner of the gas object(s) used.
@@ -410,6 +731,16 @@ type GasInput {
 	Objects used to pay for a transaction's execution and storage
 	"""
 	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
+}
+
+"""
+System transaction that initializes the network and writes the initial set of objects on-chain.
+"""
+type GenesisTransaction {
+	"""
+	Objects to be created during genesis.
+	"""
+	objects(first: Int, after: String, last: Int, before: String): ObjectConnection
 }
 
 """
@@ -542,6 +873,20 @@ type MovePackageEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+A transaction that wanted to mutate a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type MutateConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
 }
 
 """
@@ -747,6 +1092,13 @@ type PageInfo {
 	endCursor: String
 }
 
+type PerEpochConfig {
+	"""
+	The per-epoch configuration object as of the checkpoint when the transaction was executed.
+	"""
+	object: Object
+}
+
 """
 A protocol configuration that can hold an arbitrary value (or no value at all).
 """
@@ -917,6 +1269,52 @@ type Query {
 	transactions(first: Int, after: String, last: Int, before: String, filter: TransactionFilter): TransactionConnection!
 }
 
+"""
+System transaction for creating the on-chain randomness state.
+"""
+type RandomnessStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
+System transaction to update the source of on-chain randomness.
+"""
+type RandomnessStateUpdateTransaction {
+	"""
+	Epoch of the randomness state update transaction.
+	"""
+	epoch: Int
+	"""
+	Randomness round of the update.
+	"""
+	randomnessRound: Int
+	"""
+	Updated random bytes, Base64 encoded.
+	"""
+	randomBytes: Base64
+	"""
+	The initial version of the randomness object that it was shared at.
+	"""
+	randomnessObjInitialSharedVersion: Int
+}
+
+"""
+A transaction that wanted to read a consensus-managed object but couldn't because it became not-consensus-managed before the transaction executed (for example, it was deleted, turned into an owned object, or wrapped).
+"""
+type ReadConsensusStreamEnded {
+	"""
+	The ID of the consensus-managed object.
+	"""
+	address: SuiAddress
+	"""
+	The sequence number associated with the consensus stream ending.
+	"""
+	sequenceNumber: UInt53
+}
+
 type SafeMode {
 	"""
 	Whether safe mode was used for the last epoch change.
@@ -1072,6 +1470,16 @@ type StorageFund {
 	nonRefundableBalance: BigInt
 }
 
+"""
+System transaction for storing execution time observations.
+"""
+type StoreExecutionTimeObservationsTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
 
 """
 String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
@@ -1128,6 +1536,10 @@ type Transaction {
 	The results to the chain of executing this transaction.
 	"""
 	effects: TransactionEffects
+	"""
+	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
+	"""
+	kind: TransactionKind
 	"""
 	This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
 	"""
@@ -1237,6 +1649,14 @@ type TransactionEffects {
 	The before and after state of objects that were modified by this transaction.
 	"""
 	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
+	"""
+	Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
+	"""
+	gasEffects: GasEffects
+	"""
+	The unchanged consensus-managed objects that were referenced by this transaction.
+	"""
+	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
 }
 
 input TransactionFilter {
@@ -1255,9 +1675,48 @@ input TransactionFilter {
 }
 
 """
+Different types of transactions that can be executed on the Sui network.
+"""
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction
+
+"""
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
 """
 scalar UInt53
+
+"""
+Details pertaining to consensus-managed objects that are referenced by but not changed by a transaction.
+"""
+union UnchangedConsensusObject = ConsensusObjectRead | MutateConsensusStreamEnded | ReadConsensusStreamEnded | ConsensusObjectCancelled | PerEpochConfig
+
+type UnchangedConsensusObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [UnchangedConsensusObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [UnchangedConsensusObject!]!
+}
+
+"""
+An edge in a connection.
+"""
+type UnchangedConsensusObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: UnchangedConsensusObject!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 type UserSignature {
 	"""

@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// In-memory storage for testing.
-pub(crate) struct MemStore {
+pub struct MemStore {
     inner: RwLock<Inner>,
 }
 
@@ -36,7 +36,7 @@ struct Inner {
 }
 
 impl MemStore {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         MemStore {
             inner: RwLock::new(Inner {
                 blocks: BTreeMap::new(),
@@ -47,6 +47,12 @@ impl MemStore {
                 finalized_commits: BTreeMap::new(),
             }),
         }
+    }
+}
+
+impl Default for MemStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

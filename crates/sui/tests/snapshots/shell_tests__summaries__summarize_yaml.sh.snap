@@ -34,6 +34,8 @@ std
 sui
 move_package.yaml
 accumulator.yaml
+accumulator_metadata.yaml
+accumulator_settlement.yaml
 address.yaml
 authenticator_state.yaml
 bag.yaml

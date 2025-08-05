@@ -148,11 +148,9 @@ impl ExecutionScheduler {
         .concat();
 
         let epoch = epoch_store.epoch();
-        debug!(?tx_digest, "Scheduled transaction in execution scheduler");
-        tracing::trace!(
+        debug!(
             ?tx_digest,
-            "Waiting for input objects: {:?}",
-            input_and_receiving_keys
+            "Scheduled transaction, waiting for input objects: {:?}", input_and_receiving_keys,
         );
 
         let availability = self
@@ -451,7 +449,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
                     debug_fatal!(
                         "We should never enqueue certificate from wrong epoch. Expected={} Certificate={:?}",
                         epoch_store.epoch(),
-                        cert.0.epoch(),
+                        cert.0.epoch()
                     );
                     None
                 }

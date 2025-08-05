@@ -35,7 +35,7 @@ const config = {
     amplitudeKey: process.env.AMPLITUDE_KEY,
   },
 
-  onBrokenLinks: "warn",
+  onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
 
   // Even if you don't use internationalization, you can use this field to set
