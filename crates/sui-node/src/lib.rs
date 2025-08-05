@@ -70,6 +70,7 @@ pub use handle::SuiNodeHandle;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use mysten_network::server::ServerBuilder;
 use mysten_service::server_timing::server_timing_middleware;
+use sui_config::node::ForkRecoveryConfig;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
@@ -247,6 +248,7 @@ pub struct SuiNode {
     transaction_orchestrator: Option<Arc<TransactionOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
     metrics: Arc<SuiNodeMetrics>,
+    checkpoint_metrics: Arc<CheckpointMetrics>,
 
     _discovery: discovery::Handle,
     _connection_monitor_handle: consensus_core::ConnectionMonitorHandle,
@@ -483,6 +485,16 @@ impl SuiNode {
             None,
         ));
 
+        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
+        let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
+
+        Self::check_and_recover_forks(
+            &checkpoint_store,
+            &checkpoint_metrics,
+            is_validator,
+            config.fork_recovery.as_ref(),
+        )?;
+
         let mut pruner_db = None;
         if config
             .authority_store_pruning_config
@@ -510,7 +522,6 @@ impl SuiNode {
             .database_is_empty()
             .expect("Database read should not fail at init.");
 
-        let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
@@ -863,6 +874,7 @@ impl SuiNode {
                     connection_monitor_status.clone(),
                     &registry_service,
                     sui_node_metrics.clone(),
+                    checkpoint_metrics.clone(),
                 ),
                 Self::reexecute_pending_consensus_certs(&epoch_store, &state,)
             );
@@ -889,6 +901,7 @@ impl SuiNode {
             transaction_orchestrator,
             registry_service,
             metrics: sui_node_metrics,
+            checkpoint_metrics,
 
             _discovery: discovery_handle,
             _connection_monitor_handle: connection_monitor_handle,
@@ -1221,6 +1234,7 @@ impl SuiNode {
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
+        checkpoint_metrics: Arc<CheckpointMetrics>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1254,7 +1268,6 @@ impl SuiNode {
             &registry_service.default_registry(),
         );
 
-        let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
@@ -1989,6 +2002,7 @@ impl SuiNode {
                         self.connection_monitor_status.clone(),
                         &self.registry_service,
                         self.metrics.clone(),
+                        self.checkpoint_metrics.clone(),
                     )
                     .await?;
 
@@ -2095,6 +2109,153 @@ impl SuiNode {
 
     pub fn randomness_handle(&self) -> randomness::Handle {
         self.randomness_handle.clone()
+    }
+
+    /// Check for previously detected forks and handle them appropriately.
+    /// For validators with fork recovery config, clear the fork if it matches the recovery config.
+    /// For all other cases, block node startup if a fork is detected.
+    fn check_and_recover_forks(
+        checkpoint_store: &CheckpointStore,
+        checkpoint_metrics: &CheckpointMetrics,
+        is_validator: bool,
+        fork_recovery: Option<&ForkRecoveryConfig>,
+    ) -> Result<()> {
+        // Fork detection and recovery is only relevant for validators
+        // Fullnodes should sync from validators and don't need fork checking
+        if !is_validator {
+            return Ok(());
+        }
+
+        // Fork recovery for validators with recovery config
+        if let Some(recovery) = fork_recovery {
+            if recovery.clear_checkpoint_fork {
+                checkpoint_store
+                    .clear_checkpoint_fork_detected()
+                    .expect("Failed to clear checkpoint fork detected marker");
+            }
+            if recovery.clear_transaction_fork {
+                checkpoint_store
+                    .clear_transaction_fork_detected()
+                    .expect("Failed to clear transaction fork detected marker");
+            }
+
+            // TODO: when transaction fork recovery is implemented, this is how recovery will be done
+            // Handle transaction fork recovery
+            // if !recovery.transaction_overrides.is_empty() {
+            //     if let Some((tx_digest, _, _)) = checkpoint_store.get_transaction_fork_detected()? {
+            //         if recovery
+            //             .transaction_overrides
+            //             .contains_key(&tx_digest.to_string())
+            //         {
+            //             info!(
+            //                 "Fork recovery enabled for validator: clearing transaction fork for tx {:?}",
+            //                 tx_digest
+            //             );
+            //             checkpoint_store
+            //                 .clear_transaction_fork_detected()
+            //                 .expect("Failed to clear transaction fork detected marker");
+            //         }
+            //     }
+            // }
+
+            // // Handle checkpoint fork recovery
+            // if !recovery.checkpoint_overrides.is_empty() {
+            //     if let Some((checkpoint_seq, checkpoint_digest)) =
+            //         checkpoint_store.get_checkpoint_fork_detected()?
+            //     {
+            //         if recovery.checkpoint_overrides.contains_key(&checkpoint_seq) {
+            //             info!(
+            //                 "Fork recovery enabled for validator: clearing checkpoint fork at seq {} with digest {:?}",
+            //                 checkpoint_seq, checkpoint_digest
+            //             );
+            //             checkpoint_store
+            //                 .clear_checkpoint_fork_detected()
+            //                 .expect("Failed to clear checkpoint fork detected marker");
+            //         }
+            //     }
+            // }
+        }
+
+        if let Some((checkpoint_seq, checkpoint_digest)) = checkpoint_store
+            .get_checkpoint_fork_detected()
+            .map_err(|e| {
+                error!("Failed to check for checkpoint fork: {:?}", e);
+                e
+            })?
+        {
+            let digest_str = format!("{:?}", checkpoint_digest);
+            let digest_prefix = if digest_str.len() >= 5 {
+                &digest_str[0..5]
+            } else {
+                &digest_str
+            };
+
+            let detected_at = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            checkpoint_metrics
+                .fork_crash_mode
+                .with_label_values(&[
+                    "checkpoint",
+                    &checkpoint_seq.to_string(),
+                    &detected_at.to_string(),
+                    digest_prefix,
+                ])
+                .set(1);
+
+            loop {
+                error!(
+                    checkpoint_seq = checkpoint_seq,
+                    checkpoint_digest = ?checkpoint_digest,
+                    "Checkpoint fork detected! Node startup halted."
+                );
+                std::thread::sleep(std::time::Duration::from_secs(10));
+            }
+        }
+
+        if let Some((tx_digest, expected_effects_digest, actual_effects_digest)) = checkpoint_store
+            .get_transaction_fork_detected()
+            .map_err(|e| {
+                error!("Failed to check for transaction fork: {:?}", e);
+                e
+            })?
+        {
+            let digest_str = format!("{:?}", tx_digest);
+            let digest_prefix = if digest_str.len() >= 5 {
+                &digest_str[0..5]
+            } else {
+                &digest_str
+            };
+
+            let detected_at = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            checkpoint_metrics
+                .fork_crash_mode
+                .with_label_values(&[
+                    "transaction",
+                    &tx_digest.to_string(),
+                    &detected_at.to_string(),
+                    digest_prefix,
+                ])
+                .set(1);
+
+            loop {
+                error!(
+                    tx_digest = ?tx_digest,
+                    expected_effects_digest = ?expected_effects_digest,
+                    actual_effects_digest = ?actual_effects_digest,
+                    "Transaction fork detected! Node startup halted."
+                );
+                std::thread::sleep(std::time::Duration::from_secs(10));
+            }
+        }
+
+        Ok(())
     }
 }
 
