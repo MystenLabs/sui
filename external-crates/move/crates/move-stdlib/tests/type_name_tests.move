@@ -109,7 +109,7 @@ fun test_get_module() {
 
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
 fun test_get_address_aborts_with_primitive() {
-    with_defining_ids<u8>().module_string();
+    with_defining_ids<u8>().address_string();
 }
 
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
@@ -119,7 +119,7 @@ fun test_get_module_aborts_with_primitive() {
 
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
 fun test_get_address_aborts_with_primitive_generic() {
-    with_defining_ids<vector<std::ascii::String>>();
+    with_defining_ids<vector<std::ascii::String>>().address_string();
 }
 
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]

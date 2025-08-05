@@ -602,7 +602,7 @@ even if graceful unpacking has not been implemented in a "rule module".
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(!<a href="../sui/transfer_policy.md#sui_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="../sui/transfer_policy.md#sui_transfer_policy_ERuleAlreadySet">ERuleAlreadySet</a>);
     df::add(&<b>mut</b> policy.id, <a href="../sui/transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {}, cfg);
-    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.insert(type_name::get&lt;Rule&gt;())
+    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -682,7 +682,7 @@ confirming that the policy requirements are satisfied.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_add_receipt">add_receipt</a>&lt;T, Rule: drop&gt;(_: Rule, request: &<b>mut</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;) {
-    request.receipts.insert(type_name::get&lt;Rule&gt;())
+    request.receipts.insert(type_name::with_defining_ids&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -737,7 +737,7 @@ Remove the Rule from the <code><a href="../sui/transfer_policy.md#sui_transfer_p
 ) {
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(policy) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
     <b>let</b> _: Config = df::remove(&<b>mut</b> policy.id, <a href="../sui/transfer_policy.md#sui_transfer_policy_RuleKey">RuleKey</a>&lt;Rule&gt; {});
-    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.remove(&type_name::get&lt;Rule&gt;());
+    policy.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.remove(&type_name::with_defining_ids&lt;Rule&gt;());
 }
 </code></pre>
 
