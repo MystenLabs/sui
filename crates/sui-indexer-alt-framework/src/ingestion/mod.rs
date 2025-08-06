@@ -17,6 +17,7 @@ use crate::ingestion::broadcaster::broadcaster;
 use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
 use crate::ingestion::regulator::regulator;
+use crate::ingestion::streaming_service::GRPCStreamingService;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::CheckpointData;
 
@@ -27,6 +28,7 @@ mod local_client;
 mod regulator;
 mod remote_client;
 mod rpc_client;
+mod streaming_service;
 #[cfg(test)]
 mod test_utils;
 
@@ -54,6 +56,10 @@ pub struct ClientArgs {
     /// Optional password for the gRPC service.
     #[clap(long, env)]
     pub rpc_password: Option<String>,
+
+    /// gRPC endpoint for streaming checkpoints
+    #[clap(long, env)]
+    pub streaming_endpoint: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -71,6 +77,8 @@ pub struct IngestionConfig {
 pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
+    metrics: Arc<IndexerMetrics>,
+    streaming_endpoint: Option<String>,
     ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     ingest_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointData>>>,
@@ -113,6 +121,8 @@ impl IngestionService {
         Ok(Self {
             config,
             client,
+            metrics,
+            streaming_endpoint: args.streaming_endpoint,
             ingest_hi_tx,
             ingest_hi_rx,
             subscribers,
@@ -159,14 +169,15 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
+    pub async fn run<R>(self, checkpoints: R) -> Result<(JoinHandle<()>, JoinHandle<()>)>
     where
-        I: IntoIterator<Item = u64> + Send + Sync + 'static,
-        I::IntoIter: Send + Sync + 'static,
+        R: std::ops::RangeBounds<u64> + Send + Sync + 'static,
     {
         let IngestionService {
             config,
             client,
+            metrics,
+            streaming_endpoint,
             ingest_hi_tx: _,
             ingest_hi_rx,
             subscribers,
@@ -179,16 +190,21 @@ impl IngestionService {
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(config.ingest_concurrency);
 
+        // Create the streaming service
+        let streaming_service = streaming_endpoint.map(|s| GRPCStreamingService::new(s));
+
         let regulator = regulator(
+            streaming_service,
             checkpoints,
             config.checkpoint_buffer_size,
             ingest_hi_rx,
             checkpoint_tx,
+            subscribers.clone(),
+            metrics.clone(),
             cancel.clone(),
         );
 
         let broadcaster = broadcaster(config, client, checkpoint_rx, subscribers, cancel.clone());
-
         Ok((regulator, broadcaster))
     }
 }
@@ -229,6 +245,7 @@ mod tests {
                 rpc_api_url: None,
                 rpc_username: None,
                 rpc_password: None,
+                streaming_endpoint: None,
             },
             IngestionConfig {
                 checkpoint_buffer_size,

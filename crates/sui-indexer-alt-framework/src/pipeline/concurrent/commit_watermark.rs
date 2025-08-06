@@ -124,7 +124,9 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                         match next_checkpoint.cmp(&part.watermark.checkpoint_hi_inclusive) {
                             // Next pending checkpoint is from the future.
-                            Ordering::Less => break,
+                            Ordering::Less => {
+                                break;
+                            }
 
                             // This is the next checkpoint -- include it.
                             Ordering::Equal => {
@@ -242,6 +244,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                 Some(parts) = rx.recv() => {
                     for part in parts {
+                        tracing::error!(pipeline = H::NAME, ?part, "Received watermark part");
                         match precommitted.entry(part.checkpoint()) {
                             Entry::Vacant(entry) => {
                                 entry.insert(part);
