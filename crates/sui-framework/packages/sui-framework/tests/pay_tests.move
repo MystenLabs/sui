@@ -32,7 +32,7 @@ fun test_coin_split_n() {
     assert!(coin1.value() == 3);
     assert!(coin2.value() == 3);
     assert!(coin.value() == 4);
-    assert!(!scenario.has_most_recent_for_sender<Coin<SUI>>(), 1);
+    assert!(!scenario.has_most_recent_for_sender<Coin<SUI>>());
 
     test_utils::destroy(coin);
     test_utils::destroy(coin1);

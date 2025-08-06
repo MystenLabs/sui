@@ -20,6 +20,9 @@ const ENotSetForEpoch: u64 = 1;
 #[allow(unused_const)]
 const EBCSSerializationFailure: u64 = 2;
 
+/// Trying to update `Setting` in an incorrect epoch.
+const EMismatchedEpoch: u64 = 3;
+
 public struct Config<phantom WriteCap> has key {
     id: UID,
 }
@@ -82,7 +85,7 @@ public(package) fun add_for_next_epoch<
             (move newer_value, move older_value_opt)
         } else {
             // the current epoch cannot be less than the `newer_value_epoch`
-            assert!(epoch == newer_value_epoch);
+            assert!(epoch == newer_value_epoch, EMismatchedEpoch);
             // if the `newer_value` is for the current epoch, then the option must be `none`
             assert!(newer_value.is_none(), EAlreadySetForEpoch);
             (move older_value_opt, option::none())

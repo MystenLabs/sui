@@ -579,7 +579,7 @@ Aborts if <code>n</code> is greater than the length of <code>v</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_take">take</a>&lt;T: drop&gt;(<b>mut</b> v: <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt;, n: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt; {
-    <b>assert</b>!(n &lt;= v.<a href="../std/vector.md#std_vector_length">length</a>());
+    <b>assert</b>!(n &lt;= v.<a href="../std/vector.md#std_vector_length">length</a>(), <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>if</b> (n == v.<a href="../std/vector.md#std_vector_length">length</a>()) <b>return</b> v;
     v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
     <a href="../std/vector.md#std_vector_tabulate">tabulate</a>!(n, |_| v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>())

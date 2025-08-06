@@ -6,10 +6,6 @@ module sui::object_tests;
 
 use sui::address;
 
-const EDifferentAddress: u64 = 0xF000;
-const EDifferentBytes: u64 = 0xF001;
-const EAddressRoundTrip: u64 = 0xF002;
-
 #[test]
 fun test_bytes_address_roundtrip() {
     let mut ctx = tx_context::dummy();
@@ -22,11 +18,11 @@ fun test_bytes_address_roundtrip() {
     let addr1 = uid1.to_address();
     let byte1 = uid1.to_bytes();
 
-    assert!(addr0 != addr1, EDifferentAddress);
-    assert!(byte0 != byte1, EDifferentBytes);
+    assert!(addr0 != addr1);
+    assert!(byte0 != byte1);
 
-    assert!(addr0 == address::from_bytes(byte0), EAddressRoundTrip);
-    assert!(addr1 == address::from_bytes(byte1), EAddressRoundTrip);
+    assert!(addr0 == address::from_bytes(byte0));
+    assert!(addr1 == address::from_bytes(byte1));
 
     uid0.delete();
     uid1.delete();

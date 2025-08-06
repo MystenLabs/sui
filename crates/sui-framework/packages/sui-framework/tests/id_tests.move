@@ -4,8 +4,6 @@
 #[test_only]
 module sui::id_tests;
 
-const EIdBytesMismatch: u64 = 0;
-
 public struct Object has key {
     id: object::UID,
 }
@@ -16,7 +14,7 @@ fun test_get_id() {
     let id = object::new(&mut ctx);
     let obj_id = id.to_inner();
     let obj = Object { id };
-    assert!(object::id(&obj) == obj_id, EIdBytesMismatch);
+    assert!(object::id(&obj) == obj_id);
     let Object { id } = obj;
     id.delete();
 }

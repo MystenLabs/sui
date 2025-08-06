@@ -7,10 +7,6 @@ module sui::tx_context;
 /// Number of bytes in an tx hash (which will be the transaction digest)
 const TX_HASH_LENGTH: u64 = 32;
 
-#[test_only]
-/// Expected an tx hash of length 32, but found a different length
-const EBadTxHashLength: u64 = 0;
-
 #[allow(unused_field)]
 /// Information about the transaction currently being executed.
 /// This cannot be constructed by a transaction--it is a privileged object created by
@@ -112,7 +108,7 @@ public fun create(
     gas_budget: u64,
     sponsor: Option<address>,
 ): TxContext {
-    assert!(tx_hash.length() == TX_HASH_LENGTH, EBadTxHashLength);
+    assert!(tx_hash.length() == TX_HASH_LENGTH);
     replace(
         sender,
         tx_hash,
@@ -142,7 +138,7 @@ public fun new(
     epoch_timestamp_ms: u64,
     ids_created: u64,
 ): TxContext {
-    assert!(tx_hash.length() == TX_HASH_LENGTH, EBadTxHashLength);
+    assert!(tx_hash.length() == TX_HASH_LENGTH);
     create(
         sender,
         tx_hash,

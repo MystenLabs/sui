@@ -44,6 +44,9 @@ const ERuleAlreadySet: u64 = 3;
 const ENotOwner: u64 = 4;
 /// Trying to `withdraw` more than there is.
 const ENotEnough: u64 = 5;
+/// Trying to create `TransferPolicy` and `TransferPolicyCap`
+/// using `T` and `Publisher` from different package sources.
+const ENotMatchedPublisher: u64 = 6;
 
 /// A "Hot Potato" forcing the buyer to get a transfer permission
 /// from the item type (`T`) owner on purchase attempt.
@@ -113,7 +116,7 @@ public fun new_request<T>(item: ID, paid: u64, from: ID): TransferRequest<T> {
 /// confirm kiosk deals for the `T`. If there's no `TransferPolicy`
 /// available for use, the type can not be traded in kiosks.
 public fun new<T>(pub: &Publisher, ctx: &mut TxContext): (TransferPolicy<T>, TransferPolicyCap<T>) {
-    assert!(package::from_package<T>(pub), 0);
+    assert!(package::from_package<T>(pub), ENotMatchedPublisher);
     let id = object::new(ctx);
     let policy_id = id.to_inner();
 

@@ -160,6 +160,16 @@ title: Module `sui::config`
 
 
 
+<a name="sui_config_EMismatchedEpoch"></a>
+
+Trying to update <code><a href="../sui/config.md#sui_config_Setting">Setting</a></code> in an incorrect epoch.
+
+
+<pre><code><b>const</b> <a href="../sui/config.md#sui_config_EMismatchedEpoch">EMismatchedEpoch</a>: u64 = 3;
+</code></pre>
+
+
+
 <a name="sui_config_new"></a>
 
 ## Function `new`
@@ -281,7 +291,7 @@ title: Module `sui::config`
             (<b>move</b> newer_value, <b>move</b> older_value_opt)
         } <b>else</b> {
             // the current epoch cannot be less than the `newer_value_epoch`
-            <b>assert</b>!(epoch == newer_value_epoch);
+            <b>assert</b>!(epoch == newer_value_epoch, <a href="../sui/config.md#sui_config_EMismatchedEpoch">EMismatchedEpoch</a>);
             // <b>if</b> the `newer_value` is <b>for</b> the current epoch, then the option must be `none`
             <b>assert</b>!(newer_value.is_none(), <a href="../sui/config.md#sui_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>);
             (<b>move</b> older_value_opt, option::none())

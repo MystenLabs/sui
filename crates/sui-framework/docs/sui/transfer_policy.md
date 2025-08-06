@@ -360,6 +360,17 @@ Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw"
 
 
 
+<a name="sui_transfer_policy_ENotMatchedPublisher"></a>
+
+Trying to create <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> and <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code>
+using <code>T</code> and <code>Publisher</code> from different package sources.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotMatchedPublisher">ENotMatchedPublisher</a>: u64 = 6;
+</code></pre>
+
+
+
 <a name="sui_transfer_policy_new_request"></a>
 
 ## Function `new_request`
@@ -408,7 +419,7 @@ available for use, the type can not be traded in kiosks.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_new">new</a>&lt;T&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): (<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
-    <b>assert</b>!(<a href="../sui/package.md#sui_package_from_package">package::from_package</a>&lt;T&gt;(pub), 0);
+    <b>assert</b>!(<a href="../sui/package.md#sui_package_from_package">package::from_package</a>&lt;T&gt;(pub), <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotMatchedPublisher">ENotMatchedPublisher</a>);
     <b>let</b> id = <a href="../sui/object.md#sui_object_new">object::new</a>(ctx);
     <b>let</b> policy_id = id.to_inner();
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });

@@ -166,7 +166,7 @@ public fun skip<T: drop>(mut v: vector<T>, n: u64): vector<T> {
 /// Take the first `n` elements of the vector `v` and drop the rest.
 /// Aborts if `n` is greater than the length of `v`.
 public fun take<T: drop>(mut v: vector<T>, n: u64): vector<T> {
-    assert!(n <= v.length());
+    assert!(n <= v.length(), EIndexOutOfBounds);
     if (n == v.length()) return v;
     v.reverse();
     tabulate!(n, |_| v.pop_back())
