@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{
-    EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair, enum_dispatch,
+    enum_dispatch, EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair,
 };
 
 #[derive(Serialize, Deserialize)]
