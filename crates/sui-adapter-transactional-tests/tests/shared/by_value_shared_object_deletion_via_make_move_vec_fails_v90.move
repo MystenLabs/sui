@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses t1=0x0 t2=0x0 --shared-object-deletion true
+//# init --addresses t1=0x0 t2=0x0 --shared-object-deletion true --protocol-version 90
 
 //# publish
 
@@ -172,7 +172,7 @@ module t2::o2 {
 //> 1: t2::o2::pop_coin(Result(0));
 //> 2: SplitCoins(Result(1), [Input(0)]);
 //> 3: TransferObjects([Result(2)], Input(2));
-//> 4: sui::transfer::public_share_object<sui::coin::Coin<sui::sui::SUI>>(Input(1));
+//> 4: sui::transfer::public_share_object(Input(1));
 
 // Try to reshare the shared object -- this should fail since the input was
 // used for the `MakeMoveVec` call

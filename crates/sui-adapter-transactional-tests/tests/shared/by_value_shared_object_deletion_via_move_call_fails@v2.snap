@@ -51,7 +51,7 @@ task 6, lines 68-72:
 //> 1: t2::o2::freezer(Result(0));
 // pass through a move function and then try to add as dof
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 7, lines 73-77:
 //# programmable --inputs object(2,0) object(3,0)
@@ -59,7 +59,7 @@ task 7, lines 73-77:
 //> 1: t2::o2::dofer(Input(0), Result(0));
 // pass through a move function and then try to add as df
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 8, lines 78-82:
 //# programmable --inputs object(2,0) object(3,0)
@@ -67,14 +67,14 @@ task 8, lines 78-82:
 //> 1: t2::o2::dfer(Input(0), Result(0));
 // pass through a move function and then try to transfer it
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 9, lines 83-85:
 //# programmable --inputs object(2,0) object(3,0)
 //> 0: t2::o2::id<t2::o2::Obj2>(Input(1));
 //> 1: t2::o2::transferer(Result(0));
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
 
 task 10, line 87:
 //# run t2::o2::mint_shared_coin
@@ -134,4 +134,4 @@ task 15, lines 113-117:
 //> 2: TransferObjects([Result(1)], Input(2));
 //> 3: TransferObjects([Result(0)], Input(2));
 Error: Transaction Effects Status: The shared object operation is not allowed.
-Debug of error: SharedObjectOperationNotAllowed at command None
+Debug of error: SharedObjectOperationNotAllowed at command Some(0)
