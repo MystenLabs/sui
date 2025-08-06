@@ -246,7 +246,7 @@ where
     pub async fn submit_transaction(
         &self,
         request: ExecuteTransactionRequestV3,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+    ) -> SuiResult<Registration<'_, TransactionDigest, QuorumDriverResult>> {
         let tx_digest = request.transaction.digest();
         debug!(?tx_digest, "Received transaction execution request.");
         self.metrics.total_requests.inc();
@@ -513,7 +513,7 @@ where
     pub async fn submit_transaction(
         &self,
         request: ExecuteTransactionRequestV3,
-    ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
+    ) -> SuiResult<Registration<'_, TransactionDigest, QuorumDriverResult>> {
         self.quorum_driver.submit_transaction(request).await
     }
 

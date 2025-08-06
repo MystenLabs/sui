@@ -128,7 +128,7 @@ impl<'env> Context<'env> {
         self.defn_context.env
     }
 
-    pub(super) fn reporter(&self) -> &DiagnosticReporter {
+    pub(super) fn reporter(&self) -> &DiagnosticReporter<'_> {
         &self.defn_context.reporter
     }
 

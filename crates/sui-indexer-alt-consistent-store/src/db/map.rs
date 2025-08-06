@@ -156,7 +156,7 @@ where
         Ok(())
     }
 
-    fn cf(&self) -> Result<Arc<rocksdb::BoundColumnFamily>, Error> {
+    fn cf(&self) -> Result<Arc<rocksdb::BoundColumnFamily<'_>>, Error> {
         self.db
             .cf(&self.cf)
             .ok_or_else(|| Error::NoColumnFamily(self.cf.clone()))

@@ -87,7 +87,7 @@ impl<T: TName> UniqueSet<T> {
         self.iter().all(|(_, x_)| other.contains_(x_))
     }
 
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         self.into_iter()
     }
 

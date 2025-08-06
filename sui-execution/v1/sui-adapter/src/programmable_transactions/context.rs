@@ -226,7 +226,7 @@ mod checked {
             })
         }
 
-        pub fn object_runtime(&mut self) -> &ObjectRuntime {
+        pub fn object_runtime(&mut self) -> &ObjectRuntime<'_> {
             self.native_extensions.get()
         }
 
