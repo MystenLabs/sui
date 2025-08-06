@@ -137,6 +137,10 @@ export interface IDebugInfo {
  * is true, only debug infos whose respective source files are present in the filesMap
  * are included in the result.
  * @param directory directory containing debug info files.
+ * @param debugInfosMap map from stringified module info to debug info.
+ * @param allDebugInfoLinesMap map from file hash to set of lines present
+ * in all debug infos for a given file (a given debug info may contain
+ * source lines for different files due to inlining).
  * @param filesMap map from file hash to file information.
  * @param mustHaveSourceFile indicates whether resulting debug infos must have their
  * respective source files present in the filesMap.
@@ -144,12 +148,11 @@ export interface IDebugInfo {
  */
 export function readAllDebugInfos(
     directory: string,
+    debugInfosMap: Map<string, IDebugInfo>,
+    allDebugInfoLinesMap: Map<string, Set<number>>,
     filesMap: Map<string, IFileInfo>,
     mustHaveSourceFile: boolean,
-): Map<string, IDebugInfo> {
-    const debugInfosMap = new Map<string, IDebugInfo>();
-    const allDebugInfoLinesMap = new Map<string, Set<number>>;
-
+): void {
     const processDirectory = (dir: string) => {
         const files = fs.readdirSync(dir);
         for (const f of files) {
@@ -168,7 +171,21 @@ export function readAllDebugInfos(
     };
 
     processDirectory(directory);
+}
 
+/**
+ * Computes optimized lines for each debug info.
+ *
+ * @param debugInfosMap map from stringified module info to debug info.
+ * @param allDebugInfoLinesMap map from file hash to set of lines present
+ * in all debug infos for a given file (a given debug info may contain
+ * source lines for different files due to inlining).
+ */
+export function computeOptimizedLines(
+    debugInfosMap: Map<string, IDebugInfo>,
+    allDebugInfoLinesMap: Map<string, Set<number>>,
+    filesMap: Map<string, IFileInfo>,
+): void {
     for (const debugInfo of debugInfosMap.values()) {
         const fileHash = debugInfo.fileHash;
         const debugInfoLines = allDebugInfoLinesMap.get(fileHash);
@@ -181,9 +198,6 @@ export function readAllDebugInfos(
             }
         }
     }
-
-
-    return debugInfosMap;
 }
 
 /**
@@ -310,7 +324,6 @@ function readDebugInfo(
     }
     return { filePath: fileInfo.path, fileHash, modInfo, functions, optimizedLines: [] };
 }
-
 
 /**
  * Creates IFileInfo for a file on a given path and returns it along with
