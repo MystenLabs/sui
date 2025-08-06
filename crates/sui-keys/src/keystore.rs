@@ -4,25 +4,25 @@
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{Context, anyhow, bail, ensure};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
-use rand::{rngs::StdRng, SeedableRng};
+use colored::Colorize;
+use rand::{SeedableRng, rngs::StdRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
-use std::fs;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::BufReader;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{
-    enum_dispatch, EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair,
+    EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair, enum_dispatch,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -325,13 +325,15 @@ impl AccountKeystore for FileBasedKeystore {
 impl FileBasedKeystore {
     pub fn new(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
-            if !has_reduced_file_permissions(path)? {
-                bail!(
-                    "Keystore file must have reduced file permissions (600). Please set the \
-                    permissions to 600 for the file: {}",
-                    path.display()
+            let _ = set_reduced_file_permissions(path).inspect_err(|error| {
+                eprintln!(
+                    "[{}]: while attempting to ensure reduced file permissions on '{}'. Cannot set \
+                    permissions for keystore file. Error: {error}",
+                    "warning".bold().yellow(),
+                    path.display(),
                 );
-            }
+            });
+
             let reader =
                 BufReader::new(File::open(path).with_context(|| {
                     format!("Cannot open the keystore file: {}", path.display())
@@ -480,16 +482,11 @@ impl FileBasedKeystore {
     }
 }
 
-fn has_reduced_file_permissions(path: impl AsRef<Path>) -> Result<bool, anyhow::Error> {
+fn set_reduced_file_permissions(path: impl AsRef<Path>) -> Result<(), anyhow::Error> {
     let path = path.as_ref();
     let metadata = fs::metadata(path)?;
     let mode = metadata.permissions().mode();
-    Ok(mode & 0o777 == 0o600)
-}
-
-fn set_reduced_file_permissions(path: impl AsRef<Path>) -> Result<(), anyhow::Error> {
-    let path = path.as_ref();
-    if !has_reduced_file_permissions(path)? {
+    if mode & 0o177 != 0 {
         fs::set_permissions(path, fs::Permissions::from_mode(0o600)).with_context(|| {
             format!(
                 "Cannot set permissions for keystore file: {}.",

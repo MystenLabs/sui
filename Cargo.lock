@@ -15013,6 +15013,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bip32",
+ "colored",
  "fastcrypto",
  "rand 0.8.5",
  "regex",
