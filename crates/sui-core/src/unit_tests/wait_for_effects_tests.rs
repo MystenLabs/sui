@@ -137,7 +137,7 @@ async fn test_wait_for_effects_position_mismatch() {
 }
 
 #[tokio::test]
-async fn test_wait_for_effects_post_commit_rejected() {
+async fn test_wait_for_effects_consensus_rejected_validator_accepted() {
     let test_context = TestContext::new().await;
 
     let transaction = test_context.build_test_transaction();
@@ -155,6 +155,7 @@ async fn test_wait_for_effects_post_commit_rejected() {
     })
     .unwrap();
 
+    // Validator does not reject the transaction, but it is rejected by the commit.
     let state_clone = test_context.state.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -175,10 +176,7 @@ async fn test_wait_for_effects_post_commit_rejected() {
     match response {
         WaitForEffectsResponse::Rejected { error } => {
             // TODO(fastpath): Test reject reason.
-            assert!(matches!(
-                error,
-                SuiError::TransactionRejectReasonNotFound { .. }
-            ));
+            assert!(error.is_none(), "{:?}", error);
         }
         _ => panic!("Expected Rejected response"),
     }
@@ -235,8 +233,8 @@ async fn test_wait_for_effects_timeout() {
 }
 
 #[tokio::test]
-async fn test_wait_for_effects_quorum_rejected() {
-    // This test exercises the path where the transaction is rejected by a quorum in consensus.
+async fn test_wait_for_effects_consensus_rejected_validator_rejected() {
+    // This test exercises the path where the transaction is rejected by both consensus and the validator.
     let test_context = TestContext::new().await;
 
     let transaction = test_context.build_test_transaction();
@@ -281,11 +279,11 @@ async fn test_wait_for_effects_quorum_rejected() {
         WaitForEffectsResponse::Rejected { error } => {
             assert_eq!(
                 error,
-                SuiError::UserInputError {
+                Some(SuiError::UserInputError {
                     error: UserInputError::TransactionDenied {
                         error: "object denied".to_string(),
                     },
-                }
+                })
             );
         }
         _ => panic!("Expected Rejected response"),

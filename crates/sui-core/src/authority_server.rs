@@ -547,11 +547,24 @@ impl ValidatorService {
         }
 
         let request = request.into_inner();
-        let transaction = bcs::from_bytes::<Transaction>(&request.transaction).map_err(|e| {
-            SuiError::TransactionDeserializationError {
-                error: e.to_string(),
+
+        // TODO(fastpath): handle multiple transactions.
+        if request.transactions.len() != 1 {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: format!(
+                    "Expected exactly 1 transaction in request, got {}",
+                    request.transactions.len()
+                ),
             }
-        })?;
+            .into());
+        }
+
+        let transaction =
+            bcs::from_bytes::<Transaction>(&request.transactions[0]).map_err(|e| {
+                SuiError::TransactionDeserializationError {
+                    error: e.to_string(),
+                }
+            })?;
         transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         // Check system overload
@@ -1235,9 +1248,7 @@ impl ValidatorService {
         let mut cur_status = match first_status {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
                 ConsensusTxStatus::Rejected => {
-                    let error = epoch_store
-                        .get_rejection_vote_reason(consensus_position)
-                        .unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
+                    let error = epoch_store.get_rejection_vote_reason(consensus_position);
                     return Ok(WaitForEffectsResponse::Rejected { error });
                 }
                 ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => status,
@@ -1265,7 +1276,7 @@ impl ValidatorService {
                     match second_status {
                         NotifyReadConsensusTxStatusResult::Status(status) => {
                             if status == ConsensusTxStatus::Rejected {
-                                let error = epoch_store.get_rejection_vote_reason(consensus_position).unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
+                                let error = epoch_store.get_rejection_vote_reason(consensus_position);
                                 return Ok(WaitForEffectsResponse::Rejected { error });
                             }
                             assert_eq!(status, ConsensusTxStatus::Finalized);
