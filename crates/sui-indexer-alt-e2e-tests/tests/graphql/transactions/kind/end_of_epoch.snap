@@ -4,7 +4,7 @@ source: external-crates/move/crates/move-transactional-test-runner/src/framework
 processed 4 tasks
 
 task 1, line 6:
-//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee
+//# advance-epoch --create-random-state --create-authenticator-state --create-authenticator-state-expire --create-deny-list-state --create-bridge-state --create-bridge-committee --include-system-packages
 Epoch advanced: 1
 
 task 2, line 8:
@@ -18,7 +18,7 @@ Response: {
     "endOfEpochTransaction": {
       "nodes": [
         {
-          "digest": "2i1FFQCQUT1Cxs5csj1qZCxxx6ehxEfotT9sXXjvEutd",
+          "digest": "ew5K1QbBUnFpaVzF13mdEsXGKwLSHtXNyjCHuMNWGSZ",
           "kind": {
             "__typename": "EndOfEpochTransaction",
             "transactions": {
@@ -64,7 +64,33 @@ Response: {
                   "nonRefundableStorageFee": 0,
                   "epochStartTimestamp": "1970-01-01T00:00:00Z",
                   "systemPackages": {
-                    "nodes": []
+                    "nodes": [
+                      {
+                        "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                        "version": 1,
+                        "digest": "2RtAA9ZmxqeJvmuMzJ2qwQHbGHTRf25a6f5QUGtv8DLv"
+                      },
+                      {
+                        "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "version": 1,
+                        "digest": "8jAPRAjq5rJwXSDg3PpShFvt2XtZG4TEUEthUjhGBp5a"
+                      },
+                      {
+                        "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                        "version": 1,
+                        "digest": "8bcNqPukrYvNt55xoVaHpmWfkqT243rb8NKR1pCGhAEB"
+                      },
+                      {
+                        "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                        "version": 1,
+                        "digest": "AiuUdqUdc9KBX9zqNf3YVZMznwTuMSkza3Be2yyFgHLS"
+                      },
+                      {
+                        "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
+                        "version": 1,
+                        "digest": "QzUWtfGF1DL5sSMpX9yZ9VWoKjkWiwQZyHU6JJ6RzcT"
+                      }
+                    ]
                   }
                 }
               ]

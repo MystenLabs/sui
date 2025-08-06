@@ -226,6 +226,8 @@ pub struct AdvanceEpochCommand {
     pub create_bridge_state: bool,
     #[clap(long = "create-bridge-committee")]
     pub create_bridge_committee: bool,
+    #[clap(long = "include-system-packages")]
+    pub include_system_packages: bool,
 }
 
 impl From<&AdvanceEpochCommand> for simulacrum::AdvanceEpochConfig {
@@ -237,6 +239,7 @@ impl From<&AdvanceEpochCommand> for simulacrum::AdvanceEpochConfig {
             create_deny_list_state: cmd.create_deny_list_state,
             create_bridge_state: cmd.create_bridge_state,
             create_bridge_committee: cmd.create_bridge_committee,
+            include_system_packages: cmd.include_system_packages,
         }
     }
 }
