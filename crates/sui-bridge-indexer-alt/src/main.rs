@@ -68,6 +68,7 @@ async fn main() -> Result<(), anyhow::Error> {
             rpc_api_url: None,
             rpc_username: None,
             rpc_password: None,
+            streaming_endpoint: None,
         },
         Default::default(),
         Some(&MIGRATIONS),
