@@ -4,11 +4,11 @@
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
-use anyhow::{Context, anyhow, bail, ensure};
+use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
 use colored::Colorize;
-use rand::{SeedableRng, rngs::StdRng};
+use rand::{rngs::StdRng, SeedableRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
