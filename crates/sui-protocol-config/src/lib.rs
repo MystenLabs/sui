@@ -1064,6 +1064,9 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move package object, in bytes. Enforced by the Sui adapter at the end of a publish transaction.
     max_move_package_size: Option<u64>,
 
+    // Goal is to replace max_move_package_size and max_total_package_size with this.
+    max_total_package_size: Option<u64>,
+
     /// Max number of publish or upgrade commands allowed in a programmable transaction block.
     max_publish_or_upgrade_per_ptb: Option<u64>,
 
@@ -2441,6 +2444,7 @@ impl ProtocolConfig {
             binary_variant_instantiation_handles: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
+            max_total_package_size: None,
             max_publish_or_upgrade_per_ptb: None,
             max_tx_gas: Some(10_000_000_000),
             max_gas_price: Some(100_000),
@@ -4076,6 +4080,9 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
+                    cfg.max_package_dependencies = Some(100); // Relaxed
+                    cfg.max_move_package_size = Some(1024 * 1024); // Relaxed to 1 MB
+                    cfg.max_total_package_size = Some(32 * 100 * 1024); // Product of the two from before.
                 }
                 // Use this template when making changes:
                 //
