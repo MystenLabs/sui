@@ -1,0 +1,14 @@
+[package]
+name = "sui-forking"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+sui-swarm-config.workspace = true
+sui-types.workspace = true
+sui-replay-2.workspace = true
+simulacrum.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true
