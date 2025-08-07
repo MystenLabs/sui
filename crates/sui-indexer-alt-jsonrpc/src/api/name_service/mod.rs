@@ -42,7 +42,7 @@ trait NameServiceApi {
     ) -> RpcResult<PageResponse<String, String>>;
 }
 
-pub(crate) struct NameService(pub Context);
+pub struct NameService(pub Context);
 
 #[async_trait::async_trait]
 impl NameServiceApiServer for NameService {

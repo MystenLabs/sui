@@ -15,6 +15,7 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
+use sui_types::error::SuiObjectResponseError;
 
 use crate::api::objects::error::Error;
 use crate::api::rpc_module::RpcModule;
@@ -110,9 +111,9 @@ trait QueryObjectsApi {
     ) -> RpcResult<Page<SuiObjectResponse, String>>;
 }
 
-pub(crate) struct Objects(pub Context);
+pub struct Objects(pub Context);
 
-pub(crate) struct QueryObjects(pub Context);
+pub struct QueryObjects(pub Context);
 
 #[async_trait::async_trait]
 impl ObjectsApiServer for Objects {
@@ -147,16 +148,40 @@ impl ObjectsApiServer for Objects {
 
         let options = options.unwrap_or_default();
 
-        let obj_futures = object_ids
-            .iter()
-            .map(|id| response::live_object(ctx, *id, &options));
+        // Load all objects from the KV store in a single batch
+        let objects_map = ctx
+            .kv_loader()
+            .load_many_latest_objects(object_ids.clone())
+            .await
+            .unwrap_or_default();
 
-        Ok(future::join_all(obj_futures)
+        // Create futures for converting each object to response (preserving order)
+        let response_futures: Vec<_> = object_ids
+            .iter()
+            .map(|object_id| {
+                let obj = objects_map.get(object_id).cloned();
+                let object_id = *object_id;
+                let options = options.clone();
+                async move {
+                    match obj {
+                        Some(object) => response::object_data_with_options(ctx, object, &options)
+                            .await
+                            .map(SuiObjectResponse::new_with_data),
+                        None => Ok(SuiObjectResponse::new_with_error(
+                            SuiObjectResponseError::NotExists { object_id },
+                        )),
+                    }
+                }
+            })
+            .collect();
+
+        // Execute all futures concurrently and collect results
+        Ok(future::join_all(response_futures)
             .await
             .into_iter()
-            .zip(object_ids)
-            .map(|(r, o)| {
-                r.with_internal_context(|| format!("Failed to get object {o} at latest version"))
+            .zip(&object_ids)
+            .map(|(r, id)| {
+                r.with_internal_context(|| format!("Failed to get object {id} at latest version"))
             })
             .collect::<Result<Vec<_>, _>>()?)
     }

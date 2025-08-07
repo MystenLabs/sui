@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) mod checkpoints;
-pub(crate) mod coin;
-pub(crate) mod dynamic_fields;
-pub(crate) mod governance;
-pub(crate) mod move_utils;
-pub(crate) mod name_service;
-pub(crate) mod objects;
-pub(crate) mod rpc_module;
-pub(crate) mod transactions;
+pub mod checkpoints;
+pub mod coin;
+pub mod dynamic_fields;
+pub mod governance;
+pub mod move_utils;
+pub mod name_service;
+pub mod objects;
+pub mod rpc_module;
+pub mod transactions;
 pub mod write;

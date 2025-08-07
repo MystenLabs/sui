@@ -221,6 +221,7 @@ impl PTB {
             serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
             serialize_signed_transaction: program_metadata.serialize_signed_set,
             sender: program_metadata.sender.map(|x| x.value.into_inner().into()),
+            forking_mode: false,
         };
 
         let gas_payment = client.transaction_builder().input_refs(&gas).await?;

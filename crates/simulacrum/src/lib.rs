@@ -29,15 +29,18 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
-use sui_types::crypto::{AccountKeyPair, AuthoritySignature, get_account_key_pair};
+use sui_types::crypto::{
+    AccountKeyPair, AuthoritySignature, SuiKeyPair, get_account_key_pair, get_key_pair,
+};
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
-use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::EndOfEpochTransactionKind;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{EndOfEpochTransactionKind, SenderSignedData};
 use sui_types::{
     base_types::{EpochId, SuiAddress},
     committee::Committee,
@@ -54,7 +57,10 @@ use self::epoch_state::EpochState;
 pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
+use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
+use sui_types::execution::ExecutionResult;
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::{
     gas_coin::GasCoin,
@@ -114,6 +120,7 @@ pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
     deny_config: TransactionDenyConfig,
     data_ingestion_path: Option<PathBuf>,
     verifier_signing_config: VerifierSigningConfig,
+    certificate_deny_config: CertificateDenyConfig,
 }
 
 impl Simulacrum {
@@ -201,8 +208,66 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             epoch_state,
             deny_config: TransactionDenyConfig::default(),
             verifier_signing_config: VerifierSigningConfig::default(),
+            certificate_deny_config: CertificateDenyConfig::default(),
             data_ingestion_path: None,
         }
+    }
+
+    // TODO: forking: move this to main
+    /// Execute a transaction while impersonating a specific sender.
+    ///
+    /// This method allows executing transactions as any account without requiring the private
+    /// keys for that account. This is useful for testing scenarios where you want to simulate
+    /// transactions from accounts you don't control.
+    ///
+    /// # Arguments
+    /// * `transaction_data` - The transaction data to execute
+    ///
+    /// # Returns
+    /// The transaction effects and optional execution error
+    ///
+    /// # Example
+    /// ```
+    /// use simulacrum::Simulacrum;
+    /// use sui_types::base_types::SuiAddress;
+    /// use sui_types::transaction::{TransactionData, TransactionKind};
+    /// use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    ///
+    /// # fn main() -> anyhow::Result<()> {
+    /// let mut sim = Simulacrum::new();
+    /// let impersonated_address = SuiAddress::random_for_testing_only();
+    ///
+    /// // Create transaction data
+    /// let pt = ProgrammableTransactionBuilder::new().finish();
+    /// let kind = TransactionKind::ProgrammableTransaction(pt);
+    /// let gas_data = sui_types::transaction::GasData {
+    ///     payment: vec![],
+    ///     owner: impersonated_address,
+    ///     price: sim.reference_gas_price(),
+    ///     budget: 1_000_000,
+    /// };
+    /// let tx_data = TransactionData::new_with_gas_data(kind, impersonated_address, gas_data);
+    ///
+    /// // Execute as the impersonated address without needing their private key
+    /// let (effects, _) = sim.execute_transaction_impersonating(tx_data)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn execute_transaction_impersonating(
+        &mut self,
+        transaction_data: TransactionData,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        // Create dummy signatures for each required signer
+        let pk = SuiKeyPair::Ed25519(get_key_pair().1);
+        let sig = pk.sign(transaction_data.sender().as_ref());
+        // Create sender signed data with dummy signatures
+        let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
+
+        // Create transaction and mark it as verified without checking signatures
+        let transaction = Transaction::new(sender_signed_data);
+        let verified_transaction = VerifiedTransaction::new_unchecked(transaction);
+
+        self.execute_transaction_impl(verified_transaction)
     }
 
     /// Attempts to execute the provided Transaction.
@@ -260,6 +325,91 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = VerifiedTransaction::new_unchecked(transaction);
         self.execute_transaction_impl(transaction)
+    }
+
+    /// Creates a layout resolver for use with dev_inspect results.
+    /// Call this after `dev_inspect` to get a layout resolver.
+    pub fn create_layout_resolver<'a>(
+        &'a self,
+        inner_temp_store: &'a InnerTemporaryStore,
+    ) -> Box<dyn LayoutResolver + 'a> {
+        self.epoch_state
+            .create_layout_resolver(&self.store, inner_temp_store)
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    pub fn dev_inspect(
+        &self,
+        sender: SuiAddress,
+        transaction_kind: TransactionKind,
+        gas_price: Option<u64>,
+        gas_budget: Option<u64>,
+        gas_sponsor: Option<SuiAddress>,
+        gas_objects: Option<Vec<ObjectRef>>,
+        show_raw_txn_data_and_effects: Option<bool>,
+        skip_checks: Option<bool>,
+    ) -> anyhow::Result<(
+        InnerTemporaryStore,
+        TransactionEffects,
+        TransactionEvents,
+        Vec<u8>, /* raw txn data */
+        Vec<u8>, /* raw_effects */
+        Result<Vec<ExecutionResult>, ExecutionError>,
+    )> {
+        self.epoch_state.dev_inspect_transaction_block(
+            &self.store,
+            sender,
+            transaction_kind,
+            gas_price,
+            gas_budget,
+            gas_sponsor,
+            gas_objects,
+            show_raw_txn_data_and_effects,
+            skip_checks,
+            &self.deny_config,
+            &self.certificate_deny_config,
+            &self.verifier_signing_config,
+        )
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn dry_run_transaction(
+        &self,
+        transaction_data: TransactionData,
+    ) -> anyhow::Result<(
+        InnerTemporaryStore,
+        sui_types::gas::SuiGasStatus,
+        TransactionEffects,
+        Option<ObjectID>,
+        Result<(), sui_types::error::ExecutionError>,
+    )> {
+        // Create dummy signatures for each required signer
+        let pk = SuiKeyPair::Ed25519(get_key_pair().1);
+        let sig = pk.sign(transaction_data.sender().as_ref());
+        // Create sender signed data with dummy signatures
+        let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
+
+        // Create transaction and mark it as verified without checking signatures
+        let transaction = VerifiedTransaction::new_unchecked(Transaction::new(sender_signed_data));
+        let digest = transaction.digest();
+
+        let (inner_temp_store, sui_gas_status, effects, mock_gas, execution_error_opt) =
+            self.epoch_state.dry_run_exec_impl(
+                &self.store,
+                &self.deny_config,
+                &self.certificate_deny_config,
+                &self.verifier_signing_config,
+                &transaction,
+                digest,
+            )?;
+
+        Ok((
+            inner_temp_store,
+            sui_gas_status,
+            effects,
+            mock_gas,
+            execution_error_opt,
+        ))
     }
 
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
@@ -435,6 +585,14 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
 
     pub fn store(&self) -> &dyn SimulatorStore {
         &self.store
+    }
+
+    pub fn store_static(&self) -> &S {
+        &self.store
+    }
+
+    pub fn store_mut(&mut self) -> &mut S {
+        &mut self.store
     }
 
     pub fn keystore(&self) -> &KeyStore {

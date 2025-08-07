@@ -1,0 +1,83 @@
+[package]
+name = "sui-forking"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+async-graphql = { workspace = true, features = ["dataloader"] }
+axum.workspace = true
+axum-server.workspace = true
+base64.workspace = true
+bcs.workspace = true
+clap.workspace = true
+const-str.workspace = true
+cynic.workspace = true
+cynic-codegen.workspace = true
+diesel = { workspace = true, features = ["chrono", "postgres"] }
+diesel-async = { workspace = true }
+fastcrypto.workspace = true
+futures.workspace = true
+http.workspace = true
+jsonrpsee.workspace = true
+pin-project.workspace = true
+prometheus.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tower.workspace = true
+tonic.workspace = true
+tonic-reflection.workspace = true
+tonic-health.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+
+bin-version.workspace = true
+mysten-common.workspace = true
+mysten-network.workspace = true
+shared-crypto.workspace = true
+simulacrum.workspace = true
+
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
+
+sui-config.workspace = true
+sui-data-store.workspace = true
+sui-display.workspace = true
+sui-futures.workspace = true
+sui-json-rpc-types.workspace = true
+sui-indexer-alt.workspace = true
+sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-consistent-store.workspace = true
+sui-indexer-alt-jsonrpc.workspace = true
+sui-indexer-alt-metrics.workspace = true
+sui-indexer-alt-schema.workspace = true
+sui-indexer-alt-reader.workspace = true
+sui-package-resolver.workspace = true
+sui-pg-db.workspace = true
+sui-open-rpc.workspace = true
+sui-open-rpc-macros.workspace = true
+sui-sql-macro.workspace = true
+sui-swarm-config.workspace = true
+sui-types.workspace = true
+sui-rpc.workspace = true
+sui-rpc-api.workspace = true
+sui-sdk-types.workspace = true
+prost-types.workspace = true
+
+[build-dependencies]
+cynic-codegen.workspace = true
+
+[lints]
+workspace = true
