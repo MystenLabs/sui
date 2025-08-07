@@ -6614,7 +6614,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
                 SequenceNumber::CANCELLED_READ
             )
         ],
-        shared_object_version
+        shared_object_version.shared_object_versions
     );
 
     // Load shared objects.
