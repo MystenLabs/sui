@@ -104,8 +104,8 @@ fun test_borrow_swap() {
     let mut ref_1 = new(Test { id: object::new(ctx) }, ctx);
     let mut ref_2 = new(Test { id: object::new(ctx) }, ctx);
 
-    let (v_1, b_1) = borrow(&mut ref_1);
-    let (v_2, b_2) = borrow(&mut ref_2);
+    let (v_1, b_1) = ref_1.borrow();
+    let (v_2, b_2) = ref_2.borrow();
 
     put_back(&mut ref_1, v_1, b_2);
     put_back(&mut ref_2, v_2, b_1);
