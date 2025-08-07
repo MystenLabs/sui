@@ -337,7 +337,7 @@ public fun confirm_request<T>(
 
     spent_balance.destroy_none();
 
-    (*policy.rules.get(&name)).into_keys().do!(|rule| assert!(approvals.contains(&rule), ENotApproved));
+    (*policy.rules.get(&name)).into_keys().destroy!(|rule| assert!(approvals.contains(&rule), ENotApproved));
 
     (name, amount, sender, recipient)
 }
@@ -411,7 +411,7 @@ public fun confirm_with_treasury_cap<T>(
         spent_balance,
     } = request;
 
-    spent_balance.do!(|balance| treasury_cap.supply_mut().decrease_supply(balance));
+    spent_balance.destroy!(|balance| treasury_cap.supply_mut().decrease_supply(balance));
 
     (name, amount, sender, recipient)
 }

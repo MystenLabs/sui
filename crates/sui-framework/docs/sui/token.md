@@ -925,7 +925,7 @@ Aborts if:
         <a href="../sui/token.md#sui_token_recipient">recipient</a>,
     } = request;
     <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.destroy_none();
-    (*policy.<a href="../sui/token.md#sui_token_rules">rules</a>.get(&name)).into_keys().do!(|rule| <b>assert</b>!(<a href="../sui/token.md#sui_token_approvals">approvals</a>.contains(&rule), <a href="../sui/token.md#sui_token_ENotApproved">ENotApproved</a>));
+    (*policy.<a href="../sui/token.md#sui_token_rules">rules</a>.get(&name)).into_keys().destroy!(|rule| <b>assert</b>!(<a href="../sui/token.md#sui_token_approvals">approvals</a>.contains(&rule), <a href="../sui/token.md#sui_token_ENotApproved">ENotApproved</a>));
     (name, <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_sender">sender</a>, <a href="../sui/token.md#sui_token_recipient">recipient</a>)
 }
 </code></pre>
@@ -1052,7 +1052,7 @@ to be consumed, decreasing the <code>total_supply</code> of the <code><a href=".
         <a href="../sui/token.md#sui_token_approvals">approvals</a>: _,
         <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>,
     } = request;
-    <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.do!(|<a href="../sui/balance.md#sui_balance">balance</a>| treasury_cap.supply_mut().decrease_supply(<a href="../sui/balance.md#sui_balance">balance</a>));
+    <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.destroy!(|<a href="../sui/balance.md#sui_balance">balance</a>| treasury_cap.supply_mut().decrease_supply(<a href="../sui/balance.md#sui_balance">balance</a>));
     (name, <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_sender">sender</a>, <a href="../sui/token.md#sui_token_recipient">recipient</a>)
 }
 </code></pre>
