@@ -1,5 +1,7 @@
 ---
 title: Intent Signing
+description: Intent signing provides a compact domain separator to data signed by both user and authority signatures. Data that each signature commits to is called an intent message, which all signatures on Sui must include. 
+keywords: [ intent, signing, intent signatures, intent message, domain separators, compact structs, signing standard, compact domain separator, user signatures, authority signatures, proof of possession, generate proof of possession ]
 ---
 
 In Sui, an intent is a compact struct that serves as the domain separator for a message that a signature commits to. The data that the signature commits to is an intent message. All signatures in Sui must commit to an intent message, instead of the message itself.
@@ -45,7 +47,7 @@ The serialization of an `Intent` is a 3-byte array where each field is represent
 
 The serialization of an `IntentMessage<T>` is the 3 bytes of the intent concatenated with the BCS serialized message.
 
-## User Signature
+## User signature
 
 To create a user signature, construct an intent message first, and create the signature over the 32-byte Blake2b hash of the BCS serialized value of the intent message of the transaction data (`intent || message`).
 
@@ -70,11 +72,11 @@ Under the hood, the `new_secure` method in Rust and the `signData` method in Typ
 1.  Applies Blake2b hash to get the 32-byte digest
 1.  Passes the digest to the signing API for each corresponding scheme of the signer. The supported signature schemes are pure Ed25519, ECDSA Secp256k1 and ECDSA Secp256r1. See [Sui Signatures](./signatures.mdx#signature-requirements) for requirements of each scheme.
 
-## Authority Signature
+## Authority signature
 
 The authority signature is created using the protocol key. The data that it commits to is also an intent message `intent || message`. See all available intent scopes [in the source code](https://github.com/MystenLabs/sui/blob/0dc1a38f800fc2d8fabe11477fdef702058cf00d/crates/sui-types/src/intent.rs#L66)
 
-### How to Generate Proof of Possession for an Authority
+### How to generate proof of possession for an authority
 
 When an authority request to join the network, the protocol public key and its proof of possession (PoP) are required to be submitted. PoP is required to prevent [rogue key attack](https://crypto.stanford.edu/~dabo/pubs/papers/BLSmultisig.html).
 
