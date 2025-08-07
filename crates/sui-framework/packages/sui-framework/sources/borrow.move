@@ -110,7 +110,7 @@ fun test_borrow_swap() {
     ref_1.put_back(v_1, b_2);
     ref_2.put_back(v_2, b_1);
 
-    let Test { id } = destroy(ref_1);
+    let Test { id } = ref_1.destroy();
     id.delete();
 
     let Test { id } = destroy(ref_2);
