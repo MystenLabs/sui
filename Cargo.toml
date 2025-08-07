@@ -2,273 +2,231 @@
 resolver = "2"
 
 exclude = [
-  "examples/tic-tac-toe/cli",
-  "examples/regulated-coin/rust-client",
-  "examples/custom-indexer/rust",
-  "external-crates/move/crates/bytecode-interpreter-crypto",
-  "external-crates/move/crates/bytecode-verifier-libfuzzer",
-  "external-crates/move/crates/bytecode-verifier-tests",
-  "external-crates/move/crates/bytecode-verifier-prop-tests",
-  "external-crates/move/crates/bytecode-verifier-transactional-tests",
-  "external-crates/move/crates/enum-compat-util",
-  "external-crates/move/crates/invalid-mutations",
-  "external-crates/move/crates/language-benchmarks",
-  "external-crates/move/crates/module-generation",
-  "external-crates/move/crates/move-abstract-interpreter",
-  "external-crates/move/crates/move-abstract-stack",
-  "external-crates/move/crates/move-analyzer",
-  "external-crates/move/crates/move-binary-format",
-  "external-crates/move/crates/move-borrow-graph",
-  "external-crates/move/crates/move-bytecode-source-map",
-  "external-crates/move/crates/move-bytecode-utils",
-  "external-crates/move/crates/move-bytecode-verifier",
-  "external-crates/move/crates/move-bytecode-verifier-meter",
-  "external-crates/move/crates/move-bytecode-viewer",
-  "external-crates/move/crates/move-cli",
-  "external-crates/move/crates/move-command-line-common",
-  "external-crates/move/crates/move-compiler",
-  "external-crates/move/crates/move-compiler-transactional-tests",
-  "external-crates/move/crates/move-core-types",
-  "external-crates/move/crates/move-coverage",
-  "external-crates/move/crates/move-disassembler",
-  "external-crates/move/crates/move-docgen",
-  "external-crates/move/crates/move-ir-compiler",
-  "external-crates/move/crates/move-ir-compiler-transactional-tests",
-  "external-crates/move/crates/move-ir-to-bytecode",
-  "external-crates/move/crates/move-ir-to-bytecode-syntax",
-  "external-crates/move/crates/move-ir-types",
-  "external-crates/move/crates/move-model",
-  "external-crates/move/crates/move-model-2",
-  "external-crates/move/crates/move-package",
-  "external-crates/move/crates/move-package-alt",
-  "external-crates/move/crates/move-proc-macros",
-  "external-crates/move/crates/move-regex-borrow-graph",
-  "external-crates/move/crates/move-stackless-bytecode",
-  "external-crates/move/crates/move-stackless-bytecode-2",
-  "external-crates/move/crates/move-stdlib",
-  "external-crates/move/crates/move-stdlib-natives",
-  "external-crates/move/crates/move-symbol-pool",
-  "external-crates/move/crates/move-transactional-test-runner",
-  "external-crates/move/crates/move-trace-format",
-  "external-crates/move/crates/move-unit-test",
-  "external-crates/move/crates/move-vm-config",
-  "external-crates/move/crates/move-vm-integration-tests",
-  "external-crates/move/crates/move-vm-profiler",
-  "external-crates/move/crates/move-vm-runtime",
-  "external-crates/move/crates/move-vm-test-utils",
-  "external-crates/move/crates/move-vm-transactional-tests",
-  "external-crates/move/crates/move-vm-types",
-  "external-crates/move/crates/serializer-tests",
-  "external-crates/move/crates/test-generation",
-  "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v0/crates/move-stdlib-natives",
-  "external-crates/move/move-execution/v0/crates/move-vm-runtime",
-  "external-crates/move/move-execution/v0/crates/move-vm-types",
-  "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v1/crates/move-stdlib-natives",
-  "external-crates/move/move-execution/v1/crates/move-vm-runtime",
-  "external-crates/move/move-execution/v1/crates/move-vm-types",
-  "external-crates/move/move-execution/v2/crates/move-abstract-interpreter",
-  "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
-  "external-crates/move/move-execution/v2/crates/move-vm-runtime",
-  "external-crates/move/move-execution/v2/crates/move-vm-types",
+    "examples/custom-indexer/rust",
+    "examples/regulated-coin/rust-client",
+    "examples/tic-tac-toe/cli",
+    "external-crates/move/crates/bytecode-interpreter-crypto",
+    "external-crates/move/crates/bytecode-verifier-libfuzzer",
+    "external-crates/move/crates/bytecode-verifier-prop-tests",
+    "external-crates/move/crates/bytecode-verifier-tests",
+    "external-crates/move/crates/bytecode-verifier-transactional-tests",
+    "external-crates/move/crates/enum-compat-util",
+    "external-crates/move/crates/invalid-mutations",
+    "external-crates/move/crates/language-benchmarks",
+    "external-crates/move/crates/module-generation",
+    "external-crates/move/crates/move-abstract-interpreter",
+    "external-crates/move/crates/move-abstract-stack",
+    "external-crates/move/crates/move-analyzer",
+    "external-crates/move/crates/move-binary-format",
+    "external-crates/move/crates/move-borrow-graph",
+    "external-crates/move/crates/move-bytecode-source-map",
+    "external-crates/move/crates/move-bytecode-utils",
+    "external-crates/move/crates/move-bytecode-verifier",
+    "external-crates/move/crates/move-bytecode-verifier-meter",
+    "external-crates/move/crates/move-bytecode-viewer",
+    "external-crates/move/crates/move-cli",
+    "external-crates/move/crates/move-command-line-common",
+    "external-crates/move/crates/move-compiler",
+    "external-crates/move/crates/move-compiler-transactional-tests",
+    "external-crates/move/crates/move-core-types",
+    "external-crates/move/crates/move-coverage",
+    "external-crates/move/crates/move-disassembler",
+    "external-crates/move/crates/move-docgen",
+    "external-crates/move/crates/move-ir-compiler",
+    "external-crates/move/crates/move-ir-compiler-transactional-tests",
+    "external-crates/move/crates/move-ir-to-bytecode",
+    "external-crates/move/crates/move-ir-to-bytecode-syntax",
+    "external-crates/move/crates/move-ir-types",
+    "external-crates/move/crates/move-model",
+    "external-crates/move/crates/move-model-2",
+    "external-crates/move/crates/move-package",
+    "external-crates/move/crates/move-package-alt",
+    "external-crates/move/crates/move-proc-macros",
+    "external-crates/move/crates/move-regex-borrow-graph",
+    "external-crates/move/crates/move-stackless-bytecode",
+    "external-crates/move/crates/move-stackless-bytecode-2",
+    "external-crates/move/crates/move-stdlib",
+    "external-crates/move/crates/move-stdlib-natives",
+    "external-crates/move/crates/move-symbol-pool",
+    "external-crates/move/crates/move-trace-format",
+    "external-crates/move/crates/move-transactional-test-runner",
+    "external-crates/move/crates/move-unit-test",
+    "external-crates/move/crates/move-vm-config",
+    "external-crates/move/crates/move-vm-integration-tests",
+    "external-crates/move/crates/move-vm-profiler",
+    "external-crates/move/crates/move-vm-runtime",
+    "external-crates/move/crates/move-vm-test-utils",
+    "external-crates/move/crates/move-vm-transactional-tests",
+    "external-crates/move/crates/move-vm-types",
+    "external-crates/move/crates/serializer-tests",
+    "external-crates/move/crates/test-generation",
+    "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/v0/crates/move-stdlib-natives",
+    "external-crates/move/move-execution/v0/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v0/crates/move-vm-types",
+    "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/v1/crates/move-stdlib-natives",
+    "external-crates/move/move-execution/v1/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v1/crates/move-vm-types",
+    "external-crates/move/move-execution/v2/crates/move-abstract-interpreter",
+    "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
+    "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
+    "external-crates/move/move-execution/v2/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v2/crates/move-vm-types",
 ]
 
 members = [
-  "consensus/config",
-  "consensus/core",
-  "consensus/simtests",
-  "consensus/types",
-  "crates/anemo-benchmark",
-  "crates/bin-version",
-  "crates/mysten-common",
-  "crates/mysten-metrics",
-  "crates/mysten-network",
-  "crates/mysten-service",
-  "crates/prometheus-closure-metric",
-  "crates/shared-crypto",
-  "crates/simulacrum",
-  "crates/sui",
-  "crates/sui-adapter-transactional-tests",
-  "crates/sui-analytics-indexer",
-  "crates/sui-analytics-indexer-derive",
-  "crates/sui-authority-aggregation",
-  "crates/sui-aws-orchestrator",
-  "crates/sui-benchmark",
-  "crates/sui-bridge",
-  "crates/sui-bridge-cli",
-  "crates/sui-bridge-indexer",
-  "crates/sui-bridge-indexer-alt",
-  "crates/sui-bridge-schema",
-  "crates/sui-cluster-test",
-  "crates/sui-config",
-  "crates/sui-core",
-  "crates/sui-cost",
-  "crates/sui-data-ingestion",
-  "crates/sui-data-ingestion-core",
-  "crates/sui-deepbook-indexer",
-  "crates/sui-default-config",
-  "crates/sui-display",
-  "crates/sui-e2e-tests",
-  "crates/sui-edge-proxy",
-  "crates/sui-enum-compat-util",
-  "crates/sui-faucet",
-  "crates/sui-field-count",
-  "crates/sui-field-count-derive",
-  "crates/sui-framework",
-  "crates/sui-framework-snapshot",
-  "crates/sui-framework-tests",
-  "crates/sui-genesis-builder",
-  "crates/sui-graphql-e2e-tests",
-  "crates/sui-graphql-rpc",
-  "crates/sui-graphql-rpc-client",
-  "crates/sui-graphql-rpc-headers",
-  "crates/sui-http",
-  "crates/sui-indexer",
-  "crates/sui-indexer-alt",
-  "crates/sui-indexer-alt-consistent-api",
-  "crates/sui-indexer-alt-consistent-store",
-  "crates/sui-indexer-alt-e2e-tests",
-  "crates/sui-indexer-alt-framework",
-  "crates/sui-indexer-alt-framework-store-traits",
-  "crates/sui-indexer-alt-graphql",
-  "crates/sui-indexer-alt-jsonrpc",
-  "crates/sui-indexer-alt-metrics",
-  "crates/sui-indexer-alt-reader",
-  "crates/sui-indexer-alt-restorer",
-  "crates/sui-indexer-alt-schema",
-  "crates/sui-indexer-builder",
-  "crates/sui-json",
-  "crates/sui-json-rpc",
-  "crates/sui-json-rpc-api",
-  "crates/sui-json-rpc-tests",
-  "crates/sui-json-rpc-types",
-  "crates/sui-keys",
-  "crates/sui-kv-rpc",
-  "crates/sui-kvstore",
-  "crates/sui-light-client",
-  "crates/sui-macros",
-  "crates/sui-metric-checker",
-  "crates/sui-metrics-push-client",
-  "crates/sui-move",
-  "crates/sui-move-build",
-  "crates/sui-move-lsp",
-  "crates/sui-name-service",
-  "crates/sui-network",
-  "crates/sui-node",
-  "crates/sui-open-rpc",
-  "crates/sui-open-rpc-macros",
-  "crates/sui-oracle",
-  "crates/sui-package-alt",
-  "crates/sui-package-dump",
-  "crates/sui-package-management",
-  "crates/sui-package-resolver",
-  "crates/sui-pg-db",
-  "crates/sui-proc-macros",
-  "crates/sui-protocol-config",
-  "crates/sui-protocol-config-macros",
-  "crates/sui-proxy",
-  "crates/sui-replay",
-  "crates/sui-replay-2",
-  "crates/sui-rosetta",
-  "crates/sui-rpc-api",
-  "crates/sui-rpc-benchmark",
-  "crates/sui-rpc-loadgen",
-  "crates/sui-sdk",
-  "crates/sui-security-watchdog",
-  "crates/sui-simulator",
-  "crates/sui-single-node-benchmark",
-  "crates/sui-snapshot",
-  "crates/sui-source-validation",
-  "crates/sui-source-validation-service",
-  "crates/sui-sql-macro",
-  "crates/sui-storage",
-  "crates/sui-surfer",
-  "crates/sui-swarm",
-  "crates/sui-swarm-config",
-  "crates/sui-synthetic-ingestion",
-  "crates/sui-telemetry",
-  "crates/sui-test-transaction-builder",
-  "crates/sui-test-validator",
-  "crates/sui-tls",
-  "crates/sui-tool",
-  "crates/sui-transaction-builder",
-  "crates/sui-transaction-checks",
-  "crates/sui-transactional-test-runner",
-  "crates/sui-types",
-  "crates/sui-upgrade-compatibility-transactional-tests",
-  "crates/sui-verifier-transactional-tests",
-  "crates/suins-indexer",
-  "crates/telemetry-subscribers",
-  "crates/test-cluster",
-  "crates/transaction-fuzzer",
-  "crates/typed-store",
-  "crates/typed-store-derive",
-  "crates/typed-store-error",
-  "crates/typed-store-workspace-hack",
-  "crates/x",
-  "sui-execution",
-  "sui-execution/cut",
-  "sui-execution/latest/sui-adapter",
-  "sui-execution/latest/sui-move-natives",
-  "sui-execution/latest/sui-verifier",
-  "sui-execution/v0/sui-adapter",
-  "sui-execution/v0/sui-move-natives",
-  "sui-execution/v0/sui-verifier",
-  "sui-execution/v1/sui-adapter",
-  "sui-execution/v1/sui-move-natives",
-  "sui-execution/v1/sui-verifier",
-  "sui-execution/v2/sui-adapter",
-  "sui-execution/v2/sui-move-natives",
-  "sui-execution/v2/sui-verifier",
+    "consensus/config",
+    "consensus/core",
+    "consensus/simtests",
+    "consensus/types",
+    "crates/anemo-benchmark",
+    "crates/bin-version",
+    "crates/mysten-common",
+    "crates/mysten-metrics",
+    "crates/mysten-network",
+    "crates/mysten-service",
+    "crates/prometheus-closure-metric",
+    "crates/shared-crypto",
+    "crates/simulacrum",
+    "crates/sui",
+    "crates/sui-adapter-transactional-tests",
+    "crates/sui-analytics-indexer",
+    "crates/sui-analytics-indexer-derive",
+    "crates/sui-authority-aggregation",
+    "crates/sui-aws-orchestrator",
+    "crates/sui-benchmark",
+    "crates/sui-bridge",
+    "crates/sui-bridge-cli",
+    "crates/sui-bridge-indexer",
+    "crates/sui-bridge-indexer-alt",
+    "crates/sui-bridge-schema",
+    "crates/sui-cluster-test",
+    "crates/sui-config",
+    "crates/sui-core",
+    "crates/sui-cost",
+    "crates/sui-data-ingestion",
+    "crates/sui-data-ingestion-core",
+    "crates/sui-deepbook-indexer",
+    "crates/sui-default-config",
+    "crates/sui-display",
+    "crates/sui-e2e-tests",
+    "crates/sui-edge-proxy",
+    "crates/sui-enum-compat-util",
+    "crates/sui-faucet",
+    "crates/sui-field-count",
+    "crates/sui-field-count-derive",
+    "crates/sui-framework",
+    "crates/sui-framework-snapshot",
+    "crates/sui-framework-tests",
+    "crates/sui-genesis-builder",
+    "crates/sui-graphql-e2e-tests",
+    "crates/sui-graphql-rpc",
+    "crates/sui-graphql-rpc-client",
+    "crates/sui-graphql-rpc-headers",
+    "crates/sui-http",
+    "crates/sui-indexer",
+    "crates/sui-indexer-alt",
+    "crates/sui-indexer-alt-consistent-api",
+    "crates/sui-indexer-alt-consistent-store",
+    "crates/sui-indexer-alt-e2e-tests",
+    "crates/sui-indexer-alt-framework",
+    "crates/sui-indexer-alt-framework-store-traits",
+    "crates/sui-indexer-alt-graphql",
+    "crates/sui-indexer-alt-jsonrpc",
+    "crates/sui-indexer-alt-metrics",
+    "crates/sui-indexer-alt-reader",
+    "crates/sui-indexer-alt-restorer",
+    "crates/sui-indexer-alt-schema",
+    "crates/sui-indexer-builder",
+    "crates/sui-json",
+    "crates/sui-json-rpc",
+    "crates/sui-json-rpc-api",
+    "crates/sui-json-rpc-tests",
+    "crates/sui-json-rpc-types",
+    "crates/sui-keys",
+    "crates/sui-kv-rpc",
+    "crates/sui-kvstore",
+    "crates/sui-light-client",
+    "crates/sui-macros",
+    "crates/sui-metric-checker",
+    "crates/sui-metrics-push-client",
+    "crates/sui-move",
+    "crates/sui-move-build",
+    "crates/sui-move-lsp",
+    "crates/sui-name-service",
+    "crates/sui-network",
+    "crates/sui-node",
+    "crates/sui-open-rpc",
+    "crates/sui-open-rpc-macros",
+    "crates/sui-oracle",
+    "crates/sui-package-alt",
+    "crates/sui-package-dump",
+    "crates/sui-package-management",
+    "crates/sui-package-resolver",
+    "crates/sui-pg-db",
+    "crates/sui-proc-macros",
+    "crates/sui-protocol-config",
+    "crates/sui-protocol-config-macros",
+    "crates/sui-proxy",
+    "crates/sui-replay",
+    "crates/sui-replay-2",
+    "crates/sui-rosetta",
+    "crates/sui-rpc-api",
+    "crates/sui-rpc-benchmark",
+    "crates/sui-rpc-loadgen",
+    "crates/sui-sdk",
+    "crates/sui-security-watchdog",
+    "crates/sui-simulator",
+    "crates/sui-single-node-benchmark",
+    "crates/sui-snapshot",
+    "crates/sui-source-validation",
+    "crates/sui-source-validation-service",
+    "crates/sui-sql-macro",
+    "crates/sui-storage",
+    "crates/sui-surfer",
+    "crates/sui-swarm",
+    "crates/sui-swarm-config",
+    "crates/sui-synthetic-ingestion",
+    "crates/sui-telemetry",
+    "crates/sui-test-transaction-builder",
+    "crates/sui-test-validator",
+    "crates/sui-tls",
+    "crates/sui-tool",
+    "crates/sui-transaction-builder",
+    "crates/sui-transaction-checks",
+    "crates/sui-transactional-test-runner",
+    "crates/sui-types",
+    "crates/sui-upgrade-compatibility-transactional-tests",
+    "crates/sui-verifier-transactional-tests",
+    "crates/suins-indexer",
+    "crates/telemetry-subscribers",
+    "crates/test-cluster",
+    "crates/transaction-fuzzer",
+    "crates/typed-store",
+    "crates/typed-store-derive",
+    "crates/typed-store-error",
+    "crates/typed-store-workspace-hack",
+    "crates/x",
+    "sui-execution",
+    "sui-execution/cut",
+    "sui-execution/latest/sui-adapter",
+    "sui-execution/latest/sui-move-natives",
+    "sui-execution/latest/sui-verifier",
+    "sui-execution/v0/sui-adapter",
+    "sui-execution/v0/sui-move-natives",
+    "sui-execution/v0/sui-verifier",
+    "sui-execution/v1/sui-adapter",
+    "sui-execution/v1/sui-move-natives",
+    "sui-execution/v1/sui-verifier",
+    "sui-execution/v2/sui-adapter",
+    "sui-execution/v2/sui-move-natives",
+    "sui-execution/v2/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
 version = "1.54.0"
-
-[profile.release]
-# debug = 1 means line charts only, which is minimum needed for good stack traces
-debug = 1
-# Write debug info into a separate file.
-split-debuginfo = 'packed'
-# Without stripping, sui binary size would be > 1GB.
-strip = 'debuginfo'
-# Exit process with SIGABRT when any thread panics
-panic = 'abort'
-
-# Same as release, but build with lto (~50min build time).
-[profile.release-lto]
-inherits = "release"
-# Enable Link Time Optimization for better runtime performance
-lto = true
-# Use single codegen unit to enable better optimizations
-codegen-units = 1
-
-# Same as release, but build binary with debug symbols (binary size will be ~ 1GB).
-[profile.release-dbgsym]
-inherits = "release"
-split-debuginfo = 'off'
-strip = 'none'
-
-# Inherits from the release profile above.
-[profile.bench]
-# For convenience.
-strip = 'none'
-
-[profile.test.package.move-compiler]
-# opt-level 2 for move-compiler reduces the size of some of its
-# (recursive) stack frames by up to 10x, avoiding stack overflows.
-opt-level = 2
-
-[profile.simulator]
-inherits = "test"
-debug = true
-debug-assertions = true
-overflow-checks = true
-# opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
-opt-level = 1
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
@@ -278,11 +236,20 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
+
+# anemo dependencies
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+
+### Workspace Members ###
+anemo-benchmark = { path = "crates/anemo-benchmark" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 antithesis_sdk = "0.2.5"
 anyhow = "1.0.71"
+arc-swap = { version = "1.5.1", features = ["serde"] }
 arrow = "54"
 arrow-array = "54"
-arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "=7.0.1"
 async-graphql-axum = "=7.0.1"
@@ -327,6 +294,7 @@ base64-url = "2"
 bcs = "0.1.4"
 better_any = "0.1.1"
 bimap = "0.6.2"
+bin-version = { path = "crates/bin-version" }
 bincode = "1.3.3"
 bip32 = "0.4.0"
 byteorder = "1.4.3"
@@ -335,14 +303,21 @@ cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.39", features = ["clock", "serde"] }
+ciborium = "0.2"
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 codespan-reporting = "0.11.1"
 collectable = "0.0.2"
-colored = "2.0.0"
 color-eyre = "0.6.2"
+colored = "2.0.0"
 comfy-table = "6.1.3"
+
+consensus-config = { path = "consensus/config" }
+consensus-core = { path = "consensus/core" }
+consensus-simtests = { path = "consensus/simtests" }
+consensus-types = { path = "consensus/types" }
 console-subscriber = "0.4.1"
 const-str = "0.5.3"
+coset = "0.3"
 count-min-sketch = "0.1.7"
 criterion = { version = "0.5.0", features = [
   "async",
@@ -360,26 +335,32 @@ derive-syn-parse = "0.1.5"
 derive_builder = "0.12.0"
 derive_more = "1.0.0"
 diesel = "2.2"
-diesel_migrations = "2.2"
 diesel-async = "0.5"
+diesel_migrations = "2.2"
 dirs = "4.0.0"
 duration-str = "0.5.0"
 ed25519 = { version = "2", features = ["pkcs8", "alloc", "zeroize"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 either = "1.8.0"
-petgraph = "0.5.1"
 enum_dispatch = "^0.3"
 expect-test = "1.4.0"
 eyre = "0.6.8"
+
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46", features = [
+  "experimental",
+] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46", package = "fastcrypto-zkp" }
 fdlimit = "0.2.1"
 flate2 = "1.0.28"
 fs_extra = "1.3.0"
 futures = "0.3.28"
 futures-core = "0.3.21"
+gcp_auth = "0.12.3"
 git-version = "0.3.5"
 glob = "0.3.1"
 governor = "0.6.0"
-gcp_auth = "0.12.3"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
 headers = "0.4.0"
@@ -389,7 +370,6 @@ http = "1"
 http-body = "1"
 humantime = "2.1.0"
 hyper = "1"
-hyper-util = "0.1.6"
 hyper-rustls = { version = "0.27", default-features = false, features = [
   "webpki-roots",
   "http1",
@@ -397,6 +377,7 @@ hyper-rustls = { version = "0.27", default-features = false, features = [
   "ring",
   "tls12",
 ] }
+hyper-util = "0.1.6"
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.8.0", features = ["serde"] }
@@ -408,8 +389,7 @@ integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 iso8601 = "0.6.3"
 itertools = "0.13.0"
-tikv-jemalloc-ctl = "^0.5"
-tikv-jemallocator = { version = "^0.5", features = ["profiling", "disable_initial_exec_tls"] }
+json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 jsonrpsee = { version = "0.24.9", features = [
   "server",
   "macros",
@@ -417,8 +397,8 @@ jsonrpsee = { version = "0.24.9", features = [
   "http-client",
   "jsonrpsee-core",
 ] }
-json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
+linked-hash-map = "0.5.6"
 lru = "0.10"
 match_opt = "0.1.2"
 miette = { version = "7", features = ["fancy"] }
@@ -429,9 +409,41 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
+move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
+move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
+move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
+
+# Move dependencies
+move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
+move-bytecode-source-map = { path = "external-crates/move/crates/move-bytecode-source-map" }
+move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
+move-bytecode-verifier-meter = { path = "external-crates/move/crates/move-bytecode-verifier-meter" }
+move-cli = { path = "external-crates/move/crates/move-cli" }
+move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
+move-compiler = { path = "external-crates/move/crates/move-compiler" }
+move-core-types = { path = "external-crates/move/crates/move-core-types" }
+move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
+move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
+move-package = { path = "external-crates/move/crates/move-package" }
+move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
+move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
+move-stackless-bytecode-2 = { path = "external-crates/move/crates/move-stackless-bytecode-2" }
+move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
+move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
+move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
+move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
+move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
+move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
+move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
+  "tiered-gas",
+] }
 msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e", package = "msim" }
 msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e", package = "msim-macros" }
 multiaddr = "0.17.0"
+mysten-common = { path = "crates/mysten-common" }
+mysten-metrics = { path = "crates/mysten-metrics" }
+mysten-network = { path = "crates/mysten-network" }
+mysten-service = { path = "crates/mysten-service" }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nonempty = "0.9.0"
@@ -449,8 +461,18 @@ object_store = { version = "0.11.2", features = [
 ] }
 once_cell = "1.18.0"
 ouroboros = "0.17"
+p256 = { version = "0.13.2", features = ["ecdsa"] }
+
+p384 = { version = "0.13.0", default-features = false, features = [
+  "ecdsa",
+  "sha384",
+] }
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
 parquet = "54"
+passkey-authenticator = { version = "0.4.0" }
+passkey-client = { version = "0.4.0" }
+passkey-types = { version = "0.4.0" }
+petgraph = "0.5.1"
 pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.10.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
@@ -458,6 +480,7 @@ pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
 prometheus = "0.13.3"
+prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 prometheus-http-query = { version = "0.8", default-features = false, features = [
   "rustls-tls",
 ] }
@@ -508,169 +531,23 @@ serde_test = "1.0.147"
 serde_with = "3.8"
 # serde_yaml = "0.9.21"
 serde_yaml = "0.8.26"
+shared-crypto = { path = "crates/shared-crypto" }
 shell-words = "1.1.0"
 shellexpand = "3.1.0"
+shlex = "1.3.0"
 signature = "1.6.0"
 similar = "2.4.0"
-simple_moving_average = "1.0.2"
 simple-server-timing-header = "0.1.1"
+simple_moving_average = "1.0.2"
+simulacrum = { path = "crates/simulacrum" }
 slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
 snap = "1.1.0"
 snowflake-api = "0.11.0"
+starlark = "0.13.0"
 static_assertions = "1.1.0"
 strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
-syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
-# syn = { version = "2", features = ["full", "fold", "extra-traits"] }
-synstructure = "0.12"
-sysinfo = "0.35.2"
-tabled = { version = "0.12" }
-tap = "1.0.1"
-tar = "0.4.40"
-tempfile = "3.20.0"
-test-fuzz = "3.0.4"
-thiserror = "1.0.40"
-tiny-bip39 = "1.0.0"
-tokio = "1.46.1"
-tokio-retry = "0.3"
-tokio-rustls = { version = "0.26", default-features = false, features = [
-  "tls12",
-  "ring",
-] }
-tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
-tokio-util = "0.7.10"
-toml = { version = "0.7.4", features = ["preserve_order"] }
-toml_edit = { version = "0.19.10" }
-tonic = { version = "0.13.1", features = [
-  "zstd",
-  "transport",
-  "tls-webpki-roots",
-] }
-tonic-build = { version = "0.13.1", features = ["prost", "transport"] }
-tonic-health = "0.13.1"
-tonic-reflection = "0.13.1"
-tonic-web = "0.13.1"
-tonic-rustls = "0.2.0"
-tower = { version = "0.5", features = [
-  "full",
-  "util",
-  "timeout",
-  "load-shed",
-  "limit",
-] }
-tower-http = { version = "0.5", features = [
-  "cors",
-  "full",
-  "trace",
-  "set-header",
-  "propagate-header",
-] }
-tower-layer = "0.3.2"
-twox-hash = "1.6.3"
-tracing = "0.1.37"
-tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.15", default-features = false, features = [
-  "std",
-  "smallvec",
-  "fmt",
-  "ansi",
-  "time",
-  "json",
-  "registry",
-  "env-filter",
-] }
-ttl_cache = "0.5.1"
-uint = "0.9.4"
-unescape = "0.1.0"
-ureq = "2.9.1"
-url = "2.3.1"
-uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
-walkdir = "2.5.0"
-webpki = { version = "0.103", package = "rustls-webpki", features = [
-  "alloc",
-  "std",
-  "ring",
-] }
-wiremock = "0.5"
-x509-parser = { version = "0.17.0", features = ["verify"] }
-zstd = "0.12.3"
-zeroize = "1.6.0"
-versions = "4.1.0"
-linked-hash-map = "0.5.6"
-shlex = "1.3.0"
-starlark = "0.13.0"
-
-
-# Move dependencies
-move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
-move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
-move-bytecode-source-map = { path = "external-crates/move/crates/move-bytecode-source-map" }
-move-bytecode-verifier-meter = { path = "external-crates/move/crates/move-bytecode-verifier-meter" }
-move-cli = { path = "external-crates/move/crates/move-cli" }
-move-compiler = { path = "external-crates/move/crates/move-compiler" }
-move-core-types = { path = "external-crates/move/crates/move-core-types" }
-move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
-move-package = { path = "external-crates/move/crates/move-package" }
-move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
-move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
-move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
-move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
-  "tiered-gas",
-] }
-move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
-move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
-move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
-move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
-move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
-move-stackless-bytecode-2 = { path = "external-crates/move/crates/move-stackless-bytecode-2" }
-move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
-move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
-move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
-move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
-move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
-
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "16fa86d0dd943024a9088d46850a72ecd55b7f46", features = [
-  "experimental",
-] }
-passkey-types = { version = "0.4.0" }
-passkey-client = { version = "0.4.0" }
-passkey-authenticator = { version = "0.4.0" }
-coset = "0.3"
-p256 = { version = "0.13.2", features = ["ecdsa"] }
-
-p384 = { version = "0.13.0", default-features = false, features = [
-  "ecdsa",
-  "sha384",
-] }
-ciborium = "0.2"
-
-# anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
-
-# core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
-sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
-sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
-
-### Workspace Members ###
-anemo-benchmark = { path = "crates/anemo-benchmark" }
-bin-version = { path = "crates/bin-version" }
-mysten-common = { path = "crates/mysten-common" }
-mysten-metrics = { path = "crates/mysten-metrics" }
-mysten-network = { path = "crates/mysten-network" }
-mysten-service = { path = "crates/mysten-service" }
-prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
-shared-crypto = { path = "crates/shared-crypto" }
-simulacrum = { path = "crates/simulacrum" }
 sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
@@ -683,22 +560,27 @@ sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-default-config = { path = "crates/sui-default-config" }
 sui-display = { path = "crates/sui-display" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
+
+sui-execution = { path = "sui-execution" }
 sui-faucet = { path = "crates/sui-faucet" }
 sui-field-count = { path = "crates/sui-field-count" }
 sui-field-count-derive = { path = "crates/sui-field-count-derive" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
+sui-genesis-builder = { path = "crates/sui-genesis-builder" }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
+sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
 sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
 sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
 sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
-sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
@@ -718,8 +600,8 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
-sui-kvstore = { path = "crates/sui-kvstore" }
 sui-kv-rpc = { path = "crates/sui-kv-rpc" }
+sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-metrics-push-client = { path = "crates/sui-metrics-push-client" }
@@ -742,8 +624,13 @@ sui-proxy = { path = "crates/sui-proxy" }
 sui-replay = { path = "crates/sui-replay" }
 sui-replay-2 = { path = "crates/sui-replay-2" }
 sui-rosetta = { path = "crates/sui-rosetta" }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1" }
+sui-rpc-api = { path = "crates/sui-rpc-api" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
+
+# core-types from the new sdk for use in gRPC
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "d3334e5a8b1127f2e197d85750f1fb78c7084ae1", features = [ "hash", "serde" ] }
 sui-simulator = { path = "crates/sui-simulator" }
 sui-snapshot = { path = "crates/sui-snapshot" }
 sui-source-validation = { path = "crates/sui-source-validation" }
@@ -758,7 +645,6 @@ sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
-sui-rpc-api = { path = "crates/sui-rpc-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
@@ -766,19 +652,132 @@ sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" 
 sui-types = { path = "crates/sui-types" }
 sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }
 sui-verifier-transactional-tests = { path = "crates/sui-verifier-transactional-tests" }
+syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
+# syn = { version = "2", features = ["full", "fold", "extra-traits"] }
+synstructure = "0.12"
+sysinfo = "0.35.2"
+tabled = { version = "0.12" }
+tap = "1.0.1"
+tar = "0.4.40"
 telemetry-subscribers = { path = "crates/telemetry-subscribers" }
+tempfile = "3.20.0"
 test-cluster = { path = "crates/test-cluster" }
+test-fuzz = "3.0.4"
+thiserror = "1.0.40"
+tikv-jemalloc-ctl = "^0.5"
+tikv-jemallocator = { version = "^0.5", features = ["profiling", "disable_initial_exec_tls"] }
+tiny-bip39 = "1.0.0"
+tokio = "1.46.1"
+tokio-retry = "0.3"
+tokio-rustls = { version = "0.26", default-features = false, features = [
+  "tls12",
+  "ring",
+] }
+tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
+tokio-util = "0.7.10"
+toml = { version = "0.7.4", features = ["preserve_order"] }
+toml_edit = { version = "0.19.10" }
+tonic = { version = "0.13.1", features = [
+  "zstd",
+  "transport",
+  "tls-webpki-roots",
+] }
+tonic-build = { version = "0.13.1", features = ["prost", "transport"] }
+tonic-health = "0.13.1"
+tonic-reflection = "0.13.1"
+tonic-rustls = "0.2.0"
+tonic-web = "0.13.1"
+tower = { version = "0.5", features = [
+  "full",
+  "util",
+  "timeout",
+  "load-shed",
+  "limit",
+] }
+tower-http = { version = "0.5", features = [
+  "cors",
+  "full",
+  "trace",
+  "set-header",
+  "propagate-header",
+] }
+tower-layer = "0.3.2"
+tracing = "0.1.37"
+tracing-appender = "0.2.2"
+tracing-subscriber = { version = "0.3.15", default-features = false, features = [
+  "std",
+  "smallvec",
+  "fmt",
+  "ansi",
+  "time",
+  "json",
+  "registry",
+  "env-filter",
+] }
 transaction-fuzzer = { path = "crates/transaction-fuzzer" }
+ttl_cache = "0.5.1"
+twox-hash = "1.6.3"
 typed-store = { path = "crates/typed-store" }
 typed-store-error = { path = "crates/typed-store-error" }
+uint = "0.9.4"
+unescape = "0.1.0"
+ureq = "2.9.1"
+url = "2.3.1"
+uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
+versions = "4.1.0"
+walkdir = "2.5.0"
+webpki = { version = "0.103", package = "rustls-webpki", features = [
+  "alloc",
+  "std",
+  "ring",
+] }
+wiremock = "0.5"
 x = { path = "crates/x" }
+x509-parser = { version = "0.17.0", features = ["verify"] }
+zeroize = "1.6.0"
+zstd = "0.12.3"
 
-consensus-config = { path = "consensus/config" }
-consensus-core = { path = "consensus/core" }
-consensus-types = { path = "consensus/types" }
-consensus-simtests = { path = "consensus/simtests" }
+[profile.release]
+# debug = 1 means line charts only, which is minimum needed for good stack traces
+debug = 1
+# Write debug info into a separate file.
+split-debuginfo = 'packed'
+# Without stripping, sui binary size would be > 1GB.
+strip = 'debuginfo'
+# Exit process with SIGABRT when any thread panics
+panic = 'abort'
 
-sui-execution = { path = "sui-execution" }
+# Same as release, but build with lto (~50min build time).
+[profile.release-lto]
+inherits = "release"
+# Enable Link Time Optimization for better runtime performance
+lto = true
+# Use single codegen unit to enable better optimizations
+codegen-units = 1
+
+# Same as release, but build binary with debug symbols (binary size will be ~ 1GB).
+[profile.release-dbgsym]
+inherits = "release"
+split-debuginfo = 'off'
+strip = 'none'
+
+# Inherits from the release profile above.
+[profile.bench]
+# For convenience.
+strip = 'none'
+
+[profile.test.package.move-compiler]
+# opt-level 2 for move-compiler reduces the size of some of its
+# (recursive) stack frames by up to 10x, avoiding stack overflows.
+opt-level = 2
+
+[profile.simulator]
+inherits = "test"
+debug = true
+debug-assertions = true
+overflow-checks = true
+# opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
+opt-level = 1
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 # sui-adapter = { path = "sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 # sui-verifier = { path = "sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
