@@ -2257,11 +2257,11 @@ impl Function {
     }
 
     pub(crate) fn get_resolver<'a>(
-        &self,
+        module_id: &ModuleId,
         link_context: AccountAddress,
         loader: &'a Loader,
     ) -> Resolver<'a> {
-        let (compiled, loaded) = loader.get_module(link_context, &self.module);
+        let (compiled, loaded) = loader.get_module(link_context, module_id);
         Resolver::for_module(loader, compiled, loaded)
     }
 

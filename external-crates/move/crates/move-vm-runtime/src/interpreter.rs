@@ -138,7 +138,7 @@ impl Interpreter {
             let link_context = data_store
                 .link_context()
                 .map_err(|e| e.finish(Location::Undefined))?;
-            let resolver = function.get_resolver(link_context, loader);
+            let resolver = Function::get_resolver(function.module_id(), link_context, loader);
 
             let return_values = interpreter
                 .call_native_return_values(
@@ -1511,7 +1511,7 @@ impl Frame {
     }
 
     fn resolver<'a>(&self, link_context: AccountAddress, loader: &'a Loader) -> Resolver<'a> {
-        self.function.get_resolver(link_context, loader)
+        Function::get_resolver(self.function.module_id(), link_context, loader)
     }
 
     fn location(&self) -> Location {
