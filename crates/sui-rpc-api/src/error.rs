@@ -201,9 +201,9 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
                 },
                 format!("[MFP experimental]: {details}"),
             ),
-            TransactionPendingExecution => RpcError::new(
+            PendingExecutionInTransactionOrchestrator => RpcError::new(
                 Code::AlreadyExists,
-                "Transaction is already being processed (most likely by QD), wait for results",
+                "Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results",
             ),
         }
     }

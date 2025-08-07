@@ -65,8 +65,8 @@ pub enum QuorumDriverError {
     #[error("Transaction processing failed. Retriable with new attempts: {retriable}. Details: {details}")]
     TransactionFailed { retriable: bool, details: String },
 
-    #[error("Transaction is already being processed (most likely by QD), wait for results")]
-    TransactionPendingExecution,
+    #[error("Transaction is already being processed in transaction orchestrator (most likely by quorum driver), wait for results")]
+    PendingExecutionInTransactionOrchestrator,
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;

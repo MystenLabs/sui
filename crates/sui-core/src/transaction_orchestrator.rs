@@ -316,7 +316,7 @@ where
                 // Execution result returned
                 execution_result = &mut execution_future => {
                     match execution_result {
-                        Err(QuorumDriverError::TransactionPendingExecution) => {
+                        Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator) => {
                             debug!(
                                 ?tx_digest,
                                 "Transaction already being processed, disabling execution branch and waiting for local effects"
@@ -540,10 +540,10 @@ where
         if !is_new_transaction {
             debug!(
                 ?tx_digest,
-                "Transaction already in pending_tx_log, returning TransactionPendingExecution"
+                "Transaction already in pending_tx_log, returning PendingExecutionInTransactionOrchestrator"
             );
             // Return the special error to signal that we should wait for effects
-            return Err(QuorumDriverError::TransactionPendingExecution);
+            return Err(QuorumDriverError::PendingExecutionInTransactionOrchestrator);
         }
 
         debug!(
