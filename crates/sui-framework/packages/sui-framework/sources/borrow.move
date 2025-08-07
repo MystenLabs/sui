@@ -107,8 +107,8 @@ fun test_borrow_swap() {
     let (v_1, b_1) = ref_1.borrow();
     let (v_2, b_2) = ref_2.borrow();
 
-    put_back(&mut ref_1, v_1, b_2);
-    put_back(&mut ref_2, v_2, b_1);
+    ref_1.put_back(v_1, b_2);
+    ref_2.put_back(v_2, b_1);
 
     let Test { id } = destroy(ref_1);
     id.delete();
