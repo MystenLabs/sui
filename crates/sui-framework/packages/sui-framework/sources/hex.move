@@ -32,10 +32,11 @@ const HEX: vector<vector<u8>> = vector[
 
 /// Encode `bytes` in lowercase hex
 public fun encode(bytes: vector<u8>): vector<u8> {
-    let (mut r, l) = (vector[], bytes.length());
     let hex_vector = HEX;
-    l.do!(|i| r.append(hex_vector[bytes[i] as u64]));
-    r
+    bytes.fold!(vector[], |mut r, byte| {
+        r.append(hex_vector[byte as u64]);
+        r
+    })
 }
 
 /// Decode hex into `bytes`
@@ -45,13 +46,9 @@ public fun encode(bytes: vector<u8>): vector<u8> {
 /// Aborts if the hex string does not have an even number of characters (as each hex character is 2 characters long)
 /// Aborts if the hex string contains non-valid hex characters (valid characters are 0 - 9, a - f, A - F)
 public fun decode(hex: vector<u8>): vector<u8> {
-    let (mut r, l) = (vector[], hex.length());
+    let l = hex.length();
     assert!(l % 2 == 0, EInvalidHexLength);
-    (l / 2).do!(|i| {
-        let decimal = decode_byte(hex[2 * i]) * 16 + decode_byte(hex[2 * i + 1]);
-        r.push_back(decimal);
-    });
-    r
+    vector::tabulate!(l / 2, |i| decode_byte(hex[2 * i]) * 16 + decode_byte(hex[2 * i + 1]))
 }
 
 fun decode_byte(hex: u8): u8 {

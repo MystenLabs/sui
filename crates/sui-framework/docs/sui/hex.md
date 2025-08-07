@@ -68,10 +68,11 @@ Encode <code>bytes</code> in lowercase hex
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_encode">encode</a>(bytes: vector&lt;u8&gt;): vector&lt;u8&gt; {
-    <b>let</b> (<b>mut</b> r, l) = (vector[], bytes.length());
     <b>let</b> hex_vector = <a href="../sui/hex.md#sui_hex_HEX">HEX</a>;
-    l.do!(|i| r.append(hex_vector[bytes[i] <b>as</b> u64]));
-    r
+    bytes.fold!(vector[], |<b>mut</b> r, byte| {
+        r.append(hex_vector[byte <b>as</b> u64]);
+        r
+    })
 }
 </code></pre>
 
@@ -101,13 +102,9 @@ Aborts if the hex string contains non-valid hex characters (valid characters are
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/hex.md#sui_hex_decode">decode</a>(<a href="../sui/hex.md#sui_hex">hex</a>: vector&lt;u8&gt;): vector&lt;u8&gt; {
-    <b>let</b> (<b>mut</b> r, l) = (vector[], <a href="../sui/hex.md#sui_hex">hex</a>.length());
+    <b>let</b> l = <a href="../sui/hex.md#sui_hex">hex</a>.length();
     <b>assert</b>!(l % 2 == 0, <a href="../sui/hex.md#sui_hex_EInvalidHexLength">EInvalidHexLength</a>);
-    (l / 2).do!(|i| {
-        <b>let</b> decimal = <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[2 * i]) * 16 + <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[2 * i + 1]);
-        r.push_back(decimal);
-    });
-    r
+    vector::tabulate!(l / 2, |i| <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[2 * i]) * 16 + <a href="../sui/hex.md#sui_hex_decode_byte">decode_byte</a>(<a href="../sui/hex.md#sui_hex">hex</a>[2 * i + 1]))
 }
 </code></pre>
 
