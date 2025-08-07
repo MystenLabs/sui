@@ -6,7 +6,5 @@ extend-ignore-re = [
 [default.extend-words]
 groth = "groth"
 
-[default.files]
-extend-exclude = [
-  "\\.excalidraw$",
-]
+[files]
+extend-exclude = ["**/*.excalidraw"]
