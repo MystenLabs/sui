@@ -113,7 +113,7 @@ fun test_borrow_swap() {
     let Test { id } = ref_1.destroy();
     id.delete();
 
-    let Test { id } = destroy(ref_2);
+    let Test { id } = ref_2.destroy();
     id.delete();
 }
 
