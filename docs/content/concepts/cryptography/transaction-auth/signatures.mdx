@@ -1,7 +1,7 @@
 ---
 title: Signatures
 description: Sui supports multiple cryptography algorithms and primitives. Switching between them rapidly is supported.
-keywords: Ed25519 pure, pure Ed255190, ECDSA Secp256k1, ECDSA Secp256r1, multisig, zkLogin, passkey, signature requirements, signature authority, authority signature, account key pair, account key pair, network key pair
+keywords: [ Ed25519 pure, pure Ed255190, ECDSA Secp256k1, ECDSA Secp256r1, multisig, zkLogin, passkey, signature requirements, signature authority, authority signature, account key pair, account key pair, network key pair ]
 ---
 
 When a user submits a signed transaction, a serialized signature and a serialized transaction data is submitted. The serialized transaction data is the BCS serialized bytes of the struct `TransactionData` and the serialized signature is defined as a concatenation of bytes of `flag || sig || pk`.
