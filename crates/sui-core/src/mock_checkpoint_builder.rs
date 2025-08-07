@@ -4,7 +4,7 @@
 use fastcrypto::traits::Signer;
 use std::mem;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::base_types::{AuthorityName, VerifiedExecutionData};
+use sui_types::base_types::{AuthorityName, SequenceNumber, VerifiedExecutionData};
 use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -33,10 +33,14 @@ pub struct MockCheckpointBuilder {
     transactions: Vec<VerifiedExecutionData>,
     epoch_rolling_gas_cost_summary: GasCostSummary,
     epoch: u64,
+    object_start_version: SequenceNumber,
 }
 
 impl MockCheckpointBuilder {
-    pub fn new(previous_checkpoint: VerifiedCheckpoint) -> Self {
+    pub fn new(
+        previous_checkpoint: VerifiedCheckpoint,
+        object_start_version: Option<SequenceNumber>,
+    ) -> Self {
         let epoch_rolling_gas_cost_summary =
             previous_checkpoint.epoch_rolling_gas_cost_summary.clone();
         let epoch = previous_checkpoint.epoch;
@@ -46,6 +50,7 @@ impl MockCheckpointBuilder {
             transactions: Vec::new(),
             epoch_rolling_gas_cost_summary,
             epoch,
+            object_start_version: object_start_version.unwrap_or(OBJECT_START_VERSION),
         }
     }
 
@@ -142,7 +147,7 @@ impl MockCheckpointBuilder {
         let settlement_txns = builder.build_tx(
             protocol_config,
             self.epoch,
-            OBJECT_START_VERSION,
+            self.object_start_version,
             checkpoint_height,
             checkpoint_seq,
         );
@@ -163,7 +168,7 @@ impl MockCheckpointBuilder {
     ) -> Transaction {
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             self.epoch,
-            OBJECT_START_VERSION,
+            self.object_start_version,
             checkpoint_height,
             settlement_effects,
         );
