@@ -1147,7 +1147,7 @@ pub struct SuiMovePackage {
 }
 
 pub type QueryObjectsPage = Page<SuiObjectResponse, CheckpointedObjectID>;
-pub type ObjectsPage = Page<SuiObjectResponse, ObjectID>;
+pub type ObjectsPage = Page<SuiObjectResponse, String>;
 
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, Eq, PartialEq)]

@@ -47,11 +47,11 @@ use crate::timeout::TimeoutLayer;
 pub mod api;
 pub mod args;
 pub mod config;
-mod context;
+pub mod context;
 pub mod data;
-mod error;
-mod metrics;
-mod paginate;
+pub mod error;
+pub mod metrics;
+pub mod paginate;
 mod timeout;
 
 #[derive(clap::Args, Debug, Clone)]

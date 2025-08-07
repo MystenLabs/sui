@@ -26,6 +26,10 @@ use crate::pg_reader::PgReader;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VersionedObjectKey(pub ObjectID, pub u64);
 
+/// Key for fetching the latest version of an object.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LatestObjectKey(pub ObjectID);
+
 #[async_trait::async_trait]
 impl Loader<VersionedObjectKey> for PgReader {
     type Value = StoredObject;
@@ -140,6 +144,73 @@ impl Loader<VersionedObjectKey> for LedgerGrpcReader {
                     .deserialize()
                     .context("Failed to deserialize object")?;
                 results.insert(VersionedObjectKey(obj.id(), obj.version().into()), obj);
+            }
+        }
+        Ok(results)
+    }
+}
+
+// --- LatestObjectKey Loaders ---
+
+#[async_trait::async_trait]
+impl Loader<LatestObjectKey> for BigtableReader {
+    type Value = Object;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[LatestObjectKey],
+    ) -> Result<HashMap<LatestObjectKey, Object>, Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let ids: Vec<ObjectID> = keys.iter().map(|k| k.0).collect();
+        Ok(self
+            .latest_objects(&ids)
+            .await?
+            .into_iter()
+            .map(|o| (LatestObjectKey(o.id()), o))
+            .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<LatestObjectKey> for LedgerGrpcReader {
+    type Value = Object;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[LatestObjectKey],
+    ) -> Result<HashMap<LatestObjectKey, Object>, Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        // Build batch request without version to get latest objects
+        let requests = keys
+            .iter()
+            .map(|key| proto::GetObjectRequest::new(&key.0.into()))
+            .collect();
+
+        let mut request = proto::BatchGetObjectsRequest::default();
+        request.requests = requests;
+        request.read_mask = Some(FieldMask::from_paths(["bcs"]));
+
+        let response = self.0.clone().batch_get_objects(request).await?;
+        let batch_response = response.into_inner();
+
+        let mut results = HashMap::new();
+        for obj_result in batch_response.objects {
+            if let Some(proto::get_object_result::Result::Object(object)) = obj_result.result {
+                let obj: Object = object
+                    .bcs
+                    .as_ref()
+                    .context("Missing bcs in object")?
+                    .deserialize()
+                    .context("Failed to deserialize object")?;
+                results.insert(LatestObjectKey(obj.id()), obj);
             }
         }
         Ok(results)

@@ -32,6 +32,7 @@ use crate::events::StoredTransactionEvents;
 use crate::events::TransactionEventsKey;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::objects::LatestObjectKey;
 use crate::objects::VersionedObjectKey;
 use crate::pg_reader::PgReader;
 use crate::transactions::TransactionKey;
@@ -134,6 +135,47 @@ impl KvLoader {
                 Ok(results)
             }
             Self::LedgerGrpc(loader) => loader.load_many(keys).await,
+        }
+    }
+
+    /// Load the latest version of a single object by ID.
+    /// Note: This is only supported for Bigtable and LedgerGrpc backends.
+    /// For Pg backend, use pg_loader with LatestObjectVersionKey instead.
+    pub async fn load_one_latest_object(&self, id: ObjectID) -> Result<Option<Object>, Error> {
+        let key = LatestObjectKey(id);
+        match self {
+            Self::Bigtable(loader) => loader.load_one(key).await,
+            Self::Pg(_) => Err(anyhow::anyhow!(
+                "load_one_latest_object is not supported for Pg backend; use pg_loader with LatestObjectVersionKey"
+            ).into()),
+            Self::LedgerGrpc(loader) => loader.load_one(key).await,
+        }
+    }
+
+    /// Load the latest versions of multiple objects by ID.
+    /// Note: This is only supported for Bigtable and LedgerGrpc backends.
+    /// For Pg backend, use pg_loader with LatestObjectVersionKey instead.
+    pub async fn load_many_latest_objects(
+        &self,
+        ids: Vec<ObjectID>,
+    ) -> Result<HashMap<ObjectID, Object>, Error> {
+        let keys: Vec<LatestObjectKey> = ids.into_iter().map(LatestObjectKey).collect();
+        match self {
+            Self::Bigtable(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(k, v)| (k.0, v))
+                .collect()),
+            Self::Pg(_) => Err(anyhow::anyhow!(
+                "load_many_latest_objects is not supported for Pg backend; use pg_loader with LatestObjectVersionKey"
+            ).into()),
+            Self::LedgerGrpc(loader) => Ok(loader
+                .load_many(keys)
+                .await?
+                .into_iter()
+                .map(|(k, v)| (k.0, v))
+                .collect()),
         }
     }
 

@@ -106,6 +106,9 @@ use sui_types::object::Object;
 
 use crate::apis::{CoinReadApi, EventApi, GovernanceApi, QuorumDriverApi, ReadApi};
 use crate::error::{Error, SuiRpcResult};
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
+use sui_json_rpc_types::Page;
 
 pub mod apis;
 pub mod error;
@@ -628,6 +631,7 @@ impl DataReader for ReadApi {
                     .map(|r| r.clone().try_into())
                     .collect::<Result<Vec<_>, _>>()?,
             );
+            let next_cursor = next_cursor.map(|c| Base64::encode(&bcs::to_bytes(&c).unwrap()));
             cursor = next_cursor;
             has_next = has_next_page;
         }

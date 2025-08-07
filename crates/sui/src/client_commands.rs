@@ -674,6 +674,11 @@ pub struct TxProcessingArgs {
     /// private key corresponding to this address is not in keystore.
     #[arg(long, required = false, value_parser)]
     pub sender: Option<SuiAddress>,
+    /// Skip signature check in the CLI before sending the transaction to the RPC. This is useful
+    /// when working with a locally forked network to impersonate accounts without having their
+    /// keys.
+    #[arg(long)]
+    pub forking_mode: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -3101,6 +3106,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         serialize_unsigned_transaction,
         serialize_signed_transaction,
         sender,
+        forking_mode,
     } = processing;
 
     ensure!(
@@ -3207,31 +3213,32 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let mut signatures = vec![
-            context
-                .sign_secure(
-                    &KeyIdentity::Address(signer),
-                    &tx_data,
-                    Intent::sui_transaction(),
-                )
-                .await?
-                .into(),
-        ];
-
-        if let Some(gas_sponsor) = gas_sponsor
-            && gas_sponsor != signer
-        {
-            signatures.push(
+        let mut signatures = if forking_mode {
+            vec![]
+        } else {
+            let mut signatures = vec![
                 context
-                    .sign_secure(
-                        &KeyIdentity::Address(gas_sponsor),
-                        &tx_data,
-                        Intent::sui_transaction(),
-                    )
+                    .config
+                    .keystore
+                    .sign_secure(&signer, &tx_data, Intent::sui_transaction())
                     .await?
                     .into(),
-            );
-        }
+            ];
+
+            if let Some(gas_sponsor) = gas_sponsor
+                && gas_sponsor != signer
+            {
+                signatures.push(
+                    context
+                        .config
+                        .keystore
+                        .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
+                        .await?
+                        .into(),
+                );
+            }
+            signatures
+        };
 
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
         if serialize_signed_transaction {
@@ -3348,7 +3355,8 @@ async fn fetch_move_packages(
                 "Failed to fetch package {}, found object instead of package",
                 pkg_id_to_name
                     .get(&id)
-                    .map_or("of unknown name", |x| x.as_str())
+                    .map_or("of unknown name", |x| x.as_str()),
+                id
             )
         })?;
         packages.push(package);

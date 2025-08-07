@@ -4790,6 +4790,7 @@ dependencies = [
  "chrono",
  "diesel_derives",
  "itoa",
+ "pq-sys",
  "serde_json",
 ]
 
@@ -10961,6 +10962,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
+name = "pq-sys"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6cc05d7ea95200187117196eee9edd0644424911821aeb28a18ce60ea0b8793"
+dependencies = [
+ "vcpkg",
+]
+
+[[package]]
 name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14786,6 +14796,80 @@ version = "1.67.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "sui-forking"
+version = "1.65.0"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "async-trait",
+ "axum 0.8.3",
+ "axum-server",
+ "base64 0.21.7",
+ "bcs",
+ "bin-version",
+ "clap",
+ "const-str",
+ "cynic",
+ "cynic-codegen",
+ "diesel",
+ "diesel-async",
+ "fastcrypto",
+ "futures",
+ "http 1.3.1",
+ "jsonrpsee",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "mysten-common",
+ "mysten-network",
+ "pin-project",
+ "prometheus",
+ "prost-types 0.14.1",
+ "rand 0.8.5",
+ "reqwest",
+ "schemars 0.8.21",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "shared-crypto",
+ "simulacrum",
+ "sui-config",
+ "sui-data-store",
+ "sui-display",
+ "sui-futures",
+ "sui-indexer-alt",
+ "sui-indexer-alt-consistent-store",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-jsonrpc",
+ "sui-indexer-alt-metrics",
+ "sui-indexer-alt-reader",
+ "sui-indexer-alt-schema",
+ "sui-json-rpc-types",
+ "sui-open-rpc",
+ "sui-open-rpc-macros",
+ "sui-package-resolver",
+ "sui-pg-db",
+ "sui-rpc",
+ "sui-rpc-api",
+ "sui-sdk-types",
+ "sui-sql-macro",
+ "sui-swarm-config",
+ "sui-types",
+ "tap",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-util 0.7.18",
+ "tonic 0.14.2",
+ "tonic-health",
+ "tonic-reflection",
+ "tower 0.5.2",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
