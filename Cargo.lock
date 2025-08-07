@@ -14487,6 +14487,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-forking"
+version = "1.54.0"
+dependencies = [
+ "simulacrum",
+ "sui-replay-2",
+ "sui-swarm-config",
+ "sui-types",
+ "tokio",
+]
+
+[[package]]
 name = "sui-framework"
 version = "0.1.0"
 dependencies = [
