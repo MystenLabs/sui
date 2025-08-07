@@ -424,6 +424,7 @@ export class Runtime extends EventEmitter {
             // iterate over each package directory
             for (const pkgDir of pkgDirs) {
                 const pkgDirPath = path.join(extRoot, pkgDir);
+                const pkgVersionID = pkgDir.slice(2); // remove 0x prefix
 
                 const bytecodeDir = path.join(pkgDirPath, 'bytecode');
                 hashToFileMap(bytecodeDir, this.filesMap, BCODE_FILE_EXT);
@@ -445,7 +446,14 @@ export class Runtime extends EventEmitter {
                     // since disassembled bytecode files are not present in sourceFilesMap,
                     // debug infos for disassembled bytecode will be excluded.
                     const srcAllDebugInfoLinesMap = new Map<string, Set<number>>();
-                    readAllDebugInfos(sourceDir, srcDebugInfosModMap, srcAllDebugInfoLinesMap, sourceFilesMap, /* mustHaveSourceFile */ false);
+                    readAllDebugInfos(
+                        sourceDir,
+                        srcDebugInfosModMap,
+                        srcAllDebugInfoLinesMap,
+                        sourceFilesMap,
+                        /* mustHaveSourceFile */ false,
+                        pkgVersionID
+                    );
                     computeOptimizedLines(srcDebugInfosModMap, srcAllDebugInfoLinesMap, sourceFilesMap);
                     sourceFilesMap.forEach((fileInfo, fileHash) => {
                         this.filesMap.set(fileHash, fileInfo);

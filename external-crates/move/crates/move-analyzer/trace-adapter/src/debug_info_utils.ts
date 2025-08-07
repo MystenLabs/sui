@@ -144,6 +144,8 @@ export interface IDebugInfo {
  * @param filesMap map from file hash to file information.
  * @param mustHaveSourceFile indicates whether resulting debug infos must have their
  * respective source files present in the filesMap.
+ * @param pkgVersionID optional on-chain package version ID to be used when
+ * building debug info for packages coming from the chain.
  * @returns map from stringified module info to debug info.
  */
 export function readAllDebugInfos(
@@ -152,6 +154,7 @@ export function readAllDebugInfos(
     allDebugInfoLinesMap: Map<string, Set<number>>,
     filesMap: Map<string, IFileInfo>,
     mustHaveSourceFile: boolean,
+    pkgVersionID?: string,
 ): void {
     const processDirectory = (dir: string) => {
         const files = fs.readdirSync(dir);
@@ -162,7 +165,7 @@ export function readAllDebugInfos(
                 processDirectory(filePath);
             } else if (path.extname(f) === JSON_FILE_EXT) {
                 const debugInfo =
-                    readDebugInfo(filePath, filesMap, allDebugInfoLinesMap, mustHaveSourceFile);
+                    readDebugInfo(filePath, filesMap, allDebugInfoLinesMap, mustHaveSourceFile, pkgVersionID);
                 if (debugInfo) {
                     debugInfosMap.set(JSON.stringify(debugInfo.modInfo), debugInfo);
                 }
@@ -211,6 +214,8 @@ export function computeOptimizedLines(
  * source lines for different files due to inlining).
  * @param failOnNoSourceFile indicates if debug info retrieval should fail if the
  * source file is not present in the filesMap or if it should return `undefined`.
+ * @param pkgVersionID optional on-chain package version ID to be used when
+ * building debug info for packages coming from the chain.
  *
  * @returns debug info or `undefined` if `failOnNoSourceFile` is true and the source file
  * is not present in the filesMap.
@@ -221,6 +226,7 @@ function readDebugInfo(
     filesMap: Map<string, IFileInfo>,
     debugInfoLinesMap: Map<string, Set<number>>,
     failOnNoSourceFile: boolean,
+    pkgVersionID?: string,
 ): IDebugInfo | undefined {
     const debugInfoJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(debugInfoPath, 'utf8'));
 
@@ -247,9 +253,18 @@ function readDebugInfo(
         filesMap.set(fileHash, fileInfo);
     }
 
+    // if package version ID is available, use it to override module address
+    // found in the debug info if this module address is 0 (which is the case
+    // when a package is build locally from sources).
+    const debugInfoAddrStr = debugInfoJSON.module_name[0];
+    const debugInfoModAddr = parseInt(debugInfoAddrStr, 16);
+
+    const addr = pkgVersionID && debugInfoModAddr === 0 ? pkgVersionID : debugInfoAddrStr;
+    const name = debugInfoJSON.module_name[1];
+
     const modInfo: ModuleInfo = {
-        addr: debugInfoJSON.module_name[0],
-        name: debugInfoJSON.module_name[1]
+        addr,
+        name,
     };
     const functions = new Map<string, IDebugInfoFunction>();
     const debugInfoLines = debugInfoLinesMap.get(fileHash) ?? new Set<number>;
