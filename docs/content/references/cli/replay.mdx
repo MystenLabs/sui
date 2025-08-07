@@ -15,7 +15,7 @@ The main command for replaying a transaction follows. For all available flags an
 sui client replay-transaction --tx-digest <digest>
 ```
 
-After running such a command, the tool generates a directory corresponding to the digest in the current directory: `<cur_directory>/.replay/<digest>`, unless the `--output-dir` flag is set.
+After running this command, the tool generates a directory corresponding to the digest in the current directory: `<cur_directory>/.replay/<digest>`, unless you set the `--output-dir` flag.
 A typical response after running the command above is:
 ```
 Successfully replayed transaction
