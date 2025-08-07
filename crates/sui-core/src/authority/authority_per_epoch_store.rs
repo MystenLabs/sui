@@ -2844,7 +2844,7 @@ impl AuthorityPerEpochStore {
     fn process_user_signatures<'a>(&self, certificates: impl Iterator<Item = &'a Schedulable>) {
         let sigs: Vec<_> = certificates
             .filter_map(|s| match s {
-                Schedulable::Transaction(certificate) | Schedulable::Withdraw(certificate, _) => {
+                Schedulable::Transaction(certificate) => {
                     Some((*certificate.digest(), certificate.tx_signatures().to_vec()))
                 }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
@@ -3357,8 +3357,8 @@ impl AuthorityPerEpochStore {
             .collect();
 
         let (
-            mut verified_non_randomness_transactions,
-            mut verified_randomness_transactions,
+            verified_non_randomness_transactions,
+            verified_randomness_transactions,
             notifications,
             lock,
             final_round,
@@ -3386,13 +3386,6 @@ impl AuthorityPerEpochStore {
                 authority_metrics,
             )
             .await?;
-        if self.accumulators_enabled() {
-            assigned_versions.finish_process_balance_withdraw_transactions(
-                verified_non_randomness_transactions
-                    .iter_mut()
-                    .chain(verified_randomness_transactions.iter_mut()),
-            );
-        }
         self.process_user_signatures(
             verified_non_randomness_transactions
                 .iter()
@@ -3575,7 +3568,10 @@ impl AuthorityPerEpochStore {
                         &mut shared_input_next_version,
                         cancelled_txns,
                     );
-                    version_assignment.push((*key.unwrap_digest(), assigned_versions));
+                    version_assignment.push((
+                        *key.unwrap_digest(),
+                        assigned_versions.shared_object_versions,
+                    ));
                 }
                 None => {}
             }
@@ -3886,6 +3882,11 @@ impl AuthorityPerEpochStore {
         }
 
         if self.accumulators_enabled() {
+            // We insert settlement transactions to the end of the certificate queues.
+            // This is important for shared object version assignment to work correctly.
+            // Withdraw transactions will be using the accumulator version prior to the settlement,
+            // and settlements will bump the accumulator version at the end to reflect all
+            // balance changes during the commit.
             let checkpoint_height =
                 self.calculate_pending_checkpoint_height(consensus_commit_info.round);
 

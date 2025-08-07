@@ -4,7 +4,8 @@
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        shared_object_version_manager::Schedulable, AuthorityMetrics, ExecutionEnv,
+        shared_object_version_manager::{Schedulable, WithdrawType},
+        AuthorityMetrics, ExecutionEnv,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
@@ -412,13 +413,18 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
         for (schedulable, env) in certs {
             match schedulable {
                 Schedulable::Transaction(tx) => {
-                    ordinary_txns.push((tx, env));
+                    // Check if this transaction has withdraws based on the assigned versions
+                    match env.assigned_versions.withdraw_type {
+                        WithdrawType::Withdraw(accumulator_version) => {
+                            tx_with_withdraws.push((tx, accumulator_version, env));
+                        }
+                        WithdrawType::NonWithdraw => {
+                            ordinary_txns.push((tx, env));
+                        }
+                    }
                 }
                 s @ Schedulable::RandomnessStateUpdate(..) => {
                     tx_with_keys.push((s.key(), env));
-                }
-                Schedulable::Withdraw(tx, version) => {
-                    tx_with_withdraws.push((tx, version, env));
                 }
                 Schedulable::AccumulatorSettlement(_, _) => {
                     settlement_txns.push((schedulable.key(), env));
@@ -530,6 +536,7 @@ impl ExecutionSchedulerAPI for ExecutionScheduler {
 mod test {
     use std::{time::Duration, vec};
 
+    use crate::authority::shared_object_version_manager::AssignedVersions;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::object::Owner;
@@ -840,19 +847,27 @@ mod test {
             vec![
                 (
                     transaction_read_0.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_0_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_0_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_read_1.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_1_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_1_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_default.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_default_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_default_assigned_versions,
+                    )),
                 ),
                 (
                     transaction_read_2.clone(),
-                    ExecutionEnv::new().with_assigned_versions(tx_read_2_assigned_versions),
+                    ExecutionEnv::new().with_assigned_versions(AssignedVersions::non_withdraw(
+                        tx_read_2_assigned_versions,
+                    )),
                 ),
             ],
             &state.epoch_store_for_testing(),
@@ -1388,7 +1403,8 @@ mod test {
         execution_scheduler.enqueue_transactions(
             vec![(
                 cancelled_transaction.clone(),
-                ExecutionEnv::new().with_assigned_versions(assigned_versions),
+                ExecutionEnv::new()
+                    .with_assigned_versions(AssignedVersions::non_withdraw(assigned_versions)),
             )],
             &state.epoch_store_for_testing(),
         );
