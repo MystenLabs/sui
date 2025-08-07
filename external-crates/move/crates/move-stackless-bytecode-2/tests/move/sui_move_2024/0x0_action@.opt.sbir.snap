@@ -22,10 +22,7 @@ source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
         reg_15 : &vector<0x0::action::Action> = ImmBorrow(lcl_4)
         reg_16 : u64 = VecLen<0x0::action::Action>(reg_15 : &vector<0x0::action::Action>)
         reg_17 : u64 = LessThan(reg_16 : u64, reg_14 : u64)
-        JumpIf(reg_17 : u64, LBL_23, LBL_15)
-
-      Label LBL_23:
-        Jump(LBL_24)
+        JumpIf(reg_17 : u64, LBL_24, LBL_15)
 
       Label LBL_24:
         reg_18 : &vector<0x0::action::Action> = ImmBorrow(lcl_4)
@@ -113,10 +110,7 @@ source: crates/move-stackless-bytecode-2/tests/from_bytecode.rs
         VecUnpack<0x0::action::Action>(reg_64 : vector<0x0::action::Action>)
         reg_65 : u64 = Move(lcl_9)
         reg_67 : u64 = Equal(Immediate(U64(100)), reg_65 : u64)
-        JumpIf(reg_67 : u64, LBL_100, LBL_101)
-
-      Label LBL_100:
-        Jump(LBL_103)
+        JumpIf(reg_67 : u64, LBL_103, LBL_101)
 
       Label LBL_101:
         Abort(reg_68 : u64)
