@@ -31,6 +31,8 @@ pub(crate) enum TransactionRequestError {
     // Rejected by the validator when voting on the transaction.
     #[error("{0}")]
     RejectedAtValidator(SuiError),
+    #[error("Transaction rejected by consensus")]
+    RejectedByConsensus,
     // Transaction status has been dropped from cache at the validator.
     #[error("Transaction status expired")]
     StatusExpired(EpochId, u32),

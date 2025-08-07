@@ -145,6 +145,8 @@ pub struct ModuleDefinition {
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
+    /// The named address map used by this module during `expansion`.
+    pub named_address_map: Arc<NamedAddressMap>,
     pub attributes: Attributes,
     pub target_kind: TargetKind,
     pub use_funs: UseFuns,
@@ -1213,6 +1215,7 @@ impl AstDebug for ModuleDefinition {
             loc: _,
             warning_filter,
             package_name,
+            named_address_map: _,
             attributes,
             target_kind,
             use_funs,

@@ -547,11 +547,24 @@ impl ValidatorService {
         }
 
         let request = request.into_inner();
-        let transaction = bcs::from_bytes::<Transaction>(&request.transaction).map_err(|e| {
-            SuiError::TransactionDeserializationError {
-                error: e.to_string(),
+
+        // TODO(fastpath): handle multiple transactions.
+        if request.transactions.len() != 1 {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: format!(
+                    "Expected exactly 1 transaction in request, got {}",
+                    request.transactions.len()
+                ),
             }
-        })?;
+            .into());
+        }
+
+        let transaction =
+            bcs::from_bytes::<Transaction>(&request.transactions[0]).map_err(|e| {
+                SuiError::TransactionDeserializationError {
+                    error: e.to_string(),
+                }
+            })?;
         transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
         // Check system overload
@@ -1235,9 +1248,7 @@ impl ValidatorService {
         let mut cur_status = match first_status {
             NotifyReadConsensusTxStatusResult::Status(status) => match status {
                 ConsensusTxStatus::Rejected => {
-                    let error = epoch_store
-                        .get_rejection_vote_reason(consensus_position)
-                        .unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
+                    let error = epoch_store.get_rejection_vote_reason(consensus_position);
                     return Ok(WaitForEffectsResponse::Rejected { error });
                 }
                 ConsensusTxStatus::FastpathCertified | ConsensusTxStatus::Finalized => status,
@@ -1265,7 +1276,7 @@ impl ValidatorService {
                     match second_status {
                         NotifyReadConsensusTxStatusResult::Status(status) => {
                             if status == ConsensusTxStatus::Rejected {
-                                let error = epoch_store.get_rejection_vote_reason(consensus_position).unwrap_or(SuiError::TransactionRejectReasonNotFound { digest: tx_digest });
+                                let error = epoch_store.get_rejection_vote_reason(consensus_position);
                                 return Ok(WaitForEffectsResponse::Rejected { error });
                             }
                             assert_eq!(status, ConsensusTxStatus::Finalized);
@@ -1565,6 +1576,54 @@ impl ValidatorService {
             .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?;
         Ok((tonic::Response::new(response), Weight::one()))
+    }
+
+    async fn validator_health_impl(
+        &self,
+        _request: tonic::Request<sui_types::messages_grpc::RawValidatorHealthRequest>,
+    ) -> WrappedServiceResponse<sui_types::messages_grpc::RawValidatorHealthResponse> {
+        let state = &self.state;
+
+        // Get epoch store once for both metrics
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Get in-flight execution transactions from execution scheduler
+        let num_inflight_execution_transactions =
+            state.execution_scheduler().num_pending_certificates() as u64;
+
+        // Get in-flight consensus transactions from consensus adapter
+        let num_inflight_consensus_transactions =
+            self.consensus_adapter.num_inflight_transactions();
+
+        // Get last committed leader round from epoch store
+        let last_committed_leader_round = epoch_store
+            .consensus_tx_status_cache
+            .as_ref()
+            .and_then(|cache| cache.get_last_committed_leader_round())
+            .unwrap_or(0);
+
+        // Get last locally built checkpoint sequence
+        let last_locally_built_checkpoint = epoch_store
+            .last_built_checkpoint_summary()
+            .ok()
+            .flatten()
+            .map(|(_, summary)| summary.sequence_number)
+            .unwrap_or(0);
+
+        let typed_response = sui_types::messages_grpc::ValidatorHealthResponse {
+            num_inflight_consensus_transactions,
+            num_inflight_execution_transactions,
+            last_locally_built_checkpoint,
+            last_committed_leader_round,
+        };
+
+        let raw_response = typed_response
+            .try_into()
+            .map_err(|e: sui_types::error::SuiError| {
+                tonic::Status::internal(format!("Failed to serialize health response: {}", e))
+            })?;
+
+        Ok((tonic::Response::new(raw_response), Weight::one()))
     }
 
     fn get_client_ip_addr<T>(
@@ -1882,5 +1941,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<SystemStateRequest>,
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
         handle_with_decoration!(self, get_system_state_object_impl, request)
+    }
+
+    async fn validator_health(
+        &self,
+        request: tonic::Request<sui_types::messages_grpc::RawValidatorHealthRequest>,
+    ) -> Result<tonic::Response<sui_types::messages_grpc::RawValidatorHealthResponse>, tonic::Status>
+    {
+        handle_with_decoration!(self, validator_health_impl, request)
     }
 }

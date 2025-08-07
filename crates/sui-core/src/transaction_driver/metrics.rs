@@ -36,6 +36,7 @@ pub struct TransactionDriverMetrics {
     pub(crate) certified_effects_ack_latency: Histogram,
     pub(crate) certified_effects_ack_attempts: IntCounter,
     pub(crate) certified_effects_ack_successes: IntCounter,
+    pub(crate) validator_selections: IntCounterVec,
 }
 
 impl TransactionDriverMetrics {
@@ -133,6 +134,13 @@ impl TransactionDriverMetrics {
             certified_effects_ack_successes: register_int_counter_with_registry!(
                 "transaction_driver_certified_effects_ack_successes",
                 "Number of successful certified effects acknowledgments",
+                registry,
+            )
+            .unwrap(),
+            validator_selections: register_int_counter_vec_with_registry!(
+                "transaction_driver_validator_selections",
+                "Number of times each validator was selected for transaction submission",
+                &["validator"],
                 registry,
             )
             .unwrap(),

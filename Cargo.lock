@@ -2965,8 +2965,6 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
- "tokio-stream",
- "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store",
 ]

@@ -96,7 +96,7 @@ impl TestContext {
 
     fn build_submit_request(&self, transaction: Transaction) -> RawSubmitTxRequest {
         RawSubmitTxRequest {
-            transaction: bcs::to_bytes(&transaction).unwrap().into(),
+            transactions: vec![bcs::to_bytes(&transaction).unwrap().into()],
         }
     }
 }
@@ -130,7 +130,7 @@ async fn test_submit_transaction_invalid_transaction() {
 
     // Create an invalid request with malformed transaction bytes
     let request = RawSubmitTxRequest {
-        transaction: vec![0xFF, 0xFF, 0xFF].into(),
+        transactions: vec![vec![0xFF, 0xFF, 0xFF].into()],
     };
 
     let response = test_context.client.submit_transaction(request, None).await;

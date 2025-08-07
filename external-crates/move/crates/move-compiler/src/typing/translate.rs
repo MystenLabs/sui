@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::{Diagnostic, codes::*},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
@@ -12,8 +12,8 @@ use crate::{
     },
     ice, ice_assert,
     naming::ast::{
-        self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, ResolvedUseFuns, TParam,
-        TParamID, Type, Type_, TypeName, TypeName_,
+        self as N, BlockLabel, DatatypeTypeParameter, Function, IndexSyntaxMethods,
+        ResolvedUseFuns, TParam, TParamID, Type, Type_, TypeName, TypeName_, UseFuns,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, DocComment, Field, FunctionName,
@@ -57,7 +57,7 @@ use std::{
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: N::Program,
 ) -> T::Program {
     let N::Program {
@@ -66,7 +66,7 @@ pub fn program(
         inner: N::Program_ { modules: nmodules },
     } = prog;
 
-    let all_macro_definitions = extract_macros(&nmodules, &pre_compiled_lib);
+    let all_macro_definitions = extract_macros(compilation_env, &nmodules, &pre_compiled_lib);
     let mut modules = modules(compilation_env, &mut info, &all_macro_definitions, nmodules);
 
     dependency_ordering::program(compilation_env, &mut modules);
@@ -78,12 +78,12 @@ pub fn program(
         .into_iter()
         .map(|(mident, minfo)| (mident, minfo.use_funs))
         .collect();
-    let module_info =
+    let program_info =
         TypingProgramInfo::new(compilation_env, pre_compiled_lib, &modules, module_use_funs);
     let prog = T::Program {
         modules,
         warning_filters_table,
-        info: Arc::new(module_info),
+        info: Arc::new(program_info),
     };
     compilation_env
         .visitors()
@@ -94,8 +94,9 @@ pub fn program(
 }
 
 fn extract_macros(
+    compilation_env: &CompilationEnv,
     modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>,
-    pre_compiled_lib: &Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: &Option<Arc<PreCompiledProgramInfo>>,
 ) -> UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>> {
     // Merges the methods of the module into the local methods for each macro.
     fn merge_use_funs(module_use_funs: &N::UseFuns, mut macro_use_funs: N::UseFuns) -> N::UseFuns {
@@ -123,33 +124,66 @@ fn extract_macros(
         macro_use_funs
     }
 
+    //
+    let mut macro_definitions: BTreeMap<ModuleIdent, (UseFuns, UniqueMap<FunctionName, Function>)> =
+        BTreeMap::new();
+    modules.key_cloned_iter().for_each(|(mident, mdef)| {
+        let macro_functions =
+            UniqueMap::maybe_from_iter(mdef.functions.key_cloned_iter().filter_map(|(name, f)| {
+                if f.macro_.is_some() {
+                    Some((name, f.clone()))
+                } else {
+                    None
+                }
+            }))
+            .unwrap();
+        if !macro_functions.is_empty() {
+            macro_definitions
+                .entry(mident)
+                .or_insert_with(|| (mdef.use_funs.clone(), macro_functions));
+        }
+    });
+    compilation_env.save_macro_definitions(&macro_definitions);
+
     // Prefer local module definitions to previous ones. This is ostensibly an error, but naming
     // should have already produced that error. To avoid unnecessary error handling, we simply
     // prefer the non-precompiled definitions.
-    let all_modules: UniqueMap<ModuleIdent, &N::ModuleDefinition> =
-        UniqueMap::maybe_from_iter(modules.key_cloned_iter().chain(
-            pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .naming
-                    .inner
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !modules.contains_key(mident))
-            }),
-        ))
-        .unwrap();
-
-    all_modules.map(|_mident, mdef| {
-        mdef.functions.ref_filter_map(|_name, f| {
-            let _macro_loc = f.macro_?;
-            if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
-                let use_funs = merge_use_funs(&mdef.use_funs, use_funs.clone());
-                Some((use_funs, body.clone()))
-            } else {
+    let pre_compiled_macro_definitions = || {
+        pre_compiled_lib.iter().flat_map(|module_info| {
+            module_info.iter().filter_map(|(mident, module_info)| {
+                // TOOD rewrite to if ... && let Some(...) once this feature is stable
+                if !modules.contains_key(mident) {
+                    if let Some(macro_definitions) = &module_info.macro_definitions {
+                        return Some((*mident, &macro_definitions.0, &macro_definitions.1));
+                    }
+                }
                 None
-            }
+            })
         })
-    })
+    };
+
+    let all_macro_definitions = modules
+        .key_cloned_iter()
+        .map(|(mident, mdef)| (mident, &mdef.use_funs, &mdef.functions))
+        .chain(pre_compiled_macro_definitions());
+
+    UniqueMap::maybe_from_iter(
+        all_macro_definitions.map(|(mident, mod_use_funs, functions)| {
+            let macro_bodies = functions.ref_filter_map(|_, f| {
+                if f.macro_.is_none() {
+                    return None;
+                }
+                if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
+                    let use_funs = merge_use_funs(mod_use_funs, use_funs.clone());
+                    Some((use_funs, body.clone()))
+                } else {
+                    None
+                }
+            });
+            (mident, macro_bodies)
+        }),
+    )
+    .unwrap()
 }
 
 fn modules(
@@ -261,6 +295,7 @@ fn module<'env>(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         syntax_methods,
@@ -334,6 +369,7 @@ fn module<'env>(
         loc,
         warning_filter,
         package_name,
+        named_address_map,
         attributes,
         target_kind,
         dependency_order: 0,

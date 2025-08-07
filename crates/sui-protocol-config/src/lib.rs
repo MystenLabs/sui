@@ -769,6 +769,10 @@ struct FeatureFlags {
     // Check for `init` for new modules to a package on upgrade.
     #[serde(skip_serializing_if = "is_false")]
     check_for_init_during_upgrade: bool,
+
+    // Check shared object transfer restrictions per command.
+    #[serde(skip_serializing_if = "is_false")]
+    per_command_shared_object_transfer_rules: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2162,6 +2166,10 @@ impl ProtocolConfig {
 
     pub fn check_for_init_during_upgrade(&self) -> bool {
         self.feature_flags.check_for_init_during_upgrade
+    }
+
+    pub fn per_command_shared_object_transfer_rules(&self) -> bool {
+        self.feature_flags.per_command_shared_object_transfer_rules
     }
 }
 
@@ -3906,7 +3914,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.mysticeti_fastpath = true;
                     }
                 }
-                91 => {}
+                91 => {
+                    cfg.feature_flags.per_command_shared_object_transfer_rules = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
