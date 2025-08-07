@@ -1052,11 +1052,7 @@ to be consumed, decreasing the <code>total_supply</code> of the <code><a href=".
         <a href="../sui/token.md#sui_token_approvals">approvals</a>: _,
         <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>,
     } = request;
-    <b>if</b> (<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.is_some()) {
-        treasury_cap.supply_mut().decrease_supply(<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.destroy_some());
-    } <b>else</b> {
-        <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.destroy_none();
-    };
+    <a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.do!(|<a href="../sui/balance.md#sui_balance">balance</a>| treasury_cap.supply_mut().decrease_supply(<a href="../sui/balance.md#sui_balance">balance</a>));
     (name, <a href="../sui/token.md#sui_token_amount">amount</a>, <a href="../sui/token.md#sui_token_sender">sender</a>, <a href="../sui/token.md#sui_token_recipient">recipient</a>)
 }
 </code></pre>
@@ -1856,11 +1852,7 @@ Burned balance of the <code><a href="../sui/token.md#sui_token_ActionRequest">Ac
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_spent">spent</a>&lt;T&gt;(self: &<a href="../sui/token.md#sui_token_ActionRequest">ActionRequest</a>&lt;T&gt;): Option&lt;u64&gt; {
-    <b>if</b> (self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.is_some()) {
-        option::some(self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.<a href="../sui/borrow.md#sui_borrow">borrow</a>().<a href="../sui/token.md#sui_token_value">value</a>())
-    } <b>else</b> {
-        option::none()
-    }
+    self.<a href="../sui/token.md#sui_token_spent_balance">spent_balance</a>.map_ref!(|<a href="../sui/balance.md#sui_balance">balance</a>| <a href="../sui/balance.md#sui_balance">balance</a>.<a href="../sui/token.md#sui_token_value">value</a>())
 }
 </code></pre>
 

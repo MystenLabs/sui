@@ -1227,13 +1227,8 @@ Withdraw profits from the Kiosk.
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(self.<a href="../sui/kiosk.md#sui_kiosk_has_access">has_access</a>(cap), <a href="../sui/kiosk.md#sui_kiosk_ENotOwner">ENotOwner</a>);
-    <b>let</b> amount = <b>if</b> (amount.is_some()) {
-        <b>let</b> amt = amount.destroy_some();
-        <b>assert</b>!(amt &lt;= self.profits.value(), <a href="../sui/kiosk.md#sui_kiosk_ENotEnough">ENotEnough</a>);
-        amt
-    } <b>else</b> {
-        self.profits.value()
-    };
+    <b>let</b> amount = amount.destroy_or!(self.profits.value());
+    <b>assert</b>!(amount &lt;= self.profits.value(), <a href="../sui/kiosk.md#sui_kiosk_ENotEnough">ENotEnough</a>);
     <a href="../sui/coin.md#sui_coin_take">coin::take</a>(&<b>mut</b> self.profits, amount, ctx)
 }
 </code></pre>

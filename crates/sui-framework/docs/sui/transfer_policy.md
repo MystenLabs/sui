@@ -487,13 +487,8 @@ is not specified, all profits are withdrawn.
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
-    <b>let</b> amount = <b>if</b> (amount.is_some()) {
-        <b>let</b> amt = amount.destroy_some();
-        <b>assert</b>!(amt &lt;= self.<a href="../sui/balance.md#sui_balance">balance</a>.value(), <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>);
-        amt
-    } <b>else</b> {
-        self.<a href="../sui/balance.md#sui_balance">balance</a>.value()
-    };
+    <b>let</b> amount = amount.destroy_or!(self.<a href="../sui/balance.md#sui_balance">balance</a>.value());
+    <b>assert</b>!(amount &lt;= self.<a href="../sui/balance.md#sui_balance">balance</a>.value(), <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>);
     <a href="../sui/coin.md#sui_coin_take">coin::take</a>(&<b>mut</b> self.<a href="../sui/balance.md#sui_balance">balance</a>, amount, ctx)
 }
 </code></pre>

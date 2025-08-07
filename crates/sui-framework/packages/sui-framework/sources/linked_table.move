@@ -64,13 +64,10 @@ public fun push_front<K: copy + drop + store, V: store>(
     let old_head = table.head.swap_or_fill(k);
     if (table.tail.is_none()) table.tail.fill(k);
     let prev = option::none();
-    let next = if (old_head.is_some()) {
-        let old_head_k = old_head.destroy_some();
+    let next = old_head.map!(|old_head_k| {
         field::borrow_mut<K, Node<K, V>>(&mut table.id, old_head_k).prev = option::some(k);
-        option::some(old_head_k)
-    } else {
-        option::none()
-    };
+        old_head_k
+    });
     field::add(&mut table.id, k, Node { prev, next, value });
     table.size = table.size + 1;
 }
@@ -86,13 +83,10 @@ public fun push_back<K: copy + drop + store, V: store>(
 ) {
     if (table.head.is_none()) table.head.fill(k);
     let old_tail = table.tail.swap_or_fill(k);
-    let prev = if (old_tail.is_some()) {
-        let old_tail_k = old_tail.destroy_some();
+    let prev = old_tail.map!(|old_tail_k| {
         field::borrow_mut<K, Node<K, V>>(&mut table.id, old_tail_k).next = option::some(k);
-        option::some(old_tail_k)
-    } else {
-        option::none()
-    };
+        old_tail_k
+    });
     let next = option::none();
     field::add(&mut table.id, k, Node { prev, next, value });
     table.size = table.size + 1;

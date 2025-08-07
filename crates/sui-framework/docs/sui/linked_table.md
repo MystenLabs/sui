@@ -256,13 +256,10 @@ that key <code>k: K</code>.
     <b>let</b> old_head = <a href="../sui/table.md#sui_table">table</a>.head.swap_or_fill(k);
     <b>if</b> (<a href="../sui/table.md#sui_table">table</a>.tail.is_none()) <a href="../sui/table.md#sui_table">table</a>.tail.fill(k);
     <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::none();
-    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_next">next</a> = <b>if</b> (old_head.is_some()) {
-        <b>let</b> old_head_k = old_head.destroy_some();
+    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_next">next</a> = old_head.map!(|old_head_k| {
         field::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_head_k).<a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = option::some(k);
-        option::some(old_head_k)
-    } <b>else</b> {
-        option::none()
-    };
+        old_head_k
+    });
     field::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value });
     <a href="../sui/table.md#sui_table">table</a>.size = <a href="../sui/table.md#sui_table">table</a>.size + 1;
 }
@@ -298,13 +295,10 @@ that key <code>k: K</code>.
 ) {
     <b>if</b> (<a href="../sui/table.md#sui_table">table</a>.head.is_none()) <a href="../sui/table.md#sui_table">table</a>.head.fill(k);
     <b>let</b> old_tail = <a href="../sui/table.md#sui_table">table</a>.tail.swap_or_fill(k);
-    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = <b>if</b> (old_tail.is_some()) {
-        <b>let</b> old_tail_k = old_tail.destroy_some();
+    <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a> = old_tail.map!(|old_tail_k| {
         field::borrow_mut&lt;K, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a>&lt;K, V&gt;&gt;(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, old_tail_k).<a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::some(k);
-        option::some(old_tail_k)
-    } <b>else</b> {
-        option::none()
-    };
+        old_tail_k
+    });
     <b>let</b> <a href="../sui/linked_table.md#sui_linked_table_next">next</a> = option::none();
     field::add(&<b>mut</b> <a href="../sui/table.md#sui_table">table</a>.id, k, <a href="../sui/linked_table.md#sui_linked_table_Node">Node</a> { <a href="../sui/linked_table.md#sui_linked_table_prev">prev</a>, <a href="../sui/linked_table.md#sui_linked_table_next">next</a>, value });
     <a href="../sui/table.md#sui_table">table</a>.size = <a href="../sui/table.md#sui_table">table</a>.size + 1;

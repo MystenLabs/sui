@@ -125,7 +125,7 @@ public(package) fun remove_for_next_epoch<
         (move newer_value, option::none())
     } else {
         // the current epoch cannot be less than the `newer_value_epoch`
-        assert!(epoch == newer_value_epoch);
+        assert!(epoch == newer_value_epoch, EMismatchedEpoch);
         (move older_value_opt, move newer_value)
     };
     let older_value_opt_is_none = older_value_opt.is_none();

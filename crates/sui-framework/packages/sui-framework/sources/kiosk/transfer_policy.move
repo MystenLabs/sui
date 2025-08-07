@@ -148,13 +148,8 @@ public fun withdraw<T>(
 ): Coin<SUI> {
     assert!(object::id(self) == cap.policy_id, ENotOwner);
 
-    let amount = if (amount.is_some()) {
-        let amt = amount.destroy_some();
-        assert!(amt <= self.balance.value(), ENotEnough);
-        amt
-    } else {
-        self.balance.value()
-    };
+    let amount = amount.destroy_or!(self.balance.value());
+    assert!(amount <= self.balance.value(), ENotEnough);
 
     coin::take(&mut self.balance, amount, ctx)
 }

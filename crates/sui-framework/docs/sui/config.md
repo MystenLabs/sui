@@ -350,7 +350,7 @@ Trying to update <code><a href="../sui/config.md#sui_config_Setting">Setting</a>
         (<b>move</b> newer_value, option::none())
     } <b>else</b> {
         // the current epoch cannot be less than the `newer_value_epoch`
-        <b>assert</b>!(epoch == newer_value_epoch);
+        <b>assert</b>!(epoch == newer_value_epoch, <a href="../sui/config.md#sui_config_EMismatchedEpoch">EMismatchedEpoch</a>);
         (<b>move</b> older_value_opt, <b>move</b> newer_value)
     };
     <b>let</b> older_value_opt_is_none = older_value_opt.is_none();

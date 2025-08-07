@@ -411,11 +411,7 @@ public fun confirm_with_treasury_cap<T>(
         spent_balance,
     } = request;
 
-    if (spent_balance.is_some()) {
-        treasury_cap.supply_mut().decrease_supply(spent_balance.destroy_some());
-    } else {
-        spent_balance.destroy_none();
-    };
+    spent_balance.do!(|balance| treasury_cap.supply_mut().decrease_supply(balance));
 
     (name, amount, sender, recipient)
 }
@@ -670,11 +666,7 @@ public fun approvals<T>(self: &ActionRequest<T>): VecSet<TypeName> {
 
 /// Burned balance of the `ActionRequest`.
 public fun spent<T>(self: &ActionRequest<T>): Option<u64> {
-    if (self.spent_balance.is_some()) {
-        option::some(self.spent_balance.borrow().value())
-    } else {
-        option::none()
-    }
+    self.spent_balance.map_ref!(|balance| balance.value())
 }
 
 // === Internal ===

@@ -456,13 +456,8 @@ public fun withdraw(
 ): Coin<SUI> {
     assert!(self.has_access(cap), ENotOwner);
 
-    let amount = if (amount.is_some()) {
-        let amt = amount.destroy_some();
-        assert!(amt <= self.profits.value(), ENotEnough);
-        amt
-    } else {
-        self.profits.value()
-    };
+    let amount = amount.destroy_or!(self.profits.value());
+    assert!(amount <= self.profits.value(), ENotEnough);
 
     coin::take(&mut self.profits, amount, ctx)
 }
