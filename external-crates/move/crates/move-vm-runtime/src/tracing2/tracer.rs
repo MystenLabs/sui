@@ -3,7 +3,7 @@
 
 use crate::{
     interpreter::{Frame, Interpreter},
-    loader::{Function, Loader},
+    loader::{Function, Loader, Resolver},
 };
 use move_binary_format::{
     errors::{PartialVMError, VMError, VMResult},
@@ -1022,22 +1022,26 @@ impl VMTracer<'_> {
             // Handled by open frame
             B::Call(_) | B::CallGeneric(_) => {}
             B::Pack(sidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let field_count = resolver.field_count(*sidx) as usize;
                 self.register_pre_effects(popn(field_count)?);
             }
             B::PackGeneric(sidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let field_count = resolver.field_instantiation_count(*sidx) as usize;
                 self.register_pre_effects(popn(field_count)?);
             }
             B::PackVariant(vidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let (field_count, _variant_tag) = resolver.variant_field_count_and_tag(*vidx);
                 self.register_pre_effects(popn(field_count as usize)?);
             }
             B::PackVariantGeneric(vidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let (field_count, _variant_tag) =
                     resolver.variant_instantiantiation_field_count_and_tag(*vidx);
                 self.register_pre_effects(popn(field_count as usize)?);
@@ -1233,7 +1237,8 @@ impl VMTracer<'_> {
                     .instruction(instruction, vec![], vec![], remaining_gas, pc);
             }
             B::Pack(sidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let field_count = resolver.field_count(*sidx) as usize;
                 let struct_type = resolver.get_struct_type(*sidx);
                 let stack_len = self.type_stack.len();
@@ -1251,7 +1256,8 @@ impl VMTracer<'_> {
                     .instruction(instruction, vec![], effects, remaining_gas, pc);
             }
             B::PackGeneric(sidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let field_count = resolver.field_instantiation_count(*sidx) as usize;
                 let struct_type = resolver
                     .instantiate_struct_type(*sidx, &frame.ty_args)
@@ -1403,7 +1409,8 @@ impl VMTracer<'_> {
                 let MoveTypeLayout::Struct(slayout) = &value_ty.layout else {
                     panic!("Expected struct, got {:?}", value_ty.layout)
                 };
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let field_offset = resolver.field_offset(*fhidx);
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
 
@@ -1432,7 +1439,8 @@ impl VMTracer<'_> {
                 let MoveTypeLayout::Struct(slayout) = &value_ty.layout else {
                     panic!("Expected struct, got {:?}", value_ty.layout)
                 };
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let field_offset = resolver.field_instantiation_offset(*fhidx);
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
                 let location = value_ty.ref_type.as_ref()?.1.clone();
@@ -1457,7 +1465,8 @@ impl VMTracer<'_> {
             }
 
             B::VecPack(tok, n) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let ty = resolver
                     .instantiate_single_type(*tok, &frame.ty_args)
                     .ok()?;
@@ -1582,7 +1591,8 @@ impl VMTracer<'_> {
                     .instruction(instruction, vec![], effects, remaining_gas, pc);
             }
             B::PackVariant(vidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let (field_count, _variant_tag) = resolver.variant_field_count_and_tag(*vidx);
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count as usize);
@@ -1600,7 +1610,8 @@ impl VMTracer<'_> {
                     .instruction(instruction, vec![], effects, remaining_gas, pc);
             }
             B::PackVariantGeneric(vidx) => {
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let (field_count, _variant_tag) =
                     resolver.variant_instantiantiation_field_count_and_tag(*vidx);
                 let stack_len = self.type_stack.len();
@@ -1622,7 +1633,8 @@ impl VMTracer<'_> {
             }
             i @ (B::UnpackVariant(_) | B::UnpackVariantGeneric(_)) => {
                 let ty = self.type_stack.pop()?;
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let (field_count, tag) = match i {
                     B::UnpackVariant(vidx) => resolver.variant_field_count_and_tag(*vidx),
                     B::UnpackVariantGeneric(vidx) => {
@@ -1655,7 +1667,8 @@ impl VMTracer<'_> {
             | B::UnpackVariantGenericImmRef(_)
             | B::UnpackVariantGenericMutRef(_)) => {
                 let ty = self.type_stack.pop()?;
-                let resolver = Function::get_resolver(frame.function.module_id(), self.link_context(), loader);
+                let resolver =
+                    Resolver::get_resolver(frame.function.module_id(), self.link_context(), loader);
                 let ((field_count, tag), ref_type) = match i {
                     B::UnpackVariantImmRef(vidx) => {
                         (resolver.variant_field_count_and_tag(*vidx), RefType::Imm)

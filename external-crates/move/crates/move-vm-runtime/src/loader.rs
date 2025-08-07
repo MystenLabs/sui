@@ -1781,6 +1781,15 @@ impl<'a> Resolver<'a> {
     pub(crate) fn loader(&self) -> &Loader {
         self.loader
     }
+
+    pub(crate) fn get_resolver<'b>(
+        module_id: &ModuleId,
+        link_context: AccountAddress,
+        loader: &'b Loader,
+    ) -> Resolver<'b> {
+        let (compiled, loaded) = loader.get_module(link_context, module_id);
+        Resolver::for_module(loader, compiled, loaded)
+    }
 }
 
 // A LoadedModule is very similar to a CompiledModule but data is "transformed" to a representation
@@ -2254,15 +2263,6 @@ impl Function {
 
     pub(crate) fn index(&self) -> FunctionDefinitionIndex {
         self.index
-    }
-
-    pub(crate) fn get_resolver<'a>(
-        module_id: &ModuleId,
-        link_context: AccountAddress,
-        loader: &'a Loader,
-    ) -> Resolver<'a> {
-        let (compiled, loaded) = loader.get_module(link_context, module_id);
-        Resolver::for_module(loader, compiled, loaded)
     }
 
     pub(crate) fn local_count(&self) -> usize {
