@@ -40,6 +40,7 @@ use crate::{
 
 use super::{
     address::AddressableImpl,
+    checkpoint::filter::CheckpointFilter,
     object::{self, CVersion, Object, ObjectImpl, VersionFilter},
     transaction::Transaction,
 };
@@ -67,16 +68,6 @@ pub(crate) struct PackageKey {
 
     /// If specified, tries to fetch the latest version as of this checkpoint.
     pub(crate) at_checkpoint: Option<UInt53>,
-}
-
-/// Filter for paginating packages published within a range of checkpoints.
-#[derive(InputObject, Default, Debug)]
-pub(crate) struct CheckpointFilter {
-    /// Filter to packages that were published strictly after this checkpoint, defaults to fetching from the earliest checkpoint known to this RPC (this could be the genesis checkpoint, or some later checkpoint if data has been pruned).
-    pub(crate) after_checkpoint: Option<UInt53>,
-
-    /// Filter to packages published strictly before this checkpoint, defaults to fetching up to the latest checkpoint (inclusive).
-    pub(crate) before_checkpoint: Option<UInt53>,
 }
 
 /// Inner struct for the cursor produced while iterating over all package publishes.

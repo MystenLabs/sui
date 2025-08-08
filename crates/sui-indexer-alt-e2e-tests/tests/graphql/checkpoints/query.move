@@ -19,6 +19,24 @@
 
 //# create-checkpoint
 
+//# advance-epoch
+
+//# programmable --sender A --inputs object(1,0) 1
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+
+//# programmable --sender A --inputs object(1,0) 2
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+
+//# create-checkpoint
+
+//# programmable --sender A --inputs object(1,0) 3
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: MergeCoins(Gas, [Result(0)])
+
+//# create-checkpoint
+
 //# create-checkpoint
 
 //# run-graphql
@@ -39,7 +57,7 @@
 
   # This checkpoint doesn't exist, so it shouldn't be possible to time-travel
   # to it
-  nonexistent: checkpoint(sequenceNumber: 4) { query { ...State } }
+  nonexistent: checkpoint(sequenceNumber: 10) { query { ...State } }
 }
 
 fragment State on Query {
@@ -71,4 +89,152 @@ fragment State on Query {
     }
   }
 
+}
+
+//# run-graphql
+{ # Fetch checkpoints without filters
+  checkpoints(first: 10) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  # Fetch checkpoints at an epoch filter, should have next page
+  checkpoints(first: 2, filter: {atEpoch: 1}) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  # Fetch checkpoints at an epoch filter, and after checkpoint 1
+  checkpoints(first: 5, filter: {atEpoch: 0, afterCheckpoint: 1}) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  # Fetch checkpoints at an epoch filter, and before checkpoint 1
+  checkpoints(first: 5, filter: {atEpoch: 0, beforeCheckpoint: 2}) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  # Fetch checkpoints at an epoch before a checkpoint not in the epoch
+  checkpoints(first: 5, filter: {atEpoch: 1, beforeCheckpoint: 1}) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
+}
+
+//# run-graphql
+{
+  # Fetch checkpoints at nonexistent epoch
+  checkpoints(first: 10, filter: {atEpoch: 5}) {
+    pageInfo {
+      startCursor
+      endCursor
+      hasPreviousPage
+      hasNextPage
+    }
+    edges {
+      node {
+        sequenceNumber
+        digest
+        epoch {epochId}
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # Test all filters together (at_epoch + after_checkpoint + before_checkpoint).
+  checkpoints(
+    first: 10, 
+    filter: {
+      atEpoch: 1, 
+      afterCheckpoint: 2, 
+      beforeCheckpoint: 5
+    }
+  ) {
+    edges { node { sequenceNumber } }
+  }
+}
+
+//# run-graphql
+{ # Test at_checkpoint filter on a checkpoint not in the epoch filter (should override other filters).
+  checkpoints(
+    first: 10,
+    filter: {
+      atEpoch: 1,
+      afterCheckpoint: 2,
+      beforeCheckpoint: 5,
+      atCheckpoint: 3
+    }
+  ) {
+    edges { node { sequenceNumber } }
+  }
 }
