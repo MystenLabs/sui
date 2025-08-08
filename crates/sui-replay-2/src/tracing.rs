@@ -35,13 +35,6 @@ pub fn save_trace_output(
         .transpose()?
         .unwrap();
 
-    // TODO: have this use the artifact manager as well.
-    let bcode_dir = artifact_manager.base_path.join(BCODE_DIR);
-    fs::create_dir_all(&bcode_dir).context(format!(
-        "Failed to create bytecode output directory '{:?}'",
-        bcode_dir,
-    ))?;
-
     let TxnContextAndEffects {
         execution_effects: _,
         expected_effects: _,
@@ -69,7 +62,13 @@ pub fn save_trace_output(
     }
     for pkg in pkgs {
         let pkg_addr = format!("{:?}", pkg.id());
-        let bcode_pkg_dir = bcode_dir.join(&pkg_addr);
+        let pkg_dir = artifact_manager.base_path.join(&pkg_addr);
+        // TODO: have this use the artifact manager as well.
+        let bcode_pkg_dir = pkg_dir.join(BCODE_DIR);
+        fs::create_dir_all(&bcode_pkg_dir).context(format!(
+            "Failed to create bytecode output directory '{:?}'",
+            bcode_pkg_dir,
+        ))?;
         fs::create_dir_all(&bcode_pkg_dir)
             .context("Failed to create bytecode package directory")?;
         for (mod_name, serialized_mod) in pkg.serialized_module_map() {
@@ -112,14 +111,14 @@ pub fn save_trace_output(
                 mod_name, &pkg_addr,
             ))?;
         }
+        // create empty sources directory as a known placeholder for the users
+        // to put optional source files there
+        let src_pkg_dir = pkg_dir.join(SOURCE_DIR);
+        fs::create_dir_all(&src_pkg_dir).context(format!(
+            "Failed to create source output directory '{:?}'",
+            src_pkg_dir,
+        ))?;
     }
-    // create empty sources directory as a known placeholder for the users
-    // to put optional source files there
-    let src_dir = artifact_manager.base_path.join(SOURCE_DIR);
-    fs::create_dir_all(&src_dir).context(format!(
-        "Failed to create source output directory '{:?}'",
-        src_dir,
-    ))?;
 
     Ok(())
 }
