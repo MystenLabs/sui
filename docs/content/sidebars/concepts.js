@@ -97,6 +97,17 @@ const concepts = [
 			'concepts/gaming'
 		],
 	},
+	{ 
+		type: 'category',
+		label: 'Custom Indexing Framework',
+		link: {
+			type: 'doc',
+			id: 'concepts/custom-indexing-framework',
+		},
+		items: [
+			'concepts/custom-indexer/pipeline-architecture'
+		]
+	},
 	{
 		type: 'category',
 		label: 'Cryptography',
