@@ -190,7 +190,7 @@ impl<K: SourceKind> Model<K> {
         package.maybe_module(name)
     }
 
-    pub fn module(&self, module: impl TModuleId) -> Module<K> {
+    pub fn module(&self, module: impl TModuleId) -> Module<'_, K> {
         self.maybe_module(module).unwrap()
     }
 

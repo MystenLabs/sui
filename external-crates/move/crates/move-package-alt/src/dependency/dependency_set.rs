@@ -63,7 +63,7 @@ impl<T> DependencySet<T> {
     }
 
     /// Iterate over the declared entries of this set
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         self.into_iter()
     }
 

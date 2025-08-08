@@ -136,7 +136,7 @@ impl ArtifactMember<'_, '_> {
 
     /// Try to get the trace reader if the artifact type is a trace.
     /// If the artifact type is not `Trace` `None` is returned.
-    pub fn try_get_trace(&self) -> Option<anyhow::Result<MoveTraceReader<std::fs::File>>> {
+    pub fn try_get_trace(&self) -> Option<anyhow::Result<MoveTraceReader<'_, std::fs::File>>> {
         if self.artifact_type == Artifact::Trace {
             Some(
                 std::fs::File::open(&self.artifact_path)

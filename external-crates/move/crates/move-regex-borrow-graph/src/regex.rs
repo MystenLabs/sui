@@ -188,7 +188,7 @@ impl<Lbl> Regex<Lbl> {
         }
     }
 
-    fn walk(&self) -> Walk<Lbl> {
+    fn walk(&self) -> Walk<'_, Lbl> {
         if self.is_epsilon() {
             Walk::Epsilon
         } else {

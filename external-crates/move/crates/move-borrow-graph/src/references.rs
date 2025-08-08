@@ -130,7 +130,7 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowEdgeSet<Loc, Lbl> {
         self.edges.is_empty()
     }
 
-    pub(crate) fn iter(&self) -> std::collections::btree_set::Iter<BorrowEdge<Loc, Lbl>> {
+    pub(crate) fn iter(&self) -> std::collections::btree_set::Iter<'_, BorrowEdge<Loc, Lbl>> {
         debug_assert!(self.overflown || !self.is_empty());
         self.edges.iter()
     }
