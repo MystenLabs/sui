@@ -1,0 +1,23 @@
+cargo_env = true
+
+# cfgs = ["ossl320", "openssl"]
+# cfgs = ["openssl", "ossl102", "ossl110", "ossl300", "ossl101"]
+# features = ["v111"]
+[env]
+OPENSSL_STATIC="1"
+[[buildscript]]
+[buildscript.rustc_flags]
+# env = { "OPT_LEVEL" = "2" }
+
+# [[buildscript]]
+# [buildscript.gen_srcs]
+
+# cargo_env = true
+# # features = ["bindgen"]
+# # [env]
+# # OPENSSL_NO_VENDOR="1"
+# # TARGET="x86_64-unknown-linux-gnu"
+# # [[buildscript]]
+# # [buildscript.rustc_flags]
+# # [[buildscript]]
+# # [buildscript.gen_srcs]

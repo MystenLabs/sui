@@ -1,0 +1,45 @@
+# cargo_env = true
+# [[buildscript]]
+# [buildscript.rustc_flags]
+
+# [[buildscript]]
+# [buildscript.gen_srcs]
+buildscript = []
+cargo_env = true
+features = ["fxsr", "sse", "sse2"]
+# cfgs = ["asm", "switchable_stack"]
+# cfgs = ["switchable_stack"]
+# rustc_flags = ["-lstdc++"]
+[[platform_fixup.'cfg(target_arch="x86_64")'.buildscript]]
+[platform_fixup.'cfg(target_arch="x86_64")'.buildscript.cxx_library]
+name = "psm_s_x86_64"
+srcs = ["src/arch/x86_64.s"]
+headers = ["src/arch/*.h"]
+compiler_flags = [
+    # "-O0",
+    # "-ffunction-sections",
+    # "-fdata-sections",
+    # "-fPIC",
+    # "-gdwarf-4",
+    # "-fno-omit-frame-pointer",
+    # "-m64",
+    "-xassembler-with-cpp",
+]
+preprocessor_flags = [
+    "-DCFG_TARGET_OS_linux",
+    "-DCFG_TARGET_ARCH_x86_64",
+    "-DCFG_TARGET_ENV_gnu",
+]
+
+
+[[platform_fixup.'cfg(target_arch="aarch64")'.buildscript]]
+[platform_fixup.'cfg(target_arch="aarch64")'.buildscript.cxx_library]
+name = "psm_s_aarch64"
+srcs = ["src/arch/aarch_aapcs64.s"]
+headers = ["src/arch/*.h"]
+compiler_flags = ["-xassembler-with-cpp"]
+preprocessor_flags = [
+    "-DCFG_TARGET_OS_macos",
+    "-DCFG_TARGET_ARCH_aarch64",
+    # "-DCFG_TARGET_ENV_gnu",  # ??
+]
