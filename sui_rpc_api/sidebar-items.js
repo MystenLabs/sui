@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Direction","ErrorReason"],"fn":["config_to_proto","protocol_config_to_proto"],"mod":["client","ledger_service","proto","subscription"],"struct":["CheckpointNotFoundError","Config","ErrorDetails","ObjectNotFoundError","RpcError","RpcMetrics","RpcMetricsMakeCallbackHandler","RpcService","ServerVersion","TransactionNotFoundError"],"type":["Result"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Schedulable"],"struct":["AssignedTxAndVersions","ConsensusSharedObjVerAssignment","SharedObjVerManager"],"trait":["AsTx"],"type":["AssignedVersions"]};
