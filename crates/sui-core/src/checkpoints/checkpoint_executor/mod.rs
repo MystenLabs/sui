@@ -181,28 +181,6 @@ impl CheckpointExecutor {
         )
     }
 
-    pub fn new_for_tests_with_passive_mode(
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        checkpoint_store: Arc<CheckpointStore>,
-        state: Arc<AuthorityState>,
-        state_hasher: Arc<GlobalStateHasher>,
-    ) -> Self {
-        let config = CheckpointExecutorConfig {
-            mode: CheckpointExecutorMode::Passive,
-            ..Default::default()
-        };
-        Self::new(
-            epoch_store,
-            checkpoint_store,
-            state,
-            state_hasher,
-            BackpressureManager::new_for_tests(),
-            config,
-            CheckpointExecutorMetrics::new_for_tests(),
-            None,
-        )
-    }
-
     // Gets the next checkpoint to schedule for execution. If the epoch is already
     // completed, returns None.
     fn get_next_to_schedule(&self) -> Option<CheckpointSequenceNumber> {
