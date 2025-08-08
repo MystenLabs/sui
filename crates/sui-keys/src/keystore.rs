@@ -7,6 +7,7 @@ use crate::random_names::{random_name, random_names};
 use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
+use colored::Colorize;
 use rand::{rngs::StdRng, SeedableRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -14,9 +15,9 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
-use std::fs;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::BufReader;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -324,6 +325,15 @@ impl AccountKeystore for FileBasedKeystore {
 impl FileBasedKeystore {
     pub fn new(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
+            let _ = set_reduced_file_permissions(path).inspect_err(|error| {
+                eprintln!(
+                    "[{}]: while attempting to ensure reduced file permissions on '{}'. Cannot set \
+                    permissions for keystore file. Error: {error}",
+                    "warning".bold().yellow(),
+                    path.display(),
+                );
+            });
+
             let reader =
                 BufReader::new(File::open(path).with_context(|| {
                     format!("Cannot open the keystore file: {}", path.display())
@@ -448,6 +458,15 @@ impl FileBasedKeystore {
             )
             .with_context(|| format!("Cannot serialize keystore to file: {}", path.display()))?;
             fs::write(path, store)?;
+            // REVIEW: consider whether to fail this operation. For now I think just warning is
+            // sufficient.
+            let _ = set_reduced_file_permissions(path).inspect_err(|error| {
+                eprintln!(
+                    "While attempting to set reduced file permissions on '{}'. Cannot set \
+                    permissions for keystore file. Error: {error}",
+                    path.display()
+                );
+            });
         }
         Ok(())
     }
@@ -461,6 +480,21 @@ impl FileBasedKeystore {
     pub fn key_pairs(&self) -> Vec<&SuiKeyPair> {
         self.keys.values().collect()
     }
+}
+
+fn set_reduced_file_permissions(path: impl AsRef<Path>) -> Result<(), anyhow::Error> {
+    let path = path.as_ref();
+    let metadata = fs::metadata(path)?;
+    let mode = metadata.permissions().mode();
+    if mode & 0o177 != 0 {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).with_context(|| {
+            format!(
+                "Cannot set permissions for keystore file: {}.",
+                path.display(),
+            )
+        })?;
+    }
+    Ok(())
 }
 
 #[derive(Default, Serialize, Deserialize)]
