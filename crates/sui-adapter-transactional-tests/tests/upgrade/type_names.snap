@@ -22,7 +22,7 @@ task 3, lines 32-62:
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 9902800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 10001600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4, line 64:
 //# run A2::m::canary --type-args A0::m::A --args true --sender A

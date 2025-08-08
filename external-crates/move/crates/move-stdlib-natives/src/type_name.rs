@@ -81,6 +81,14 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
         ),
         (
             "get_with_original_ids",
+            make_native_get(/* use_original_id */ true, gas_params.get.clone()),
+        ),
+        (
+            "with_defining_ids",
+            make_native_get(/* use_original_id */ false, gas_params.get.clone()),
+        ),
+        (
+            "with_original_ids",
             make_native_get(/* use_original_id */ true, gas_params.get),
         ),
     ];
