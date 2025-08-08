@@ -131,6 +131,7 @@ pub struct CheckpointExecutor {
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
     subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
+    passive_mode: bool,
 }
 
 impl CheckpointExecutor {
@@ -144,6 +145,7 @@ impl CheckpointExecutor {
         metrics: Arc<CheckpointExecutorMetrics>,
         subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
     ) -> Self {
+        let passive_mode = config.passive_mode;
         Self {
             epoch_store,
             state: state.clone(),
@@ -157,6 +159,7 @@ impl CheckpointExecutor {
             metrics,
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
+            passive_mode,
         }
     }
 
@@ -173,6 +176,28 @@ impl CheckpointExecutor {
             state_hasher,
             BackpressureManager::new_for_tests(),
             Default::default(),
+            CheckpointExecutorMetrics::new_for_tests(),
+            None,
+        )
+    }
+
+    pub fn new_for_tests_with_passive_mode(
+        epoch_store: Arc<AuthorityPerEpochStore>,
+        checkpoint_store: Arc<CheckpointStore>,
+        state: Arc<AuthorityState>,
+        state_hasher: Arc<GlobalStateHasher>,
+    ) -> Self {
+        let config = CheckpointExecutorConfig {
+            passive_mode: true,
+            ..Default::default()
+        };
+        Self::new(
+            epoch_store,
+            checkpoint_store,
+            state,
+            state_hasher,
+            BackpressureManager::new_for_tests(),
+            config,
             CheckpointExecutorMetrics::new_for_tests(),
             None,
         )
@@ -815,9 +840,15 @@ impl CheckpointExecutor {
             ),
         );
 
-        // Enqueue unexecuted transactions with their expected effects digests
-        self.execution_scheduler
-            .enqueue_transactions(unexecuted_txns, &self.epoch_store);
+        if !self.passive_mode {
+            self.execution_scheduler
+                .enqueue_transactions(unexecuted_txns, &self.epoch_store);
+        } else {
+            info!(
+                "Passive mode: skipping execution scheduling for {} transactions",
+                unexecuted_tx_digests.len()
+            );
+        }
 
         unexecuted_tx_digests
     }

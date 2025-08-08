@@ -902,6 +902,11 @@ pub struct CheckpointExecutorConfig {
     /// When specified, each executed checkpoint will be saved in a local directory for post processing
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_ingestion_dir: Option<PathBuf>,
+
+    /// When true, checkpoint executor will not schedule transactions for execution.
+    /// Change epoch transactions will still be executed normally.
+    #[serde(default)]
+    pub passive_mode: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -1002,6 +1007,7 @@ impl Default for CheckpointExecutorConfig {
             checkpoint_execution_max_concurrency: default_checkpoint_execution_max_concurrency(),
             local_execution_timeout_sec: default_local_execution_timeout_sec(),
             data_ingestion_dir: None,
+            passive_mode: false,
         }
     }
 }
