@@ -143,13 +143,17 @@ async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
     .await
     .unwrap_err();
 
-    // Because the tx did not go through, we expect to see it in the WAL log
+    // Because the tx did not go through, we expect to see it in the WAL log if it
+    // was submitted via quorum driver. Transaction driver submitted tx would have
+    // been removed from wal on timeout/error.
     let pending_txes: Vec<_> = orchestrator
         .load_all_pending_transactions()?
         .into_iter()
         .map(|t| t.into_inner())
         .collect();
-    assert_eq!(pending_txes, vec![txn.clone()]);
+    if !pending_txes.is_empty() {
+        assert_eq!(pending_txes, vec![txn.clone()]);
+    }
 
     // Bring up 1 validator, we obtain quorum again and tx should succeed
     test_cluster.start_node(&validator_addresses[0]).await;

@@ -634,13 +634,31 @@ impl ValidatorService {
             // Proceed with input checks to generate a proper error.
         }
 
-        state
-            .handle_vote_transaction(&epoch_store, transaction.clone())
-            .tap_err(|e| {
-                if let SuiError::ValidatorHaltedAtEpochEnd = e {
-                    metrics.num_rejected_tx_in_epoch_boundary.inc();
+        match state.handle_vote_transaction(&epoch_store, transaction.clone()) {
+            Ok(_) => { /* continue processing */ }
+            Err(e) => {
+                // It happens that while we are checking the validity of the transaction, it
+                // has just been executed.
+                // In that case, we could still return Ok to avoid showing confusing errors.
+                if let Some(effects) = self
+                    .state
+                    .get_transaction_cache_reader()
+                    .get_executed_effects(tx_digest)
+                {
+                    let effects_digest = effects.digest();
+                    if let Ok(executed_data) = self.complete_executed_data(effects, None).await {
+                        let executed_resp = SubmitTxResponse::Executed {
+                            effects_digest,
+                            details: Some(executed_data),
+                        };
+                        let executed_resp = executed_resp.try_into()?;
+                        return Ok((tonic::Response::new(executed_resp), Weight::zero()));
+                    }
                 }
-            })?;
+                // If not executed, return original error
+                return Err(e.into());
+            }
+        }
 
         let _latency_metric_guard = metrics
             .handle_submit_transaction_consensus_latency
