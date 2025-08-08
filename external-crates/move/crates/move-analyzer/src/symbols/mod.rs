@@ -59,7 +59,7 @@ use crate::{
     compiler_info::CompilerInfo,
     symbols::{
         compilation::{
-            CompiledPkgInfo, CompiledProgram, ParsedDefinitions, PrecomputedPkgInfo,
+            CachedPackages, CachedPkgInfo, CompiledPkgInfo, CompiledProgram, ParsedDefinitions,
             SymbolsComputationData, get_compiled_pkg,
         },
         cursor::CursorContext,
@@ -154,7 +154,7 @@ pub type FileModules = BTreeMap<PathBuf, BTreeSet<ModuleDefs>>;
 /// the ones in `modified_files` (if `modified_paths` contains a path not representing
 /// a Move file but rather a directory, then we conservatively do not re-use any cached info).
 pub fn get_symbols(
-    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     modified_files: Option<Vec<PathBuf>>,
@@ -186,7 +186,7 @@ pub fn get_symbols(
 /// Compute symbols for a given package from the parsed and typed ASTs,
 /// as well as other auxiliary data provided in `compiled_pkg_info`.
 pub fn compute_symbols(
-    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    packages_info: Arc<Mutex<CachedPackages>>,
     mut compiled_pkg_info: CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Symbols {
@@ -234,9 +234,9 @@ pub fn compute_symbols(
         if let Some(deps_symbols_data) = deps_symbols_data_opt {
             // dependencies may have changed or not, but we still need to update the cache
             // with new file hashes and user program info
-            pkg_deps.insert(
+            pkg_deps.pkg_info.insert(
                 pkg_path,
-                PrecomputedPkgInfo {
+                CachedPkgInfo {
                     manifest_hash,
                     deps_hash,
                     deps: cached_deps.program_deps.clone(),
