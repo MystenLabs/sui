@@ -11,9 +11,9 @@ use crate::{
     errors::FileHandle,
     package::{EnvironmentName, layout::SourcePackageLayout, paths::PackagePath},
     schema::{
-        DefaultDependency, ExternalDependency, ImplicitDepMode, LocalDepInfo,
-        ManifestDependencyInfo, ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata,
-        PackageName, PublishAddresses, PublishedID,
+        DefaultDependency, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
+        ManifestGitDependency, OnChainDepInfo, OriginalID, PackageMetadata, PackageName,
+        PublishAddresses, PublishedID,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
@@ -292,18 +292,17 @@ fn parse_source_manifest(
 
             // IF we have one system package OR this package is a system package itself,
             // we disable implicit deps.
-            let implicit_deps = if has_system_package || is_system_package {
-                ImplicitDepMode::Disabled
+            let system_dependencies = if has_system_package || is_system_package {
+                Some(vec![])
             } else {
-                // Otherwise we enable implicit deps (unfortunately all of them)
-                ImplicitDepMode::Enabled(None)
+                None
             };
 
             Ok(ParsedLegacyPackage {
                 metadata: PackageMetadata {
                     name: new_name,
                     edition: metadata.edition,
-                    implicit_deps,
+                    system_dependencies,
                     unrecognized_fields: metadata.unrecognized_fields,
                 },
                 deps: dependencies,
