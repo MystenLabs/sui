@@ -682,7 +682,7 @@ impl ModuleCache {
 
 // Helpers to load/verify modules without recursion
 
-// In order to traverse the transitive dependencies of a module (when verifing the module),
+// In order to traverse the transitive dependencies of a module (when verifying the module),
 // we create a stack and iterate over the dependencies to avoid recursion.
 // An entry on the stack is conceptually a pair (module, dependencies) where dependencies
 // is used to visit them and to track when a module is ready for linkage checks
@@ -1843,7 +1843,7 @@ pub(crate) struct LoadedModule {
     // hence, a single type.
     single_signature_token_map: BTreeMap<SignatureIndex, Type>,
 
-    // a map from signatures in instantiations to the `Vec<Type>` that reperesent it.
+    // a map from signatures in instantiations to the `Vec<Type>` that represent it.
     instantiation_signatures: BTreeMap<SignatureIndex, Vec<Type>>,
 }
 
