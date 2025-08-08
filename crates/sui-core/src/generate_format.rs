@@ -64,7 +64,7 @@ use sui_types::{
 };
 use sui_types::{
     crypto::{PublicKey, ZkLoginPublicIdentifier},
-    effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects, UnchangedSharedKind},
+    effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects, UnchangedConsensusKind},
     utils::DEFAULT_ADDRESS_SEED,
 };
 use typed_store::TypedStoreError;
@@ -242,7 +242,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<IDOperation>(&samples).unwrap();
     tracer.trace_type::<ObjectIn>(&samples).unwrap();
     tracer.trace_type::<ObjectOut>(&samples).unwrap();
-    tracer.trace_type::<UnchangedSharedKind>(&samples).unwrap();
+    tracer
+        .trace_type::<UnchangedConsensusKind>(&samples)
+        .unwrap();
     tracer.trace_type::<AccumulatorValue>(&samples).unwrap();
     tracer.trace_type::<AccumulatorOperation>(&samples).unwrap();
     tracer.trace_type::<TransactionEffects>(&samples).unwrap();

@@ -197,8 +197,9 @@ pub async fn execute_transaction(
                 }
 
                 if mask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                    for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
-                        let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectId>()
+                    for unchanged_consensus_object in effects.unchanged_shared_objects.iter_mut() {
+                        let Ok(object_id) =
+                            unchanged_consensus_object.object_id().parse::<ObjectId>()
                         else {
                             continue;
                         };
@@ -206,7 +207,7 @@ pub async fn execute_transaction(
                         if let Some(object) =
                             input_objects.iter().find(|o| o.object_id() == object_id)
                         {
-                            unchanged_shared_object.object_type =
+                            unchanged_consensus_object.object_type =
                                 Some(match object.object_type() {
                                     sui_sdk_types::ObjectType::Package => "package".to_owned(),
                                     sui_sdk_types::ObjectType::Struct(struct_tag) => {
