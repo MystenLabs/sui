@@ -881,6 +881,18 @@ impl ConsensusConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CheckpointExecutorMode {
+    /// Normal mode: checkpoint executor schedules and executes transactions
+    #[default]
+    Normal,
+    /// Passive mode: checkpoint executor does not schedule transactions for execution,
+    /// expecting them to be executed by external components.
+    /// Change epoch transactions are still executed normally.
+    Passive,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct CheckpointExecutorConfig {
@@ -903,10 +915,9 @@ pub struct CheckpointExecutorConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_ingestion_dir: Option<PathBuf>,
 
-    /// When true, checkpoint executor will not schedule transactions for execution.
-    /// Change epoch transactions will still be executed normally.
+    /// Execution mode for the checkpoint executor
     #[serde(default)]
-    pub passive_mode: bool,
+    pub mode: CheckpointExecutorMode,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -1007,7 +1018,7 @@ impl Default for CheckpointExecutorConfig {
             checkpoint_execution_max_concurrency: default_checkpoint_execution_max_concurrency(),
             local_execution_timeout_sec: default_local_execution_timeout_sec(),
             data_ingestion_dir: None,
-            passive_mode: false,
+            mode: CheckpointExecutorMode::default(),
         }
     }
 }

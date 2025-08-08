@@ -27,7 +27,7 @@ use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 
-use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
+use sui_config::node::{CheckpointExecutorConfig, CheckpointExecutorMode, RunWithRange};
 use sui_macros::fail_point;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -131,7 +131,7 @@ pub struct CheckpointExecutor {
     metrics: Arc<CheckpointExecutorMetrics>,
     tps_estimator: Mutex<TPSEstimator>,
     subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
-    passive_mode: bool,
+    mode: CheckpointExecutorMode,
 }
 
 impl CheckpointExecutor {
@@ -145,7 +145,7 @@ impl CheckpointExecutor {
         metrics: Arc<CheckpointExecutorMetrics>,
         subscription_service_checkpoint_sender: Option<tokio::sync::mpsc::Sender<CheckpointData>>,
     ) -> Self {
-        let passive_mode = config.passive_mode;
+        let mode = config.mode;
         Self {
             epoch_store,
             state: state.clone(),
@@ -159,7 +159,7 @@ impl CheckpointExecutor {
             metrics,
             tps_estimator: Mutex::new(TPSEstimator::default()),
             subscription_service_checkpoint_sender,
-            passive_mode,
+            mode,
         }
     }
 
@@ -188,7 +188,7 @@ impl CheckpointExecutor {
         state_hasher: Arc<GlobalStateHasher>,
     ) -> Self {
         let config = CheckpointExecutorConfig {
-            passive_mode: true,
+            mode: CheckpointExecutorMode::Passive,
             ..Default::default()
         };
         Self::new(
@@ -840,14 +840,17 @@ impl CheckpointExecutor {
             ),
         );
 
-        if !self.passive_mode {
-            self.execution_scheduler
-                .enqueue_transactions(unexecuted_txns, &self.epoch_store);
-        } else {
-            info!(
-                "Passive mode: skipping execution scheduling for {} transactions",
-                unexecuted_tx_digests.len()
-            );
+        match self.mode {
+            CheckpointExecutorMode::Normal => {
+                self.execution_scheduler
+                    .enqueue_transactions(unexecuted_txns, &self.epoch_store);
+            }
+            CheckpointExecutorMode::Passive => {
+                info!(
+                    "Passive mode: skipping execution scheduling for {} transactions",
+                    unexecuted_tx_digests.len()
+                );
+            }
         }
 
         unexecuted_tx_digests
