@@ -139,7 +139,7 @@ public fun public_share_object<T: key + store>(obj: T) {
 /// argument to receive and return the referenced owned object of type `T`.
 /// This function has custom rules performed by the Sui Move bytecode verifier that ensures
 /// that `T` is an object defined in the module where `receive` is invoked. Use
-/// `public_receive` to receivne an object with `store` outside of its module.
+/// `public_receive` to receive an object with `store` outside of its module.
 public fun receive<T: key>(parent: &mut UID, to_receive: Receiving<T>): T {
     let Receiving { id, version } = to_receive;
     receive_impl(parent.to_address(), id, version)

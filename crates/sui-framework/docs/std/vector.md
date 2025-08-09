@@ -64,12 +64,12 @@ vectors are growable. This module has many native functions.
 ## Constants
 
 
-<a name="std_vector_EINDEX_OUT_OF_BOUNDS"></a>
+<a name="std_vector_EIndexOutOfBounds"></a>
 
 The index into the vector is out of bounds
 
 
-<pre><code><b>const</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>: <a href="../std/u64.md#std_u64">u64</a> = 131072;
+<pre><code><b>const</b> <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>: <a href="../std/u64.md#std_u64">u64</a> = 131072;
 </code></pre>
 
 
@@ -391,13 +391,7 @@ Otherwise, returns false.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_contains">contains</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): <a href="../std/bool.md#std_bool">bool</a> {
-    <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
-    <b>while</b> (i &lt; len) {
-        <b>if</b> (&v[i] == e) <b>return</b> <b>true</b>;
-        i = i + 1;
-    };
-    <b>false</b>
+    v.<a href="../std/vector.md#std_vector_any">any</a>!(|elem| elem == e)
 }
 </code></pre>
 
@@ -458,7 +452,7 @@ Aborts if <code>i</code> is out of bounds.
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_remove">remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, <b>mut</b> i: <a href="../std/u64.md#std_u64">u64</a>): Element {
     <b>let</b> <b>mut</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
     // i out of bounds; <b>abort</b>
-    <b>if</b> (i &gt;= len) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    <b>if</b> (i &gt;= len) <b>abort</b> <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>;
     len = len - 1;
     <b>while</b> (i &lt; len) {
         v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, { i = i + 1; i });
@@ -494,7 +488,7 @@ Aborts if <code>i &gt; v.<a href="../std/vector.md#std_vector_length">length</a>
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_insert">insert</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: Element, <b>mut</b> i: <a href="../std/u64.md#std_u64">u64</a>) {
     <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
     // i too big <b>abort</b>
-    <b>if</b> (i &gt; len) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    <b>if</b> (i &gt; len) <b>abort</b> <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>;
     v.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e);
     <b>while</b> (i &lt; len) {
         v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, len);
@@ -526,7 +520,7 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_swap_remove">swap_remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>): Element {
-    <b>assert</b>!(v.<a href="../std/vector.md#std_vector_length">length</a>() != 0, <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>);
+    <b>assert</b>!(v.<a href="../std/vector.md#std_vector_length">length</a>() != 0, <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> last_idx = v.<a href="../std/vector.md#std_vector_length">length</a>() - 1;
     v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, last_idx);
     v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()
@@ -585,7 +579,7 @@ Aborts if <code>n</code> is greater than the length of <code>v</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_take">take</a>&lt;T: drop&gt;(<b>mut</b> v: <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt;, n: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;T&gt; {
-    <b>assert</b>!(n &lt;= v.<a href="../std/vector.md#std_vector_length">length</a>());
+    <b>assert</b>!(n &lt;= v.<a href="../std/vector.md#std_vector_length">length</a>(), <a href="../std/vector.md#std_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>if</b> (n == v.<a href="../std/vector.md#std_vector_length">length</a>()) <b>return</b> v;
     v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
     <a href="../std/vector.md#std_vector_tabulate">tabulate</a>!(n, |_| v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>())
@@ -1277,7 +1271,7 @@ The sort is stable, meaning that equal elements will maintain their relative ord
 Please, note that the comparison function <code>le</code> expects less or equal, not less.
 
 Example:
-```
+```move
 let mut v = vector[2, 1, 3];
 v.insertion_sort_by(|a, b| a <= b);
 assert!(v == vector[1, 2, 3]);
@@ -1328,7 +1322,7 @@ Merge sort is efficient for large vectors, and is a stable sort.
 Please, note that the comparison function <code>le</code> expects less or equal, not less.
 
 Example:
-```
+```move
 let mut v = vector[2, 1, 3];
 v.merge_sort_by(|a, b| a <= b);
 assert!(v == vector[1, 2, 3]);
@@ -1436,9 +1430,9 @@ function <code>le</code> (les). Returns <code><b>true</b></code> if the vector i
 
 ## Macro function `take_while`
 
-Return a new vector containing the elements of <code>v</code> except the first <code>n</code> elements
-that satisfy the predicate <code>p</code>. If all elements satisfy the predicate, returns an
-empty vector.
+Return a new vector containing the elements of <code>v</code> include the first <code>n</code> elements
+that satisfy the predicate <code>p</code>. If all elements satisfy the predicate, returns a
+new vector containing the same elements.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_take_while">take_while</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $p: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;

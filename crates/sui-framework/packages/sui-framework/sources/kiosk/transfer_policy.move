@@ -13,7 +13,7 @@
 /// hot potato or transaction will fail.
 ///
 /// - Type owner (creator) can set any Rules as long as the ecosystem supports
-/// them. All of the Rules need to be resolved within a single transaction (eg
+/// them. All of the Rules need to be resolved within a single transaction (e.g.
 /// pay royalty and pay fixed commission). Once required actions are performed,
 /// the `TransferRequest` can be "confirmed" via `confirm_request` call.
 ///
@@ -44,6 +44,9 @@ const ERuleAlreadySet: u64 = 3;
 const ENotOwner: u64 = 4;
 /// Trying to `withdraw` more than there is.
 const ENotEnough: u64 = 5;
+/// Trying to create `TransferPolicy` and `TransferPolicyCap`
+/// using `T` and `Publisher` from different package sources.
+const ENotMatchedPublisher: u64 = 6;
 
 /// A "Hot Potato" forcing the buyer to get a transfer permission
 /// from the item type (`T`) owner on purchase attempt.
@@ -113,7 +116,7 @@ public fun new_request<T>(item: ID, paid: u64, from: ID): TransferRequest<T> {
 /// confirm kiosk deals for the `T`. If there's no `TransferPolicy`
 /// available for use, the type can not be traded in kiosks.
 public fun new<T>(pub: &Publisher, ctx: &mut TxContext): (TransferPolicy<T>, TransferPolicyCap<T>) {
-    assert!(package::from_package<T>(pub), 0);
+    assert!(package::from_package<T>(pub), ENotMatchedPublisher);
     let id = object::new(ctx);
     let policy_id = id.to_inner();
 
@@ -145,13 +148,8 @@ public fun withdraw<T>(
 ): Coin<SUI> {
     assert!(object::id(self) == cap.policy_id, ENotOwner);
 
-    let amount = if (amount.is_some()) {
-        let amt = amount.destroy_some();
-        assert!(amt <= self.balance.value(), ENotEnough);
-        amt
-    } else {
-        self.balance.value()
-    };
+    let amount = amount.destroy_or!(self.balance.value());
+    assert!(amount <= self.balance.value(), ENotEnough);
 
     coin::take(&mut self.balance, amount, ctx)
 }
@@ -185,16 +183,11 @@ public fun confirm_request<T>(
     request: TransferRequest<T>,
 ): (ID, u64, ID) {
     let TransferRequest { item, paid, from, receipts } = request;
-    let mut completed = receipts.into_keys();
-    let mut total = completed.length();
+    let completed = receipts.into_keys();
 
-    assert!(total == self.rules.size(), EPolicyNotSatisfied);
+    assert!(completed.length() == self.rules.size(), EPolicyNotSatisfied);
 
-    while (total > 0) {
-        let rule_type = completed.pop_back();
-        assert!(self.rules.contains(&rule_type), EIllegalRule);
-        total = total - 1;
-    };
+    completed.destroy!(|rule_type| assert!(self.rules.contains(&rule_type), EIllegalRule));
 
     (item, paid, from)
 }

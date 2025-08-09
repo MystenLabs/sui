@@ -27,8 +27,7 @@ fun test_ecrecover_pubkey() {
     assert!(pubkey == pubkey_bytes);
 }
 
-#[test]
-#[expected_failure(abort_code = ecdsa_k1::EFailToRecoverPubKey)]
+#[test, expected_failure(abort_code = ecdsa_k1::EFailToRecoverPubKey)]
 fun test_ecrecover_pubkey_fail_to_recover() {
     let msg = x"00";
     let sig =
@@ -36,8 +35,7 @@ fun test_ecrecover_pubkey_fail_to_recover() {
     ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 1);
 }
 
-#[test]
-#[expected_failure(abort_code = ecdsa_k1::EInvalidSignature)]
+#[test, expected_failure(abort_code = ecdsa_k1::EInvalidSignature)]
 fun test_ecrecover_pubkey_invalid_sig() {
     let msg = b"Hello, world!";
     // incorrect length sig
@@ -189,8 +187,7 @@ fun test_sign_recoverable() {
     assert!(pk != ecdsa_k1::secp256k1_ecrecover(&sig, &other_msg, 0));
 }
 
-#[test]
-#[expected_failure(abort_code = ecdsa_k1::EInvalidHashFunction)]
+#[test, expected_failure(abort_code = ecdsa_k1::EInvalidHashFunction)]
 fun test_sign_invalid_hash() {
     let msg = b"Hello, world!";
     let sk = x"42258dcda14cf111c602b8971b8cc843e91e46ca905151c02744a6b017e69316";
@@ -199,8 +196,7 @@ fun test_sign_invalid_hash() {
     ecdsa_k1::secp256k1_sign(&sk, &msg, 2, false);
 }
 
-#[test]
-#[expected_failure(abort_code = ecdsa_k1::EInvalidPrivKey)]
+#[test, expected_failure(abort_code = ecdsa_k1::EInvalidPrivKey)]
 fun test_sign_invalid_private_key() {
     let msg = b"Hello, world!";
 
@@ -224,8 +220,7 @@ fun test_generate_keypair() {
     assert!(ecdsa_k1::secp256k1_verify(&sig, kp.public_key(), &msg, 1));
 }
 
-#[test]
-#[expected_failure(abort_code = ecdsa_k1::EInvalidSeed)]
+#[test, expected_failure(abort_code = ecdsa_k1::EInvalidSeed)]
 fun test_generate_keypair_invalid_seed() {
     let seed = b"Seed is not 32 bytes long";
     ecdsa_k1::secp256k1_keypair_from_seed(&seed);

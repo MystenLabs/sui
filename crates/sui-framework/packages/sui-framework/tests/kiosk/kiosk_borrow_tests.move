@@ -28,8 +28,7 @@ fun test_borrow() {
     utils::return_kiosk(kiosk, cap, ctx);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::ENotOwner)]
+#[test, expected_failure(abort_code = sui::kiosk::ENotOwner)]
 fun test_borrow_fail_not_owner() {
     let ctx = &mut utils::ctx();
     let (_item, id) = utils::get_asset(ctx);
@@ -41,8 +40,7 @@ fun test_borrow_fail_not_owner() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemNotFound)]
 fun test_borrow_fail_item_not_found() {
     let ctx = &mut utils::ctx();
     let (_item, id) = utils::get_asset(ctx);
@@ -69,8 +67,7 @@ fun test_borrow_mut() {
     utils::return_kiosk(kiosk, cap, ctx);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::ENotOwner)]
+#[test, expected_failure(abort_code = sui::kiosk::ENotOwner)]
 fun test_borrow_mut_fail_not_owner() {
     let ctx = &mut utils::ctx();
     let (_item, id) = utils::get_asset(ctx);
@@ -81,8 +78,7 @@ fun test_borrow_mut_fail_not_owner() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemNotFound)]
 fun test_borrow_mut_fail_item_not_found() {
     let ctx = &mut utils::ctx();
     let (_item, id) = utils::get_asset(ctx);
@@ -92,8 +88,7 @@ fun test_borrow_mut_fail_item_not_found() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemIsListed)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemIsListed)]
 fun test_borrow_mut_fail_item_is_listed() {
     let ctx = &mut utils::ctx();
     let (item, id) = utils::get_asset(ctx);
@@ -124,8 +119,7 @@ fun test_borrow_val() {
     utils::return_kiosk(kiosk, cap, ctx);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::ENotOwner)]
+#[test, expected_failure(abort_code = sui::kiosk::ENotOwner)]
 fun test_borrow_val_fail_not_owner() {
     let ctx = &mut utils::ctx();
     let (_item, id) = utils::get_asset(ctx);
@@ -136,8 +130,7 @@ fun test_borrow_val_fail_not_owner() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemNotFound)]
 fun test_borrow_val_fail_item_not_found() {
     let ctx = &mut utils::ctx();
     let (_item, id) = utils::get_asset(ctx);
@@ -147,8 +140,7 @@ fun test_borrow_val_fail_item_not_found() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemIsListed)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemIsListed)]
 fun test_borrow_val_fail_item_is_listed() {
     let ctx = &mut utils::ctx();
     let (item, id) = utils::get_asset(ctx);
@@ -160,8 +152,7 @@ fun test_borrow_val_fail_item_is_listed() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EWrongKiosk)]
+#[test, expected_failure(abort_code = sui::kiosk::EWrongKiosk)]
 fun test_borrow_val_fail_wrong_kiosk() {
     let ctx = &mut utils::ctx();
     let (item_1, id_1) = utils::get_asset(ctx);
@@ -180,8 +171,7 @@ fun test_borrow_val_fail_wrong_kiosk() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemMismatch)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemMismatch)]
 fun test_borrow_val_fail_item_mismatch() {
     let ctx = &mut utils::ctx();
     let (item_1, id_1) = utils::get_asset(ctx);

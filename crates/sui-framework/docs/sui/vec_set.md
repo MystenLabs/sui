@@ -200,10 +200,7 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_contains">contains</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): bool {
-    'search: {
-        self.contents.do_ref!(|k| <b>if</b> (k == key) <b>return</b> 'search <b>true</b>);
-        <b>false</b>
-    }
+    self.contents.find_index!(|k| k == key).is_some()
 }
 </code></pre>
 
@@ -253,7 +250,7 @@ Return true if <code>self</code> has 0 elements, false otherwise
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_is_empty">is_empty</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt;): bool {
-    <a href="../sui/vec_set.md#sui_vec_set_size">size</a>(self) == 0
+    self.<a href="../sui/vec_set.md#sui_vec_set_size">size</a>() == 0
 }
 </code></pre>
 
@@ -306,10 +303,9 @@ and are *not* sorted.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b> + drop&gt;(<b>mut</b> <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>: vector&lt;K&gt;): <a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt; {
-    <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.reverse();
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/vec_set.md#sui_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b> + drop&gt;(<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>: vector&lt;K&gt;): <a href="../sui/vec_set.md#sui_vec_set_VecSet">VecSet</a>&lt;K&gt; {
     <b>let</b> <b>mut</b> set = <a href="../sui/vec_set.md#sui_vec_set_empty">empty</a>();
-    <b>while</b> (<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.length() != 0) set.<a href="../sui/vec_set.md#sui_vec_set_insert">insert</a>(<a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.pop_back());
+    <a href="../sui/vec_set.md#sui_vec_set_keys">keys</a>.do!(|key| set.<a href="../sui/vec_set.md#sui_vec_set_insert">insert</a>(key));
     set
 }
 </code></pre>

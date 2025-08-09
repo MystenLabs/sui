@@ -106,8 +106,7 @@ fun test_remove_during_tx() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
 fun test_double_remove() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -550,8 +549,7 @@ fun test_no_receive_object_then_use_next_tx() {
 
 // Try to receive an object that has been shared. We should be unable to
 // allocate the receiving ticket for this object.
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
 fun test_receive_object_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -570,8 +568,7 @@ fun test_receive_object_shared() {
 
 // Try to allocate multiple receiving tickets for the same object in a
 // single transaction. We should be unable to allocate the second ticket.
-#[test]
-#[expected_failure(abort_code = test_scenario::EReceivingTicketAlreadyAllocated)]
+#[test, expected_failure(abort_code = test_scenario::EReceivingTicketAlreadyAllocated)]
 fun test_receive_object_double_allocate_ticket() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -788,8 +785,7 @@ fun test_later_epoch() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
 fun test_invalid_shared_usage() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -807,8 +803,7 @@ fun test_invalid_shared_usage() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
 fun test_invalid_immutable_usage() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -826,8 +821,7 @@ fun test_invalid_immutable_usage() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
 fun test_modify_immutable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -846,8 +840,7 @@ fun test_modify_immutable() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::ECantReturnObject)]
+#[test, expected_failure(abort_code = test_scenario::ECantReturnObject)]
 fun test_invalid_address_return() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -856,8 +849,7 @@ fun test_invalid_address_return() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::ECantReturnObject)]
+#[test, expected_failure(abort_code = test_scenario::ECantReturnObject)]
 fun test_invalid_shared_return() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -866,8 +858,7 @@ fun test_invalid_shared_return() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::ECantReturnObject)]
+#[test, expected_failure(abort_code = test_scenario::ECantReturnObject)]
 fun test_invalid_immutable_return() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -876,8 +867,7 @@ fun test_invalid_immutable_return() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
 fun test_empty_inventory() {
     let sender = @0x0;
     let scenario = test_scenario::begin(sender);
@@ -885,8 +875,7 @@ fun test_empty_inventory() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
 fun test_empty_inventory_shared() {
     let sender = @0x0;
     let scenario = test_scenario::begin(sender);
@@ -894,8 +883,7 @@ fun test_empty_inventory_shared() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EEmptyInventory)]
+#[test, expected_failure(abort_code = test_scenario::EEmptyInventory)]
 fun test_empty_inventory_immutable() {
     let sender = @0x0;
     let scenario = test_scenario::begin(sender);
@@ -903,8 +891,7 @@ fun test_empty_inventory_immutable() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
 fun test_object_not_found() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -914,8 +901,7 @@ fun test_object_not_found() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
 fun test_object_not_found_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -925,8 +911,7 @@ fun test_object_not_found_shared() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
 fun test_object_not_found_immutable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -936,8 +921,7 @@ fun test_object_not_found_immutable() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
 fun test_wrong_object_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -948,8 +932,7 @@ fun test_wrong_object_type() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
 fun test_wrong_object_type_shared() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -960,8 +943,7 @@ fun test_wrong_object_type_shared() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EObjectNotFound)]
+#[test, expected_failure(abort_code = test_scenario::EObjectNotFound)]
 fun test_wrong_object_type_immutable() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -1018,8 +1000,7 @@ fun test_dynamic_object_field_not_retrievable() {
     parent.delete();
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
 fun test_dynamic_field_shared_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -1037,8 +1018,7 @@ fun test_dynamic_field_shared_misuse() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
 fun test_dynamic_field_immutable_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -1056,8 +1036,7 @@ fun test_dynamic_field_immutable_misuse() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
 fun test_dynamic_object_field_shared_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -1074,8 +1053,7 @@ fun test_dynamic_object_field_shared_misuse() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
+#[test, expected_failure(abort_code = test_scenario::EInvalidSharedOrImmutableUsage)]
 fun test_dynamic_object_field_immutable_misuse() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -1258,8 +1236,7 @@ fun test_tx_context_with_builder() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
+#[test, expected_failure]
 fun test_tx_context_no_rgp() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
@@ -1272,8 +1249,7 @@ fun test_tx_context_no_rgp() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
+#[test, expected_failure]
 fun test_tx_context_bad_epoch() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
@@ -1290,8 +1266,7 @@ fun test_tx_context_bad_epoch() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
+#[test, expected_failure]
 fun test_tx_context_bad_rgp_no_epoch_change() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)
@@ -1308,8 +1283,7 @@ fun test_tx_context_bad_rgp_no_epoch_change() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure]
+#[test, expected_failure]
 fun test_tx_context_bad_epoch_timestamp() {
     let ctx_builder = test_scenario::ctx_builder_from_sender(@0xB)
         .set_epoch(42)

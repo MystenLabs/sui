@@ -42,18 +42,11 @@ The length of an address, in bytes
 
 
 
-<a name="sui_address_MAX"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/address.md#sui_address_MAX">MAX</a>: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
-</code></pre>
-
-
-
 <a name="sui_address_EAddressParseError"></a>
 
 Error from <code><a href="../sui/address.md#sui_address_from_bytes">from_bytes</a></code> when it is supplied too many or too few bytes.
+Error from <code><a href="../sui/address.md#sui_address_from_ascii_bytes">from_ascii_bytes</a></code> when it is supplied incorrect length of bytes or
+an invalid character is encountered.
 
 
 <pre><code><b>const</b> <a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a>: u64 = 0;
@@ -216,7 +209,7 @@ Converts an ASCII string to an address, taking the numerical value for each char
 string must be Base16 encoded, and thus exactly 64 characters long.
 For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
 will be converted to the address @0xDEADB33F.
-Aborts with <code><a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>s</code> is not 64,
+Aborts with <code><a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a></code> if the length of <code>bytes</code> is not 64,
 or if an invalid character is encountered.
 
 
@@ -232,13 +225,11 @@ or if an invalid character is encountered.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_from_ascii_bytes">from_ascii_bytes</a>(bytes: &vector&lt;u8&gt;): <b>address</b> {
     <b>assert</b>!(bytes.<a href="../sui/address.md#sui_address_length">length</a>() == 64, <a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a>);
     <b>let</b> <b>mut</b> hex_bytes = vector[];
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; 64) {
-        <b>let</b> hi = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[i]);
-        <b>let</b> lo = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[i+1]);
+    32u64.do!(|i| {
+        <b>let</b> hi = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[2 * i]);
+        <b>let</b> lo = <a href="../sui/address.md#sui_address_hex_char_value">hex_char_value</a>(bytes[2 * i + 1]);
         hex_bytes.push_back((hi &lt;&lt; 4) | lo);
-        i = i + 2;
-    };
+    });
     <a href="../sui/address.md#sui_address_from_bytes">from_bytes</a>(hex_bytes)
 }
 </code></pre>
@@ -316,7 +307,8 @@ Largest possible address
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/address.md#sui_address_max">max</a>(): u256 {
-    <a href="../sui/address.md#sui_address_MAX">MAX</a>
+    // The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
+    <a href="../std/u256.md#std_u256_max_value">std::u256::max_value</a>!()
 }
 </code></pre>
 

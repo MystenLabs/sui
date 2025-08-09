@@ -49,8 +49,8 @@ public fun try_string(bytes: vector<u8>): Option<String> {
     if (is_valid) option::some(String { bytes }) else option::none()
 }
 
-/// Returns `true` if all characters in `string` are printable characters
-/// Returns `false` otherwise. Not all `String`s are printable strings.
+/// Returns `true` if all characters in `string` are printable.
+/// Returns `false` otherwise, not all characters are printable.
 public fun all_characters_printable(string: &String): bool {
     string.bytes.all!(|byte| is_printable_char(*byte))
 }
@@ -81,7 +81,7 @@ public fun insert(s: &mut String, at: u64, o: String) {
     o.into_bytes().destroy!(|e| s.bytes.insert(e, at));
 }
 
-/// Copy the slice of the `string` from `i` to `j` into a new `String`.
+/// Copy the slice of the `string` from `i` to `j` (exclusive) into a new `String`.
 public fun substring(string: &String, i: u64, j: u64): String {
     assert!(i <= j && j <= string.length(), EInvalidIndex);
     let mut bytes = vector[];
@@ -140,19 +140,21 @@ public fun to_lowercase(string: &String): String {
 /// Returns the length of the `string` if the `substr` is not found.
 /// Returns 0 if the `substr` is empty.
 public fun index_of(string: &String, substr: &String): u64 {
-    let mut i = 0;
     let (n, m) = (string.length(), substr.length());
     if (n < m) return n;
-    while (i <= n - m) {
-        let mut j = 0;
-        while (j < m && string.bytes[i + j] == substr.bytes[j]) j = j + 1;
-        if (j == m) return i;
-        i = i + 1;
-    };
-    n
+    'index: {
+        (n - m + 1).do!(|i| {
+            let matched = 'matched: {
+                m.do!(|j| if (string.bytes[i + j] != substr.bytes[j]) return 'matched false);
+                true
+            };
+            if (matched) return 'index i;
+        });
+        n
+    }
 }
 
-/// Convert a `char` to its lowercase equivalent.
+/// Convert a `char` to its uppercase equivalent.
 fun char_to_uppercase(byte: u8): u8 {
     if (byte >= 0x61 && byte <= 0x7A) byte - 0x20 else byte
 }

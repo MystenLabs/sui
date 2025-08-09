@@ -84,8 +84,7 @@ module sui::transfer_policy_tests {
         assert!(wrapup(policy, cap, ctx) == 10_000);
     }
 
-    #[test]
-    #[expected_failure(abort_code = sui::transfer_policy::EPolicyNotSatisfied)]
+    #[test, expected_failure(abort_code = sui::transfer_policy::EPolicyNotSatisfied)]
     /// Policy set but not satisfied;
     fun test_rule_ignored() {
         let ctx = &mut tx_context::dummy();
@@ -100,8 +99,7 @@ module sui::transfer_policy_tests {
         wrapup(policy, cap, ctx);
     }
 
-    #[test]
-    #[expected_failure(abort_code = sui::transfer_policy::ERuleAlreadySet)]
+    #[test, expected_failure(abort_code = sui::transfer_policy::ERuleAlreadySet)]
     /// Attempt to add another policy;
     fun test_rule_exists() {
         let ctx = &mut tx_context::dummy();
@@ -117,8 +115,7 @@ module sui::transfer_policy_tests {
         wrapup(policy, cap, ctx);
     }
 
-    #[test]
-    #[expected_failure(abort_code = sui::transfer_policy::EIllegalRule)]
+    #[test, expected_failure(abort_code = sui::transfer_policy::EIllegalRule)]
     /// Attempt to cheat by using another rule approval;
     fun test_rule_swap() {
         let ctx = &mut tx_context::dummy();

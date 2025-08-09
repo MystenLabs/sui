@@ -48,8 +48,7 @@ fun test_place_and_take() {
     test::return_assets(vector[asset]);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemLocked)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemLocked)]
 fun test_taking_not_allowed() {
     let ctx = &mut test::ctx();
     let (asset, item_id) = test::get_asset(ctx);
@@ -98,8 +97,7 @@ fun test_delist() {
     test::return_policy(policy, policy_cap, ctx);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::ENotListed)]
+#[test, expected_failure(abort_code = sui::kiosk::ENotListed)]
 fun test_delist_not_listed() {
     let ctx = &mut test::ctx();
     let (asset, item_id) = test::get_asset(ctx);
@@ -111,8 +109,7 @@ fun test_delist_not_listed() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EListedExclusively)]
+#[test, expected_failure(abort_code = sui::kiosk::EListedExclusively)]
 fun test_delist_listed_exclusively() {
     let ctx = &mut test::ctx();
     let (asset, item_id) = test::get_asset(ctx);
@@ -128,8 +125,7 @@ fun test_delist_listed_exclusively() {
 #[allow(unused_field)]
 public struct WrongAsset has key, store { id: sui::object::UID }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemNotFound)]
 fun test_delist_wrong_type() {
     let ctx = &mut test::ctx();
     let (asset, item_id) = test::get_asset(ctx);
@@ -141,8 +137,7 @@ fun test_delist_wrong_type() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemNotFound)]
 fun test_delist_no_item() {
     let ctx = &mut test::ctx();
     let (_asset, item_id) = test::get_asset(ctx);
@@ -153,8 +148,7 @@ fun test_delist_no_item() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EIncorrectAmount)]
+#[test, expected_failure(abort_code = sui::kiosk::EIncorrectAmount)]
 fun test_purchase_wrong_amount() {
     let ctx = &mut test::ctx();
     let (asset, item_id) = test::get_asset(ctx);
@@ -206,8 +200,7 @@ fun test_purchase_cap_return() {
     test::return_policy(policy, policy_cap, ctx);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemNotFound)]
 fun test_list_no_item_fail() {
     let ctx = &mut test::ctx();
     let (_asset, item_id) = test::get_asset(ctx);
@@ -218,8 +211,7 @@ fun test_list_no_item_fail() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EItemNotFound)]
+#[test, expected_failure(abort_code = sui::kiosk::EItemNotFound)]
 fun test_list_with_purchase_cap_no_item_fail() {
     let ctx = &mut test::ctx();
     let (_asset, item_id) = test::get_asset(ctx);
@@ -230,8 +222,7 @@ fun test_list_with_purchase_cap_no_item_fail() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EAlreadyListed)]
+#[test, expected_failure(abort_code = sui::kiosk::EAlreadyListed)]
 fun test_purchase_cap_already_listed_fail() {
     let ctx = &mut test::ctx();
     let (asset, item_id) = test::get_asset(ctx);
@@ -243,8 +234,7 @@ fun test_purchase_cap_already_listed_fail() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EListedExclusively)]
+#[test, expected_failure(abort_code = sui::kiosk::EListedExclusively)]
 fun test_purchase_cap_issued_list_fail() {
     let ctx = &mut test::ctx();
     let (asset, item_id) = test::get_asset(ctx);
@@ -258,8 +248,7 @@ fun test_purchase_cap_issued_list_fail() {
     abort 1337
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::ENotEmpty)]
+#[test, expected_failure(abort_code = sui::kiosk::ENotEmpty)]
 fun test_kiosk_has_items() {
     let ctx = &mut test::ctx();
     let (_policy, _cap) = test::get_policy(ctx);
@@ -282,8 +271,7 @@ fun test_withdraw_default() {
     test::return_kiosk(kiosk, owner_cap, ctx);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::ENotEnough)]
+#[test, expected_failure(abort_code = sui::kiosk::ENotEnough)]
 fun test_withdraw_more_than_there_is() {
     let ctx = &mut test::ctx();
     let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
@@ -313,8 +301,7 @@ fun test_uid_access() {
     test::return_kiosk(kiosk, owner_cap, ctx);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::kiosk::EUidAccessNotAllowed)]
+#[test, expected_failure(abort_code = sui::kiosk::EUidAccessNotAllowed)]
 fun test_disallow_extensions_uid_mut() {
     let ctx = &mut test::ctx();
     let (mut kiosk, owner_cap) = test::get_kiosk(ctx);

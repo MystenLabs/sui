@@ -3,8 +3,8 @@ title: Module `sui::deny_list`
 ---
 
 Defines the <code><a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a></code> type. The <code><a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a></code> shared object is used to restrict access to
-instances of certain core types from being used as inputs by specified addresses in the deny
-list.
+instances of certain core types from being used as inputs or being received by specified
+addresses in the deny list.
 
 
 -  [Struct `DenyList`](#sui_deny_list_DenyList)

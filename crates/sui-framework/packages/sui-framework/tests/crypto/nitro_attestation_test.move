@@ -58,8 +58,7 @@ fun test_nitro_attestation() {
     clock.destroy_for_testing();
 }
 
-#[test]
-#[expected_failure(abort_code = nitro_attestation::EParseError)]
+#[test, expected_failure(abort_code = nitro_attestation::EParseError)]
 fun test_nitro_attestation_invalid_attestation() {
     let mut scenario = test_scenario::begin(@0x0);
     let ctx = scenario.ctx();
@@ -71,8 +70,7 @@ fun test_nitro_attestation_invalid_attestation() {
     clock.destroy_for_testing();
 }
 
-#[test]
-#[expected_failure(abort_code = nitro_attestation::EVerifyError)]
+#[test, expected_failure(abort_code = nitro_attestation::EVerifyError)]
 fun test_nitro_attestation_expired() {
     let mut scenario = test_scenario::begin(@0x0);
     let ctx = scenario.ctx();

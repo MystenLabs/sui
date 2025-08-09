@@ -120,7 +120,7 @@ const EItemLocked: u64 = 8;
 const EItemIsListed: u64 = 9;
 /// Item does not match `Borrow` in `return_val`.
 const EItemMismatch: u64 = 10;
-/// An is not found while trying to borrow.
+/// Item is not found while trying to borrow.
 const EItemNotFound: u64 = 11;
 /// Delisting an item that is not listed.
 const ENotListed: u64 = 12;
@@ -456,13 +456,8 @@ public fun withdraw(
 ): Coin<SUI> {
     assert!(self.has_access(cap), ENotOwner);
 
-    let amount = if (amount.is_some()) {
-        let amt = amount.destroy_some();
-        assert!(amt <= self.profits.value(), ENotEnough);
-        amt
-    } else {
-        self.profits.value()
-    };
+    let amount = amount.destroy_or!(self.profits.value());
+    assert!(amount <= self.profits.value(), ENotEnough);
 
     coin::take(&mut self.profits, amount, ctx)
 }

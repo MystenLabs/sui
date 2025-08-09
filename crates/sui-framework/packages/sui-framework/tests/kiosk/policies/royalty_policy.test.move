@@ -82,8 +82,7 @@ module sui::royalty_policy_tests {
         assert!(profits == 1000);
     }
 
-    #[test]
-    #[expected_failure(abort_code = sui::royalty_policy::EIncorrectArgument)]
+    #[test, expected_failure(abort_code = sui::royalty_policy::EIncorrectArgument)]
     fun test_incorrect_config() {
         let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = test::prepare(ctx);
@@ -92,8 +91,7 @@ module sui::royalty_policy_tests {
         test::wrapup(policy, cap, ctx);
     }
 
-    #[test]
-    #[expected_failure(abort_code = sui::royalty_policy::EInsufficientAmount)]
+    #[test, expected_failure(abort_code = sui::royalty_policy::EInsufficientAmount)]
     fun test_insufficient_amount() {
         let ctx = &mut tx_context::dummy();
         let (mut policy, cap) = test::prepare(ctx);

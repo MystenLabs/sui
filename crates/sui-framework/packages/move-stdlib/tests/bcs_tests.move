@@ -101,8 +101,7 @@ fun encode_128() {
     bcs::to_bytes(&box127(true));
 }
 
-#[test]
-#[expected_failure]
+#[test, expected_failure]
 // failes due to VM max value depth
 fun encode_129() {
     bcs::to_bytes(&Box { x: box127(true) });

@@ -60,62 +60,52 @@ decimal.
 ## Constants
 
 
-<a name="std_fixed_point32_MAX_U64"></a>
-
-> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
-
-
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_MAX_U64">MAX_U64</a>: <a href="../std/u128.md#std_u128">u128</a> = 18446744073709551615;
-</code></pre>
-
-
-
-<a name="std_fixed_point32_EDENOMINATOR"></a>
+<a name="std_fixed_point32_EDenominator"></a>
 
 The denominator provided was zero
 
 
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDENOMINATOR">EDENOMINATOR</a>: <a href="../std/u64.md#std_u64">u64</a> = 65537;
+<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDenominator">EDenominator</a>: <a href="../std/u64.md#std_u64">u64</a> = 65537;
 </code></pre>
 
 
 
-<a name="std_fixed_point32_EDIVISION"></a>
+<a name="std_fixed_point32_EDivision"></a>
 
 The quotient value would be too large to be held in a <code><a href="../std/u64.md#std_u64">u64</a></code>
 
 
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDIVISION">EDIVISION</a>: <a href="../std/u64.md#std_u64">u64</a> = 131074;
+<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDivision">EDivision</a>: <a href="../std/u64.md#std_u64">u64</a> = 131074;
 </code></pre>
 
 
 
-<a name="std_fixed_point32_EMULTIPLICATION"></a>
+<a name="std_fixed_point32_EMultiplication"></a>
 
 The multiplied value would be too large to be held in a <code><a href="../std/u64.md#std_u64">u64</a></code>
 
 
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EMULTIPLICATION">EMULTIPLICATION</a>: <a href="../std/u64.md#std_u64">u64</a> = 131075;
+<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EMultiplication">EMultiplication</a>: <a href="../std/u64.md#std_u64">u64</a> = 131075;
 </code></pre>
 
 
 
-<a name="std_fixed_point32_EDIVISION_BY_ZERO"></a>
+<a name="std_fixed_point32_EDivisionByZero"></a>
 
 A division by zero was encountered
 
 
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDIVISION_BY_ZERO">EDIVISION_BY_ZERO</a>: <a href="../std/u64.md#std_u64">u64</a> = 65540;
+<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_EDivisionByZero">EDivisionByZero</a>: <a href="../std/u64.md#std_u64">u64</a> = 65540;
 </code></pre>
 
 
 
-<a name="std_fixed_point32_ERATIO_OUT_OF_RANGE"></a>
+<a name="std_fixed_point32_ERatioOutOfRange"></a>
 
 The computed ratio when converting to a <code><a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">FixedPoint32</a></code> would be unrepresentable
 
 
-<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_ERATIO_OUT_OF_RANGE">ERATIO_OUT_OF_RANGE</a>: <a href="../std/u64.md#std_u64">u64</a> = 131077;
+<pre><code><b>const</b> <a href="../std/fixed_point32.md#std_fixed_point32_ERatioOutOfRange">ERatioOutOfRange</a>: <a href="../std/u64.md#std_u64">u64</a> = 131077;
 </code></pre>
 
 
@@ -147,7 +137,7 @@ overflows.
     // so rescale it by shifting away the low bits.
     <b>let</b> product = unscaled_product &gt;&gt; 32;
     // Check whether the value is too large.
-    <b>assert</b>!(product &lt;= <a href="../std/fixed_point32.md#std_fixed_point32_MAX_U64">MAX_U64</a>, <a href="../std/fixed_point32.md#std_fixed_point32_EMULTIPLICATION">EMULTIPLICATION</a>);
+    <b>assert</b>!(product &lt;= (<a href="../std/u64.md#std_u64_max_value">std::u64::max_value</a>!() <b>as</b> <a href="../std/u128.md#std_u128">u128</a>), <a href="../std/fixed_point32.md#std_fixed_point32_EMultiplication">EMultiplication</a>);
     product <b>as</b> <a href="../std/u64.md#std_u64">u64</a>
 }
 </code></pre>
@@ -176,13 +166,13 @@ is zero or if the quotient overflows.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/fixed_point32.md#std_fixed_point32_divide_u64">divide_u64</a>(val: <a href="../std/u64.md#std_u64">u64</a>, divisor: <a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">FixedPoint32</a>): <a href="../std/u64.md#std_u64">u64</a> {
     // Check <b>for</b> division by zero.
-    <b>assert</b>!(divisor.value != 0, <a href="../std/fixed_point32.md#std_fixed_point32_EDIVISION_BY_ZERO">EDIVISION_BY_ZERO</a>);
+    <b>assert</b>!(divisor.value != 0, <a href="../std/fixed_point32.md#std_fixed_point32_EDivisionByZero">EDivisionByZero</a>);
     // First convert to 128 bits and then shift left to
     // add 32 fractional zero bits to the dividend.
     <b>let</b> scaled_value = val <b>as</b> <a href="../std/u128.md#std_u128">u128</a> &lt;&lt; 32;
     <b>let</b> quotient = scaled_value / (divisor.value <b>as</b> <a href="../std/u128.md#std_u128">u128</a>);
     // Check whether the value is too large.
-    <b>assert</b>!(quotient &lt;= <a href="../std/fixed_point32.md#std_fixed_point32_MAX_U64">MAX_U64</a>, <a href="../std/fixed_point32.md#std_fixed_point32_EDIVISION">EDIVISION</a>);
+    <b>assert</b>!(quotient &lt;= (<a href="../std/u64.md#std_u64_max_value">std::u64::max_value</a>!() <b>as</b> <a href="../std/u128.md#std_u128">u128</a>), <a href="../std/fixed_point32.md#std_fixed_point32_EDivision">EDivision</a>);
     // the value may be too large, which will cause the cast to fail
     // with an arithmetic error.
     quotient <b>as</b> <a href="../std/u64.md#std_u64">u64</a>
@@ -225,12 +215,12 @@ rounding, e.g., 0.0125 will round down to 0.012 instead of up to 0.013.
     // fractional bits.
     <b>let</b> scaled_numerator = numerator <b>as</b> <a href="../std/u128.md#std_u128">u128</a> &lt;&lt; 64;
     <b>let</b> scaled_denominator = denominator <b>as</b> <a href="../std/u128.md#std_u128">u128</a> &lt;&lt; 32;
-    <b>assert</b>!(scaled_denominator != 0, <a href="../std/fixed_point32.md#std_fixed_point32_EDENOMINATOR">EDENOMINATOR</a>);
+    <b>assert</b>!(scaled_denominator != 0, <a href="../std/fixed_point32.md#std_fixed_point32_EDenominator">EDenominator</a>);
     <b>let</b> quotient = scaled_numerator / scaled_denominator;
-    <b>assert</b>!(quotient != 0 || numerator == 0, <a href="../std/fixed_point32.md#std_fixed_point32_ERATIO_OUT_OF_RANGE">ERATIO_OUT_OF_RANGE</a>);
+    <b>assert</b>!(quotient != 0 || numerator == 0, <a href="../std/fixed_point32.md#std_fixed_point32_ERatioOutOfRange">ERatioOutOfRange</a>);
     // Return the quotient <b>as</b> a fixed-point number. We first need to check whether the cast
     // can succeed.
-    <b>assert</b>!(quotient &lt;= <a href="../std/fixed_point32.md#std_fixed_point32_MAX_U64">MAX_U64</a>, <a href="../std/fixed_point32.md#std_fixed_point32_ERATIO_OUT_OF_RANGE">ERATIO_OUT_OF_RANGE</a>);
+    <b>assert</b>!(quotient &lt;= (<a href="../std/u64.md#std_u64_max_value">std::u64::max_value</a>!() <b>as</b> <a href="../std/u128.md#std_u128">u128</a>), <a href="../std/fixed_point32.md#std_fixed_point32_ERatioOutOfRange">ERatioOutOfRange</a>);
     <a href="../std/fixed_point32.md#std_fixed_point32_FixedPoint32">FixedPoint32</a> { value: quotient <b>as</b> <a href="../std/u64.md#std_u64">u64</a> }
 }
 </code></pre>
