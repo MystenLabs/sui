@@ -108,7 +108,15 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             );
 
             let message = CheckpointSignatureMessage { summary };
-            let transaction = ConsensusTransaction::new_checkpoint_signature_message(message);
+            // Choose V2 when feature is enabled; otherwise V1 for compatibility.
+            let transaction = if epoch_store
+                .protocol_config()
+                .consensus_checkpoint_signature_key_includes_digest()
+            {
+                ConsensusTransaction::new_checkpoint_signature_message_v2(message)
+            } else {
+                ConsensusTransaction::new_checkpoint_signature_message(message)
+            };
             self.sender
                 .submit_to_consensus(&vec![transaction], epoch_store)?;
             self.metrics

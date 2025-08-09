@@ -2978,7 +2978,9 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CheckpointSignature(data),
+                kind:
+                    ConsensusTransactionKind::CheckpointSignature(data)
+                    | ConsensusTransactionKind::CheckpointSignatureV2(data),
                 ..
             }) => {
                 if transaction.sender_authority() != data.summary.auth_sig().authority {
@@ -4143,7 +4145,9 @@ impl AuthorityPerEpochStore {
                 )
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CheckpointSignature(info),
+                kind:
+                    ConsensusTransactionKind::CheckpointSignature(info)
+                    | ConsensusTransactionKind::CheckpointSignatureV2(info),
                 ..
             }) => {
                 // We usually call notify_checkpoint_signature in SuiTxValidator, but that step can

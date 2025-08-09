@@ -1043,7 +1043,8 @@ impl ConsensusAdapter {
             };
 
             let checkpoint_synced_future = if let SequencedConsensusTransactionKey::External(
-                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number),
+                ConsensusTransactionKey::CheckpointSignature(_, checkpoint_sequence_number)
+                | ConsensusTransactionKey::CheckpointSignatureV2(_, checkpoint_sequence_number, _),
             ) = transaction_key
             {
                 // If the transaction is a checkpoint signature, we can also wait to get notified when a checkpoint with equal or higher sequence
