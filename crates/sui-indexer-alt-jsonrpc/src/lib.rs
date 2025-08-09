@@ -37,6 +37,7 @@ use crate::context::Context;
 
 pub mod api;
 pub mod args;
+mod client;
 pub mod config;
 mod context;
 pub mod data;

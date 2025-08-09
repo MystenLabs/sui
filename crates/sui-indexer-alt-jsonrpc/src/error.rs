@@ -121,6 +121,7 @@ pub(crate) fn invalid_params<E: std::error::Error>(err: E) -> RpcError<E> {
 }
 
 /// Helper function to convert a jsonrpc client error into an `ErrorObject`.
+#[allow(dead_code)]
 pub(crate) fn client_error_to_error_object(
     error: jsonrpsee::core::ClientError,
 ) -> ErrorObject<'static> {
@@ -131,4 +132,26 @@ pub(crate) fn client_error_to_error_object(
         jsonrpsee::core::ClientError::Call(e) => e,
         _ => ErrorObject::owned(INTERNAL_ERROR_CODE, error.to_string(), None::<()>),
     }
+}
+
+/// Helper function to convert an anyhow error (from our reqwest client) into an `ErrorObject`.
+pub(crate) fn anyhow_error_to_error_object(error: anyhow::Error) -> ErrorObject<'static> {
+    // Try to extract JSON-RPC error information if available
+    let error_string = error.to_string();
+    
+    // Check if this looks like a JSON-RPC error message
+    if error_string.starts_with("JSON-RPC error ") {
+        // Extract the error code if possible
+        if let Some(start) = error_string.find("JSON-RPC error ") {
+            if let Some(end) = error_string[start + 15..].find(':') {
+                if let Ok(code) = error_string[start + 15..start + 15 + end].parse::<i32>() {
+                    let message = error_string[start + 15 + end + 2..].to_string();
+                    return ErrorObject::owned(code, message, None::<()>);
+                }
+            }
+        }
+    }
+    
+    // Default to internal error for other cases
+    ErrorObject::owned(INTERNAL_ERROR_CODE, error_string, None::<()>)
 }

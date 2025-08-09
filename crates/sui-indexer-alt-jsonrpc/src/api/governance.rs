@@ -4,9 +4,8 @@
 use anyhow::Context as _;
 use diesel::{ExpressionMethods, QueryDsl};
 
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
-use sui_json_rpc_api::GovernanceReadApiClient;
 use sui_json_rpc_types::{DelegatedStake, ValidatorApys};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -24,10 +23,11 @@ use sui_types::{
 };
 
 use crate::{
+    client::HttpClient,
     config::NodeConfig,
     context::Context,
     data::load_live_deserialized,
-    error::{client_error_to_error_object, rpc_bail, RpcError},
+    error::{anyhow_error_to_error_object, rpc_bail, RpcError},
 };
 
 use super::rpc_module::RpcModule;
@@ -95,7 +95,7 @@ impl DelegationGovernanceApiServer for DelegationGovernance {
         client
             .get_stakes_by_ids(staked_sui_ids)
             .await
-            .map_err(client_error_to_error_object)
+            .map_err(anyhow_error_to_error_object)
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
@@ -104,7 +104,7 @@ impl DelegationGovernanceApiServer for DelegationGovernance {
         client
             .get_stakes(owner)
             .await
-            .map_err(client_error_to_error_object)
+            .map_err(anyhow_error_to_error_object)
     }
 
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
@@ -113,7 +113,7 @@ impl DelegationGovernanceApiServer for DelegationGovernance {
         client
             .get_validators_apy()
             .await
-            .map_err(client_error_to_error_object)
+            .map_err(anyhow_error_to_error_object)
     }
 }
 
