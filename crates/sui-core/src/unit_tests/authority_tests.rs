@@ -6,7 +6,7 @@ use bcs;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::FuturesUnordered, StreamExt};
 use move_binary_format::{
-    compiled_module::empty_module,
+    compiled_module,
     file_format::{AddressIdentifierIndex, IdentifierIndex, ModuleHandle},
     CompiledModule,
 };
@@ -1640,7 +1640,7 @@ async fn test_objected_owned_gas() {
 
 /// Create a `CompiledModule` that depends on `m`
 fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
-    let mut dependent_module = empty_module();
+    let mut dependent_module = compiled_module::empty_module();
     dependent_module
         .identifiers
         .push(m.self_id().name().to_owned());
