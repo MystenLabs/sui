@@ -2995,6 +2995,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-vm-stack"
+version = "0.1.0"
+dependencies = [
+ "move-bytecode-verifier",
+ "move-vm-types",
+]
+
+[[package]]
 name = "move-vm-test-utils"
 version = "0.1.0"
 dependencies = [

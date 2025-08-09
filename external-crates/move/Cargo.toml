@@ -190,6 +190,7 @@ move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
+move-vm-stack = { path = "crates/move-vm-stack" }
 move-vm-test-utils = { path = "crates/move-vm-test-utils" }
 move-vm-types = { path = "crates/move-vm-types" }
 prover_bytecode = { path = "crates/move-stackless-bytecode", package = "move-stackless-bytecode" }
