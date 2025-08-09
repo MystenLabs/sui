@@ -47,7 +47,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             max_back_edges_per_module: None,
 
             max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
-            max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
+            max_identifier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
             disallow_self_identifier: true,
             allow_receiving_object_id: true,
             reject_mutable_random_on_entry_functions: true,
