@@ -29,7 +29,8 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::SuiSignature;
 
 pub async fn start_rosetta_test_server(client: SuiClient) -> (RosettaClient, Vec<JoinHandle<()>>) {
-    let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client);
+    let grpc_client = sui_rpc_api::client::Client::new("http://localhost:9000").unwrap();
+    let online_server = RosettaOnlineServer::new(SuiEnv::LocalNet, client, grpc_client);
     let offline_server = RosettaOfflineServer::new(SuiEnv::LocalNet);
     let local_ip = local_ip_utils::localhost_for_testing();
     let port = local_ip_utils::get_available_port(&local_ip);
