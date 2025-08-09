@@ -1,6 +1,7 @@
 ---
 title: Access On-Chain Time
 description: Access network-based time for your transactions. Sui provides a Clock module to capture near-real time or epoch time in your Sui packages.
+keywords: [ network-based time, on-chain time, onchain time, sui::clock::Clock, clock module, sui::clock::timestamp_ms, epoch timestamps, timestamps, use time in transactions, sui::tx_context ] 
 ---
 
 You have options when needing to access network-based time for your transactions. If you need a near real-time measurement (within a few seconds), use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every network checkpoint. If you don't need as current a time slice, use the `epoch_timestamp_ms` function to capture the precise moment the current epoch started.

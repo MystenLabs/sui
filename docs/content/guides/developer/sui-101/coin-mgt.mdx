@@ -1,6 +1,7 @@
 ---
 title: Coin Management
-description: Because Sui uses Coins as owned objects for transactions, you need to explicitly manage them in your programmable transaction block development.
+description: Because Sui uses coins as owned objects for transactions, you need to explicitly manage them in your programmable transaction block development.
+keywords: [ owned objects, address-owned objects, parallel transactions, coins, coin management, typescript, rust, typescript sdk, rust sdk, gas smashing, concurrency, generic coins, coin<sui>, ]
 ---
 
 A key concept when programming on Sui is that of owned objects. Address-owned objects are important in that they allow for highly parallelizable transactions. And they also logically map to assets or resources that someone exclusively owns. Coins are a typical case of owned object usage, with cash being a real-life reference. The owned objects paradigm, however, and particularly as related to coins, is somewhat of a divergence from other blockchains which have a concept of balance. In other words, in other systems, especially account based systems, coins are held in a single location (field) which can be thought of as a balance in a bank account.
@@ -11,13 +12,13 @@ Because Sui uses owned objects instead of a balance, it is common to own a numbe
 
 The Sui SDKs ([TypeScript](https://sdk.mystenlabs.com/typescript) and [Rust](/references/rust-sdk.mdx)) manage coins on your behalf, removing the overhead of having to deal with coin management manually. The SDKs attempt to merge coins whenever possible and assume that transactions are executed in sequence. That's a reasonable assumption with wallet-based transactions and for common scenarios in general. Sui recommends relying on this feature if you do not have a need for heavy parallel or concurrent execution.
 
-## Gas Smashing
+## Gas smashing
 
 When executing a transaction Sui allows you to provide a number of coins as payment. In other words, the payment can be a vector of coins rather than a single coin. That feature, known as gas smashing, performs merging of coins automatically, and presents the PTBs you write with a single gas coin that can be used for other purposes besides just gas.
 
 Basically, you can provide as many coins as you want (with a max limit defined in the protocol configuration) and have all of them merged (smashed) into the first coin provided as payment. That coin, minus the gas budget, is then available inside the transaction and can be used in any command. If the coin is unused it is returned to the user.
 
-Gas smashing is an important feature - and a key concept to understand - to have for the optimal management of coins. See [Gas Smashing](/concepts/transactions/gas-smashing.mdx) for more details.
+Gas smashing is an important feature and key concept to understand for the optimal management of coins. See [Gas Smashing](/concepts/transactions/gas-smashing.mdx) for more details.
 
 ## Generic coins
 
