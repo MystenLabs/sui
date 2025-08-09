@@ -1062,6 +1062,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
             }
         }
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
+        ConsensusTransactionKind::CheckpointSignatureV2(_) => "checkpoint_signature",
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
         ConsensusTransactionKind::CapabilityNotification(_) => "capability_notification",
         ConsensusTransactionKind::CapabilityNotificationV2(_) => "capability_notification_v2",
@@ -1440,12 +1441,20 @@ mod tests {
     use futures::pin_mut;
     use prometheus::Registry;
     use sui_protocol_config::{
-        Chain, ConsensusTransactionOrdering, PerObjectCongestionControlMode, ProtocolVersion,
+        Chain, ConsensusTransactionOrdering, PerObjectCongestionControlMode, ProtocolConfig,
+        ProtocolVersion,
     };
     use sui_types::{
+        base_types::ExecutionDigests,
         base_types::{random_object_ref, AuthorityName, FullObjectRef, ObjectID, SuiAddress},
         committee::Committee,
         crypto::deterministic_random_account_key,
+        gas::GasCostSummary,
+        message_envelope::Message,
+        messages_checkpoint::{
+            CheckpointContents, CheckpointSignatureMessage, CheckpointSummary,
+            SignedCheckpointSummary,
+        },
         messages_consensus::{
             AuthorityCapabilitiesV1, ConsensusTransaction, ConsensusTransactionKind,
         },
@@ -1904,6 +1913,132 @@ mod tests {
                 "eop(11)".to_string(),
             ]
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_checkpoint_signature_dedup_v1_vs_v2() {
+        telemetry_subscribers::init_for_testing();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config, 0)
+            .build()
+            .await;
+
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let consensus_committee = epoch_store.epoch_start_state().get_consensus_committee();
+
+        let make_signed = || {
+            let epoch = epoch_store.epoch();
+            let contents =
+                CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
+            let summary = CheckpointSummary::new(
+                &ProtocolConfig::get_for_max_version_UNSAFE(),
+                epoch,
+                42, // sequence number
+                10, // network_total_transactions
+                &contents,
+                None, // previous_digest
+                GasCostSummary::default(),
+                None,       // end_of_epoch_data
+                0,          // timestamp
+                Vec::new(), // randomness_rounds
+            );
+            SignedCheckpointSummary::new(epoch, summary, &*state.secret, state.name)
+        };
+
+        // Prepare V1 pair: same (authority, seq), different digests => same key
+        let v1_s1 = make_signed();
+        let v1_s2 = make_signed();
+        // Validate assumption: digests differ
+        assert_ne!(v1_s1.data().digest(), v1_s2.data().digest());
+        let v1_a =
+            ConsensusTransaction::new_checkpoint_signature_message(CheckpointSignatureMessage {
+                summary: v1_s1,
+            });
+        let v1_b =
+            ConsensusTransaction::new_checkpoint_signature_message(CheckpointSignatureMessage {
+                summary: v1_s2,
+            });
+
+        // Prepare V2 pair: same (authority, seq), different digests => different keys
+        let v2_s1 = make_signed();
+        let v2_s1_clone = v2_s1.clone();
+        let v2_digest_a = v2_s1.data().digest();
+        let v2_a =
+            ConsensusTransaction::new_checkpoint_signature_message_v2(CheckpointSignatureMessage {
+                summary: v2_s1,
+            });
+
+        let v2_s2 = make_signed();
+        let v2_digest_b = v2_s2.data().digest();
+        let v2_b =
+            ConsensusTransaction::new_checkpoint_signature_message_v2(CheckpointSignatureMessage {
+                summary: v2_s2,
+            });
+
+        assert_ne!(v2_digest_a, v2_digest_b);
+
+        // Create an exact duplicate with same digest to exercise valid dedup
+        assert_eq!(v2_s1_clone.data().digest(), v2_digest_a);
+        let v2_dup =
+            ConsensusTransaction::new_checkpoint_signature_message_v2(CheckpointSignatureMessage {
+                summary: v2_s1_clone,
+            });
+
+        let to_tx = |ct: &ConsensusTransaction| Transaction::new(bcs::to_bytes(ct).unwrap());
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(100, 0)
+                .set_transactions(vec![
+                    to_tx(&v1_a),
+                    to_tx(&v1_b),
+                    to_tx(&v2_a),
+                    to_tx(&v2_b),
+                    to_tx(&v2_dup),
+                ])
+                .build(),
+        );
+        let commit = CommittedSubDag::new(
+            block.reference(),
+            vec![block.clone()],
+            block.timestamp_ms(),
+            CommitRef::new(10, CommitDigest::MIN),
+        );
+
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let throughput = ConsensusThroughputCalculator::new(None, metrics.clone());
+        let backpressure = BackpressureManager::new_for_tests();
+        let mut handler = ConsensusHandler::new(
+            epoch_store.clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            state.execution_scheduler().clone(),
+            state.get_object_cache_reader().clone(),
+            Arc::new(ArcSwap::default()),
+            consensus_committee.clone(),
+            metrics,
+            Arc::new(throughput),
+            backpressure.subscribe(),
+        );
+
+        handler.handle_consensus_commit(commit).await;
+
+        use crate::consensus_handler::SequencedConsensusTransactionKey as SK;
+        use sui_types::messages_consensus::ConsensusTransactionKey as CK;
+
+        // V1 collapses digest: both map to the same key and are processed once.
+        let v1_key = SK::External(CK::CheckpointSignature(state.name, 42));
+        assert!(epoch_store.is_consensus_message_processed(&v1_key).unwrap());
+
+        // V2 distinct digests: both must be processed. If these were collapsed to one CheckpointSeq num, only one would process.
+        let v2_key_a = SK::External(CK::CheckpointSignatureV2(state.name, 42, v2_digest_a));
+        let v2_key_b = SK::External(CK::CheckpointSignatureV2(state.name, 42, v2_digest_b));
+        assert!(epoch_store
+            .is_consensus_message_processed(&v2_key_a)
+            .unwrap());
+        assert!(epoch_store
+            .is_consensus_message_processed(&v2_key_b)
+            .unwrap());
     }
 
     fn extract(v: Vec<VerifiedSequencedConsensusTransaction>) -> Vec<String> {
