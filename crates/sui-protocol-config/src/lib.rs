@@ -1064,8 +1064,9 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move package object, in bytes. Enforced by the Sui adapter at the end of a publish transaction.
     max_move_package_size: Option<u64>,
 
-    // Goal is to replace max_move_package_size and max_total_package_size with this.
-    max_total_package_size: Option<u64>,
+    /// Maximum size of a Move package with its dependencies, in bytes. This limits the overall size of a loaded package and its dependencies.
+    // Enforced by the <WHO?> at <WHERE?>.
+    max_total_linkage_size: Option<u64>,
 
     /// Max number of publish or upgrade commands allowed in a programmable transaction block.
     max_publish_or_upgrade_per_ptb: Option<u64>,
