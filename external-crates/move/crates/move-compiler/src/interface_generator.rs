@@ -4,10 +4,13 @@
 
 use crate::shared::{NumberFormat, NumericalAddress};
 use anyhow::{anyhow, Result};
-use move_binary_format::file_format::{
-    Ability, AbilitySet, CompiledModule, DatatypeHandleIndex, DatatypeTyParameter,
-    FunctionDefinition, ModuleHandle, SignatureToken, StructDefinition, StructFieldInformation,
-    TypeParameterIndex, Visibility,
+use move_binary_format::{
+    file_format::{
+        Ability, AbilitySet, DatatypeHandleIndex, DatatypeTyParameter, FunctionDefinition,
+        ModuleHandle, SignatureToken, StructDefinition, StructFieldInformation, TypeParameterIndex,
+        Visibility,
+    },
+    CompiledModule,
 };
 use move_core_types::language_storage::ModuleId;
 use std::collections::BTreeMap;

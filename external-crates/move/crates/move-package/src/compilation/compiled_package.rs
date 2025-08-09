@@ -14,7 +14,7 @@ use crate::{
 use anyhow::{ensure, Result};
 use colored::Colorize;
 use itertools::{Either, Itertools};
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::{
     serialize_to_json, serialize_to_json_string, source_map_from_file,
 };

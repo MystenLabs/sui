@@ -7,8 +7,8 @@
 //! - a constant's data serializes correctly for that type
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMResult, VMResult},
-    file_format::{CompiledModule, Constant, SignatureToken, TableIndex},
-    IndexKind,
+    file_format::{Constant, SignatureToken, TableIndex},
+    CompiledModule, IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 

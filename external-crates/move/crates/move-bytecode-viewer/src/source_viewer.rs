@@ -11,7 +11,7 @@ use crate::{
     bytecode_viewer::{BytecodeInfo, BytecodeViewer},
     interfaces::{RightScreen, SourceContext},
 };
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use std::{cmp, fs, path::Path};
 
 const CONTEXT_SIZE: usize = 1000;

@@ -12,11 +12,11 @@
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, Constant, DatatypeHandle, DatatypeHandleIndex, FunctionHandle,
-        FunctionHandleIndex, FunctionInstantiation, ModuleHandle, Signature,
-        StructFieldInformation, TableIndex, VariantHandle,
+        Constant, DatatypeHandle, DatatypeHandleIndex, FunctionHandle, FunctionHandleIndex,
+        FunctionInstantiation, ModuleHandle, Signature, StructFieldInformation, TableIndex,
+        VariantHandle,
     },
-    IndexKind,
+    CompiledModule, IndexKind,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,

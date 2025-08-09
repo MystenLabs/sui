@@ -5,7 +5,7 @@
 //! This module contains verification of usage of dependencies for modules
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::CompiledModule,
+    CompiledModule,
 };
 use move_core_types::vm_status::StatusCode;
 
