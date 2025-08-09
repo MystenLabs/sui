@@ -62,7 +62,8 @@ impl SuiTxValidator {
                 ConsensusTransactionKind::CertifiedTransaction(certificate) => {
                     cert_batch.push(certificate.as_ref());
                 }
-                ConsensusTransactionKind::CheckpointSignature(signature) => {
+                ConsensusTransactionKind::CheckpointSignature(signature)
+                | ConsensusTransactionKind::CheckpointSignatureV2(signature) => {
                     ckpt_messages.push(signature.as_ref());
                     ckpt_batch.push(&signature.summary);
                 }
