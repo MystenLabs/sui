@@ -88,10 +88,10 @@ pub fn check_zklogin_id_internal(
 
     let result = check_id_internal(
         &address,
-        &*key_claim_name.as_bytes_ref(),
-        &*key_claim_value.as_bytes_ref(),
-        &*audience.as_bytes_ref(),
-        &*issuer.as_bytes_ref(),
+        &key_claim_name.as_bytes_ref(),
+        &key_claim_value.as_bytes_ref(),
+        &audience.as_bytes_ref(),
+        &issuer.as_bytes_ref(),
         &pin_hash,
     );
 
@@ -179,7 +179,7 @@ pub fn check_zklogin_issuer_internal(
     // The address to check
     let address = pop_arg!(args, AccountAddress);
 
-    let result = check_issuer_internal(&address, &address_seed, &*issuer.as_bytes_ref());
+    let result = check_issuer_internal(&address, &address_seed, &issuer.as_bytes_ref());
 
     match result {
         Ok(result) => Ok(NativeResult::ok(
