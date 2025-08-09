@@ -205,6 +205,10 @@ pub fn resolve_address(addr: &str) -> Option<AccountAddress> {
     }
 }
 
+fn tag_type<K: MoveTypeTagTrait>(_: K) -> TypeTag {
+    K::get_type_tag()
+}
+
 pub trait MoveTypeTagTrait {
     fn get_type_tag() -> TypeTag;
 }

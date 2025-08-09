@@ -1,12 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
-
 use anyhow::{bail, ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
@@ -14,29 +8,38 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
+use std::{
+    collections::HashMap,
+    fs,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
     consistent_service_client::ConsistentServiceClient, AvailableRangeRequest,
 };
-use sui_indexer_alt_consistent_store::{
+pub use sui_indexer_alt_consistent_store::{
     args::RpcArgs as ConsistentArgs, config::ServiceConfig as ConsistentConfig,
     start_service as start_consistent_store,
 };
 use sui_indexer_alt_framework::{ingestion::ClientArgs, postgres::schema::watermarks, IndexerArgs};
-use sui_indexer_alt_graphql::{
+pub use sui_indexer_alt_graphql::{
     config::RpcConfig as GraphQlConfig, start_rpc as start_graphql, RpcArgs as GraphQlArgs,
 };
-use sui_indexer_alt_jsonrpc::{
+pub use sui_indexer_alt_jsonrpc::{
     config::RpcConfig as JsonRpcConfig, start_rpc as start_jsonrpc, NodeArgs as JsonRpcNodeArgs,
     RpcArgs as JsonRpcArgs,
 };
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, system_package_task::SystemPackageTaskArgs,
 };
+use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
 };
+use sui_storage::blob::{Blob, BlobEncoding};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -65,10 +68,6 @@ pub struct FullCluster {
     /// The off-chain services (database, indexer, RPC) that are ingesting data from the
     /// simulation.
     offchain: OffchainCluster,
-
-    /// Temporary directory to store checkpoint information in, so that the indexer can pick it up.
-    #[allow(unused)]
-    temp_dir: TempDir,
 }
 
 /// A collection of the off-chain services (an indexer, a database, and JSON-RPC/GraphQL servers
@@ -117,7 +116,12 @@ pub struct OffchainCluster {
     /// Hold on to the temporary directory where the consistent store writes its data, so it
     /// doesn't get cleaned up until the cluster is stopped.
     #[allow(unused)]
-    dir: TempDir,
+    rocksdb_temp_dir: TempDir,
+
+    /// Hold on to the temporary directory where the consistent store writes its data, so it
+    /// doesn't get cleaned up until the cluster is stopped.
+    #[allow(unused)]
+    ingestion_temp_dir: Option<TempDir>,
 
     /// This token controls the clean up of the cluster.
     cancel: CancellationToken,
@@ -129,14 +133,7 @@ impl FullCluster {
     pub async fn new() -> anyhow::Result<Self> {
         Self::new_with_configs(
             Simulacrum::new(),
-            IndexerArgs::default(),
-            IndexerArgs::default(),
-            IndexerConfig::for_test(),
-            ConsistentConfig::for_test(),
-            JsonRpcConfig::default(),
-            GraphQlConfig::default(),
-            &prometheus::Registry::new(),
-            CancellationToken::new(),
+            OffchainClusterConfig::with_local_ingestion(),
         )
         .await
     }
@@ -146,45 +143,20 @@ impl FullCluster {
     /// `jsonrpc_config`, and the GraphQL server is configured using `graphql_config`.
     pub async fn new_with_configs(
         mut executor: Simulacrum,
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
-        registry: &prometheus::Registry,
-        cancel: CancellationToken,
+        offchain_cluster_config: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
-        let temp_dir = tempfile::tempdir().context("Failed to create data ingestion path")?;
-        executor.set_data_ingestion_path(temp_dir.path().to_owned());
+        let ingestion_path = offchain_cluster_config
+            .client_args
+            .local_ingestion_path
+            .as_ref()
+            .unwrap();
+        executor.set_data_ingestion_path(ingestion_path.to_owned());
 
-        let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
-            remote_store_url: None,
-            rpc_api_url: None,
-            rpc_username: None,
-            rpc_password: None,
-        };
+        let offchain = OffchainCluster::new(offchain_cluster_config)
+            .await
+            .context("Failed to create off-chain cluster")?;
 
-        let offchain = OffchainCluster::new(
-            indexer_args,
-            consistent_indexer_args,
-            client_args,
-            indexer_config,
-            consistent_config,
-            jsonrpc_config,
-            graphql_config,
-            registry,
-            cancel,
-        )
-        .await
-        .context("Failed to create off-chain cluster")?;
-
-        Ok(Self {
-            executor,
-            offchain,
-            temp_dir,
-        })
+        Ok(Self { executor, offchain })
     }
 
     /// Return the reference gas price for the current epoch
@@ -291,10 +263,67 @@ impl FullCluster {
             .await
     }
 
+    pub async fn wait_for_graphql(
+        &self,
+        checkpoint: u64,
+        timeout: Duration,
+    ) -> Result<(), Elapsed> {
+        self.offchain.wait_for_graphql(checkpoint, timeout).await
+    }
+
     /// Triggers cancellation of all downstream services, waits for them to stop, cleans up the
     /// temporary database, and the temporary directory used for ingestion.
     pub async fn stopped(self) {
         self.offchain.stopped().await;
+    }
+}
+
+pub struct OffchainClusterConfig {
+    pub indexer_args: IndexerArgs,
+    pub consistent_indexer_args: IndexerArgs,
+    pub client_args: ClientArgs,
+    pub indexer_config: IndexerConfig,
+    pub consistent_config: ConsistentConfig,
+    pub jsonrpc_config: JsonRpcConfig,
+    pub graphql_config: GraphQlConfig,
+    pub registry: prometheus::Registry,
+    pub cancel: CancellationToken,
+    pub ingestion_temp_dir: Option<TempDir>,
+    pub stored_genesis: Option<StoredGenesis>,
+}
+
+impl OffchainClusterConfig {
+    pub fn with_local_ingestion() -> Self {
+        let ingestion_temp_dir = tempfile::tempdir()
+            .context("Failed to create data ingestion path")
+            .unwrap();
+        let client_args = ClientArgs {
+            local_ingestion_path: Some(ingestion_temp_dir.path().to_owned()),
+            remote_store_url: None,
+            rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
+        };
+        Self {
+            indexer_args: IndexerArgs::default(),
+            consistent_indexer_args: IndexerArgs::default(),
+            client_args,
+            indexer_config: IndexerConfig::for_test(),
+            consistent_config: ConsistentConfig::for_test(),
+            jsonrpc_config: JsonRpcConfig::default(),
+            graphql_config: GraphQlConfig::default(),
+            registry: prometheus::Registry::new(),
+            cancel: CancellationToken::new(),
+            ingestion_temp_dir: Some(ingestion_temp_dir),
+            stored_genesis: None,
+        }
+    }
+}
+
+pub fn dummy_stored_genesis() -> StoredGenesis {
+    StoredGenesis {
+        genesis_digest: [1u8; 32].to_vec(),
+        initial_protocol_version: 0,
     }
 }
 
@@ -307,15 +336,19 @@ impl OffchainCluster {
     /// - `graphql_config` controls the GraphQL server.
     /// - `registry` is used to register metrics for the indexer, JSON-RPC, and GraphQL servers.
     pub async fn new(
-        indexer_args: IndexerArgs,
-        consistent_indexer_args: IndexerArgs,
-        client_args: ClientArgs,
-        indexer_config: IndexerConfig,
-        consistent_config: ConsistentConfig,
-        jsonrpc_config: JsonRpcConfig,
-        graphql_config: GraphQlConfig,
-        registry: &prometheus::Registry,
-        cancel: CancellationToken,
+        OffchainClusterConfig {
+            indexer_args,
+            consistent_indexer_args,
+            client_args,
+            indexer_config,
+            consistent_config,
+            jsonrpc_config,
+            graphql_config,
+            registry,
+            cancel,
+            ingestion_temp_dir,
+            stored_genesis,
+        }: OffchainClusterConfig,
     ) -> anyhow::Result<Self> {
         let consistent_port = get_available_port();
         let consistent_listen_address =
@@ -330,8 +363,9 @@ impl OffchainCluster {
         let database = TempDb::new().context("Failed to create database")?;
         let database_url = database.database().url();
 
-        let dir = tempfile::tempdir().context("Failed to create temporary directory")?;
-        let rocksdb_path = dir.path().join("rocksdb");
+        let rocksdb_temp_dir =
+            tempfile::tempdir().context("Failed to create temporary directory")?;
+        let rocksdb_path = rocksdb_temp_dir.path().join("rocksdb");
 
         let consistent_args = ConsistentArgs {
             rpc_listen_address: consistent_listen_address,
@@ -351,15 +385,14 @@ impl OffchainCluster {
             .await
             .context("Failed to connect to database")?;
 
-        let with_genesis = true;
         let indexer = setup_indexer(
             database_url.clone(),
             DbArgs::default(),
             indexer_args,
             client_args.clone(),
             indexer_config,
-            with_genesis,
-            registry,
+            stored_genesis,
+            &registry,
             cancel.child_token(),
         )
         .await
@@ -371,11 +404,11 @@ impl OffchainCluster {
         let consistent_store = start_consistent_store(
             rocksdb_path,
             consistent_indexer_args,
-            client_args,
+            client_args.clone(),
             consistent_args,
             "0.0.0",
             consistent_config,
-            registry,
+            &registry,
             cancel.child_token(),
         )
         .await
@@ -390,7 +423,7 @@ impl OffchainCluster {
             JsonRpcNodeArgs::default(),
             SystemPackageTaskArgs::default(),
             jsonrpc_config,
-            registry,
+            &registry,
             cancel.child_token(),
         )
         .await
@@ -406,7 +439,7 @@ impl OffchainCluster {
             "0.0.0",
             graphql_config,
             pipelines.iter().map(|p| p.to_string()).collect(),
-            registry,
+            &registry,
             cancel.child_token(),
         )
         .await
@@ -423,7 +456,8 @@ impl OffchainCluster {
             jsonrpc,
             graphql,
             database,
-            dir,
+            rocksdb_temp_dir,
+            ingestion_temp_dir,
             cancel,
         })
     }
@@ -551,6 +585,14 @@ impl OffchainCluster {
         );
 
         Ok(body.data.checkpoint.sequence_number as u64)
+    }
+
+    pub async fn write_checkpoint(&self, checkpoint_data: CheckpointData) -> anyhow::Result<()> {
+        let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+        let file_path = self.ingestion_temp_dir.as_ref().unwrap().path().join(file_name);
+        let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
+        fs::write(file_path, blob.to_bytes())?;
+        Ok(())
     }
 
     /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is

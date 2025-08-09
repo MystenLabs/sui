@@ -26,6 +26,7 @@ use sui_indexer_alt_framework::{
     Indexer, IndexerArgs,
 };
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
+use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -43,11 +44,7 @@ pub async fn setup_indexer(
     indexer_args: IndexerArgs,
     client_args: ClientArgs,
     indexer_config: IndexerConfig,
-    // If true, the indexer will bootstrap from genesis.
-    // Otherwise it will skip the pipelines that rely on genesis data.
-    // TODO: There is probably a better way to handle this.
-    // For instance, we could also pass in dummy genesis data in the benchmark mode.
-    with_genesis: bool,
+    stored_genesis: Option<StoredGenesis>,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<Indexer<Db>> {
@@ -162,13 +159,11 @@ pub async fn setup_indexer(
         };
     }
 
-    if with_genesis {
-        let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
+    let genesis = bootstrap(&indexer, retry_interval, cancel.clone(), stored_genesis).await?;
 
-        // Pipelines that rely on genesis information
-        add_concurrent!(KvFeatureFlags(genesis.clone()), kv_feature_flags);
-        add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
-    }
+    // Pipelines that rely on genesis information
+    add_concurrent!(KvFeatureFlags(genesis.clone()), kv_feature_flags);
+    add_concurrent!(KvProtocolConfigs(genesis.clone()), kv_protocol_configs);
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);

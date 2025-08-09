@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use crate::Indexer;
 use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
@@ -20,8 +21,6 @@ use sui_indexer_alt_schema::{
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::Indexer;
-
 /// Ensures the genesis table has been populated before the rest of the indexer is run, and returns
 /// the information stored there. If the database has been bootstrapped before, this function will
 /// simply read the previously bootstrapped information. Otherwise, it will wait until the first
@@ -33,6 +32,7 @@ pub async fn bootstrap(
     indexer: &Indexer<Db>,
     retry_interval: Duration,
     cancel: CancellationToken,
+    stored_genesis: Option<StoredGenesis>,
 ) -> Result<StoredGenesis> {
     info!("Bootstrapping indexer with genesis information");
 
@@ -40,7 +40,7 @@ pub async fn bootstrap(
         bail!("Bootstrap failed to get connection for DB");
     };
 
-    // If the row has already been written, return it.
+    // 1. If the row has already been written, return it.
     if let Some(genesis) = kv_genesis::table
         .select(StoredGenesis::as_select())
         .first(&mut conn)
@@ -56,7 +56,16 @@ pub async fn bootstrap(
         return Ok(genesis);
     }
 
-    // Otherwise, extract the necessary information from the genesis checkpoint:
+    // 2. If stored_genesis is provided, return it.
+    if let Some(genesis) = stored_genesis {
+        diesel::insert_into(kv_genesis::dsl::kv_genesis)
+            .values(&genesis)
+            .execute(&mut conn)
+            .await?;
+        return Ok(genesis);
+    }
+
+    // 3. Otherwise, extract the necessary information from the genesis checkpoint:
     //
     // - Get the Genesis system transaction from the genesis checkpoint.
     // - Get the system state object that was written out by the system transaction.

@@ -1,39 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-
 use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag},
 };
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk_types::CheckpointTimestamp;
 use tap::Pipe;
 
-use crate::{
-    base_types::{
-        dbg_addr, random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber,
-        SuiAddress,
-    },
-    committee::Committee,
-    digests::TransactionDigest,
-    effects::{TestEffectsBuilder, TransactionEffectsAPI, TransactionEvents},
-    event::{Event, SystemEpochInfoEvent},
-    full_checkpoint_content::{CheckpointData, CheckpointTransaction},
-    gas_coin::GAS,
-    message_envelope::Message,
-    messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, EndOfEpochData,
-    },
-    object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING},
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{
-        EndOfEpochTransactionKind, ObjectArg, SenderSignedData, Transaction, TransactionData,
-        TransactionKind,
-    },
-    SUI_SYSTEM_ADDRESS,
+use crate::balance::Balance;
+use crate::base_types::MoveObjectType;
+use crate::collection_types::VecMap;
+use crate::dynamic_field::{derive_dynamic_field_id, key_to_bytes, Field};
+use crate::id::UID;
+use crate::sui_system_state::sui_system_state_inner_v1::{
+    StakeSubsidyV1, StorageFundV1, SuiSystemStateInnerV1, SystemParametersV1, ValidatorSetV1,
 };
+use crate::sui_system_state::SuiSystemStateWrapper;
+use crate::{base_types::{
+    dbg_addr, random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber,
+    SuiAddress,
+}, committee::Committee, digests::TransactionDigest, effects::{TestEffectsBuilder, TransactionEffectsAPI, TransactionEvents}, event::{Event, SystemEpochInfoEvent}, full_checkpoint_content::{CheckpointData, CheckpointTransaction}, gas_coin::GAS, message_envelope::Message, messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, EndOfEpochData,
+}, object::{MoveObject, Object, Owner, GAS_VALUE_FOR_TESTING}, programmable_transaction_builder::ProgrammableTransactionBuilder, tag_type, transaction::{
+    EndOfEpochTransactionKind, ObjectArg, SenderSignedData, Transaction, TransactionData,
+    TransactionKind,
+}, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID};
 
 /// A builder for creating test checkpoint data.
 /// Once initialized, the builder can be used to build multiple checkpoints.
@@ -674,6 +668,104 @@ impl TestCheckpointDataBuilder {
 
         let transaction_events = events.map(|events| TransactionEvents { data: events });
 
+        let version = 1;
+        let system_state_wrapper_object = Object::new_move(
+            unsafe {
+                MoveObject::new_from_execution(
+                    MoveObjectType::gas_coin(),
+                    // must be true to pass validation
+                    true,
+                    0.into(),
+                    bcs::to_bytes(&SuiSystemStateWrapper {
+                        // must be SUI_SYSTEM_STATE_OBJECT_ID
+                        id: UID::new(SUI_SYSTEM_STATE_OBJECT_ID),
+                        // 1 = SuiSystemStateInnerV1, 2 = SuiSystemStateInnerV2
+                        version,
+                    })
+                    .unwrap(),
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    false,
+                )
+                .unwrap()
+            },
+            Owner::Immutable,
+            TransactionDigest::genesis_marker(),
+        );
+        let dynamic_field_key = 0u64; // value does not matter
+        let system_state_object_id = derive_dynamic_field_id(
+            SUI_SYSTEM_STATE_OBJECT_ID,
+            &tag_type(dynamic_field_key),
+            &key_to_bytes(&version),
+        ).unwrap();
+        let system_state_inner_object = Object::new_move(
+            unsafe {
+                MoveObject::new_from_execution(
+                    MoveObjectType::gas_coin(),
+                    true,
+                    0.into(),
+                    bcs::to_bytes(&Field {
+                        // hash based on system_state_wrapper_object
+                        id: UID::new(system_state_object_id),
+                        name: dynamic_field_key,
+                        // needs to be SuiSystemStateInnerV1
+                        value: SuiSystemStateInnerV1 {
+                            epoch: 0,
+                            protocol_version: 0,
+                            system_state_version: 0,
+                            validators: ValidatorSetV1 {
+                                total_stake: 0,
+                                active_validators: vec![],
+                                pending_active_validators: Default::default(),
+                                pending_removals: vec![],
+                                staking_pool_mappings: Default::default(),
+                                inactive_validators: Default::default(),
+                                validator_candidates: Default::default(),
+                                at_risk_validators: VecMap { contents: vec![] },
+                                extra_fields: Default::default(),
+                            },
+                            storage_fund: StorageFundV1 {
+                                total_object_storage_rebates: Balance::new(0),
+                                non_refundable_balance: Balance::new(0),
+                            },
+                            parameters: SystemParametersV1 {
+                                epoch_duration_ms: 0,
+                                stake_subsidy_start_epoch: 0,
+                                max_validator_count: 0,
+                                min_validator_joining_stake: 0,
+                                validator_low_stake_threshold: 0,
+                                validator_very_low_stake_threshold: 0,
+                                validator_low_stake_grace_period: 0,
+                                extra_fields: Default::default(),
+                            },
+                            reference_gas_price: 0,
+                            validator_report_records: VecMap { contents: vec![] },
+                            stake_subsidy: StakeSubsidyV1 {
+                                balance: Balance::new(0),
+                                distribution_counter: 0,
+                                current_distribution_amount: 0,
+                                stake_subsidy_period_length: 0,
+                                stake_subsidy_decrease_rate: 0,
+                                extra_fields: Default::default(),
+                            },
+                            safe_mode: false,
+                            safe_mode_storage_rewards: Balance::new(0),
+                            safe_mode_computation_rewards: Balance::new(0),
+                            safe_mode_storage_rebates: 0,
+                            safe_mode_non_refundable_storage_fee: 0,
+                            epoch_start_timestamp_ms: 0,
+                            extra_fields: Default::default(),
+                        },
+                    })
+                    .unwrap(),
+                    &ProtocolConfig::get_for_max_version_UNSAFE(),
+                    false,
+                )
+                .unwrap()
+            },
+            Owner::Immutable,
+            TransactionDigest::genesis_marker(),
+        );
+
         // Similar to calling self.finish_transaction()
         self.checkpoint_builder
             .transactions
@@ -682,7 +774,7 @@ impl TestCheckpointDataBuilder {
                 effects: Default::default(),
                 events: transaction_events,
                 input_objects: vec![],
-                output_objects: vec![],
+                output_objects: vec![system_state_wrapper_object, system_state_inner_object],
             });
 
         // Call build_checkpoint() to finalize the checkpoint and then populate the checkpoint with
