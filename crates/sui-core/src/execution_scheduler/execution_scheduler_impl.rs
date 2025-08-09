@@ -27,7 +27,7 @@ use sui_types::{
     base_types::{FullObjectID, SequenceNumber},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    storage::InputKey,
+    storage::{ChildObjectResolver, InputKey},
     transaction::{SenderSignedData, TransactionDataAPI, TransactionKey},
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
@@ -80,6 +80,7 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         balance_accumulator_enabled: bool,
@@ -92,7 +93,7 @@ impl ExecutionScheduler {
                 .expect("Accumulator root object must be present if balance accumulator is enabled")
                 .version();
             Some(BalanceWithdrawScheduler::new(
-                Arc::new(object_cache_read.clone()),
+                Arc::new(child_object_resolver),
                 starting_accumulator_version,
             ))
         } else {
@@ -569,6 +570,7 @@ mod test {
         let execution_scheduler =
             ExecutionSchedulerWrapper::ExecutionScheduler(ExecutionScheduler::new(
                 state.get_object_cache_reader().clone(),
+                state.get_child_object_resolver().clone(),
                 state.get_transaction_cache_reader().clone(),
                 tx_ready_certificates,
                 false,

@@ -216,6 +216,10 @@ impl MoveObject {
             .splice(ID_END_INDEX.., timestamp_ms.to_le_bytes());
     }
 
+    pub fn set_contents_unsafe(&mut self, contents: Vec<u8>) {
+        self.contents = contents;
+    }
+
     pub fn is_coin(&self) -> bool {
         self.type_.is_coin()
     }
