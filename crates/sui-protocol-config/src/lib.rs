@@ -4083,6 +4083,9 @@ impl ProtocolConfig {
                     cfg.max_package_dependencies = Some(100); // Relaxed
                     cfg.max_move_package_size = Some(1024 * 1024); // Relaxed to 1 MB
                     cfg.max_total_package_size = Some(32 * 100 * 1024); // Product of the two from before.
+                    cfg.max_package_dependencies = Some(100);
+                    cfg.max_move_package_size = Some(1024 * 1024);
+                    cfg.max_total_package_size = Some(32 * 100 * 1024); // Product of previous package and dependency limits.
                 }
                 // Use this template when making changes:
                 //
