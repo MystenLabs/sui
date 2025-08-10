@@ -212,7 +212,7 @@ public fun peel_vec_u256(bcs: &mut BCS): vector<u256> {
 /// however the tag can be any `u32` value.
 ///
 /// Example:
-/// ```rust
+/// ```
 /// let my_enum = match (bcs.peel_enum_tag()) {
 ///    0 => Enum::Empty,
 ///    1 => Enum::U8(bcs.peel_u8()),
