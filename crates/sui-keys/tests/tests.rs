@@ -338,5 +338,9 @@ fn keystore_file_permissions_test() {
 
     let metadata_after = fs::metadata(&keystore_path).unwrap();
     let mode_after = metadata_after.permissions().mode();
-    assert_eq!(mode_after & 0o777, 0o600, "Keystore file permissions should remain 0o600 after operations");
+    assert_eq!(
+        mode_after & 0o777,
+        0o600,
+        "Keystore file permissions should remain 0o600 after operations"
+    );
 }
