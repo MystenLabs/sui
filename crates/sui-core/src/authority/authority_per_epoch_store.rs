@@ -1431,6 +1431,53 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
+    pub fn clear_state_hashes_after_checkpoint(
+        &self,
+        last_committed_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let tables = self.tables()?;
+
+        let mut keys_to_remove = Vec::new();
+        for kv in tables
+            .running_root_state_hash
+            .safe_iter_with_bounds(Some(last_committed_checkpoint + 1), None)
+        {
+            let (checkpoint_seq, _) = kv?;
+            if checkpoint_seq > last_committed_checkpoint {
+                keys_to_remove.push(checkpoint_seq);
+            }
+        }
+
+        for key in keys_to_remove {
+            tables.running_root_state_hash.remove(&key)?;
+            info!(
+                "Cleared running root state hash for checkpoint {} (after last committed checkpoint {})",
+                key, last_committed_checkpoint
+            );
+        }
+
+        let mut checkpoint_keys_to_remove = Vec::new();
+        for kv in tables
+            .state_hash_by_checkpoint
+            .safe_iter_with_bounds(Some(last_committed_checkpoint + 1), None)
+        {
+            let (checkpoint_seq, _) = kv?;
+            if checkpoint_seq > last_committed_checkpoint {
+                checkpoint_keys_to_remove.push(checkpoint_seq);
+            }
+        }
+
+        for key in checkpoint_keys_to_remove {
+            tables.state_hash_by_checkpoint.remove(&key)?;
+            info!(
+                "Cleared checkpoint state hash for checkpoint {} (after last committed checkpoint {})",
+                key, last_committed_checkpoint
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn reference_gas_price(&self) -> u64 {
         self.epoch_start_state().reference_gas_price()
     }
