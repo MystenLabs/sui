@@ -21,7 +21,7 @@ use move_command_line_common::files::verify_and_create_named_address_mapping;
 use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
-    Flags, FullyCompiledProgram,
+    Flags, PreCompiledProgramInfo,
 };
 use move_core_types::ident_str;
 use move_core_types::parsing::address::ParsedAddress;
@@ -336,7 +336,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
+        pre_compiled_deps: Option<Arc<PreCompiledProgramInfo>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -2292,7 +2292,7 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
     map
 });
 
-pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
+pub static PRE_COMPILED: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
     // TODO invoke package system? Or otherwise pull the versions for these packages as per their
     // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
@@ -2326,7 +2326,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "bridge", "sources"]);
         buf.to_string_lossy().to_string()
     };
-    let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
+    let pre_compiled_program = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
             paths: vec![
@@ -2343,7 +2343,7 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         None,
     )
     .unwrap();
-    match fully_compiled_res {
+    match pre_compiled_program {
         Err((files, diags)) => {
             eprintln!("!!!Sui framework failed to compile!!!");
             move_compiler::diagnostics::report_diagnostics(&files, diags)

@@ -249,6 +249,8 @@ pub fn transaction<Mode: ExecutionMode>(
                 result_type: tys,
                 // computed later
                 drop_values: vec![],
+                // computed later
+                consumed_shared_objects: vec![],
             };
             Ok(sp(idx, c))
         })
@@ -258,6 +260,8 @@ pub fn transaction<Mode: ExecutionMode>(
     scope_references::transaction(&mut ast);
     // mark unused results to be dropped
     unused_results::transaction(&mut ast);
+    // track shared object IDs
+    consumed_shared_objects::transaction(&mut ast)?;
     Ok(ast)
 }
 
@@ -898,6 +902,149 @@ mod unused_results {
     fn argument(used: &mut IndexSet<(u16, u16)>, sp!(_, (arg_, _)): &T::Argument) {
         if let T::Location::Result(i, j) = arg_.location() {
             used.insert((i, j));
+        }
+    }
+}
+
+//**************************************************************************************************
+// consumed shared object IDs
+//**************************************************************************************************
+
+mod consumed_shared_objects {
+
+    use crate::{
+        sp, static_programmable_transactions::loading::ast as L,
+        static_programmable_transactions::typing::ast as T,
+    };
+    use sui_types::{base_types::ObjectID, error::ExecutionError};
+
+    // Shared object (non-party) IDs contained in each location
+    struct Context {
+        // (legacy) shared object IDs that are used as inputs
+        inputs: Vec<Option<ObjectID>>,
+        results: Vec<Vec<Option<Vec<ObjectID>>>>,
+    }
+
+    impl Context {
+        pub fn new(ast: &T::Transaction) -> Self {
+            let T::Transaction {
+                bytes: _,
+                objects,
+                pure: _,
+                receiving: _,
+                commands: _,
+            } = ast;
+            let inputs = objects
+                .iter()
+                .map(|o| match &o.arg {
+                    L::ObjectArg::SharedObject {
+                        id,
+                        kind: L::SharedObjectKind::Legacy,
+                        ..
+                    } => Some(*id),
+                    L::ObjectArg::ImmObject(_)
+                    | L::ObjectArg::OwnedObject(_)
+                    | L::ObjectArg::SharedObject {
+                        kind: L::SharedObjectKind::Party,
+                        ..
+                    } => None,
+                })
+                .collect::<Vec<_>>();
+            Self {
+                inputs,
+                results: vec![],
+            }
+        }
+    }
+
+    /// Finds what shared objects are taken by-value by each command and must be either
+    /// deleted or re-shared.
+    /// MakeMoveVec is the only command that can take shared objects by-value and propagate them
+    /// for another command.
+    pub fn transaction(ast: &mut T::Transaction) -> Result<(), ExecutionError> {
+        let mut context = Context::new(ast);
+
+        // For each command, find what shared objects are taken by-value and mark them as being
+        // consumed
+        for c in &mut ast.commands {
+            debug_assert!(c.value.consumed_shared_objects.is_empty());
+            command(&mut context, c)?;
+            debug_assert!(context.results.last().unwrap().len() == c.value.result_type.len());
+        }
+        Ok(())
+    }
+
+    fn command(context: &mut Context, sp!(_, c): &mut T::Command) -> Result<(), ExecutionError> {
+        let mut acc = vec![];
+        match &c.command {
+            T::Command__::MoveCall(mc) => arguments(context, &mut acc, &mc.arguments),
+            T::Command__::TransferObjects(objects, recipient) => {
+                argument(context, &mut acc, recipient);
+                arguments(context, &mut acc, objects);
+            }
+            T::Command__::SplitCoins(_, coin, amounts) => {
+                arguments(context, &mut acc, amounts);
+                argument(context, &mut acc, coin);
+            }
+            T::Command__::MergeCoins(_, target, coins) => {
+                arguments(context, &mut acc, coins);
+                argument(context, &mut acc, target);
+            }
+            T::Command__::MakeMoveVec(_, elements) => arguments(context, &mut acc, elements),
+            T::Command__::Publish(_, _, _) => (),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(context, &mut acc, x),
+        }
+        let (consumed, result) = match &c.command {
+            // make move vec does not "consume" any by-value shared objects, and can propagate
+            // them to a later command
+            T::Command__::MakeMoveVec(_, _) => {
+                assert_invariant!(
+                    c.result_type.len() == 1,
+                    "MakeMoveVec must return a single value"
+                );
+                (vec![], vec![Some(acc)])
+            }
+            // these commands do not propagate shared objects, and consume any in the acc
+            T::Command__::MoveCall(_)
+            | T::Command__::TransferObjects(_, _)
+            | T::Command__::SplitCoins(_, _, _)
+            | T::Command__::MergeCoins(_, _, _)
+            | T::Command__::Publish(_, _, _)
+            | T::Command__::Upgrade(_, _, _, _, _) => (acc, vec![None; c.result_type.len()]),
+        };
+        c.consumed_shared_objects = consumed;
+        context.results.push(result);
+        Ok(())
+    }
+
+    fn arguments(context: &mut Context, acc: &mut Vec<ObjectID>, args: &[T::Argument]) {
+        for arg in args {
+            argument(context, acc, arg)
+        }
+    }
+
+    fn argument(context: &mut Context, acc: &mut Vec<ObjectID>, sp!(_, (arg_, _)): &T::Argument) {
+        let T::Argument__::Use(T::Usage::Move(loc)) = arg_ else {
+            // only Move usage can take shared objects by-value since they cannot be copied
+            return;
+        };
+        match loc {
+            // no shared objects in these locations
+            T::Location::TxContext
+            | T::Location::GasCoin
+            | T::Location::PureInput(_)
+            | T::Location::ReceivingInput(_) => (),
+            T::Location::ObjectInput(i) => {
+                if let Some(id) = context.inputs[*i as usize] {
+                    acc.push(id);
+                }
+            }
+
+            T::Location::Result(i, j) => {
+                if let Some(ids) = &context.results[*i as usize][*j as usize] {
+                    acc.extend(ids.iter().copied());
+                }
+            }
         }
     }
 }

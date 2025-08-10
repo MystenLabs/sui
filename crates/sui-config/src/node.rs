@@ -5,6 +5,7 @@ use crate::genesis;
 use crate::object_storage_config::ObjectStoreConfig;
 use crate::p2p::P2pConfig;
 use crate::transaction_deny_config::TransactionDenyConfig;
+use crate::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use crate::verifier_signing_config::VerifierSigningConfig;
 use crate::Config;
 use anyhow::Result;
@@ -211,6 +212,11 @@ pub struct NodeConfig {
     /// override this value on production networks will result in an error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain_override_for_testing: Option<Chain>,
+
+    /// Configuration for validator client monitoring from the client perspective.
+    /// When enabled, tracks client-observed performance metrics for validators.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub validator_client_monitor_config: Option<ValidatorClientMonitorConfig>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

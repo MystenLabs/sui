@@ -139,6 +139,7 @@ fn execute_command<Mode: ExecutionMode>(
         command,
         result_type,
         drop_values,
+        consumed_shared_objects,
     } = c;
     let mut args_to_update = vec![];
     let result = match command {
@@ -321,6 +322,7 @@ fn execute_command<Mode: ExecutionMode>(
         .zip(drop_values)
         .map(|(value, drop)| if !drop { Some(value) } else { None })
         .collect::<Vec<_>>();
+    context.check_shared_object_usage(consumed_shared_objects)?;
     context.result(result)?;
     Ok(())
 }

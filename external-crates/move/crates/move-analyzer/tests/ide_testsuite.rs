@@ -263,18 +263,23 @@ impl CursorTest {
         let cursor_path = path.to_path_buf();
         let cursor_info = Some((&cursor_path, Position { line, character }));
         let mut symbols_computation_data = SymbolsComputationData::new();
-        let mut symbols_computation_data_deps = SymbolsComputationData::new();
+        let typed_mod_named_address_maps = compiled_pkg_info
+            .program
+            .typed_modules
+            .iter()
+            .map(|(_, _, mdef)| (mdef.loc, mdef.named_address_map.clone()))
+            .collect::<BTreeMap<_, _>>();
         let mut cursor_context = compute_symbols_pre_process(
             &mut symbols_computation_data,
-            &mut symbols_computation_data_deps,
             &mut compiled_pkg_info,
             cursor_info,
+            &typed_mod_named_address_maps,
         );
         cursor_context = compute_symbols_parsed_program(
             &mut symbols_computation_data,
-            &mut symbols_computation_data_deps,
             &compiled_pkg_info,
             cursor_context,
+            &typed_mod_named_address_maps,
         );
         symbols.cursor_context = cursor_context.clone();
 

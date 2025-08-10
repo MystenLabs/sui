@@ -10,6 +10,7 @@ use rand::rngs::OsRng;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::node::RunWithRange;
+use sui_core::transaction_driver::QuorumTransactionResponse;
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_json_rpc_types::{
     EventPage, SuiEvent, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
@@ -35,9 +36,7 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, QuorumDriverResponse,
-};
+use sui_types::quorum_driver_types::{ExecuteTransactionRequestType, ExecuteTransactionRequestV3};
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
     CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
@@ -748,8 +747,8 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 
     let (
         tx,
-        QuorumDriverResponse {
-            effects_cert: certified_txn_effects,
+        QuorumTransactionResponse {
+            effects: finalized_effects,
             events: txn_events,
             ..
         },
@@ -758,7 +757,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert_eq!(*tx.digest(), digest);
     assert_eq!(
         response.effects.effects.digest(),
-        *certified_txn_effects.digest()
+        finalized_effects.effects.digest()
     );
     assert!(is_executed_locally);
     assert_eq!(
@@ -783,8 +782,8 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
 
     let (
         tx,
-        QuorumDriverResponse {
-            effects_cert: certified_txn_effects,
+        QuorumTransactionResponse {
+            effects: finalized_effects,
             events: txn_events,
             ..
         },
@@ -793,7 +792,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert_eq!(*tx.digest(), digest);
     assert_eq!(
         response.effects.effects.digest(),
-        *certified_txn_effects.digest()
+        finalized_effects.effects.digest()
     );
     assert_eq!(
         txn_events.unwrap_or_default().digest(),
@@ -1213,8 +1212,8 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
 
     let (
         _tx,
-        QuorumDriverResponse {
-            effects_cert: _certified_txn_effects,
+        QuorumTransactionResponse {
+            effects: _finalized_effects,
             events: _txn_events,
             ..
         },

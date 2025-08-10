@@ -105,6 +105,7 @@ use sui_core::overload_monitor::overload_monitor;
 use sui_core::rpc_index::RpcIndexStore;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
 use sui_core::storage::RocksDbStore;
+use sui_core::transaction_orchestrator::QuorumTransactionEffectsResult;
 use sui_core::transaction_orchestrator::TransactionOrchestrator;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
@@ -138,7 +139,6 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilitiesV1, ConsensusTransaction,
 };
-use sui_types::quorum_driver_types::QuorumDriverEffectsQueueResult;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -796,6 +796,7 @@ impl SuiNode {
                 end_of_epoch_receiver,
                 &config.db_path(),
                 &prometheus_registry,
+                &config,
             )))
         } else {
             None
@@ -1716,7 +1717,7 @@ impl SuiNode {
 
     pub fn subscribe_to_transaction_orchestrator_effects(
         &self,
-    ) -> Result<tokio::sync::broadcast::Receiver<QuorumDriverEffectsQueueResult>> {
+    ) -> Result<tokio::sync::broadcast::Receiver<QuorumTransactionEffectsResult>> {
         self.transaction_orchestrator
             .as_ref()
             .map(|to| to.subscribe_to_effects_queue())

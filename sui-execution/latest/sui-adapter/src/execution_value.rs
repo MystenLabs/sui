@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use move_binary_format::file_format::AbilitySet;
-use move_core_types::identifier::IdentStr;
 use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
@@ -70,12 +71,8 @@ pub enum UsageKind {
 }
 
 #[derive(Clone, Copy)]
-pub enum CommandKind<'a> {
-    MoveCall {
-        package: ObjectID,
-        module: &'a IdentStr,
-        function: &'a IdentStr,
-    },
+pub enum CommandKind {
+    MoveCall,
     MakeMoveVec,
     TransferObjects,
     SplitCoins,
@@ -98,6 +95,7 @@ pub struct ResultValue {
     /// a "move" of the value.
     pub last_usage_kind: Option<UsageKind>,
     pub value: Option<Value>,
+    pub shared_object_ids: BTreeSet<ObjectID>,
 }
 
 #[derive(Debug, Clone)]
@@ -159,9 +157,18 @@ impl InputObjectMetadata {
 
 impl InputValue {
     pub fn new_object(object_metadata: InputObjectMetadata, value: ObjectValue) -> Self {
+        let mut inner = ResultValue::new(Value::Object(value));
+        if let InputObjectMetadata::InputObject {
+            id,
+            owner: Owner::Shared { .. },
+            ..
+        } = &object_metadata
+        {
+            inner.shared_object_ids.insert(*id);
+        }
         InputValue {
             object_metadata: Some(object_metadata),
-            inner: ResultValue::new(Value::Object(value)),
+            inner,
         }
     }
 
@@ -186,6 +193,7 @@ impl InputValue {
             inner: ResultValue {
                 last_usage_kind: None,
                 value: None,
+                shared_object_ids: BTreeSet::new(),
             },
         }
     }
@@ -196,6 +204,7 @@ impl ResultValue {
         Self {
             last_usage_kind: None,
             value: Some(value),
+            shared_object_ids: BTreeSet::new(),
         }
     }
 }
