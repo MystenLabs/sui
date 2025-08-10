@@ -217,6 +217,24 @@ pub struct NodeConfig {
     /// When enabled, tracks client-observed performance metrics for validators.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validator_client_monitor_config: Option<ValidatorClientMonitorConfig>,
+
+    /// Fork recovery configuration for handling validator equivocation after forks
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fork_recovery: Option<ForkRecoveryConfig>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ForkRecoveryConfig {
+    /// Map of transaction digest to effects digest overrides
+    /// Used to repoint transactions to correct effects after a fork
+    #[serde(default)]
+    pub transaction_overrides: BTreeMap<String, String>,
+
+    /// Map of checkpoint sequence number to checkpoint digest overrides
+    /// Used to repoint checkpoints to correct versions after a fork
+    #[serde(default)]
+    pub checkpoint_overrides: BTreeMap<u64, String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
