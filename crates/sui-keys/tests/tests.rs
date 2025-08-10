@@ -330,7 +330,11 @@ fn keystore_file_permissions_test() {
 
     let metadata = fs::metadata(&keystore_path).unwrap();
     let mode = metadata.permissions().mode();
-    assert_eq!(mode & 0o777, 0o600, "Keystore file should have 0o600 permissions");
+    assert_eq!(
+        mode & 0o777,
+        0o600,
+        "Keystore file should have 0o600 permissions"
+    );
 
     keystore
         .generate(SignatureScheme::ED25519, None, None, None)
