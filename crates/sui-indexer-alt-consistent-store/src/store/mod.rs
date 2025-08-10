@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use std::sync::OnceLock;
 use std::{path::Path, sync::Arc, time::Duration};
