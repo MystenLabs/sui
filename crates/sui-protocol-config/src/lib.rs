@@ -3880,7 +3880,7 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .ignore_execution_time_observations_after_certs_closed = true;
 
-                    // Disable backwards compatible behavior in exeuction time estimator for
+                    // Disable backwards compatible behavior in execution time estimator for
                     // new protocol version.
                     cfg.feature_flags.per_object_congestion_control_mode =
                         PerObjectCongestionControlMode::ExecutionTimeEstimate(
@@ -3937,7 +3937,9 @@ impl ProtocolConfig {
             cfg.consensus_gc_depth = Some(5);
 
             // Trigger checkpoint splitting more often.
-            cfg.max_transactions_per_checkpoint = Some(10);
+            // cfg.max_transactions_per_checkpoint = Some(10);
+            // FIXME: Re-introduce this once we resolve the checkpoint splitting issue
+            // in the quarantine output.
         }
 
         cfg
