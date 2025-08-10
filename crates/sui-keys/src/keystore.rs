@@ -325,6 +325,7 @@ impl AccountKeystore for FileBasedKeystore {
 impl FileBasedKeystore {
     pub fn new(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
+            #[cfg(unix)]
             let _ = set_reduced_file_permissions(path).inspect_err(|error| {
                 eprintln!(
                     "[{}]: while attempting to ensure reduced file permissions on '{}'. Cannot set \
@@ -458,8 +459,7 @@ impl FileBasedKeystore {
             )
             .with_context(|| format!("Cannot serialize keystore to file: {}", path.display()))?;
             fs::write(path, store)?;
-            // REVIEW: consider whether to fail this operation. For now I think just warning is
-            // sufficient.
+            #[cfg(unix)]
             let _ = set_reduced_file_permissions(path).inspect_err(|error| {
                 eprintln!(
                     "While attempting to set reduced file permissions on '{}'. Cannot set \
@@ -482,6 +482,7 @@ impl FileBasedKeystore {
     }
 }
 
+#[cfg(unix)]
 fn set_reduced_file_permissions(path: impl AsRef<Path>) -> Result<(), anyhow::Error> {
     let path = path.as_ref();
     let metadata = fs::metadata(path)?;
