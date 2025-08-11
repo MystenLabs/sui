@@ -2155,8 +2155,9 @@ impl AuthorityState {
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
-        let executor = sui_execution::executor(protocol_config, silent, None)
-            .expect("Creating an executor should not fail here");
+        let executor =
+            sui_execution::executor(protocol_config, silent, epoch_store.get_chain(), None)
+                .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
         let early_execution_error = get_early_execution_error(
@@ -2361,6 +2362,7 @@ impl AuthorityState {
         let executor = sui_execution::executor(
             protocol_config,
             true, // silent
+            epoch_store.get_chain(),
             None,
         )
         .expect("Creating an executor should not fail here");
@@ -2553,8 +2555,13 @@ impl AuthorityState {
             }
         };
 
-        let executor = sui_execution::executor(protocol_config, /* silent */ true, None)
-            .expect("Creating an executor should not fail here");
+        let executor = sui_execution::executor(
+            protocol_config,
+            /* silent */ true,
+            epoch_store.get_chain(),
+            None,
+        )
+        .expect("Creating an executor should not fail here");
         let gas_data = transaction.gas_data().clone();
         let intent_msg = IntentMessage::new(
             Intent {
@@ -4786,8 +4793,12 @@ impl AuthorityState {
             let modules = system_package.modules().to_vec();
             // In simtests, we could override the current built-in framework packages.
             #[cfg(msim)]
-            let modules = framework_injection::get_override_modules(&system_package.id, self.name)
-                .unwrap_or(modules);
+            let modules =
+                match framework_injection::get_override_modules(&system_package.id, self.name) {
+                    Some(overrides) if overrides.is_empty() => continue,
+                    Some(overrides) => overrides,
+                    None => modules,
+                };
 
             let Some(obj_ref) = sui_framework::compare_system_package(
                 &self.get_object_store(),
@@ -5442,10 +5453,12 @@ impl AuthorityState {
                 )
             };
 
-        // since system packages are created during the current epoch, they should abide by the
-        // rules of the current epoch, including the current epoch's max Move binary format version
-        let config = epoch_store.protocol_config();
-        let binary_config = to_binary_config(config);
+        // Even though the system packages are committed to in the current epoch, they will run and
+        // be deserialized in the next, so they should abide by (and support) the binary config of
+        // the incoming epoch that has been determined, and not the current one.
+        let incoming_config =
+            ProtocolConfig::get_for_version(next_epoch_protocol_version, epoch_store.get_chain());
+        let binary_config = to_binary_config(&incoming_config);
         let Some(next_epoch_system_package_bytes) = self
             .get_system_package_bytes(next_epoch_system_packages.clone(), &binary_config)
             .await
@@ -5977,6 +5990,25 @@ pub mod framework_injection {
                 buf
             })
             .collect()
+    }
+
+    pub fn set_system_packages(packages: Vec<SystemPackage>) {
+        OVERRIDE.with(|bs| {
+            let mut new_packages_not_to_include = BuiltInFramework::all_package_ids()
+                .into_iter()
+                .collect::<BTreeSet<_>>();
+            for pkg in &packages {
+                new_packages_not_to_include.remove(&pkg.id);
+            }
+            for pkg in packages {
+                bs.borrow_mut()
+                    .insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
+            }
+            for empty_pkg in new_packages_not_to_include {
+                bs.borrow_mut()
+                    .insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
+            }
+        });
     }
 
     pub fn set_override(package_id: ObjectID, modules: Vec<CompiledModule>) {

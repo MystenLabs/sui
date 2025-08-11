@@ -43,6 +43,7 @@ sui-json-rpc-types.workspace = true
 serde_json.workspace = true
 zstd.workspace = true
 tabled.workspace = true
+sui-protocol-config.workspace = true
 
 [build-dependencies]
 cynic-codegen.workspace = true

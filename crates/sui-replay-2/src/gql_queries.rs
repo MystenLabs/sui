@@ -93,6 +93,7 @@ pub mod epoch_query {
                     "Canot find epoch info for epoch {}",
                     epoch_id
                 )))?,
+            chain: data_store.chain(),
         })
     }
 }

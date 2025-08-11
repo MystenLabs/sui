@@ -5,7 +5,7 @@ use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::transaction::GasData;
@@ -38,7 +38,10 @@ use crate::executor;
 use crate::verifier;
 use sui_adapter_latest::execution_mode;
 
-pub(crate) struct Executor(Arc<MoveVM>);
+pub(crate) struct Executor {
+    vm: Arc<MoveVM>,
+    chain: Chain,
+}
 
 pub(crate) struct Verifier<'m> {
     config: VerifierConfig,
@@ -49,13 +52,17 @@ impl Executor {
     pub(crate) fn new(
         protocol_config: &ProtocolConfig,
         silent: bool,
+        chain: Chain,
         enable_profiler: Option<PathBuf>,
     ) -> Result<Self, SuiError> {
-        Ok(Executor(Arc::new(new_move_vm(
-            all_natives(silent, protocol_config),
-            protocol_config,
-            enable_profiler,
-        )?)))
+        Ok(Executor {
+            vm: Arc::new(new_move_vm(
+                all_natives(silent, protocol_config),
+                protocol_config,
+                enable_profiler,
+            )?),
+            chain,
+        })
     }
 }
 
@@ -97,8 +104,9 @@ impl executor::Executor for Executor {
             transaction_kind,
             transaction_signer,
             transaction_digest,
-            &self.0,
+            &self.vm,
             epoch_id,
+            self.chain,
             epoch_timestamp_ms,
             protocol_config,
             metrics,
@@ -139,8 +147,9 @@ impl executor::Executor for Executor {
                 transaction_kind,
                 transaction_signer,
                 transaction_digest,
-                &self.0,
+                &self.vm,
                 epoch_id,
+                self.chain,
                 epoch_timestamp_ms,
                 protocol_config,
                 metrics,
@@ -157,8 +166,9 @@ impl executor::Executor for Executor {
                 transaction_kind,
                 transaction_signer,
                 transaction_digest,
-                &self.0,
+                &self.vm,
                 epoch_id,
+                self.chain,
                 epoch_timestamp_ms,
                 protocol_config,
                 metrics,
@@ -198,10 +208,11 @@ impl executor::Executor for Executor {
             store,
             protocol_config,
             metrics,
-            &self.0,
+            &self.vm,
             tx_context,
             input_objects,
             pt,
+            self.chain,
         )
     }
 
@@ -209,7 +220,7 @@ impl executor::Executor for Executor {
         &'vm self,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r> {
-        Box::new(TypeLayoutResolver::new(&self.0, store))
+        Box::new(TypeLayoutResolver::new(&self.vm, store))
     }
 }
 

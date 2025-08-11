@@ -39,7 +39,8 @@ mod checked {
     use move_core_types::ident_str;
     use sui_move_natives::all_natives;
     use sui_protocol_config::{
-        LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig, check_limit_by_meter,
+        Chain, LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig,
+        check_limit_by_meter,
     };
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
@@ -95,6 +96,7 @@ mod checked {
         transaction_digest: TransactionDigest,
         move_vm: &Arc<MoveVM>,
         epoch_id: &EpochId,
+        chain: Chain,
         epoch_timestamp_ms: u64,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -125,6 +127,7 @@ mod checked {
             transaction_digest,
             protocol_config,
             *epoch_id,
+            chain,
         );
 
         let sponsor = {
@@ -277,6 +280,7 @@ mod checked {
         tx_context: Rc<RefCell<TxContext>>,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
+        chain: Chain,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
         let input_objects = input_objects.into_inner();
         let mut temporary_store = TemporaryStore::new(
@@ -286,6 +290,7 @@ mod checked {
             tx_context.borrow().digest(),
             protocol_config,
             0,
+            chain,
         );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.borrow().digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
@@ -1022,37 +1027,26 @@ mod checked {
             }
         }
 
-        if protocol_config.fresh_vm_on_framework_upgrade() {
-            let new_vm = new_move_vm(
-                all_natives(/* silent */ true, protocol_config),
-                protocol_config,
-                /* enable_profiler */ None,
-            )
-            .expect("Failed to create new MoveVM");
-            process_system_packages(
-                change_epoch,
-                temporary_store,
-                store,
-                tx_ctx,
-                &new_vm,
-                gas_charger,
-                protocol_config,
-                metrics,
-                trace_builder_opt,
-            );
-        } else {
-            process_system_packages(
-                change_epoch,
-                temporary_store,
-                store,
-                tx_ctx,
-                move_vm,
-                gas_charger,
-                protocol_config,
-                metrics,
-                trace_builder_opt,
-            );
-        }
+        let incoming_protocol_config =
+            ProtocolConfig::get_for_version(change_epoch.protocol_version, temporary_store.chain());
+        let new_vm = new_move_vm(
+            all_natives(/* silent */ true, &incoming_protocol_config),
+            &incoming_protocol_config,
+            /* enable_profiler */ None,
+        )
+        .expect("Failed to create new MoveVM");
+        process_system_packages(
+            change_epoch,
+            temporary_store,
+            store,
+            tx_ctx,
+            &new_vm,
+            gas_charger,
+            &incoming_protocol_config,
+            metrics,
+            trace_builder_opt,
+        );
+
         Ok(())
     }
 
