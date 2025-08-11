@@ -1350,6 +1350,27 @@ impl ConsensusBlockHandler {
                     block,
                     index: txn_idx as TransactionIndex,
                 };
+
+                let status_str = if parsed.rejected {
+                    "rejected"
+                } else {
+                    "certified"
+                }
+                .to_string();
+                if let ConsensusTransactionKind::UserTransaction(tx) = &parsed.transaction.kind {
+                    debug!(
+                        "User Transaction in position: {:?} with digest {:?} is {:?}",
+                        position,
+                        tx.digest(),
+                        status_str
+                    );
+                } else {
+                    debug!(
+                        "System Transaction in position: {:?} is {:?}",
+                        position, status_str
+                    );
+                }
+
                 if parsed.rejected {
                     // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
                     self.epoch_store
@@ -1360,6 +1381,7 @@ impl ConsensusBlockHandler {
                         .inc();
                     continue;
                 }
+
                 self.epoch_store
                     .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
 

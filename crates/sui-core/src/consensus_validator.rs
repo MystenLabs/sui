@@ -14,7 +14,7 @@ use sui_types::{
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{debug, info, warn};
+use tracing::{info, instrument, warn};
 
 use crate::{
     authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
@@ -151,6 +151,7 @@ impl SuiTxValidator {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all, fields(block_ref = ?block_ref))]
     fn vote_transactions(
         &self,
         block_ref: &BlockRef,
@@ -168,7 +169,6 @@ impl SuiTxValidator {
             };
 
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
-                debug!("Failed to vote transaction: {:?}", error);
                 result.push(i as TransactionIndex);
 
                 // Cache the rejection vote reason (error) for the transaction
@@ -186,6 +186,7 @@ impl SuiTxValidator {
         result
     }
 
+    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx.digest()))]
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
