@@ -538,13 +538,15 @@ impl FileBasedKeystore {
             tokio::task::spawn_blocking(move || {
                 let ret = std::fs::write(&keystore_path, store);
                 #[cfg(unix)]
-                let _ = set_reduced_file_permissions(&keystore_path).inspect_err(|error| {
-                    eprintln!(
-                        "While attempting to set reduced file permissions on '{}'. Cannot set \
-                            permissions for keystore file. Error: {error}",
-                        keystore_path.display()
-                    );
-                });
+                if ret.is_ok() {
+                    let _ = set_reduced_file_permissions(&keystore_path).inspect_err(|error| {
+                        eprintln!(
+                            "While attempting to set reduced file permissions on '{}'. Cannot set \
+                                permissions for keystore file. Error: {error}",
+                            keystore_path.display()
+                        );
+                    });
+                }
                 ret
             })
             .await?
