@@ -8,6 +8,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use jsonrpsee::{
@@ -29,6 +30,7 @@ use super::RpcMetrics;
 pub(crate) struct MetricsLayer {
     metrics: Arc<RpcMetrics>,
     methods: Arc<HashSet<String>>,
+    slow_request_threshold: Duration,
 }
 
 /// The Tower Service responsible for wrapping the JSON-RPC request handler with metrics handling.
@@ -50,6 +52,7 @@ pub(crate) struct MetricsFuture<'a, F> {
     method: Cow<'a, str>,
     // RPC request params for logging
     params: Option<Cow<'a, RawValue>>,
+    slow_request_threshold: Duration,
     #[pin]
     inner: F,
 }
@@ -57,10 +60,15 @@ pub(crate) struct MetricsFuture<'a, F> {
 impl MetricsLayer {
     /// Create a new metrics layer that only records statistics for the given methods (any other
     /// methods will be replaced with "<UNKNOWN>").
-    pub fn new(metrics: Arc<RpcMetrics>, methods: HashSet<String>) -> Self {
+    pub fn new(
+        metrics: Arc<RpcMetrics>,
+        methods: HashSet<String>,
+        slow_request_threshold: Duration,
+    ) -> Self {
         Self {
             metrics,
             methods: Arc::new(methods),
+            slow_request_threshold,
         }
     }
 }
@@ -115,6 +123,7 @@ where
             }),
             method,
             params: request.params.clone(),
+            slow_request_threshold: self.layer.slow_request_threshold,
             inner: self.inner.call(request),
         }
     }
@@ -139,13 +148,17 @@ where
 
         let method = this.method.as_ref();
         let elapsed_ms = metrics.timer.stop_and_record() * 1000.0;
+        let slow_threshold_ms = this.slow_request_threshold.as_millis() as f64;
 
-        if let Some(code) = resp.as_error_code() {
-            metrics
-                .failed
-                .with_label_values(&[method, &format!("{code}")])
-                .inc();
+        // Determine if we need detailed logging that includes params and response.
+        let needs_detailed_log = if let Some(code) = resp.as_error_code() {
+            code == INTERNAL_ERROR_CODE || tracing::enabled!(tracing::Level::DEBUG)
+        } else {
+            elapsed_ms > slow_threshold_ms
+        };
 
+        // Only compute params and response when needed for detailed logging
+        let (params, response) = if needs_detailed_log {
             let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
             let result = resp.as_result();
             let response = if result.len() > 1000 {
@@ -153,6 +166,16 @@ where
             } else {
                 result.to_string()
             };
+            (params, response)
+        } else {
+            ("", String::new())
+        };
+
+        if let Some(code) = resp.as_error_code() {
+            metrics
+                .failed
+                .with_label_values(&[method, &format!("{code}")])
+                .inc();
 
             if code == INTERNAL_ERROR_CODE {
                 error!(
@@ -169,7 +192,19 @@ where
             }
         } else {
             metrics.succeeded.with_label_values(&[method]).inc();
-            info!(method, elapsed_ms, "Request succeeded");
+
+            if elapsed_ms > slow_threshold_ms {
+                warn!(
+                    method,
+                    params,
+                    response,
+                    elapsed_ms,
+                    threshold_ms = slow_threshold_ms,
+                    "Slow request - exceeded threshold but succeeded"
+                );
+            } else {
+                info!(method, elapsed_ms, "Request succeeded");
+            }
         }
 
         Poll::Ready(resp)
@@ -189,8 +224,7 @@ impl<F> PinnedDrop for MetricsFuture<'_, F> {
 
             info!(method, elapsed_ms, "Request cancelled");
 
-            // TODO: make this configurable
-            if elapsed_ms > 5000.0 {
+            if elapsed_ms > this.slow_request_threshold.as_millis() as f64 {
                 let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
                 warn!(
                     method,
