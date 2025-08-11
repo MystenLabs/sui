@@ -5,11 +5,17 @@ description: The `sui-indexer-alt-framework` is a powerful Rust framework for bu
 
 Sui generates rich, complex data, including transactions, events, object changes, and more. While Sui provides standard APIs to access this data, many applications need customized data processing for workflows such as tracking specific events, aggregating analytics, building dashboards, or creating specialized databases.
 
-The `sui-indexer-alt-framework` is a powerful Rust framework for building high-performance, custom blockchain indexers on Sui. It provides production-ready components for data ingestion, processing, and storage while giving you full control over your indexing logic.
+A custom indexer can be used to extract, transform, and store the specific blockchain data you need. Instead of querying Sui APIs repeatedly or building complex filtering logic, you process the raw blockchain data once and store it in your preferred format.
 
-A custom indexer solves this by letting you extract, transform, and store exactly the blockchain data you need. Instead of querying Sui APIs repeatedly or building complex filtering logic, you process the raw blockchain data once and store it in your preferred format.
+To create a custom indexer, the `sui-indexer-alt-framework` Rust framework can be used. It provides production-ready components for data ingestion, processing, and storage while giving you full control over your indexing logic.
 
-Leveraging the custom indexing framework is necessary for projects that track DEX trading volumes, monitor NFT collection activity, build analytics dashboards, create specialized search indexes, aggregate cross-chain bridge data, and many more use cases.
+Leveraging the custom indexing framework is necessary for projects and use cases such as:
+
+- Tracking DEX trading volumes
+- Monitoring NFT collection activity
+- Building analytics dashboards
+- Creating specialized search indexes
+- Aggregating cross-chain bridge data
 
 ## Framework architecture
 
