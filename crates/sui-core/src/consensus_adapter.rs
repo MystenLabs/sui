@@ -48,6 +48,8 @@ use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::{self};
+use tracing::instrument;
+use tracing::Instrument;
 use tracing::{debug, info, trace, warn};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -670,11 +672,14 @@ impl ConsensusAdapter {
         tx_consensus_position: Option<oneshot::Sender<Vec<ConsensusPosition>>>,
     ) -> JoinHandle<()> {
         // Reconfiguration lock is dropped when pending_consensus_transactions is persisted, before it is handled by consensus
-        let async_stage = self.clone().submit_and_wait(
-            transactions.to_vec(),
-            epoch_store.clone(),
-            tx_consensus_position,
-        );
+        let async_stage = self
+            .clone()
+            .submit_and_wait(
+                transactions.to_vec(),
+                epoch_store.clone(),
+                tx_consensus_position,
+            )
+            .in_current_span();
         // Number of these tasks is weakly limited based on `num_inflight_transactions`.
         // (Limit is not applied atomically, and only to user transactions.)
         let join_handle = spawn_monitored_task!(async_stage);
@@ -709,6 +714,7 @@ impl ConsensusAdapter {
     }
 
     #[allow(clippy::option_map_unit_fn)]
+    #[instrument(level="trace", skip_all, fields(tx_count = ?transactions.len(), tx_type = tracing::field::Empty, tx_keys = tracing::field::Empty, status = tracing::field::Empty, consensus_positions = tracing::field::Empty))]
     async fn submit_and_wait_inner(
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
@@ -747,6 +753,8 @@ impl ConsensusAdapter {
         } else {
             "soft_bundle"
         };
+        tracing::Span::current().record("tx_type", tx_type);
+        tracing::Span::current().record("tx_keys", tracing::field::debug(&transaction_keys));
 
         let mut guard = InflightDropGuard::acquire(&self, tx_type);
 
@@ -845,6 +853,10 @@ impl ConsensusAdapter {
                         .await;
 
                     if let Some(tx_consensus_positions) = tx_consensus_positions.take() {
+                        tracing::Span::current().record(
+                            "consensus_positions",
+                            tracing::field::debug(&consensus_positions),
+                        );
                         // We send the first consensus position returned by consensus
                         // to the submitting client even if it is retried internally within
                         // consensus adapter due to an error or GC. They can handle retries
@@ -855,6 +867,7 @@ impl ConsensusAdapter {
 
                     match status_waiter.await {
                         Ok(BlockStatus::Sequenced(_)) => {
+                            tracing::Span::current().record("status", "sequenced");
                             self.metrics
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "sequenced"])
@@ -866,6 +879,7 @@ impl ConsensusAdapter {
                             break;
                         }
                         Ok(BlockStatus::GarbageCollected(_)) => {
+                            tracing::Span::current().record("status", "garbage_collected");
                             self.metrics
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "garbage_collected"])
