@@ -230,6 +230,48 @@ impl SuiObjectData {
             None => false,
         }
     }
+
+    pub fn try_into_object(
+        self,
+        protocol_config: &ProtocolConfig,
+    ) -> Result<Object, anyhow::Error> {
+        let data = match self.bcs {
+            Some(SuiRawData::MoveObject(o)) => Data::Move(unsafe {
+                MoveObject::new_from_execution(
+                    o.type_().clone().into(),
+                    o.has_public_transfer,
+                    o.version,
+                    o.bcs_bytes,
+                    protocol_config,
+                    /* system_mutation */ false,
+                )?
+            }),
+            Some(SuiRawData::Package(p)) => Data::Package(MovePackage::new(
+                p.id,
+                self.version,
+                p.module_map,
+                protocol_config.max_move_package_size(),
+                p.type_origin_table,
+                p.linkage_table,
+            )?),
+            _ => Err(anyhow!(
+                "BCS data is required to convert SuiObjectData to Object"
+            ))?,
+        };
+        Ok(ObjectInner {
+            data,
+            owner: self
+                .owner
+                .ok_or_else(|| anyhow!("Owner is required to convert SuiObjectData to Object"))?,
+            previous_transaction: self.previous_transaction.ok_or_else(|| {
+                anyhow!("previous_transaction is required to convert SuiObjectData to Object")
+            })?,
+            storage_rebate: self.storage_rebate.ok_or_else(|| {
+                anyhow!("storage_rebate is required to convert SuiObjectData to Object")
+            })?,
+        }
+        .into())
+    }
 }
 
 impl Display for SuiObjectData {
@@ -612,42 +654,7 @@ impl TryInto<Object> for SuiObjectData {
 
     fn try_into(self) -> Result<Object, Self::Error> {
         let protocol_config = ProtocolConfig::get_for_min_version();
-        let data = match self.bcs {
-            Some(SuiRawData::MoveObject(o)) => Data::Move(unsafe {
-                MoveObject::new_from_execution(
-                    o.type_().clone().into(),
-                    o.has_public_transfer,
-                    o.version,
-                    o.bcs_bytes,
-                    &protocol_config,
-                    /* system_mutation */ false,
-                )?
-            }),
-            Some(SuiRawData::Package(p)) => Data::Package(MovePackage::new(
-                p.id,
-                self.version,
-                p.module_map,
-                protocol_config.max_move_package_size(),
-                p.type_origin_table,
-                p.linkage_table,
-            )?),
-            _ => Err(anyhow!(
-                "BCS data is required to convert SuiObjectData to Object"
-            ))?,
-        };
-        Ok(ObjectInner {
-            data,
-            owner: self
-                .owner
-                .ok_or_else(|| anyhow!("Owner is required to convert SuiObjectData to Object"))?,
-            previous_transaction: self.previous_transaction.ok_or_else(|| {
-                anyhow!("previous_transaction is required to convert SuiObjectData to Object")
-            })?,
-            storage_rebate: self.storage_rebate.ok_or_else(|| {
-                anyhow!("storage_rebate is required to convert SuiObjectData to Object")
-            })?,
-        }
-        .into())
+        self.try_into_object(&protocol_config)
     }
 }
 

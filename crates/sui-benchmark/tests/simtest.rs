@@ -23,7 +23,7 @@ mod test {
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
-        LocalValidatorAggregatorProxy, ValidatorProxy,
+        FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::node::AuthorityOverloadConfig;
     use sui_config::ExecutionCacheConfig;
@@ -1074,6 +1074,7 @@ mod test {
 
     #[derive(Debug)]
     struct SimulatedLoadConfig {
+        remote_env: bool,
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
         slow_weight: u32,
@@ -1095,6 +1096,7 @@ mod test {
     impl Default for SimulatedLoadConfig {
         fn default() -> Self {
             Self {
+                remote_env: true,
                 shared_counter_weight: 1,
                 slow_weight: 1,
                 transfer_object_weight: 1,
@@ -1151,15 +1153,23 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
-            LocalValidatorAggregatorProxy::from_genesis(
-                &genesis,
-                &registry,
-                None,
-                test_cluster.transaction_driver_percentage(),
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
+            Arc::new(
+                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url)
+                    .await
+                    .unwrap(),
             )
-            .await,
-        );
+        } else {
+            Arc::new(
+                LocalValidatorAggregatorProxy::from_genesis(
+                    &genesis,
+                    &registry,
+                    Some(test_cluster.fullnode_handle.rpc_url.as_str()),
+                    test_cluster.transaction_driver_percentage(),
+                )
+                .await,
+            )
+        };
 
         let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
         let system_state_observer = {
