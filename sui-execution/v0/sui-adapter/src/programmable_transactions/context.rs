@@ -197,25 +197,6 @@ mod checked {
                 metrics.clone(),
             );
 
-            // Set the profiler if in CLI
-            #[skip_checked_arithmetic]
-            move_vm_profiler::tracing_feature_enabled! {
-                use move_vm_profiler::GasProfiler;
-                use move_vm_types::gas::GasMeter;
-                use crate::gas_meter::SuiGasMeter;
-
-                let tx_digest = tx_context.digest();
-                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
-                    gas_charger.move_gas_status_mut(),
-                ))
-                .into();
-                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
-                    &vm.config().profiler_config,
-                    format!("{}", tx_digest),
-                    remaining_gas,
-                ));
-            }
-
             Ok(Self {
                 protocol_config,
                 metrics,

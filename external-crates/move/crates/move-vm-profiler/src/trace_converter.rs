@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Event, FrameName, Profile, Shared};
 use move_trace_format::format::{Frame, MoveTraceReader, TraceEvent};
 use serde::Serialize;
 use std::{
@@ -10,6 +9,41 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FrameName {
+    name: String,
+    file: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize)]
+pub struct Shared {
+    frames: Vec<FrameName>,
+
+    #[serde(skip)]
+    frame_table: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Event {
+    #[serde(rename(serialize = "type"))]
+    ty: String,
+    frame: u64,
+    at: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    #[serde(rename(serialize = "type"))]
+    ty: String,
+    name: String,
+    unit: String,
+    start_value: u64,
+    end_value: u64,
+    events: Vec<Event>,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct ProfilerConfig {

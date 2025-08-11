@@ -909,7 +909,7 @@ fn create_genesis_transaction(
     let (effects, events, objects) = {
         let silent = true;
 
-        let executor = sui_execution::executor(protocol_config, silent, None)
+        let executor = sui_execution::executor(protocol_config, silent)
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
@@ -969,7 +969,7 @@ fn create_genesis_objects(
     );
 
     let silent = true;
-    let executor = sui_execution::executor(&protocol_config, silent, None)
+    let executor = sui_execution::executor(&protocol_config, silent)
         .expect("Creating an executor should not fail here");
 
     for system_package in system_packages.into_iter() {
