@@ -578,7 +578,7 @@ async fn do_test_full_node_sync_flood() {
                     .split_coin(object_to_split, vec![1])
                     .build();
 
-                    let tx = test_cluster.wallet.sign_transaction(&tx);
+                    let tx = test_cluster.wallet.sign_transaction(&tx).await;
                     test_cluster.execute_transaction(tx).await
                 };
 
@@ -833,11 +833,13 @@ async fn test_execute_tx_with_serialized_signature() -> Result<(), anyhow::Error
     context
         .config
         .keystore
-        .import(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
+        .import(None, SuiKeyPair::Secp256k1(get_key_pair().1))
+        .await?;
     context
         .config
         .keystore
-        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+        .import(None, SuiKeyPair::Ed25519(get_key_pair().1))
+        .await?;
 
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
@@ -1009,11 +1011,14 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
         .await
         .unwrap()
         .unwrap();
-    let nft_transfer_tx = test_cluster.wallet.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_ref, rgp)
-            .transfer(FullObjectRef::from_fastpath_ref(object_ref_v1), recipient)
-            .build(),
-    );
+    let nft_transfer_tx = test_cluster
+        .wallet
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_ref, rgp)
+                .transfer(FullObjectRef::from_fastpath_ref(object_ref_v1), recipient)
+                .build(),
+        )
+        .await;
     test_cluster.execute_transaction(nft_transfer_tx).await;
     sleep(Duration::from_secs(1)).await;
 
@@ -1239,15 +1244,17 @@ async fn test_access_old_object_pruned() {
     let new_gas_version = effects.gas_object().reference.version;
     test_cluster.trigger_reconfiguration().await;
     // Construct a new transaction that uses the old gas object reference.
-    let tx = test_cluster.sign_transaction(
-        &test_cluster
-            .test_transaction_builder_with_gas_object(sender, gas_object)
-            .await
-            // Make sure we are doing something different from the first transaction.
-            // Otherwise we would just end up with the same digest.
-            .transfer_sui(Some(1), sender)
-            .build(),
-    );
+    let tx = test_cluster
+        .sign_transaction(
+            &test_cluster
+                .test_transaction_builder_with_gas_object(sender, gas_object)
+                .await
+                // Make sure we are doing something different from the first transaction.
+                // Otherwise we would just end up with the same digest.
+                .transfer_sui(Some(1), sender)
+                .build(),
+        )
+        .await;
     for validator in test_cluster.swarm.active_validators() {
         validator
             .get_node_handle()
@@ -1315,11 +1322,13 @@ async fn transfer_coin(
     let receiver = accounts_and_objs[1].0;
     let gas_object = accounts_and_objs[0].1[0];
     let object_to_send = accounts_and_objs[0].1[1];
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .transfer(FullObjectRef::from_fastpath_ref(object_to_send), receiver)
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer(FullObjectRef::from_fastpath_ref(object_to_send), receiver)
+                .build(),
+        )
+        .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
     Ok((object_to_send.0, sender, receiver, resp.digest, gas_object))
 }
@@ -1427,7 +1436,7 @@ async fn publish_init_events_without_local_execution() {
         .await
         .publish(path)
         .build();
-    let tx = test_cluster.sign_transaction(&tx_data);
+    let tx = test_cluster.sign_transaction(&tx_data).await;
     let client = test_cluster.wallet.get_client().await.unwrap();
     let response = client
         .quorum_driver_api()
