@@ -89,7 +89,7 @@ where
         driver
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?request.transaction.digest()))]
+    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?request.transaction.digest()))]
     pub async fn drive_transaction(
         &self,
         request: SubmitTxRequest,
@@ -186,7 +186,7 @@ where
         }
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx_digest))]
     async fn drive_transaction_once(
         &self,
         tx_digest: &TransactionDigest,
