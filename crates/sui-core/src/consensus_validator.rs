@@ -496,12 +496,12 @@ mod tests {
 
     #[sim_test]
     async fn reject_checkpoint_signature_v2_when_flag_disabled() {
-        // Build a single-validator network and authority with protocol version < 91 (flag disabled)
+        // Build a single-validator network and authority with protocol version < 92 (flag disabled)
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
 
         let disabled_cfg =
-            ProtocolConfig::get_for_version(ProtocolVersion::new(90), Chain::Unknown);
+            ProtocolConfig::get_for_version(ProtocolVersion::new(91), Chain::Unknown);
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
             .with_protocol_config(disabled_cfg)
@@ -550,11 +550,11 @@ mod tests {
 
     #[sim_test]
     async fn accept_checkpoint_signature_v2_when_flag_enabled() {
-        // Build a single-validator network and authority with protocol version >= 91 (flag enabled)
+        // Build a single-validator network and authority with protocol version >= 92 (flag enabled)
         let network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir().build();
 
-        let enabled_cfg = ProtocolConfig::get_for_version(ProtocolVersion::new(91), Chain::Unknown);
+        let enabled_cfg = ProtocolConfig::get_for_version(ProtocolVersion::new(92), Chain::Unknown);
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
             .with_protocol_config(enabled_cfg)

@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 91;
+const MAX_PROTOCOL_VERSION: u64 = 92;
 
 // Record history of protocol version allocations here:
 //
@@ -255,6 +255,7 @@ const MAX_PROTOCOL_VERSION: u64 = 91;
 //             Enable `debug_fatal` on Move invariant violations.
 //             Enable passkey and passkey inside multisig for mainnet.
 // Version 91: Minor changes in Sui Framework. Include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
+// Version 92: Enable CheckpointDigest in consensus dedup key for checkpoint signatures.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3925,6 +3926,8 @@ impl ProtocolConfig {
                 }
                 91 => {
                     cfg.feature_flags.per_command_shared_object_transfer_rules = true;
+                }
+                92 => {
                     cfg.feature_flags
                         .consensus_checkpoint_signature_key_includes_digest = true;
                 }
