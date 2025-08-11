@@ -5,6 +5,7 @@ use anyhow::{bail, ensure, Context};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use reqwest::Client;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use simulacrum::Simulacrum;
@@ -32,7 +33,6 @@ pub use sui_indexer_alt_jsonrpc::{
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableArgs, system_package_task::SystemPackageTaskArgs,
 };
-use sui_indexer_alt_schema::checkpoints::StoredGenesis;
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
@@ -536,24 +536,43 @@ impl OffchainCluster {
             .context("Consistent Store has not started yet")
     }
 
-    /// Returns the latest checkpoint that the GraphQL service is aware of.
-    pub async fn latest_graphql_checkpoint(&self) -> anyhow::Result<u64> {
-        let query = json!({
-            "query": "query { checkpoint { sequenceNumber } }"
-        });
-
+    pub async fn query_graphql<T: DeserializeOwned>(
+        &self,
+        query: &str,
+    ) -> Result<T, anyhow::Error> {
+        let query = json!({"query": query});
         let client = Client::new();
+
         let request = client.post(self.graphql_url()).json(&query);
         let response = request
             .send()
             .await
             .context("Request to GraphQL server failed")?;
 
-        #[derive(Serialize, Deserialize)]
-        struct Response {
-            data: Data,
+        let status = response.status();
+        if !status.is_success() {
+            bail!(
+                "GraphQL server returned error {}:\n{}",
+                status,
+                response.text().await?
+            );
         }
 
+        #[derive(Serialize, Deserialize)]
+        struct Response<T> {
+            data: T,
+        }
+
+        let data = response
+            .json::<Response<T>>()
+            .await
+            .context("Failed to parse GraphQL response")?
+            .data;
+        Ok(data)
+    }
+
+    /// Returns the latest checkpoint that the GraphQL service is aware of.
+    pub async fn latest_graphql_checkpoint(&self) -> anyhow::Result<u64> {
         #[derive(Serialize, Deserialize)]
         struct Data {
             checkpoint: Checkpoint,
@@ -565,17 +584,14 @@ impl OffchainCluster {
             sequence_number: i64,
         }
 
-        let body: Response = response
-            .json()
-            .await
-            .context("Failed to parse GraphQL response")?;
+        let Data {
+            checkpoint: Checkpoint { sequence_number },
+        } = self
+            .query_graphql("query { checkpoint { sequenceNumber } }")
+            .await?;
+        ensure!(sequence_number != i64::MAX, "Indexer has not started yet");
 
-        ensure!(
-            body.data.checkpoint.sequence_number != i64::MAX,
-            "Indexer has not started yet",
-        );
-
-        Ok(body.data.checkpoint.sequence_number as u64)
+        Ok(sequence_number as u64)
     }
 
     /// Waits until the indexer has caught up to the given `checkpoint`, or the `timeout` is
