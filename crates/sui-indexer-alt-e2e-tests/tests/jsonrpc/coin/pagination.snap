@@ -172,7 +172,7 @@ Response: {
 }
 
 task 15, lines 55-59:
-//# run-jsonrpc --cursors bcs(@{obj_2_0},1,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_2_0}),1,4)
 Response: {
   "jsonrpc": "2.0",
   "id": 1,
@@ -233,7 +233,7 @@ Response: {
 }
 
 task 16, lines 61-65:
-//# run-jsonrpc --cursors bcs(@{obj_7_0},1,1)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_7_0}),1,1)
 Response: {
   "jsonrpc": "2.0",
   "id": 2,
@@ -266,7 +266,7 @@ task 18, line 71:
 Checkpoint created: 2
 
 task 19, lines 73-77:
-//# run-jsonrpc --cursors bcs(@{obj_1_0},2,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),2,4)
 Response: {
   "jsonrpc": "2.0",
   "id": 3,
@@ -343,7 +343,7 @@ Response: {
 }
 
 task 20, lines 79-83:
-//# run-jsonrpc --cursors bcs(@{obj_1_0},1,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),1,4)
 Response: {
   "jsonrpc": "2.0",
   "id": 4,
