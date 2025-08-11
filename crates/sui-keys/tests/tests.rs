@@ -332,16 +332,17 @@ fn alias_names(aliases: Vec<&Alias>) -> Vec<&str> {
 }
 
 #[cfg(unix)]
-#[test]
-fn keystore_file_permissions_test() {
+#[tokio::test]
+async fn keystore_file_permissions_test() {
     use std::os::unix::fs::PermissionsExt;
 
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
 
-    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
     keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
+        .generate(None, GenerateOptions::Default)
+        .await
         .unwrap();
 
     let metadata = fs::metadata(&keystore_path).unwrap();
@@ -353,7 +354,8 @@ fn keystore_file_permissions_test() {
     );
 
     keystore
-        .generate(SignatureScheme::ED25519, None, None, None)
+        .generate(None, GenerateOptions::Default)
+        .await
         .unwrap();
 
     let metadata_after = fs::metadata(&keystore_path).unwrap();
