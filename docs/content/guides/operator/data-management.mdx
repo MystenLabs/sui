@@ -1,6 +1,7 @@
 ---
 title: Data Management
 description: A high-level description of data management on the Sui network that you can use to optimize your Sui Full node configuration. 
+keywords: [ data management, run data management, what is data management, full node data, full node data management, rpc, pruning, data pruning, pruning policies, object pruning, object history ]
 ---
 
 Managing the data on your Sui Full node is critical to ensuring a healthy Sui network. This topic provides a high-level description of data management on Sui Full nodes that you can use to optimize your Full node configuration. For more information about Sui Full nodes, such as pruning policies and archival settings, see [Run a Sui Full Node](./sui-full-node.mdx).
@@ -20,7 +21,7 @@ The preceding image shows how data flows through a Full node:
 2. **RPCs:** A Sui Full node exposes Sui RPC endpoints for querying the latest state of the system, including both the latest state metadata (such as, `sui_getProtocolConfig`), and the latest state object data (`sui_getObject)`.
 3. **Transaction submission:** Each Sui Full node orchestrates transaction submission to the quorum of the Sui Validators, and, optionally if configured, locally executes the finalized transactions (called fast path execution), which circumvents the wait for checkpoint synchronization.
 
-## Sui Full node Data and RPC types
+## Sui Full node data and RPC types
 
 A Sui Full Node stores multiple categories of data in its permanent store.
 
@@ -50,11 +51,11 @@ Sui Full nodes support more than 40 RPC types that includes the following catego
 
 :::
 
-## Sui Archival data
+## Sui archival data
 
 A Sui archive instance stores the full Sui transaction history since genesis in a database agnostic format. This includes information about transactions (with client authentication), effects, events, and checkpoints. As such, archival storage can be used for data auditing and for replaying historic transactions.
 
-A Full node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring Archival Fallback](./archives.mdx#set-up-archival-fallback) in the `fullnode.yaml` configuration file to point to the cloud bucket that stores the archive.
+A Full node that starts from scratch can replay (and thus re-verify) transactions that occurred since Sui genesis from the given archive via [configuring archival fallback](./archives.mdx#set-up-archival-fallback) in the `fullnode.yaml` configuration file to point to the cloud bucket that stores the archive.
 
 A Sui Full node that fails to retrieve checkpoints from its peers via state sync protocol falls back to downloading the missing checkpoints from its pre-configured archive. This fallback enables a Full node to catch up with the rest of the system regardless of the pruning policies of its peers.
 
@@ -148,7 +149,7 @@ authority-store-pruning-config:
 
 :::info
 
-If you prune transactions, Archival nodes can help ensure lagging peer nodes don't lose any information. For more information, see [Sui Archives](./archives.mdx).
+If you prune transactions, archival nodes can help ensure lagging peer nodes don't lose any information. For more information, see [Sui Archives](./archives.mdx).
 
 :::
 
