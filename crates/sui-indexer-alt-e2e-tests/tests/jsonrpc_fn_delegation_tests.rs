@@ -103,7 +103,7 @@ impl FnDelegationTestCluster {
             .transfer_sui(Some(1_000), recipient)
             .build();
         let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
+        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
         let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
@@ -120,7 +120,7 @@ impl FnDelegationTestCluster {
             .call_request_remove_validator()
             .build();
         let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
+        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
         let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();

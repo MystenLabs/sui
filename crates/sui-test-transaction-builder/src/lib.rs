@@ -543,7 +543,7 @@ pub async fn batch_make_transfer_transactions(
                 gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
                 gas_price,
             );
-            let tx = context.sign_transaction(&data);
+            let tx = context.sign_transaction(&data).await;
             res.push(tx);
         }
     }
@@ -557,11 +557,13 @@ pub async fn make_transfer_sui_transaction(
 ) -> Transaction {
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .transfer_sui(amount, recipient.unwrap_or(sender))
-            .build(),
-    )
+    context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui(amount, recipient.unwrap_or(sender))
+                .build(),
+        )
+        .await
 }
 
 pub async fn make_staking_transaction(
@@ -573,21 +575,25 @@ pub async fn make_staking_transaction(
     let gas_object = accounts_and_objs[0].1[0];
     let stake_object = accounts_and_objs[0].1[1];
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .call_staking(stake_object, validator_address)
-            .build(),
-    )
+    context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .call_staking(stake_object, validator_address)
+                .build(),
+        )
+        .await
 }
 
 pub async fn make_publish_transaction(context: &WalletContext, path: PathBuf) -> Transaction {
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish(path)
-            .build(),
-    )
+    context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish(path)
+                .build(),
+        )
+        .await
 }
 
 pub async fn make_publish_transaction_with_deps(
@@ -596,21 +602,25 @@ pub async fn make_publish_transaction_with_deps(
 ) -> Transaction {
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish_with_deps(path)
-            .build(),
-    )
+    context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_with_deps(path)
+                .build(),
+        )
+        .await
 }
 
 pub async fn publish_package(context: &WalletContext, path: PathBuf) -> ObjectRef {
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish(path)
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish(path)
+                .build(),
+        )
+        .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
     get_new_package_obj_from_response(&resp).unwrap()
 }
@@ -619,11 +629,13 @@ pub async fn publish_package(context: &WalletContext, path: PathBuf) -> ObjectRe
 pub async fn publish_basics_package(context: &WalletContext) -> ObjectRef {
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish_examples("basics")
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_examples("basics")
+                .build(),
+        )
+        .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
     get_new_package_obj_from_response(&resp).unwrap()
 }
@@ -636,11 +648,13 @@ pub async fn publish_basics_package_and_make_counter(
     let package_ref = publish_basics_package(context).await;
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    let counter_creation_txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .call_counter_create(package_ref.0)
-            .build(),
-    );
+    let counter_creation_txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .call_counter_create(package_ref.0)
+                .build(),
+        )
+        .await;
     let resp = context
         .execute_transaction_must_succeed(counter_creation_txn)
         .await;
@@ -664,11 +678,13 @@ pub async fn publish_basics_package_and_make_party_object(
     let package_ref = publish_basics_package(context).await;
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    let object_creation_txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .call_object_create_party(package_ref.0)
-            .build(),
-    );
+    let object_creation_txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .call_object_create_party(package_ref.0)
+                .build(),
+        )
+        .await;
     let resp = context
         .execute_transaction_must_succeed(object_creation_txn)
         .await;
@@ -704,11 +720,13 @@ pub async fn increment_counter(
             .unwrap()
     };
     let rgp = context.get_reference_gas_price().await.unwrap();
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, rgp)
-            .call_counter_increment(package_id, counter_id, initial_shared_version)
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, rgp)
+                .call_counter_increment(package_id, counter_id, initial_shared_version)
+                .build(),
+        )
+        .await;
     context.execute_transaction_must_succeed(txn).await
 }
 
@@ -747,11 +765,13 @@ pub async fn emit_new_random_u128(
         mutable: false,
     });
 
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, rgp)
-            .move_call(package_id, "random", "new", vec![random_call_arg])
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, rgp)
+                .move_call(package_id, "random", "new", vec![random_call_arg])
+                .build(),
+        )
+        .await;
     context.execute_transaction_must_succeed(txn).await
 }
 
@@ -763,11 +783,13 @@ pub async fn publish_nfts_package(
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let gas_id = gas_object.0;
     let gas_price = context.get_reference_gas_price().await.unwrap();
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, gas_price)
-            .publish_examples("nft")
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .publish_examples("nft")
+                .build(),
+        )
+        .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
     let package_id = get_new_package_obj_from_response(&resp).unwrap().0;
     (package_id, gas_id, resp.digest)
@@ -783,11 +805,13 @@ pub async fn create_nft(
     let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
     let rgp = context.get_reference_gas_price().await.unwrap();
 
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas_object, rgp)
-            .call_nft_create(package_id)
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, rgp)
+                .call_nft_create(package_id)
+                .build(),
+        )
+        .await;
     let resp = context.execute_transaction_must_succeed(txn).await;
 
     let object_id = resp
@@ -816,10 +840,12 @@ pub async fn delete_nft(
         .unwrap()
         .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
     let rgp = context.get_reference_gas_price().await.unwrap();
-    let txn = context.sign_transaction(
-        &TestTransactionBuilder::new(sender, gas, rgp)
-            .call_nft_delete(package_id, nft_to_delete)
-            .build(),
-    );
+    let txn = context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .call_nft_delete(package_id, nft_to_delete)
+                .build(),
+        )
+        .await;
     context.execute_transaction_must_succeed(txn).await
 }

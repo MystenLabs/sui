@@ -1138,19 +1138,20 @@ impl AuthorityState {
 
         // timeout in tests can be reduced to exercise error paths, if QD properly retries
         // failures to lock on objects waiting for future versions.
-        if epoch_store.protocol_config().mysticeti_fastpath()
-            && !self
-                .wait_for_fastpath_dependency_objects(
-                    &transaction,
-                    epoch_store.epoch(),
-                    WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
-                )
+        if epoch_store.protocol_config().mysticeti_fastpath() {
+            let timeout = if cfg!(msim) {
+                Duration::from_millis(100)
+            } else {
+                WAIT_FOR_FASTPATH_INPUT_TIMEOUT
+            };
+            if !self
+                .wait_for_fastpath_dependency_objects(&transaction, epoch_store.epoch(), timeout)
                 .await?
-        {
-            debug!("fastpath input objects are still unavailable after waiting");
-            // Proceed with input checks to generate a proper error.
+            {
+                debug!("fastpath input objects are still unavailable after waiting");
+                // Proceed with input checks to generate a proper error.
+            }
         }
-
         self.handle_sign_transaction(epoch_store, transaction).await
     }
 

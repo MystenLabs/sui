@@ -615,13 +615,15 @@ mod sim_only_tests {
         let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
 
         let rgp = context.get_reference_gas_price().await.unwrap();
-        let txn = context.sign_transaction(&TransactionData::new_programmable(
-            sender,
-            vec![gas_object],
-            ptb,
-            rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-            rgp,
-        ));
+        let txn = context
+            .sign_transaction(&TransactionData::new_programmable(
+                sender,
+                vec![gas_object],
+                ptb,
+                rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+                rgp,
+            ))
+            .await;
 
         context
             .execute_transaction_must_succeed(txn)

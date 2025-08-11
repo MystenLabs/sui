@@ -254,7 +254,7 @@ const MAX_PROTOCOL_VERSION: u64 = 91;
 // Version 90: Standard library improvements.
 //             Enable `debug_fatal` on Move invariant violations.
 //             Enable passkey and passkey inside multisig for mainnet.
-// Version 91: Minor changes in Sui Framework.
+// Version 91: Minor changes in Sui Framework. Include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -451,6 +451,10 @@ struct FeatureFlags {
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
+
+    // If true, include CheckpointDigest in consensus dedup key for checkpoint signatures (V2).
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_checkpoint_signature_key_includes_digest: bool,
 
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
@@ -2170,6 +2174,11 @@ impl ProtocolConfig {
 
     pub fn per_command_shared_object_transfer_rules(&self) -> bool {
         self.feature_flags.per_command_shared_object_transfer_rules
+    }
+
+    pub fn consensus_checkpoint_signature_key_includes_digest(&self) -> bool {
+        self.feature_flags
+            .consensus_checkpoint_signature_key_includes_digest
     }
 }
 
@@ -3916,6 +3925,8 @@ impl ProtocolConfig {
                 }
                 91 => {
                     cfg.feature_flags.per_command_shared_object_transfer_rules = true;
+                    cfg.feature_flags
+                        .consensus_checkpoint_signature_key_includes_digest = true;
                 }
                 // Use this template when making changes:
                 //
