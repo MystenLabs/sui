@@ -13,7 +13,7 @@ use anyhow::Result;
 use clap::Parser;
 use move_core_types::parsing::values::ParsedValue;
 use move_core_types::{language_storage::TypeTag, runtime_value::MoveValue};
-use move_package::compilation::package_layout::CompiledPackageLayout;
+use move_package_alt_compilation::layout::CompiledPackageLayout;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::{
     fs,

@@ -10,11 +10,14 @@ use move_command_line_common::{
 };
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
-use move_package::{
-    BuildConfig,
-    compilation::{compiled_package::OnDiskCompiledPackage, package_layout::CompiledPackageLayout},
-    resolution::resolution_graph::ResolvedGraph,
-    source_package::{layout::SourcePackageLayout, manifest_parser::parse_move_manifest_from_file},
+
+use move_package_alt::{
+    flavor::{Vanilla, vanilla},
+    package::{RootPackage, layout::SourcePackageLayout},
+};
+use move_package_alt_compilation::{
+    build_config::BuildConfig, layout::CompiledPackageLayout,
+    on_disk_package::OnDiskCompiledPackage,
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -60,12 +63,15 @@ fn collect_coverage(
     build_dir: &Path,
 ) -> anyhow::Result<ExecCoverageMapWithModules> {
     let canonical_build = build_dir.canonicalize().unwrap();
-    let package_name = parse_move_manifest_from_file(
-        &SourcePackageLayout::try_find_root(&canonical_build).unwrap(),
-    )?
-    .package
-    .name
-    .to_string();
+
+    todo!();
+    // let package_name = parse_move_manifest_from_file(
+    //     &SourcePackageLayout::try_find_root(&canonical_build).unwrap(),
+    // )?
+    // .package
+    // .name
+    // .to_string();
+    let package_name = "todo".to_string();
     let pkg = OnDiskCompiledPackage::from_path(
         &build_dir
             .join(package_name)
@@ -73,7 +79,7 @@ fn collect_coverage(
     )?
     .into_compiled_package()?;
     let src_modules = pkg
-        .all_modules()
+        .all_compiled_units_with_source()
         .map(|unit| {
             let absolute_path = path_to_string(&unit.source_path.canonicalize()?)?;
             Ok((absolute_path, unit.unit.module.clone()))
@@ -99,16 +105,19 @@ fn collect_coverage(
 }
 
 fn determine_package_nest_depth(
-    resolution_graph: &ResolvedGraph,
+    root_pkg: &RootPackage<Vanilla>,
     pkg_dir: &Path,
 ) -> anyhow::Result<usize> {
     let mut depth = 0;
-    for (_, dep) in resolution_graph.package_table.iter() {
-        depth = std::cmp::max(
-            depth,
-            dep.package_path.strip_prefix(pkg_dir)?.components().count() + 1,
-        );
+
+    let packages = root_pkg.packages().unwrap();
+
+    for package in packages {
+        let path = package.path();
+        let components = path.path().strip_prefix(pkg_dir)?.components().count() + 1;
+        depth = std::cmp::max(depth, components);
     }
+
     Ok(depth)
 }
 
@@ -130,20 +139,20 @@ fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
     // Sometimes we run a test that isn't a package for metatests so if there isn't a package we
     // don't need to nest at all. Resolution graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer.
-    let package_resolution = match (BuildConfig {
-        dev_mode: true,
-        ..Default::default()
-    })
-    .resolution_graph_for_package(pkg_dir, None, &mut Vec::new())
-    {
-        Ok(pkg) => pkg,
-        Err(_) => return Ok(tmp_dir.to_path_buf()),
+    let rt = tokio::runtime::Runtime::new()?;
+    let Ok(root_pkg) = rt.block_on(RootPackage::<Vanilla>::load(
+        pkg_dir,
+        vanilla::default_environment(),
+    )) else {
+        return Ok(tmp_dir.to_path_buf());
     };
-    let package_nest_depth = determine_package_nest_depth(&package_resolution, pkg_dir)?;
+
+    let package_nest_depth = determine_package_nest_depth(&root_pkg, pkg_dir)?;
     let tmp_dir = pad_tmp_path(tmp_dir, package_nest_depth)?;
-    for (_, dep) in package_resolution.package_table.iter() {
-        let source_dep_path = &dep.package_path;
-        let dest_dep_path = tmp_dir.join(dep.package_path.strip_prefix(pkg_dir).unwrap());
+
+    for package in root_pkg.packages().unwrap() {
+        let source_dep_path = package.path().path();
+        let dest_dep_path = tmp_dir.join(source_dep_path.strip_prefix(pkg_dir).unwrap());
         if !dest_dep_path.exists() {
             fs::create_dir_all(&dest_dep_path)?;
         }

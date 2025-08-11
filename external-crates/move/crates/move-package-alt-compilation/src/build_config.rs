@@ -2,9 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
-use move_package_alt::schema::EnvironmentName;
+use move_package_alt::{
+    errors::PackageResult, flavor::MoveFlavor, package::RootPackage, schema::{Environment, EnvironmentName}
+};
+
+use crate::{build_plan::BuildPlan, compiled_package::CompiledPackage};
 
 use super::lint_flag::LintFlag;
 use clap::Parser;
@@ -77,4 +84,16 @@ pub struct BuildConfig {
     /// Compile in 'test' mode. Code in the 'tests' directory will be used too.
     #[clap(name = "test-mode", long = "test", global = true)]
     pub test_mode: bool,
+}
+
+impl BuildConfig {
+    pub async fn compile<F: MoveFlavor, W: Write>(
+        &self,
+        path: &Path,
+        env: &Environment,
+        writer: &mut W,
+    ) -> PackageResult<CompiledPackage> {
+        let root_pkg = RootPackage::<F>::load(path, env.clone()).await?;
+        BuildPlan::create(root_pkg, self)?.compile(writer, |compiler| compiler)
+    }
 }

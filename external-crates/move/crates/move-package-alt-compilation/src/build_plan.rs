@@ -2,13 +2,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Write;
+use std::{collections::BTreeSet, io::Write, path::Path};
 
 use vfs::VfsPath;
 
 use crate::{
     build_config::BuildConfig,
     compiled_package::{CompiledPackage, build_all},
+    layout::CompiledPackageLayout,
 };
 use move_compiler::{
     Compiler,
@@ -20,6 +21,7 @@ use move_package_alt::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::RootPackage,
+    schema::PackageName,
 };
 
 #[derive(Debug)]
@@ -85,13 +87,13 @@ impl<F: MoveFlavor> BuildPlan<F> {
             },
         )?;
 
-        // let project_root = root_pkg.package_path().path();
-        // let sorted_deps = compiled.get_dependency_sorted_modules();
+        let project_root = self.root_pkg.package_path().path();
+        let sorted_deps = self.root_pkg.sorted_deps().into_iter().cloned().collect();
 
-        // clean(
-        //     &project_root.join(CompiledPackageLayout::Root.path()),
-        //     sorted_deps.iter().copied().collect(),
-        // )?;
+        self.clean(
+            &project_root.join(CompiledPackageLayout::Root.path()),
+            sorted_deps,
+        )?;
 
         Ok(compiled)
     }
@@ -134,19 +136,19 @@ impl<F: MoveFlavor> BuildPlan<F> {
         res
     }
 
-    // Clean out old packages that are no longer used, or no longer used under the current
-    // compilation flags
-    // fn clean(&self, build_root: &Path, keep_paths: BTreeSet<PackageName>) -> PackageResult<()> {
-    //     for dir in std::fs::read_dir(build_root)? {
-    //         let path = dir?.path();
-    //         if !keep_paths.iter().any(|name| path.ends_with(name.as_str())) {
-    //             if path.is_file() {
-    //                 std::fs::remove_file(&path)?;
-    //             } else {
-    //                 std::fs::remove_dir_all(&path)?;
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
+    /// Clean out old packages that are no longer used, or no longer used under the current
+    /// compilation flags
+    fn clean(&self, build_root: &Path, keep_paths: BTreeSet<PackageName>) -> PackageResult<()> {
+        for dir in std::fs::read_dir(build_root)? {
+            let path = dir?.path();
+            if !keep_paths.iter().any(|name| path.ends_with(name.as_str())) {
+                if path.is_file() {
+                    std::fs::remove_file(&path)?;
+                } else {
+                    std::fs::remove_dir_all(&path)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }

@@ -42,10 +42,7 @@ impl Build {
             Environment::new(name.to_string(), id.to_string())
         };
 
-        let root_pkg = RootPackage::<F>::load(path, env).await?;
-
-        let mut build_plan = BuildPlan::create(root_pkg, &config)?;
-        let compiled_package = build_plan.compile(&mut std::io::stdout(), |compiler| compiler)?;
+        let compiled_package = config.compile::<F, _>(path, &env, &mut std::io::stdout()).await?;
 
         Ok(())
     }
