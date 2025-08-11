@@ -14,22 +14,21 @@ mod config;
 mod error;
 mod grpc;
 mod metrics;
-pub mod proto;
 mod reader;
 mod response;
 mod service;
 pub mod subscription;
 
-pub use crate::grpc::v2beta::ledger_service;
 pub use crate::grpc::v2beta2::protocol_config_to_proto;
 pub use client::Client;
 pub use config::Config;
 pub use error::{
     CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
 };
+pub use grpc::v2beta2::ledger_service;
 pub use metrics::{RpcMetrics, RpcMetricsMakeCallbackHandler};
 pub use reader::TransactionNotFoundError;
-pub use service::protocol_config::config_to_proto;
+pub use sui_rpc::proto;
 
 #[derive(Clone)]
 pub struct ServerVersion {
@@ -112,12 +111,6 @@ impl RpcService {
         let metrics = self.metrics.clone();
 
         let router = {
-            let ledger_service =
-                crate::proto::rpc::v2beta::ledger_service_server::LedgerServiceServer::new(
-                    self.clone(),
-                );
-            let transaction_execution_service = crate::proto::rpc::v2beta::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone());
-
             let ledger_service2 =
                 sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer::new(
                     self.clone(),
@@ -140,9 +133,6 @@ impl RpcService {
                     crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(
-                    crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
@@ -157,9 +147,6 @@ impl RpcService {
                     crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(
-                    crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
@@ -171,8 +158,6 @@ impl RpcService {
             }
 
             for service_name in [
-                service_name(&ledger_service),
-                service_name(&transaction_execution_service),
                 service_name(&ledger_service2),
                 service_name(&transaction_execution_service2),
                 service_name(&live_data_service2),
@@ -187,8 +172,6 @@ impl RpcService {
             }
 
             let mut services = grpc::Services::new()
-                .add_service(ledger_service)
-                .add_service(transaction_execution_service)
                 .add_service(ledger_service2)
                 .add_service(transaction_execution_service2)
                 .add_service(live_data_service2)

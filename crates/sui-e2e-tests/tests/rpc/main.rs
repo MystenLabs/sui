@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod client;
-mod ledger_service;
-mod transaction_execution_service;
 mod v2beta2;
 
 async fn transfer_coin(
