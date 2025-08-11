@@ -7,7 +7,7 @@ use anyhow::{anyhow, ensure};
 use futures::future;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
 use sui_json_rpc_types::{
@@ -51,8 +51,9 @@ impl WalletContext {
         Ok(context)
     }
 
-    pub fn new_for_tests(keystore: Keystore) -> Self {
-        let config = SuiClientConfig::new(keystore).persisted(Path::new("test_config.yaml"));
+    pub fn new_for_tests(keystore: Keystore, path: Option<PathBuf>) -> Self {
+        let config = SuiClientConfig::new(keystore)
+            .persisted(&path.unwrap_or(PathBuf::from("test_config.yaml")));
         Self {
             config,
             request_timeout: None,
@@ -401,8 +402,7 @@ impl WalletContext {
         }
 
         Err(anyhow!(
-            "No keystore found for the provided key identity: {:?}",
-            key_identity
+            "No keystore found for the provided key identity: {key_identity}"
         ))
     }
 
@@ -421,8 +421,7 @@ impl WalletContext {
         }
 
         Err(anyhow!(
-            "No keystore found for the provided key identity: {:?}",
-            key_identity
+            "No keystore found for the provided key identity: {key_identity}"
         ))
     }
 
