@@ -18,8 +18,8 @@ fun test_create_predefined_account() {
     let derived_id = derived_object::derive_address(registry.id.to_inner(), key);
     let another_derived_id = derived_object::derive_address(registry.id.to_inner(), another_key);
 
-    let derived_uid = derived_object::claim(&mut registry.id, key);
-    let another_derived_uid = derived_object::claim(&mut registry.id, another_key);
+    let derived_uid = derived_object::new(&mut registry.id, key);
+    let another_derived_uid = derived_object::new(&mut registry.id, another_key);
 
     assert!(derived_object::exists(&registry.id, key));
     assert!(derived_object::exists(&registry.id, another_key));
@@ -27,13 +27,9 @@ fun test_create_predefined_account() {
     assert!(derived_uid.to_address() == derived_id);
     assert!(another_derived_uid.to_address() == another_derived_id);
 
-    derived_object::delete(&mut registry.id, derived_uid);
-    derived_object::delete(&mut registry.id, another_derived_uid);
-
-    assert!(!derived_object::exists(&registry.id, key));
-    assert!(!derived_object::exists(&registry.id, another_key));
-
     destroy(registry);
+    destroy(derived_uid);
+    destroy(another_derived_uid);
 }
 
 #[test, expected_failure(abort_code = derived_object::EObjectAlreadyExists)]
@@ -43,23 +39,8 @@ fun try_to_claim_same_account_twice() {
     let mut registry = Registry { id: object::new(&mut ctx) };
     let key = b"demo".to_string();
 
-    let _uid = derived_object::claim(&mut registry.id, key);
-    let _another_uid = derived_object::claim(&mut registry.id, key);
-
-    abort
-}
-
-#[test, expected_failure(abort_code = derived_object::EInvalidParent)]
-fun try_to_delete_account_with_invalid_parent() {
-    let mut ctx = tx_context::dummy();
-
-    let mut registry = Registry { id: object::new(&mut ctx) };
-    let mut another_registry = Registry { id: object::new(&mut ctx) };
-    let key = b"demo".to_string();
-
-    let uid = derived_object::claim(&mut registry.id, key);
-
-    derived_object::delete(&mut another_registry.id, uid);
+    let _uid = derived_object::new(&mut registry.id, key);
+    let _another_uid = derived_object::new(&mut registry.id, key);
 
     abort
 }
