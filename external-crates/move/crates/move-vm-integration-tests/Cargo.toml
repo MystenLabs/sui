@@ -35,7 +35,6 @@ default = []
 tracing = [
     "move-vm-config/tracing",
     "move-vm-runtime/tracing",
-    "move-vm-profiler/tracing",
     "move-vm-test-utils/tracing",
 ]
 

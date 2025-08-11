@@ -57,7 +57,7 @@ mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
-move-vm-profiler.workspace = true
+move-vm-config.workspace = true
 sui-http.workspace = true
 sui-metrics-push-client.workspace = true
 

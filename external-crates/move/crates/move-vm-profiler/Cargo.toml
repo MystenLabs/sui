@@ -12,8 +12,8 @@ serde_json.workspace = true
 once_cell.workspace = true
 tracing.workspace = true
 
-move-vm-config.workspace = true
 move-trace-format.workspace = true
+move-vm-config.workspace = true
 
 [features]
 tracing = ["move-vm-config/tracing"]

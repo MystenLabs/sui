@@ -85,18 +85,6 @@ pub fn run(
         // script fun. parse module, extract script ID to pass to VM
         let module = CompiledModule::deserialize_with_defaults(&bytecode)
             .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
-        move_vm_profiler::tracing_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            use move_vm_types::gas::GasMeter;
-
-            let gas_rem: u64 = gas_status.remaining_gas().into();
-            gas_status.set_profiler(GasProfiler::init(
-                &session.vm_config().profiler_config,
-                function_name.to_owned(),
-                gas_rem,
-            ));
-        }
-
         session.execute_entry_function(
             &module.self_id(),
             IdentStr::new(function_name)?,

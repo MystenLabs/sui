@@ -6,7 +6,6 @@ use move_core_types::{
     gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes},
     language_storage::ModuleId,
 };
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
@@ -361,14 +360,6 @@ impl GasMeter for SuiGasMeter<'_> {
             return InternalGas::new(u64::MAX);
         }
         self.0.gas_left
-    }
-
-    fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
-        self.0.profiler.as_mut()
-    }
-
-    fn set_profiler(&mut self, profiler: GasProfiler) {
-        self.0.profiler = Some(profiler);
     }
 }
 
