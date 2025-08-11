@@ -6,7 +6,7 @@
 use crate::offchain_state::OffchainStateReader;
 use crate::simulator_persisted_store::PersistedStore;
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use crate::{TransactionalAdapter, ValidatorWithFullnode};
+use crate::{cursor, TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
@@ -1485,33 +1485,6 @@ impl SuiTestAdapter {
         Ok(interpolated_contents)
     }
 
-    fn encode_cursor(&self, cursor: &str) -> anyhow::Result<String> {
-        // Cursor format is either bcs(object_id,n1,n2,...) or a json value,
-        // in which case we just return its base64 encoding.
-        let Some(args) = cursor
-            .strip_prefix("bcs(")
-            .and_then(|c| c.strip_suffix(")"))
-        else {
-            return Ok(Base64::encode(cursor));
-        };
-
-        let mut parts = args.split(",");
-
-        let id: ObjectID = parts
-            .next()
-            .context("bcs(...) cursors must have at least one argument")?
-            .trim()
-            .parse()?;
-
-        let mut bytes = bcs::to_bytes(&id.to_vec())?;
-        for part in parts {
-            let n: u64 = part.trim().parse()?;
-            bytes.extend(bcs::to_bytes(&n)?);
-        }
-
-        Ok(Base64::encode(bytes))
-    }
-
     fn interpolate_query(
         &self,
         contents: &str,
@@ -1527,11 +1500,13 @@ impl SuiTestAdapter {
 
         // Then interpolate the cursors which may reference objects
         for (idx, s) in cursors.iter().enumerate() {
-            let interpolated_cursor = self.interpolate_contents(s, &variables)?;
-            let encoded_cursor = self.encode_cursor(&interpolated_cursor)?;
+            // Try and parse the encoded cursor, if it fails, assume the cursor is a plain
+            // JSON cursor.
+            let c = self.interpolate_contents(s, &variables)?;
+            let encoded = Base64::encode(cursor::parse(&c).unwrap_or_else(|_| c.into_bytes()));
 
             // Add the encoded cursor to the variables map because they may get used in the query.
-            variables.insert(format!("cursor_{idx}"), encoded_cursor);
+            variables.insert(format!("cursor_{idx}"), encoded);
         }
         self.interpolate_contents(contents, &variables)
     }

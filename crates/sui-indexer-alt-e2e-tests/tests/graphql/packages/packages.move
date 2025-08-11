@@ -115,7 +115,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_1_0},1,1)
+//# run-graphql --cursors bcs(bcs(@{obj_1_0}),1,1)
 { # Offset at the front and then fetch from the front
   packages(after: "@{cursor_0}", first: 1) {
     pageInfo {
@@ -134,7 +134,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 { # Offset at the front such that the first page is not full
   packages(after: "@{cursor_0}", first: 2) {
     pageInfo {
@@ -153,7 +153,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 { # Offset at the front such that the first page is not full, and then fetch from the back
   packages(after: "@{cursor_0}", last: 2) {
     pageInfo {
@@ -172,7 +172,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 { # Offset at the back and fetch from the back
   packages(before: "@{cursor_0}", last: 1) {
     pageInfo {
@@ -191,7 +191,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 { # Offset at the back and fetch from the front
   packages(before: "@{cursor_0}", first: 1) {
     pageInfo {
@@ -210,7 +210,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(0x2,0,1)
+//# run-graphql --cursors bcs(bcs(0x2),0,1)
 { # Offset at the back such that the first page is not full, fetch from the back
   packages(before: "@{cursor_0}", last: 2) {
     pageInfo {
@@ -229,7 +229,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(0x2,0,1)
+//# run-graphql --cursors bcs(bcs(0x2),0,1)
 { # Offset at the back such that the first page is not full, fetch from the front
   packages(before: "@{cursor_0}", first: 2) {
     pageInfo {
@@ -248,7 +248,7 @@ module Q3::N {
   }
 }
 
-//# run-graphql --cursors bcs(@{obj_1_0},1,1) bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_1_0}),1,1) bcs(bcs(@{obj_4_0}),4,2)
 { # Offset at the front and back
   packages(after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {

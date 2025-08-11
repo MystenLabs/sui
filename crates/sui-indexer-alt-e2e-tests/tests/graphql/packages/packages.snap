@@ -240,7 +240,7 @@ Response: {
 }
 
 task 15, lines 118-135:
-//# run-graphql --cursors bcs(@{obj_1_0},1,1)
+//# run-graphql --cursors bcs(bcs(@{obj_1_0}),1,1)
 Response: {
   "data": {
     "packages": {
@@ -264,7 +264,7 @@ Response: {
 }
 
 task 16, lines 137-154:
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 Response: {
   "data": {
     "packages": {
@@ -288,7 +288,7 @@ Response: {
 }
 
 task 17, lines 156-173:
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 Response: {
   "data": {
     "packages": {
@@ -312,7 +312,7 @@ Response: {
 }
 
 task 18, lines 175-192:
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 Response: {
   "data": {
     "packages": {
@@ -336,7 +336,7 @@ Response: {
 }
 
 task 19, lines 194-211:
-//# run-graphql --cursors bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_4_0}),4,2)
 Response: {
   "data": {
     "packages": {
@@ -360,7 +360,7 @@ Response: {
 }
 
 task 20, lines 213-230:
-//# run-graphql --cursors bcs(0x2,0,1)
+//# run-graphql --cursors bcs(bcs(0x2),0,1)
 Response: {
   "data": {
     "packages": {
@@ -384,7 +384,7 @@ Response: {
 }
 
 task 21, lines 232-249:
-//# run-graphql --cursors bcs(0x2,0,1)
+//# run-graphql --cursors bcs(bcs(0x2),0,1)
 Response: {
   "data": {
     "packages": {
@@ -408,7 +408,7 @@ Response: {
 }
 
 task 22, lines 251-268:
-//# run-graphql --cursors bcs(@{obj_1_0},1,1) bcs(@{obj_4_0},4,2)
+//# run-graphql --cursors bcs(bcs(@{obj_1_0}),1,1) bcs(bcs(@{obj_4_0}),4,2)
 Response: {
   "data": {
     "packages": {
