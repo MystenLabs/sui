@@ -1385,7 +1385,7 @@ mod test {
                 let node_to_authority_map = node_to_authority_map.clone();
                 let _test_cluster_for_handler = test_cluster_for_handler.clone();
                 move |_cluster: Arc<TestCluster>| async move {
-                    // Setup fork simulation after gas creation but before load generation
+                    // Simulate fork during execution to generate divergent effects
                     register_fail_point_arg("simulate_fork_during_execution", {
                         let forked_validators = forked_validators.clone();
                         let effects_overrides = effects_overrides.clone();
@@ -1400,6 +1400,7 @@ mod test {
                         }
                     });
 
+                    // Intercept validator panic when overwriting a previously-computed digest & shutdown instead
                     register_fail_point_arg("kill_checkpoint_fork_node", {
                         let forked_validators: Arc<
                             Mutex<HashSet<sui_types::crypto::AuthorityPublicKeyBytes>>,
@@ -1418,6 +1419,7 @@ mod test {
                             }
                         }
                     });
+                    // Intercept validator panic when txn effects fork detected & shutdown instead
                     register_fail_point_if("kill_transaction_fork_node", {
                         let forked_validators = forked_validators.clone();
                         let node_to_authority_map = node_to_authority_map.clone();
@@ -1430,6 +1432,7 @@ mod test {
                         }
                     });
 
+                    // Intercept validator panic when split brain detected & shutdown instead
                     register_fail_point_arg("kill_split_brain_node", {
                         let checkpoint_overrides = checkpoint_overrides.clone();
                         let forked_validators = forked_validators.clone();

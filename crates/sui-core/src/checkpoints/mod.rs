@@ -1577,9 +1577,7 @@ impl CheckpointBuilder {
                 if previously_computed_summary != *summary {
                     let override_digest =
                         if let Some(fork_recovery) = self.state.get_fork_recovery_state() {
-                            fork_recovery
-                                .get_checkpoint_override(&summary.sequence_number)
-                                .await
+                            fork_recovery.get_checkpoint_override(&summary.sequence_number)
                         } else {
                             None
                         };
@@ -2910,8 +2908,8 @@ impl CheckpointService {
         // This prevents ECMH divergence after fork recovery restarts
         if let Some(last_committed_seq) = self
             .tables
-            .get_highest_verified_checkpoint()
-            .expect("Failed to get highest verified checkpoint")
+            .get_highest_executed_checkpoint()
+            .expect("Failed to get highest executed checkpoint")
             .map(|checkpoint| *checkpoint.sequence_number())
         {
             if let Err(e) = builder

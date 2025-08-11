@@ -902,16 +902,17 @@ impl ExecutionEnv {
 #[derive(Debug)]
 pub struct ForkRecoveryState {
     /// Transaction digest to effects digest overrides
-    transaction_overrides: RwLock<HashMap<TransactionDigest, TransactionEffectsDigest>>,
+    transaction_overrides:
+        parking_lot::RwLock<HashMap<TransactionDigest, TransactionEffectsDigest>>,
     /// Checkpoint sequence to checkpoint digest overrides  
-    checkpoint_overrides: RwLock<HashMap<CheckpointSequenceNumber, CheckpointDigest>>,
+    checkpoint_overrides: parking_lot::RwLock<HashMap<CheckpointSequenceNumber, CheckpointDigest>>,
 }
 
 impl Default for ForkRecoveryState {
     fn default() -> Self {
         Self {
-            transaction_overrides: RwLock::new(HashMap::new()),
-            checkpoint_overrides: RwLock::new(HashMap::new()),
+            transaction_overrides: parking_lot::RwLock::new(HashMap::new()),
+            checkpoint_overrides: parking_lot::RwLock::new(HashMap::new()),
         }
     }
 }
@@ -947,27 +948,23 @@ impl ForkRecoveryState {
         }
 
         Ok(Self {
-            transaction_overrides: RwLock::new(transaction_overrides),
-            checkpoint_overrides: RwLock::new(checkpoint_overrides),
+            transaction_overrides: parking_lot::RwLock::new(transaction_overrides),
+            checkpoint_overrides: parking_lot::RwLock::new(checkpoint_overrides),
         })
     }
 
-    pub async fn get_transaction_override(
+    pub fn get_transaction_override(
         &self,
         tx_digest: &TransactionDigest,
     ) -> Option<TransactionEffectsDigest> {
-        self.transaction_overrides
-            .read()
-            .await
-            .get(tx_digest)
-            .copied()
+        self.transaction_overrides.read().get(tx_digest).copied()
     }
 
-    pub async fn get_checkpoint_override(
+    pub fn get_checkpoint_override(
         &self,
         seq_num: &CheckpointSequenceNumber,
     ) -> Option<CheckpointDigest> {
-        self.checkpoint_overrides.read().await.get(seq_num).copied()
+        self.checkpoint_overrides.read().get(seq_num).copied()
     }
 }
 
@@ -1524,8 +1521,8 @@ impl AuthorityState {
         let tx_digest = certificate.digest();
 
         if let Some(fork_recovery) = &self.fork_recovery_state {
-            if let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest).await {
-                info!(
+            if let Some(override_digest) = fork_recovery.get_transaction_override(tx_digest) {
+                warn!(
                     ?tx_digest,
                     original_digest = ?execution_env.expected_effects_digest,
                     override_digest = ?override_digest,

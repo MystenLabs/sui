@@ -1448,12 +1448,18 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        for key in keys_to_remove {
-            tables.running_root_state_hash.remove(&key)?;
-            info!(
-                "Cleared running root state hash for checkpoint {} (after last committed checkpoint {})",
-                key, last_committed_checkpoint
-            );
+        if !keys_to_remove.is_empty() {
+            let mut batch = tables.running_root_state_hash.batch();
+            batch
+                .delete_batch(&tables.running_root_state_hash, keys_to_remove.clone())
+                .expect("db error");
+            batch.write().expect("db error");
+            for key in keys_to_remove {
+                info!(
+                    "Cleared running root state hash for checkpoint {} (after last committed checkpoint {})",
+                    key, last_committed_checkpoint
+                );
+            }
         }
 
         let mut checkpoint_keys_to_remove = Vec::new();
@@ -1467,12 +1473,21 @@ impl AuthorityPerEpochStore {
             }
         }
 
-        for key in checkpoint_keys_to_remove {
-            tables.state_hash_by_checkpoint.remove(&key)?;
-            info!(
-                "Cleared checkpoint state hash for checkpoint {} (after last committed checkpoint {})",
-                key, last_committed_checkpoint
-            );
+        if !checkpoint_keys_to_remove.is_empty() {
+            let mut batch = tables.state_hash_by_checkpoint.batch();
+            batch
+                .delete_batch(
+                    &tables.state_hash_by_checkpoint,
+                    checkpoint_keys_to_remove.clone(),
+                )
+                .expect("db error");
+            batch.write().expect("db error");
+            for key in checkpoint_keys_to_remove {
+                info!(
+                    "Cleared checkpoint state hash for checkpoint {} (after last committed checkpoint {})",
+                    key, last_committed_checkpoint
+                );
+            }
         }
 
         Ok(())
