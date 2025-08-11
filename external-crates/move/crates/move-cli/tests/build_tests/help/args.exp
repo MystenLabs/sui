@@ -12,6 +12,7 @@ Commands:
   migrate      Migrate to Move 2024 for the package at `path`. If no path is provided defaults to current directory
   new          Create a new Move package with name `name` at `path`. If `path` is not provided the package will be created in the directory `name`
   test         Run Move unit tests in this package
+  profile      Generate a gas profile from the Move trace file at `input`. If `output` is provided, the profile will be saved under that directory, otherwise it will be saved in the current directory
   sandbox      Execute a sandbox command
   summary      Generate a serialized summary of a Move package (e.g., functions, structs, annotations, etc.)
   help         Print this message or the help of the given subcommand(s)

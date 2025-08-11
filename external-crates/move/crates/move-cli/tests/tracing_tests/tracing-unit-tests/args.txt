@@ -9,3 +9,5 @@ coverage lcov --only-test f21
 
 coverage lcov --differential-test f21
 > wc -l f21.diff.lcov.info
+
+profile -i saved_traces/0x1__calls__test_complex_nested_calls.json.zst -o gas_profiles

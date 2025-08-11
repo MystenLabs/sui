@@ -24,6 +24,8 @@ use move_vm_runtime::native_functions::NativeFunction;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::path::PathBuf;
 
+use crate::base::profile::Profile;
+
 type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunction);
 
 #[derive(Parser)]
@@ -64,6 +66,7 @@ pub enum Command {
     Migrate(Migrate),
     New(New),
     Test(Test),
+    Profile(Profile),
     /// Execute a sandbox command.
     #[clap(name = "sandbox")]
     Sandbox {
@@ -104,6 +107,7 @@ pub fn run_cli(
             natives,
             Some(cost_table.clone()),
         ),
+        Command::Profile(c) => c.execute(),
         Command::Sandbox { storage_dir, cmd } => {
             cmd.handle_command(natives, cost_table, &move_args, &storage_dir)
         }

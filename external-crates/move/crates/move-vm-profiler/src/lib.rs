@@ -4,6 +4,8 @@ use move_vm_config::runtime::VMProfilerConfig;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+pub mod trace_converter;
+
 #[cfg(feature = "tracing")]
 use tracing::info;
 

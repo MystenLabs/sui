@@ -13,6 +13,7 @@ once_cell.workspace = true
 tracing.workspace = true
 
 move-vm-config.workspace = true
+move-trace-format.workspace = true
 
 [features]
 tracing = ["move-vm-config/tracing"]

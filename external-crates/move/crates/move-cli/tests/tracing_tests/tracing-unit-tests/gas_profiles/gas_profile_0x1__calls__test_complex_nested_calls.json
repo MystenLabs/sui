@@ -1,0 +1,115 @@
+{
+  "exporter": "speedscope@1.15.2",
+  "name": "saved_traces/0x1__calls__test_complex_nested_calls.json.zst",
+  "activeProfileIndex": 0,
+  "$schema": "https://www.speedscope.app/file-format-schema.json",
+  "shared": {
+    "frames": [
+      {
+        "name": "test_complex_nested_calls",
+        "file": ""
+      },
+      {
+        "name": "f",
+        "file": ""
+      },
+      {
+        "name": "k",
+        "file": ""
+      },
+      {
+        "name": "g",
+        "file": ""
+      },
+      {
+        "name": "i",
+        "file": ""
+      },
+      {
+        "name": "h",
+        "file": ""
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "type": "evented",
+      "name": "saved_traces/0x1__calls__test_complex_nested_calls.json.zst",
+      "unit": "none",
+      "startValue": 0,
+      "endValue": 16891,
+      "events": [
+        {
+          "type": "O",
+          "frame": 0,
+          "at": 0
+        },
+        {
+          "type": "O",
+          "frame": 1,
+          "at": 0
+        },
+        {
+          "type": "O",
+          "frame": 2,
+          "at": 1133
+        },
+        {
+          "type": "C",
+          "frame": 2,
+          "at": 2907
+        },
+        {
+          "type": "O",
+          "frame": 3,
+          "at": 3013
+        },
+        {
+          "type": "O",
+          "frame": 4,
+          "at": 5676
+        },
+        {
+          "type": "C",
+          "frame": 4,
+          "at": 9132
+        },
+        {
+          "type": "O",
+          "frame": 5,
+          "at": 9132
+        },
+        {
+          "type": "C",
+          "frame": 5,
+          "at": 12037
+        },
+        {
+          "type": "O",
+          "frame": 5,
+          "at": 12069
+        },
+        {
+          "type": "C",
+          "frame": 5,
+          "at": 14974
+        },
+        {
+          "type": "C",
+          "frame": 3,
+          "at": 15613
+        },
+        {
+          "type": "C",
+          "frame": 1,
+          "at": 16252
+        },
+        {
+          "type": "C",
+          "frame": 0,
+          "at": 16891
+        }
+      ]
+    }
+  ]
+}

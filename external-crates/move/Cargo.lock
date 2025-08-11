@@ -2896,6 +2896,7 @@ dependencies = [
 name = "move-vm-profiler"
 version = "0.1.0"
 dependencies = [
+ "move-trace-format",
  "move-vm-config",
  "once_cell",
  "serde",
