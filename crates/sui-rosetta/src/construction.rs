@@ -8,17 +8,10 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
-use futures::StreamExt;
 
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{
-    StakeStatus, SuiObjectDataOptions, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponseOptions,
-};
-use sui_sdk::rpc_types::SuiExecutionStatus;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
-use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::{
     verify_sender_signed_data_message_signatures, VerifiedDigestCache,
@@ -36,8 +29,130 @@ use crate::types::{
     TransactionIdentifierResponse,
 };
 use crate::{OnlineServerContext, SuiEnv};
+use sui_rpc::proto::sui::rpc::v2beta2::{execution_error, ExecutionError};
 
 // This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
+
+/// Extract a simple error string from a GRPC ExecutionError
+fn extract_error_kind(error: &ExecutionError) -> String {
+    if let Some(kind) = error.kind {
+        match execution_error::ExecutionErrorKind::try_from(kind) {
+            Ok(execution_error::ExecutionErrorKind::InsufficientGas) => {
+                "InsufficientGas".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidGasObject) => {
+                "InvalidGasObject".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvariantViolation) => {
+                "InvariantViolation".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::FeatureNotYetSupported) => {
+                "FeatureNotYetSupported".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::ObjectTooBig) => "ObjectTooBig".to_string(),
+            Ok(execution_error::ExecutionErrorKind::PackageTooBig) => "PackageTooBig".to_string(),
+            Ok(execution_error::ExecutionErrorKind::CircularObjectOwnership) => {
+                "CircularObjectOwnership".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InsufficientCoinBalance) => {
+                "InsufficientCoinBalance".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CoinBalanceOverflow) => {
+                "CoinBalanceOverflow".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PublishErrorNonZeroAddress) => {
+                "PublishErrorNonZeroAddress".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::SuiMoveVerificationError) => {
+                "SuiMoveVerificationError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::MovePrimitiveRuntimeError) => {
+                "MovePrimitiveRuntimeError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::MoveAbort) => "MoveAbort".to_string(),
+            Ok(execution_error::ExecutionErrorKind::VmVerificationOrDeserializationError) => {
+                "VmVerificationOrDeserializationError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::VmInvariantViolation) => {
+                "VmInvariantViolation".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::FunctionNotFound) => {
+                "FunctionNotFound".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::ArityMismatch) => "ArityMismatch".to_string(),
+            Ok(execution_error::ExecutionErrorKind::TypeArityMismatch) => {
+                "TypeArityMismatch".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::NonEntryFunctionInvoked) => {
+                "NonEntryFunctionInvoked".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CommandArgumentError) => {
+                "CommandArgumentError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::TypeArgumentError) => {
+                "TypeArgumentError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::UnusedValueWithoutDrop) => {
+                "UnusedValueWithoutDrop".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidPublicFunctionReturnType) => {
+                "InvalidPublicFunctionReturnType".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidTransferObject) => {
+                "InvalidTransferObject".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::EffectsTooLarge) => {
+                "EffectsTooLarge".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PublishUpgradeMissingDependency) => {
+                "PublishUpgradeMissingDependency".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PublishUpgradeDependencyDowngrade) => {
+                "PublishUpgradeDependencyDowngrade".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::PackageUpgradeError) => {
+                "PackageUpgradeError".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::WrittenObjectsTooLarge) => {
+                "WrittenObjectsTooLarge".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CertificateDenied) => {
+                "CertificateDenied".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::SuiMoveVerificationTimedout) => {
+                "SuiMoveVerificationTimedout".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::SharedObjectOperationNotAllowed) => {
+                "SharedObjectOperationNotAllowed".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InputObjectDeleted) => {
+                "InputObjectDeleted".to_string()
+            }
+            Ok(
+                execution_error::ExecutionErrorKind::ExecutionCanceledDueToSharedObjectCongestion,
+            ) => "ExecutionCanceledDueToSharedObjectCongestion".to_string(),
+            Ok(execution_error::ExecutionErrorKind::AddressDeniedForCoin) => {
+                "AddressDeniedForCoin".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::CoinTypeGlobalPause) => {
+                "CoinTypeGlobalPause".to_string()
+            }
+            Ok(
+                execution_error::ExecutionErrorKind::ExecutionCanceledDueToRandomnessUnavailable,
+            ) => "ExecutionCanceledDueToRandomnessUnavailable".to_string(),
+            Ok(execution_error::ExecutionErrorKind::MoveVectorElemTooBig) => {
+                "MoveVectorElemTooBig".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::MoveRawValueTooBig) => {
+                "MoveRawValueTooBig".to_string()
+            }
+            Ok(execution_error::ExecutionErrorKind::InvalidLinkage) => "InvalidLinkage".to_string(),
+            Ok(execution_error::ExecutionErrorKind::Unknown) | Err(_) => "Unknown".to_string(),
+        }
+    } else {
+        format!("{:?}", error)
+    }
+}
 
 /// Derive returns the AccountIdentifier associated with a public key.
 ///
@@ -148,40 +263,44 @@ pub async fn submit(
     // through a dry_run with a possibly invalid budget (metadata endpoint), but the requirements
     // are that it should pass from there and fail here.
     let tx_data = signed_tx.data().transaction_data().clone();
-    let dry_run = context
-        .client
-        .read_api()
-        .dry_run_transaction_block(tx_data)
-        .await?;
-    if let SuiExecutionStatus::Failure { error } = dry_run.effects.status() {
-        return Err(Error::TransactionDryRunError(error.clone()));
-    };
+    let dry_run = context.client.simulate_transaction(tx_data).await?;
 
-    let response = context
-        .client
-        .quorum_driver_api()
-        .execute_transaction_block(
-            signed_tx,
-            SuiTransactionBlockResponseOptions::new()
-                .with_input()
-                .with_effects()
-                .with_balance_changes(),
-            None,
-        )
-        .await?;
+    // Check if simulation was successful
+    let transaction = dry_run.transaction.as_ref().ok_or_else(|| {
+        Error::TransactionDryRunError("No transaction returned from simulation".to_string())
+    })?;
 
-    if let SuiExecutionStatus::Failure { error } = response
-        .effects
-        .expect("Execute transaction should return effects")
-        .status()
-    {
-        return Err(Error::TransactionExecutionError(error.to_string()));
+    let effects = transaction.effects.as_ref().ok_or_else(|| {
+        Error::TransactionDryRunError("No effects returned from simulation".to_string())
+    })?;
+
+    if let Some(status) = &effects.status {
+        if !status.success.unwrap_or(false) {
+            if let Some(error) = &status.error {
+                return Err(Error::TransactionDryRunError(extract_error_kind(error)));
+            }
+            return Err(Error::TransactionDryRunError(
+                "Transaction simulation failed".to_string(),
+            ));
+        }
     }
 
+    let response = context.client.execute_transaction(signed_tx).await?;
+
+    // Check if execution was successful
+    use sui_types::effects::TransactionEffectsAPI;
+    match response.effects.status() {
+        sui_types::execution_status::ExecutionStatus::Success => {}
+        sui_types::execution_status::ExecutionStatus::Failure { error, .. } => {
+            return Err(Error::TransactionExecutionError(error.to_string()));
+        }
+    }
+
+    // Extract the transaction digest from the response
+    let digest = response.effects.transaction_digest();
+
     Ok(TransactionIdentifierResponse {
-        transaction_identifier: TransactionIdentifier {
-            hash: response.digest,
-        },
+        transaction_identifier: TransactionIdentifier { hash: *digest },
         metadata: None,
     })
 }
@@ -245,11 +364,15 @@ pub async fn metadata(
     };
     let coin_type = currency.as_ref().map(|c| c.metadata.coin_type.clone());
 
-    let mut gas_price = context
+    // Get the current epoch to fetch reference gas price
+    let epoch = context
         .client
-        .governance_api()
-        .get_reference_gas_price()
+        .get_epoch(None) // None gets the current epoch
         .await?;
+
+    let mut gas_price = epoch
+        .reference_gas_price
+        .ok_or_else(|| Error::DataError("No reference gas price in epoch".to_string()))?;
     // make sure it works over epoch changes
     gas_price += 100;
 
@@ -261,15 +384,15 @@ pub async fn metadata(
         }
         InternalOperation::PayCoin { amounts, .. } => {
             let amount = amounts.iter().sum::<u64>();
-            let coin_objs: Vec<ObjectRef> = context
+            let selected_coins = context
                 .client
-                .coin_read_api()
-                .select_coins(sender, coin_type, amount.into(), vec![])
+                .select_coins(sender, coin_type, amount, vec![])
                 .await
                 .ok()
-                .unwrap_or_default()
-                .iter()
-                .map(|coin| coin.object_ref())
+                .unwrap_or_default();
+            let coin_objs: Vec<ObjectRef> = selected_coins
+                .into_iter()
+                .map(|(_, _, object_ref)| object_ref)
                 .collect();
             (Some(0), coin_objs) // amount is 0 for gas coin
         }
@@ -277,22 +400,7 @@ pub async fn metadata(
         InternalOperation::WithdrawStake { sender, stake_ids } => {
             let stake_ids = if stake_ids.is_empty() {
                 // unstake all
-                context
-                    .client
-                    .governance_api()
-                    .get_stakes(*sender)
-                    .await?
-                    .into_iter()
-                    .flat_map(|s| {
-                        s.stakes.into_iter().filter_map(|s| {
-                            if let StakeStatus::Active { .. } = s.status {
-                                Some(s.staked_sui_id)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect()
+                context.client.get_stakes(*sender).await?
             } else {
                 stake_ids.clone()
             };
@@ -301,16 +409,7 @@ pub async fn metadata(
                 return Err(Error::InvalidInput("No active stake to withdraw".into()));
             }
 
-            let responses = context
-                .client
-                .read_api()
-                .multi_get_object_with_options(stake_ids, SuiObjectDataOptions::default())
-                .await?;
-            let stake_refs = responses
-                .into_iter()
-                .map(|stake| stake.into_object().map(|o| o.object_ref()))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(SuiError::from)?;
+            let stake_refs = context.client.get_object_refs(stake_ids).await?;
 
             (Some(0), stake_refs)
         }
@@ -336,17 +435,39 @@ pub async fn metadata(
                     currency: currency.clone(),
                 })?;
 
-            let dry_run = context
-                .client
-                .read_api()
-                .dry_run_transaction_block(data)
-                .await?;
-            let effects = dry_run.effects;
+            let dry_run = context.client.simulate_transaction(data).await?;
 
-            if let SuiExecutionStatus::Failure { error } = effects.status() {
-                return Err(Error::TransactionDryRunError(error.to_string()));
+            // Check if simulation was successful and get effects
+            let transaction = dry_run.transaction.as_ref().ok_or_else(|| {
+                Error::TransactionDryRunError("No transaction returned from simulation".to_string())
+            })?;
+
+            let effects = transaction.effects.as_ref().ok_or_else(|| {
+                Error::TransactionDryRunError("No effects returned from simulation".to_string())
+            })?;
+
+            if let Some(status) = &effects.status {
+                if !status.success.unwrap_or(false) {
+                    if let Some(error) = &status.error {
+                        return Err(Error::TransactionDryRunError(extract_error_kind(error)));
+                    }
+                    return Err(Error::TransactionDryRunError(
+                        "Transaction simulation failed".to_string(),
+                    ));
+                }
             }
-            effects.gas_cost_summary().computation_cost + effects.gas_cost_summary().storage_cost
+
+            // Extract gas cost from proto effects
+            let gas_summary = effects.gas_used.as_ref().ok_or_else(|| {
+                Error::TransactionDryRunError("No gas cost summary in effects".to_string())
+            })?;
+
+            let computation_cost = gas_summary.computation_cost.unwrap_or(0);
+            let storage_cost = gas_summary.storage_cost.unwrap_or(0);
+            let storage_rebate = gas_summary.storage_rebate.unwrap_or(0);
+
+            // Total gas cost = computation + storage - rebate
+            computation_cost + storage_cost - storage_rebate
         }
     };
 
@@ -355,37 +476,42 @@ pub async fn metadata(
         let total_amount = amount + budget;
         context
             .client
-            .coin_read_api()
-            .select_coins(sender, None, total_amount.into(), vec![])
+            .select_coins(sender, None, total_amount, vec![])
             .await
             .ok()
+            .map(|selected| {
+                selected
+                    .into_iter()
+                    .map(|(id, balance, _obj_ref)| sui_types::coin::Coin::new(id, balance))
+                    .collect()
+            })
     } else {
         None
     };
 
     // If required amount is None (all SUI) or failed to select coin (might not have enough SUI), select all coins.
-    let coins = if let Some(coins) = coins {
+    let coins: Vec<sui_types::coin::Coin> = if let Some(coins) = coins {
         coins
     } else {
-        context
-            .client
-            .coin_read_api()
-            .get_coins_stream(sender, None)
-            .collect::<Vec<_>>()
-            .await
+        let all_coins = context.client.get_all_coins(sender, None).await?;
+        all_coins
+            .into_iter()
+            .map(|(id, balance, _obj_ref)| sui_types::coin::Coin::new(id, balance))
+            .collect()
     };
 
-    let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance);
+    let total_coin_value = coins.iter().fold(0, |sum, coin| sum + coin.balance.value());
 
-    let coins = coins
-        .into_iter()
-        .map(|c| c.object_ref())
-        .collect::<Vec<_>>();
+    // Need to get object references for coins - store them separately
+    let coin_refs = context
+        .client
+        .get_object_refs(coins.iter().map(|c| *c.id()).collect())
+        .await?;
 
     Ok(ConstructionMetadataResponse {
         metadata: ConstructionMetadata {
             sender,
-            coins,
+            coins: coin_refs,
             objects,
             total_coin_value: total_coin_value.into(),
             gas_price,

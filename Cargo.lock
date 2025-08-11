@@ -15765,6 +15765,7 @@ dependencies = [
  "axum 0.8.3",
  "axum-extra 0.10.1",
  "bcs",
+ "bytes",
  "clap",
  "eyre",
  "fastcrypto",
@@ -15789,6 +15790,8 @@ dependencies = [
  "sui-keys",
  "sui-move-build",
  "sui-node",
+ "sui-rpc",
+ "sui-rpc-api",
  "sui-sdk",
  "sui-swarm-config",
  "sui-types",
@@ -15797,8 +15800,10 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
+ "tonic 0.13.1",
  "tracing",
  "typed-store",
+ "url",
 ]
 
 [[package]]

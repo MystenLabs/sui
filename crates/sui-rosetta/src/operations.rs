@@ -15,18 +15,21 @@ use serde::Serialize;
 
 use sui_json_rpc_types::SuiProgrammableMoveCall;
 use sui_json_rpc_types::SuiProgrammableTransactionBlock;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{BalanceChange, SuiArgument};
 use sui_json_rpc_types::{SuiCallArg, SuiCommand};
+use sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction as ProtoExecutedTransaction;
 use sui_sdk::rpc_types::{
     SuiTransactionBlockData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockKind, SuiTransactionBlockResponse,
+    SuiTransactionBlockKind,
 };
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::object::Owner;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::{SenderSignedData, TransactionData, TransactionDataAPI};
 use sui_types::{SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
 
 use crate::types::{
@@ -574,6 +577,272 @@ impl Operations {
     }
 }
 impl Operations {
+    pub async fn try_from_grpc_response(
+        response: sui_rpc::proto::sui::rpc::v2beta2::ExecutedTransaction,
+        cache: &CoinMetadataCache,
+    ) -> Result<Self, Error> {
+        use sui_types::effects::TransactionEffects;
+        use sui_types::transaction::{Transaction, TransactionKind};
+
+        // Extract transaction BCS data
+        let tx_bcs = response
+            .transaction
+            .as_ref()
+            .and_then(|t| t.bcs.as_ref())
+            .and_then(|bcs| bcs.value.as_ref())
+            .ok_or_else(|| Error::DataError("Missing transaction BCS data".to_string()))?;
+
+        // Deserialize transaction to get sender and transaction data
+        let transaction: Transaction = bcs::from_bytes(tx_bcs)
+            .map_err(|e| Error::DataError(format!("Failed to deserialize transaction: {}", e)))?;
+
+        let tx_data = transaction.transaction_data();
+        let sender = tx_data.sender();
+
+        // Extract effects BCS data
+        let effects_bcs = response
+            .effects
+            .as_ref()
+            .and_then(|e| e.bcs.as_ref())
+            .and_then(|bcs| bcs.value.as_ref())
+            .ok_or_else(|| Error::DataError("Missing effects BCS data".to_string()))?;
+
+        // Deserialize effects
+        let effects: TransactionEffects = bcs::from_bytes(effects_bcs)
+            .map_err(|e| Error::DataError(format!("Failed to deserialize effects: {}", e)))?;
+
+        let (_gas_obj_ref, gas_obj_owner) = effects.gas_object();
+        let gas_owner = gas_obj_owner
+            .get_owner_address()
+            .map_err(|e| Error::DataError(format!("Failed to get gas owner: {}", e)))?;
+        let gas_summary = effects.gas_cost_summary();
+        let gas_used = gas_summary.storage_rebate as i128
+            - gas_summary.storage_cost as i128
+            - gas_summary.computation_cost as i128;
+
+        let status = if effects.status().is_ok() {
+            Some(OperationStatus::Success)
+        } else {
+            Some(OperationStatus::Failure)
+        };
+
+        // Parse transaction kind to extract operations
+        let mut ops = vec![];
+        match tx_data {
+            TransactionData::V1(v1) => {
+                match &v1.kind {
+                    TransactionKind::ProgrammableTransaction(pt) => {
+                        // For programmable transactions, analyze the commands to determine operation type
+                        // This is a simplified version - in production we'd parse all commands
+                        let has_stake_call = pt.commands.iter().any(|cmd| {
+                            matches!(cmd, sui_types::transaction::Command::MoveCall(call)
+                                if call.package == SUI_SYSTEM_PACKAGE_ID
+                                && call.module.as_str() == "sui_system"
+                                && (call.function.as_str() == "request_add_stake" || call.function.as_str() == "request_withdraw_stake"))
+                        });
+
+                        if has_stake_call {
+                            // For stake operations, we'll let the balance change processing handle the details
+                            ops.push(Operation {
+                                operation_identifier: Default::default(),
+                                type_: OperationType::Stake,
+                                status,
+                                account: Some(sender.into()),
+                                amount: None,
+                                coin_change: None,
+                                metadata: None,
+                            });
+                        } else {
+                            // For other programmable transactions, create a pay operation
+                            // The actual amounts will be determined by balance changes
+                            ops.push(Operation {
+                                operation_identifier: Default::default(),
+                                type_: OperationType::PaySui,
+                                status,
+                                account: Some(sender.into()),
+                                amount: None,
+                                coin_change: None,
+                                metadata: None,
+                            });
+                        }
+                    }
+                    _ => {
+                        // For non-programmable transactions (Genesis, ChangeEpoch, etc)
+                        ops.push(Operation {
+                            operation_identifier: Default::default(),
+                            type_: OperationType::Genesis,
+                            status,
+                            account: Some(sender.into()),
+                            amount: None,
+                            coin_change: None,
+                            metadata: None,
+                        });
+                    }
+                }
+            }
+        }
+
+        let ops = Operations::new(ops);
+        let ops = ops.into_iter();
+
+        // We will need to subtract the operation amounts from the actual balance
+        // change amount extracted from event to prevent double counting.
+        let mut accounted_balances =
+            ops.as_ref()
+                .iter()
+                .fold(HashMap::new(), |mut balances, op| {
+                    if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
+                        (&op.account, &op.amount, &op.status)
+                    {
+                        *balances
+                            .entry((acc.address, amount.clone().currency))
+                            .or_default() -= amount.value;
+                    }
+                    balances
+                });
+
+        let mut principal_amounts = 0;
+        let mut reward_amounts = 0;
+
+        // Extract balance change from unstake events
+        if let Some(events) = &response.events {
+            if let Some(events_bcs) = &events.bcs {
+                if let Some(events_data) = &events_bcs.value {
+                    if let Ok(events) =
+                        bcs::from_bytes::<sui_types::effects::TransactionEvents>(events_data)
+                    {
+                        for event in &events.data {
+                            if is_unstake_event(&event.type_) {
+                                // Parse event data to extract amounts
+                                if let Ok(parsed_json) =
+                                    serde_json::from_slice::<serde_json::Value>(&event.contents)
+                                {
+                                    let principal_amount = parsed_json
+                                        .pointer("/principal_amount")
+                                        .and_then(|v| v.as_str())
+                                        .and_then(|v| i128::from_str(v).ok());
+                                    let reward_amount = parsed_json
+                                        .pointer("/reward_amount")
+                                        .and_then(|v| v.as_str())
+                                        .and_then(|v| i128::from_str(v).ok());
+                                    if let (Some(principal_amount), Some(reward_amount)) =
+                                        (principal_amount, reward_amount)
+                                    {
+                                        principal_amounts += principal_amount;
+                                        reward_amounts += reward_amount;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let staking_balance = if principal_amounts != 0 {
+            *accounted_balances.entry((sender, SUI.clone())).or_default() -= principal_amounts;
+            *accounted_balances.entry((sender, SUI.clone())).or_default() -= reward_amounts;
+            vec![
+                Operation::stake_principle(status, sender, principal_amounts),
+                Operation::stake_reward(status, sender, reward_amounts),
+            ]
+        } else {
+            vec![]
+        };
+
+        let mut balance_changes = vec![];
+
+        // Convert proto balance changes to sui_json_rpc_types::BalanceChange
+        for proto_bc in &response.balance_changes {
+            let address: SuiAddress = proto_bc
+                .address
+                .as_ref()
+                .ok_or_else(|| Error::DataError("Missing address in balance change".to_string()))?
+                .parse()
+                .map_err(|e| {
+                    Error::DataError(format!("Invalid address in balance change: {}", e))
+                })?;
+
+            let coin_type = proto_bc.coin_type.as_ref().ok_or_else(|| {
+                Error::DataError("Missing coin type in balance change".to_string())
+            })?;
+
+            let amount_str = proto_bc
+                .amount
+                .as_ref()
+                .ok_or_else(|| Error::DataError("Missing amount in balance change".to_string()))?;
+            let amount = amount_str.parse::<i128>().map_err(|e| {
+                Error::DataError(format!("Invalid amount in balance change: {}", e))
+            })?;
+
+            // Parse coin type
+            let type_tag = coin_type
+                .parse()
+                .map_err(|e| Error::DataError(format!("Invalid coin type: {}", e)))?;
+
+            // Get currency info from cache
+            if let Ok(currency) = cache.get_currency(&type_tag).await {
+                if !currency.symbol.is_empty() {
+                    let balance_change = BalanceChange {
+                        owner: Owner::AddressOwner(address),
+                        coin_type: type_tag,
+                        amount,
+                    };
+                    balance_changes.push((balance_change, currency));
+                }
+            }
+        }
+
+        // Extract coin change operations from balance changes
+        let coin_change_operations = Self::process_balance_change(
+            gas_owner,
+            gas_used,
+            balance_changes,
+            status,
+            accounted_balances,
+        );
+
+        let ops: Operations = ops
+            .into_iter()
+            .chain(coin_change_operations)
+            .chain(staking_balance)
+            .collect();
+
+        // This is a workaround for the payCoin cases that are mistakenly considered to be paySui operations
+        let mutually_cancelling_balances: HashMap<_, _> = ops
+            .clone()
+            .into_iter()
+            .fold(
+                HashMap::new(),
+                |mut balances: HashMap<(SuiAddress, Currency), i128>, op| {
+                    if let (Some(acc), Some(amount)) = (&op.account, &op.amount) {
+                        *balances
+                            .entry((acc.address, amount.clone().currency))
+                            .or_default() += amount.value;
+                    }
+                    balances
+                },
+            )
+            .into_iter()
+            .filter(|(_, balance)| *balance == 0)
+            .collect();
+
+        // Filter out operations that cancel each other
+        let filtered_ops: Operations = ops
+            .into_iter()
+            .filter(|op| {
+                if let (Some(acc), Some(amount)) = (&op.account, &op.amount) {
+                    !mutually_cancelling_balances
+                        .contains_key(&(acc.address, amount.clone().currency))
+                } else {
+                    true
+                }
+            })
+            .collect();
+
+        Ok(filtered_ops)
+    }
+
     pub async fn try_from_response(
         response: SuiTransactionBlockResponse,
         cache: &CoinMetadataCache,
@@ -717,6 +986,126 @@ impl Operations {
                 true
             })
             .collect();
+
+        Ok(ops)
+    }
+
+    pub async fn try_from_proto_transaction(
+        proto_tx: ProtoExecutedTransaction,
+        cache: &CoinMetadataCache,
+    ) -> Result<Self, Error> {
+        // Extract transaction data from BCS
+        let tx_data = if let Some(tx) = &proto_tx.transaction {
+            if let Some(bcs) = &tx.bcs {
+                // Deserialize BCS to get SenderSignedData, then extract transaction data
+                let bcs_bytes = &bcs
+                    .value
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("BCS value missing"))?;
+                let sender_signed_data: SenderSignedData = bcs::from_bytes(bcs_bytes)
+                    .map_err(|e| anyhow!("Failed to deserialize transaction BCS: {}", e))?;
+                sender_signed_data.transaction_data().clone()
+            } else {
+                return Err(anyhow!("Transaction BCS data missing").into());
+            }
+        } else {
+            return Err(anyhow!("Transaction data missing").into());
+        };
+
+        // Convert to SuiTransactionBlockData for compatibility with existing logic
+        struct NoOpsModuleResolver;
+        impl ModuleResolver for NoOpsModuleResolver {
+            type Error = Error;
+            fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+                Ok(None)
+            }
+        }
+        let sui_tx_data = SuiTransactionBlockData::try_from_with_module_cache(
+            tx_data.clone(),
+            &&mut NoOpsModuleResolver,
+        )?;
+
+        // Extract transaction effects and determine status
+        let effects = proto_tx
+            .effects
+            .ok_or_else(|| anyhow!("Transaction effects should not be empty"))?;
+
+        let status = effects.status.map(|s| match s.success {
+            Some(true) => OperationStatus::Success,
+            _ => OperationStatus::Failure,
+        });
+
+        // Extract sender and gas information
+        let sender = tx_data.sender();
+        let gas_owner = effects
+            .gas_object
+            .as_ref()
+            .and_then(|go| go.output_owner.as_ref())
+            .and_then(|owner| owner.address.as_ref())
+            .and_then(|addr| addr.parse::<SuiAddress>().ok())
+            .unwrap_or(sender);
+
+        let gas_used = effects
+            .gas_used
+            .as_ref()
+            .map(|gcs| {
+                gcs.storage_rebate.unwrap_or(0) as i128
+                    - gcs.storage_cost.unwrap_or(0) as i128
+                    - gcs.computation_cost.unwrap_or(0) as i128
+            })
+            .unwrap_or(0);
+
+        // Extract operations from transaction data using existing logic
+        let ops = Operations::try_from_data(sui_tx_data, status)?;
+        let ops_iter = ops.into_iter();
+
+        // Convert proto balance changes to JSON-RPC format for compatibility
+        let mut proto_balance_changes = vec![];
+        for balance_change in &proto_tx.balance_changes {
+            if let (Some(address_str), Some(amount_str), Some(coin_type_str)) = (
+                balance_change.address.as_ref(),
+                balance_change.amount.as_ref(),
+                balance_change.coin_type.as_ref(),
+            ) {
+                if let (Ok(address), Ok(amount), Ok(coin_type)) = (
+                    address_str.parse::<SuiAddress>(),
+                    amount_str.parse::<i128>(),
+                    coin_type_str.parse(),
+                ) {
+                    let currency = cache.get_currency(&coin_type).await?;
+
+                    let json_balance_change = BalanceChange {
+                        owner: Owner::AddressOwner(address),
+                        coin_type,
+                        amount,
+                    };
+                    proto_balance_changes.push((json_balance_change, currency));
+                }
+            }
+        }
+
+        // We need to calculate accounted balances from existing operations
+        let mut accounted_balances = HashMap::new();
+        for op in ops_iter.as_ref().iter() {
+            if let (Some(acc), Some(amount), Some(OperationStatus::Success)) =
+                (&op.account, &op.amount, &op.status)
+            {
+                *accounted_balances
+                    .entry((acc.address, amount.clone().currency))
+                    .or_default() += amount.value;
+            }
+        }
+
+        // Extract coin change operations from balance changes using existing logic
+        let coin_change_operations = Self::process_balance_change(
+            gas_owner,
+            gas_used,
+            proto_balance_changes,
+            status,
+            accounted_balances,
+        );
+
+        let ops: Operations = ops_iter.into_iter().chain(coin_change_operations).collect();
 
         Ok(ops)
     }
