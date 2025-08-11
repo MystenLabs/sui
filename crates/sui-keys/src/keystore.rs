@@ -7,7 +7,8 @@ use crate::random_names::{random_name, random_names};
 use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
-use colored::Colorize;
+#[cfg(unix)]
+use colored::Colorize as _;
 use rand::{rngs::StdRng, SeedableRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -17,6 +18,7 @@ use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::fs::{self, File};
 use std::io::BufReader;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
