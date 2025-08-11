@@ -11,10 +11,7 @@ const filePath = path.resolve(
 
 let content = fs.readFileSync(filePath, "utf8");
 
-content = content.replace(
-  /\/references\/sui-api\/sui-graphql\/beta\/reference\/types\/objects\/query\.mdx/g,
-  "/references/sui-api/sui-graphql/beta/reference/operations/queries/checkpoint.mdx",
-);
+content = content.replace(/\[(`Query`)\]\(.*query\.mdx\)/g, "$1");
 
 fs.writeFileSync(filePath, content, "utf8");
 
