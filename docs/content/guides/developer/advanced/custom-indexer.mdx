@@ -306,7 +306,7 @@ After the `TransactionDigestHandler` struct, add the `Processor` code:
 Key concepts:
 
 - `NAME`: Unique identifier for this processor used in monitoring and logging.
-- `type Value`: Defines what data flows through the pipeline - ensures type safety.
+- `type Value`: Defines what data flows through the pipeline, which ensures type safety.
 - `process()`: Core logic that transforms checkpoint data into your custom data structure.
 
 Save the `handlers.rs` file.
