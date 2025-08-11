@@ -9,11 +9,7 @@ Sui provides a command line interface (CLI) tool to interact with the Sui networ
 
 ## Update CLI
 
-To get the latest version of the CLI, you can run the following command from a terminal or console. Be sure to replace `<BRANCH-NAME>` with `main`, `devnet`, `testnet`, or `mainnet` to get the desired version. For more information on the branches available, see [Sui Environment Setup](./contribute/sui-environment.mdx).
-
-```sh
-$ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features tracing sui
-```
+The recommended way to manage Sui CLI installations and versions is via `suiup`: https://github.com/mystenLabs/suiup.
 
 :::info
 
@@ -29,4 +25,5 @@ There are a number of top-level commands available, but the five most useful to 
 - **[Sui Client PTB CLI](./cli/ptb.mdx):** Use the `sui client ptb` command to build and execute PTBs.
 - **[Sui Keytool CLI](./cli/keytool.mdx):** Use the `sui keytool` commands to access cryptography utilities.
 - **[Sui Move CLI](./cli/move.mdx):** Use the `sui move` commands to work with the Move programming language.
+- **[Sui Replay CLI](./cli/replay.mdx):** Use the `sui client replay` command to replay a transaction and generate transaction traces for the Move debugger.
 - **[Sui Validator CLI](./cli/validator.mdx):** Use the `sui validator` commands to access tools useful for Sui validators.

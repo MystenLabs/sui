@@ -9,13 +9,13 @@ use crate::authority_client::{
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 #[cfg(test)]
 use crate::test_authority_clients::MockAuthorityApi;
-use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard, MonitorCancellation};
+use futures::StreamExt;
+use mysten_metrics::{spawn_monitored_task, GaugeGuard, MonitorCancellation};
 use mysten_network::config::Config;
 use std::convert::AsRef;
 use std::net::SocketAddr;
+use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
 use sui_authority_aggregation::ReduceOutput;
-use sui_authority_aggregation::{quorum_map_then_reduce_with_timeout, AsyncResult};
 use sui_config::genesis::Genesis;
 use sui_network::{
     default_mysten_network_config, DEFAULT_CONNECT_TIMEOUT_SEC, DEFAULT_REQUEST_TIMEOUT_SEC,
@@ -36,7 +36,7 @@ use sui_types::{
     transaction::*,
 };
 use thiserror::Error;
-use tracing::{debug, error, info, instrument, trace, trace_span, warn, Instrument};
+use tracing::{debug, error, instrument, trace, trace_span, warn, Instrument};
 
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
@@ -45,22 +45,22 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
     IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_types::committee::{CommitteeTrait, CommitteeWithNetworkMetadata, StakeUnit};
+use sui_types::committee::{CommitteeWithNetworkMetadata, StakeUnit};
 use sui_types::effects::{
     CertifiedTransactionEffects, SignedTransactionEffects, TransactionEffects, TransactionEvents,
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV3, LayoutGenerationOption,
-    ObjectInfoRequest, TransactionInfoRequest,
+    ObjectInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
 
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -72,11 +72,6 @@ pub mod authority_aggregator_tests;
 pub struct TimeoutConfig {
     pub pre_quorum_timeout: Duration,
     pub post_quorum_timeout: Duration,
-
-    // Timeout used to determine when to start a second "serial" request for
-    // quorum_once_with_timeout. If this is set to zero, then
-    // quorum_once_with_timeout becomes completely parallelized.
-    pub serial_authority_request_interval: Duration,
 }
 
 impl Default for TimeoutConfig {
@@ -84,7 +79,6 @@ impl Default for TimeoutConfig {
         Self {
             pre_quorum_timeout: Duration::from_secs(60),
             post_quorum_timeout: Duration::from_secs(7),
-            serial_authority_request_interval: Duration::from_millis(1000),
         }
     }
 }
@@ -681,193 +675,6 @@ impl<A> AuthorityAggregator<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    // Repeatedly calls the provided closure on a randomly selected validator until it succeeds.
-    // Once all validators have been attempted, starts over at the beginning. Intended for cases
-    // that must eventually succeed as long as the network is up (or comes back up) eventually.
-    async fn quorum_once_inner<'a, S, FMap>(
-        &'a self,
-        // try these authorities first
-        preferences: Option<&BTreeSet<AuthorityName>>,
-        // only attempt from these authorities.
-        restrict_to: Option<&BTreeSet<AuthorityName>>,
-        // The async function used to apply to each authority. It takes an authority name,
-        // and authority client parameter and returns a Result<V>.
-        map_each_authority: FMap,
-        timeout_each_authority: Duration,
-        authority_errors: &mut HashMap<AuthorityName, SuiError>,
-    ) -> Result<S, SuiError>
-    where
-        FMap: Fn(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, S, SuiError>
-            + Send
-            + Clone
-            + 'a,
-        S: Send,
-    {
-        let start = tokio::time::Instant::now();
-        let mut delay = Duration::from_secs(1);
-        loop {
-            let authorities_shuffled = self.committee.shuffle_by_stake(preferences, restrict_to);
-            let mut authorities_shuffled = authorities_shuffled.iter();
-
-            type RequestResult<S> = Result<Result<S, SuiError>, tokio::time::error::Elapsed>;
-
-            enum Event<S> {
-                StartNext,
-                Request(AuthorityName, RequestResult<S>),
-            }
-
-            let mut futures = FuturesUnordered::<BoxFuture<'a, Event<S>>>::new();
-
-            let start_req = |name: AuthorityName, client: Arc<SafeClient<A>>| {
-                let map_each_authority = map_each_authority.clone();
-                Box::pin(monitored_future!(async move {
-                    trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start, "new request");
-                    let map = map_each_authority(name, client);
-                    Event::Request(name, timeout(timeout_each_authority, map).await)
-                }))
-            };
-
-            let schedule_next = || {
-                let delay = self.timeouts.serial_authority_request_interval;
-                Box::pin(monitored_future!(async move {
-                    sleep(delay).await;
-                    Event::StartNext
-                }))
-            };
-
-            // This process is intended to minimize latency in the face of unreliable authorities,
-            // without creating undue load on authorities.
-            //
-            // The fastest possible process from the
-            // client's point of view would simply be to issue a concurrent request to every
-            // authority and then take the winner - this would create unnecessary load on
-            // authorities.
-            //
-            // The most efficient process from the network's point of view is to do one request at
-            // a time, however if the first validator that the client contacts is unavailable or
-            // slow, the client must wait for the serial_authority_request_interval period to elapse
-            // before starting its next request.
-            //
-            // So, this process is designed as a compromise between these two extremes.
-            // - We start one request, and schedule another request to begin after
-            //   serial_authority_request_interval.
-            // - Whenever a request finishes, if it succeeded, we return. if it failed, we start a
-            //   new request.
-            // - If serial_authority_request_interval elapses, we begin a new request even if the
-            //   previous one is not finished, and schedule another future request.
-
-            let name = authorities_shuffled.next().ok_or_else(|| {
-                error!(
-                    ?preferences,
-                    ?restrict_to,
-                    "Available authorities list is empty."
-                );
-                SuiError::from("Available authorities list is empty")
-            })?;
-            futures.push(start_req(*name, self.authority_clients[name].clone()));
-            futures.push(schedule_next());
-
-            while let Some(res) = futures.next().await {
-                match res {
-                    Event::StartNext => {
-                        trace!(now = ?tokio::time::Instant::now() - start, "eagerly beginning next request");
-                        futures.push(schedule_next());
-                    }
-                    Event::Request(name, res) => {
-                        match res {
-                            // timeout
-                            Err(_) => {
-                                debug!(name=?name.concise(), "authority request timed out");
-                                authority_errors.insert(name, SuiError::TimeoutError);
-                            }
-                            // request completed
-                            Ok(inner_res) => {
-                                trace!(name=?name.concise(), now = ?tokio::time::Instant::now() - start,
-                                       "request completed successfully");
-                                match inner_res {
-                                    Err(e) => authority_errors.insert(name, e),
-                                    Ok(res) => return Ok(res),
-                                };
-                            }
-                        };
-                    }
-                }
-
-                if let Some(next_authority) = authorities_shuffled.next() {
-                    futures.push(start_req(
-                        *next_authority,
-                        self.authority_clients[next_authority].clone(),
-                    ));
-                } else {
-                    break;
-                }
-            }
-
-            info!(
-                ?authority_errors,
-                "quorum_once_with_timeout failed on all authorities, retrying in {:?}", delay
-            );
-            sleep(delay).await;
-            delay = std::cmp::min(delay * 2, Duration::from_secs(5 * 60));
-        }
-    }
-
-    /// Like quorum_map_then_reduce_with_timeout, but for things that need only a single
-    /// successful response, such as fetching a Transaction from some authority.
-    /// This is intended for cases in which byzantine authorities can time out or slow-loris, but
-    /// can't give a false answer, because e.g. the digest of the response is known, or a
-    /// quorum-signed object such as a checkpoint has been requested.
-    pub(crate) async fn quorum_once_with_timeout<'a, S, FMap>(
-        &'a self,
-        // try these authorities first
-        preferences: Option<&BTreeSet<AuthorityName>>,
-        // only attempt from these authorities.
-        restrict_to: Option<&BTreeSet<AuthorityName>>,
-        // The async function used to apply to each authority. It takes an authority name,
-        // and authority client parameter and returns a Result<V>.
-        map_each_authority: FMap,
-        timeout_each_authority: Duration,
-        // When to give up on the attempt entirely.
-        timeout_total: Option<Duration>,
-        // The behavior that authorities expect to perform, used for logging and error
-        description: String,
-    ) -> Result<S, SuiError>
-    where
-        FMap: Fn(AuthorityName, Arc<SafeClient<A>>) -> AsyncResult<'a, S, SuiError>
-            + Send
-            + Clone
-            + 'a,
-        S: Send,
-    {
-        let mut authority_errors = HashMap::new();
-
-        let fut = self.quorum_once_inner(
-            preferences,
-            restrict_to,
-            map_each_authority,
-            timeout_each_authority,
-            &mut authority_errors,
-        );
-
-        if let Some(t) = timeout_total {
-            timeout(t, fut).await.map_err(|_timeout_error| {
-                if authority_errors.is_empty() {
-                    SuiError::TimeoutError
-                } else {
-                    SuiError::TooManyIncorrectAuthorities {
-                        errors: authority_errors
-                            .iter()
-                            .map(|(a, b)| (*a, b.clone()))
-                            .collect(),
-                        action: description,
-                    }
-                }
-            })?
-        } else {
-            fut.await
-        }
-    }
-
     /// Query the object with highest version number from the authorities.
     /// We stop after receiving responses from 2f+1 validators.
     /// This function is untrusted because we simply assume each response is valid and there are no
@@ -1778,35 +1585,6 @@ where
             .await?;
 
         Ok(response.effects_cert)
-    }
-
-    /// This function tries to get SignedTransaction OR CertifiedTransaction from
-    /// an given list of validators who are supposed to know about it.
-    #[instrument(level = "trace", skip_all, fields(?tx_digest))]
-    pub async fn handle_transaction_info_request_from_some_validators(
-        &self,
-        tx_digest: &TransactionDigest,
-        // authorities known to have the transaction info we are requesting.
-        validators: &BTreeSet<AuthorityName>,
-        timeout_total: Option<Duration>,
-    ) -> SuiResult<PlainTransactionInfoResponse> {
-        self.quorum_once_with_timeout(
-            None,
-            Some(validators),
-            |_authority, client| {
-                Box::pin(async move {
-                    client
-                        .handle_transaction_info_request(TransactionInfoRequest {
-                            transaction_digest: *tx_digest,
-                        })
-                        .await
-                })
-            },
-            Duration::from_secs(2),
-            timeout_total,
-            "handle_transaction_info_request_from_some_validators".to_string(),
-        )
-        .await
     }
 }
 

@@ -222,9 +222,13 @@ where
 
 // Chooses the percentage of transactions to be driven by TransactionDriver.
 pub fn choose_transaction_driver_percentage() -> u8 {
-    // Currently, TD cannot work in non-test environments.
-    if std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME).is_ok() {
-        return 0;
+    // Currently, TD cannot work in mainnet.
+    if let Ok(chain) =
+        std::env::var(sui_types::digests::SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME)
+    {
+        if chain == "mainnet" {
+            return 0;
+        }
     }
 
     if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {

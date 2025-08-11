@@ -79,35 +79,35 @@ pub fn publish_module(
 ) -> VMResult<()>;
 ```
 
-The `module` is in a [serialized form](#Binary-Format) and the VM performs the
+The `module` is in a [serialized form](#binary-format) and the VM performs the
 following steps:
 
 * Deserialize the module: If the module does not deserialize, an error is
 returned with a proper `StatusCode`.
 
 * Check that the module address and the `sender` address are the same: This
-check verifies that the publisher is the account that will eventually [hold
-the module](#References-to-Data-and-Code). If the two addresses do not match, an
+check verifies that the publisher is the account that will eventually hold
+the module. If the two addresses do not match, an
 error with `StatusCode::MODULE_ADDRESS_DOES_NOT_MATCH_SENDER` is returned.
 
 * Check that the module is not already published: Code is immutable in
 Move. An attempt to overwrite an existing module results in an error with
 `StatusCode::DUPLICATE_MODULE_NAME`.
 
-* Verify loading: The VM performs [verification](#Verification) of the
+* Verify loading: The VM performs verification of the
 module to prove correctness. However, neither the module nor any of its
 dependencies are actually saved in the cache. The VM ensures that the module
 will be loadable when a reference will be found. If a module would fail to
 load an error with proper `StatusCode` is returned.
 
 * Publish: The VM writes the serialized bytes of the module
-with the [proper key](#References-to-Data-and-Code) to the storage.
+with the proper key to the storage.
 After this step any reference to the
 module is valid.
 
 ## Script Execution
 
-The VM allows the execution of [scripts](#Binary-Format). A script is a
+The VM allows the execution of [scripts](#binary-format). A script is a
 Move function declared in a `script` block that performs
 calls into a Framework published on-chain to accomplish a
 logical transaction. A script is not saved in storage and
@@ -124,7 +124,7 @@ pub fn execute_script(
 ) -> VMResult<()>;
 ```
 
-The `script` is specified in a [serialized form](#Binary-Format).
+The `script` is specified in a [serialized form](#binary-format).
 If the script is generic, the `ty_args` vector contains the `TypeTag`
 values for the type arguments. The `signer` account addresses for the
 script are specified in the `senders` vector. Any additional arguments
@@ -137,10 +137,10 @@ performs the following steps:
     - The `sha3_256` hash value of the `script` binary is computed.
     - The hash is used to access the script cache to see if the script was
       loaded. The hash is used for script identity.
-    - If not in the cache the script is [loaded](#Loading). If loading fails,
+    - If not in the cache the script is loaded. If loading fails,
       execution stops and an error with a proper `StatusCode` is returned.
-    - The script main function is [checked against the
-      type argument instantiation](#Verification) and if there are
+    - The script main function is checked against the
+      type argument instantiation and if there are
       errors, execution stops and the error returned.
 
 * Build the argument list: The first arguments are `Signer` values created by
@@ -150,8 +150,8 @@ types and added to the arguments for the script.
 The VM returns an error with `StatusCode::TYPE_MISMATCH` if
 any of the types is not permitted.
 
-* Execute the script: The VM invokes the interpreter to [execute the
-script](#Interpreter). Any error during execution is returned, and the
+* Execute the script: The VM invokes the interpreter to execute the
+script. Any error during execution is returned, and the
 transaction aborted. The VM returns whether execution succeeded or
 failed.
 
@@ -183,13 +183,13 @@ it will fail with the `EXECUTE_SCRIPT_FUNCTION_CALLED_ON_NON_SCRIPT_VISIBLE` sta
 
 ## Function Execution
 
-The VM allows the execution of [any function in a module](#Binary-Format)
+The VM allows the execution of [any function in a module](#binary-format)
 through a `ModuleId` and a function name. Function names are unique within a
 module (no overloading), so the signature of the function is not
-required. Argument checking is done by the [interpreter](#Interpreter).
+required. Argument checking is done by the interpreter.
 
 The adapter uses this entry point to run specific system functions as
-described in [validation](#Validation) and [execution](#Execution). This is a
+described in validation and execution. This is a
 very powerful entry point into the system given there are no visibility
 checks. Clients would likely use this entry point internally (e.g., for
 constructing a genesis state), or wrap and expose it with restrictions.
@@ -209,12 +209,12 @@ The VM performs the following steps:
 
 * Load the function:
 
-    - The specified `module` is first [loaded](#Loading).
+    - The specified `module` is first loaded.
       An error in loading halts execution and returns the error with a proper
       `StatusCode`.
     - The VM looks up the function in the module. Failure to resolve the
       function returns an error with a proper `StatusCode`.
-    - Every type in the `ty_args` vector is [loaded](#Loading). An error
+    - Every type in the `ty_args` vector is loaded. An error
       in loading halts execution and returns the error with a proper `StatusCode`.
       Type arguments are checked against type parameters and an error returned
       if there is a mismatch (i.e., argument inconsistent with generic declaration).
@@ -223,8 +223,8 @@ The VM performs the following steps:
 of permitted types (_specify which types_). The VM returns an error with
 `StatusCode::TYPE_MISMATCH` if any of the types is not permitted.
 
-* Execute the function: The VM invokes the interpreter to [execute the
-function](#Interpreter). Any error during execution aborts the interpreter
+* Execute the function: The VM invokes the interpreter to execute the
+function. Any error during execution aborts the interpreter
 and returns the error. The VM returns whether execution succeeded or
 failed.
 
@@ -269,7 +269,7 @@ Following the binary header are the table headers. There are as many tables as
 defined in "table count". Each table header
 has the following format:
 
-* `Table Kind`: 1 byte for the [kind of table](#Tables) that is serialized at
+* `Table Kind`: 1 byte for the [kind of table](#tables) that is serialized at
 the location defined by the next 2 entries
 * `Table Offset`: ULEB128 offset from the end of the table headers where the
 table content starts
@@ -315,7 +315,7 @@ uniquely identify a user type:
     * `name`: ULEB128 index into the `IDENTIFIERS` table of the name of the struct
     * `nominal resource`: U8 bool defining whether the
     struct is a resource (true/1) or not (false/0)
-    * `type parameters`: vector of [type parameter kinds](#Kinds) if the
+    * `type parameters`: vector of [type parameter kinds](#kinds) if the
     struct is generic, an empty vector otherwise:
         * `length`: ULEB128 length of the vector, effectively the number of type
         parameters for the generic struct
@@ -330,7 +330,7 @@ identify a function:
     * `parameters`: ULEB128 index into the `SIGNATURES` table for the argument types
     of the function
     * `return`: ULEB128 index into the `SIGNATURES` table for the return types of the function
-    * `type parameters`: vector of [type parameter kinds](#Kinds) if the function
+    * `type parameters`: vector of [type parameter kinds](#kinds) if the function
     is generic, an empty vector otherwise:
         * `length`: ULEB128 length of the vector, effectively the number of type
         parameters for the generic function
@@ -349,16 +349,16 @@ be `f<U8, Bool>()` whereas a partial instantiation would be `f<U8, Z>()` where
     instantiation of the function
 
 * `SIGNATURES`: The set of signatures in this binary. A signature is a
-vector of [Signature Tokens](#SignatureTokens), so every signature will carry
+vector of [Signature Tokens](#signaturetokens), so every signature will carry
 the length (in ULEB128 form) followed by the Signature Tokens.
 
 * `CONSTANT_POOL`: The set of constants in the binary. A constant is a
 copyable primitive value or a vector of vectors of primitives. Constants
 cannot be user types. Constants are serialized according to the rule defined
-in [Move Values](#Move-Values) and stored in the table in serialized form. A
+in Move Values and stored in the table in serialized form. A
 constant in the constant pool has the following entries:
 
-    * `type`: the [Signature Token](#SignatureTokens) (type) of the value that follows
+    * `type`: the [Signature Token](#signaturetokens) (type) of the value that follows
     * `length`: the length of the serialized value in bytes
     * `value`: the serialized value
 
@@ -386,7 +386,7 @@ struct definition contains the following fields:
 
             * `name`: ULEB128 index in the `IDENTIFIERS` table containing the
             name of the field
-            * `field type`: [SignatureToken](#SignatureTokens) - the type of
+            * `field type`: [SignatureToken](#signaturetokens) - the type of
             the field
 
 * `STRUCT_DEF_INSTANTIATIONS`: the set of instantiation for any given
@@ -428,7 +428,7 @@ function definition contains the following fields:
 
         * `locals`: ULEB128 index into the `SIGNATURES` table for the types
         of the locals of the function
-        * `code`: vector of [Bytecodes](#Bytecodes), the body of this function
+        * `code`: vector of [Bytecodes](#bytecodes), the body of this function
 
             * `length`: the count of bytecodes the follows
             * `bytecodes`: Bytecodes, they are variable size
@@ -638,12 +638,12 @@ kind of the type parameters is in this vector.
 
     * `length`: ULEB128 length of the vector, effectively the number of
     type parameters for the generic entry point. 0 if the script is not generic
-    * `kinds`: array of `length` U8 [kind](#Kinds) values, not present
+    * `kinds`: array of `length` U8 [kind](#kinds) values, not present
     if length is 0
 
 * `parameters`: ULEB128 index into the `SIGNATURES` table for the argument
 types of the entry point
 
-* `code`: vector of [Bytecodes](#Bytecodes), the body of this function
+* `code`: vector of [Bytecodes](#bytecodes), the body of this function
     * `length`: the count of bytecodes
     * `bytecodes`: Bytecodes contiguously serialized, they are variable size

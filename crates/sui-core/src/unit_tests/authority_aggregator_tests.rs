@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
@@ -19,6 +19,7 @@ use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
+use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::Object;
 use sui_types::transaction::*;
 use sui_types::utils::create_fake_transaction;
@@ -27,12 +28,10 @@ use super::*;
 use crate::authority_client::AuthorityAPI;
 use crate::test_authority_clients::{
     HandleTransactionTestAuthorityClient, LocalAuthorityClient, LocalAuthorityClientFaultConfig,
-    MockAuthorityApi,
 };
 use crate::unit_test_utils::init_local_authorities;
 use sui_framework::BuiltInFramework;
 use sui_types::utils::to_sender_signed_transaction;
-use tokio::time::Instant;
 
 #[cfg(msim)]
 use sui_simulator::configs::constant_latency_ms;
@@ -584,106 +583,12 @@ async fn test_process_certificate_fault_fail() {
     );
 }
 
-#[tokio::test(start_paused = true)]
-async fn test_quorum_once_with_timeout() {
-    telemetry_subscribers::init_for_testing();
-
-    let count = Arc::new(Mutex::new(0));
-    let (authorities, _authorities_vec, clients) = get_authorities(count.clone(), 30);
-    let agg = get_genesis_agg(authorities, clients);
-
-    let case = |agg: AuthorityAggregator<MockAuthorityApi>, authority_request_timeout: u64| async move {
-        let log = Arc::new(Mutex::new(Vec::new()));
-        let start = Instant::now();
-        agg.quorum_once_with_timeout(
-            None,
-            None,
-            |_name, client| {
-                let digest = TransactionDigest::new([0u8; 32]);
-                let log = log.clone();
-                Box::pin(async move {
-                    // log the start time of the request
-                    log.lock().unwrap().push(Instant::now() - start);
-                    let res = client
-                        .handle_transaction_info_request(TransactionInfoRequest {
-                            transaction_digest: digest,
-                        })
-                        .await;
-                    match res {
-                        Ok(_) => Ok(()),
-                        // Treat transaction not found OK just to test timeout functionality.
-                        Err(SuiError::TransactionNotFound { .. }) => Ok(()),
-                        Err(err) => Err(err),
-                    }
-                })
-            },
-            Duration::from_millis(authority_request_timeout),
-            Some(Duration::from_millis(30 * 50)),
-            "test".to_string(),
-        )
-        .await
-        .unwrap();
-        Arc::try_unwrap(log).unwrap().into_inner().unwrap()
-    };
-
-    // New requests are started every 50ms even though each request hangs for 1000ms.
-    // The 15th request succeeds, and we exit before processing the remaining authorities.
-    assert_eq!(
-        case(agg.clone(), 1000).await,
-        (0..15)
-            .map(|d| Duration::from_millis(d * 50))
-            .collect::<Vec<Duration>>()
-    );
-
-    *count.lock().unwrap() = 0;
-    // Here individual requests time out relatively quickly (100ms), but we continue increasing
-    // the parallelism every 50ms
-    assert_eq!(
-        case(agg.clone(), 100).await,
-        [0, 50, 100, 100, 150, 150, 200, 200, 200, 250, 250, 250, 300, 300, 300]
-            .iter()
-            .map(|d| Duration::from_millis(*d))
-            .collect::<Vec<Duration>>()
-    );
-}
-
-#[allow(clippy::type_complexity)]
-fn get_authorities(
-    count: Arc<Mutex<u32>>,
-    committee_size: u64,
-) -> (
-    BTreeMap<AuthorityName, StakeUnit>,
-    Vec<(AuthorityName, StakeUnit)>,
-    BTreeMap<AuthorityName, MockAuthorityApi>,
-) {
-    let new_client = |delay: u64| {
-        let delay = Duration::from_millis(delay);
-        let count = count.clone();
-        MockAuthorityApi::new(delay, count)
-    };
-
-    let mut authorities = BTreeMap::new();
-    let mut authorities_vec = Vec::new();
-    let mut clients = BTreeMap::new();
-    for _ in 0..committee_size {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authorities_vec.push((name, 1));
-        clients.insert(name, new_client(1000));
-    }
-    (authorities, authorities_vec, clients)
-}
-
 fn get_genesis_agg<A: Clone>(
     authorities: BTreeMap<AuthorityName, StakeUnit>,
     clients: BTreeMap<AuthorityName, A>,
 ) -> AuthorityAggregator<A> {
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
-    let timeouts_config = TimeoutConfig {
-        serial_authority_request_interval: Duration::from_millis(50),
-        ..Default::default()
-    };
+    let timeouts_config = TimeoutConfig::default();
     AuthorityAggregatorBuilder::from_committee(committee)
         .with_timeouts_config(timeouts_config)
         .build_custom_clients(clients)

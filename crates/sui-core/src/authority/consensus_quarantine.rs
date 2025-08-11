@@ -612,7 +612,12 @@ impl ConsensusOutputQuarantine {
                 .checkpoint_height
                 .expect("non-genesis checkpoint must have height");
             if let Some(highest) = highest_committed_height {
-                assert!(checkpoint_height > highest);
+                assert!(
+                    checkpoint_height >= highest,
+                    "current checkpoint height {} must be no less than highest committed height {}",
+                    checkpoint_height,
+                    highest
+                );
             }
 
             highest_committed_height = Some(checkpoint_height);
