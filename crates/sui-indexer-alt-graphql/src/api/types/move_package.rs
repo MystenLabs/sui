@@ -82,8 +82,8 @@ pub(crate) struct PackageCheckpointFilter {
 /// Inner struct for the cursor produced while iterating over all package publishes.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub(crate) struct PackageCursor {
-    pub original_id: Vec<u8>,
     pub cp_sequence_number: u64,
+    pub original_id: Vec<u8>,
     pub package_version: u64,
 }
 
@@ -613,8 +613,8 @@ impl MovePackage {
 
         let (prev, next, results) = page.paginate_results(results, |p| {
             BcsCursor::new(PackageCursor {
-                original_id: p.original_id.clone(),
                 cp_sequence_number: p.cp_sequence_number as u64,
+                original_id: p.original_id.clone(),
                 package_version: p.package_version as u64,
             })
         });
