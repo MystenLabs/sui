@@ -6,6 +6,7 @@ use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use futures::{future::join_all, StreamExt};
 
+use sui_rpc::proto::sui::rpc::v2beta2::GetBalanceRequest;
 use sui_sdk::rpc_types::StakeStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
@@ -114,12 +115,25 @@ async fn get_account_balances(
     address: SuiAddress,
     coin_type: &String,
 ) -> Result<i128, Error> {
-    Ok(ctx
-        .client
-        .coin_read_api()
-        .get_balance(address, Some(coin_type.to_string()))
-        .await?
-        .total_balance as i128)
+    let mut live_data_client = ctx.grpc_client.live_data_client();
+
+    let request = GetBalanceRequest {
+        owner: Some(address.to_string()),
+        coin_type: Some(coin_type.to_string()),
+    };
+
+    let response = live_data_client
+        .get_balance(request)
+        .await
+        .map_err(|e| Error::DataError(format!("gRPC error: {}", e)))?;
+
+    let balance = response
+        .into_inner()
+        .balance
+        .and_then(|b| b.balance)
+        .unwrap_or(0);
+
+    Ok(balance as i128)
 }
 
 async fn get_sub_account_balances(

@@ -85,6 +85,14 @@ impl Client {
         TransactionExecutionServiceClient::with_interceptor(self.channel.clone(), self.auth.clone())
     }
 
+    pub fn live_data_client(
+        &self,
+    ) -> sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient<
+        tonic::service::interceptor::InterceptedService<tonic::transport::Channel, AuthInterceptor>,
+    > {
+        sui_rpc::proto::sui::rpc::v2beta2::live_data_service_client::LiveDataServiceClient::with_interceptor(self.channel.clone(), self.auth.clone())
+    }
+
     pub async fn get_latest_checkpoint(&self) -> Result<CertifiedCheckpointSummary> {
         self.get_checkpoint_internal(None).await
     }
