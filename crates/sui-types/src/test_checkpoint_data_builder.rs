@@ -113,6 +113,20 @@ impl TransactionBuilder {
     }
 }
 
+pub struct AdvanceEpochConfig {
+    pub safe_mode: bool,
+    pub protocol_version: ProtocolVersion,
+}
+
+impl Default for AdvanceEpochConfig {
+    fn default() -> Self {
+        Self {
+            safe_mode: false,
+            protocol_version: ProtocolVersion::MAX,
+        }
+    }
+}
+
 impl TestCheckpointDataBuilder {
     pub fn new(checkpoint: u64) -> Self {
         Self {
@@ -610,20 +624,17 @@ impl TestCheckpointDataBuilder {
         }
     }
 
-    /// Like `advance_epoch_and_protocol_upgrade`, but default the protocol version to the maximum.
-    pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
-        self.advance_epoch_and_protocol_upgrade(safe_mode, ProtocolVersion::MAX)
-    }
-
     /// Creates a transaction that advances the epoch, adds it to the checkpoint, and then builds
     /// the checkpoint. This increments the stored checkpoint sequence number and epoch. If
     /// `safe_mode` is true, the epoch end transaction will not include the `SystemEpochInfoEvent`.
     /// The `protocol_version` is used to set the protocol that we are going to follow in the
     /// subsequent epoch.
-    pub fn advance_epoch_and_protocol_upgrade(
+    pub fn advance_epoch(
         &mut self,
-        safe_mode: bool,
-        protocol_version: ProtocolVersion,
+        AdvanceEpochConfig {
+            safe_mode,
+            protocol_version,
+        }: AdvanceEpochConfig,
     ) -> CheckpointData {
         let (committee, _) = Committee::new_simple_test_committee();
         let tx_kind = EndOfEpochTransactionKind::new_change_epoch(
