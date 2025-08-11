@@ -35,7 +35,7 @@ impl TransactionSubmitter {
         Self { metrics }
     }
 
-    #[instrument(level = "error", skip_all, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx_digest))]
     pub(crate) async fn submit_transaction<A>(
         &self,
         authority_aggregator: &Arc<AuthorityAggregator<A>>,
@@ -67,7 +67,7 @@ impl TransactionSubmitter {
                     options,
                     client_monitor,
                     name,
-                    authority_aggregator,
+                    display_name.clone(),
                 )
                 .await
             {
@@ -106,7 +106,7 @@ impl TransactionSubmitter {
         }
     }
 
-    #[instrument(level = "error", skip_all)]
+    #[instrument(level = "debug", skip_all, err, ret, fields(validator_display_name = ?display_name))]
     async fn submit_transaction_once<A>(
         &self,
         client: Arc<SafeClient<A>>,
@@ -114,13 +114,12 @@ impl TransactionSubmitter {
         options: &SubmitTransactionOptions,
         client_monitor: &Arc<ValidatorClientMonitor<A>>,
         validator: AuthorityName,
-        authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        display_name: String,
     ) -> Result<SubmitTxResponse, TransactionRequestError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let submit_start = Instant::now();
-        let display_name = authority_aggregator.get_display_name(&validator);
 
         let resp = timeout(
             SUBMIT_TRANSACTION_TIMEOUT,
