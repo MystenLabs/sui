@@ -17,7 +17,7 @@ use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
-use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
+use sui_config::node::{AuthorityOverloadConfig, CheckpointExecutorMode, DBCheckpointConfig, RunWithRange};
 use sui_config::{ExecutionCacheConfig, NodeConfig};
 use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
@@ -56,6 +56,7 @@ pub struct SwarmBuilder<R = OsRng> {
     authority_overload_config: Option<AuthorityOverloadConfig>,
     execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    checkpoint_executor_mode: Option<CheckpointExecutorMode>,
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
     fullnode_fw_config: Option<RemoteFirewallConfig>,
@@ -89,6 +90,7 @@ impl SwarmBuilder {
             authority_overload_config: None,
             execution_cache_config: None,
             data_ingestion_dir: None,
+            checkpoint_executor_mode: None,
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
             fullnode_fw_config: None,
@@ -124,6 +126,7 @@ impl<R> SwarmBuilder<R> {
             authority_overload_config: self.authority_overload_config,
             execution_cache_config: self.execution_cache_config,
             data_ingestion_dir: self.data_ingestion_dir,
+            checkpoint_executor_mode: self.checkpoint_executor_mode,
             fullnode_run_with_range: self.fullnode_run_with_range,
             fullnode_policy_config: self.fullnode_policy_config,
             fullnode_fw_config: self.fullnode_fw_config,
@@ -296,6 +299,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_checkpoint_executor_mode(mut self, mode: CheckpointExecutorMode) -> Self {
+        self.checkpoint_executor_mode = Some(mode);
+        self
+    }
+
     pub fn with_fullnode_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
         if let Some(run_with_range) = run_with_range {
             self.fullnode_run_with_range = Some(run_with_range);
@@ -382,6 +390,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
             if let Some(path) = self.data_ingestion_dir {
                 config_builder = config_builder.with_data_ingestion_dir(path);
+            }
+
+            if let Some(mode) = self.checkpoint_executor_mode {
+                config_builder = config_builder.with_checkpoint_executor_mode(mode);
             }
 
             if let Some(max_submit_position) = self.max_submit_position {

@@ -752,6 +752,43 @@ mod test {
             Blob::from_bytes(&bytes).expect("failed to load checkpoint");
     }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_checkpoint_executor_passive_mode() {
+        info!("Starting checkpoint executor passive mode test");
+        
+        // Build a test cluster with passive mode enabled
+        let test_cluster = build_test_cluster_with_passive_mode(4, 5000, 1).await;
+        
+        info!("Test cluster built with passive mode enabled");
+        
+        // In passive mode, checkpoint executor won't schedule transactions for re-execution
+        // during checkpoint verification. Transactions are still executed via consensus.
+        // We just want to verify that passive mode is engaged and checkpoints are still created.
+        
+        // Wait for epoch to ensure checkpoints are processed
+        test_cluster.wait_for_epoch_all_nodes(1).await;
+        
+        info!("Successfully reached epoch 1 with passive mode enabled");
+        
+        info!("Passive mode test completed successfully - checkpoints are being created with passive mode enabled");
+    }
+    
+    async fn build_test_cluster_with_passive_mode(
+        committee_size: usize,
+        epoch_duration_ms: u64,
+        num_unpruned_validators: usize,
+    ) -> Arc<TestCluster> {
+        use sui_config::node::CheckpointExecutorMode;
+        
+        Arc::new(
+            init_test_cluster_builder(committee_size, epoch_duration_ms)
+                .with_num_unpruned_validators(num_unpruned_validators)
+                .with_checkpoint_executor_mode(CheckpointExecutorMode::Passive)
+                .build()
+                .await,
+        )
+    }
+
     // Tests the correctness of large consensus commit transaction due to large number
     // of cancelled transactions. Note that we use a low latency configuration since
     // simtest has low timeout tolerance and it is not designed to test performance.

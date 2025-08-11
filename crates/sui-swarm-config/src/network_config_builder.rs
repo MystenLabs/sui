@@ -7,7 +7,7 @@ use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
 use rand::rngs::OsRng;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
-use sui_config::node::AuthorityOverloadConfig;
+use sui_config::node::{AuthorityOverloadConfig, CheckpointExecutorMode};
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
 use sui_config::ExecutionCacheConfig;
@@ -76,6 +76,7 @@ pub struct ConfigBuilder<R = OsRng> {
     authority_overload_config: Option<AuthorityOverloadConfig>,
     execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    checkpoint_executor_mode: Option<CheckpointExecutorMode>,
     policy_config: Option<PolicyConfig>,
     firewall_config: Option<RemoteFirewallConfig>,
     max_submit_position: Option<usize>,
@@ -103,6 +104,7 @@ impl ConfigBuilder {
             authority_overload_config: None,
             execution_cache_config: None,
             data_ingestion_dir: None,
+            checkpoint_executor_mode: None,
             policy_config: None,
             firewall_config: None,
             max_submit_position: None,
@@ -176,6 +178,11 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
+        self
+    }
+
+    pub fn with_checkpoint_executor_mode(mut self, mode: CheckpointExecutorMode) -> Self {
+        self.checkpoint_executor_mode = Some(mode);
         self
     }
 
@@ -310,6 +317,7 @@ impl<R> ConfigBuilder<R> {
             authority_overload_config: self.authority_overload_config,
             execution_cache_config: self.execution_cache_config,
             data_ingestion_dir: self.data_ingestion_dir,
+            checkpoint_executor_mode: self.checkpoint_executor_mode,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             max_submit_position: self.max_submit_position,
@@ -491,6 +499,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
                 if let Some(path) = &self.data_ingestion_dir {
                     builder = builder.with_data_ingestion_dir(path.clone());
+                }
+
+                if let Some(mode) = &self.checkpoint_executor_mode {
+                    builder = builder.with_checkpoint_executor_mode(*mode);
                 }
 
                 #[cfg(msim)]

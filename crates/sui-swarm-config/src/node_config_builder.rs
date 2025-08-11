@@ -10,7 +10,7 @@ use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig,
+    CheckpointExecutorConfig, CheckpointExecutorMode, DBCheckpointConfig, ExecutionCacheConfig,
     ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
     StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
@@ -46,6 +46,7 @@ pub struct ValidatorConfigBuilder {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2: bool,
+    checkpoint_executor_mode: Option<CheckpointExecutorMode>,
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
 }
@@ -101,6 +102,11 @@ impl ValidatorConfigBuilder {
 
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
+        self
+    }
+
+    pub fn with_checkpoint_executor_mode(mut self, mode: CheckpointExecutorMode) -> Self {
+        self.checkpoint_executor_mode = Some(mode);
         self
     }
 
@@ -190,6 +196,7 @@ impl ValidatorConfigBuilder {
         let pruning_config = pruning_config;
         let checkpoint_executor_config = CheckpointExecutorConfig {
             data_ingestion_dir: self.data_ingestion_dir,
+            mode: self.checkpoint_executor_mode.unwrap_or_default(),
             ..Default::default()
         };
 
@@ -289,6 +296,7 @@ pub struct FullnodeConfigBuilder {
     policy_config: Option<PolicyConfig>,
     fw_config: Option<RemoteFirewallConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    checkpoint_executor_mode: Option<CheckpointExecutorMode>,
     disable_pruning: bool,
     chain_override: Option<Chain>,
 }
@@ -414,6 +422,11 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_checkpoint_executor_mode(mut self, mode: CheckpointExecutorMode) -> Self {
+        self.checkpoint_executor_mode = Some(mode);
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -479,6 +492,7 @@ impl FullnodeConfigBuilder {
 
         let checkpoint_executor_config = CheckpointExecutorConfig {
             data_ingestion_dir: self.data_ingestion_dir,
+            mode: self.checkpoint_executor_mode.unwrap_or_default(),
             ..Default::default()
         };
 
