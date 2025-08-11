@@ -672,7 +672,7 @@ impl KeyToolCommand {
                 }
             }
             KeyToolCommand::Export { key_identity } => {
-                let address = keystore.get_by_identity(key_identity)?;
+                let address = keystore.get_by_identity(&key_identity)?;
                 let skp = keystore.export(&address)?;
                 let mut key = Key::from(skp);
                 key.alias = keystore.get_alias(&key.sui_address).ok();
@@ -834,7 +834,7 @@ impl KeyToolCommand {
                 data,
                 intent,
             } => {
-                let address = keystore.get_by_identity(address)?;
+                let address = keystore.get_by_identity(&address)?;
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 let intent_clone = intent.clone();
                 let msg: TransactionData =

@@ -16,6 +16,7 @@ use sui_types::base_types::*;
 #[derive(Serialize, Deserialize)]
 pub struct SuiClientConfig {
     pub keystore: Keystore,
+    pub external_keys: Option<Keystore>,
     pub envs: Vec<SuiEnv>,
     pub active_env: Option<String>,
     pub active_address: Option<SuiAddress>,
@@ -25,6 +26,7 @@ impl SuiClientConfig {
     pub fn new(keystore: Keystore) -> Self {
         SuiClientConfig {
             keystore,
+            external_keys: None,
             envs: vec![],
             active_env: None,
             active_address: None,

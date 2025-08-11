@@ -1630,7 +1630,7 @@ impl SuiClientCommands {
             SuiClientCommands::RemoveAddress { alias_or_address } => {
                 let identity = KeyIdentity::from_str(&alias_or_address)
                     .map_err(|e| anyhow!("Invalid address or alias: {}", e))?;
-                let address: SuiAddress = context.config.keystore.get_by_identity(identity)?;
+                let address: SuiAddress = context.config.keystore.get_by_identity(&identity)?;
 
                 context.config.keystore.remove(address).await?;
 
