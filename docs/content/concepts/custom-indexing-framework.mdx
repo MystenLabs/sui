@@ -33,7 +33,7 @@ The following diagram details the custom indexer architecture.
 
 ### Data sources
 
-The data sources are where checkpoint data comes from. The framework supports multiple data sources to maximize flexibility.
+Checkpoint data comes from various data sources, including:
 
 - **Remote stores** connect to public checkpoint stores like [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/) - the most straightforward way to get started without running your own infrastructure.
 - **Local files** allow you to process checkpoint files dumped by a local Sui Full node, providing the lowest latency, but should be used for testing only as these files are not automatically cleaned up.
