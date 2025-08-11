@@ -36,7 +36,7 @@
 
 //# create-checkpoint
 
-//# run-jsonrpc --cursors bcs(@{obj_1_0},1,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),1,4)
 {
   "method": "suix_getCoins",
   "params": ["@{A}", null, "@{cursor_0}"]

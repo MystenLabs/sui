@@ -16512,6 +16512,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bimap",
+ "bincode 2.0.1",
  "clap",
  "criterion",
  "eyre",
@@ -16554,6 +16555,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "winnow 0.7.3",
 ]
 
 [[package]]
