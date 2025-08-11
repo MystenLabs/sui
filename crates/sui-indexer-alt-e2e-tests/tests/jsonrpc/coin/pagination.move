@@ -52,13 +52,13 @@
   "params": ["@{A}", null, null, 3]
 }
 
-//# run-jsonrpc --cursors bcs(@{obj_2_0},1,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_2_0}),1,4)
 {
   "method": "suix_getCoins",
   "params": ["@{A}", null, "@{cursor_0}"]
 }
 
-//# run-jsonrpc --cursors bcs(@{obj_7_0},1,1)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_7_0}),1,1)
 {
   "method": "suix_getCoins",
   "params": ["@{A}", null, "@{cursor_0}"]
@@ -70,15 +70,14 @@
 
 //# create-checkpoint
 
-//# run-jsonrpc --cursors bcs(@{obj_1_0},2,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),2,4)
 {
   "method": "suix_getCoins",
   "params": ["@{A}", null, "@{cursor_0}"]
 }
 
-//# run-jsonrpc --cursors bcs(@{obj_1_0},1,4)
+//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),1,4)
 {
   "method": "suix_getCoins",
   "params": ["@{A}", null, "@{cursor_0}"]
 }
-
