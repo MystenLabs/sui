@@ -55,8 +55,7 @@ fun simple_all_functions() {
     bag.destroy_empty();
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
 fun add_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -66,8 +65,7 @@ fun add_duplicate() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -76,8 +74,7 @@ fun borrow_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun borrow_mut_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -86,8 +83,7 @@ fun borrow_mut_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 fun remove_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -96,8 +92,7 @@ fun remove_missing() {
     abort 42
 }
 
-#[test]
-#[expected_failure(abort_code = sui::object_bag::EBagNotEmpty)]
+#[test, expected_failure(abort_code = sui::object_bag::EBagNotEmpty)]
 fun destroy_non_empty() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);

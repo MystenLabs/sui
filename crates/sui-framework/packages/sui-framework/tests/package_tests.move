@@ -111,8 +111,7 @@ fun test_full_upgrade_flow() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = sui::package::ETooPermissive)]
+#[test, expected_failure(abort_code = sui::package::ETooPermissive)]
 fun test_failure_to_widen_upgrade_policy() {
     let mut scenario = test_scenario::begin(@0x1);
     let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
@@ -124,8 +123,7 @@ fun test_failure_to_widen_upgrade_policy() {
     abort 0
 }
 
-#[test]
-#[expected_failure(abort_code = sui::package::ETooPermissive)]
+#[test, expected_failure(abort_code = sui::package::ETooPermissive)]
 fun test_failure_to_authorize_overly_permissive_upgrade() {
     let mut scenario = test_scenario::begin(@0x1);
     let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
@@ -139,8 +137,7 @@ fun test_failure_to_authorize_overly_permissive_upgrade() {
     abort 0
 }
 
-#[test]
-#[expected_failure(abort_code = sui::package::EAlreadyAuthorized)]
+#[test, expected_failure(abort_code = sui::package::EAlreadyAuthorized)]
 fun test_failure_to_authorize_multiple_upgrades() {
     let mut scenario = test_scenario::begin(@0x1);
     let mut cap = package::test_publish(@0x42.to_id(), scenario.ctx());
@@ -160,8 +157,7 @@ fun test_failure_to_authorize_multiple_upgrades() {
     abort 0
 }
 
-#[test]
-#[expected_failure(abort_code = sui::package::EWrongUpgradeCap)]
+#[test, expected_failure(abort_code = sui::package::EWrongUpgradeCap)]
 fun test_failure_to_commit_upgrade_to_wrong_cap() {
     let mut scenario = test_scenario::begin(@0x1);
     let mut cap0 = package::test_publish(@0x42.to_id(), scenario.ctx());

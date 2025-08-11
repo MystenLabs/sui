@@ -15,11 +15,9 @@ public use fun sui::object::id_from_address as address.to_id;
 /// The length of an address, in bytes
 const LENGTH: u64 = 32;
 
-// The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
-const MAX: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
-
-#[allow(unused_const)]
 /// Error from `from_bytes` when it is supplied too many or too few bytes.
+/// Error from `from_ascii_bytes` when it is supplied incorrect length of bytes or
+/// an invalid character is encountered.
 const EAddressParseError: u64 = 0;
 
 /// Convert `a` into a u256 by interpreting `a` as the bytes of a big-endian integer
@@ -53,18 +51,16 @@ public fun to_string(a: address): string::String {
 /// string must be Base16 encoded, and thus exactly 64 characters long.
 /// For example, the string "00000000000000000000000000000000000000000000000000000000DEADB33F"
 /// will be converted to the address @0xDEADB33F.
-/// Aborts with `EAddressParseError` if the length of `s` is not 64,
+/// Aborts with `EAddressParseError` if the length of `bytes` is not 64,
 /// or if an invalid character is encountered.
 public fun from_ascii_bytes(bytes: &vector<u8>): address {
     assert!(bytes.length() == 64, EAddressParseError);
     let mut hex_bytes = vector[];
-    let mut i = 0;
-    while (i < 64) {
-        let hi = hex_char_value(bytes[i]);
-        let lo = hex_char_value(bytes[i+1]);
+    32u64.do!(|i| {
+        let hi = hex_char_value(bytes[2 * i]);
+        let lo = hex_char_value(bytes[2 * i + 1]);
         hex_bytes.push_back((hi << 4) | lo);
-        i = i + 2;
-    };
+    });
     from_bytes(hex_bytes)
 }
 
@@ -82,5 +78,6 @@ public fun length(): u64 {
 
 /// Largest possible address
 public fun max(): u256 {
-    MAX
+    // The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
+    std::u256::max_value!()
 }

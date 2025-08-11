@@ -7,8 +7,7 @@ module sui::zklogin_verified_id_tests;
 use sui::test_scenario;
 use sui::zklogin_verified_id::{check_zklogin_id, verify_zklogin_id};
 
-#[test]
-#[expected_failure(abort_code = sui::zklogin_verified_id::EFunctionDisabled)]
+#[test, expected_failure(abort_code = sui::zklogin_verified_id::EFunctionDisabled)]
 fun test_check_zklogin_id() {
     let address = @0x1c6b623a2f2c91333df730c98d220f11484953b391a3818680f922c264cc0c6b;
     let kc_name = b"sub".to_string();
@@ -20,8 +19,7 @@ fun test_check_zklogin_id() {
     check_zklogin_id(address, &kc_name, &kc_value, &iss, &aud, salt_hash);
 }
 
-#[test]
-#[expected_failure(abort_code = sui::zklogin_verified_id::EFunctionDisabled)]
+#[test, expected_failure(abort_code = sui::zklogin_verified_id::EFunctionDisabled)]
 fun test_verified_id() {
     let address = @0x1c6b623a2f2c91333df730c98d220f11484953b391a3818680f922c264cc0c6b;
 

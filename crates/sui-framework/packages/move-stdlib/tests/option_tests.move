@@ -39,8 +39,7 @@ fun option_borrow_some() {
     assert!(*some_other.borrow() == 6);
 }
 
-#[test]
-#[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+#[test, expected_failure(abort_code = option::EOptionNotSet)]
 fun option_borrow_none() {
     option::none<u64>().borrow();
 }
@@ -53,8 +52,7 @@ fun borrow_mut_some() {
     assert!(*some.borrow() == 10);
 }
 
-#[test]
-#[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+#[test, expected_failure(abort_code = option::EOptionNotSet)]
 fun borrow_mut_none() {
     option::none<u64>().borrow_mut();
 }
@@ -82,8 +80,7 @@ fun extract_some() {
     assert!(opt.is_none());
 }
 
-#[test]
-#[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+#[test, expected_failure(abort_code = option::EOptionNotSet)]
 fun extract_none() {
     option::none<u64>().extract();
 }
@@ -109,8 +106,7 @@ fun swap_or_fill_none() {
     assert!(*none.borrow() == 1);
 }
 
-#[test]
-#[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+#[test, expected_failure(abort_code = option::EOptionNotSet)]
 fun swap_none() {
     option::none<u64>().swap(1);
 }
@@ -123,8 +119,7 @@ fun fill_none() {
     assert!(*none.borrow() == 3);
 }
 
-#[test]
-#[expected_failure(abort_code = option::EOPTION_IS_SET)]
+#[test, expected_failure(abort_code = option::EOptionIsSet)]
 fun fill_some() {
     option::some(3).fill(0);
 }
@@ -140,8 +135,7 @@ fun destroy_some() {
     assert!(option::some(4).destroy_some() == 4);
 }
 
-#[test]
-#[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+#[test, expected_failure(abort_code = option::EOptionNotSet)]
 fun destroy_some_none() {
     option::none<u64>().destroy_some();
 }
@@ -151,8 +145,7 @@ fun destroy_none() {
     option::none<u64>().destroy_none();
 }
 
-#[test]
-#[expected_failure(abort_code = option::EOPTION_IS_SET)]
+#[test, expected_failure(abort_code = option::EOptionIsSet)]
 fun destroy_none_some() {
     option::some<u64>(0).destroy_none();
 }

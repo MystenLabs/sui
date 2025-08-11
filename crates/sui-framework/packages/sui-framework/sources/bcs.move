@@ -165,17 +165,17 @@ public fun peel_vec_address(bcs: &mut BCS): vector<address> {
     bcs.peel_vec!(|bcs| bcs.peel_address())
 }
 
-/// Peel a vector of `address` from serialized bytes.
+/// Peel a vector of `bool` from serialized bytes.
 public fun peel_vec_bool(bcs: &mut BCS): vector<bool> {
     bcs.peel_vec!(|bcs| bcs.peel_bool())
 }
 
-/// Peel a vector of `u8` (eg string) from serialized bytes.
+/// Peel a vector of `u8` (e.g. string) from serialized bytes.
 public fun peel_vec_u8(bcs: &mut BCS): vector<u8> {
     bcs.peel_vec!(|bcs| bcs.peel_u8())
 }
 
-/// Peel a `vector<vector<u8>>` (eg vec of string) from serialized bytes.
+/// Peel a `vector<vector<u8>>` (e.g. vec of string) from serialized bytes.
 public fun peel_vec_vec_u8(bcs: &mut BCS): vector<vector<u8>> {
     bcs.peel_vec!(|bcs| bcs.peel_vec_u8())
 }
@@ -212,7 +212,7 @@ public fun peel_vec_u256(bcs: &mut BCS): vector<u256> {
 /// however the tag can be any `u32` value.
 ///
 /// Example:
-/// ```rust
+/// ```move
 /// let my_enum = match (bcs.peel_enum_tag()) {
 ///    0 => Enum::Empty,
 ///    1 => Enum::U8(bcs.peel_u8()),

@@ -288,40 +288,34 @@ fun test_valid_scalar_from_bytes() {
     assert!(group_ops::equal(&zero, &zero_from_bytes));
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_scalar_order() {
     let _ = bls12381::scalar_from_bytes(&ORDER_BYTES);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_scalar_empty() {
     let _ = bls12381::scalar_from_bytes(&vector[]);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_scalar_too_short() {
     let _ = bls12381::scalar_from_bytes(&SHORT_SCALAR_BYTES);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_scalar_too_long() {
     let _ = bls12381::scalar_from_bytes(&LONG_SCALAR_BYTES);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_scalar_div() {
     let a = bls12381::scalar_from_u64(0);
     let b = bls12381::scalar_from_u64(10);
     let _ = bls12381::scalar_div(&a, &b);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_scalar_inv() {
     let a = bls12381::scalar_from_u64(0);
     let _ = bls12381::scalar_inv(&a);
@@ -403,34 +397,29 @@ fun test_valid_g1_from_bytes() {
     assert!(group_ops::equal(&id, &id_from_bytes));
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g1_too_short() {
     let _ = bls12381::g1_from_bytes(&SHORT_G1_BYTES);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g1_empty() {
     let _ = bls12381::g1_from_bytes(&vector[]);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g1_too_long() {
     let _ = bls12381::g1_from_bytes(&LONG_G1_BYTES);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g1_div() {
     let a = bls12381::scalar_from_u64(0);
     let b = bls12381::g1_generator();
     let _ = bls12381::g1_div(&a, &b);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g1_empty_msg() {
     let _ = bls12381::hash_to_g1(&vector[]);
 }
@@ -488,8 +477,7 @@ fun test_uncompressed_g1_sum() {
     };
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInputTooLong)]
+#[test, expected_failure(abort_code = group_ops::EInputTooLong)]
 fun test_uncompressed_g1_sum_too_long() {
     // Sum with random terms
     let mut gen = random::new_generator_for_testing();
@@ -581,34 +569,29 @@ fun test_valid_g2_from_bytes() {
     assert!(group_ops::equal(&id, &id_from_bytes));
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g2_empty() {
     let _ = bls12381::g2_from_bytes(&vector[]);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g2_too_short() {
     let _ = bls12381::g2_from_bytes(&SHORT_G2_BYTES);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g2_too_long() {
     let _ = bls12381::g2_from_bytes(&LONG_G2_BYTES);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g2_div() {
     let a = bls12381::scalar_from_u64(0);
     let b = bls12381::g2_generator();
     let _ = bls12381::g2_div(&a, &b);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_g2_empty_msg() {
     let _ = bls12381::hash_to_g2(&vector[]);
 }
@@ -670,8 +653,7 @@ fun test_gt_to_bytes_regression() {
     assert_eq(expected, h_bytes);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_invalid_gt_div() {
     let a = bls12381::scalar_from_u64(0);
     let b = bls12381::gt_generator();
@@ -742,16 +724,14 @@ fun test_msm_g1_id() {
     assert!(group_ops::equal(&result, &expected_result));
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_empty_g1_msm() {
     let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
     let elements: vector<group_ops::Element<bls12381::G1>> = vector[];
     let _ = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_diff_length_g1_msm() {
     let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
     scalars.push_back(bls12381::scalar_zero());
@@ -761,8 +741,7 @@ fun test_diff_length_g1_msm() {
     let _ = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInputTooLong)]
+#[test, expected_failure(abort_code = group_ops::EInputTooLong)]
 fun test_msm_g1_too_long() {
     let mut i = 1;
     let mut expected_result = bls12381::g1_identity();
@@ -848,16 +827,14 @@ fun test_msm_g2_id() {
     assert!(group_ops::equal(&result, &expected_result));
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_empty_g2_msm() {
     let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
     let elements: vector<group_ops::Element<bls12381::G2>> = vector[];
     let _ = bls12381::g2_multi_scalar_multiplication(&scalars, &elements);
 }
 
-#[test]
-#[expected_failure(abort_code = group_ops::EInvalidInput)]
+#[test, expected_failure(abort_code = group_ops::EInvalidInput)]
 fun test_diff_length_g2_msm() {
     let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
     scalars.push_back(bls12381::scalar_zero());

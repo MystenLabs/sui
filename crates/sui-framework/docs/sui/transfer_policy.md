@@ -14,7 +14,7 @@ type <code>T</code> becomes tradable in <code>Kiosk</code>s. On every purchase o
 hot potato or transaction will fail.
 
 - Type owner (creator) can set any Rules as long as the ecosystem supports
-them. All of the Rules need to be resolved within a single transaction (eg
+them. All of the Rules need to be resolved within a single transaction (e.g.
 pay royalty and pay fixed commission). Once required actions are performed,
 the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a></code> can be "confirmed" via <code><a href="../sui/transfer_policy.md#sui_transfer_policy_confirm_request">confirm_request</a></code> call.
 
@@ -360,6 +360,17 @@ Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw"
 
 
 
+<a name="sui_transfer_policy_ENotMatchedPublisher"></a>
+
+Trying to create <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> and <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code>
+using <code>T</code> and <code>Publisher</code> from different package sources.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotMatchedPublisher">ENotMatchedPublisher</a>: u64 = 6;
+</code></pre>
+
+
+
 <a name="sui_transfer_policy_new_request"></a>
 
 ## Function `new_request`
@@ -408,7 +419,7 @@ available for use, the type can not be traded in kiosks.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_new">new</a>&lt;T&gt;(pub: &Publisher, ctx: &<b>mut</b> TxContext): (<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
-    <b>assert</b>!(<a href="../sui/package.md#sui_package_from_package">package::from_package</a>&lt;T&gt;(pub), 0);
+    <b>assert</b>!(<a href="../sui/package.md#sui_package_from_package">package::from_package</a>&lt;T&gt;(pub), <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotMatchedPublisher">ENotMatchedPublisher</a>);
     <b>let</b> id = <a href="../sui/object.md#sui_object_new">object::new</a>(ctx);
     <b>let</b> policy_id = id.to_inner();
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicyCreated">TransferPolicyCreated</a>&lt;T&gt; { id: policy_id });
@@ -476,13 +487,8 @@ is not specified, all profits are withdrawn.
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;SUI&gt; {
     <b>assert</b>!(<a href="../sui/object.md#sui_object_id">object::id</a>(self) == cap.policy_id, <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>);
-    <b>let</b> amount = <b>if</b> (amount.is_some()) {
-        <b>let</b> amt = amount.destroy_some();
-        <b>assert</b>!(amt &lt;= self.<a href="../sui/balance.md#sui_balance">balance</a>.value(), <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>);
-        amt
-    } <b>else</b> {
-        self.<a href="../sui/balance.md#sui_balance">balance</a>.value()
-    };
+    <b>let</b> amount = amount.destroy_or!(self.<a href="../sui/balance.md#sui_balance">balance</a>.value());
+    <b>assert</b>!(amount &lt;= self.<a href="../sui/balance.md#sui_balance">balance</a>.value(), <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>);
     <a href="../sui/coin.md#sui_coin_take">coin::take</a>(&<b>mut</b> self.<a href="../sui/balance.md#sui_balance">balance</a>, amount, ctx)
 }
 </code></pre>
@@ -553,14 +559,9 @@ Kiosk trades will not be possible.
     request: <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a>&lt;T&gt;,
 ): (ID, u64, ID) {
     <b>let</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_TransferRequest">TransferRequest</a> { <a href="../sui/transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_from">from</a>, receipts } = request;
-    <b>let</b> <b>mut</b> completed = receipts.into_keys();
-    <b>let</b> <b>mut</b> total = completed.length();
-    <b>assert</b>!(total == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
-    <b>while</b> (total &gt; 0) {
-        <b>let</b> rule_type = completed.pop_back();
-        <b>assert</b>!(self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="../sui/transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>);
-        total = total - 1;
-    };
+    <b>let</b> completed = receipts.into_keys();
+    <b>assert</b>!(completed.length() == self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.size(), <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>);
+    completed.destroy!(|rule_type| <b>assert</b>!(self.<a href="../sui/transfer_policy.md#sui_transfer_policy_rules">rules</a>.contains(&rule_type), <a href="../sui/transfer_policy.md#sui_transfer_policy_EIllegalRule">EIllegalRule</a>));
     (<a href="../sui/transfer_policy.md#sui_transfer_policy_item">item</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_paid">paid</a>, <a href="../sui/transfer_policy.md#sui_transfer_policy_from">from</a>)
 }
 </code></pre>

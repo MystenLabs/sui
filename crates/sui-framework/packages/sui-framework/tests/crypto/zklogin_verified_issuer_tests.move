@@ -52,8 +52,7 @@ fun test_verified_issuer() {
     scenario.end();
 }
 
-#[test]
-#[expected_failure(abort_code = sui::zklogin_verified_issuer::EInvalidProof)]
+#[test, expected_failure(abort_code = sui::zklogin_verified_issuer::EInvalidProof)]
 fun test_invalid_verified_issuer() {
     let other_address = @0x1;
     let iss = b"https://accounts.google.com".to_string();

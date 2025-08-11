@@ -14,6 +14,7 @@ Priority queue implemented using a max heap.
 -  [Function `new_entry`](#sui_priority_queue_new_entry)
 -  [Function `create_entries`](#sui_priority_queue_create_entries)
 -  [Function `restore_heap_recursive`](#sui_priority_queue_restore_heap_recursive)
+-  [Function `restore_heap_iterative`](#sui_priority_queue_restore_heap_iterative)
 -  [Function `max_heapify_recursive`](#sui_priority_queue_max_heapify_recursive)
 -  [Function `priorities`](#sui_priority_queue_priorities)
 
@@ -100,6 +101,16 @@ For when heap is empty and there's no data to pop.
 
 
 
+<a name="sui_priority_queue_EIndexOutOfBound"></a>
+
+For when max heapify recursive, the index is out of bound.
+
+
+<pre><code><b>const</b> <a href="../sui/priority_queue.md#sui_priority_queue_EIndexOutOfBound">EIndexOutOfBound</a>: u64 = 1;
+</code></pre>
+
+
+
 <a name="sui_priority_queue_new"></a>
 
 ## Function `new`
@@ -118,12 +129,8 @@ Create a new priority queue from the input entry vectors.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_new">new</a>&lt;T: drop&gt;(<b>mut</b> entries: vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt;): <a href="../sui/priority_queue.md#sui_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt; {
     <b>let</b> len = entries.length();
-    <b>let</b> <b>mut</b> i = len / 2;
-    // Max heapify from the first node that is a parent (node at len / 2).
-    <b>while</b> (i &gt; 0) {
-        i = i - 1;
-        <a href="../sui/priority_queue.md#sui_priority_queue_max_heapify_recursive">max_heapify_recursive</a>(&<b>mut</b> entries, len, i);
-    };
+    // Max heapify from the first node that is a parent (node at len / 2 - 1).
+    (len / 2).do!(|i| <a href="../sui/priority_queue.md#sui_priority_queue_max_heapify_recursive">max_heapify_recursive</a>(&<b>mut</b> entries, len, len / 2 - 1 - i));
     <a href="../sui/priority_queue.md#sui_priority_queue_PriorityQueue">PriorityQueue</a> { entries }
 }
 </code></pre>
@@ -195,6 +202,7 @@ Insert a new entry into the queue.
 
 ## Function `new_entry`
 
+Create a new entry from the input priority and value.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_new_entry">new_entry</a>&lt;T: drop&gt;(priority: u64, value: T): <a href="../sui/priority_queue.md#sui_priority_queue_Entry">sui::priority_queue::Entry</a>&lt;T&gt;
@@ -219,6 +227,7 @@ Insert a new entry into the queue.
 
 ## Function `create_entries`
 
+Create an entry vectors from the input priority vectors and value vectors.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(p: vector&lt;u64&gt;, v: vector&lt;T&gt;): vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">sui::priority_queue::Entry</a>&lt;T&gt;&gt;
@@ -230,18 +239,8 @@ Insert a new entry into the queue.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(<b>mut</b> p: vector&lt;u64&gt;, <b>mut</b> v: vector&lt;T&gt;): vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
-    <b>let</b> len = p.length();
-    <b>assert</b>!(v.length() == len, 0);
-    <b>let</b> <b>mut</b> res = vector[];
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; len) {
-        <b>let</b> priority = p.remove(0);
-        <b>let</b> value = v.remove(0);
-        res.push_back(<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a> { priority, value });
-        i = i + 1;
-    };
-    res
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(p: vector&lt;u64&gt;, v: vector&lt;T&gt;): vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
+    p.zip_map!(v, |priority, value| <a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a> { priority, value })
 }
 </code></pre>
 
@@ -282,6 +281,39 @@ Insert a new entry into the queue.
 
 </details>
 
+<a name="sui_priority_queue_restore_heap_iterative"></a>
+
+## Function `restore_heap_iterative`
+
+
+
+<pre><code><b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_restore_heap_iterative">restore_heap_iterative</a>&lt;T: drop&gt;(v: &<b>mut</b> vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">sui::priority_queue::Entry</a>&lt;T&gt;&gt;, i: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_restore_heap_iterative">restore_heap_iterative</a>&lt;T: drop&gt;(v: &<b>mut</b> vector&lt;<a href="../sui/priority_queue.md#sui_priority_queue_Entry">Entry</a>&lt;T&gt;&gt;, <b>mut</b> i: u64) {
+    <b>while</b> (i &gt; 0) {
+        <b>let</b> parent = (i - 1) / 2;
+        // If <a href="../sui/priority_queue.md#sui_priority_queue_new">new</a> elem is greater than its parent, swap them and iterative
+        // do the restoration upwards.
+        <b>if</b> (*&v[i].priority &lt;= *&v[parent].priority) {
+            <b>break</b>
+        };
+        v.swap(i, parent);
+        i = parent;
+    };
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_priority_queue_max_heapify_recursive"></a>
 
 ## Function `max_heapify_recursive`
@@ -306,7 +338,7 @@ do satisfy the max heap property.
     <b>if</b> (len == 0) {
         <b>return</b>
     };
-    <b>assert</b>!(i &lt; len, 1);
+    <b>assert</b>!(i &lt; len, <a href="../sui/priority_queue.md#sui_priority_queue_EIndexOutOfBound">EIndexOutOfBound</a>);
     <b>let</b> left = i * 2 + 1;
     <b>let</b> right = left + 1;
     <b>let</b> <b>mut</b> max = i;
@@ -337,6 +369,7 @@ do satisfy the max heap property.
 
 ## Function `priorities`
 
+Get priority vectors in priority queue.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_priorities">priorities</a>&lt;T: drop&gt;(pq: &<a href="../sui/priority_queue.md#sui_priority_queue_PriorityQueue">sui::priority_queue::PriorityQueue</a>&lt;T&gt;): vector&lt;u64&gt;
@@ -349,13 +382,7 @@ do satisfy the max heap property.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/priority_queue.md#sui_priority_queue_priorities">priorities</a>&lt;T: drop&gt;(pq: &<a href="../sui/priority_queue.md#sui_priority_queue_PriorityQueue">PriorityQueue</a>&lt;T&gt;): vector&lt;u64&gt; {
-    <b>let</b> <b>mut</b> res = vector[];
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; pq.entries.length()) {
-        res.push_back(pq.entries[i].priority);
-        i = i +1;
-    };
-    res
+    pq.entries.map_ref!(|<b>entry</b>| <b>entry</b>.priority)
 }
 </code></pre>
 

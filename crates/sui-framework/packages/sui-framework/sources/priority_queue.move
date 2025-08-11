@@ -6,6 +6,8 @@ module sui::priority_queue;
 
 /// For when heap is empty and there's no data to pop.
 const EPopFromEmptyHeap: u64 = 0;
+/// For when max heapify recursive, the index is out of bound.
+const EIndexOutOfBound: u64 = 1;
 
 /// Struct representing a priority queue. The `entries` vector represents a max
 /// heap structure, where entries[0] is the root, entries[1] and entries[2] are the
@@ -24,12 +26,8 @@ public struct Entry<T: drop> has drop, store {
 /// Create a new priority queue from the input entry vectors.
 public fun new<T: drop>(mut entries: vector<Entry<T>>): PriorityQueue<T> {
     let len = entries.length();
-    let mut i = len / 2;
-    // Max heapify from the first node that is a parent (node at len / 2).
-    while (i > 0) {
-        i = i - 1;
-        max_heapify_recursive(&mut entries, len, i);
-    };
+    // Max heapify from the first node that is a parent (node at len / 2 - 1).
+    (len / 2).do!(|i| max_heapify_recursive(&mut entries, len, len / 2 - 1 - i));
     PriorityQueue { entries }
 }
 
@@ -52,25 +50,16 @@ public fun insert<T: drop>(pq: &mut PriorityQueue<T>, priority: u64, value: T) {
     restore_heap_recursive(&mut pq.entries, index);
 }
 
+/// Create a new entry from the input priority and value.
 public fun new_entry<T: drop>(priority: u64, value: T): Entry<T> {
     Entry { priority, value }
 }
 
-public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector<Entry<T>> {
-    let len = p.length();
-    assert!(v.length() == len, 0);
-    let mut res = vector[];
-    let mut i = 0;
-    while (i < len) {
-        let priority = p.remove(0);
-        let value = v.remove(0);
-        res.push_back(Entry { priority, value });
-        i = i + 1;
-    };
-    res
+/// Create an entry vectors from the input priority vectors and value vectors.
+public fun create_entries<T: drop>(p: vector<u64>, v: vector<T>): vector<Entry<T>> {
+    p.zip_map!(v, |priority, value| Entry { priority, value })
 }
 
-// TODO: implement iterative version too and see performance difference.
 fun restore_heap_recursive<T: drop>(v: &mut vector<Entry<T>>, i: u64) {
     if (i == 0) {
         return
@@ -85,6 +74,21 @@ fun restore_heap_recursive<T: drop>(v: &mut vector<Entry<T>>, i: u64) {
     }
 }
 
+#[allow(unused_function)]
+// TODO: completed iterative version, need to see performance difference.
+fun restore_heap_iterative<T: drop>(v: &mut vector<Entry<T>>, mut i: u64) {
+    while (i > 0) {
+        let parent = (i - 1) / 2;
+        // If new elem is greater than its parent, swap them and iterative
+        // do the restoration upwards.
+        if (*&v[i].priority <= *&v[parent].priority) {
+            break
+        };
+        v.swap(i, parent);
+        i = parent;
+    };
+}
+
 /// Max heapify the subtree whose root is at index `i`. That means after this function
 /// finishes, the subtree should have the property that the parent node has higher priority
 /// than both child nodes.
@@ -94,7 +98,7 @@ fun max_heapify_recursive<T: drop>(v: &mut vector<Entry<T>>, len: u64, i: u64) {
     if (len == 0) {
         return
     };
-    assert!(i < len, 1);
+    assert!(i < len, EIndexOutOfBound);
     let left = i * 2 + 1;
     let right = left + 1;
     let mut max = i;
@@ -116,14 +120,9 @@ fun max_heapify_recursive<T: drop>(v: &mut vector<Entry<T>>, len: u64, i: u64) {
     }
 }
 
+/// Get priority vectors in priority queue.
 public fun priorities<T: drop>(pq: &PriorityQueue<T>): vector<u64> {
-    let mut res = vector[];
-    let mut i = 0;
-    while (i < pq.entries.length()) {
-        res.push_back(pq.entries[i].priority);
-        i = i +1;
-    };
-    res
+    pq.entries.map_ref!(|entry| entry.priority)
 }
 
 #[test]
@@ -167,6 +166,28 @@ fun test_swap_remove_edge_case() {
     check_pop_max(&mut h, 2, 0);
     check_pop_max(&mut h, 1, 0);
     check_pop_max(&mut h, 0, 0);
+}
+
+#[test]
+fun use_iterative_version_to_restore_heap() {
+    let mut h = new(create_entries(vector[3, 1, 4, 2, 5, 2], vector[10, 20, 30, 40, 50, 60]));
+    check_pop_max(&mut h, 5, 50);
+    check_pop_max(&mut h, 4, 30);
+    check_pop_max(&mut h, 3, 10);
+    insert_with_iterative_version(&mut h, 7, 70);
+    check_pop_max(&mut h, 7, 70);
+    check_pop_max(&mut h, 2, 40);
+    insert_with_iterative_version(&mut h, 0, 80);
+    check_pop_max(&mut h, 2, 60);
+    check_pop_max(&mut h, 1, 20);
+    check_pop_max(&mut h, 0, 80);
+}
+
+#[test_only]
+fun insert_with_iterative_version<T: drop>(pq: &mut PriorityQueue<T>, priority: u64, value: T) {
+    pq.entries.push_back(Entry { priority, value });
+    let index = pq.entries.length() - 1;
+    restore_heap_iterative(&mut pq.entries, index);
 }
 
 #[test_only]

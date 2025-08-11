@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Defines the `DenyList` type. The `DenyList` shared object is used to restrict access to
-/// instances of certain core types from being used as inputs by specified addresses in the deny
-/// list.
+/// instances of certain core types from being used as inputs or being received by specified
+/// addresses in the deny list.
 module sui::deny_list;
 
 use sui::bag::{Self, Bag};
