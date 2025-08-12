@@ -2,13 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::{Loc, sp};
-use move_symbol_pool::Symbol;
-
 use crate::{
     PreCompiledProgramInfo, diag,
     diagnostics::DiagnosticReporter,
-    expansion::ast::Address,
     parser::{
         ast::{self as P, DocComment},
         filter::{FilterContext, filter_program},
@@ -16,10 +12,12 @@ use crate::{
     shared::{
         CompilationEnv,
         known_attributes::{self, AttributeKind_},
-        stdlib_definitions::{has_unit_test_module, unit_test_poision},
+        stdlib_definitions::{has_unit_test_module, unit_test_poision_native},
     },
-    sui_mode::STD_ADDR_VALUE,
 };
+
+use move_ir_types::location::{Loc, sp};
+use move_symbol_pool::Symbol;
 
 use std::sync::Arc;
 
@@ -89,8 +87,6 @@ impl FilterContext for Context<'_> {
 // Filtering of test-annotated module members
 //***************************************************************************
 
-pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
-
 // This filters out all test, and test-only annotated module member from `prog` if the `test` flag
 // in `compilation_env` is not set. If the test flag is set, no filtering is performed, and instead
 // a test plan is created for use by the testing framework.
@@ -109,54 +105,13 @@ pub fn program(
     filter_program(&mut context, prog)
 }
 
-fn stdlib_unit_test_module_in_program(prog: &P::Program) -> bool {
-    use crate::shared::stdlib_definitions as SD;
-    prog.lib_definitions
-        .iter()
-        .chain(prog.source_definitions.iter())
-        .any(|pkg| match &pkg.def {
-            P::Definition::Module(mdef) => {
-                mdef.name.0.value == SD::UNIT_TEST_MODULE_NAME
-                    && mdef.address.is_some()
-                    && match &mdef.address.as_ref().unwrap().value {
-                        // TODO: remove once named addresses have landed in the stdlib
-                        P::LeadingNameAccess_::Name(name) => name.value == SD::STDLIB_ADDRESS_NAME,
-                        P::LeadingNameAccess_::GlobalAddress(name) => {
-                            name.value == SD::STDLIB_ADDRESS_NAME
-                        }
-                        P::LeadingNameAccess_::AnonymousAddress(_) => false,
-                    }
-            }
-            _ => false,
-        })
-}
-
-fn stdlib_unit_test_module_in_pre_compiled_lib(
-    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
-) -> bool {
-    use crate::shared::stdlib_definitions as SD;
-    pre_compiled_lib.is_some_and(|module_info| {
-        module_info.iter().any(|(sp!(_, mident), _)| {
-            mident.module.0.value == SD::UNIT_TEST_MODULE_NAME
-                && match mident.address {
-                    Address::Numerical {
-                        value: sp!(_, addr),
-                        ..
-                    } => addr == STD_ADDR_VALUE,
-                    Address::NamedUnassigned(_) => false,
-                }
-        })
-    })
-}
-
 fn check_has_unit_test_module(
     compilation_env: &CompilationEnv,
     reporter: &DiagnosticReporter,
     pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &P::Program,
 ) -> bool {
-    let has_unit_test_module = stdlib_unit_test_module_in_program(prog)
-        || stdlib_unit_test_module_in_pre_compiled_lib(pre_compiled_lib);
+    let has_unit_test_module = has_unit_test_module(prog, pre_compiled_lib);
 
     if !has_unit_test_module && compilation_env.test_mode() {
         if let Some(P::PackageDefinition { def, .. }) = prog
@@ -196,7 +151,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         return_type: sp(mloc, P::Type_::Unit),
     };
 
-    let unit_test_poison_name = unit_test_poision(mloc);
+    let unit_test_poison_name = unit_test_poision_native(mloc);
     let nop_call = P::Exp_::Call(unit_test_poison_name, sp(mloc, vec![]));
 
     // fun unit_test_poison() { 0x1::UnitTest::poison(0); () }
@@ -208,7 +163,10 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         entry: Some(mloc), // it's a bit of a hack to avoid treating this function as unused
         macro_: None,
         signature,
-        name: P::FunctionName(sp(mloc, UNIT_TEST_POISON_FUN_NAME)),
+        name: P::FunctionName(sp(
+            mloc,
+            crate::shared::stdlib_definitions::UNIT_TEST_POISON_INJECTION_NAME,
+        )),
         body: sp(
             mloc,
             P::FunctionBody_::Defined((

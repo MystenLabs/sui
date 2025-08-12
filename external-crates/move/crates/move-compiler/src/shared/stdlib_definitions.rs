@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram,
+    PreCompiledProgramInfo,
     expansion::ast as E,
     parser::ast::{self as P, NameAccessChain},
 };
@@ -49,7 +49,8 @@ pub const STRING_STRING_TYPE: StdlibName = StdlibName(STRING_MODULE_NAME, STRING
 // Unit Tests
 
 pub const UNIT_TEST_MODULE_NAME: Symbol = symbol!("unit_test");
-pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("poison");
+pub const UNIT_TEST_POISON_NATIVE_NAME: Symbol = symbol!("poison");
+pub const UNIT_TEST_POISON_INJECTION_NAME: Symbol = symbol!("unit_test_poison");
 
 // -----------------------------------------------
 // Std Lib Defintions
@@ -278,46 +279,48 @@ pub fn is_utf8_string(value: &E::Value_) -> Result<(), String> {
 // -----------------------------------------------
 
 pub fn has_unit_test_module(
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &P::Program,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
 ) -> bool {
-    has_module(pre_compiled_lib, prog, UNIT_TEST_MODULE_NAME)
+    has_stdlib_module(prog, pre_compiled_lib, UNIT_TEST_MODULE_NAME)
 }
 
-pub fn unit_test_poision(loc: Loc) -> P::NameAccessChain {
-    name_access_chain(loc, UNIT_TEST_MODULE_NAME, UNIT_TEST_POISON_FUN_NAME)
+pub fn unit_test_poision_native(loc: Loc) -> P::NameAccessChain {
+    name_access_chain(loc, UNIT_TEST_MODULE_NAME, UNIT_TEST_POISON_NATIVE_NAME)
 }
 
 // -----------------------------------------------
 // Helpers
 // -----------------------------------------------
 
-fn has_module(
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+fn has_stdlib_module(
     prog: &P::Program,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     module: Symbol,
 ) -> bool {
-    has_stdlib_module(prog, module)
-        || pre_compiled_lib.is_some_and(|p| has_stdlib_module(&p.parser, module))
-}
+    fn stdlib_addr_name(sp!(_, n): &P::LeadingNameAccess) -> bool {
+        match n {
+            P::LeadingNameAccess_::Name(name) => name.value == STDLIB_ADDRESS_NAME,
+            P::LeadingNameAccess_::GlobalAddress(name) => name.value == STDLIB_ADDRESS_NAME,
+            P::LeadingNameAccess_::AnonymousAddress(_) => false,
+        }
+    }
 
-fn has_stdlib_module(prog: &P::Program, module: Symbol) -> bool {
     prog.lib_definitions
         .iter()
         .chain(prog.source_definitions.iter())
-        .any(|pkg| match &pkg.def {
-            P::Definition::Module(mdef) => {
-                mdef.name.0.value == module
-                    && mdef.address.is_some()
-                    && match &mdef.address.as_ref().unwrap().value {
-                        P::LeadingNameAccess_::Name(name) => name.value == STDLIB_ADDRESS_NAME,
-                        P::LeadingNameAccess_::GlobalAddress(name) => {
-                            name.value == STDLIB_ADDRESS_NAME
-                        }
-                        P::LeadingNameAccess_::AnonymousAddress(_) => false,
-                    }
-            }
-            _ => false,
+        .any(|pkg| {
+            let P::Definition::Module(mdef) = &pkg.def else {
+                return false;
+            };
+            mdef.name.0.value == module
+                && mdef.address.is_some()
+                && stdlib_addr_name(mdef.address.as_ref().unwrap())
+        })
+        || pre_compiled_lib.is_some_and(|mdefs| {
+            mdefs
+                .iter()
+                .any(|(sp!(_, mident), _)| mident.named_address_is(STDLIB_ADDRESS_NAME, module))
         })
 }
 
