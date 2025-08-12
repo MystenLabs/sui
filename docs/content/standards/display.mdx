@@ -1,6 +1,7 @@
 ---
 title: Sui Object Display
 description: The Sui Object Display standard is a template engine that enables on-chain management of off-chain representation (display) for a type.
+keywords: [ object display, object, display, display properties, object properties, sui::display, display<T>, Sui utility objects, Unique objects with dynamic representation, objects with unique static content ]
 ---
 
 The Sui Object Display standard is a template engine that enables on-chain management of off-chain representation (display) for a type. With it, you can substitute data for an object into a template string. The standard doesn’t limit the fields you can set. You can use the  `{property}` syntax to access all object properties, and then insert them as a part of the template string.
@@ -15,16 +16,17 @@ Sui Full nodes process all objects of the type `T` by matching the `Display` def
 
 The basic set of properties suggested includes:
 
-- `name` - A name for the object. The name is displayed when users view the object.
-- `description` - A description for the object. The description is displayed when users view the object.
-- `link` - A link to the object to use in an application.
-- `image_url` - A URL or a blob with the image for the object.
-- `thumbnail_url` - A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
-- `project_url` - A link to a website associated with the object or creator.
-- `creator` - A string that indicates the object creator.
+- `name`: A name for the object. The name is displayed when users view the object.
+- `description`: A description for the object. The description is displayed when users view the object.
+- `link`: A link to the object to use in an application.
+- `image_url`: A URL or a blob with the image for the object.
+- `thumbnail_url`: A URL to a **smaller** image to use in wallets, explorers, and other products as a preview.
+- `project_url`: A link to a website associated with the object or creator.
+- `creator`: A string that indicates the object creator.
 
 
-### An example Sui Hero module
+### Example: Sui Hero module
+
 The following code sample demonstrates how the `Display` for an example `Hero` module varies based on the `name`, `id`, and `image_url` properties of the type `Hero`.
 The following represents the template the `init` function defines:
 

@@ -1,8 +1,10 @@
 ---
 title: Spending
+description: Token types cannot use the `store` ability to store other objects. Instead, Tokens have a `spend` method. 
+keywords: [ token, store, spend, spend action, spent token, actionrequest, action request, gating the spend action, assigning rules, rules for spending, authorizing spending, authorized spending, token policies, tokenpolicy, treasureycap, treasury cap ]
 ---
 
-Because `Token` types do not have the `store` ability, it is impossible to store them in another object. Hence, `Coin`-like approaches to spending are not possible - an application that takes `Token` as a payment won't be able to add it to its balance. To address this issue, `Token` has a `spend` method, which allows spending it in one application and then delivering it as a `spent_balance` to the [`TokenPolicy`](./token-policy.mdx) or burning right away with a `TreasuryCap`.
+Because `Token` types do not have the `store` ability, it is impossible to store them in another object. Hence, `Coin`-like approaches to spending are not possible. An application that takes `Token` as a payment won't be able to add it to its balance. To address this issue, `Token` has a `spend` method, which allows spending it in one application and then delivering it as a `spent_balance` to the [`TokenPolicy`](./token-policy.mdx) or burning right away with a `TreasuryCap`.
 
 ## Spend action
 
