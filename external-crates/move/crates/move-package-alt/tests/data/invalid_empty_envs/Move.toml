@@ -1,5 +1,0 @@
-[package]
-name = "example"
-edition = "2025"
-
-[environments]

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    FullyCompiledProgram, diag,
+    PreCompiledProgramInfo, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         warning_filters::{
@@ -42,6 +42,7 @@ use crate::{
     shared::{
         ide::{IDEAnnotation, IDEInfo},
         known_attributes::{AttributeKind_, AttributePosition},
+        program_info::ModuleInfo,
         string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
         *,
@@ -69,8 +70,8 @@ type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
 // majority of the pass while swapping out how we handle paths and aliases for Move 2024 versus
 // legacy.
 
-pub(super) struct DefnContext<'env, 'map> {
-    pub(super) named_address_mapping: Option<&'map NamedAddressMap>,
+pub(super) struct DefnContext<'env> {
+    pub(super) named_address_mapping: Option<Arc<NamedAddressMap>>,
     pub(super) module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     pub(super) env: &'env CompilationEnv,
     pub(super) address_conflicts: BTreeSet<Symbol>,
@@ -79,8 +80,8 @@ pub(super) struct DefnContext<'env, 'map> {
     pub(super) reporter: DiagnosticReporter<'env>,
 }
 
-pub(super) struct Context<'env, 'map> {
-    defn_context: DefnContext<'env, 'map>,
+pub(super) struct Context<'env> {
+    defn_context: DefnContext<'env>,
     address: Option<Address>,
     warning_filters_table: Mutex<WarningFiltersTable>,
     // Cached warning filters for all available prefixes. Used by non-source defs
@@ -89,7 +90,7 @@ pub(super) struct Context<'env, 'map> {
     pub path_expander: Option<Box<dyn PathExpander>>,
 }
 
-impl<'env> Context<'env, '_> {
+impl<'env> Context<'env> {
     fn new(
         compilation_env: &'env CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
@@ -327,7 +328,7 @@ impl<'env> Context<'env, '_> {
     }
 }
 
-impl DefnContext<'_, '_> {
+impl DefnContext<'_> {
     pub(super) fn add_diag(&self, diag: Diagnostic) {
         self.reporter.add_diag(diag);
     }
@@ -396,18 +397,23 @@ fn unnecessary_alias_error(context: &mut Context, unnecessary: UnnecessaryAlias)
 /// We mark named addresses as having a conflict if there is not a bidirectional mapping between
 /// the name and its value
 fn compute_address_conflicts(
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: &P::Program,
 ) -> BTreeSet<Symbol> {
     let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
     let mut addr_to_name: BTreeMap<AccountAddress, BTreeSet<Symbol>> = BTreeMap::new();
-    let all_addrs = prog.named_address_maps.all().iter().chain(
-        pre_compiled_lib
+    let all_addrs =
+        prog.named_address_maps
+            .all()
             .iter()
-            .flat_map(|pre| pre.parser.named_address_maps.all()),
-    );
+            .cloned()
+            .chain(pre_compiled_lib.iter().flat_map(|module_info| {
+                module_info
+                    .iter()
+                    .map(|(_, m)| m.info.named_address_map.clone())
+            }));
     for map in all_addrs {
-        for (n, addr) in map {
+        for (n, addr) in &*map {
             let n = *n;
             let addr = addr.into_inner();
             name_to_addr.entry(n).or_default().insert(addr);
@@ -496,7 +502,7 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
 
 pub fn program(
     compilation_env: &CompilationEnv,
-    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    pre_compiled_lib: Option<Arc<PreCompiledProgramInfo>>,
     prog: P::Program,
 ) -> E::Program {
     let address_conflicts = compute_address_conflicts(pre_compiled_lib.clone(), &prog);
@@ -530,15 +536,13 @@ pub fn program(
             true,
             &prog.lib_definitions,
         );
+
         if let Some(pre_compiled) = pre_compiled_lib.clone() {
-            assert!(pre_compiled.parser.lib_definitions.is_empty());
-            all_module_members(
-                &mut member_computation_context,
-                &pre_compiled.parser.named_address_maps,
-                &mut members,
-                false,
-                &pre_compiled.parser.source_definitions,
-            );
+            for (mident, module_info) in pre_compiled.iter() {
+                if !members.contains_key(mident) {
+                    let _ = members.add(*mident, pre_compiled_member_kinds(&module_info.info));
+                }
+            }
         }
         members
     };
@@ -571,7 +575,7 @@ pub fn program(
         {
             let mut path_expander = Move2024PathExpander::new();
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
+            let aliases = named_addr_map_to_alias_map_builder(&mut context, &named_address_map);
 
             // should never fail
             if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
@@ -607,7 +611,7 @@ pub fn program(
         {
             let mut path_expander = Move2024PathExpander::new();
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
+            let aliases = named_addr_map_to_alias_map_builder(&mut context, &named_address_map);
             // should never fail
             if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
                 context.add_diag(*diag);
@@ -689,7 +693,7 @@ pub(super) fn top_level_address(
 ) -> Address {
     top_level_address_(
         context,
-        context.named_address_mapping.as_ref().unwrap(),
+        context.named_address_mapping.clone().unwrap(),
         suggest_declaration,
         ln,
     )
@@ -697,7 +701,7 @@ pub(super) fn top_level_address(
 
 fn top_level_address_(
     context: &mut DefnContext,
-    named_address_mapping: &NamedAddressMap,
+    named_address_mapping: Arc<NamedAddressMap>,
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
 ) -> Address {
@@ -984,13 +988,16 @@ fn module_(
 
     context.pop_alias_scope(Some(&mut use_funs));
 
+    let named_address_map = context.defn_context.named_address_mapping.clone().unwrap();
+    let target_kind = context.defn_context.target_kind;
     let def = E::ModuleDefinition {
+        named_address_map,
         doc,
         package_name,
         attributes,
         loc,
         use_funs,
-        target_kind: context.defn_context.target_kind,
+        target_kind,
         friends,
         structs,
         enums,
@@ -1268,7 +1275,7 @@ fn all_module_members<'a>(
         ..
     } in defs
     {
-        let named_addr_map: &NamedAddressMap = named_addr_maps.get(*named_address_map_index);
+        let named_addr_map = named_addr_maps.get(*named_address_map_index);
         match def {
             P::Definition::Module(m) => {
                 let addr = match &m.address {
@@ -1327,6 +1334,42 @@ fn module_members(
         };
     }
     members.add(mident, cur_members).unwrap();
+}
+
+/// Convert a pre-compiled module info to a map of member kinds.
+fn pre_compiled_member_kinds(
+    pre_compiled_module_info: &ModuleInfo,
+) -> BTreeMap<Name, ModuleMemberKind> {
+    let mut member_kinds = BTreeMap::new();
+    for (loc, name, _) in &pre_compiled_module_info.structs {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Struct);
+        assert!(
+            prev_val.is_none(),
+            "ICE a struct with the same name as another module member in pre-compiled info"
+        );
+    }
+    for (loc, name, _) in &pre_compiled_module_info.enums {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Enum);
+        assert!(
+            prev_val.is_none(),
+            "ICE an enum with the same name as another module member in pre-compiled info"
+        );
+    }
+    for (loc, name, _) in &pre_compiled_module_info.functions {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Function);
+        assert!(
+            prev_val.is_none(),
+            "ICE a function with the same name as another module member in pre-compiled info"
+        );
+    }
+    for (loc, name, _) in &pre_compiled_module_info.constants {
+        let prev_val = member_kinds.insert(sp(loc, *name), ModuleMemberKind::Constant);
+        assert!(
+            prev_val.is_none(),
+            "ICE a constant with the same name as another module member in pre-compiled info"
+        );
+    }
+    member_kinds
 }
 
 fn named_addr_map_to_alias_map_builder(

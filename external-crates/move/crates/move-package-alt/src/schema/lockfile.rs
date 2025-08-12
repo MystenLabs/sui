@@ -9,8 +9,8 @@ use toml_edit::{
 use crate::flavor::MoveFlavor;
 
 use super::{
-    EnvironmentID, EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, OriginalID, PackageName,
-    PublishedID,
+    EnvironmentID, EnvironmentName, GitSha, LocalDepInfo, OnChainDepInfo, PackageName,
+    PublishAddresses,
 };
 
 /// An identifier for a node in the package graph, used to index into the
@@ -23,24 +23,25 @@ pub type PackageID = String;
 #[derive_where(Default, Clone)]
 #[serde(bound = "")]
 pub struct ParsedLockfile<F: MoveFlavor> {
+    #[serde(default)]
     pub pinned: BTreeMap<EnvironmentName, BTreeMap<PackageID, Pin>>,
 
     #[serde(default)]
     pub published: BTreeMap<EnvironmentName, Publication<F>>,
 }
 
-pub type BuildConfig = toml::Value;
+pub type BuildConfig = BTreeMap<String, String>;
 
 /// A serialized entry in the `[published.<environment>]` table of the lockfile
 #[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
 #[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
 pub struct Publication<F: MoveFlavor> {
-    pub published_at: PublishedID,
-    pub original_id: OriginalID,
+    #[serde(flatten)]
+    pub addresses: PublishAddresses,
     pub chain_id: EnvironmentID,
     pub toolchain_version: String,
+    #[serde(default)]
     pub build_config: BuildConfig,
 
     #[serde(flatten)]
@@ -53,6 +54,10 @@ pub struct Publication<F: MoveFlavor> {
 pub struct Pin {
     /// Metadata about the package's source
     pub source: LockfileDependencyInfo,
+
+    /// The stored `published-at` and `original-id` overrides (from the `published-at` and
+    /// `original-id` fields in the manifest
+    pub address_override: Option<PublishAddresses>,
 
     /// The environment that should be used for the dependency (as defined in the dependency's
     /// manifest but specified in the depender's manifest).
@@ -81,6 +86,12 @@ pub enum LockfileDependencyInfo {
     Local(LocalDepInfo),
     OnChain(OnChainDepInfo),
     Git(LockfileGitDepInfo),
+    Root(RootDepInfo),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RootDepInfo {
+    pub root: bool,
 }
 
 /// A serialized lockfile dependency of the form `{git = "...", rev = "...", subdir = "..."}`

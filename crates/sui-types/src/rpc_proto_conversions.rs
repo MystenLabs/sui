@@ -1046,6 +1046,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
+            E::InsufficientBalanceForWithdraw => {
+                todo!("Add InsufficientBalanceForWithdraw to rpc sdk")
+            }
         };
 
         message.set_kind(kind);
@@ -1105,9 +1108,12 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             E::InvalidArgumentArity => CommandArgumentErrorKind::InvalidArgumentArity,
 
             //TODO
-            E::InvalidTransferObject => CommandArgumentErrorKind::Unknown,
-            //TODO
-            E::InvalidMakeMoveVecNonObjectArgument => CommandArgumentErrorKind::Unknown,
+            E::InvalidTransferObject
+            | E::InvalidMakeMoveVecNonObjectArgument
+            | E::ArgumentWithoutValue
+            | E::CannotMoveBorrowedValue
+            | E::CannotWriteToExtendedReference
+            | E::InvalidReferenceArgument => CommandArgumentErrorKind::Unknown,
         };
 
         message.set_kind(kind);
@@ -1555,6 +1561,10 @@ impl Merge<crate::object::Object> for Object {
 
         if mask.contains(Self::STORAGE_REBATE_FIELD.name) {
             self.storage_rebate = Some(source.storage_rebate);
+        }
+
+        if mask.contains(Self::BALANCE_FIELD) {
+            self.balance = source.as_coin_maybe().map(|coin| coin.balance.value());
         }
 
         self.merge(&source.data, mask);

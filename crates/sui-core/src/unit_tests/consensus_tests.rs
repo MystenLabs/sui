@@ -288,6 +288,7 @@ pub fn make_consensus_adapter_for_test(
             let mut consensus_positions = Vec::new();
             for index in 0..num_transactions {
                 consensus_positions.push(ConsensusPosition {
+                    epoch: epoch_store.epoch(),
                     index: index as u16,
                     block: BlockRef::MIN,
                 });

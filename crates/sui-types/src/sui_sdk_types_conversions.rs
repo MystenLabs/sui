@@ -754,9 +754,14 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             crate::execution_status::CommandArgumentError::SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
             crate::execution_status::CommandArgumentError::InvalidArgumentArity => Self::InvalidArgumentArity,
             crate::execution_status::CommandArgumentError::InvalidTransferObject |
-            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument => {
-                todo!("New errors need to be added to SDK once stabilized")
+            crate::execution_status::CommandArgumentError::InvalidMakeMoveVecNonObjectArgument |
+            crate::execution_status::CommandArgumentError::ArgumentWithoutValue |
+            crate::execution_status::CommandArgumentError::CannotMoveBorrowedValue |
+            crate::execution_status::CommandArgumentError::CannotWriteToExtendedReference |
+            crate::execution_status::CommandArgumentError::InvalidReferenceArgument => {
+                    todo!("New errors need to be added to SDK once stabilized")
             }
+
         }
     }
 }
@@ -837,6 +842,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::MoveVectorElemTooBig { value_size, max_scaled_size } => Self::MoveVectorElemTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
+            crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
+                todo!("Add InsufficientBalanceForWithdraw to sdk")
+            }
         }
     }
 }

@@ -29,7 +29,7 @@ module test::m1 {
 //> 0: test::m1::ascii_(Input(0));
 //> 1: test::m1::string(Input(0));
 //> 2: test::m1::fix<std::ascii::String>(Input(0));
-// now will fail as Input(0) if always a String
+// In original PTB execution, now will fail as Input(0) if always a String
 //> 3: test::m1::string(Input(0));
 
 //# programmable --inputs @A
@@ -37,7 +37,7 @@ module test::m1 {
 //> 0: test::m1::addr(Input(0));
 //> 1: test::m1::id(Input(0));
 //> 2: test::m1::fix<sui::object::ID>(Input(0));
-// now will fail as Input(0) if always an ID
+// In original PTB execution, now will fail as Input(0) if always an ID
 //> 3: test::m1::addr(Input(0));
 
 //# programmable --inputs vector[0u64]
@@ -45,7 +45,7 @@ module test::m1 {
 //> 0: test::m1::vec<u64>(Input(0));
 //> 1: test::m1::opt<u64>(Input(0));
 //> 2: test::m1::fix<vector<u64>>(Input(0));
-// now will fail as Input(0) if always a vector
+// In original PTB execution, now will fail as Input(0) if always a vector
 //> 3: test::m1::opt<u64>(Input(0));
 
 //# programmable --inputs vector[]
@@ -53,5 +53,5 @@ module test::m1 {
 //> 0: test::m1::vec<u64>(Input(0));
 //> 1: test::m1::opt<u64>(Input(0));
 //> 2: test::m1::fix<std::option::Option<u64>>(Input(0));
-// now will fail as Input(0) if always an Option
+// In original PTB execution, now will fail as Input(0) if always an Option
 //> 3: test::m1::vec<u64>(Input(0));

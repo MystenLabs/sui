@@ -389,7 +389,7 @@ mod tests {
             initial_watermark: Option<CommitterWatermark>,
         ) -> Self {
             let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
-            let metrics = IndexerMetrics::new(&Registry::default());
+            let metrics = IndexerMetrics::new(None, &Registry::default());
             let cancel = CancellationToken::new();
 
             let skip_watermark = false;

@@ -3,7 +3,7 @@
 
 use crate::execution_mode::ExecutionMode;
 use crate::programmable_transactions::execution::check_private_generics;
-use crate::static_programmable_transactions::typing::ast::InputArg;
+use crate::sp;
 use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use sui_types::{
@@ -13,58 +13,39 @@ use sui_types::{
 
 struct Context {
     gas_coin: IsDirty,
-    inputs: Vec<IsDirty>,
+    objects: Vec<IsDirty>,
+    pure: Vec<IsDirty>,
+    receiving: Vec<IsDirty>,
     results: Vec<Vec<IsDirty>>,
 }
 
 /// Is dirty for entry verifier rules
-#[derive(Copy, Clone)]
-enum IsDirty {
-    /// BCS input is not yet fixed
-    NotFixed,
-    Fixed {
-        is_dirty: bool,
-    },
-}
+type IsDirty = bool;
 
 impl Context {
-    fn new(inputs: &T::Inputs) -> Self {
-        let inputs = inputs
-            .iter()
-            .map(|(arg, _)| match arg {
-                InputArg::Pure(_) => IsDirty::NotFixed,
-                InputArg::Receiving(_) | InputArg::Object(_) => IsDirty::Fixed { is_dirty: false },
-            })
-            .collect();
+    fn new(txn: &T::Transaction) -> Self {
         Self {
-            gas_coin: IsDirty::Fixed { is_dirty: false },
-            inputs,
+            gas_coin: false,
+            objects: txn.objects.iter().map(|_| false).collect(),
+            pure: txn.pure.iter().map(|_| false).collect(),
+            receiving: txn.receiving.iter().map(|_| false).collect(),
             results: vec![],
         }
     }
 
     // check if dirty, and mark it as fixed if mutably borrowing a pure input
-    fn is_dirty(&mut self, arg: &T::Argument) -> bool {
-        match &arg.value.0 {
-            T::Argument__::Borrow(/* mut */ true, T::Location::Input(i)) => {
-                match &mut self.inputs[*i as usize] {
-                    input @ IsDirty::NotFixed => {
-                        *input = IsDirty::Fixed { is_dirty: false };
-                        false
-                    }
-                    IsDirty::Fixed { is_dirty } => *is_dirty,
-                }
-            }
-            _ => self.is_loc_dirty(arg.value.0.location()),
-        }
+    fn is_dirty(&self, arg: &T::Argument) -> bool {
+        self.is_loc_dirty(arg.value.0.location())
     }
 
     fn is_loc_dirty(&self, location: T::Location) -> bool {
         match location {
             T::Location::TxContext => false, // TxContext is never dirty
-            T::Location::GasCoin => self.gas_coin.is_dirty(),
-            T::Location::Input(i) => self.inputs[i as usize].is_dirty(),
-            T::Location::Result(i, j) => self.results[i as usize][j as usize].is_dirty(),
+            T::Location::GasCoin => self.gas_coin,
+            T::Location::ObjectInput(i) => self.objects[i as usize],
+            T::Location::PureInput(i) => self.pure[i as usize],
+            T::Location::ReceivingInput(i) => self.receiving[i as usize],
+            T::Location::Result(i, j) => self.results[i as usize][j as usize],
         }
     }
 
@@ -83,24 +64,11 @@ impl Context {
     fn mark_loc_dirty(&mut self, location: T::Location) {
         match location {
             T::Location::TxContext => (), // TxContext is never dirty, so nothing to do
-            T::Location::GasCoin => self.gas_coin = IsDirty::Fixed { is_dirty: true },
-            T::Location::Input(i) => match &mut self.inputs[i as usize] {
-                // if it needs to be dirtied, it will first be marked as fixed
-                IsDirty::NotFixed => (),
-                IsDirty::Fixed { is_dirty } => *is_dirty = true,
-            },
-            T::Location::Result(i, j) => {
-                self.results[i as usize][j as usize] = IsDirty::Fixed { is_dirty: true }
-            }
-        }
-    }
-}
-
-impl IsDirty {
-    fn is_dirty(self) -> bool {
-        match self {
-            IsDirty::NotFixed => false,
-            IsDirty::Fixed { is_dirty } => is_dirty,
+            T::Location::GasCoin => self.gas_coin = true,
+            T::Location::ObjectInput(i) => self.objects[i as usize] = true,
+            T::Location::PureInput(i) => self.pure[i as usize] = true,
+            T::Location::ReceivingInput(i) => self.receiving[i as usize] = true,
+            T::Location::Result(i, j) => self.results[i as usize][j as usize] = true,
         }
     }
 }
@@ -113,13 +81,12 @@ impl IsDirty {
 /// - no references returned from move calls
 ///    - Can be disabled under certain execution modes
 pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
-    let T::Transaction { inputs, commands } = txn;
-    let mut context = Context::new(inputs);
-    for (c, result) in commands {
-        let result_dirties = command::<Mode>(env, &mut context, c, result)
+    let mut context = Context::new(txn);
+    for c in &txn.commands {
+        let result_dirties = command::<Mode>(env, &mut context, c)
             .map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(
-            result_dirties.len() == result.len(),
+            result_dirties.len() == c.value.result_type.len(),
             "result length mismatch"
         );
         context.results.push(result_dirties);
@@ -130,26 +97,26 @@ pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<()
 fn command<Mode: ExecutionMode>(
     env: &Env,
     context: &mut Context,
-    command: &T::Command,
-    result: &T::ResultType,
+    sp!(_, c): &T::Command,
 ) -> Result<Vec<IsDirty>, ExecutionError> {
-    Ok(match &command.value {
-        T::Command_::MoveCall(call) => move_call::<Mode>(env, context, call, result)?,
-        T::Command_::TransferObjects(objs, recipient) => {
+    let result = &c.result_type;
+    Ok(match &c.command {
+        T::Command__::MoveCall(call) => move_call::<Mode>(env, context, call, result)?,
+        T::Command__::TransferObjects(objs, recipient) => {
             arguments(env, context, objs);
             argument(env, context, recipient);
             vec![]
         }
-        T::Command_::SplitCoins(_, coin, amounts) => {
+        T::Command__::SplitCoins(_, coin, amounts) => {
             let amounts_are_dirty = arguments(env, context, amounts);
             let coin_is_dirty = argument(env, context, coin);
             let is_dirty = amounts_are_dirty || coin_is_dirty;
             if is_dirty {
                 context.mark_dirty(coin);
             }
-            vec![IsDirty::Fixed { is_dirty }; result.len()]
+            vec![is_dirty; result.len()]
         }
-        T::Command_::MergeCoins(_, target, coins) => {
+        T::Command__::MergeCoins(_, target, coins) => {
             let is_dirty = arguments(env, context, coins);
             argument(env, context, target);
             if is_dirty {
@@ -157,33 +124,30 @@ fn command<Mode: ExecutionMode>(
             }
             vec![]
         }
-        T::Command_::MakeMoveVec(_, args) => {
+        T::Command__::MakeMoveVec(_, args) => {
             let is_dirty = arguments(env, context, args);
             debug_assert_eq!(result.len(), 1);
-            vec![IsDirty::Fixed { is_dirty }]
+            vec![is_dirty]
         }
-        T::Command_::Publish(_, _, _) => {
+        T::Command__::Publish(_, _, _) => {
             debug_assert_eq!(Mode::packages_are_predefined(), result.is_empty());
             debug_assert_eq!(!Mode::packages_are_predefined(), result.len() == 1);
-            result
-                .iter()
-                .map(|_| IsDirty::Fixed { is_dirty: false })
-                .collect::<Vec<_>>()
+            result.iter().map(|_| false).collect::<Vec<_>>()
         }
-        T::Command_::Upgrade(_, _, _, ticket, _) => {
+        T::Command__::Upgrade(_, _, _, ticket, _) => {
             debug_assert_eq!(result.len(), 1);
-            let result = vec![IsDirty::Fixed { is_dirty: false }];
+            let result = vec![false];
             argument(env, context, ticket);
             result
         }
     })
 }
 
-fn arguments(env: &Env, context: &mut Context, args: &[T::Argument]) -> bool {
+fn arguments(env: &Env, context: &Context, args: &[T::Argument]) -> bool {
     args.iter().any(|arg| argument(env, context, arg))
 }
 
-fn argument(_env: &Env, context: &mut Context, arg: &T::Argument) -> bool {
+fn argument(_env: &Env, context: &Context, arg: &T::Argument) -> bool {
     context.is_dirty(arg)
 }
 
@@ -219,7 +183,7 @@ fn move_call<Mode: ExecutionMode>(
             context.mark_dirty(arg);
         }
     }
-    Ok(vec![IsDirty::Fixed { is_dirty: true }; result.len()])
+    Ok(vec![true; result.len()])
 }
 
 fn check_signature<Mode: ExecutionMode>(

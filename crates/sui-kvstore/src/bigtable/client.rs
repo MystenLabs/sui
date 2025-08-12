@@ -1,42 +1,48 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::bigtable::metrics::KvMetrics;
-use crate::bigtable::proto::bigtable::v2::bigtable_client::BigtableClient as BigtableInternalClient;
-use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
-use crate::bigtable::proto::bigtable::v2::mutation::SetCell;
-use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowStatus;
-use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
-use crate::bigtable::proto::bigtable::v2::{
-    mutation, MutateRowsRequest, MutateRowsResponse, Mutation, ReadRowsRequest, RowRange, RowSet,
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, RwLock},
+    task::{Context, Poll},
+    time::{Duration, Instant},
 };
-use crate::{Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData};
+
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use gcp_auth::{Token, TokenProvider};
 use http::{HeaderValue, Request, Response};
 use prometheus::Registry;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, RwLock};
-use std::task::{Context, Poll};
-use std::time::Duration;
-use std::time::Instant;
-use sui_types::base_types::{EpochId, ObjectID, TransactionDigest};
-use sui_types::digests::CheckpointDigest;
-use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
-use sui_types::messages_consensus::TimestampMs;
-use sui_types::object::Object;
-use sui_types::storage::{EpochInfo, ObjectKey};
-use tonic::body::BoxBody;
-use tonic::codegen::Service;
-use tonic::transport::{Certificate, Channel, ClientTlsConfig};
-use tonic::Streaming;
+use sui_types::{
+    base_types::{EpochId, ObjectID, TransactionDigest},
+    digests::CheckpointDigest,
+    full_checkpoint_content::CheckpointData,
+    messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary},
+    messages_consensus::TimestampMs,
+    object::Object,
+    storage::{EpochInfo, ObjectKey},
+};
+use tonic::{
+    body::BoxBody,
+    codegen::Service,
+    transport::{Certificate, Channel, ClientTlsConfig},
+    Streaming,
+};
 use tracing::error;
 
-use super::proto::bigtable::v2::row_filter::{Chain, Filter};
-use super::proto::bigtable::v2::RowFilter;
+use super::proto::bigtable::v2::{
+    row_filter::{Chain, Filter},
+    RowFilter,
+};
+use crate::bigtable::metrics::KvMetrics;
+use crate::bigtable::proto::bigtable::v2::{
+    bigtable_client::BigtableClient as BigtableInternalClient, mutate_rows_request::Entry,
+    mutation, mutation::SetCell, read_rows_response::cell_chunk::RowStatus,
+    request_stats::StatsView, row_range::EndKey, MutateRowsRequest, MutateRowsResponse, Mutation,
+    ReadRowsRequest, RequestStats, RowRange, RowSet,
+};
+use crate::{Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData};
 
 const OBJECTS_TABLE: &str = "objects";
 const TRANSACTIONS_TABLE: &str = "transactions";
@@ -429,9 +435,45 @@ impl BigTableClient {
         Ok(self.client.mutate_rows(request).await?.into_inner())
     }
 
+    fn report_bt_stats(&self, request_stats: &Option<RequestStats>, table_name: &str) {
+        let Some(metrics) = &self.metrics else {
+            return;
+        };
+        let labels = [&self.client_name, table_name];
+        if let Some(StatsView::FullReadStatsView(view)) =
+            request_stats.as_ref().and_then(|r| r.stats_view.as_ref())
+        {
+            if let Some(latency) = view
+                .request_latency_stats
+                .as_ref()
+                .and_then(|s| s.frontend_server_latency)
+            {
+                if latency.seconds < 0 || latency.nanos < 0 {
+                    return;
+                }
+                let duration = Duration::new(latency.seconds as u64, latency.nanos as u32);
+                metrics
+                    .kv_bt_chunk_latency_ms
+                    .with_label_values(&labels)
+                    .observe(duration.as_millis() as f64);
+            }
+            if let Some(iteration_stats) = &view.read_iteration_stats {
+                metrics
+                    .kv_bt_chunk_rows_returned_count
+                    .with_label_values(&labels)
+                    .inc_by(iteration_stats.rows_returned_count as u64);
+                metrics
+                    .kv_bt_chunk_rows_seen_count
+                    .with_label_values(&labels)
+                    .inc_by(iteration_stats.rows_seen_count as u64);
+            }
+        }
+    }
+
     pub async fn read_rows(
         &mut self,
         mut request: ReadRowsRequest,
+        table_name: &str,
     ) -> Result<Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>> {
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
@@ -446,6 +488,7 @@ impl BigTableClient {
         let mut timestamp = 0;
 
         while let Some(message) = response.message().await? {
+            self.report_bt_stats(&message.request_stats, table_name);
             for mut chunk in message.chunks.into_iter() {
                 // new row check
                 if !chunk.row_key.is_empty() {
@@ -633,10 +676,11 @@ impl BigTableClient {
                 row_ranges: vec![],
             }),
             filter,
+            request_stats_view: 2,
             ..ReadRowsRequest::default()
         };
         let mut result = vec![];
-        for (_, cells) in self.read_rows(request).await? {
+        for (_, cells) in self.read_rows(request, table_name).await? {
             result.push(cells);
         }
         Ok(result)
@@ -692,7 +736,7 @@ impl BigTableClient {
             reversed: true,
             ..ReadRowsRequest::default()
         };
-        self.read_rows(request).await
+        self.read_rows(request, table_name).await
     }
 
     fn raw_object_key(object_key: &ObjectKey) -> Result<Vec<u8>> {

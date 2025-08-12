@@ -30,6 +30,7 @@ criterion.workspace = true
 tracing.workspace = true
 
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-command-line-common.workspace = true
@@ -38,6 +39,7 @@ move-core-types.workspace = true
 move-symbol-pool.workspace = true
 move-transactional-test-runner.workspace = true
 telemetry-subscribers.workspace = true
+iso8601.workspace = true
 
 move-stdlib = { path = "../../external-crates/move/crates/move-stdlib" }
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }

@@ -104,7 +104,7 @@ async fn test_custom_coin_balance() {
 
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
-    let txn = test_cluster.wallet.sign_transaction(&tx_data);
+    let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
 
     let (transaction, publish_gas_used) = execute_transaction(&test_cluster, &txn).await;
 
@@ -175,7 +175,7 @@ async fn test_custom_coin_balance() {
     let tx_data = TestTransactionBuilder::new(address, gas_object, gas_price)
         .programmable(ptb)
         .build();
-    let txn = test_cluster.wallet.sign_transaction(&tx_data);
+    let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
     let (_, mint_gas_used) = execute_transaction(&test_cluster, &txn).await;
 
     // Check balances after minting
@@ -301,9 +301,9 @@ async fn test_multiple_concurrent_balance_changes() {
             .await;
 
     // Sign all transactions
-    let signed_tx_0 = test_cluster.wallet.sign_transaction(&tx_0);
-    let signed_tx_1 = test_cluster.wallet.sign_transaction(&tx_1);
-    let signed_tx_2 = test_cluster.wallet.sign_transaction(&tx_2);
+    let signed_tx_0 = test_cluster.wallet.sign_transaction(&tx_0).await;
+    let signed_tx_1 = test_cluster.wallet.sign_transaction(&tx_1).await;
+    let signed_tx_2 = test_cluster.wallet.sign_transaction(&tx_2).await;
 
     // Submit all transactions concurrently
     let channel = tonic::transport::Channel::from_shared(test_cluster.rpc_url().to_owned())
@@ -655,7 +655,7 @@ async fn split_and_transfer_coin(
     let ptb = builder.finish();
     let tx_data =
         TransactionData::new_programmable(sender, vec![gas_object], ptb, 100_000_000, gas_price);
-    let txn = test_cluster.wallet.sign_transaction(&tx_data);
+    let txn = test_cluster.wallet.sign_transaction(&tx_data).await;
     let (_, gas_used) = execute_transaction(test_cluster, &txn).await;
     gas_used
 }

@@ -1,6 +1,7 @@
 ---
 title: Upgrading Packages
 description: Sui provides a method of upgrading your packages while still retaining their immutable properties.
+keywords: [ upgrading packages, upgrade considerations, how to upgrade a package, how to upgrade, update package, update, how to update ]
 ---
 
 Sui smart contracts are immutable package objects consisting of a collection of Move modules. Because the packages are immutable, transactions can safely access smart contracts without full consensus (fastpath transactions). If someone could change these packages, they would become [shared objects](/concepts/object-ownership/shared.mdx#shared), which would require full consensus before completing a transaction.

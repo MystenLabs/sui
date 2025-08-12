@@ -6,14 +6,14 @@ pub mod vanilla;
 
 pub use vanilla::Vanilla;
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{
-    dependency::{DependencySet, PinnedDependencyInfo},
-    schema::EnvironmentName,
-};
+use crate::schema::{EnvironmentID, EnvironmentName, PackageName, ReplacementDependency};
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
@@ -36,19 +36,17 @@ pub trait MoveFlavor: Debug {
     /// An [AddressInfo] should give a unique identifier for a compiled package
     type AddressInfo: Debug + Serialize + DeserializeOwned + Clone;
 
-    /// An [EnvironmentID] uniquely identifies a place that a package can be published. For
-    /// example, an environment ID might be a chain identifier
-    //
-    // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
-    type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq + Ord + Debug + ToString;
-
     /// Return the default environments for the flavor.
     /// Used for populating new manifests & migration purposes.
-    fn default_environments() -> BTreeMap<EnvironmentName, Self::EnvironmentID>;
+    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID>;
 
     /// Return the implicit dependencies for the environments listed in [environments]
-    fn implicit_deps(
-        &self,
-        environments: impl Iterator<Item = Self::EnvironmentID>,
-    ) -> DependencySet<PinnedDependencyInfo>;
+    fn implicit_deps(environment: EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency>;
+
+    /// Return the names of the system dependencies for this flavor.
+    fn system_deps_names() -> BTreeSet<PackageName> {
+        // Default implementation returns an empty map.
+        // Specific flavors can override this to provide system dependencies.
+        BTreeSet::new()
+    }
 }

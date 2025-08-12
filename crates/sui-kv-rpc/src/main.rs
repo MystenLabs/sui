@@ -9,7 +9,7 @@ use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
 use std::sync::Arc;
 use sui_kv_rpc::KvRpcServer;
-use sui_rpc_api::proto::rpc::v2beta::ledger_service_server::LedgerServiceServer;
+use sui_rpc::proto::sui::rpc::v2beta2::ledger_service_server::LedgerServiceServer;
 use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
 use telemetry_subscribers::TelemetryConfig;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
@@ -69,14 +69,18 @@ async fn main() -> Result<()> {
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
         )
         .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(sui_rpc_api::proto::rpc::v2beta::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(
+            sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
+        )
         .build_v1()?;
     let reflection_v1alpha = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
         )
         .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(sui_rpc_api::proto::rpc::v2beta::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(
+            sui_rpc::proto::sui::rpc::v2beta2::FILE_DESCRIPTOR_SET,
+        )
         .build_v1alpha()?;
     tokio::spawn(async {
         let web_server = Router::new().route("/health", get(health_check));

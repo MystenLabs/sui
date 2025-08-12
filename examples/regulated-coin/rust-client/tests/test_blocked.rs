@@ -31,7 +31,8 @@ fn cmd_sui_client_switch(new_addr: SuiAddress) -> Result<()> {
 }
 
 fn get_other_address(different_from: SuiAddress) -> Result<SuiAddress> {
-    let keystore = FileBasedKeystore::new(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
+    let keystore =
+        FileBasedKeystore::load_or_create(&sui_config_dir()?.join(SUI_KEYSTORE_FILENAME))?;
     Ok(keystore
         .keys()
         .into_iter()

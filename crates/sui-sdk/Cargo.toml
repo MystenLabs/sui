@@ -6,6 +6,14 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+# This needs to be specified, in addition to the same setting
+# in the workspace Cargo.toml.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(msim)',
+  'cfg(fail_points)',
+] }
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

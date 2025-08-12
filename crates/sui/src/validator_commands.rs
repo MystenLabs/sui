@@ -285,7 +285,7 @@ impl SuiValidatorCommand {
             } => {
                 let dir = std::env::current_dir()?;
                 let protocol_key_file_name = dir.join("protocol.key");
-                let account_key = match context.config.keystore.get_key(&sui_address)? {
+                let account_key = match context.config.keystore.export(&sui_address)? {
                     SuiKeyPair::Ed25519(account_key) => SuiKeyPair::Ed25519(account_key.copy()),
                     _ => panic!(
                         "Other account key types supported yet, please use Ed25519 keys for now."
@@ -575,7 +575,7 @@ impl SuiValidatorCommand {
                         serialized_unsigned_transaction: Some(serialized_data),
                     }
                 } else {
-                    let tx = context.sign_transaction(&tx_data);
+                    let tx = context.sign_transaction(&tx_data).await;
                     let response = context.execute_transaction_must_succeed(tx).await;
                     println!(
                         "Committee registration successful. Transaction digest: {}",
@@ -653,7 +653,7 @@ impl SuiValidatorCommand {
                         serialized_unsigned_transaction: Some(serialized_data),
                     }
                 } else {
-                    let tx = context.sign_transaction(&tx_data);
+                    let tx = context.sign_transaction(&tx_data).await;
                     let response = context.execute_transaction_must_succeed(tx).await;
                     println!(
                         "Update Bridge validator node URL successful. Transaction digest: {}",
@@ -864,11 +864,11 @@ async fn call_0x5(
     let sender = context.active_address()?;
     let tx_data =
         construct_unsigned_0x5_txn(context, sender, function, call_args, gas_budget).await?;
-    let signature =
-        context
-            .config
-            .keystore
-            .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+    let signature = context
+        .config
+        .keystore
+        .sign_secure(&sender, &tx_data, Intent::sui_transaction())
+        .await?;
     let transaction = Transaction::from_data(tx_data, vec![signature]);
     let sui_client = context.get_client().await?;
     sui_client

@@ -95,7 +95,7 @@ async fn resolve_transaction_simple_transfer() {
         .into_inner();
     let (transaction, effects_from_simulation, _events) = proto_to_response(resolved);
 
-    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
+    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction).await;
     let effects = client
         .execute_transaction(&signed_transaction)
         .await
@@ -161,12 +161,14 @@ async fn resolve_transaction_transfer_with_sponsor() {
         .config
         .keystore
         .sign_secure(&sender, &transaction, Intent::sui_transaction())
+        .await
         .unwrap();
     let sponsor_sig = test_cluster
         .wallet
         .config
         .keystore
         .sign_secure(&sponsor, &transaction, Intent::sui_transaction())
+        .await
         .unwrap();
 
     let signed_transaction =
@@ -221,7 +223,7 @@ async fn resolve_transaction_borrowed_shared_object() {
         .into_inner();
     let (transaction, _effects, _events) = proto_to_response(resolved);
 
-    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
+    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction).await;
     let effects = client
         .execute_transaction(&signed_transaction)
         .await
@@ -289,7 +291,7 @@ async fn resolve_transaction_mutable_shared_object() {
         .into_inner();
     let (transaction, effects_from_simulation, _events) = proto_to_response(resolved);
 
-    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction);
+    let signed_transaction = test_cluster.wallet.sign_transaction(&transaction).await;
     let effects = client
         .execute_transaction(&signed_transaction)
         .await

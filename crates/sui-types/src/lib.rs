@@ -50,6 +50,7 @@ pub mod event;
 pub mod executable_transaction;
 pub mod execution;
 pub mod execution_config_utils;
+pub mod execution_params;
 pub mod execution_status;
 pub mod full_checkpoint_content;
 pub mod gas;
@@ -236,6 +237,10 @@ impl<T: MoveTypeTagTrait> MoveTypeTagTrait for Vec<T> {
     fn get_type_tag() -> TypeTag {
         TypeTag::Vector(Box::new(T::get_type_tag()))
     }
+}
+
+pub trait MoveTypeTagTraitGeneric {
+    fn get_type_tag(type_params: &[TypeTag]) -> TypeTag;
 }
 
 pub fn is_primitive(

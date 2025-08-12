@@ -28,10 +28,10 @@ pub(crate) enum ScheduleStatus {
     /// This transaction should result in an execution failure without actually executing it, similar to
     /// how transaction cancellation works.
     InsufficientBalance,
-    /// The consensus commit batch of this transaction has already been scheduled in the past.
+    /// The accumulator version for this transaction has already been executed/settled.
     /// The caller should stop the scheduling of this transaction.
-    /// This is to avoid scheduling the same transaction multiple times.
-    AlreadyScheduled,
+    /// This happens when the transaction can be executed through checkpoint executor.
+    AlreadyExecuted,
 }
 
 /// The result of scheduling the withdraw reservations for a transaction.

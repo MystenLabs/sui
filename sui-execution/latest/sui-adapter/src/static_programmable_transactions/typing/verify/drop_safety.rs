@@ -30,29 +30,29 @@ mod refine {
     /// borrowed at the time of the last usage.
     pub fn transaction(ast: &mut T::Transaction) {
         let mut used: BTreeSet<T::Location> = BTreeSet::new();
-        for (c, _tys) in ast.commands.iter_mut().rev() {
+        for c in ast.commands.iter_mut().rev() {
             command(&mut used, c);
         }
     }
 
-    fn command(used: &mut BTreeSet<T::Location>, sp!(_, command): &mut T::Command) {
-        match command {
-            T::Command_::MoveCall(mc) => arguments(used, &mut mc.arguments),
-            T::Command_::TransferObjects(objects, recipient) => {
+    fn command(used: &mut BTreeSet<T::Location>, sp!(_, c): &mut T::Command) {
+        match &mut c.command {
+            T::Command__::MoveCall(mc) => arguments(used, &mut mc.arguments),
+            T::Command__::TransferObjects(objects, recipient) => {
                 argument(used, recipient);
                 arguments(used, objects);
             }
-            T::Command_::SplitCoins(_, coin, amounts) => {
+            T::Command__::SplitCoins(_, coin, amounts) => {
                 arguments(used, amounts);
                 argument(used, coin);
             }
-            T::Command_::MergeCoins(_, target, coins) => {
+            T::Command__::MergeCoins(_, target, coins) => {
                 arguments(used, coins);
                 argument(used, target);
             }
-            T::Command_::MakeMoveVec(_, xs) => arguments(used, xs),
-            T::Command_::Publish(_, _, _) => (),
-            T::Command_::Upgrade(_, _, _, x, _) => argument(used, x),
+            T::Command__::MakeMoveVec(_, xs) => arguments(used, xs),
+            T::Command__::Publish(_, _, _) => (),
+            T::Command__::Upgrade(_, _, _, x, _) => argument(used, x),
         }
     }
 
@@ -106,17 +106,27 @@ mod verify {
     struct Context {
         tx_context: Option<Value>,
         gas_coin: Option<Value>,
-        inputs: Vec<Option<Value>>,
+        objects: Vec<Option<Value>>,
+        pure: Vec<Option<Value>>,
+        receiving: Vec<Option<Value>>,
         results: Vec<Vec<Option<Value>>>,
     }
 
     impl Context {
         fn new(ast: &T::Transaction) -> Result<Self, ExecutionError> {
-            let inputs = ast.inputs.iter().map(|_| Some(Value)).collect();
+            let objects = ast.objects.iter().map(|_| Some(Value)).collect::<Vec<_>>();
+            let pure = ast.pure.iter().map(|_| Some(Value)).collect::<Vec<_>>();
+            let receiving = ast
+                .receiving
+                .iter()
+                .map(|_| Some(Value))
+                .collect::<Vec<_>>();
             Ok(Self {
                 tx_context: Some(Value),
                 gas_coin: Some(Value),
-                inputs,
+                objects,
+                pure,
+                receiving,
                 results: Vec::with_capacity(ast.commands.len()),
             })
         }
@@ -125,7 +135,9 @@ mod verify {
             match l {
                 T::Location::TxContext => &mut self.tx_context,
                 T::Location::GasCoin => &mut self.gas_coin,
-                T::Location::Input(i) => &mut self.inputs[i as usize],
+                T::Location::ObjectInput(i) => &mut self.objects[i as usize],
+                T::Location::PureInput(i) => &mut self.pure[i as usize],
+                T::Location::ReceivingInput(i) => &mut self.receiving[i as usize],
                 T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
             }
         }
@@ -139,24 +151,49 @@ mod verify {
     ) -> Result<(), ExecutionError> {
         let mut context = Context::new(ast)?;
         let commands = &ast.commands;
-        for (c, t) in commands {
+        for c in commands {
             let result =
-                command(&mut context, c, t).map_err(|e| e.with_command_index(c.idx as usize))?;
-            assert_invariant!(result.len() == t.len(), "result length mismatch");
-            context.results.push(result.into_iter().map(Some).collect());
+                command(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
+            assert_invariant!(
+                result.len() == c.value.result_type.len(),
+                "result length mismatch"
+            );
+            // drop unused result values
+            assert_invariant!(
+                result.len() == c.value.drop_values.len(),
+                "drop values length mismatch"
+            );
+            let result_values = result
+                .into_iter()
+                .zip(c.value.drop_values.iter().copied())
+                .map(|(v, drop)| {
+                    if !drop {
+                        Some(v)
+                    } else {
+                        consume_value(v);
+                        None
+                    }
+                })
+                .collect();
+            context.results.push(result_values);
         }
 
         let Context {
             tx_context,
             gas_coin,
-            inputs,
+            objects,
+            pure,
+            receiving,
             results,
         } = context;
         consume_value_opt(gas_coin);
         // TODO do we want to check inputs in the dev inspect case?
-        consume_value_opts(inputs);
+        consume_value_opts(objects);
+        consume_value_opts(pure);
+        consume_value_opts(receiving);
         assert_invariant!(results.len() == commands.len(), "result length mismatch");
-        for (i, (result, (_, tys))) in results.into_iter().zip(&ast.commands).enumerate() {
+        for (i, (result, c)) in results.into_iter().zip(&ast.commands).enumerate() {
+            let tys = &c.value.result_type;
             assert_invariant!(result.len() == tys.len(), "result length mismatch");
             for (j, (vopt, ty)) in result.into_iter().zip(tys).enumerate() {
                 drop_value_opt::<Mode>((i, j), vopt, ty)?;
@@ -168,11 +205,11 @@ mod verify {
 
     fn command(
         context: &mut Context,
-        sp!(_, command): &T::Command,
-        result_tys: &[Type],
+        sp!(_, c): &T::Command,
     ) -> Result<Vec<Value>, ExecutionError> {
-        Ok(match command {
-            T::Command_::MoveCall(mc) => {
+        let result_tys = &c.result_type;
+        Ok(match &c.command {
+            T::Command__::MoveCall(mc) => {
                 let T::MoveCall {
                     function,
                     arguments: args,
@@ -182,34 +219,34 @@ mod verify {
                 consume_values(arg_values);
                 (0..return_.len()).map(|_| Value).collect()
             }
-            T::Command_::TransferObjects(objects, recipient) => {
+            T::Command__::TransferObjects(objects, recipient) => {
                 let object_values = arguments(context, objects)?;
                 let recipient_value = argument(context, recipient)?;
                 consume_values(object_values);
                 consume_value(recipient_value);
                 vec![]
             }
-            T::Command_::SplitCoins(_, coin, amounts) => {
+            T::Command__::SplitCoins(_, coin, amounts) => {
                 let coin_value = argument(context, coin)?;
                 let amount_values = arguments(context, amounts)?;
                 consume_values(amount_values);
                 consume_value(coin_value);
                 (0..amounts.len()).map(|_| Value).collect()
             }
-            T::Command_::MergeCoins(_, target, coins) => {
+            T::Command__::MergeCoins(_, target, coins) => {
                 let target_value = argument(context, target)?;
                 let coin_values = arguments(context, coins)?;
                 consume_values(coin_values);
                 consume_value(target_value);
                 vec![]
             }
-            T::Command_::MakeMoveVec(_, xs) => {
+            T::Command__::MakeMoveVec(_, xs) => {
                 let vs = arguments(context, xs)?;
                 consume_values(vs);
                 vec![Value]
             }
-            T::Command_::Publish(_, _, _) => result_tys.iter().map(|_| Value).collect(),
-            T::Command_::Upgrade(_, _, _, x, _) => {
+            T::Command__::Publish(_, _, _) => result_tys.iter().map(|_| Value).collect(),
+            T::Command__::Upgrade(_, _, _, x, _) => {
                 let v = argument(context, x)?;
                 consume_value(v);
                 vec![Value]

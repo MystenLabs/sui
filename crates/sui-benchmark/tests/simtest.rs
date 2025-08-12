@@ -23,7 +23,7 @@ mod test {
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
-        LocalValidatorAggregatorProxy, ValidatorProxy,
+        FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::node::AuthorityOverloadConfig;
     use sui_config::ExecutionCacheConfig;
@@ -108,6 +108,9 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_testnet_config() {
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
+        }
         chain_config_smoke_test(Chain::Testnet).await;
     }
 
@@ -125,6 +128,8 @@ mod test {
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
+            // Disable TransactionDriver in chain configide override tests.
+            .transaction_driver_percentage(0)
             .build()
             .await
             .into();
@@ -707,9 +712,11 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_mysticeti_fastpath() {
-        unsafe {
-            std::env::set_var("TRANSACTION_DRIVER", "100");
+        if sui_simulator::has_mainnet_protocol_config_override() {
+            return;
         }
+
+        std::env::set_var("TRANSACTION_DRIVER", "100");
 
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;
@@ -854,6 +861,8 @@ mod test {
                 )
                 .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
                 .with_stake_subsidy_start_epoch(10)
+                // Disable TransactionDriver in upgrade compatibility tests.
+                .transaction_driver_percentage(0)
                 .build()
                 .await,
         );
@@ -1037,6 +1046,7 @@ mod test {
             })
             .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
+            .disable_fullnode_pruning()
             .build()
             .await
             .into()
@@ -1046,10 +1056,12 @@ mod test {
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
     ) -> TestClusterBuilder {
-        let mut builder = TestClusterBuilder::new().with_num_validators(get_var(
-            "SIM_STRESS_TEST_NUM_VALIDATORS",
-            default_num_validators,
-        ));
+        let mut builder = TestClusterBuilder::new()
+            .with_num_validators(get_var(
+                "SIM_STRESS_TEST_NUM_VALIDATORS",
+                default_num_validators,
+            ))
+            .with_synthetic_execution_time_injection();
         if std::env::var("CHECKPOINTS_PER_EPOCH").is_ok() {
             eprintln!("CHECKPOINTS_PER_EPOCH env var is deprecated, use EPOCH_DURATION_MS");
         }
@@ -1062,6 +1074,7 @@ mod test {
 
     #[derive(Debug)]
     struct SimulatedLoadConfig {
+        remote_env: bool,
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
         slow_weight: u32,
@@ -1083,6 +1096,7 @@ mod test {
     impl Default for SimulatedLoadConfig {
         fn default() -> Self {
             Self {
+                remote_env: true,
                 shared_counter_weight: 1,
                 slow_weight: 1,
                 transfer_object_weight: 1,
@@ -1139,8 +1153,23 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> =
-            Arc::new(LocalValidatorAggregatorProxy::from_genesis(&genesis, &registry, None).await);
+        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
+            Arc::new(
+                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url)
+                    .await
+                    .unwrap(),
+            )
+        } else {
+            Arc::new(
+                LocalValidatorAggregatorProxy::from_genesis(
+                    &genesis,
+                    &registry,
+                    Some(test_cluster.fullnode_handle.rpc_url.as_str()),
+                    test_cluster.transaction_driver_percentage(),
+                )
+                .await,
+            )
+        };
 
         let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
         let system_state_observer = {

@@ -293,7 +293,18 @@ pub mod checked {
 
             if self.smashed_gas_coin.is_some() {
                 // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation() {
+                let is_move_abort = execution_result
+                    .as_ref()
+                    .err()
+                    .map(|err| {
+                        matches!(
+                            err.kind(),
+                            sui_types::execution_status::ExecutionFailureStatus::MoveAbort(_, _)
+                        )
+                    })
+                    .unwrap_or(false);
+                // bucketize computation cost
+                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort)) {
                     if execution_result.is_ok() {
                         *execution_result = Err(err);
                     }

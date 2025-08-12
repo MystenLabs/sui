@@ -18,15 +18,17 @@ use sui_core::{
         QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
     transaction_driver::{
-        SubmitTransactionOptions, SubmitTxRequest, TransactionDriver, TransactionDriverMetrics,
+        choose_transaction_driver_percentage, SubmitTransactionOptions, SubmitTxRequest,
+        TransactionDriver, TransactionDriverMetrics,
     },
+    validator_client_monitor::ValidatorClientMetrics,
 };
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
+use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::gas::GasCostSummary;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::EffectsFinalityInfo;
 use sui_types::quorum_driver_types::FinalizedEffects;
@@ -46,6 +48,7 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
+use sui_types::{digests::ChainIdentifier, gas::GasCostSummary};
 use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
@@ -264,6 +267,7 @@ pub struct LocalValidatorAggregatorProxy {
     td: Arc<TransactionDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+    td_percentage: u8,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -271,11 +275,18 @@ impl LocalValidatorAggregatorProxy {
         genesis: &Genesis,
         registry: &Registry,
         reconfig_fullnode_rpc_url: Option<&str>,
+        transaction_driver_percentage: Option<u8>,
     ) -> Self {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
+
+        let td_percentage = if let Some(tx_driver_percentage) = transaction_driver_percentage {
+            tx_driver_percentage
+        } else {
+            choose_transaction_driver_percentage()
+        };
 
         Self::new_impl(
             aggregator,
@@ -283,6 +294,7 @@ impl LocalValidatorAggregatorProxy {
             reconfig_fullnode_rpc_url,
             clients,
             committee,
+            td_percentage,
         )
         .await
     }
@@ -293,6 +305,7 @@ impl LocalValidatorAggregatorProxy {
         reconfig_fullnode_rpc_url: Option<&str>,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
+        td_percentage: u8,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
         let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
@@ -330,13 +343,23 @@ impl LocalValidatorAggregatorProxy {
                 .with_reconfig_observer(reconfig_observer.clone());
         let qd_handler = qd_handler_builder.start();
         let qd = qd_handler.clone_quorum_driver();
-        let td = TransactionDriver::new(aggregator, reconfig_observer, transaction_driver_metrics);
+        let client_metrics = Arc::new(ValidatorClientMetrics::new(&Registry::new()));
+
+        // For benchmark, pass None to use default validator client monitor config
+        let td = TransactionDriver::new(
+            aggregator,
+            reconfig_observer,
+            transaction_driver_metrics,
+            None,
+            client_metrics,
+        );
         Self {
             _qd_handler: qd_handler,
             qd,
             td,
             clients,
             committee,
+            td_percentage,
         }
     }
 
@@ -387,18 +410,14 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         let tx_digest = *tx.digest();
-        if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
-            if let Ok(tx_driver_percentage) = v.parse::<u8>() {
-                if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
-                    let random_value = rand::thread_rng().gen_range(1..=100);
-                    if random_value <= tx_driver_percentage {
-                        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-                        return (
-                            ClientType::TransactionDriver,
-                            self.submit_transaction_block(tx).await,
-                        );
-                    }
-                }
+        if self.td_percentage > 0 {
+            let random_value = rand::thread_rng().gen_range(1..=100);
+            if random_value <= self.td_percentage {
+                debug!("Using TransactionDriver for transaction {:?}", tx_digest);
+                return (
+                    ClientType::TransactionDriver,
+                    self.submit_transaction_block(tx).await,
+                );
             }
         }
 
@@ -494,6 +513,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             td: self.td.clone(),
             clients: self.clients.clone(),
             committee: self.committee.clone(),
+            td_percentage: self.td_percentage,
         })
     }
 
@@ -509,7 +529,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
 pub struct FullNodeProxy {
     sui_client: SuiClient,
+
+    // Committee and protocol config are initialized on startup and not updated on epoch changes.
     committee: Arc<Committee>,
+    protocol_config: Arc<ProtocolConfig>,
 }
 
 impl FullNodeProxy {
@@ -520,16 +543,24 @@ impl FullNodeProxy {
             .build(http_url)
             .await?;
 
-        let resp = sui_client.read_api().get_committee_info(None).await?;
-        let epoch = resp.epoch;
-        let committee_vec = resp.validators;
-        let committee_map = BTreeMap::from_iter(committee_vec.into_iter());
-        let committee =
-            Committee::new_for_testing_with_normalized_voting_power(epoch, committee_map);
+        let committee = {
+            let resp = sui_client.read_api().get_committee_info(None).await?;
+            let epoch = resp.epoch;
+            let committee_map = resp.validators.into_iter().collect();
+            Committee::new(epoch, committee_map)
+        };
+
+        let protocol_config = {
+            let resp = sui_client.read_api().get_protocol_config(None).await?;
+            // Basically set by the SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE env var.
+            let chain = ChainIdentifier::default().chain();
+            ProtocolConfig::get_for_version(resp.protocol_version, chain)
+        };
 
         Ok(Self {
             sui_client,
             committee: Arc::new(committee),
+            protocol_config: Arc::new(protocol_config),
         })
     }
 }
@@ -544,7 +575,7 @@ impl ValidatorProxy for FullNodeProxy {
             .await?;
 
         if let Some(sui_object) = response.data {
-            sui_object.try_into()
+            sui_object.try_into_object(&self.protocol_config)
         } else if let Some(error) = response.error {
             bail!("Error getting object {:?}: {}", object_id, error)
         } else {
@@ -586,9 +617,12 @@ impl ValidatorProxy for FullNodeProxy {
         for object in objects {
             let o = object.data;
             if let Some(o) = o {
-                let temp: Object = o.clone().try_into()?;
+                let temp: Object = o.clone().try_into_object(&self.protocol_config)?;
                 let gas_coin = GasCoin::try_from(&temp)?;
-                values_objects.push((gas_coin.value(), o.clone().try_into()?));
+                values_objects.push((
+                    gas_coin.value(),
+                    o.clone().try_into_object(&self.protocol_config)?,
+                ));
             }
         }
 
@@ -661,6 +695,7 @@ impl ValidatorProxy for FullNodeProxy {
         Box::new(Self {
             sui_client: self.sui_client.clone(),
             committee: self.clone_committee(),
+            protocol_config: self.protocol_config.clone(),
         })
     }
 

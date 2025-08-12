@@ -1,7 +1,6 @@
 [package]
 name = "Constants"
-version = "0.0.1"
 edition = "2024.beta"
 
 [addresses]
-counter = "0x0"
+constants = "0x0"

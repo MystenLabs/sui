@@ -36,6 +36,8 @@ std
 sui
 move_package.json
 accumulator.json
+accumulator_metadata.json
+accumulator_settlement.json
 address.json
 authenticator_state.json
 bag.json

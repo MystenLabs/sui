@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    metrics::IndexerMetrics,
+    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
     store::{CommitterWatermark, Connection, TransactionalStore},
 };
@@ -84,6 +84,12 @@ where
         // The committer task will periodically output a log message at a higher log level to
         // demonstrate that the pipeline is making progress.
         let mut logger = WatermarkLogger::new("sequential_committer", &watermark);
+
+        let checkpoint_lag_reporter = CheckpointLagMetricReporter::new_for_pipeline::<H>(
+            &metrics.watermarked_checkpoint_timestamp_lag,
+            &metrics.latest_watermarked_checkpoint_timestamp_lag_ms,
+            &metrics.watermark_checkpoint_in_db,
+        );
 
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
@@ -264,6 +270,11 @@ where
 
                     logger.log::<H>(&watermark, elapsed);
 
+                    checkpoint_lag_reporter.report_lag(
+                        watermark.checkpoint_hi_inclusive,
+                        watermark.timestamp_ms_hi_inclusive
+                    );
+
                     metrics
                         .total_committer_batches_succeeded
                         .with_label_values(&[H::NAME])
@@ -438,7 +449,7 @@ mod tests {
         config: SequentialConfig,
         store: MockStore,
     ) -> TestSetup {
-        let metrics = IndexerMetrics::new(&Registry::default());
+        let metrics = IndexerMetrics::new(None, &Registry::default());
         let cancel = CancellationToken::new();
 
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);

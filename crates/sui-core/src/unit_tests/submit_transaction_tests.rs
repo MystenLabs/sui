@@ -3,7 +3,6 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use consensus_core::BlockStatus;
 use consensus_types::block::BlockRef;
@@ -11,9 +10,10 @@ use fastcrypto::traits::KeyPair;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ObjectRef, SuiAddress};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::effects::TransactionEffectsAPI as _;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages_consensus::ConsensusPosition;
-use sui_types::messages_grpc::{RawSubmitTxRequest, SubmitTxResponse};
+use sui_types::message_envelope::Message as _;
+use sui_types::messages_grpc::RawSubmitTxRequest;
 use sui_types::object::Object;
 use sui_types::transaction::{
     Transaction, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
@@ -27,6 +27,7 @@ use crate::authority_server::AuthorityServer;
 use crate::consensus_adapter::consensus_tests::make_consensus_adapter_for_test;
 use crate::execution_scheduler::SchedulingSource;
 use crate::mock_consensus::with_block_status;
+use crate::transaction_driver::SubmitTxResponse;
 
 use super::AuthorityServerHandle;
 
@@ -95,7 +96,7 @@ impl TestContext {
 
     fn build_submit_request(&self, transaction: Transaction) -> RawSubmitTxRequest {
         RawSubmitTxRequest {
-            transaction: bcs::to_bytes(&transaction).unwrap().into(),
+            transactions: vec![bcs::to_bytes(&transaction).unwrap().into()],
         }
     }
 }
@@ -114,11 +115,13 @@ async fn test_submit_transaction_success() {
         .unwrap();
 
     // Verify we got a consensus position back
-    let response = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response.consensus_position.as_ref())
-            .unwrap(),
+    let response: SubmitTxResponse = response.try_into().unwrap();
+    match response {
+        SubmitTxResponse::Submitted { consensus_position } => {
+            assert_eq!(consensus_position.index, 0);
+        }
+        _ => panic!("Expected Submitted response"),
     };
-    assert_eq!(response.consensus_position.index, 0);
 }
 
 #[tokio::test]
@@ -127,7 +130,7 @@ async fn test_submit_transaction_invalid_transaction() {
 
     // Create an invalid request with malformed transaction bytes
     let request = RawSubmitTxRequest {
-        transaction: vec![0xFF, 0xFF, 0xFF].into(),
+        transactions: vec![vec![0xFF, 0xFF, 0xFF].into()],
     };
 
     let response = test_context.client.submit_transaction(request, None).await;
@@ -135,41 +138,7 @@ async fn test_submit_transaction_invalid_transaction() {
     assert!(response.is_err());
 }
 
-#[tokio::test]
-async fn test_submit_transaction_duplicate() {
-    let test_context = TestContext::new().await;
-
-    let transaction = test_context.build_test_transaction();
-    let request = test_context.build_submit_request(transaction.clone());
-
-    // Submit the transaction for the first time
-    let response1 = test_context
-        .client
-        .submit_transaction(request.clone(), None)
-        .await
-        .unwrap();
-    // Verify we got a consensus position back
-    let response1 = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response1.consensus_position.as_ref())
-            .unwrap(),
-    };
-    assert_eq!(response1.consensus_position.index, 0);
-
-    // Submit the same transaction again
-    let response2 = test_context
-        .client
-        .submit_transaction(request, None)
-        .await
-        .unwrap();
-    // Verify we got a consensus position back
-    let response2 = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response2.consensus_position.as_ref())
-            .unwrap(),
-    };
-    assert_eq!(response2.consensus_position.index, 0);
-}
-
-// test transaction submission after already executed
+// test transaction submission after already executed.
 #[tokio::test]
 async fn test_submit_transaction_already_executed() {
     let test_context = TestContext::new().await;
@@ -177,54 +146,74 @@ async fn test_submit_transaction_already_executed() {
     let transaction = test_context.build_test_transaction();
     let request = test_context.build_submit_request(transaction.clone());
 
-    // Submit the transaction for the first time
+    let epoch_store = test_context.state.epoch_store_for_testing();
+    let verified_transaction = VerifiedExecutableTransaction::new_from_checkpoint(
+        VerifiedTransaction::new_unchecked(transaction),
+        epoch_store.epoch(),
+        1,
+    );
+    test_context
+        .state
+        .try_execute_immediately(
+            &verified_transaction,
+            // Fastpath execution will only put outputs in a temporary cache,
+            // and the object changes in this transaction are not yet committed.
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::MysticetiFastPath),
+            &epoch_store,
+        )
+        .await
+        .unwrap();
+
+    // Submit the same transaction that has already been fastpath executed.
     let response1 = test_context
         .client
         .submit_transaction(request.clone(), None)
         .await
         .unwrap();
-    // Verify we got a consensus position back
-    let response1 = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response1.consensus_position.as_ref())
-            .unwrap(),
+
+    // Verify we still got a consensus position back, because the transaction has not been committed yet,
+    // so we can still sign the same transaction.
+    let response1: SubmitTxResponse = response1.try_into().unwrap();
+    match response1 {
+        SubmitTxResponse::Submitted { consensus_position } => {
+            assert_eq!(consensus_position.index, 0);
+        }
+        _ => panic!("Expected Submitted response"),
     };
-    let tx_position = response1.consensus_position;
-    assert_eq!(tx_position.index, 0);
 
-    let state_clone = test_context.state.clone();
-    let exec_handle = tokio::spawn(async move {
-        let epoch_store = state_clone.epoch_store_for_testing();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let verified_transaction = VerifiedExecutableTransaction::new_from_checkpoint(
-            VerifiedTransaction::new_unchecked(transaction),
-            state_clone.epoch_store_for_testing().epoch(),
-            1,
-        );
-        state_clone
-            .try_execute_immediately(
-                &verified_transaction,
-                ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
-                &epoch_store,
-            )
-            .await
-            .unwrap()
-            .0
-    });
-    assert!(exec_handle.await.is_ok());
+    // Execute it again through non-fastpath, which will commit the object changes.
+    test_context
+        .state
+        .try_execute_immediately(
+            &verified_transaction,
+            ExecutionEnv::new().with_scheduling_source(SchedulingSource::NonFastPath),
+            &epoch_store,
+        )
+        .await
+        .unwrap();
 
-    // Submit the same transaction again
+    // Submit the same transaction again.
     let response2 = test_context
         .client
         .submit_transaction(request, None)
         .await
         .unwrap();
-
-    // Verify we got a consensus position back
-    let response2 = SubmitTxResponse {
-        consensus_position: ConsensusPosition::try_from(response2.consensus_position.as_ref())
-            .unwrap(),
+    // Verify we got the full effects back.
+    let response2: SubmitTxResponse = response2.try_into().unwrap();
+    match response2 {
+        SubmitTxResponse::Executed {
+            effects_digest,
+            details,
+        } => {
+            let details = details.unwrap();
+            assert_eq!(effects_digest, details.effects.digest());
+            assert_eq!(
+                verified_transaction.digest(),
+                details.effects.transaction_digest()
+            );
+        }
+        _ => panic!("Expected Executed response"),
     };
-    assert_eq!(response2.consensus_position.index, 0);
 }
 
 #[tokio::test]

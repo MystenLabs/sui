@@ -72,7 +72,7 @@ async fn test_indexing_with_tto() {
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
-    let txn = cluster.wallet.sign_transaction(&tx_data);
+    let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
     let transaction = super::super::execute_transaction(&mut channel, &txn).await;
 
@@ -124,7 +124,7 @@ async fn test_indexing_with_tto() {
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
-    let txn = cluster.wallet.sign_transaction(&tx_data);
+    let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
     let transaction = super::super::execute_transaction(&mut channel, &txn).await;
 
@@ -232,7 +232,7 @@ async fn test_indexing_with_tto() {
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
-    let txn = cluster.wallet.sign_transaction(&tx_data);
+    let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
     super::super::execute_transaction(&mut channel, &txn).await;
 
@@ -326,7 +326,7 @@ async fn test_filter_by_type() {
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
-    let txn = cluster.wallet.sign_transaction(&tx_data);
+    let txn = cluster.wallet.sign_transaction(&tx_data).await;
     let transaction = super::super::execute_transaction(&mut channel, &txn).await;
 
     let effects = transaction.effects.unwrap();
@@ -446,7 +446,7 @@ async fn test_filter_by_type() {
     let kind = TransactionKind::ProgrammableTransaction(ptb);
     let tx_data = TransactionData::new_with_gas_data(kind, address, gas_data);
 
-    let txn = cluster.wallet.sign_transaction(&tx_data);
+    let txn = cluster.wallet.sign_transaction(&tx_data).await;
 
     super::super::execute_transaction(&mut channel, &txn).await;
 

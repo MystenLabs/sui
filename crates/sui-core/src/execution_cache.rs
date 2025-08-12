@@ -12,6 +12,7 @@ use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use itertools::Itertools;
 use mysten_common::fatal;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
@@ -244,7 +245,7 @@ pub trait ObjectCacheRead: Send + Sync {
         &self,
         keys: &[InputKey],
         receiving_objects: &HashSet<InputKey>,
-        epoch: &EpochId,
+        epoch: EpochId,
     ) -> Vec<bool> {
         let mut results = vec![false; keys.len()];
         let non_canceled_keys = keys.iter().enumerate().filter(|(idx, key)| {
@@ -288,22 +289,22 @@ pub trait ObjectCacheRead: Send + Sync {
                     .get_object(&id.id())
                     .map(|obj| obj.version() >= **version)
                     .unwrap_or(false)
-                    || self.fastpath_stream_ended_at_version_or_after(id.id(), **version, *epoch);
+                    || self.fastpath_stream_ended_at_version_or_after(id.id(), **version, epoch);
                 results[*idx] = is_available;
             } else {
                 // If the object is an already-removed consensus object, mark it as available if the
                 // version for that object is in the marker table.
                 let is_consensus_stream_ended = self
-                    .get_consensus_stream_end_tx_digest(FullObjectKey::new(**id, **version), *epoch)
+                    .get_consensus_stream_end_tx_digest(FullObjectKey::new(**id, **version), epoch)
                     .is_some();
                 results[*idx] = is_consensus_stream_ended;
             }
         }
 
         package_object_keys.into_iter().for_each(|(idx, id)| {
-            // unwrap is safe since this only errors when the object is not a package,
-            // which is impossible if we have a certificate for execution.
-            results[idx] = self.get_package_object(id).unwrap().is_some();
+            // get_package_object() only errors when the object is not a package, so returning false on error.
+            // Error is possible when this gets called on uncertified transactions.
+            results[idx] = self.get_package_object(id).is_ok_and(|p| p.is_some());
         });
 
         results
@@ -411,7 +412,7 @@ pub trait ObjectCacheRead: Send + Sync {
         &'a self,
         input_and_receiving_keys: &'a [InputKey],
         receiving_keys: &'a HashSet<InputKey>,
-        epoch: &'a EpochId,
+        epoch: EpochId,
     ) -> BoxFuture<'a, ()>;
 }
 
@@ -516,8 +517,11 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
+    fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>>;
+
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>>;
 
@@ -530,10 +534,13 @@ pub trait TransactionCacheRead: Send + Sync {
     /// occurring!
     fn notify_read_executed_effects<'a>(
         &'a self,
+        task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffects>> {
         async move {
-            let digests = self.notify_read_executed_effects_digests(digests).await;
+            let digests = self
+                .notify_read_executed_effects_digests(task_name, digests)
+                .await;
             // once digests are available, effects must be present as well
             self.multi_get_effects(&digests)
                 .into_iter()
@@ -543,10 +550,11 @@ pub trait TransactionCacheRead: Send + Sync {
         .boxed()
     }
 
-    /// Whether the given transaction was executed from mysticeti fastpath, but have not
-    /// yet been finalized. The outputs are still in the temporary buffer and have not
-    /// been flushed to the cache.
-    fn is_tx_fastpath_executed(&self, tx_digest: &TransactionDigest) -> bool;
+    /// Get the execution outputs of a mysticeti fastpath certified transaction, if it exists.
+    fn get_mysticeti_fastpath_outputs(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Option<Arc<TransactionOutputs>>;
 
     /// Wait until the outputs of the given transactions are available
     /// in the temporary buffer holding mysticeti fastpath outputs.
@@ -582,10 +590,6 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// that it is not visible to any subsequent transaction until we observe it
     /// from consensus or checkpoints.
     fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>);
-
-    /// Flush the output of a Mysticeti fastpath certified transaction to dirty cache.
-    /// This is used to make the output visible to subsequent transactions.
-    fn flush_fastpath_transaction_outputs(&self, tx_digest: TransactionDigest, epoch_id: EpochId);
 
     /// Attempt to acquire object locks for all of the owned input locks.
     fn acquire_transaction_locks(

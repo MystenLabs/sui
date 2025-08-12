@@ -612,7 +612,12 @@ impl ConsensusOutputQuarantine {
                 .checkpoint_height
                 .expect("non-genesis checkpoint must have height");
             if let Some(highest) = highest_committed_height {
-                assert!(checkpoint_height > highest);
+                assert!(
+                    checkpoint_height >= highest,
+                    "current checkpoint height {} must be no less than highest committed height {}",
+                    checkpoint_height,
+                    highest
+                );
             }
 
             highest_committed_height = Some(checkpoint_height);
@@ -818,18 +823,6 @@ impl ConsensusOutputQuarantine {
             .any(|output| output.pending_checkpoint_exists(index))
     }
 
-    #[cfg(tidehunter)]
-    pub(super) fn get_new_jwks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        round: u64,
-    ) -> SuiResult<Vec<ActiveJwk>> {
-        // todo fix this for tidehunter
-        // active_jwks.safe_iter_with_bounds is not supported for hashed keys in tidehunter
-        Ok(vec![])
-    }
-
-    #[cfg(not(tidehunter))]
     pub(super) fn get_new_jwks(
         &self,
         epoch_store: &AuthorityPerEpochStore,

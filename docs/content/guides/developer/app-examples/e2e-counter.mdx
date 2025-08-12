@@ -2,6 +2,7 @@
 title: Distributed Counter
 description: An app that allows users to create counters that anyone can increment, but only the owner can reset.
 effort: small
+keywords: [ distributed counter, example dapp, example app, react app, react dapp, increment counter, shared objects, programmable transaction blocks ptbs ]
 ---
 
 This example walks you through building a basic distributed counter app, covering the full end-to-end flow of building your Sui Move module and connecting it to your React Sui dApp. The app allows users to create counters that anyone can increment, but only the owner can reset. 
@@ -65,7 +66,7 @@ If you are targeting a network other than Testnet, be sure to update the `rev` v
 
 ### `Counter` struct
 
-To begin creating the smart contract that defines the on-chain counter, create a `counter.move` file inside your `react-e2e-counter/move/counter` folder. Define the module that holds your smart contract logic.
+To begin creating the smart contract that defines the on-chain counter, create a `counter.move` file inside your `react-e2e-counter/move/counter/sources` folder. Define the module that holds your smart contract logic.
 
 ```move
 module counter::counter {

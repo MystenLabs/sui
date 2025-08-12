@@ -6,6 +6,7 @@ concurrency:
 on:
   schedule:
     - cron: '0 9 * * *' # equivalent to 1am PST
+    - cron: '0 21 * * *' # equivalent to 1pm PST
   workflow_dispatch:
     inputs:
       sui_ref:
@@ -18,6 +19,11 @@ on:
         type: string
         required: false
         default: "30"
+      protocol_config_override:
+        description: "Protocol config override"
+        type: string
+        required: false
+        default: ""
 
 env:
   SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
@@ -76,6 +82,28 @@ jobs:
       - name: Install simtest
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
+
+      - name: Set protocol config override based on trigger
+        # This step determines which protocol config override to use.
+        # It checks if the trigger was a manual dispatch or a specific schedule.
+        run: |
+          message=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "${{ github.event.inputs.protocol_config_override }}" ]]; then
+              echo "Testing with protocol config override: ${{ github.event.inputs.protocol_config_override }}"
+              echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${{ github.event.inputs.protocol_config_override }}" >> $GITHUB_ENV
+            else
+              echo "Testing latest protocol config for dispatched run"
+            fi
+          elif [[ "${{ github.event.schedule }}" == "0 21 * * *" ]]; then
+            echo "Testing mainnet protocol config"
+            echo "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=mainnet" >> $GITHUB_ENV
+            message="(mainnet config) "
+          else
+            echo "Testing latest protocol config"
+          fi
+          # Set the output for other jobs to use
+          echo "protocol_message=${message}" >> $GITHUB_OUTPUT
 
       # Run simulator tests
       - name: Run simtest
@@ -149,7 +177,7 @@ jobs:
       with:
         channel-id: 'simtest-nightly'
         slack-message: |
-          :sui::error-cross: *${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
+          :sui::error-cross: *${{ github.workflow }}* ${{ needs.simtest.outputs.protocol_message }}workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
           Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
           Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
           <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results

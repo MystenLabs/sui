@@ -12,3 +12,8 @@ workspace = true
 [dependencies]
 move-package-alt.workspace = true
 serde.workspace = true
+sui-package-management.workspace = true
+move-core-types.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -149,6 +149,12 @@ pub fn current_simnode_id() -> msim::task::NodeId {
     msim::runtime::NodeHandle::current().id()
 }
 
+pub fn has_mainnet_protocol_config_override() -> bool {
+    use sui_types::{digests::ChainIdentifier, supported_protocol_versions::Chain};
+
+    ChainIdentifier::default().chain() == Chain::Mainnet
+}
+
 #[cfg(msim)]
 pub mod random {
     use super::*;

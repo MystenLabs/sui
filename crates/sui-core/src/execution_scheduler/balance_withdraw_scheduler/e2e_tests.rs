@@ -11,6 +11,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::accumulator_root::update_account_balance_for_testing;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
+use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::transaction::WithdrawTypeParam;
 use sui_types::type_input::TypeInput;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
@@ -31,7 +32,7 @@ use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::{
     authority::{
         shared_object_version_manager::Schedulable, test_authority_builder::TestAuthorityBuilder,
-        AuthorityState, BalanceWithdrawStatus, ExecutionEnv,
+        AuthorityState, ExecutionEnv,
     },
     execution_scheduler::{
         ExecutionScheduler, ExecutionSchedulerAPI, ExecutionSchedulerWrapper, PendingCertificate,
@@ -66,7 +67,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
     let account_objects = starting_objects.iter().map(|o| o.id()).collect();
     starting_objects.push(gas_object.clone());
     let mut protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-    protocol_config.set_enable_accumulators_for_testing(true);
+    protocol_config.enable_accumulators_for_testing();
     let state = TestAuthorityBuilder::new()
         .with_protocol_config(protocol_config)
         .with_starting_objects(&starting_objects)

@@ -8,7 +8,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::publish_basics_package_and_make_party_object;
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{FullObjectRef, SuiAddress};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg};
@@ -18,6 +18,10 @@ use tracing::info;
 /// Delete a party object as the object owner.
 #[sim_test]
 async fn party_object_deletion() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -56,6 +60,10 @@ async fn party_object_deletion() {
 
 #[sim_test]
 async fn party_object_deletion_multiple_times() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_deletions = 20;
@@ -96,7 +104,7 @@ async fn party_object_deletion_multiple_times() {
                 },
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))
@@ -122,12 +130,16 @@ async fn party_object_deletion_multiple_times() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
 #[sim_test]
 async fn party_object_deletion_multiple_times_cert_racing() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_deletions = 10;
@@ -169,7 +181,7 @@ async fn party_object_deletion_multiple_times_cert_racing() {
                 },
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
 
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
@@ -194,13 +206,17 @@ async fn party_object_deletion_multiple_times_cert_racing() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
 /// Transfer a party object as the object owner.
 #[sim_test]
 async fn party_object_transfer() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -249,6 +265,10 @@ async fn party_object_transfer() {
 
 #[sim_test]
 async fn party_object_transfer_multiple_times() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     let num_transfers = 20;
@@ -290,7 +310,7 @@ async fn party_object_transfer_multiple_times() {
                 SuiAddress::ZERO,
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))
@@ -316,7 +336,7 @@ async fn party_object_transfer_multiple_times() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&digests)
+        .notify_read_executed_effects("", &digests)
         .await;
 }
 
@@ -329,6 +349,10 @@ async fn party_object_transfer_multiple_times() {
 /// 4. Execute the remaining two.
 #[sim_test]
 async fn party_object_transfer_multi_certs() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     // cause random delay just before tx is executed (to explore all orders)
@@ -373,7 +397,7 @@ async fn party_object_transfer_multi_certs() {
             SuiAddress::ZERO,
         )
         .build();
-    let xfer_tx = test_cluster.sign_transaction(&xfer_tx);
+    let xfer_tx = test_cluster.sign_transaction(&xfer_tx).await;
 
     let repeat_tx_a = test_cluster
         .test_transaction_builder_with_gas_object(sender, gas2)
@@ -388,7 +412,7 @@ async fn party_object_transfer_multi_certs() {
             SuiAddress::ZERO,
         )
         .build();
-    let repeat_tx_a = test_cluster.sign_transaction(&repeat_tx_a);
+    let repeat_tx_a = test_cluster.sign_transaction(&repeat_tx_a).await;
     let repeat_tx_a_digest = *repeat_tx_a.digest();
 
     let repeat_tx_b = test_cluster
@@ -404,7 +428,7 @@ async fn party_object_transfer_multi_certs() {
             SuiAddress::ZERO,
         )
         .build();
-    let repeat_tx_b = test_cluster.sign_transaction(&repeat_tx_b);
+    let repeat_tx_b = test_cluster.sign_transaction(&repeat_tx_b).await;
     let repeat_tx_b_digest = *repeat_tx_b.digest();
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
@@ -450,13 +474,17 @@ async fn party_object_transfer_multi_certs() {
     fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&[repeat_tx_a_digest, repeat_tx_b_digest])
+        .notify_read_executed_effects("", &[repeat_tx_a_digest, repeat_tx_b_digest])
         .await;
 }
 
 /// Use a party object immutably.
 #[sim_test]
 async fn party_object_read() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     telemetry_subscribers::init_for_testing();
 
     // Create a test cluster with enough gas coins for the below.
@@ -508,7 +536,7 @@ async fn party_object_read() {
                 })],
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))
@@ -538,7 +566,7 @@ async fn party_object_read() {
             recipient,
         )
         .build();
-    let signed_transfer = test_cluster.sign_transaction(&transfer_transaction);
+    let signed_transfer = test_cluster.sign_transaction(&transfer_transaction).await;
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
     test_cluster
         .create_certificate(signed_transfer.clone(), Some(client_ip))
@@ -576,7 +604,7 @@ async fn party_object_read() {
                 })],
             )
             .build();
-        let signed = test_cluster.sign_transaction(&transaction);
+        let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
             .create_certificate(signed.clone(), Some(client_ip))
@@ -597,7 +625,7 @@ async fn party_object_read() {
     let effects = fullnode
         .state()
         .get_transaction_cache_reader()
-        .notify_read_executed_effects(&all_digests)
+        .notify_read_executed_effects("", &all_digests)
         .await;
     assert_eq!(effects.len(), all_digests.len());
     for effect in effects {
@@ -616,6 +644,10 @@ async fn party_object_grpc() {
     use sui_rpc::proto::sui::rpc::v2beta2::owner::OwnerKind;
     use sui_rpc::proto::sui::rpc::v2beta2::GetObjectRequest;
     use sui_rpc::proto::sui::rpc::v2beta2::ListOwnedObjectsRequest;
+
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
 
     let test_cluster = TestClusterBuilder::new().build().await;
 
@@ -692,7 +724,7 @@ async fn party_object_grpc() {
         .effects
         .unwrap();
 
-    // Once we've transfered the object to another address we need to make sure that its owner is
+    // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
     let resp = ledger_service_client
         .get_object(GetObjectRequest {
@@ -765,6 +797,10 @@ async fn party_coin_grpc() {
     use sui_types::transaction::{CallArg, ObjectArg, TransactionData};
     use sui_types::Identifier;
 
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let cluster = TestClusterBuilder::new().build().await;
     let channel = tonic::transport::Channel::from_shared(cluster.rpc_url().to_owned())
         .unwrap()
@@ -804,7 +840,9 @@ async fn party_coin_grpc() {
         vec!["0x2::coin::Coin<0x2::sui::SUI>".parse().unwrap()],
         vec![party_coin_arg, party_owner],
     );
-    builder.transfer_object(recipient, owned_coin).unwrap();
+    builder
+        .transfer_object(recipient, FullObjectRef::from_fastpath_ref(owned_coin))
+        .unwrap();
     let ptb = builder.finish();
 
     let gas_data = sui_types::transaction::GasData {
@@ -928,6 +966,10 @@ async fn party_coin_grpc() {
 /// indexes
 #[sim_test]
 async fn party_object_jsonrpc() {
+    if sui_simulator::has_mainnet_protocol_config_override() {
+        return;
+    }
+
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, object) =
@@ -987,7 +1029,7 @@ async fn party_object_jsonrpc() {
         .effects
         .unwrap();
 
-    // Once we've transfered the object to another address we need to make sure that its owner is
+    // Once we've transferred the object to another address we need to make sure that its owner is
     // properly updated and that the owner index correctly updated
     let object = client
         .read_api()
