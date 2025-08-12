@@ -10,6 +10,7 @@ use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk_types::CheckpointTimestamp;
 use tap::Pipe;
 
+use crate::messages_checkpoint::CheckpointCommitment;
 use crate::{
     base_types::{
         dbg_addr, random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber,
@@ -116,6 +117,7 @@ pub struct AdvanceEpochConfig {
     pub safe_mode: bool,
     pub protocol_version: ProtocolVersion,
     pub output_objects: Vec<Object>,
+    pub epoch_commitments: Vec<CheckpointCommitment>,
 }
 
 impl Default for AdvanceEpochConfig {
@@ -124,6 +126,7 @@ impl Default for AdvanceEpochConfig {
             safe_mode: false,
             protocol_version: ProtocolVersion::MAX,
             output_objects: vec![],
+            epoch_commitments: vec![],
         }
     }
 }
@@ -636,6 +639,7 @@ impl TestCheckpointDataBuilder {
             safe_mode,
             protocol_version,
             output_objects,
+            epoch_commitments,
         }: AdvanceEpochConfig,
     ) -> CheckpointData {
         let (committee, _) = Committee::new_simple_test_committee();
@@ -704,7 +708,7 @@ impl TestCheckpointDataBuilder {
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: committee.voting_rights.clone(),
             next_epoch_protocol_version: protocol_version,
-            epoch_commitments: vec![],
+            epoch_commitments,
         };
         checkpoint.checkpoint_summary.end_of_epoch_data = Some(end_of_epoch_data);
         self.checkpoint_builder.epoch += 1;
