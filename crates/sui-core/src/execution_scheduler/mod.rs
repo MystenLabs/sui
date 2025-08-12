@@ -15,7 +15,9 @@ use prometheus::IntGauge;
 use std::{collections::BTreeSet, sync::Arc};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
-    error::SuiResult, executable_transaction::VerifiedExecutableTransaction, storage::InputKey,
+    error::SuiResult,
+    executable_transaction::VerifiedExecutableTransaction,
+    storage::{ChildObjectResolver, InputKey},
     transaction::SenderSignedData,
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -100,6 +102,7 @@ pub enum ExecutionSchedulerWrapper {
 impl ExecutionSchedulerWrapper {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
+        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -112,6 +115,7 @@ impl ExecutionSchedulerWrapper {
             let enable_accumulators = epoch_store.accumulators_enabled();
             Self::ExecutionScheduler(ExecutionScheduler::new(
                 object_cache_read,
+                child_object_resolver,
                 transaction_cache_read,
                 tx_ready_certificates,
                 enable_accumulators,

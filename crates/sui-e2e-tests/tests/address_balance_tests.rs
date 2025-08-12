@@ -8,12 +8,13 @@ use sui_macros::*;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
-    accumulator_root::{AccumulatorOwner, AccumulatorValue, U128},
+    accumulator_metadata::AccumulatorOwner,
+    accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
     base_types::{ObjectRef, SuiAddress},
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    storage::ObjectStore,
+    storage::ChildObjectResolver,
     transaction::{Argument, Command, TransactionData, TransactionKind},
     SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -62,42 +63,57 @@ async fn test_deposits() -> Result<(), anyhow::Error> {
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        let object_store = state.get_object_store().as_ref();
-        verify_accumulator_exists(object_store, recipient);
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, recipient, 1000);
     });
 
     Ok(())
 }
 
-fn verify_accumulator_exists(object_store: &dyn ObjectStore, owner: SuiAddress) {
+fn verify_accumulator_exists(
+    child_object_resolver: &dyn ChildObjectResolver,
+    owner: SuiAddress,
+    expected_balance: u64,
+) {
     let sui_coin_type = Balance::type_tag(GAS::type_tag());
 
     assert!(
-        AccumulatorValue::exists(object_store, owner, &sui_coin_type).unwrap(),
+        AccumulatorValue::exists(child_object_resolver, None, owner, &sui_coin_type).unwrap(),
         "Accumulator value should have been created"
     );
 
-    let accumulator_value = AccumulatorValue::load(object_store, owner, &sui_coin_type).unwrap();
+    let accumulator_value =
+        AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
+            .expect("read cannot fail")
+            .expect("accumulator should exist");
 
     assert_eq!(
         accumulator_value,
-        AccumulatorValue::U128(U128 { value: 1000 }),
+        AccumulatorValue::U128(U128 {
+            value: expected_balance as u128
+        }),
         "Accumulator value should be 1000"
     );
 
     assert!(
-        AccumulatorOwner::exists(object_store, owner).unwrap(),
+        AccumulatorOwner::exists(child_object_resolver, None, owner).unwrap(),
         "Owner object should have been created"
     );
 
-    let owner = AccumulatorOwner::load(object_store, owner).unwrap();
+    let owner = AccumulatorOwner::load(child_object_resolver, None, owner)
+        .expect("read cannot fail")
+        .expect("owner must exist");
 
     assert!(
-        owner.metadata_exists(object_store, &sui_coin_type).unwrap(),
+        owner
+            .metadata_exists(child_object_resolver, None, &sui_coin_type)
+            .unwrap(),
         "Metadata object should have been created"
     );
 
-    let _metadata = owner.load_metadata(object_store, &sui_coin_type).unwrap();
+    let _metadata = owner
+        .load_metadata(child_object_resolver, None, &sui_coin_type)
+        .unwrap();
 }
 
 #[sim_test]
@@ -118,8 +134,8 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        let object_store = state.get_object_store().as_ref();
-        verify_accumulator_exists(object_store, sender);
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, sender, 1000);
     });
 
     let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
@@ -129,15 +145,15 @@ async fn test_deposit_and_withdraw() -> Result<(), anyhow::Error> {
 
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        let object_store = state.get_object_store().as_ref();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
         let sui_coin_type = Balance::type_tag(GAS::type_tag());
 
         assert!(
-            !AccumulatorValue::exists(object_store, sender, &sui_coin_type).unwrap(),
+            !AccumulatorValue::exists(child_object_resolver, None, sender, &sui_coin_type).unwrap(),
             "Accumulator value should have been removed"
         );
         assert!(
-            !AccumulatorOwner::exists(object_store, sender).unwrap(),
+            !AccumulatorOwner::exists(child_object_resolver, None, sender).unwrap(),
             "Owner object should have been removed"
         );
     });
@@ -166,6 +182,13 @@ async fn test_deposit_and_withdraw_with_larger_reservation() -> Result<(), anyho
     // Withdraw 800 with a reservation of 1000 (larger than actual withdrawal)
     let tx = withdraw_from_balance_tx_with_reservation(800, 1000, sender, gas, rgp);
     test_cluster.sign_and_execute_transaction(&tx).await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        // Verify that the accumulator still exists, as the entire balance was not withdrawn
+        verify_accumulator_exists(child_object_resolver, sender, 200);
+    });
 
     Ok(())
 }
