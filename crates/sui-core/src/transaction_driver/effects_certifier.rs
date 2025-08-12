@@ -10,7 +10,7 @@ use std::{
 use futures::{join, stream::FuturesUnordered, StreamExt as _};
 use mysten_common::debug_fatal;
 use sui_types::{
-    base_types::AuthorityName,
+    base_types::{AuthorityName, ConciseableName as _},
     committee::StakeUnit,
     digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffectsAPI as _,
@@ -305,15 +305,18 @@ impl EffectsCertifier {
             TransactionEffectsDigest,
             StatusAggregator<()>,
         > = BTreeMap::new();
-        // Collect errors non-retriable even with new transaction submission.
+        // Collect responses from validators which observed the transaction getting rejected,
+        // and rejected the transaction with errors non-retriable with new transaction submissions.
         let mut non_retriable_errors_aggregator =
             StatusAggregator::<TransactionRequestError>::new(committee.clone());
-        // Collect errors retriable with new transaction submission.
+        // Collect responses from validators which observed the transaction getting rejected,
+        // and rejected the transaction with errors retriable with new transaction submissions.
         let mut retriable_errors_aggregator =
             StatusAggregator::<TransactionRequestError>::new(committee.clone());
-        // Collect validators that voted to accept the transaction, even though these validators believe
-        // consensus has rejected it.
-        let mut accept_aggregator = StatusAggregator::<()>::new(committee.clone());
+        // Collect responses from validators which observed the transaction getting rejected,
+        // but do not have a local reason to reject the transaction. The validator could have
+        // accepted the transaction during voting, or the reason has been lost.
+        let mut reason_not_found_aggregator = StatusAggregator::<()>::new(committee.clone());
 
         // Every validator returns at most one WaitForEffectsResponse.
         while let Some((name, response)) = futures.next().await {
@@ -348,6 +351,7 @@ impl EffectsCertifier {
                 }
                 Ok(WaitForEffectsResponse::Rejected { error }) => {
                     if let Some(e) = error {
+                        tracing::trace!(name = ?name.concise(), "Rejected at validator: {:?}", e);
                         let error = TransactionRequestError::RejectedAtValidator(e);
                         if error.is_submission_retriable() {
                             retriable_errors_aggregator.insert(name, error);
@@ -355,7 +359,8 @@ impl EffectsCertifier {
                             non_retriable_errors_aggregator.insert(name, error);
                         }
                     } else {
-                        accept_aggregator.insert(name, ());
+                        tracing::trace!(name = ?name.concise(), "Not found at validator");
+                        reason_not_found_aggregator.insert(name, ());
                     }
                     self.metrics.rejection_acks.inc();
                 }
@@ -382,14 +387,19 @@ impl EffectsCertifier {
                 .map(|agg| agg.total_votes())
                 .sum();
             let total_weight = executed_weight
-                + accept_aggregator.total_votes()
+                + reason_not_found_aggregator.total_votes()
                 + non_retriable_errors_aggregator.total_votes()
                 + retriable_errors_aggregator.total_votes();
+            let remaining_weight = committee.total_votes() - total_weight;
 
             // Wait for a quorum of responses, to not summarize the responses too early.
+            // If neither of the branches can exit the loop, the loop will eventually terminate when responses are
+            // gathered from all validators. The time is bounded by WAIT_FOR_EFFECTS_TIMEOUT.
+            //
+            // The most important goal here is to aggregate enough useful errors to be actionable.
+            // Breaking the loop at the earliest possible time is not the goal.
             if total_weight >= committee.quorum_threshold() {
-                // If neither of the branches below can exit the loop, the loop will eventually terminate
-                // when responses are gathered from all validators. The time is bounded by WAIT_FOR_EFFECTS_TIMEOUT.
+                // Try returning non-retriable aggregated error first.
                 if non_retriable_errors_aggregator.total_votes() >= committee.validity_threshold() {
                     return Err(TransactionDriverError::InvalidTransaction {
                         submission_non_retriable_errors: aggregate_request_errors(
@@ -399,9 +409,14 @@ impl EffectsCertifier {
                             retriable_errors_aggregator.status_by_authority(),
                         ),
                     });
-                } else if non_retriable_errors_aggregator.total_votes()
-                    + retriable_errors_aggregator.total_votes()
-                    >= committee.validity_threshold()
+                }
+                // Return a retriable aggregated error only if it becomes impossible to gather enough non-retriable errors.
+                // reason_not_found_aggregator is excluded here intentionally because it does not contain a useful error message.
+                if non_retriable_errors_aggregator.total_votes() + remaining_weight
+                    < committee.validity_threshold()
+                    && retriable_errors_aggregator.total_votes()
+                        + non_retriable_errors_aggregator.total_votes()
+                        >= committee.validity_threshold()
                 {
                     let mut observed_effects_digests =
                         Vec::<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>::new();
@@ -429,17 +444,15 @@ impl EffectsCertifier {
 
         // At this point, no effects digest has reached quorum. But failed responses do not reach
         // validity threshold either.
-        let retriable_and_accept_weight =
-            retriable_errors_aggregator.total_votes() + accept_aggregator.total_votes();
+        let retriable_weight =
+            retriable_errors_aggregator.total_votes() + reason_not_found_aggregator.total_votes();
         // Whether the transaction is retriable regardless of known effects.
-        let mut submission_retriable = retriable_and_accept_weight >= committee.quorum_threshold();
+        let mut submission_retriable = retriable_weight >= committee.quorum_threshold();
         let mut observed_effects_digests =
             Vec::<(TransactionEffectsDigest, Vec<AuthorityName>, StakeUnit)>::new();
         for (effects_digest, aggregator) in effects_digest_aggregators {
             // This effects digest can still get certified, so the transaction is retriable.
-            if aggregator.total_votes() + retriable_and_accept_weight
-                >= committee.quorum_threshold()
-            {
+            if aggregator.total_votes() + retriable_weight >= committee.quorum_threshold() {
                 submission_retriable = true;
             }
             observed_effects_digests.push((
