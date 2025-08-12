@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use fastcrypto::encoding::{Base58, Encoding};
 use jsonrpsee::core::Serialize;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
@@ -15,10 +16,11 @@ use sui_indexer_alt::{
 use sui_indexer_alt_e2e_tests::{
     local_ingestion_client_args, write_checkpoint, OffchainCluster, OffchainClusterConfig,
 };
-use sui_indexer_alt_schema::checkpoints::StoredGenesis;
-use sui_indexer_alt_schema::epochs::StoredEpochStart;
+use sui_indexer_alt_schema::{checkpoints::StoredGenesis, epochs::StoredEpochStart};
 use sui_types::{
     balance::Balance,
+    digests::Digest,
+    messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest},
     sui_system_state::{
         mock, sui_system_state_inner_v1::SuiSystemStateInnerV1,
         sui_system_state_inner_v2::SuiSystemStateInnerV2, SuiSystemState,
@@ -146,6 +148,45 @@ async fn safe_mode_system_state_v2() -> Result<(), anyhow::Error> {
     assert_eq!(storage_cost, STORAGE_COST);
     assert_eq!(storage_rebate, STORAGE_REBATE);
     assert_eq!(non_refundable_storage_fee, NON_REFUNDABLE_STORAGE_FEE);
+    Ok(())
+}
+
+#[tokio::test]
+async fn live_object_set_digest() -> Result<(), anyhow::Error> {
+    let sui_system_state = SuiSystemState::V2(mock::sui_system_state_inner_v2());
+    const LIVE_OBJECT_SET_DIGEST_QUERY: &str = r#"
+query {
+    epoch(epochId: 0) {
+        liveObjectSetDigest
+    }
+}
+"#;
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct LiveObjectsSetDigestEpoch {
+        live_object_set_digest: String,
+    }
+
+    let expected_digest = [1u8; 32];
+    let LiveObjectsSetDigestEpoch {
+        live_object_set_digest: actual_digest,
+    } = test_graphql(
+        LIVE_OBJECT_SET_DIGEST_QUERY,
+        sui_system_state.clone(),
+        AdvanceEpochConfig {
+            output_objects: mock::system_state_output_objects(sui_system_state),
+            epoch_commitments: vec![CheckpointCommitment::ECMHLiveObjectSetDigest(
+                ECMHLiveObjectSetDigest {
+                    digest: Digest::new(expected_digest),
+                },
+            )],
+            ..Default::default()
+        },
+    )
+    .await?;
+
+    assert_eq!(actual_digest, Base58::encode(expected_digest));
     Ok(())
 }
 

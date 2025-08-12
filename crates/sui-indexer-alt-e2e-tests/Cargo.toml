@@ -18,6 +18,7 @@ anyhow.workspace = true
 bcs.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+fastcrypto.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
 serde.workspace = true
