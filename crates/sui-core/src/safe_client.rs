@@ -586,6 +586,7 @@ where
     }
 
     /// Handle Transaction information requests for a given digest.
+    /// Only used for testing.
     #[instrument(level = "trace", skip_all, fields(authority = ?self.address.concise()))]
     pub async fn handle_transaction_info_request(
         &self,

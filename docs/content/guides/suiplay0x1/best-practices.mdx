@@ -1,5 +1,7 @@
 ---
 title: Best Practices
+description: Adhere to best practices when developing for SuiPlay0X1.
+keywords: [ SuiPlay0X1, beamable, shinami, data management, handling transactions, on-chain storage, off-chain storage ]
 ---
 
 {@include: ../../snippets/suiplay.mdx}
@@ -24,10 +26,10 @@ Proper data management design can augment the user experience.
 
 Consider where best to store your data:
 
-- **On chain:** Assets and currencies that can be traded or sold.  
-- **Off chain:** Game state, progress, and so on using traditional game servers.
+- **On-chain:** Assets and currencies that can be traded or sold.  
+- **Off-chain:** Game state, progress, and so on using traditional game servers.
 
-While you can store any information on chain, consider whether it’s important to your game for that data to exist there. If not, leverage traditional game server backends, which makes data syncing and updating easier.
+While you can store any information on-chain, consider whether it’s important to your game for that data to exist there. If not, leverage traditional game server backends, which makes data syncing and updating easier.
 
 ### Session start protocol
 
@@ -37,5 +39,5 @@ Always check wallet state at session beginning and don't cache wallet data betwe
 
 - [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
 - [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
-- [SuiPlay0x1 Discord](https://discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
+- [SuiPlay0X1 Discord](https://discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
 - [Wallet Integration Options](./wallet-integration.mdx): Details about the available wallet integrations. 

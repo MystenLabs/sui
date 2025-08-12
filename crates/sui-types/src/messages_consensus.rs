@@ -7,7 +7,9 @@ use crate::committee::EpochId;
 use crate::digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest};
 use crate::error::SuiError;
 use crate::execution::ExecutionTimeObservationKey;
-use crate::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSignatureMessage};
+use crate::messages_checkpoint::{
+    CheckpointDigest, CheckpointSequenceNumber, CheckpointSignatureMessage,
+};
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
@@ -181,9 +183,11 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
+// Serialized ordinally - always append to end of enum
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
+    // V1: dedup by authority + sequence only (no digest)
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityName, u64 /* generation */),
@@ -193,6 +197,8 @@ pub enum ConsensusTransactionKey {
     RandomnessDkgMessage(AuthorityName),
     RandomnessDkgConfirmation(AuthorityName),
     ExecutionTimeObservation(AuthorityName, u64 /* generation */),
+    // V2: dedup by authority + sequence + digest
+    CheckpointSignatureV2(AuthorityName, CheckpointSequenceNumber, CheckpointDigest),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -202,6 +208,13 @@ impl Debug for ConsensusTransactionKey {
             Self::CheckpointSignature(name, seq) => {
                 write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
             }
+            Self::CheckpointSignatureV2(name, seq, digest) => write!(
+                f,
+                "CheckpointSignatureV2({:?}, {:?}, {:?})",
+                name.concise(),
+                seq,
+                digest
+            ),
             Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
             Self::CapabilityNotification(name, generation) => write!(
                 f,
@@ -384,6 +397,7 @@ impl ExecutionTimeObservation {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     CertifiedTransaction(Box<CertifiedTransaction>),
+    // V1: dedup by authority + sequence only
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
 
@@ -405,6 +419,8 @@ pub enum ConsensusTransactionKind {
     UserTransaction(Box<Transaction>),
 
     ExecutionTimeObservation(ExecutionTimeObservation),
+    // V2: dedup by authority + sequence + digest
+    CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
 }
 
 impl ConsensusTransactionKind {
@@ -547,6 +563,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_checkpoint_signature_message_v2(data: CheckpointSignatureMessage) -> Self {
+        let mut hasher = DefaultHasher::new();
+        data.summary.auth_sig().signature.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::CheckpointSignatureV2(Box::new(data)),
+        }
+    }
+
     pub fn new_end_of_publish(authority: AuthorityName) -> Self {
         let mut hasher = DefaultHasher::new();
         authority.hash(&mut hasher);
@@ -658,6 +684,13 @@ impl ConsensusTransaction {
                 ConsensusTransactionKey::CheckpointSignature(
                     data.summary.auth_sig().authority,
                     data.summary.sequence_number,
+                )
+            }
+            ConsensusTransactionKind::CheckpointSignatureV2(data) => {
+                ConsensusTransactionKey::CheckpointSignatureV2(
+                    data.summary.auth_sig().authority,
+                    data.summary.sequence_number,
+                    *data.summary.digest(),
                 )
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {

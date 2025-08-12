@@ -4,37 +4,30 @@
 use crate::{
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    collection_types::Bag,
+    digests::TransactionDigest,
     dynamic_field::{
-        derive_dynamic_field_id, get_dynamic_field_from_store, get_dynamic_field_from_store_generic,
+        serialize_dynamic_field, BoundedDynamicFieldID, DynamicFieldKey, DynamicFieldObject,
     },
     error::{SuiError, SuiResult},
-    gas_coin::GasCoin,
     object::{Object, Owner},
-    storage::ObjectStore,
-    transaction::WithdrawTypeParam,
-    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+    storage::{ChildObjectResolver, ObjectStore},
+    MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use move_core_types::{
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub const ACCUMULATOR_ROOT_MODULE: &IdentStr = ident_str!("accumulator");
-pub const ACCUMULATOR_METADATA_MODULE: &IdentStr = ident_str!("accumulator_metadata");
 pub const ACCUMULATOR_SETTLEMENT_MODULE: &IdentStr = ident_str!("accumulator_settlement");
 pub const ACCUMULATOR_ROOT_CREATE_FUNC: &IdentStr = ident_str!("create");
 pub const ACCUMULATOR_ROOT_SETTLE_U128_FUNC: &IdentStr = ident_str!("settle_u128");
 pub const ACCUMULATOR_ROOT_SETTLEMENT_PROLOGUE_FUNC: &IdentStr = ident_str!("settlement_prologue");
 
 const ACCUMULATOR_KEY_TYPE: &IdentStr = ident_str!("Key");
-const ACCUMULATOR_OWNER_KEY_TYPE: &IdentStr = ident_str!("OwnerKey");
-const ACCUMULATOR_OWNER_TYPE: &IdentStr = ident_str!("Owner");
-const ACCUMULATOR_METADATA_KEY_TYPE: &IdentStr = ident_str!("MetadataKey");
-
 const ACCUMULATOR_U128_TYPE: &IdentStr = ident_str!("U128");
 
 pub fn get_accumulator_root_obj_initial_shared_version(
@@ -53,8 +46,8 @@ pub fn get_accumulator_root_obj_initial_shared_version(
 /// Rust type for the Move type AccumulatorKey used to derive the dynamic field id for the
 /// balance account object.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct AccumulatorKey {
-    owner: SuiAddress,
+pub struct AccumulatorKey {
+    pub owner: SuiAddress,
 }
 
 impl MoveTypeTagTraitGeneric for AccumulatorKey {
@@ -68,125 +61,12 @@ impl MoveTypeTagTraitGeneric for AccumulatorKey {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct AccumulatorOwner {
-    balances: Bag,
-    owner: SuiAddress,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct MetadataKey(u8);
-
-impl MoveTypeTagTraitGeneric for MetadataKey {
-    fn get_type_tag(type_params: &[TypeTag]) -> TypeTag {
-        TypeTag::Struct(Box::new(StructTag {
-            address: SUI_FRAMEWORK_PACKAGE_ID.into(),
-            module: ACCUMULATOR_METADATA_MODULE.to_owned(),
-            name: ACCUMULATOR_METADATA_KEY_TYPE.to_owned(),
-            type_params: type_params.to_vec(),
-        }))
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AccumulatorMetadata {
-    /// Any per-balance fields we wish to add in the future.
-    fields: Bag,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct OwnerKey {
-    owner: SuiAddress,
-}
-
-impl MoveTypeTagTrait for OwnerKey {
-    fn get_type_tag() -> TypeTag {
-        TypeTag::Struct(Box::new(StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: ACCUMULATOR_METADATA_MODULE.to_owned(),
-            name: ACCUMULATOR_OWNER_KEY_TYPE.to_owned(),
-            type_params: vec![],
-        }))
-    }
-}
-
-impl AccumulatorOwner {
-    pub fn type_() -> StructTag {
-        StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: ACCUMULATOR_METADATA_MODULE.to_owned(),
-            name: ACCUMULATOR_OWNER_TYPE.to_owned(),
-            type_params: vec![],
-        }
-    }
-
-    pub fn derive_owner_address(owner: SuiAddress) -> ObjectID {
-        derive_dynamic_field_id(
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            &TypeTag::Address,
-            &bcs::to_bytes(&owner).expect("to_bytes should not fail"),
-        )
-        .expect("derive_dynamic_field_id should not fail")
-    }
-
-    pub fn exists(object_store: &dyn ObjectStore, owner: SuiAddress) -> SuiResult<bool> {
-        let key = OwnerKey { owner };
-        let key_bytes = bcs::to_bytes(&key).expect("to_bytes should not fail");
-        let id = derive_dynamic_field_id(
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            &OwnerKey::get_type_tag(),
-            &key_bytes,
-        )
-        .map_err(|e| SuiError::TypeError {
-            error: format!("Failed to derive dynamic field id: {}", e),
-        })?;
-        Ok(object_store.get_object(&id).is_some())
-    }
-
-    pub fn load(object_store: &dyn ObjectStore, owner: SuiAddress) -> SuiResult<Self> {
-        let key = OwnerKey { owner };
-        get_dynamic_field_from_store(object_store, SUI_ACCUMULATOR_ROOT_OBJECT_ID, &key)
-    }
-
-    pub fn metadata_exists(
-        &self,
-        object_store: &dyn ObjectStore,
-        type_: &TypeTag,
-    ) -> SuiResult<bool> {
-        let key = MetadataKey::default();
-        let key_bytes = bcs::to_bytes(&key).unwrap();
-        let id = derive_dynamic_field_id(
-            *self.balances.id.object_id(),
-            &MetadataKey::get_type_tag(&[type_.clone()]),
-            &key_bytes,
-        )
-        .map_err(|e| SuiError::TypeError {
-            error: format!("Failed to derive dynamic field id: {}", e),
-        })?;
-        Ok(object_store.get_object(&id).is_some())
-    }
-
-    pub fn load_metadata(
-        &self,
-        object_store: &dyn ObjectStore,
-        type_: &TypeTag,
-    ) -> SuiResult<AccumulatorMetadata> {
-        let key = MetadataKey::default();
-        get_dynamic_field_from_store_generic(
-            object_store,
-            *self.balances.id.object_id(),
-            &key,
-            &[type_.clone()],
-        )
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub enum AccumulatorValue {
     U128(U128),
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct U128 {
     pub value: u128,
 }
@@ -203,37 +83,7 @@ impl MoveTypeTagTrait for U128 {
 }
 
 impl AccumulatorValue {
-    pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> Result<ObjectID, bcs::Error> {
-        let key = AccumulatorKey { owner };
-        let key_bytes = bcs::to_bytes(&key).unwrap();
-        derive_dynamic_field_id(SUI_ACCUMULATOR_ROOT_OBJECT_ID, type_, &key_bytes)
-    }
-
-    pub fn exists(
-        object_store: &dyn ObjectStore,
-        owner: SuiAddress,
-        type_: &TypeTag,
-    ) -> SuiResult<bool> {
-        let key = AccumulatorKey { owner };
-        let key_bytes = bcs::to_bytes(&key).unwrap();
-
-        let id = derive_dynamic_field_id(
-            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            &AccumulatorKey::get_type_tag(&[type_.clone()]),
-            &key_bytes,
-        )
-        .map_err(|e| SuiError::TypeError {
-            error: format!("Failed to derive dynamic field id: {}", e),
-        })?;
-
-        Ok(object_store.get_object(&id).is_some())
-    }
-
-    pub fn load(
-        object_store: &dyn ObjectStore,
-        owner: SuiAddress,
-        type_: &TypeTag,
-    ) -> SuiResult<Self> {
+    pub fn get_field_id(owner: SuiAddress, type_: &TypeTag) -> SuiResult<ObjectID> {
         if !Balance::is_balance_type(type_) {
             return Err(SuiError::TypeError {
                 error: "only Balance<T> is supported".to_string(),
@@ -241,41 +91,127 @@ impl AccumulatorValue {
         }
 
         let key = AccumulatorKey { owner };
-        let value: U128 = get_dynamic_field_from_store_generic(
-            object_store,
+        Ok(DynamicFieldKey(
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-            &key,
-            &[type_.clone()],
-        )?;
+            key,
+            AccumulatorKey::get_type_tag(&[type_.clone()]),
+        )
+        .into_unbounded_id()?
+        .as_object_id())
+    }
 
-        Ok(Self::U128(value))
+    pub fn exists(
+        child_object_resolver: &dyn ChildObjectResolver,
+        version_bound: Option<SequenceNumber>,
+        owner: SuiAddress,
+        type_: &TypeTag,
+    ) -> SuiResult<bool> {
+        if !Balance::is_balance_type(type_) {
+            return Err(SuiError::TypeError {
+                error: "only Balance<T> is supported".to_string(),
+            });
+        }
+
+        let key = AccumulatorKey { owner };
+        DynamicFieldKey(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            key,
+            AccumulatorKey::get_type_tag(&[type_.clone()]),
+        )
+        .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
+        .exists(child_object_resolver)
+    }
+
+    pub fn load_by_id<T>(
+        child_object_resolver: &dyn ChildObjectResolver,
+        version_bound: Option<SequenceNumber>,
+        id: ObjectID,
+    ) -> SuiResult<Option<T>>
+    where
+        T: Serialize + DeserializeOwned,
+    {
+        BoundedDynamicFieldID::<AccumulatorKey>::new(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            id,
+            version_bound.unwrap_or(SequenceNumber::MAX),
+        )
+        .load_object(child_object_resolver)?
+        .map(|o| o.load_value::<T>())
+        .transpose()
+    }
+
+    pub fn load(
+        child_object_resolver: &dyn ChildObjectResolver,
+        version_bound: Option<SequenceNumber>,
+        owner: SuiAddress,
+        type_: &TypeTag,
+    ) -> SuiResult<Option<Self>> {
+        if !Balance::is_balance_type(type_) {
+            return Err(SuiError::TypeError {
+                error: "only Balance<T> is supported".to_string(),
+            });
+        }
+
+        let key = AccumulatorKey { owner };
+        let key_type_tag = AccumulatorKey::get_type_tag(&[type_.clone()]);
+
+        let Some(value) = DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
+            .into_id_with_bound(version_bound.unwrap_or(SequenceNumber::MAX))?
+            .load_object(child_object_resolver)?
+            .map(|o| o.load_value::<U128>())
+            .transpose()?
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self::U128(value)))
+    }
+
+    pub fn create_for_testing(owner: SuiAddress, type_tag: TypeTag, balance: u64) -> Object {
+        let key = AccumulatorKey { owner };
+        let value = U128 {
+            value: balance as u128,
+        };
+
+        let field_key = DynamicFieldKey(
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            key,
+            AccumulatorKey::get_type_tag(&[type_tag.clone()]),
+        );
+        let field = field_key.into_field(value).unwrap();
+        let move_object = field
+            .into_move_object_unsafe_for_testing(SequenceNumber::new())
+            .unwrap();
+
+        Object::new_move(
+            move_object,
+            Owner::ObjectOwner(SUI_ACCUMULATOR_ROOT_ADDRESS.into()),
+            TransactionDigest::genesis_marker(),
+        )
     }
 }
 
-/// Given an account object, return the balance of the account.
-/// This is a temporary function for testing.
-pub fn get_balance_from_account_for_testing(account_object: &Object) -> u64 {
-    // TODO(address-balances): Implement this properly.
-    GasCoin::try_from(account_object).unwrap().value()
-}
-
 pub fn update_account_balance_for_testing(account_object: &mut Object, balance_change: i128) {
-    let new_balance = get_balance_from_account_for_testing(account_object) as i128 + balance_change;
-    account_object
-        .data
-        .try_as_move_mut()
-        .unwrap()
-        .set_coin_value_unsafe(new_balance as u64);
-}
+    let current_balance_field = DynamicFieldObject::<AccumulatorKey>::new(account_object.clone())
+        .load_field::<U128>()
+        .unwrap();
 
-/// Create an account object for testing.
-/// This is a temporary function for testing.
-pub fn create_account_for_testing(
-    owner: SuiAddress,
-    type_param: WithdrawTypeParam,
-    balance: u64,
-) -> Object {
-    let type_tag = type_param.get_type_tag().unwrap();
-    let account_object_id = AccumulatorValue::get_field_id(owner, &type_tag).unwrap();
-    Object::with_id_owner_gas_for_testing(account_object_id, owner, balance)
+    let current_balance = current_balance_field.value.value;
+
+    assert!(current_balance <= i128::MAX as u128);
+    assert!(current_balance as i128 >= balance_change.abs());
+
+    let new_balance = U128 {
+        value: (current_balance as i128 + balance_change) as u128,
+    };
+
+    let new_field = serialize_dynamic_field(
+        &current_balance_field.id,
+        &current_balance_field.name,
+        new_balance,
+    )
+    .unwrap();
+
+    let move_object = account_object.data.try_as_move_mut().unwrap();
+    move_object.set_contents_unsafe(new_field);
 }

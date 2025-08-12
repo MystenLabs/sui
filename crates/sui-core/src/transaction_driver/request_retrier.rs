@@ -122,8 +122,6 @@ impl<A: Clone> RequestRetrier<A> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use sui_types::error::{SuiError, UserInputError};
 
     use crate::{
@@ -136,10 +134,7 @@ mod tests {
     pub(crate) fn get_authority_aggregator(
         committee_size: usize,
     ) -> AuthorityAggregator<MockAuthorityApi> {
-        let timeouts_config = TimeoutConfig {
-            serial_authority_request_interval: Duration::from_millis(50),
-            ..Default::default()
-        };
+        let timeouts_config = TimeoutConfig::default();
         AuthorityAggregatorBuilder::from_committee_size(committee_size)
             .with_timeouts_config(timeouts_config)
             .build_mock_authority_aggregator()

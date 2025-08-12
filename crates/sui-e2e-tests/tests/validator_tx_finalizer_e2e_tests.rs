@@ -20,7 +20,7 @@ async fn test_validator_tx_finalizer_fastpath_tx() {
         .await
         .transfer_sui(None, dbg_addr(1))
         .build();
-    let tx = cluster.sign_transaction(&tx_data);
+    let tx = cluster.sign_transaction(&tx_data).await;
     let tx_digest = *tx.digest();
     // Only broadcast to get a certificate, but do not execute it.
     cluster
@@ -60,7 +60,7 @@ async fn test_validator_tx_finalizer_consensus_tx() {
         .await
         .call_counter_increment(package.0, counter.0, counter.1)
         .build();
-    let tx = cluster.sign_transaction(&tx_data);
+    let tx = cluster.sign_transaction(&tx_data).await;
     let tx_digest = *tx.digest();
     // Only broadcast to get a certificate, but do not execute it.
     cluster
@@ -98,13 +98,13 @@ async fn test_validator_tx_finalizer_equivocation() {
         .await
         .transfer_sui(None, dbg_addr(1))
         .build();
-    let tx1 = cluster.sign_transaction(&tx_data1);
+    let tx1 = cluster.sign_transaction(&tx_data1).await;
     let tx_data2 = cluster
         .test_transaction_builder()
         .await
         .transfer_sui(None, dbg_addr(2))
         .build();
-    let tx2 = cluster.sign_transaction(&tx_data2);
+    let tx2 = cluster.sign_transaction(&tx_data2).await;
     let tx_digest1 = *tx1.digest();
     let tx_digest2 = *tx2.digest();
     let auth_agg = cluster.authority_aggregator();

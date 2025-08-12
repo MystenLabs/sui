@@ -1,6 +1,7 @@
 ---
 title: Sponsored Transactions
 description: Sponsored transactions are a primitive on the Sui blockchain that enable the execution of a transaction where you pay the gas fee for your users transactions.
+keywords: [ sponsored, sponsor a transaction, sponsored transactions, pay for a transaction, app-specific sponsorship, wildcard sponsorship, sponsored transaction flow, sponsor an app, sponsor a transaction flow, pay for gas fee, pay another user's gas fee, pay another gas fee ]
 ---
 
 A transaction on Sui takes a payment to execute. The payment, also known as gas, is a list of `0x2::coin::Coin<0x2::sui::Sui>` objects. Although gas is a critical piece in Sui tokenomics, it sometimes adds challenges when new Web3 users start to navigate on Sui.
@@ -11,9 +12,9 @@ Sponsored transactions are a primitive on the Sui blockchain that enable the exe
 
 In a sponsored transaction there are three roles: the user, the gas station, and the sponsor.
 
-* The user is the entity who wants to execute a transaction. 
-* The gas station is the entity that fulfills the sponsorship request for the user's transaction by providing the gas payment they own.
-* The sponsor is entity that funds the gas station for its operations.
+- The user is the entity who wants to execute a transaction. 
+- The gas station is the entity that fulfills the sponsorship request for the user's transaction by providing the gas payment they own.
+- The sponsor is entity that funds the gas station for its operations.
 
 It's not uncommon for the gas station and the sponsor to be the same entity. For example, a web3 gaming studio could run its own gas station to sponsor users with real free-to-play gaming experiences at its user acquisition stage. Because it's not always trivial to maintain a gas station for teams of any size, that gaming studio could also leverage third-party gas stations to sponsor transactions they want to promote. 
 

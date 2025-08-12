@@ -141,7 +141,6 @@ pub async fn init_local_authorities_with_genesis(
     let timeouts = TimeoutConfig {
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
-        serial_authority_request_interval: Duration::from_secs(1),
     };
     AuthorityAggregatorBuilder::from_genesis(genesis)
         .with_timeouts_config(timeouts)
