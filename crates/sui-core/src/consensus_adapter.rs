@@ -867,8 +867,9 @@ impl ConsensusAdapter {
                     }
 
                     match status_waiter.await {
-                        Ok(BlockStatus::Sequenced(_)) => {
-                            tracing::Span::current().record("status", "sequenced");
+                        Ok(status @ BlockStatus::Sequenced(_)) => {
+                            tracing::Span::current()
+                                .record("status", tracing::field::debug(&status));
                             self.metrics
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "sequenced"])
@@ -879,8 +880,9 @@ impl ConsensusAdapter {
                             );
                             break;
                         }
-                        Ok(BlockStatus::GarbageCollected(_)) => {
-                            tracing::Span::current().record("status", "garbage_collected");
+                        Ok(status @ BlockStatus::GarbageCollected(_)) => {
+                            tracing::Span::current()
+                                .record("status", tracing::field::debug(&status));
                             self.metrics
                                 .sequencing_certificate_status
                                 .with_label_values(&[tx_type, "garbage_collected"])
