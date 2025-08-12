@@ -13968,6 +13968,7 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-framework",
+ "sui-framework-snapshot",
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-json-rpc-types",

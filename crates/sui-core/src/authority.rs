@@ -4786,8 +4786,12 @@ impl AuthorityState {
             let modules = system_package.modules().to_vec();
             // In simtests, we could override the current built-in framework packages.
             #[cfg(msim)]
-            let modules = framework_injection::get_override_modules(&system_package.id, self.name)
-                .unwrap_or(modules);
+            let modules =
+                match framework_injection::get_override_modules(&system_package.id, self.name) {
+                    Some(overrides) if overrides.is_empty() => continue,
+                    Some(overrides) => overrides,
+                    None => modules,
+                };
 
             let Some(obj_ref) = sui_framework::compare_system_package(
                 &self.get_object_store(),
@@ -5990,6 +5994,25 @@ pub mod framework_injection {
         OVERRIDE.with(|bs| {
             bs.borrow_mut()
                 .insert(package_id, PackageOverrideConfig::PerValidator(func))
+        });
+    }
+
+    pub fn set_system_packages(packages: Vec<SystemPackage>) {
+        OVERRIDE.with(|bs| {
+            let mut new_packages_not_to_include = BuiltInFramework::all_package_ids()
+                .into_iter()
+                .collect::<BTreeSet<_>>();
+            for pkg in &packages {
+                new_packages_not_to_include.remove(&pkg.id);
+            }
+            for pkg in packages {
+                bs.borrow_mut()
+                    .insert(pkg.id, PackageOverrideConfig::Global(pkg.modules()));
+            }
+            for empty_pkg in new_packages_not_to_include {
+                bs.borrow_mut()
+                    .insert(empty_pkg, PackageOverrideConfig::Global(vec![]));
+            }
         });
     }
 
