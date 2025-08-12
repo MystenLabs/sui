@@ -10,29 +10,34 @@ use std::time::Duration;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
-    /// Given a pipeline, return the committer watermark from the `Store`. This is used by the
-    /// indexer on startup to determine which checkpoint to resume processing from.
+    /// Given a pipeline and optional indexer task, return the committer watermark from the `Store`.
+    /// The indexer fetches this value for each pipeline added to determine which checkponit to
+    /// resume processing from. By default, there is no task name.
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&'static str>,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
-    /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
-    /// to determine the new `reader_lo` or inclusive lower bound of available data.
+    /// Given a pipeline and optional indexer task, return the reader watermark from the database.
+    /// This is used by the indexer to determine the new `reader_lo` or inclusive lower bound of
+    /// available data. By default, there is no task name.
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&'static str>,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
 
-    /// Get the bounds for the region that the pruner is allowed to prune, and the time in
-    /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
-    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
-    /// `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has passed. This
-    /// minimizes the possibility for the pruner to delete data still expected by inflight read
-    /// requests.
+    /// For some pipeline and optional indexer task, get the bounds for the region that the pruner
+    /// is allowed to prune, and the time in milliseconds the pruner must wait before it can begin
+    /// pruning data. The pruner is allowed to prune the region between the returned `pruner_hi`
+    /// (inclusive) and `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has
+    /// passed. This minimizes the possibility for the pruner to delete data still expected by
+    /// inflight read requests. By default, there is no task name.
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&'static str>,
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>>;
 
@@ -41,6 +46,7 @@ pub trait Connection: Send {
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&'static str>,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 
@@ -60,6 +66,7 @@ pub trait Connection: Send {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&'static str>,
         reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
@@ -67,6 +74,7 @@ pub trait Connection: Send {
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
+        task: Option<&'static str>,
         pruner_hi: u64,
     ) -> anyhow::Result<bool>;
 }

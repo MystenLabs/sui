@@ -60,6 +60,11 @@ pub struct IndexerArgs {
 }
 
 pub struct Indexer<S: Store> {
+    /// An optional task name configured on the indexer to support running one-off or temporary
+    /// tasks, like backfills. By default, there is no task name. If one is provided, the indexer
+    /// will write watermark rows for pipeline = `pipeline` and task = `task`.
+    task: Option<&'static str>,
+
     /// The storage backend that the indexer uses to write and query indexed data. This
     /// generic implementation allows for plugging in different storage solutions that implement the
     /// `Store` trait.
@@ -72,6 +77,7 @@ pub struct Indexer<S: Store> {
     ingestion_service: IngestionService,
 
     /// Optional override of the checkpoint lowerbound.
+    /// TODO: more doc comments on how this is used/ interacted with
     first_checkpoint: Option<u64>,
 
     /// Optional override of the checkpoint upperbound.
@@ -113,6 +119,11 @@ impl<S: Store> Indexer<S> {
     ///
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
+    ///
+    /// Optionally, a task name can be provided to the indexer to support running one-off or
+    /// temporary tasks, like backfills. By default, there is no task name. In this scenario, the
+    /// indexer will write watermark rows for pipeline = `pipeline`. If one is provided, the indexer
+    /// will write watermark rows for pipeline = `pipeline` and task = `task`.
     pub async fn new(
         store: S,
         indexer_args: IndexerArgs,
@@ -120,6 +131,7 @@ impl<S: Store> Indexer<S> {
         ingestion_config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
+        task: Option<&'static str>,
         cancel: CancellationToken,
     ) -> Result<Self> {
         let IndexerArgs {
@@ -139,6 +151,7 @@ impl<S: Store> Indexer<S> {
         )?;
 
         Ok(Self {
+            task,
             store,
             metrics,
             ingestion_service,
@@ -215,6 +228,7 @@ impl<S: Store> Indexer<S> {
             config,
             self.skip_watermark,
             self.store.clone(),
+            self.task,
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
@@ -321,9 +335,19 @@ impl<S: Store> Indexer<S> {
             .context("Failed to establish connection to store")?;
 
         let watermark = conn
-            .committer_watermark(P::NAME)
+            .committer_watermark(P::NAME, self.task)
             .await
-            .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
+            .with_context(|| {
+                if let Some(task) = self.task {
+                    format!(
+                        "Failed to get watermark for pipeline {} of task {}",
+                        P::NAME,
+                        task
+                    )
+                } else {
+                    format!("Failed to get watermark for pipeline {}", P::NAME)
+                }
+            })?;
 
         let expected_first_checkpoint = watermark
             .as_ref()
@@ -391,6 +415,7 @@ impl<T: TransactionalStore> Indexer<T> {
             watermark,
             config,
             self.store.clone(),
+            self.task,
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),

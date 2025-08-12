@@ -49,12 +49,17 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     store: H::Store,
+    task: Option<&'static str>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         if skip_watermark {
-            info!(pipeline = H::NAME, "Skipping commit watermark task");
+            info!(
+                pipeline = H::NAME,
+                task = task,
+                "Skipping commit watermark task"
+            );
             return;
         }
 
@@ -84,12 +89,17 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             &metrics.watermark_checkpoint_in_db,
         );
 
-        info!(pipeline = H::NAME, ?watermark, "Starting commit watermark");
+        info!(
+            pipeline = H::NAME,
+            task = task,
+            ?watermark,
+            "Starting commit watermark"
+        );
 
         loop {
             tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
+                    info!(pipeline = H::NAME, task = task, "Shutdown received");
                     break;
                 }
 
@@ -97,16 +107,18 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     if precommitted.len() > WARN_PENDING_WATERMARKS {
                         warn!(
                             pipeline = H::NAME,
+                            task = task,
                             pending = precommitted.len(),
                             "Pipeline has a large number of pending commit watermarks",
                         );
                     }
 
                     let Ok(mut conn) = store.connect().await else {
-                        warn!(pipeline = H::NAME, "Commit watermark task failed to get connection for DB");
+                        warn!(pipeline = H::NAME, task = task, "Commit watermark task failed to get connection for DB");
                         continue;
                     };
 
+                    // TODO: how do we report task to this metric?
                     // Check if the pipeline's watermark needs to be updated
                     let guard = metrics
                         .watermark_gather_latency
@@ -174,6 +186,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                     debug!(
                         pipeline = H::NAME,
+                        task = task,
                         elapsed_ms = elapsed * 1000.0,
                         watermark = watermark.checkpoint_hi_inclusive,
                         timestamp = %watermark.timestamp(),
@@ -191,6 +204,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         // for the first time, we should also update the low watermark.
                         match conn.set_committer_watermark(
                             H::NAME,
+                            task,
                             watermark,
                         ).await {
                             // If there's an issue updating the watermark, log it but keep going,
@@ -199,6 +213,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                                 let elapsed = guard.stop_and_record();
                                 error!(
                                     pipeline = H::NAME,
+                                    task = task,
                                     elapsed_ms = elapsed * 1000.0,
                                     ?watermark,
                                     "Error updating commit watermark: {e}",
@@ -235,7 +250,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                     }
 
                     if rx.is_closed() && rx.is_empty() {
-                        info!(pipeline = H::NAME, "Committer closed channel");
+                        info!(pipeline = H::NAME, task = task, "Committer closed channel");
                         break;
                     }
                 }
@@ -258,6 +273,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
         info!(
             pipeline = H::NAME,
+            task = task,
             ?watermark,
             "Stopping committer watermark task"
         );
@@ -334,6 +350,7 @@ mod tests {
             false,
             watermark_rx,
             store_clone,
+            None, // task
             metrics,
             cancel_clone,
         );

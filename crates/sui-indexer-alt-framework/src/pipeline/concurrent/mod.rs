@@ -191,6 +191,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     config: ConcurrentConfig,
     skip_watermark: bool,
     store: H::Store,
+    task: Option<&'static str>,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -251,6 +252,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         skip_watermark,
         watermark_rx,
         store.clone(),
+        task,
         metrics.clone(),
         cancel,
     );
@@ -258,6 +260,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
         store.clone(),
+        task,
         metrics.clone(),
         pruner_cancel.clone(),
     );
@@ -266,6 +269,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         handler,
         pruner_config,
         store,
+        task,
         metrics,
         pruner_cancel.clone(),
     );
@@ -401,6 +405,7 @@ mod tests {
                 config,
                 skip_watermark,
                 store.clone(),
+                None, // task
                 checkpoint_rx,
                 metrics,
                 cancel.clone(),

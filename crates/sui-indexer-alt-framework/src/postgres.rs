@@ -36,6 +36,7 @@ impl Indexer<Db> {
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
     pub async fn new_from_pg(
+        indexer_task: Option<&'static str>,
         database_url: Url,
         db_args: DbArgs,
         indexer_args: IndexerArgs,
@@ -68,6 +69,7 @@ impl Indexer<Db> {
             ingestion_config,
             metrics_prefix,
             registry,
+            indexer_task,
             cancel,
         )
         .await
@@ -96,6 +98,7 @@ impl Indexer<Db> {
             IngestionConfig::default(),
             None,
             &Registry::new(),
+            None, // indexer_task
             CancellationToken::new(),
         )
         .await
@@ -170,7 +173,7 @@ pub mod tests {
             let watermark = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
             assert!(conn
-                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
+                .set_committer_watermark(ConcurrentPipeline1::NAME, None, watermark)
                 .await
                 .unwrap());
         }
@@ -188,12 +191,12 @@ pub mod tests {
             let watermark1 = CommitterWatermark::new_for_testing(10);
             let mut conn = indexer.store().connect().await.unwrap();
             assert!(conn
-                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
+                .set_committer_watermark(ConcurrentPipeline1::NAME, None, watermark1)
                 .await
                 .unwrap());
             let watermark2 = CommitterWatermark::new_for_testing(20);
             assert!(conn
-                .set_committer_watermark(ConcurrentPipeline2::NAME, watermark2)
+                .set_committer_watermark(ConcurrentPipeline2::NAME, None, watermark2)
                 .await
                 .unwrap());
         }

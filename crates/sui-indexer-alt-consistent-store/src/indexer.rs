@@ -82,6 +82,7 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
             ingestion_config,
             metrics_prefix,
             registry,
+            None, // TODO: configure indexer_task
             cancel.child_token(),
         )
         .await
