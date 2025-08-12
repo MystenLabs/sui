@@ -153,7 +153,7 @@ where
         }
     }
 
-    #[instrument(level = "debug", skip_all, err, fields(tx_digest = ?tx_digest))]
+    #[instrument(level = "debug", skip_all, err)]
     async fn drive_transaction_once(
         &self,
         tx_digest: &TransactionDigest,
