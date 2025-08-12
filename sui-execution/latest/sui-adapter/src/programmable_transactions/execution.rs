@@ -390,6 +390,7 @@ mod checked {
             .expect("vector abilities are well formed")
     }
 
+    #[instrument(level = "trace", skip_all, fields(package = %move_call.package, module = %move_call.module, move_call = move_call.function))]
     fn execute_move_call_command<Mode: ExecutionMode>(
         context: &mut LinkedContext<'_, '_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
