@@ -39,48 +39,50 @@
 
 //# create-checkpoint
 
-//# run-graphql
-{ # Fetch checkpoints without filters
-  checkpoints(first: 10) {
-    pageInfo {
-      startCursor
-      endCursor
-      hasPreviousPage
-      hasNextPage
-    }
-    edges {
-      node {
-        sequenceNumber
-        digest
-        epoch {epochId}
-      }
-    }
-  }
-}
-
-//# run-graphql --cursors 4
-{ # Fetch checkpoints with, paginate from the back
-  checkpoints(last: 2, before: "@{cursor_0}") {
-    pageInfo {
-      startCursor
-      endCursor
-      hasPreviousPage
-      hasNextPage
-    }
-    edges {
-      node {
-        sequenceNumber
-        digest
-        epoch {epochId}
-      }
-    }
-  }
-}
 
 //# run-graphql
 {
-  # Fetch checkpoints at an epoch filter, should have next page
-  checkpoints(first: 5, filter: {atEpoch: 1}) {
+  # Test basic pagination without filters
+  allCheckpoints: checkpoints(first: 10) {
+    pageInfo { ...PageInfoFields }
+    edges {
+      node { ...CheckpointFields }
+    }
+  }
+  
+  # Test pagination with epoch filter
+  paginatedCheckpointsAtEpoch: checkpoints(first: 5, filter: {atEpoch: 1}) {
+    pageInfo { ...PageInfoFields }
+    edges {
+      node { ...CheckpointFields }
+    }
+  }
+  
+  # Test filtering for non-existent epoch
+  checkpointsAtNonExistentEpoch: checkpoints(first: 10, filter: {atEpoch: 5}) {
+    pageInfo { ...PageInfoFields }
+    edges {
+      node { ...CheckpointFields }
+    }
+  }
+}
+
+fragment CheckpointFields on Checkpoint {
+  sequenceNumber
+  digest
+  epoch {epochId}
+}
+
+fragment PageInfoFields on PageInfo {
+  startCursor
+  endCursor
+  hasPreviousPage
+  hasNextPage
+}
+
+//# run-graphql --cursors 4
+{
+  checkpointsBeforeCursorFromBack: checkpoints(last: 2, before: "@{cursor_0}") {
     pageInfo {
       startCursor
       endCursor
@@ -99,8 +101,7 @@
 
 //# run-graphql --cursors 0
 {
-  # Fetch checkpoints at an epoch that appear after a cursor
-  checkpoints(first: 10, after: "@{cursor_0}", filter: {atEpoch: 0}) {
+  checkpointsAtEpochAfterCursor: checkpoints(first: 10, after: "@{cursor_0}", filter: {atEpoch: 0}) {
     pageInfo {
       startCursor
       endCursor
@@ -119,8 +120,7 @@
 
 //# run-graphql  --cursors 3
 {
-  # Fetch checkpoints at an epoch that appear before a cursor
-  checkpoints(first: 10, filter: {atEpoch: 0}, before: "@{cursor_0}") {
+  checkpointsAtEpochBeforeCursor: checkpoints(first: 10, filter: {atEpoch: 0}, before: "@{cursor_0}") {
     pageInfo {
       startCursor
       endCursor
@@ -139,8 +139,7 @@
 
 //# run-graphql  --cursors 0 3
 {
-  # Fetch checkpoints at an epoch that appear between two cursors, page from the front
-  checkpoints(first: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
+  checkpointsAtEpochBetweenCursorsFromFront: checkpoints(first: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {
       startCursor
       endCursor
@@ -155,12 +154,7 @@
       }
     }
   }
-}
-
-//# run-graphql  --cursors 0 3
-{
-  # Fetch checkpoints at an epoch that appear between two cursors, page from the back
-  checkpoints(last: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
+  checkpointsAtEpochBetweenCursorsFromBack: checkpoints(last: 1, filter: {atEpoch: 0}, after: "@{cursor_0}", before: "@{cursor_1}") {
     pageInfo {
       startCursor
       endCursor
@@ -179,28 +173,7 @@
 
 //# run-graphql  --cursors 6
 {
-  # Fetch checkpoints at an epoch that appear before a cursor, page from the back
-  checkpoints(last: 10, filter: {atEpoch: 1}, before: "@{cursor_0}") {
-    pageInfo {
-      startCursor
-      endCursor
-      hasPreviousPage
-      hasNextPage
-    }
-    edges {
-      node {
-        sequenceNumber
-        digest
-        epoch {epochId}
-      }
-    }
-  }
-}
-
-//# run-graphql
-{
-  # Fetch checkpoints at nonexistent epoch
-  checkpoints(first: 10, filter: {atEpoch: 5}) {
+  checkpointsAtEpochBeforeCursorFromBack: checkpoints(last: 10, filter: {atEpoch: 1}, before: "@{cursor_0}") {
     pageInfo {
       startCursor
       endCursor
@@ -218,8 +191,9 @@
 }
 
 //# run-graphql --cursors 1
-{ # Test that before cursor is exclusive (should not include checkpoint 1)
-  checkpoints(first: 5, before: "@{cursor_0}") {
+{ 
+  # Test that before cursor is exclusive (should not include checkpoint 1)
+  checkpointsBeforeCp1: checkpoints(first: 5, before: "@{cursor_0}") {
     pageInfo {
       startCursor
       endCursor
@@ -235,8 +209,9 @@
 }
 
 //# run-graphql --cursors 0
-{ # Test before cursor at 0 (should handle saturating_sub gracefully)
-  checkpoints(first: 5, before: "@{cursor_0}") {
+{ 
+  # Test before cursor at 0 (should handle saturating_sub gracefully)
+  checkpointsBeforeCp0: checkpoints(first: 5, before: "@{cursor_0}") {
     pageInfo {
       startCursor
       endCursor
