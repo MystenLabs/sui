@@ -54,7 +54,7 @@ async fn pay_with_gas_budget(budget: u64) -> TransactionIdentifierResponseResult
     let client = test_cluster.wallet.get_client().await.unwrap();
     let keystore = &test_cluster.wallet.config.keystore;
 
-    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone(), &test_cluster).await;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
