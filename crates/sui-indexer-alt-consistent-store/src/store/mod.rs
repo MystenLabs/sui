@@ -152,6 +152,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
+        _task: Option<&'static str>,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
         Ok(self.store.0.db.watermark(pipeline)?.map(Into::into))
     }
@@ -159,6 +160,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
+        _task: Option<&'static str>,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         self.watermark = Some((pipeline, watermark.into()));
@@ -168,6 +170,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn reader_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
     ) -> anyhow::Result<Option<store::ReaderWatermark>> {
         Ok(None)
     }
@@ -175,6 +178,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn pruner_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
         _delay: Duration,
     ) -> anyhow::Result<Option<store::PrunerWatermark>> {
         Ok(None)
@@ -183,6 +187,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn set_reader_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
         _reader_lo: u64,
     ) -> anyhow::Result<bool> {
         bail!("Pruning not supported by this store");
@@ -191,6 +196,7 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
     async fn set_pruner_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
         _pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         bail!("Pruning not supported by this store");
@@ -271,8 +277,12 @@ mod tests {
             .transaction(move |c| {
                 async move {
                     mutator(c.store.schema(), &mut c.batch)?;
-                    c.set_committer_watermark(pipeline, CommitterWatermark::new_for_testing(cp))
-                        .await?;
+                    c.set_committer_watermark(
+                        pipeline,
+                        None,
+                        CommitterWatermark::new_for_testing(cp),
+                    )
+                    .await?;
                     Ok(())
                 }
                 .scope_boxed()
