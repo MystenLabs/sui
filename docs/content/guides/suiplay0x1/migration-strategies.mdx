@@ -1,16 +1,18 @@
 ---
 title: Broader Sui Ecosystem Support
+description: SuiPlay0X1 is part of the Sui gaming ecosystem. Users can migrate accounts between on-device and off-device versions of a game. 
+keywords: [ suiplayx01, playtron, sui dapp kit, off-device users, on-device users, sui gaming, on-device gaming, off-device gaming, playtron wallet, off-device play, on-device play, dapp kit, migrate off-device to on-device, migrate on-device to off-device ]
 ---
 
 {@include: ../../snippets/suiplay.mdx}
 
-The SuiPlay0x1 is one part of a larger ecosystem of Sui gaming. Users might play your game for the first time on the device, and later decide to continue playing your game on PC. Or they might have already played your game before on PC with their own mnemonic wallet, and want to continue playing on the device.
+The SuiPlay0X1 is one part of a larger ecosystem of Sui gaming. Users might play your game for the first time on the device, and later decide to continue playing your game on PC. Or, they might have already played your game before on PC with their own mnemonic wallet and want to continue playing on the device.
 
 As a result, it’s important to consider the different possible migration flows for your game both for new users and existing ones.
 
-## On device ⇒ off device
+## On-device ⇒ off-device
 
-If a user starts playing your game on device first, and you have added support using dApp Kit, then their Playtron wallet is their primary wallet. Off-device play is automatically supported with the same wallet.
+If a user starts playing your game on-device first, and you have added support using dApp Kit, then their Playtron wallet is their primary wallet. Off-device play is automatically supported with the same wallet.
 
 **Automatic transition**
 
@@ -30,9 +32,9 @@ The Playtron wallet is portable and can connect to any dApp using the Sui dApp K
 - No manual transfer required.
 - Users can connect their Playtron wallet to marketplaces, DeFi protocols, and other dApps that support Playtron wallet.
 
-## Off device ⇒ on device
+## Off-device ⇒ on-device
 
-If a user starts playing your game off device first, their primary wallet depends on what wallet architecture you choose in your game design (custodial, self-custody, or game-specific zkLogin). Depending on what kind of wallet interactions your game requires during gameplay, you have different options for supporting cross-device gameplay. To learn more about wallet options, see [Wallet Integration Options](./migration-strategies.mdx).
+If a user starts playing your game off-device first, their primary wallet depends on what wallet architecture you choose in your game design (custodial, self-custody, or game-specific zkLogin). Depending on what kind of wallet interactions your game requires during gameplay, you have different options for supporting cross-device gameplay. To learn more about wallet options, see [Wallet Integration Options](./migration-strategies.mdx).
 
 ### Read-only asset access
 
@@ -71,6 +73,6 @@ If you are using a game-specific zkLogin wallet, to use the companion web app re
 
 - [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
 - [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
-- [SuiPlay0x1 Discord](https://discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
+- [SuiPlay0X1 Discord](https://discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
 - [Companion web application](https://wallet.playtron.one) (in development): Support linking the Playtron wallet to other self-custodied wallets using Sui Link, enabling read-access of associated wallets while on the device.
 - [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect): With Enoki Connect, users can use their dApp-specific accounts across different dApps, enabling a more unified and consistent experience.
