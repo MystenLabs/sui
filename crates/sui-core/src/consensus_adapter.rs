@@ -965,7 +965,7 @@ impl ConsensusAdapter {
             .inc();
     }
 
-    #[instrument(name = "ConsensusAdapter::submit_inner", level = "debug", skip_all)]
+    #[instrument(name = "ConsensusAdapter::submit_inner", level = "trace", skip_all)]
     async fn submit_inner(
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
