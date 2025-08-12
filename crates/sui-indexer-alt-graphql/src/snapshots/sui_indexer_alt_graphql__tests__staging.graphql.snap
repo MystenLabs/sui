@@ -318,7 +318,7 @@ type CoinDenyListStateCreateTransaction {
 """
 A single command in the programmable transaction.
 """
-union Command = MoveCallCommand
+union Command = MoveCallCommand | OtherCommand
 
 type CommandConnection {
 	"""
@@ -709,6 +709,16 @@ type FeatureFlag {
 
 
 """
+Access to the gas inputs, after they have been smashed into one coin. The gas coin can only be used by reference, except for with `TransferObjectsTransaction` that can accept it by value.
+"""
+type GasCoin {
+	"""
+	Placeholder field (gas coin has no additional data)
+	"""
+	_: Boolean
+}
+
+"""
 Summary of charges from transactions.
 
 Storage is charged in three parts -- `storage_cost`, `-storage_rebate`, and `non_refundable_storage_fee` -- independently of `computation_cost`.
@@ -821,15 +831,31 @@ interface IObject {
 	previousTransaction: Transaction
 }
 
+type Input {
+	"""
+	The index of the input.
+	"""
+	ix: Int
+}
 
-"""
-A call to a Move function.
-"""
+
 type MoveCallCommand {
 	"""
-	Placeholder field
+	The storage ID of the package the function being called is defined in.
 	"""
-	_: Boolean
+	package: SuiAddress
+	"""
+	The name of the module the function being called is defined in.
+	"""
+	module: String
+	"""
+	The name of the function being called.
+	"""
+	functionName: String
+	"""
+	The actual function parameters passed in for this move call.
+	"""
+	arguments: [TransactionArgument!]!
 }
 
 """
@@ -1090,6 +1116,23 @@ input ObjectKey {
 	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
 	"""
 	atCheckpoint: UInt53
+}
+
+"""
+Placeholder for unimplemented command types
+"""
+type OtherCommand {
+	"""
+	Placeholder field for unimplemented commands
+	"""
+	_: Boolean
+}
+
+"""
+A Move object, either immutable, or owned mutable.
+"""
+type OwnedOrImmutable {
+	object: Object
 }
 
 """
@@ -1380,6 +1423,13 @@ type ReadConsensusStreamEnded {
 	sequenceNumber: UInt53
 }
 
+"""
+A Move object that can be received in this transaction.
+"""
+type Receiving {
+	object: Object
+}
+
 type SafeMode {
 	"""
 	Whether safe mode was used for the last epoch change.
@@ -1491,6 +1541,26 @@ type ServiceConfig {
 	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
 	"""
 	maxMoveValueDepth: Int
+}
+
+"""
+A Move object that's shared.
+"""
+type SharedInput {
+	"""
+	The address of the shared object.
+	"""
+	address: SuiAddress
+	"""
+	The version that this object was shared at.
+	"""
+	initialSharedVersion: UInt53
+	"""
+	Controls whether the transaction block can reference the shared object as a mutable reference or by value.
+	
+	This has implications for scheduling: Transactions that just read shared objects at a certain version (mutable = false) can be executed concurrently, while transactions that write shared objects (mutable = true) must be executed serially with respect to each other.
+	"""
+	mutable: Boolean
 }
 
 """
@@ -1627,6 +1697,11 @@ type Transaction {
 	signatures: [UserSignature!]!
 }
 
+"""
+An argument to a programmable transaction command.
+"""
+union TransactionArgument = GasCoin | Input | TxResult
+
 type TransactionConnection {
 	"""
 	Information to aid in pagination.
@@ -1742,7 +1817,7 @@ input TransactionFilter {
 """
 Input argument to a Programmable Transaction Block (PTB) command.
 """
-union TransactionInput = Pure
+union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving
 
 type TransactionInputConnection {
 	"""
@@ -1777,6 +1852,20 @@ type TransactionInputEdge {
 Different types of transactions that can be executed on the Sui network.
 """
 union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction
+
+"""
+The result of another command.
+"""
+type TxResult {
+	"""
+	The index of the command that produced this result.
+	"""
+	cmd: Int
+	"""
+	For nested results, the index within the result.
+	"""
+	ix: Int
+}
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.

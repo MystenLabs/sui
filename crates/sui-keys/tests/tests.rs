@@ -330,3 +330,39 @@ fn alias_names(aliases: Vec<&Alias>) -> Vec<&str> {
         .map(|alias| alias.alias.as_str())
         .collect()
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn keystore_file_permissions_test() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path).unwrap());
+    keystore
+        .generate(None, GenerateOptions::Default)
+        .await
+        .unwrap();
+
+    let metadata = fs::metadata(&keystore_path).unwrap();
+    let mode = metadata.permissions().mode();
+    assert_eq!(
+        mode & 0o777,
+        0o600,
+        "Keystore file should have 0o600 permissions"
+    );
+
+    keystore
+        .generate(None, GenerateOptions::Default)
+        .await
+        .unwrap();
+
+    let metadata_after = fs::metadata(&keystore_path).unwrap();
+    let mode_after = metadata_after.permissions().mode();
+    assert_eq!(
+        mode_after & 0o777,
+        0o600,
+        "Keystore file permissions should remain 0o600 after operations"
+    );
+}

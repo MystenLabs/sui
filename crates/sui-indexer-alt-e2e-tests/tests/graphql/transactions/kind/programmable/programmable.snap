@@ -39,8 +39,7 @@ Response: {
           },
           "nodes": [
             {
-              "__typename": "Pure",
-              "bytes": "VE9ETzogVW5zdXBwb3J0ZWQgaW5wdXQgdHlwZQ=="
+              "__typename": "SharedInput"
             },
             {
               "__typename": "Pure",
@@ -60,15 +59,14 @@ Response: {
           "nodes": [
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "increment"
             },
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "add"
             },
             {
-              "__typename": "MoveCallCommand",
-              "_": null
+              "__typename": "OtherCommand"
             }
           ]
         }
@@ -92,8 +90,7 @@ Response: {
           },
           "nodes": [
             {
-              "__typename": "Pure",
-              "bytes": "VE9ETzogVW5zdXBwb3J0ZWQgaW5wdXQgdHlwZQ=="
+              "__typename": "SharedInput"
             },
             {
               "__typename": "Pure",
@@ -109,11 +106,11 @@ Response: {
           "nodes": [
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "increment"
             },
             {
               "__typename": "MoveCallCommand",
-              "_": null
+              "functionName": "add"
             }
           ]
         }

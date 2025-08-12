@@ -10,6 +10,8 @@ use anyhow::{anyhow, bail, ensure, Context};
 use async_trait::async_trait;
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
+#[cfg(unix)]
+use colored::Colorize as _;
 use rand::{rngs::StdRng, SeedableRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -17,7 +19,10 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use std::fs;
 use std::io::BufReader;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair_from_rng;
@@ -391,6 +396,16 @@ impl AccountKeystore for FileBasedKeystore {
 impl FileBasedKeystore {
     pub fn load_or_create(path: &PathBuf) -> Result<Self, anyhow::Error> {
         let keys = if path.exists() {
+            #[cfg(unix)]
+            let _ = set_reduced_file_permissions(path).inspect_err(|error| {
+                eprintln!(
+                    "[{}]: while attempting to ensure reduced file permissions on '{}'. Cannot set \
+                    permissions for keystore file. Error: {error}",
+                    "warning".bold().yellow(),
+                    path.display(),
+                );
+            });
+
             let reader =
                 BufReader::new(std::fs::File::open(path).with_context(|| {
                     format!("Cannot open the keystore file: {}", path.display())
@@ -520,9 +535,22 @@ impl FileBasedKeystore {
             .with_context(|| format!("Cannot serialize keystore to file: {}", path.display()))?;
             let keystore_path = path.clone();
             // no reactor for tokio::fs::write in simtest, so we use spawn_blocking
-            tokio::task::spawn_blocking(move || std::fs::write(keystore_path, store))
-                .await?
-                .with_context(|| format!("Cannot write keystore to file: {}", path.display()))?;
+            tokio::task::spawn_blocking(move || {
+                let ret = std::fs::write(&keystore_path, store);
+                #[cfg(unix)]
+                if ret.is_ok() {
+                    let _ = set_reduced_file_permissions(&keystore_path).inspect_err(|error| {
+                        eprintln!(
+                            "While attempting to set reduced file permissions on '{}'. Cannot set \
+                                permissions for keystore file. Error: {error}",
+                            keystore_path.display()
+                        );
+                    });
+                }
+                ret
+            })
+            .await?
+            .with_context(|| format!("Cannot write keystore to file: {}", path.display()))?;
         }
         Ok(())
     }
@@ -536,6 +564,22 @@ impl FileBasedKeystore {
     pub fn key_pairs(&self) -> Vec<&SuiKeyPair> {
         self.keys.values().collect()
     }
+}
+
+#[cfg(unix)]
+fn set_reduced_file_permissions(path: impl AsRef<Path>) -> Result<(), anyhow::Error> {
+    let path = path.as_ref();
+    let metadata = fs::metadata(path)?;
+    let mode = metadata.permissions().mode();
+    if mode & 0o177 != 0 {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).with_context(|| {
+            format!(
+                "Cannot set permissions for keystore file: {}.",
+                path.display(),
+            )
+        })?;
+    }
+    Ok(())
 }
 
 #[derive(Default, Serialize, Deserialize)]

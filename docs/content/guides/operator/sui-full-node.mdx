@@ -1,6 +1,7 @@
 ---
 title: Sui Full Node Configuration
 description: Operate a Sui Full node to validate blockchain activities, like transactions, checkpoints, and epoch changes.  
+keywords: [ fullnode configuration, full node configuration, sui full nodes, state synchronization, state sync, full node architecture, node hardware requirements, node software requirements, grpc, starting a full node, running a full node ]
 ---
 
 :::info
@@ -83,7 +84,7 @@ cmake
 
 To serve the [gRPC API in beta](/concepts/grpc-overview.mdx), you must enable it on your Full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your Full node may not be able to handle other traffic — including the [JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your Full node's hardware and software configuration.
 
-Enable gRPC indexing on your Full node by adding the following entry to the fullnode.yaml configuration:
+Enable gRPC indexing on your Full node by adding the following entry to the `fullnode.yaml` configuration:
 
 ```sh
 
@@ -92,7 +93,7 @@ rpc:
 
 ```
 
-Running gRPC alongside JSON-RPC increases your Full node’s storage usage. While this is expected in the short term, you can reclaim this storage in the future by disabling JSON-RPC after it is phased out. All applications must gradually migrate to gRPC or [GraphQL RPC](/concepts/graphql-rpc.mdx) (which will internally rely on gRPC). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to applications. Add the following to the fullnode.yaml configuration of your Full node to selectively disable JSON-RPC on it:
+Running gRPC alongside JSON-RPC increases your Full node’s storage usage. While this is expected in the short term, you can reclaim this storage in the future by disabling JSON-RPC after it is phased out. All applications must gradually migrate to gRPC or [GraphQL RPC](/concepts/graphql-rpc.mdx) (which will internally rely on gRPC). You can also run gRPC and JSON-RPC on separate nodes to optimize resource usage and provide a performant and resilient RPC experience to applications. Add the following to the `fullnode.yaml` configuration of your Full node to selectively disable JSON-RPC on it:
 
 ```sh
 
@@ -100,7 +101,7 @@ enable-index-processing: false
 
 ```
 
-You can configure the retention window for the gRPC index on your Full node by adding the following to its fullnode.yaml configuration:
+You can configure the retention window for the gRPC index on your Full node by adding the following to its `fullnode.yaml` configuration:
 
 ```sh
 
@@ -215,7 +216,7 @@ When you are ready to run `sui-node` in your production environment, you can set
 
     </Tabs>
 1. Optional: Set up the [Archival Fallback](./archives.mdx), which allows you to sync checkpoints if you fall behind the network's `seed-peers`.
-1. Optional: Skip this step to accept the default paths to resources. Edit the fullnode.yaml file to use custom paths.
+1. Optional: Skip this step to accept the default paths to resources. Edit the `fullnode.yaml` file to use custom paths.
 1. Update the `db-path` field with the path to the Full node database.
     `db-path: "/db-files/sui-fullnode"`
 1. Update the `genesis-file-location` with the path to genesis.blob.
@@ -247,7 +248,7 @@ If you receive the following error:
 panicked at error binding to 0.0.0.0:9184: error creating server listener: Address already in use (os error 98)
 ```
 
-Then update the metrics address in your fullnode.yaml file to use port `9180`.
+Then update the metrics address in your `fullnode.yaml` file to use port `9180`.
 
 ```sh
 metrics-address: "0.0.0.0:9180"

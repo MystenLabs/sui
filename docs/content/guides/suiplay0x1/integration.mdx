@@ -1,5 +1,7 @@
 ---
 title: SDK Integrations
+description: Integrate with SuiPlay0X1 using the Playtron GameOS SDK. 
+keywords: [ playtron, playtron gameOS, gameOS SDK, C++, C#, node.js, dapp kit, sui dapp kit, self-custody wallets, playtron wallets, gaming, suiplay0x1 ]
 ---
 
 {@include: ../../snippets/suiplay.mdx}
@@ -12,13 +14,13 @@ For on device game integration, you need the [Playtron GameOS SDK](https://githu
 
 The Playtron GameOS SDK repository contains the installation and initialization steps to begin development. The repository also contains examples on how to use the SDK in C++, C#, and Node.js environments. The .dll build files needed to compile the C++ code are provided. For the C# and Node.js examples, you can install the necessary dependencies from the respective package manager.
 
-The Paytron GameOS SDK provides automatic wallet access with the following benefits:
+The Playtron GameOS SDK provides automatic wallet access with the following benefits:
 
 - Users already have a Playtron wallet through their Playtron account.
 - No additional wallet setup required on device.
 - Games can immediately access wallet functions through the SDK.
 
-## Off device integration
+## Off-device integration
 
 For off-device integration, use the [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). By integrating the Sui dApp Kit, your game can continue to use the Playtron zkLogin wallet when not running directly on the SuiPlay0x1 device. This is useful if your game is available on the web, desktop, or mobile devices.
 
@@ -38,5 +40,5 @@ If you're unable to run TypeScript, you can always support sending assets from y
 - [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub.
 - [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): The Sui dApp Kit is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
 - [SuiPlay0x1 Discord](https://discord.gg/suiplay): Follow announcements and connect with the community on the Discord channel for SuiPlay0X1.
-- [Companion web application](https://wallet.playtron.one) (in development): Support linking the Playtron wallet to other self-custodied wallets using Sui Link, enabling read-access of associated wallets while on the device.
+- [Companion web application](https://wallet.playtron.one) (in development): Support linking the Playtron wallet to other self-custody wallets using Sui Link, enabling read-access of associated wallets while on the device.
 - [Enoki Connect](https://docs.enoki.mystenlabs.com/enoki-connect): With Enoki Connect, users can use their dApp-specific accounts across different dApps, enabling a more unified and consistent experience.
