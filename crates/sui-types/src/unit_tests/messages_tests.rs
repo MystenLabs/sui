@@ -1054,7 +1054,7 @@ fn test_consensus_commit_prologue_transaction() {
         SharedInputObject {
             id: SUI_CLOCK_OBJECT_ID,
             initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         },
     );
     assert!(tx.is_system_tx());
@@ -1083,7 +1083,7 @@ fn test_consensus_commit_prologue_v2_transaction() {
         SharedInputObject {
             id: SUI_CLOCK_OBJECT_ID,
             initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         },
     );
     assert!(tx.is_system_tx());
@@ -1113,7 +1113,7 @@ fn test_consensus_commit_prologue_v3_transaction() {
         SharedInputObject {
             id: SUI_CLOCK_OBJECT_ID,
             initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-            mutable: true,
+            mutability: SharedObjectMutability::Mutable,
         },
     );
     assert!(tx.is_system_tx());
@@ -1212,7 +1212,7 @@ fn test_move_input_objects() {
     rem!(InputObjectKind::SharedMoveObject {
         id: shared.0,
         initial_shared_version: shared.1,
-        mutable: true,
+        mutability: SharedObjectMutability::Mutable,
     });
     rem!(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
     assert!(input_objects.is_empty());

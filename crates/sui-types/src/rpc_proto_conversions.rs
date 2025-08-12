@@ -2332,6 +2332,10 @@ impl From<crate::transaction::CallArg> for Input {
                     message.digest = Some(digest.to_string());
                     InputKind::Receiving
                 }
+                O::SharedObjectV2 { .. } => {
+                    // TODO(address-balances)
+                    todo!()
+                }
             },
             //TODO
             I::FundsWithdrawal(_) => InputKind::Unknown,
