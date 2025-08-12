@@ -48,9 +48,7 @@ use tokio::sync::{oneshot, Semaphore, SemaphorePermit};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::{self};
-use tracing::instrument;
-use tracing::Instrument;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, debug_span, info, instrument, trace, warn, Instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointStore;
@@ -715,7 +713,7 @@ impl ConsensusAdapter {
     }
 
     #[allow(clippy::option_map_unit_fn)]
-    #[instrument(level="trace", skip_all, fields(tx_count = ?transactions.len(), tx_type = tracing::field::Empty, tx_keys = tracing::field::Empty, status = tracing::field::Empty, consensus_positions = tracing::field::Empty))]
+    #[instrument(name="ConsensusAdapter::submit_and_wait_inner", level="trace", skip_all, fields(tx_count = ?transactions.len(), tx_type = tracing::field::Empty, tx_keys = tracing::field::Empty, submit_status = tracing::field::Empty, consensus_positions = tracing::field::Empty))]
     async fn submit_and_wait_inner(
         self: Arc<Self>,
         transactions: Vec<ConsensusTransaction>,
@@ -976,6 +974,7 @@ impl ConsensusAdapter {
             .inc();
     }
 
+    #[instrument(name = "ConsensusAdapter::submit_inner", level = "debug", skip_all)]
     async fn submit_inner(
         self: &Arc<Self>,
         transactions: &[ConsensusTransaction],
@@ -988,9 +987,11 @@ impl ConsensusAdapter {
         let mut retries: u32 = 0;
 
         let (consensus_positions, status_waiter) = loop {
+            let span = debug_span!("client_submit");
             match self
                 .consensus_client
                 .submit(transactions, epoch_store)
+                .instrument(span)
                 .await
             {
                 Err(err) => {
