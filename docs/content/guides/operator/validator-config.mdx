@@ -1,6 +1,7 @@
 ---
 title: Sui Validator Node Configuration
 description: Learn how to set up, configure, and manage a Sui Validator node, including staking, reference gas price, and tallying rules.
+keywords: [ sui validator node, validator nodes, validator node configuration, configure validator node, set up validator node, manage validator, manage staking, manage gas price reference, tally rules, validator tally rules, validator staking, validator consensus, validator voting power, user staking and rewards, slashing, tallying ]
 ---
 
 Validators on the Sui network run special nodes and have additional tasks and responsibilities beyond those of Full node operators.
@@ -14,12 +15,12 @@ To learn how to set up and configure a Sui Validator node, see [Sui for Node Ope
 Specific steps you must take include:
 
 - Install and configure Sui
-- Configure Port and Protocol settings
+- Configure port and protocol settings
 - Key management
 - Storage configuration
 - Software updates
 - On-chain commands
-- Update the Gas Price Survey
+- Update the gas price survey
 - Reporting other validators
 
 {@include: ../../snippets/staking-pool-reqs.mdx}
@@ -55,15 +56,20 @@ Within a given validator staking pool, all stakers receive the same proportion o
 
 Staking rewards are funded by transaction gas fees collected during the current epoch and by stake subsidies released at the end of the epoch.
 
+$$
 StakeRewards = StakeSubsidies + GasFees
+$$
 
 Stake subsidies are intended to subsidize the network during its early phases and are funded by a 10% allocation of SUI tokens. After this allocation depletes, the entirety of stake rewards will be made up of gas fees collected through regular network operations.
 
 Stake rewards are made up of gas fees and stake subsidies. The total amount distributed throughout each epoch is determined as follows:
 
-- **Stake Subsidies:** The amount distributed in each epoch is determined prior to the beginning of the epoch according to a predefined schedule.
-- **Gas Fees:** Each epoch's amount depends on the total gas fees collected throughout the epoch. Each Sui transaction pays gas fees depending on two variables, the amount of executed gas units and the gas price:
-_GasFee = GasPrice _ GasUnits*
+- **Stake subsidies:** The amount distributed in each epoch is determined prior to the beginning of the epoch according to a predefined schedule.
+- **Gas fees:** Each epoch's amount depends on the total gas fees collected throughout the epoch. Each Sui transaction pays gas fees depending on two variables, the amount of executed gas units and the gas price:
+
+$$
+_GasFee = GasPrice _ GasUnits
+$$
 
 The total amount of gas fees collected corresponds to the sum of gas fees across all transactions processed in the epoch. During regular market conditions, the vast majority of transactions should have a `GasPrice` equal to the `ReferenceGasPrice`.
 
@@ -100,9 +106,9 @@ Importantly, the gas object's value persists across epochs so that a validator w
 
 ## Validator slashing and tallying rule 
 
-Sui is designed to encourage and enforce community monitoring of the validator set. This is done through the Tallying Rule by which each validator monitors and scores every other validator in order to ensure that everyone is operating efficiently and in the network's best interest. Validators that receive a low score can be penalized with slashed stake rewards.
+Sui is designed to encourage and enforce community monitoring of the validator set. This is done through the tallying rule by which each validator monitors and scores every other validator in order to ensure that everyone is operating efficiently and in the network's best interest. Validators that receive a low score can be penalized with slashed stake rewards.
 
-The protocol only computes the global Tallying Rule score at the epoch boundary and so relies on validators monitoring actively and changing their individual scores whenever they detect changes in other validator behavior. In general, the Tallying Rule default option should always be a score of one for all validators and only be changed to zero upon determining bad operations. In practice, the Tallying Rule consists of a set of objects each validator owns that default to scores of one and thus a validator will generally be passive and only update the object corresponding to another validator's score whenever needed.
+The protocol only computes the global tallying rule score at the epoch boundary and so relies on validators monitoring actively and changing their individual scores whenever they detect changes in other validator behavior. In general, the tallying rule default option should always be a score of one for all validators and only be changed to zero upon determining bad operations. In practice, the tallying rule consists of a set of objects each validator owns that default to scores of one and thus a validator will generally be passive and only update the object corresponding to another validator's score whenever needed.
 
 For example, to report a validator whose Sui address is `0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446` as bad or non-performant, run:
 
@@ -110,4 +116,4 @@ For example, to report a validator whose Sui address is `0x44840a79dd5cf1f5efeff
 $ sui client call --package <PACKAGE-ID> --module sui_system --function report_validator --args 0x5 0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446 --gas-budget <GAS-AMOUNT>
 ```
 
-The Tallying Rule should be implemented through a social equilibrium. The validator set should actively monitor itself and if one validator is clearly non-performant, then the other validators should score that validator with a 0 and slash its rewards. Community members can launch public dashboards tracking validator performance and that can be used as further signal into a validator's operations. There is no limit on the number of validators that can receive a 0 tallying score in an epoch.
+The tallying rule should be implemented through a social equilibrium. The validator set should actively monitor itself and if one validator is clearly non-performant, then the other validators should score that validator with a 0 and slash its rewards. Community members can launch public dashboards tracking validator performance and that can be used as further signal into a validator's operations. There is no limit on the number of validators that can receive a 0 tallying score in an epoch.
