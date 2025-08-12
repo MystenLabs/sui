@@ -6,7 +6,7 @@ keywords: [ balancemanager, balance manager, manage balances, balances for diffe
 
 The `BalanceManager` shared object holds all balances for different assets. To perform trades, pass a combination of `BalanceManager` and `TradeProof` into a [pool](./design.mdx#pool). `TradeProof`s are generated in one of two ways, either by the `BalanceManager` owner directly, or by any `TradeCap` owner. The owner can generate a `TradeProof` without the risk of equivocation. The `TradeCap` owner, because it's an owned object, risks equivocation when generating a `TradeProof`. Generally, a high frequency trading engine trades as the default owner.
 
-With exception to swaps, all interactions with DeepBook require a `BalanceManager` as one of its inputs. When orders are matched, funds are transferred to or from the `BalanceManager`. You can use a single `BalanceManager` between all pools.
+With exception to swaps, all interactions with DeepBookV3 require a `BalanceManager` as one of its inputs. When orders are matched, funds are transferred to or from the `BalanceManager`. You can use a single `BalanceManager` between all pools.
 
 ## API
 
@@ -69,3 +69,7 @@ Only holders of a `WithdrawCap` for the `BalanceManager` can call this function 
 ### Read endpoints
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=validate_proof,balance,owner,id}
+
+## Related links
+
+- [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3): The DeepBookV3 repository on GitHub.

@@ -23,34 +23,24 @@ const standards = [
 	'standards/kiosk-apps',
 	{
 		type: 'category',
-		label: 'DeepBook',
+		label: 'DeepBookV3',
 		link: {
 			type: 'doc',
-			id: 'standards/deepbook',
+			id: 'standards/deepbookv3',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'DeepBookV3',
-				link: {
-					type: 'doc',
-					id: 'standards/deepbookv3',
-				},
-				items: [
-					'standards/deepbookv3/design',
-					'standards/deepbookv3/balance-manager',
-					'standards/deepbookv3/permissionless-pool',
-					'standards/deepbookv3/query-the-pool',
-					'standards/deepbookv3/orders',
-					'standards/deepbookv3/swaps',
-					'standards/deepbookv3/flash-loans',
-					'standards/deepbookv3/staking-governance',
-				],
-			},
+			'standards/deepbookv3/design',
+			'standards/deepbookv3/balance-manager',
+			'standards/deepbookv3/permissionless-pool',
+			'standards/deepbookv3/query-the-pool',
+			'standards/deepbookv3/orders',
+			'standards/deepbookv3/swaps',
+			'standards/deepbookv3/flash-loans',
+			'standards/deepbookv3/staking-governance',
 			'standards/deepbookv3-indexer',
 			{
 				type: 'category',
-				label: 'DeepBookV3 SDK',
+				label: 'SDK',
 				link: {
 					type: 'doc',
 					id: 'standards/deepbookv3-sdk',
