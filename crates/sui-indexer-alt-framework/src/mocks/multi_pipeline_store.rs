@@ -13,12 +13,9 @@ use dashmap::DashMap;
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use scoped_futures::ScopedBoxFuture;
 use tokio::time::Duration;
 
-use crate::store::{
-    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
-};
+use crate::store::{CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store};
 
 #[derive(Default, Clone)]
 pub struct MockWatermark {
@@ -51,16 +48,13 @@ pub struct Failures {
     pub attempts: AtomicUsize,
 }
 
-/// Mock store for testing pipelines driven by one or more indexers.
+/// Mock store for testing concurrent pipelines driven by one or more indexers.
 #[derive(Clone, Default)]
-pub struct MockStore {
-    /// Maps each pipeline's name to its watermark.
+pub struct MockMultiPipelineStore {
+    /// Maps each pipeline name to its watermark.
     pub watermarks: Arc<DashMap<String, MockWatermark>>,
-    /// Maps each pipeline's name to a map of checkpoint sequence numbers to a vector of numbers.
+    /// Maps each pipeline name to a map of checkpoint sequence numbers to a vector of numbers.
     pub data: Arc<DashMap<String, DashMap<u64, Vec<u64>>>>,
-    /// Tracks the order of checkpoint processing for testing sequential processing
-    /// Each entry is the checkpoint number that was processed
-    pub sequential_checkpoint_data: Arc<Mutex<Vec<u64>>>,
     /// Controls pruning failure simulation for testing retry behavior.
     /// Maps from [from_checkpoint, to_checkpoint_exclusive) to Failures struct.
     /// Thread-safe for concurrent access during pruning operations.
@@ -69,8 +63,6 @@ pub struct MockStore {
     pub connection_failure: Arc<Mutex<ConnectionFailure>>,
     /// Number of remaining failures for set_reader_watermark operation
     pub set_reader_watermark_failure_attempts: Arc<Mutex<usize>>,
-    /// Configuration for simulating transaction failures in tests
-    pub transaction_failures: Arc<Failures>,
     /// Configuration for simulating commit failures in tests
     pub commit_failures: Arc<Failures>,
     /// Configuration for simulating commit watermark failures in tests
@@ -80,13 +72,13 @@ pub struct MockStore {
 }
 
 #[derive(Clone)]
-pub struct MockConnection<'c>(pub &'c MockStore);
+pub struct MockConnection<'c>(pub &'c MockMultiPipelineStore);
 
 #[async_trait]
 impl Connection for MockConnection<'_> {
     async fn committer_watermark(
         &mut self,
-        _pipeline: &str,
+        pipeline: &str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
         let watermark = self.0.watermarks.get(pipeline);
         Ok(watermark.map(|w| CommitterWatermark {
@@ -131,7 +123,7 @@ impl Connection for MockConnection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        _pipeline: &str,
+        pipeline: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Check if we should simulate a commit failure
@@ -146,7 +138,11 @@ impl Connection for MockConnection<'_> {
             self.0.commit_watermark_failures.failures - prev
         );
 
-        let mut wm = self.0.watermarks.entry(pipeline.to_string()).or_default();
+        let mut wm = self
+            .0
+            .watermarks
+            .entry(pipeline.to_string())
+            .or_insert_with(|| MockWatermark::default());
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
         wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
@@ -196,7 +192,7 @@ impl Connection for MockConnection<'_> {
 }
 
 #[async_trait]
-impl Store for MockStore {
+impl Store for MockMultiPipelineStore {
     type Connection<'c> = MockConnection<'c>;
 
     async fn connect(&self) -> anyhow::Result<Self::Connection<'_>> {
@@ -225,39 +221,9 @@ impl Store for MockStore {
     }
 }
 
-#[async_trait]
-impl TransactionalStore for MockStore {
-    async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
-    where
-        R: Send + 'a,
-        F: Send + 'a,
-        F: for<'r> FnOnce(
-            &'r mut Self::Connection<'_>,
-        ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
-    {
-        // Check if we should simulate a transaction failure
-        let prev = self
-            .transaction_failures
-            .attempts
-            .fetch_add(1, Ordering::Relaxed);
-        ensure!(
-            prev >= self.transaction_failures.failures,
-            "Transaction failed, remaining failures: {}",
-            self.transaction_failures.failures - prev
-        );
-
-        let mut conn = self.connect().await?;
-        f(&mut conn).await
-    }
-}
-
-impl MockStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
+impl MockMultiPipelineStore {
     /// Commits data to the mock store, handling delays and simulated failures
-    pub async fn commit_bulk_data(
+    pub async fn commit_data(
         &self,
         pipeline: &'static str,
         values: std::collections::HashMap<u64, Vec<u64>>,
@@ -280,41 +246,21 @@ impl MockStore {
 
         let key = pipeline.to_string();
         let mut total = 0;
-        let inner = self.data.entry(key).or_default();
+        if let Some(inner) = self.data.get(&key) {
+            for (cp, v) in values {
+                total += v.len();
+                inner.entry(cp).or_insert_with(Vec::new).extend(v);
+            }
+            return Ok(total);
+        }
+
+        // create once, then insert
+        let inner = DashMap::new();
         for (cp, v) in values {
             total += v.len();
-            inner.entry(cp).or_default().extend(v);
+            inner.entry(cp).or_insert_with(Vec::new).extend(v);
         }
-        Ok(total)
-    }
-
-    pub async fn commit_data(
-        &self,
-        pipeline: &'static str,
-        checkpoint: u64,
-        values: Vec<u64>,
-    ) -> anyhow::Result<usize> {
-        // Apply commit delay if configured
-        if self.commit_delay_ms > 0 {
-            tokio::time::sleep(Duration::from_millis(self.commit_delay_ms)).await;
-        }
-
-        // Check for commit failure simulation
-        let prev = self
-            .commit_failures
-            .attempts
-            .fetch_add(1, Ordering::Relaxed);
-        ensure!(
-            prev >= self.commit_failures.failures,
-            "Transaction failed, remaining failures: {}",
-            self.commit_failures.failures - prev
-        );
-
-        let key = pipeline.to_string();
-        let mut total = 0;
-        let inner = self.data.entry(key).or_default();
-        total += values.len();
-        inner.insert(checkpoint, values);
+        self.data.insert(key, inner);
         Ok(total)
     }
 
@@ -355,15 +301,6 @@ impl MockStore {
         self
     }
 
-    /// Helper to configure transaction failure simulation
-    pub fn with_transaction_failures(mut self, failures: usize) -> Self {
-        self.transaction_failures = Arc::new(Failures {
-            failures,
-            attempts: AtomicUsize::new(0),
-        });
-        self
-    }
-
     /// Helper to configure commit watermark failure simulation
     pub fn with_commit_watermark_failures(mut self, failures: usize) -> Self {
         self.commit_watermark_failures = Arc::new(Failures {
@@ -373,7 +310,7 @@ impl MockStore {
         self
     }
 
-    /// Helper to configure commit delay
+    /// Create a new MockMultiPipelineStore with commit delay
     pub fn with_commit_delay(mut self, delay_ms: u64) -> Self {
         self.commit_delay_ms = delay_ms;
         self
@@ -406,29 +343,9 @@ impl MockStore {
         self
     }
 
-    pub fn with_watermark(self, watermark_key: &str, watermark: MockWatermark) -> Self {
-        self.watermarks.insert(watermark_key.to_string(), watermark);
-        self
-    }
-
-    pub fn with_data(
-        self,
-        watermark_key: &str,
-        data: std::collections::HashMap<u64, Vec<u64>>,
-    ) -> Self {
-        self.data
-            .insert(watermark_key.to_string(), DashMap::from_iter(data));
-        self
-    }
-
     /// Helper to get the current watermark state for testing.
     pub fn watermark(&self, watermark_key: &str) -> Option<MockWatermark> {
         self.watermarks.get(watermark_key).map(|w| w.clone())
-    }
-
-    /// Get the sequential checkpoint data
-    pub fn get_sequential_data(&self) -> Vec<u64> {
-        self.sequential_checkpoint_data.lock().unwrap().clone()
     }
 
     /// Helper to get the number of connection attempts for testing
@@ -487,7 +404,7 @@ impl MockStore {
                     return;
                 }
             }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            tokio::time::sleep(Duration::from_millis(1000)).await;
         }
         panic!("Timeout waiting for any data to be processed - pipeline may be stuck");
     }
