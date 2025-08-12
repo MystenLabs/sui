@@ -272,6 +272,7 @@ const MAX_PROTOCOL_VERSION: u64 = 99;
 // Version 98: Add authenticated event streams support via emit_authenticated function.
 //             Add better error messages to the loader.
 // Version 99: Enable new commit handler.
+//             Set max updates per settlement txn to 100.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -858,6 +859,11 @@ struct FeatureFlags {
     // If true, deprecate global storage ops during Move module deserialization
     #[serde(skip_serializing_if = "is_false")]
     deprecate_global_storage_ops_during_deserialization: bool,
+
+    // If true, enable non-exclusive writes for user transactions.
+    // DO NOT ENABLE outside of the transaction test runner.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_non_exclusive_writes: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1687,6 +1693,9 @@ pub struct ProtocolConfig {
     /// listed in `tx_digests`
     #[serde(skip_serializing_if = "Vec::is_empty")]
     aliased_addresses: Vec<AliasedAddress>,
+
+    /// The maximum number of updates per settlement transaction.
+    max_updates_per_settlement_txn: Option<u32>,
 }
 
 /// An aliased address.
@@ -1968,6 +1977,10 @@ impl ProtocolConfig {
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
         self.feature_flags.enable_authenticated_event_streams && self.enable_accumulators()
+    }
+
+    pub fn enable_non_exclusive_writes(&self) -> bool {
+        self.feature_flags.enable_non_exclusive_writes
     }
 
     pub fn enable_coin_registry(&self) -> bool {
@@ -2874,6 +2887,8 @@ impl ProtocolConfig {
             consensus_commit_rate_estimation_window_size: None,
 
             aliased_addresses: vec![],
+
+            max_updates_per_settlement_txn: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4117,6 +4132,7 @@ impl ProtocolConfig {
                 }
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
+                    cfg.max_updates_per_settlement_txn = Some(100);
                 }
                 // Use this template when making changes:
                 //
@@ -4410,6 +4426,10 @@ impl ProtocolConfig {
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
+    }
+
+    pub fn enable_non_exclusive_writes_for_testing(&mut self) {
+        self.feature_flags.enable_non_exclusive_writes = true;
     }
 
     pub fn set_ignore_execution_time_observations_after_certs_closed_for_testing(

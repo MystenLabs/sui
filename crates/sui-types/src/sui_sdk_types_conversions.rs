@@ -856,6 +856,9 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
                 todo!("Add InsufficientBalanceForWithdraw to sdk")
             }
+            crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { .. } => {
+                todo!("Add NonExclusiveWriteInputObjectModified to sdk")
+            }
         }
     }
 }
@@ -1165,6 +1168,8 @@ impl From<crate::transaction::CallArg> for Input {
                     mutable: match mutability {
                         crate::transaction::SharedObjectMutability::Mutable => true,
                         crate::transaction::SharedObjectMutability::Immutable => false,
+                        // TODO(address-balances): expose non-exclusive writes to sdk
+                        crate::transaction::SharedObjectMutability::NonExclusiveWrite => false,
                     },
                 },
                 crate::transaction::ObjectArg::Receiving((id, version, digest)) => Self::Receiving(

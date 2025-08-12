@@ -7,7 +7,7 @@ use crate::{
     sp,
     static_programmable_transactions::{
         env::Env,
-        loading::ast::Type,
+        loading::ast::{ObjectMutability, Type},
         typing::ast::{self as T, BytesConstraint, ObjectArg},
     },
 };
@@ -43,9 +43,19 @@ impl Context {
                     allow_by_value: true,
                     allow_by_mut_ref: true,
                 },
-                ObjectArg::SharedObject { mutable, .. } => ObjectUsage {
-                    allow_by_value: *mutable,
-                    allow_by_mut_ref: *mutable,
+                ObjectArg::SharedObject { mutability, .. } => ObjectUsage {
+                    allow_by_value: match mutability {
+                        ObjectMutability::Mutable => true,
+                        ObjectMutability::Immutable => false,
+                        // NonExclusiveWrite can be taken by value, but unless it is re-shared
+                        // with no mutations, the transaction will abort.
+                        ObjectMutability::NonExclusiveWrite => true,
+                    },
+                    allow_by_mut_ref: match mutability {
+                        ObjectMutability::Mutable => true,
+                        ObjectMutability::Immutable => false,
+                        ObjectMutability::NonExclusiveWrite => true,
+                    },
                 },
             })
             .collect();

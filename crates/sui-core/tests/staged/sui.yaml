@@ -631,6 +631,11 @@ ExecutionFailureStatus:
       InvalidLinkage: UNIT
     40:
       InsufficientBalanceForWithdraw: UNIT
+    41:
+      NonExclusiveWriteInputObjectModified:
+        STRUCT:
+          - id:
+              TYPENAME: ObjectID
 ExecutionStatus:
   ENUM:
     0:
@@ -1047,6 +1052,8 @@ SharedObjectMutability:
       Immutable: UNIT
     1:
       Mutable: UNIT
+    2:
+      NonExclusiveWrite: UNIT
 StoredExecutionTimeObservations:
   ENUM:
     0:

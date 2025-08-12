@@ -86,7 +86,7 @@ mod checked {
     ) {
         let input_objects = input_objects.into_inner();
         let mutable_inputs = if enable_expensive_checks {
-            input_objects.mutable_inputs().keys().copied().collect()
+            input_objects.all_mutable_inputs().keys().copied().collect()
         } else {
             HashSet::new()
         };
