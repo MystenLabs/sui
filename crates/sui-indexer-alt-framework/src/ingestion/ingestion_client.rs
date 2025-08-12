@@ -294,6 +294,8 @@ impl IngestionClient {
         self.checkpoint_lag_reporter
             .report_lag(checkpoint, data.summary.timestamp_ms);
 
+        println!("Ingested checkpoint {}", checkpoint);
+
         self.metrics.total_ingested_checkpoints.inc();
 
         self.metrics
