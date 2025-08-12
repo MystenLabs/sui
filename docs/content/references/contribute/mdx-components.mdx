@@ -179,6 +179,8 @@ When including sections of code, understand that the code might change from what
 
 To include the entire source file, use the `{@inject}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write `{@inject: examples/move/hero/sources/example.move`. The file location is automatically used as the title for the codeblock.
 
+#### Non-Sui repos
+
 You can use source code from other GitHub repositories, but should do so sparingly and purposefully. There is almost no way to track those projects to ensure the code is valid, unlike the CI processes running on the sui repo. To use, format the directive as `{@inject: github:<GITHUB_ORG_NAME>/<GITHUB_REPO_NAME>/<PATH_TO_FILE>}`.
 
 #### Include part of code
