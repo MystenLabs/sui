@@ -302,7 +302,6 @@ input CheckpointFilter {
 }
 
 """
-<<<<<<< HEAD
 System transaction for creating the coin deny list state.
 """
 type CoinDenyListStateCreateTransaction {
@@ -310,7 +309,9 @@ type CoinDenyListStateCreateTransaction {
 	A workaround to define an empty variant of a GraphQL union.
 	"""
 	_: Boolean
-=======
+}
+
+"""
 A single command in the programmable transaction.
 """
 union Command = MoveCallCommand
@@ -342,7 +343,6 @@ type CommandEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
->>>>>>> 18ce9967f8 (Update back to Command name)
 }
 
 """
@@ -819,7 +819,7 @@ interface IObject {
 
 
 """
-A call to either an entry or a public Move function.
+A call to a Move function.
 """
 type MoveCallCommand {
 	"""
@@ -1132,7 +1132,6 @@ type PageInfo {
 	endCursor: String
 }
 
-<<<<<<< HEAD
 type PerEpochConfig {
 	"""
 	The per-epoch configuration object as of the checkpoint when the transaction was executed.
@@ -1140,42 +1139,6 @@ type PerEpochConfig {
 	object: Object
 }
 
-"""
-A single command in the programmable transaction.
-"""
-union ProgrammableCommand = MoveCallCommand
-
-type ProgrammableCommandConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [ProgrammableCommandEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [ProgrammableCommand!]!
-}
-
-"""
-An edge in a connection.
-"""
-type ProgrammableCommandEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: ProgrammableCommand!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
-}
-
-=======
->>>>>>> 18ce9967f8 (Update back to Command name)
 type ProgrammableTransaction {
 	"""
 	Input objects or primitive values.
@@ -1809,15 +1772,7 @@ type TransactionInputEdge {
 """
 Different types of transactions that can be executed on the Sui network.
 """
-<<<<<<< HEAD
-<<<<<<< HEAD
-union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction
-=======
-union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | ProgrammableTransactionBlock
->>>>>>> 48cc5ca29b ([graphql-alt] Support Programmable for TransactionKind [1/n])
-=======
-union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | ProgrammableTransaction
->>>>>>> e53cba6748 (rename and restructure)
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.

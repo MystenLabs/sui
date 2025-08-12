@@ -3,7 +3,7 @@
 
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
-    *,
+    Context, Object,
 };
 use sui_types::transaction::ProgrammableTransaction as NativeProgrammableTransaction;
 

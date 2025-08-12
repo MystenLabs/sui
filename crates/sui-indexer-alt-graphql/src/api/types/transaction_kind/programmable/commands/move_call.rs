@@ -4,7 +4,7 @@
 use async_graphql::*;
 
 // TODO(DVX-1373): Implement MoveCallCommand
-/// A call to either an entry or a public Move function.
+/// A call to a Move function.
 #[derive(SimpleObject, Clone)]
 pub struct MoveCallCommand {
     /// Placeholder field

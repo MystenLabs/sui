@@ -11,7 +11,6 @@ use self::{
     change_epoch::ChangeEpochTransaction,
     consensus_commit_prologue::ConsensusCommitPrologueTransaction,
     end_of_epoch::EndOfEpochTransaction, genesis::GenesisTransaction,
-    consensus_commit_prologue::ConsensusCommitPrologueTransaction, genesis::GenesisTransaction,
     programmable::ProgrammableTransaction,
     randomness_state_update::RandomnessStateUpdateTransaction,
 };
