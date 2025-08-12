@@ -18,7 +18,11 @@ fn test_module_tables_ignored_in_equivalence() {
     );
 
     // Clone module and alter `tables` to ensure these changes are not observable.
-    let mut modified_module = base_module.clone();
+    let mut modified_module = mk_module_plus_code(
+        &mut pool,
+        Visibility::Public as u8,
+        vec![Bytecode::LdU8(0), Bytecode::Ret],
+    );
     let new_signatures = vec![Rc::new(vec![Rc::new(Type::U128)])];
     modified_module.update_table_signatures(new_signatures);
 
@@ -40,7 +44,11 @@ fn test_function_locals_ignored_in_equivalence() {
     );
 
     // Modified module identical to base, but with extra locals
-    let mut modified_module = base_module.clone();
+    let mut modified_module = mk_module_plus_code(
+        &mut pool,
+        Visibility::Public as u8,
+        vec![Bytecode::LdU8(0), Bytecode::Ret],
+    );
     for func in modified_module.functions.values_mut() {
         let mut_func = Rc::make_mut(func);
         mut_func.locals = Rc::new(
