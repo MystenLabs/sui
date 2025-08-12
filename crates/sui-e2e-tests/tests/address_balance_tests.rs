@@ -8,7 +8,8 @@ use sui_macros::*;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
-    accumulator_root::{AccumulatorOwner, AccumulatorValue, U128},
+    accumulator_metadata::AccumulatorOwner,
+    accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
     base_types::{ObjectRef, SuiAddress},
     gas_coin::GAS,
