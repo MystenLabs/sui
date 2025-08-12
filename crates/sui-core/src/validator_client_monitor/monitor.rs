@@ -14,10 +14,7 @@ use std::collections::HashMap;
 use std::{sync::Arc, time::Instant};
 use sui_config::validator_client_monitor_config::ValidatorClientMonitorConfig;
 use sui_types::committee::Committee;
-use sui_types::{
-    base_types::{AuthorityName, ConciseableName},
-    messages_grpc::ValidatorHealthRequest,
-};
+use sui_types::{base_types::AuthorityName, messages_grpc::ValidatorHealthRequest};
 use tokio::{
     task::JoinSet,
     time::{interval, timeout},
@@ -170,16 +167,14 @@ impl<A: Clone> ValidatorClientMonitor<A> {
         let authority_agg = self.authority_aggregator.load();
         let committee = &authority_agg.committee;
 
-        let score_map = self
-            .client_stats
-            .read()
-            .get_all_validator_stats(committee, &authority_agg.validator_display_names);
+        let score_map = self.client_stats.read().get_all_validator_stats(committee);
 
         for (validator, score) in score_map.iter() {
             debug!("Validator {}: score {}", validator, score);
+            let display_name = authority_agg.get_display_name(validator);
             self.metrics
                 .performance_score
-                .with_label_values(&[&validator.concise().to_string()])
+                .with_label_values(&[&display_name])
                 .set(*score);
         }
 
