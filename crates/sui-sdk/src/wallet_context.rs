@@ -109,8 +109,7 @@ impl WalletContext {
             }
 
             Err(anyhow!(
-                "No address found for the provided key identity: {:?}",
-                key_identity
+                "No address found for the provided key identity: {key_identity}"
             ))
         } else {
             self.active_address()
