@@ -19,7 +19,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::Transaction;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEffects;
 use sui_rpc::proto::sui::rpc::v2beta2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2beta2::UserSignature;
-use sui_sdk_types::ObjectId;
+use sui_sdk_types::Address;
 use sui_types::balance_change::derive_balance_changes;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
@@ -177,7 +177,7 @@ pub async fn execute_transaction(
 
                 if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
                     for changed_object in effects.changed_objects.iter_mut() {
-                        let Ok(object_id) = changed_object.object_id().parse::<ObjectId>() else {
+                        let Ok(object_id) = changed_object.object_id().parse::<Address>() else {
                             continue;
                         };
 
@@ -196,10 +196,11 @@ pub async fn execute_transaction(
                     }
                 }
 
-                if mask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                    for unchanged_consensus_object in effects.unchanged_shared_objects.iter_mut() {
+                if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                    for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut()
+                    {
                         let Ok(object_id) =
-                            unchanged_consensus_object.object_id().parse::<ObjectId>()
+                            unchanged_consensus_object.object_id().parse::<Address>()
                         else {
                             continue;
                         };

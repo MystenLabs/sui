@@ -174,7 +174,7 @@ impl Client {
         version: Option<u64>,
     ) -> Result<Object> {
         let request = proto::GetObjectRequest {
-            object_id: Some(sui_sdk_types::ObjectId::from(object_id).to_string()),
+            object_id: Some(sui_sdk_types::Address::from(object_id).to_string()),
             version,
             read_mask: FieldMask::from_paths(["bcs"]).pipe(Some),
         };

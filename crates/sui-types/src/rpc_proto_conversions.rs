@@ -993,7 +993,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             E::CertificateDenied => ExecutionErrorKind::CertificateDenied,
             E::SuiMoveVerificationTimedout => ExecutionErrorKind::SuiMoveVerificationTimedout,
             E::SharedObjectOperationNotAllowed => {
-                ExecutionErrorKind::SharedObjectOperationNotAllowed
+                ExecutionErrorKind::ConsensusObjectOperationNotAllowed
             }
             E::InputObjectDeleted => ExecutionErrorKind::InputObjectDeleted,
             E::ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => {
@@ -1005,7 +1005,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                         .collect(),
                 }));
 
-                ExecutionErrorKind::ExecutionCanceledDueToSharedObjectCongestion
+                ExecutionErrorKind::ExecutionCanceledDueToConsensusObjectCongestion
             }
             E::AddressDeniedForCoin { address, coin_type } => {
                 message.error_details = Some(ErrorDetails::CoinDenyListError(CoinDenyListError {
@@ -1103,7 +1103,7 @@ impl From<crate::execution_status::CommandArgumentError> for CommandArgumentErro
             E::InvalidObjectByValue => CommandArgumentErrorKind::InvalidObjectByValue,
             E::InvalidObjectByMutRef => CommandArgumentErrorKind::InvalidObjectByMutRef,
             E::SharedObjectOperationNotAllowed => {
-                CommandArgumentErrorKind::SharedObjectOperationNotAllowed
+                CommandArgumentErrorKind::ConsensusObjectOperationNotAllowed
             }
             E::InvalidArgumentArity => CommandArgumentErrorKind::InvalidArgumentArity,
 
@@ -2457,7 +2457,7 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
         }
 
         if mask.contains(Self::CHANGED_OBJECTS_FIELD.name)
-            || mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name)
+            || mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name)
             || mask.contains(Self::GAS_OBJECT_FIELD.name)
         {
             let mut changed_objects = Vec::new();
@@ -2594,9 +2594,10 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                     changed_object.input_version = Some(version);
                     changed_object.input_digest = Some(digest);
                 } else {
-                    let unchanged_consensus_object = UnchangedSharedObject {
+                    let unchanged_consensus_object = UnchangedConsensusObject {
                         kind: Some(
-                            unchanged_shared_object::UnchangedSharedObjectKind::ReadOnlyRoot.into(),
+                            unchanged_consensus_object::UnchangedConsensusObjectKind::ReadOnlyRoot
+                                .into(),
                         ),
                         object_id: Some(object_id),
                         version: Some(version),
@@ -2620,8 +2621,8 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                 self.changed_objects = changed_objects;
             }
 
-            if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                self.unchanged_shared_objects = unchanged_consensus_objects;
+            if mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                self.unchanged_consensus_objects = unchanged_consensus_objects;
             }
         }
     }
@@ -2714,12 +2715,12 @@ impl Merge<&crate::effects::TransactionEffectsV2> for TransactionEffects {
             }
         }
 
-        if mask.contains(Self::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-            self.unchanged_shared_objects = unchanged_consensus_objects
+        if mask.contains(Self::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+            self.unchanged_consensus_objects = unchanged_consensus_objects
                 .clone()
                 .into_iter()
                 .map(|(id, unchanged)| {
-                    let mut message = UnchangedSharedObject::from(unchanged);
+                    let mut message = UnchangedConsensusObject::from(unchanged);
                     message.object_id = Some(id.to_canonical_string(true));
                     message
                 })
@@ -2797,13 +2798,13 @@ impl From<crate::effects::IDOperation> for changed_object::IdOperation {
 }
 
 //
-// UnchangedSharedObject
+// UnchangedConsensusObject
 //
 
-impl From<crate::effects::UnchangedConsensusKind> for UnchangedSharedObject {
+impl From<crate::effects::UnchangedConsensusKind> for UnchangedConsensusObject {
     fn from(value: crate::effects::UnchangedConsensusKind) -> Self {
         use crate::effects::UnchangedConsensusKind as K;
-        use unchanged_shared_object::UnchangedSharedObjectKind;
+        use unchanged_consensus_object::UnchangedConsensusObjectKind;
 
         let mut message = Self::default();
 
@@ -2811,21 +2812,21 @@ impl From<crate::effects::UnchangedConsensusKind> for UnchangedSharedObject {
             K::ReadOnlyRoot((version, digest)) => {
                 message.version = Some(version.value());
                 message.digest = Some(digest.to_string());
-                UnchangedSharedObjectKind::ReadOnlyRoot
+                UnchangedConsensusObjectKind::ReadOnlyRoot
             }
             K::MutateConsensusStreamEnded(version) => {
                 message.version = Some(version.value());
-                UnchangedSharedObjectKind::MutateDeleted
+                UnchangedConsensusObjectKind::MutateConsensusStreamEnded
             }
             K::ReadConsensusStreamEnded(version) => {
                 message.version = Some(version.value());
-                UnchangedSharedObjectKind::ReadDeleted
+                UnchangedConsensusObjectKind::ReadConsensusStreamEnded
             }
             K::Cancelled(version) => {
                 message.version = Some(version.value());
-                UnchangedSharedObjectKind::Canceled
+                UnchangedConsensusObjectKind::Canceled
             }
-            K::PerEpochConfig => UnchangedSharedObjectKind::PerEpochConfig,
+            K::PerEpochConfig => UnchangedConsensusObjectKind::PerEpochConfig,
             // PerEpochConfigWithSequenceNumber { version } => {
             //     message.version = Some(version);
             //     UnchangedSharedObjectKind::PerEpochConfig

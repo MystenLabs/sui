@@ -17,7 +17,7 @@ use sui_rpc::proto::sui::rpc::v2beta2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2beta2::ListDynamicFieldsRequest;
 use sui_rpc::proto::sui::rpc::v2beta2::ListDynamicFieldsResponse;
 use sui_rpc::proto::sui::rpc::v2beta2::Object;
-use sui_sdk_types::ObjectId;
+use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
 
 const MAX_PAGE_SIZE: usize = 1000;
@@ -36,7 +36,7 @@ pub fn list_dynamic_fields(
         .indexes()
         .ok_or_else(RpcError::not_found)?;
 
-    let parent: ObjectId = request
+    let parent: Address = request
         .parent
         .as_ref()
         .ok_or_else(|| {
@@ -135,8 +135,8 @@ fn encode_page_token(page_token: PageToken) -> Bytes {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PageToken {
-    parent: ObjectId,
-    field_id: ObjectId,
+    parent: Address,
+    field_id: Address,
 }
 
 fn get_dynamic_field(
