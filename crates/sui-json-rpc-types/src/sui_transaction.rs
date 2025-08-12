@@ -257,6 +257,35 @@ impl SuiTransactionBlockResponse {
     pub fn status_ok(&self) -> Option<bool> {
         self.effects.as_ref().map(|e| e.status().is_ok())
     }
+
+    pub fn get_new_package_obj(&self) -> Option<ObjectRef> {
+        self.object_changes.as_ref().and_then(|changes| {
+            changes
+                .iter()
+                .find(|change| matches!(change, ObjectChange::Published { .. }))
+                .map(|change| change.object_ref())
+        })
+    }
+
+    pub fn get_new_package_upgrade_cap(&self) -> Option<ObjectRef> {
+        self.object_changes.as_ref().and_then(|changes| {
+            changes
+                .iter()
+                .find(|change| {
+                    matches!(change, ObjectChange::Created {
+                        owner: Owner::AddressOwner(_),
+                        object_type: StructTag {
+                            address: SUI_FRAMEWORK_ADDRESS,
+                            module,
+                            name,
+                            ..
+                        },
+                        ..
+                    } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
+                })
+                .map(|change| change.object_ref())
+        })
+    }
 }
 
 /// We are specifically ignoring events for now until events become more stable.
@@ -364,39 +393,6 @@ fn write_obj_changes<T: Display>(
         }
     }
     Ok(())
-}
-
-pub fn get_new_package_obj_from_response(
-    response: &SuiTransactionBlockResponse,
-) -> Option<ObjectRef> {
-    response.object_changes.as_ref().and_then(|changes| {
-        changes
-            .iter()
-            .find(|change| matches!(change, ObjectChange::Published { .. }))
-            .map(|change| change.object_ref())
-    })
-}
-
-pub fn get_new_package_upgrade_cap_from_response(
-    response: &SuiTransactionBlockResponse,
-) -> Option<ObjectRef> {
-    response.object_changes.as_ref().and_then(|changes| {
-        changes
-            .iter()
-            .find(|change| {
-                matches!(change, ObjectChange::Created {
-                    owner: Owner::AddressOwner(_),
-                    object_type: StructTag {
-                        address: SUI_FRAMEWORK_ADDRESS,
-                        module,
-                        name,
-                        ..
-                    },
-                    ..
-                } if module.as_str() == "package" && name.as_str() == "UpgradeCap")
-            })
-            .map(|change| change.object_ref())
-    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
