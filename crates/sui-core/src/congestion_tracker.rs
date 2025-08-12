@@ -122,7 +122,7 @@ impl CongestionTracker {
             transaction
                 .shared_input_objects()
                 .into_iter()
-                .filter(|id| id.mutable)
+                .filter(|id| id.is_accessed_exclusively())
                 .map(|id| id.id),
         )
     }

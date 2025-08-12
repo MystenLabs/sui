@@ -17,6 +17,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::storage::{
     transaction_non_shared_input_object_keys, transaction_receiving_object_keys, ObjectKey,
 };
+use sui_types::transaction::SharedObjectMutability;
 use sui_types::transaction::{SharedInputObject, TransactionDataAPI, TransactionKey};
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
@@ -123,7 +124,7 @@ impl<T> Schedulable<T> {
                         .epoch_start_config()
                         .randomness_obj_initial_shared_version()
                         .expect("randomness obj initial shared version should be set"),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }))
             }
             Schedulable::AccumulatorSettlement(_, _) => {
@@ -133,7 +134,7 @@ impl<T> Schedulable<T> {
                         .epoch_start_config()
                         .accumulator_root_obj_initial_shared_version()
                         .expect("accumulator root obj initial shared version should be set"),
-                    mutable: true,
+                    mutability: SharedObjectMutability::Mutable,
                 }))
             }
         }
@@ -308,7 +309,7 @@ impl SharedObjVerManager {
 
         let mut input_object_keys = assignable.non_shared_input_object_keys();
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
-        let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
+        let mut is_exclusively_accessed_input = Vec::with_capacity(shared_input_objects.len());
         // Record receiving object versions towards the shared version computation.
         let receiving_object_keys = assignable.receiving_object_keys();
         input_object_keys.extend(receiving_object_keys);
@@ -343,14 +344,14 @@ impl SharedObjVerManager {
                     None => unreachable!("cancelled transaction should have cancellation info"),
                 };
                 assigned_versions.push(((*id, *initial_shared_version), assigned_version));
-                is_mutable_input.push(false);
+                is_exclusively_accessed_input.push(false);
             }
         } else {
             for (
                 SharedInputObject {
                     id,
                     initial_shared_version,
-                    mutable,
+                    mutability,
                 },
                 assigned_version,
             ) in shared_input_objects.iter().map(|obj| {
@@ -363,7 +364,7 @@ impl SharedObjVerManager {
             }) {
                 assigned_versions.push(((*id, *initial_shared_version), assigned_version));
                 input_object_keys.push(ObjectKey(*id, assigned_version));
-                is_mutable_input.push(*mutable);
+                is_exclusively_accessed_input.push(mutability.is_exclusive());
             }
         }
 
@@ -379,7 +380,7 @@ impl SharedObjVerManager {
             // Update the next version for the shared objects.
             assigned_versions
                 .iter()
-                .zip(is_mutable_input)
+                .zip(is_exclusively_accessed_input)
                 .filter_map(|((id, _), mutable)| {
                     if mutable {
                         Some((*id, next_version))

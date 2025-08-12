@@ -761,7 +761,7 @@ impl ExecutionSchedulerAPI for TransactionManager {
                 .shared_input_objects()
                 .into_iter()
                 .filter_map(|r| {
-                    r.mutable
+                    r.is_accessed_exclusively()
                         .then_some(FullObjectID::new(r.id, Some(r.initial_shared_version)))
                 })
                 .collect(),

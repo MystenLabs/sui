@@ -1263,6 +1263,9 @@ mod checked {
                 /* imm override */ !mutable,
                 id,
             ),
+            ObjectArg::SharedObjectV2 { .. } => {
+                unreachable!("Impossible to hit SharedObjectV2 in v0")
+            }
             ObjectArg::Receiving(_) => unreachable!("Impossible to hit Receiving in v0"),
         }
     }

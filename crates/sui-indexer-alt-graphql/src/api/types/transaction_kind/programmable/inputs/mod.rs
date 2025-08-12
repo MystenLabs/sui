@@ -43,6 +43,16 @@ impl TransactionInput {
                     initial_shared_version,
                     mutable,
                 )),
+                ObjectArg::SharedObjectV2 {
+                    id,
+                    initial_shared_version,
+                    mutability,
+                } => Self::SharedInput(SharedInput::from_shared_object(
+                    id,
+                    initial_shared_version,
+                    // TODO: extend schema to expose the full mutability enum
+                    mutability.is_exclusive(),
+                )),
                 ObjectArg::Receiving((object_id, version, digest)) => Self::Receiving(
                     Receiving::from_object_ref(object_id, version, digest, scope),
                 ),

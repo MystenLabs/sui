@@ -48,7 +48,9 @@ use sui_types::{
     base_types::{AuthorityName, SuiAddress},
     sui_system_state::SuiSystemStateTrait,
 };
-use sui_types::{digests::ChainIdentifier, gas::GasCostSummary};
+use sui_types::{
+    digests::ChainIdentifier, gas::GasCostSummary, transaction::SharedObjectMutability,
+};
 use sui_types::{
     effects::{TransactionEffectsAPI, TransactionEvents},
     execution_status::ExecutionFailureStatus,
@@ -713,7 +715,7 @@ impl ValidatorProxy for FullNodeProxy {
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum BenchMoveCallArg {
     Pure(Vec<u8>),
-    Shared((ObjectID, SequenceNumber, bool)),
+    Shared((ObjectID, SequenceNumber, SharedObjectMutability)),
     ImmOrOwnedObject(ObjectRef),
     ImmOrOwnedObjectVec(Vec<ObjectRef>),
     SharedObjectVec(Vec<(ObjectID, SequenceNumber, bool)>),
@@ -784,7 +786,20 @@ impl From<CallArg> for BenchMoveCallArg {
                     id,
                     initial_shared_version,
                     mutable,
-                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                } => BenchMoveCallArg::Shared((
+                    id,
+                    initial_shared_version,
+                    if mutable {
+                        SharedObjectMutability::Mutable
+                    } else {
+                        SharedObjectMutability::Immutable
+                    },
+                )),
+                ObjectArg::SharedObjectV2 {
+                    id,
+                    initial_shared_version,
+                    mutability,
+                } => BenchMoveCallArg::Shared((id, initial_shared_version, mutability)),
                 ObjectArg::Receiving(_) => {
                     unimplemented!("Receiving is not supported for benchmarks")
                 }
@@ -807,11 +822,15 @@ pub fn convert_move_call_args(
             BenchMoveCallArg::Pure(bytes) => {
                 pt_builder.input(CallArg::Pure(bytes.clone())).unwrap()
             }
-            BenchMoveCallArg::Shared((id, initial_shared_version, mutable)) => pt_builder
+            BenchMoveCallArg::Shared((id, initial_shared_version, mutability)) => pt_builder
                 .input(CallArg::Object(ObjectArg::SharedObject {
                     id: *id,
                     initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
+                    mutable: match mutability {
+                        SharedObjectMutability::Mutable => true,
+                        SharedObjectMutability::Immutable => false,
+                        SharedObjectMutability::NonExclusiveWrite => todo!(),
+                    },
                 }))
                 .unwrap(),
             BenchMoveCallArg::ImmOrOwnedObject(obj_ref) => {

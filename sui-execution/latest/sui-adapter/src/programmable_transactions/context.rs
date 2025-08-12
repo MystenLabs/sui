@@ -70,7 +70,7 @@ mod checked {
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::DenyListResult,
-        transaction::{Argument, CallArg, ObjectArg},
+        transaction::{Argument, CallArg, ObjectArg, SharedObjectMutability},
     };
     use tracing::instrument;
 
@@ -1887,6 +1887,26 @@ mod checked {
                 /* imm override */ !mutable,
                 id,
             ),
+            ObjectArg::SharedObjectV2 { id, mutability, .. } => {
+                let mutable = match mutability {
+                    SharedObjectMutability::Mutable => true,
+                    // From the perspective of the adapter, non-exclusive write are mutable,
+                    // in that the move code will receive a &mut arg. The object itself
+                    // cannot be written to, this is enforced by post execution checks.
+                    SharedObjectMutability::NonExclusiveWrite => true,
+                    SharedObjectMutability::Immutable => false,
+                };
+                load_object(
+                    protocol_config,
+                    vm,
+                    state_view,
+                    linkage_view,
+                    new_packages,
+                    input_object_map,
+                    /* imm override */ !mutable,
+                    id,
+                )
+            }
             ObjectArg::Receiving((id, version, _)) => {
                 Ok(InputValue::new_receiving_object(id, version))
             }

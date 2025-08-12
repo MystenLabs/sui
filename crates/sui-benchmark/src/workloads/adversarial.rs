@@ -26,12 +26,15 @@ use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::{random_object_ref, ObjectRef};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::{base_types::ObjectID, object::Owner};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair, transaction::Transaction};
+use sui_types::{
+    base_types::{random_object_ref, ObjectRef},
+    transaction::SharedObjectMutability,
+};
 use sui_types::{transaction::TransactionData, utils::to_sender_signed_transaction};
 use tracing::debug;
 
@@ -530,7 +533,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         // We've seen that the shared objects are indeed created,we store them so we can read them in MaxReads workload
         self.shared_objs = created
             .iter()
-            .map(|o| BenchMoveCallArg::Shared((o.0 .0, o.0 .1, false)))
+            .map(|o| BenchMoveCallArg::Shared((o.0 .0, o.0 .1, SharedObjectMutability::Immutable)))
             .collect();
     }
 
