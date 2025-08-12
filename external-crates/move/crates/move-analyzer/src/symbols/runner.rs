@@ -7,7 +7,7 @@
 
 use crate::symbols::{
     Symbols,
-    compilation::{MANIFEST_FILE_NAME, PrecomputedPkgInfo},
+    compilation::{CachedPackages, MANIFEST_FILE_NAME},
     get_symbols,
 };
 
@@ -48,7 +48,7 @@ impl SymbolicatorRunner {
     pub fn new(
         ide_files_root: VfsPath,
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
-        packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+        packages_info: Arc<Mutex<CachedPackages>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
         implicit_deps: Dependencies,
