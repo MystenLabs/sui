@@ -325,11 +325,11 @@ impl ExecutionTimeObserver {
 
         let mut uses_indebted_object = false;
 
-        // Update the accumulated excess execution time for each mutable shared object
-        // used in this transaction, and determine the max overage.
+        // Update the accumulated excess execution time for shared object
+        // used for exclusive access in this transaction, and determine the max overage.
         let max_excess_per_object_execution_time = tx
             .shared_input_objects()
-            .filter_map(|obj| obj.mutability.is_mutable().then_some(obj.id))
+            .filter_map(|obj| obj.is_accessed_exclusively().then_some(obj.id))
             .map(|id| {
                 // Mark if any object used in the tx is indebted.
                 if !uses_indebted_object && self.indebted_objects.binary_search(&id).is_ok() {

@@ -217,7 +217,8 @@ pub trait Storage {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
-    fn record_execution_results(&mut self, results: ExecutionResults);
+    fn record_execution_results(&mut self, results: ExecutionResults)
+    -> Result<(), ExecutionError>;
 
     fn save_loaded_runtime_objects(
         &mut self,

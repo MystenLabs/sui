@@ -530,7 +530,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         // We've seen that the shared objects are indeed created,we store them so we can read them in MaxReads workload
         self.shared_objs = created
             .iter()
-            .map(|o| BenchMoveCallArg::Shared((o.0.0, o.0.1, false)))
+            .map(|o| BenchMoveCallArg::Shared((o.0.0, o.0.1, SharedObjectMutability::Immutable)))
             .collect();
     }
 

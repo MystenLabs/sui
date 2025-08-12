@@ -327,7 +327,7 @@ impl SharedObjectCongestionTracker {
         let end_cost = start_cost.saturating_add(tx_cost);
 
         for obj in shared_input_objects {
-            if obj.mutability.is_mutable() {
+            if obj.is_accessed_exclusively() {
                 let old_end_cost = self.object_execution_cost.insert(obj.id, end_cost);
                 assert!(old_end_cost.is_none() || old_end_cost.unwrap() <= end_cost);
             }

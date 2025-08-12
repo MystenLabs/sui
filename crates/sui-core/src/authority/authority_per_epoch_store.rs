@@ -70,9 +70,9 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
 };
 use sui_types::sui_system_state::{self, SuiSystemState};
 use sui_types::transaction::{
-    AuthenticatorStateUpdate, CallArg, CertifiedTransaction, InputObjectKind, ObjectArg,
-    ProgrammableTransaction, SenderSignedData, StoredExecutionTimeObservations, Transaction,
-    TransactionData, TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
+    AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, ProgrammableTransaction,
+    SenderSignedData, StoredExecutionTimeObservations, Transaction, TransactionData,
+    TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
     VerifiedCertificate, VerifiedSignedTransaction, VerifiedTransaction,
 };
 use tap::TapOptional;
@@ -1596,11 +1596,7 @@ impl AuthorityPerEpochStore {
         let TransactionKind::ProgrammableTransaction(ptb) = tx.kind() else {
             return;
         };
-        if !ptb
-            .inputs
-            .iter()
-            .any(|input| matches!(input, CallArg::Object(ObjectArg::SharedObject { .. })))
-        {
+        if !ptb.has_shared_inputs() {
             return;
         }
 

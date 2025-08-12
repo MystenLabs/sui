@@ -442,6 +442,10 @@ impl TransactionInput {
                 mutable: match mutability {
                     SharedObjectMutability::Mutable => true,
                     SharedObjectMutability::Immutable => false,
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        // TODO: graphql should probably expose the full mutability enum
+                        true
+                    }
                 },
             }),
 

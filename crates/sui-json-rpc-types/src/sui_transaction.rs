@@ -23,7 +23,6 @@ use mysten_metrics::monitored_scope;
 use sui_json::{SuiJsonValue, primitive_type};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -58,6 +57,7 @@ use sui_types::transaction::{
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
     WithdrawalTypeArg,
 };
+use sui_types::{authenticator_state::ActiveJwk, transaction::SharedObjectMutability};
 
 use crate::balance_changes::BalanceChange;
 use crate::object_changes::ObjectChange;
@@ -2220,7 +2220,12 @@ impl From<InputObjectKind> for SuiInputObjectKind {
             } => Self::SharedMoveObject {
                 id,
                 initial_shared_version,
-                mutable: mutability.is_mutable(),
+                mutable: match mutability {
+                    SharedObjectMutability::Mutable => true,
+                    SharedObjectMutability::Immutable => false,
+                    // TODO(address-balances): expose detailed mutability info
+                    SharedObjectMutability::NonExclusiveWrite => false,
+                },
             },
         }
     }
@@ -2362,7 +2367,7 @@ impl SuiCallArg {
             }) => SuiCallArg::Object(SuiObjectArg::SharedObject {
                 object_id: id,
                 initial_shared_version,
-                mutable: mutability.is_mutable(),
+                mutable: mutability.is_exclusive(),
             }),
             CallArg::Object(ObjectArg::Receiving((object_id, version, digest))) => {
                 SuiCallArg::Object(SuiObjectArg::Receiving {

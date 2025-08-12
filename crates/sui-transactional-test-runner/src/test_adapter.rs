@@ -244,6 +244,7 @@ impl AdapterInitConfig {
             enable_accumulators,
             enable_authenticated_event_streams,
             allow_references_in_ptbs,
+            enable_non_exclusive_writes,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -264,6 +265,9 @@ impl AdapterInitConfig {
         }
         if allow_references_in_ptbs {
             protocol_config.allow_references_in_ptbs_for_testing();
+        }
+        if enable_non_exclusive_writes {
+            protocol_config.enable_non_exclusive_writes_for_testing();
         }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
@@ -1299,6 +1303,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     SuiValue::Receiving(_, _) => bail!("receiving is not supported as an input"),
                     SuiValue::ImmShared(_, _) => {
                         bail!("read-only shared object is not supported as an input")
+                    }
+                    SuiValue::NonExclusiveWrite(_, _) => {
+                        bail!("non-exclusive write object is not supported as an input")
                     }
                 };
                 let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);

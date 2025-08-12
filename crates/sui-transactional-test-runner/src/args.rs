@@ -93,6 +93,9 @@ pub struct SuiInitArgs {
     /// Enable references in PTBs
     #[clap(long = "allow-references-in-ptbs")]
     pub allow_references_in_ptbs: bool,
+    /// Enable non-exclusive write objects for testing
+    #[clap(long = "enable-non-exclusive-write-objects")]
+    pub enable_non_exclusive_writes: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -407,6 +410,7 @@ pub enum SuiExtraValueArgs {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    NonExclusiveWrite(FakeID, Option<SequenceNumber>),
 }
 
 #[derive(Clone)]
@@ -417,6 +421,7 @@ pub enum SuiValue {
     Digest(String),
     Receiving(FakeID, Option<SequenceNumber>),
     ImmShared(FakeID, Option<SequenceNumber>),
+    NonExclusiveWrite(FakeID, Option<SequenceNumber>),
 }
 
 impl SuiExtraValueArgs {
@@ -439,6 +444,13 @@ impl SuiExtraValueArgs {
     ) -> anyhow::Result<Self> {
         let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "immshared")?;
         Ok(SuiExtraValueArgs::ImmShared(fake_id, version))
+    }
+
+    fn parse_non_exlucsive_write_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
+        parser: &mut MoveCLParser<'a, ValueToken, I>,
+    ) -> anyhow::Result<Self> {
+        let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "nonexclusive")?;
+        Ok(SuiExtraValueArgs::NonExclusiveWrite(fake_id, version))
     }
 
     fn parse_digest_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
@@ -497,6 +509,9 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::NonExclusiveWrite(_, _) => {
+                panic!("unexpected nested Sui non-exclusive write object in args")
+            }
         }
     }
 
@@ -508,6 +523,9 @@ impl SuiValue {
             SuiValue::Digest(_) => panic!("unexpected nested Sui package digest in args"),
             SuiValue::Receiving(_, _) => panic!("unexpected nested Sui receiving object in args"),
             SuiValue::ImmShared(_, _) => panic!("unexpected nested Sui shared object in args"),
+            SuiValue::NonExclusiveWrite(_, _) => {
+                panic!("unexpected nested Sui non-exclusive write object in args")
+            }
         }
     }
 
@@ -546,6 +564,33 @@ impl SuiValue {
         version: Option<SequenceNumber>,
         test_adapter: &SuiTestAdapter,
     ) -> anyhow::Result<ObjectArg> {
+        Self::shared_arg_impl(
+            fake_id,
+            version,
+            test_adapter,
+            SharedObjectMutability::Immutable,
+        )
+    }
+
+    fn non_exclusive_write_arg(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+    ) -> anyhow::Result<ObjectArg> {
+        Self::shared_arg_impl(
+            fake_id,
+            version,
+            test_adapter,
+            SharedObjectMutability::NonExclusiveWrite,
+        )
+    }
+
+    fn shared_arg_impl(
+        fake_id: FakeID,
+        version: Option<SequenceNumber>,
+        test_adapter: &SuiTestAdapter,
+        mutability: SharedObjectMutability,
+    ) -> anyhow::Result<ObjectArg> {
         let obj = Self::resolve_object(fake_id, version, test_adapter)?;
         let id = obj.id();
         if let Owner::Shared {
@@ -555,7 +600,7 @@ impl SuiValue {
             Ok(ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
-                mutability: SharedObjectMutability::Immutable,
+                mutability,
             })
         } else {
             bail!("{fake_id} is not a shared object.")
@@ -600,6 +645,9 @@ impl SuiValue {
             SuiValue::ImmShared(fake_id, version) => {
                 CallArg::Object(Self::read_shared_arg(fake_id, version, test_adapter)?)
             }
+            SuiValue::NonExclusiveWrite(fake_id, version) => CallArg::Object(
+                Self::non_exclusive_write_arg(fake_id, version, test_adapter)?,
+            ),
             SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
             SuiValue::Digest(pkg) => {
                 let pkg = Symbol::from(pkg);
@@ -641,6 +689,9 @@ impl ParsableValue for SuiExtraValueArgs {
             (ValueToken::Ident, "digest") => Some(Self::parse_digest_value(parser)),
             (ValueToken::Ident, "receiving") => Some(Self::parse_receiving_value(parser)),
             (ValueToken::Ident, "immshared") => Some(Self::parse_read_shared_value(parser)),
+            (ValueToken::Ident, "nonexclusive") => {
+                Some(Self::parse_non_exlucsive_write_value(parser))
+            }
             _ => None,
         }
     }
@@ -676,6 +727,9 @@ impl ParsableValue for SuiExtraValueArgs {
             SuiExtraValueArgs::Digest(pkg) => Ok(SuiValue::Digest(pkg)),
             SuiExtraValueArgs::Receiving(id, version) => Ok(SuiValue::Receiving(id, version)),
             SuiExtraValueArgs::ImmShared(id, version) => Ok(SuiValue::ImmShared(id, version)),
+            SuiExtraValueArgs::NonExclusiveWrite(id, version) => {
+                Ok(SuiValue::NonExclusiveWrite(id, version))
+            }
         }
     }
 }

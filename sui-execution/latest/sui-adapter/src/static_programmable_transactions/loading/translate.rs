@@ -82,7 +82,7 @@ fn input(env: &Env, arg: CallArg) -> Result<(L::InputArg, L::InputType), Executi
                 L::InputArg::Object(L::ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
-                    mutable: mutability.is_mutable(),
+                    mutability: mutability.into(),
                     kind,
                 }),
                 L::InputType::Fixed(ty),

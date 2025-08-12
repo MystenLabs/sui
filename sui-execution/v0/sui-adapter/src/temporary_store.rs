@@ -71,7 +71,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&[]);
         let deleted_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -996,7 +996,10 @@ impl Storage for TemporaryStore<'_> {
         TemporaryStore::read_object(self, id)
     }
 
-    fn record_execution_results(&mut self, results: ExecutionResults) {
+    fn record_execution_results(
+        &mut self,
+        results: ExecutionResults,
+    ) -> Result<(), ExecutionError> {
         let ExecutionResults::V1(results) = results else {
             panic!("ExecutionResults::V1 expected in sui-execution v0");
         };
@@ -1004,6 +1007,7 @@ impl Storage for TemporaryStore<'_> {
         for event in results.user_events {
             TemporaryStore::log_event(self, event);
         }
+        Ok(())
     }
 
     fn save_loaded_runtime_objects(
