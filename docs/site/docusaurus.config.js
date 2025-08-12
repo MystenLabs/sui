@@ -78,11 +78,6 @@ const config = {
         rootPath: "../content", // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/sui-graphql/alpha/reference",
         homepage: false,
-        docOptions: {
-          frontMatter: {
-            isGraphQlAlpha: true,
-          },
-        },
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
         },
@@ -96,6 +91,11 @@ const config = {
         rootPath: "../content",
         baseURL: "references/sui-api/sui-graphql/beta/reference",
         homepage: false,
+        docOptions: {
+          frontMatter: {
+            isGraphQlBeta: true,
+          },
+        },
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
         },

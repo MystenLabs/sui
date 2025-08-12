@@ -6,11 +6,11 @@ import DocItem from "@theme-original/DocItem";
 import GraphqlBetaLink from "@site/src/components/GraphqlBetaLink";
 
 export default function DocItemWrapper(props) {
-  const isGraphQlAlpha = props.content.frontMatter?.isGraphQlAlpha;
+  const isGraphQlBeta = props.content.frontMatter?.isGraphQlBeta;
   const title = props.content.frontMatter?.title || "GraphQL";
   return (
     <>
-      {isGraphQlAlpha && <GraphqlBetaLink title={title}></GraphqlBetaLink>}
+      {isGraphQlBeta && <GraphqlBetaLink title={title}></GraphqlBetaLink>}
       <DocItem {...props} />
     </>
   );
