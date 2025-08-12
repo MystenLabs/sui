@@ -1642,14 +1642,35 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
     }
 
     fn get_network_committee(&self) -> CommitteeWithNetworkMetadata {
-        let genesis = if let Some(network_config) = self.network_config {
+        self.get_genesis().committee_with_network()
+    }
+
+    fn get_committee_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String> {
+        let state = self
+            .get_genesis()
+            .sui_system_object()
+            .into_genesis_version_for_tooling();
+        state
+            .validators
+            .active_validators
+            .iter()
+            .map(|v| {
+                let metadata = v.verified_metadata();
+                let name = metadata.sui_pubkey_bytes();
+
+                (name, metadata.name.clone())
+            })
+            .collect()
+    }
+
+    fn get_genesis(&self) -> &Genesis {
+        if let Some(network_config) = self.network_config {
             &network_config.genesis
         } else if let Some(genesis) = self.genesis {
             genesis
         } else {
             panic!("need either NetworkConfig or Genesis.");
-        };
-        genesis.committee_with_network()
+        }
     }
 
     fn get_committee(&self) -> Committee {
@@ -1679,6 +1700,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
         authority_clients: BTreeMap<AuthorityName, C>,
     ) -> AuthorityAggregator<C> {
         let committee = self.get_committee();
+        let validator_display_names = self.get_committee_authority_names_to_hostnames();
         let registry = Registry::new();
         let registry = self.registry.unwrap_or(&registry);
         let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
@@ -1696,7 +1718,7 @@ impl<'a> AuthorityAggregatorBuilder<'a> {
             authority_clients,
             safe_client_metrics_base,
             auth_agg_metrics,
-            Arc::new(HashMap::new()),
+            Arc::new(validator_display_names),
             timeouts_config,
         )
     }
