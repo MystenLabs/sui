@@ -4,7 +4,7 @@ index a342267d27..47fd7e4ee1 100644
 +++ b/.cargo/config.toml
 @@ -29,4 +29,4 @@ move-clippy = [
  ]
- 
+
  [build]
 -rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]
 +rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "--cfg", "msim"]
@@ -16,5 +16,5 @@ index 4af4ba3596..0e6314d81d 100644
  async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
  async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
  async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-+tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e" }
-+futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "192bd9590f8552d5a1c5debf66c4ff2672af037e" }
++tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "45b88cffa3f50d6f2022d0b422ca4a077ac96a98" }
++futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "45b88cffa3f50d6f2022d0b422ca4a077ac96a98" }
