@@ -63,22 +63,6 @@ const standards = [
 					'standards/deepbookv3-sdk/swaps',
 				],
 			},
-			{
-				type: 'category',
-				label: 'DeepBookV2',
-				link: {
-					type: 'doc',
-					id: 'standards/deepbookv2',
-				},
-				items: [
-					'standards/deepbookv2/design',
-					'standards/deepbookv2/orders',
-					'standards/deepbookv2/pools',
-					'standards/deepbookv2/query-the-pool',
-					'standards/deepbookv2/routing-a-swap',
-					'standards/deepbookv2/trade-and-swap',
-				],
-			},
 		],
 	},
 	'standards/display',
