@@ -21,13 +21,12 @@ mod compatibility_tests {
 
     #[tokio::test]
     async fn test_framework_compatibility() {
-        // This test checks that the current framework is compatible with all previous framework
-        // bytecode snapshots.
+        // This test checks that the current framework is compatible with
+        // `SNAPSHOT_BACKTEST_WINDOW` previous framework bytecode snapshots.
         for (version, _snapshots) in load_bytecode_snapshot_manifest()
             .iter()
             .rev()
             .take(SNAPSHOT_BACKTEST_WINDOW)
-            .rev()
         {
             let config =
                 ProtocolConfig::get_for_version(ProtocolVersion::new(*version), Chain::Unknown);

@@ -5999,9 +5999,8 @@ pub mod framework_injection {
 
     pub fn set_system_packages(packages: Vec<SystemPackage>) {
         OVERRIDE.with(|bs| {
-            let mut new_packages_not_to_include = BuiltInFramework::all_package_ids()
-                .into_iter()
-                .collect::<BTreeSet<_>>();
+            let mut new_packages_not_to_include: BTreeSet<_> =
+                BuiltInFramework::all_package_ids().into_iter().collect();
             for pkg in &packages {
                 new_packages_not_to_include.remove(&pkg.id);
             }
