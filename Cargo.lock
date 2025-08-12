@@ -14993,6 +14993,7 @@ dependencies = [
  "base64 0.21.7",
  "bcs",
  "bip32",
+ "colored",
  "fastcrypto",
  "jsonrpc",
  "mockall",
