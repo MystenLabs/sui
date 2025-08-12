@@ -87,6 +87,7 @@ impl Connection for MockConnection<'_> {
     async fn committer_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
         let watermarks = self.0.watermarks.lock().unwrap();
         Ok(Some(CommitterWatermark {
@@ -100,6 +101,7 @@ impl Connection for MockConnection<'_> {
     async fn reader_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
     ) -> Result<Option<ReaderWatermark>, anyhow::Error> {
         let watermarks = self.0.watermarks.lock().unwrap();
         Ok(Some(ReaderWatermark {
@@ -111,6 +113,7 @@ impl Connection for MockConnection<'_> {
     async fn pruner_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
         delay: Duration,
     ) -> Result<Option<PrunerWatermark>, anyhow::Error> {
         let watermarks = self.0.watermarks.lock().unwrap();
@@ -130,6 +133,7 @@ impl Connection for MockConnection<'_> {
     async fn set_committer_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         let mut watermarks = self.0.watermarks.lock().unwrap();
@@ -143,6 +147,7 @@ impl Connection for MockConnection<'_> {
     async fn set_reader_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
         reader_lo: u64,
     ) -> anyhow::Result<bool> {
         // Check for set_reader_watermark failure simulation
@@ -172,6 +177,7 @@ impl Connection for MockConnection<'_> {
     async fn set_pruner_watermark(
         &mut self,
         _pipeline: &'static str,
+        _task: Option<&'static str>,
         pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         let mut watermarks = self.0.watermarks.lock().unwrap();

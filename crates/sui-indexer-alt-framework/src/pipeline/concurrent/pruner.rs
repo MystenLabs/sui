@@ -98,18 +98,21 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
+    task: Option<&'static str>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let Some(config) = config else {
-            info!(pipeline = H::NAME, "Skipping pruner task");
+            info!(pipeline = H::NAME, task = task, "Skipping pruner task");
             return;
         };
 
         info!(
             pipeline = H::NAME,
-            "Starting pruner with config: {:?}", config
+            task = task,
+            "Starting pruner with config: {:?}",
+            config
         );
 
         // The pruner can pause for a while, waiting for the delay imposed by the
@@ -131,7 +134,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             // (1) Get the latest pruning bounds from the database.
             let mut watermark = tokio::select! {
                 _ = cancel.cancelled() => {
-                    info!(pipeline = H::NAME, "Shutdown received");
+                    info!(pipeline = H::NAME, task = task, "Shutdown received");
                     break;
                 }
 
@@ -142,11 +145,11 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                         .start_timer();
 
                     let Ok(mut conn) = store.connect().await else {
-                        warn!(pipeline = H::NAME, "Pruner failed to connect, while fetching watermark");
+                        warn!(pipeline = H::NAME, task = task, "Pruner failed to connect, while fetching watermark");
                         continue;
                     };
 
-                    match conn.pruner_watermark(H::NAME, config.delay()).await {
+                    match conn.pruner_watermark(H::NAME, task, config.delay()).await {
                         Ok(Some(current)) => {
                             guard.stop_and_record();
                             current
@@ -154,13 +157,13 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
                         Ok(None) => {
                             guard.stop_and_record();
-                            warn!(pipeline = H::NAME, "No watermark for pipeline, skipping");
+                            warn!(pipeline = H::NAME, task = task, "No watermark for pipeline, skipping");
                             continue;
                         }
 
                         Err(e) => {
                             guard.stop_and_record();
-                            warn!(pipeline = H::NAME, "Failed to get watermark: {e}");
+                            warn!(pipeline = H::NAME, task = task, "Failed to get watermark: {e}");
                             continue;
                         }
                     }
@@ -169,11 +172,16 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
             // (2) Wait until this information can be acted upon.
             if let Some(wait_for) = watermark.wait_for() {
-                debug!(pipeline = H::NAME, ?wait_for, "Waiting to prune");
+                debug!(
+                    pipeline = H::NAME,
+                    task = task,
+                    ?wait_for,
+                    "Waiting to prune"
+                );
                 tokio::select! {
                     _ = tokio::time::sleep(wait_for) => {}
                     _ = cancel.cancelled() => {
-                        info!(pipeline = H::NAME, "Shutdown received");
+                        info!(pipeline = H::NAME, task = task, "Shutdown received");
                         break;
                     }
                 }
@@ -193,6 +201,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
             debug!(
                 pipeline = H::NAME,
+                task = task,
                 "Number of chunks to prune: {}",
                 pending_prune_ranges.len()
             );
@@ -240,6 +249,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     Err(e) => {
                         error!(
                             pipeline = H::NAME,
+                            task = task,
                             "Failed to prune data for range: {from} to {to_exclusive}: {e}"
                         );
                     }
@@ -259,16 +269,21 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     let Ok(mut conn) = store.connect().await else {
                         warn!(
                             pipeline = H::NAME,
+                            task = task,
                             "Pruner failed to connect while updating watermark"
                         );
                         continue;
                     };
 
-                    match conn.set_pruner_watermark(H::NAME, highest_pruned).await {
+                    match conn
+                        .set_pruner_watermark(H::NAME, task, highest_pruned)
+                        .await
+                    {
                         Err(e) => {
                             let elapsed = guard.stop_and_record();
                             error!(
                                 pipeline = H::NAME,
+                                task = task,
                                 elapsed_ms = elapsed * 1000.0,
                                 "Failed to update pruner watermark: {e}"
                             )
@@ -281,6 +296,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                                 elapsed,
                             );
 
+                            // TODO: how do we report task to this metric?
                             metrics
                                 .watermark_pruner_hi_in_db
                                 .with_label_values(&[H::NAME])
@@ -562,6 +578,7 @@ mod tests {
                 handler,
                 Some(pruner_config),
                 store_clone,
+                None, // task
                 metrics,
                 cancel_clone,
             )
@@ -658,6 +675,7 @@ mod tests {
                 handler,
                 Some(pruner_config),
                 store_clone,
+                None, // task
                 metrics,
                 cancel_clone,
             )
@@ -744,6 +762,7 @@ mod tests {
                 handler,
                 Some(pruner_config),
                 store_clone,
+                None, // task
                 metrics,
                 cancel_clone,
             )
