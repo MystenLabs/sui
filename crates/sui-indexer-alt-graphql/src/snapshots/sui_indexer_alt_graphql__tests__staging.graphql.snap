@@ -316,6 +316,40 @@ type CoinDenyListStateCreateTransaction {
 }
 
 """
+A single command in the programmable transaction.
+"""
+union Command = MoveCallCommand
+
+type CommandConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CommandEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Command!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CommandEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Command!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 System transaction that runs at the beginning of a checkpoint, and is responsible for setting the current value of the clock, based on the timestamp from consensus.
 """
 type ConsensusCommitPrologueTransaction {
@@ -789,6 +823,16 @@ interface IObject {
 
 
 """
+A call to a Move function.
+"""
+type MoveCallCommand {
+	"""
+	Placeholder field
+	"""
+	_: Boolean
+}
+
+"""
 A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 """
 type MovePackage implements IAddressable & IObject {
@@ -1099,6 +1143,17 @@ type PerEpochConfig {
 	object: Object
 }
 
+type ProgrammableTransaction {
+	"""
+	Input objects or primitive values.
+	"""
+	inputs(first: Int, after: String, last: Int, before: String): TransactionInputConnection!
+	"""
+	The transaction commands, executed sequentially.
+	"""
+	commands(first: Int, after: String, last: Int, before: String): CommandConnection!
+}
+
 """
 A protocol configuration that can hold an arbitrary value (or no value at all).
 """
@@ -1136,6 +1191,16 @@ type ProtocolConfigs {
 	List all available feature flags and their values.
 	"""
 	featureFlags: [FeatureFlag!]!
+}
+
+"""
+BCS encoded primitive value (not an object or Move struct).
+"""
+type Pure {
+	"""
+	BCS serialized and Base64 encoded primitive value.
+	"""
+	bytes: Base64
 }
 
 type Query {
@@ -1675,9 +1740,43 @@ input TransactionFilter {
 }
 
 """
+Input argument to a Programmable Transaction Block (PTB) command.
+"""
+union TransactionInput = Pure
+
+type TransactionInputConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionInputEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionInput!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionInputEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionInput!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 Different types of transactions that can be executed on the Sui network.
 """
-union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction
+union TransactionKind = GenesisTransaction | ConsensusCommitPrologueTransaction | ChangeEpochTransaction | RandomnessStateUpdateTransaction | AuthenticatorStateUpdateTransaction | EndOfEpochTransaction | ProgrammableTransaction
 
 """
 An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.

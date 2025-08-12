@@ -41,7 +41,9 @@ Response: {
   "data": {
     "nonAuthenticatorTransaction": {
       "digest": "4naXncbBysxsttwyjJaLK35CTQQuHnqDAGJ8MPcwUsSP",
-      "kind": null
+      "kind": {
+        "__typename": "ProgrammableTransaction"
+      }
     }
   }
 }
