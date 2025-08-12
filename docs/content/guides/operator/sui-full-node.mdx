@@ -144,7 +144,7 @@ When you are ready to run `sui-node` in your production environment, you can set
 
 1. Make a copy of the [Full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml):
     ```sh
-    $ cp crates/sui-config/data/fullnode-template.yaml `fullnode.yaml`
+    $ cp crates/sui-config/data/fullnode-template.yaml fullnode.yaml
     ```
 1. Download the genesis blob for the network to use:
     - [Devnet genesis blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob):
@@ -234,7 +234,7 @@ Instead, start your Full node from a recent snapshot. You can find details on ho
 Now that you have your Full node config file set up, and you've obtained a snapshot, you can start your Full node by running the `sui-node` binary with your `fullnode.yaml` configuration file:
 
 ```sh
-$ sui-node --config-path `fullnode.yaml`
+$ sui-node --config-path fullnode.yaml
 ```
 
 It's a good idea to use something like systemd to manage your Full node in a production environment.

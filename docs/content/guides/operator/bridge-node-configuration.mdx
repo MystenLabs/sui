@@ -170,7 +170,7 @@ With `run-client: true`, you can find these additional fields in the generated c
 | `db-path` | Path of BridgeClient database, for BridgeClient. |
 | `sui:bridge-client-key-path` | The file path of Bridge Client key. This key can be generated with `sui-bridge-cli create-bridge-client-key` as previously shown. When `run-client` is true but you do not provide `sui:bridge-client-key-path`, it defaults to use the Bridge Validator key to submit transactions on Sui. This is not recommended for the sake of key separation. | 
 
-### `BridgeClient`
+### BridgeClient
 
 `BridgeClient` orchestrates bridge transfer requests. It is **optional** to run for a `BridgeNode`. `BridgeClient` submits transaction on the Sui network. Thus when it's enabled, you need a Sui account key with enough SUI balance.
 
