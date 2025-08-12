@@ -479,7 +479,7 @@ pub struct AuthorityEpochTables {
 
     /// Map stores pending transactions that this authority submitted to consensus
     #[default_options_override_fn = "pending_consensus_transactions_table_default_config"]
-    pending_consensus_transactions: DBMap<ConsensusTransactionKey, ConsensusTransaction>,
+    pending_consensus_transactions: DBMap<[u8; 32], ConsensusTransaction>,
 
     /// The following table is used to store a single value (the corresponding key is a constant). The value
     /// represents the index of the latest consensus message this authority processed, running hash of
@@ -2349,7 +2349,7 @@ impl AuthorityPerEpochStore {
         transactions: &[ConsensusTransaction],
         lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
-        let key_value_pairs = transactions.iter().map(|tx| (tx.key(), tx));
+        let key_value_pairs = transactions.iter().map(|tx| (sui_types::crypto::default_hash(&tx.key()), tx));
         self.tables()?
             .pending_consensus_transactions
             .multi_insert(key_value_pairs)?;
@@ -2381,6 +2381,7 @@ impl AuthorityPerEpochStore {
         &self,
         keys: &[ConsensusTransactionKey],
     ) -> SuiResult {
+        let keys: Vec<_> = keys.iter().map(sui_types::crypto::default_hash).collect();
         self.tables()?
             .pending_consensus_transactions
             .multi_remove(keys)?;
