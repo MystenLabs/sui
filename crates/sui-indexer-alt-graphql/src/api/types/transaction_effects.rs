@@ -67,6 +67,7 @@ type CObjectChange = JsonCursor<usize>;
 type CEvent = JsonCursor<usize>;
 type CBalanceChange = JsonCursor<usize>;
 type CUnchangedConsensusObject = JsonCursor<usize>;
+type CDependency = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -352,6 +353,39 @@ impl EffectsContents {
 
             conn.edges
                 .push(Edge::new(edge.cursor, unchanged_consensus_object))
+        }
+
+        Ok(Some(conn))
+    }
+
+    /// Transactions whose outputs this transaction depends upon.
+    async fn dependencies(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CDependency>,
+        last: Option<u64>,
+        before: Option<CDependency>,
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "dependencies");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let effects = content.effects()?;
+        let dependencies = effects.dependencies();
+        let cursors = page.paginate_indices(dependencies.len());
+
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        for edge in cursors.edges {
+            let dependency_digest = dependencies[*edge.cursor];
+            let transaction = Transaction::with_id(self.scope.clone(), dependency_digest);
+
+            conn.edges
+                .push(Edge::new(edge.cursor.encode_cursor(), transaction));
         }
 
         Ok(Some(conn))
