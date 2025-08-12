@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 23 tasks
+processed 18 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -59,145 +59,38 @@ task 9, lines 30-32:
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 10, line 34:
-//# advance-epoch
-Epoch advanced: 2
-
-task 11, lines 36-38:
-//# programmable --sender A --inputs 1
-//> SplitCoins(Gas, [Input(0)]);
-//> MergeCoins(Gas, [Result(0)])
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
-
-task 12, lines 40-42:
-//# programmable --sender A --inputs 2
-//> SplitCoins(Gas, [Input(0)]);
-//> MergeCoins(Gas, [Result(0)])
-mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
-
-task 13, lines 44-46:
+task 10, lines 34-36:
 //# programmable --sender A --inputs 3
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 14, lines 48-63:
-//# run-graphql
-Response: {
-  "data": {
-    "epoch": {
-      "totalTransactions": 2,
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": false,
-          "hasNextPage": false,
-          "startCursor": "MA==",
-          "endCursor": "MQ=="
-        },
-        "edges": [
-          {
-            "cursor": "MA==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 0
-                }
-              }
-            }
-          },
-          {
-            "cursor": "MQ==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 1
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
+task 11, lines 38-40:
+//# programmable --sender A --inputs 3
+//> SplitCoins(Gas, [Input(0)]);
+//> MergeCoins(Gas, [Result(0)])
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 15, lines 65-80:
-//# run-graphql
-Response: {
-  "data": {
-    "epoch": {
-      "totalTransactions": 2,
-      "transactions": {
-        "pageInfo": {
-          "hasPreviousPage": false,
-          "hasNextPage": false,
-          "startCursor": "MQ==",
-          "endCursor": "MQ=="
-        },
-        "edges": [
-          {
-            "cursor": "MQ==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 1
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
+task 12, line 42:
+//# advance-epoch
+Epoch advanced: 2
 
-task 16, lines 82-96:
-//# run-graphql
+task 13, lines 44-58:
+//# run-graphql --cursors 4 8
 Response: {
   "data": {
-    "epoch": {
-      "totalTransactions": 6,
+    "epoch1WithCursorsFromFront": {
+      "totalTransactions": 8,
       "transactions": {
         "pageInfo": {
-          "hasPreviousPage": false,
-          "hasNextPage": false,
-          "startCursor": "Mg==",
-          "endCursor": "Nw=="
+          "hasPreviousPage": true,
+          "hasNextPage": true,
+          "startCursor": "NQ==",
+          "endCursor": "Ng=="
         },
         "edges": [
-          {
-            "cursor": "Mg==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 2
-                }
-              }
-            }
-          },
-          {
-            "cursor": "Mw==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 2
-                }
-              }
-            }
-          },
-          {
-            "cursor": "NA==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 2
-                }
-              }
-            }
-          },
           {
             "cursor": "NQ==",
             "node": {
@@ -208,6 +101,36 @@ Response: {
               }
             }
           },
+          {
+            "cursor": "Ng==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 14, lines 60-74:
+//# run-graphql --cursors 4 8
+Response: {
+  "data": {
+    "epoch1WithCursorsFromBack": {
+      "totalTransactions": 8,
+      "transactions": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true,
+          "startCursor": "Ng==",
+          "endCursor": "Nw=="
+        },
+        "edges": [
           {
             "cursor": "Ng==",
             "node": {
@@ -234,31 +157,101 @@ Response: {
   }
 }
 
-task 17, lines 98-112:
-//# run-graphql --cursors 4 8
+task 15, lines 76-90:
+//# run-graphql --cursors 4 
 Response: {
   "data": {
-    "epoch": {
-      "totalTransactions": 6,
+    "epoch1WithAfterCursorFromFront": {
+      "totalTransactions": 8,
+      "transactions": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true,
+          "startCursor": "NQ==",
+          "endCursor": "Ng=="
+        },
+        "edges": [
+          {
+            "cursor": "NQ==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 3
+                }
+              }
+            }
+          },
+          {
+            "cursor": "Ng==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 16, lines 92-106:
+//# run-graphql --cursors 4 
+Response: {
+  "data": {
+    "epoch1WithAfterCursorFromBack": {
+      "totalTransactions": 8,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": true,
           "hasNextPage": false,
-          "startCursor": "NQ==",
+          "startCursor": "OA==",
+          "endCursor": "OQ=="
+        },
+        "edges": [
+          {
+            "cursor": "OA==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            }
+          },
+          {
+            "cursor": "OQ==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 17, lines 108-122:
+//# run-graphql --cursors 8
+Response: {
+  "data": {
+    "epoch1WithBeforeCursorFromBack": {
+      "totalTransactions": 8,
+      "transactions": {
+        "pageInfo": {
+          "hasPreviousPage": true,
+          "hasNextPage": true,
+          "startCursor": "Ng==",
           "endCursor": "Nw=="
         },
         "edges": [
           {
-            "cursor": "NQ==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 3
-                }
-              }
-            }
-          },
-          {
             "cursor": "Ng==",
             "node": {
               "effects": {
@@ -281,169 +274,5 @@ Response: {
         ]
       }
     }
-  }
-}
-
-task 18, lines 114-122:
-//# run-graphql
-Response: {
-  "data": {
-    "epoch": {
-      "totalTransactions": 6,
-      "transactions": {
-        "edges": [
-          {
-            "cursor": "Ng==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 5
-                }
-              }
-            }
-          },
-          {
-            "cursor": "Nw==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 5
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 19, lines 124-132:
-//# run-graphql
-Response: {
-  "data": {
-    "epoch": {
-      "totalTransactions": 6,
-      "transactions": {
-        "edges": [
-          {
-            "cursor": "NQ==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 3
-                }
-              }
-            }
-          },
-          {
-            "cursor": "Ng==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 5
-                }
-              }
-            }
-          },
-          {
-            "cursor": "Nw==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 5
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 20, lines 134-142:
-//# run-graphql --cursors 5
-Response: {
-  "data": {
-    "epoch": {
-      "totalTransactions": 6,
-      "transactions": {
-        "edges": [
-          {
-            "cursor": "Ng==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 5
-                }
-              }
-            }
-          },
-          {
-            "cursor": "Nw==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 5
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 21, lines 144-152:
-//# run-graphql
-Response: {
-  "data": {
-    "epoch": {
-      "totalTransactions": 6,
-      "transactions": {
-        "edges": [
-          {
-            "cursor": "Mg==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 2
-                }
-              }
-            }
-          },
-          {
-            "cursor": "Mw==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 2
-                }
-              }
-            }
-          },
-          {
-            "cursor": "NA==",
-            "node": {
-              "effects": {
-                "checkpoint": {
-                  "sequenceNumber": 2
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-
-task 22, lines 154-168:
-//# run-graphql
-Response: {
-  "data": {
-    "epoch": null
   }
 }

@@ -133,14 +133,14 @@ impl Epoch {
         let limits = pagination.limits("Epoch", "transactions");
         let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cp_lo_exclusive = (start.cp_lo as u64).saturating_sub(1);
+        let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
         let cp_hi = end.as_ref().map_or_else(
             || self.scope.checkpoint_viewed_at_exclusive_bound(),
             |end| end.cp_hi as u64,
         );
 
         let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
-            after_checkpoint: (cp_lo_exclusive > 0).then(|| UInt53::from(cp_lo_exclusive)),
+            after_checkpoint: cp_lo_exclusive.map(UInt53::from),
             before_checkpoint: Some(UInt53::from(cp_hi)),
             ..Default::default()
         }) else {

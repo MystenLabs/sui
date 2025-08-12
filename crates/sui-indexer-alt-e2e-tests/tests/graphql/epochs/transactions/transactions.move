@@ -63,23 +63,6 @@
 }
 
 //# run-graphql
-{ # Fetch an epoch and fetch transactions after checkpoint 0.
-  # This should have 1 transaction in Checkpoint 1.
-  epoch(epochId: 0) {
-    totalTransactions
-    transactions(first: 1, filter: { afterCheckpoint: 0 }) {
-      pageInfo {
-        hasPreviousPage
-        hasNextPage
-        startCursor
-        endCursor
-      }
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
-    }
-  }
-}
-
-//# run-graphql
 { # Fetch an epoch and its transactions
   epoch(epochId: 1) {
     totalTransactions
@@ -90,62 +73,6 @@
         startCursor
         endCursor
       }
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
-    }
-  }
-}
-
-//# run-graphql --cursors 4 8
-{ # Fetch an epoch and its transactions, with cursors applied to transactions
-  epoch(epochId: 1) {
-    totalTransactions
-    transactions(first: 10, after: "@{cursor_0}", before: "@{cursor_1}") {
-      pageInfo {
-        hasPreviousPage
-        hasNextPage
-        startCursor
-        endCursor
-      }
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
-    }
-  }
-}
-
-//# run-graphql
-{ # Fetch an epoch and its transactions, at a checkpoint
-  epoch(epochId: 1) {
-    totalTransactions
-    transactions( first: 3, filter: { atCheckpoint: 5 }) {
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
-    }
-  }
-}
-
-//# run-graphql
-{ # Fetch an epoch and its transactions, after a checkpoint
-  epoch(epochId: 1) {
-    totalTransactions
-    transactions( first: 3, filter: { afterCheckpoint: 2 }) {
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
-    }
-  }
-}
-
-//# run-graphql --cursors 5
-{ # Fetch an epoch and its transactions, after a checkpoint with cursors applied
-  epoch(epochId: 1) {
-    totalTransactions
-    transactions( first: 3, filter: { afterCheckpoint: 2 }, after: "@{cursor_0}") {
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
-    }
-  }
-}
-
-//# run-graphql
-{ # Fetch an epoch and its transactions, before a checkpoint
-  epoch(epochId: 1) {
-    totalTransactions
-    transactions( first: 3, filter: { beforeCheckpoint: 3 }) {
       edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
     }
   }
