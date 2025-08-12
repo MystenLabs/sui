@@ -100,6 +100,7 @@ impl RpcArgs {
     }
 
     /// Requests that take longer than this are logged for debugging even if they succeed.
+    /// This threshold should be lower than the request timeout threshold.
     fn slow_request_threshold(&self) -> Duration {
         Duration::from_millis(self.slow_request_threshold_ms)
     }

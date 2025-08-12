@@ -192,7 +192,6 @@ where
             }
         } else {
             metrics.succeeded.with_label_values(&[method]).inc();
-
             if elapsed_ms > slow_threshold_ms {
                 warn!(
                     method,
