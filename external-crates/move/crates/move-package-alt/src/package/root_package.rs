@@ -166,7 +166,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// this package depends on (transitively). Returns an error if any of the packages that this
     /// package depends on is unpublished.
     pub fn linkage(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
-        todo!()
+        Ok(self.graph.linkage()?)
+    }
+
+    /// Return the direct dependencies of the root package. This contains only the immediate 
+    /// dependencies that the root package declares, not transitive dependencies.
+    /// Returns an error if any direct dependency is unpublished.
+    pub fn direct_dependencies(&self) -> PackageResult<BTreeMap<OriginalID, PackageInfo<F>>> {
+        Ok(self.graph.direct_dependencies()?)
     }
 
     /// Output an updated lockfile containg the dependency graph represented by `self`. Note that
