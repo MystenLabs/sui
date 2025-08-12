@@ -51,9 +51,14 @@ impl WalletContext {
         Ok(context)
     }
 
-    pub fn new_for_tests(keystore: Keystore, path: Option<PathBuf>) -> Self {
-        let config = SuiClientConfig::new(keystore)
+    pub fn new_for_tests(
+        keystore: Keystore,
+        external: Option<Keystore>,
+        path: Option<PathBuf>,
+    ) -> Self {
+        let mut config = SuiClientConfig::new(keystore)
             .persisted(&path.unwrap_or(PathBuf::from("test_config.yaml")));
+        config.external_keys = external;
         Self {
             config,
             request_timeout: None,
