@@ -16,6 +16,7 @@ pub struct MoveCallCommand {
 
 #[Object]
 impl MoveCallCommand {
+    // TODO(DVX-1373): Replace package, module and function_name by MoveFunction type.
     /// The storage ID of the package the function being called is defined in.
     async fn package(&self) -> Option<SuiAddress> {
         Some(SuiAddress::from(self.native.package))
