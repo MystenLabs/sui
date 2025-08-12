@@ -18,15 +18,10 @@ use tracing::info;
 #[derive(Clone)]
 pub struct ObjectStore {
     object_store: Arc<dyn object_store::ObjectStore>,
-    /// Temporary workaround: watermark_task allows overriding the watermark path
-    /// to support multiple indexer instances writing to different watermark files.
-    /// This will be replaced by the proper Tasks framework feature (see PR #23737).
-    watermark_task: Option<String>,
 }
 
 pub struct ObjectStoreConnection {
     object_store: Arc<dyn object_store::ObjectStore>,
-    watermark_task: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -38,14 +33,8 @@ struct ComitterWatermark {
 }
 
 impl ObjectStore {
-    pub fn new(
-        object_store: Arc<dyn object_store::ObjectStore>,
-        watermark_task: Option<String>,
-    ) -> Self {
-        Self {
-            object_store,
-            watermark_task,
-        }
+    pub fn new(object_store: Arc<dyn object_store::ObjectStore>) -> Self {
+        Self { object_store }
     }
 }
 
@@ -84,7 +73,6 @@ impl Store for ObjectStore {
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
         Ok(ObjectStoreConnection {
             object_store: self.object_store.clone(),
-            watermark_task: self.watermark_task.clone(),
         })
     }
 }
@@ -93,13 +81,9 @@ impl Store for ObjectStore {
 impl Connection for ObjectStoreConnection {
     async fn committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
     ) -> anyhow::Result<Option<framework_traits::CommitterWatermark>> {
-        let object_path = if let Some(ref task) = self.watermark_task {
-            ObjectPath::from(format!("_metadata/watermarks/{}@{}.json", pipeline, task))
-        } else {
-            ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline))
-        };
+        let object_path = ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline_task));
         match self.object_store.get(&object_path).await {
             Ok(result) => {
                 let bytes = result.bytes().await?;
@@ -107,7 +91,7 @@ impl Connection for ObjectStoreConnection {
                     .context("Failed to parse watermark from object store")?;
 
                 info!(
-                    pipeline,
+                    pipeline_task,
                     checkpoint = watermark.checkpoint_hi_inclusive,
                     "Downloaded watermark from object store"
                 );
@@ -136,15 +120,11 @@ impl Connection for ObjectStoreConnection {
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
         watermark: framework_traits::CommitterWatermark,
     ) -> anyhow::Result<bool> {
         let new_watermark: ComitterWatermark = watermark.into();
-        let object_path = if let Some(ref task) = self.watermark_task {
-            ObjectPath::from(format!("_metadata/watermarks/{}@{}.json", pipeline, task))
-        } else {
-            ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline))
-        };
+        let object_path = ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline_task));
 
         let (current_watermark, e_tag, version) = match self.object_store.get(&object_path).await {
             Ok(result) => {
@@ -209,7 +189,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_watermark_operations() {
-        let store = ObjectStore::new(Arc::new(InMemory::new()), None);
+        let store = ObjectStore::new(Arc::new(InMemory::new()));
         let mut conn = store.connect().await.unwrap();
 
         let pipeline = "test_pipeline";

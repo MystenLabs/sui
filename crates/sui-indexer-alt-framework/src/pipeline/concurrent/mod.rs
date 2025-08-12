@@ -5,7 +5,10 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, watch},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -14,13 +17,14 @@ use crate::{metrics::IndexerMetrics, store::Store, types::full_checkpoint_conten
 use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
 
 use self::{
-    collector::collector, commit_watermark::commit_watermark, committer::committer, pruner::pruner,
-    reader_watermark::reader_watermark,
+    collector::collector, commit_watermark::commit_watermark, committer::committer,
+    main_reader_lo::main_reader_lo, pruner::pruner, reader_watermark::reader_watermark,
 };
 
 mod collector;
 mod commit_watermark;
 mod committer;
+mod main_reader_lo;
 mod pruner;
 mod reader_watermark;
 
@@ -205,6 +209,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     next_checkpoint: u64,
     config: ConcurrentConfig,
     store: H::Store,
+    task: Option<String>,
     checkpoint_rx: mpsc::Receiver<Arc<Checkpoint>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -233,6 +238,18 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner_cancel = cancel.child_token();
     let handler = Arc::new(handler);
 
+    // The watch channel is an channel<Option<u64>> is populated with 0 if this is the main
+    // pipeline. Otherwise, the channel is set to None, so that the reader_lo task can correctly
+    // inform its consumers of the latest reader_lo.
+    let (main_reader_lo_tx, main_reader_lo_rx) = watch::channel(task.is_none().then_some(0));
+
+    let main_reader_lo_task = main_reader_lo::<H>(
+        main_reader_lo_tx,
+        pruner_config.clone(),
+        cancel.clone(),
+        store.clone(),
+    );
+
     let processor = processor(
         handler.clone(),
         checkpoint_rx,
@@ -246,6 +263,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config.clone(),
         collector_rx,
         collector_tx,
+        main_reader_lo_rx,
         metrics.clone(),
         cancel.clone(),
     );
@@ -265,9 +283,14 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config,
         watermark_rx,
         store.clone(),
+        task.clone(),
         metrics.clone(),
         cancel,
     );
+
+    // Tasked pipelines will skip reader_watermark and pruner. Setting the pruner config to None
+    // will result in the tasks returning early.
+    let pruner_config = if task.is_some() { None } else { pruner_config };
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
@@ -285,7 +308,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     );
 
     tokio::spawn(async move {
-        let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
+        let (_, _, _, _, _) = futures::join!(
+            main_reader_lo_task,
+            processor,
+            collector,
+            committer,
+            commit_watermark
+        );
 
         pruner_cancel.cancel();
         let _ = futures::join!(reader_watermark, pruner);
@@ -413,6 +442,7 @@ mod tests {
                 next_checkpoint,
                 config,
                 store.clone(),
+                None,
                 checkpoint_rx,
                 metrics,
                 cancel.clone(),
