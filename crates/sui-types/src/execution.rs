@@ -9,7 +9,7 @@ use crate::{
     is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
-    transaction::{Argument, Command},
+    transaction::{Argument, Command, SharedObjectMutability},
     type_input::TypeInput,
 };
 use move_core_types::language_storage::TypeTag;
@@ -25,7 +25,12 @@ use std::time::Duration;
 /// 2. Whether the object appeared as mutable (or owned) in the transaction, or as read-only.
 /// 3. The transaction digest of the previous transaction that used this object mutably or
 ///    took it by value.
-pub type ConsensusStreamEndedInfo = (ObjectID, SequenceNumber, bool, TransactionDigest);
+pub type ConsensusStreamEndedInfo = (
+    ObjectID,
+    SequenceNumber,
+    SharedObjectMutability,
+    TransactionDigest,
+);
 
 /// A sequence of information about removed consensus objects in the transaction's inputs.
 pub type ConsensusStreamEndedObjects = Vec<ConsensusStreamEndedInfo>;

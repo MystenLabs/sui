@@ -45,7 +45,9 @@ pub struct TemporaryStore<'backing> {
     stream_ended_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
-    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
+    /// Inputs that will be mutated by the transaction. Does not include NonExclusiveWrite inputs,
+    /// which can be taken as `&mut T` but cannot be directly mutated.
+    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     execution_results: ExecutionResultsV2,
     /// Objects that were loaded during execution (dynamic fields + received objects).
     loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
@@ -86,7 +88,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &'backing ProtocolConfig,
         cur_epoch: EpochId,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let stream_ended_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
@@ -169,6 +171,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// sequence number. This is required to achieve safety.
     pub(crate) fn ensure_active_inputs_mutated(&mut self) {
         let mut to_be_updated = vec![];
+        // Note: we do not mutate input objects if they are non-exclusive write
         for id in self.mutable_input_refs.keys() {
             if !self.execution_results.modified_objects.contains(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
