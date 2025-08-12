@@ -1345,6 +1345,7 @@ impl TestClusterBuilder {
         // Create wallet config with stated authorities port
         SuiClientConfig {
             keystore: Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?),
+            external_keys: None,
             envs: Default::default(),
             active_address,
             active_env: Default::default(),

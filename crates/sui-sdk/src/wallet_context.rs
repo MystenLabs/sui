@@ -7,7 +7,7 @@ use anyhow::{anyhow, ensure};
 use futures::future;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
 use sui_json_rpc_types::{
@@ -15,9 +15,10 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::key_identity::KeyIdentity;
-use sui_keys::keystore::AccountKeystore;
+use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{Signature, SuiKeyPair};
+
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
@@ -50,6 +51,23 @@ impl WalletContext {
         Ok(context)
     }
 
+    pub fn new_for_tests(
+        keystore: Keystore,
+        external: Option<Keystore>,
+        path: Option<PathBuf>,
+    ) -> Self {
+        let mut config = SuiClientConfig::new(keystore)
+            .persisted(&path.unwrap_or(PathBuf::from("test_config.yaml")));
+        config.external_keys = external;
+        Self {
+            config,
+            request_timeout: None,
+            client: Arc::new(Default::default()),
+            max_concurrent_requests: None,
+            env_override: None,
+        }
+    }
+
     pub fn with_request_timeout(mut self, request_timeout: std::time::Duration) -> Self {
         self.request_timeout = Some(request_timeout);
         self
@@ -78,7 +96,21 @@ impl WalletContext {
         input: Option<KeyIdentity>,
     ) -> Result<SuiAddress, anyhow::Error> {
         if let Some(key_identity) = input {
-            Ok(self.config.keystore.get_by_identity(key_identity)?)
+            if let Ok(address) = self.config.keystore.get_by_identity(&key_identity) {
+                return Ok(address);
+            }
+            if let Some(address) = self
+                .config
+                .external_keys
+                .as_ref()
+                .and_then(|external_keys| external_keys.get_by_identity(&key_identity).ok())
+            {
+                return Ok(address);
+            }
+
+            Err(anyhow!(
+                "No address found for the provided key identity: {key_identity}"
+            ))
         } else {
             self.active_address()
         }
@@ -357,6 +389,55 @@ impl WalletContext {
     /// Add an account
     pub async fn add_account(&mut self, alias: Option<String>, keypair: SuiKeyPair) {
         self.config.keystore.import(alias, keypair).await.unwrap();
+    }
+
+    pub fn get_keystore_by_identity(
+        &self,
+        key_identity: &KeyIdentity,
+    ) -> Result<&Keystore, anyhow::Error> {
+        if self.config.keystore.get_by_identity(key_identity).is_ok() {
+            return Ok(&self.config.keystore);
+        }
+
+        if let Some(external_keys) = self.config.external_keys.as_ref() {
+            if external_keys.get_by_identity(key_identity).is_ok() {
+                return Ok(external_keys);
+            }
+        }
+
+        Err(anyhow!(
+            "No keystore found for the provided key identity: {key_identity}"
+        ))
+    }
+
+    pub fn get_keystore_by_identity_mut(
+        &mut self,
+        key_identity: &KeyIdentity,
+    ) -> Result<&mut Keystore, anyhow::Error> {
+        if self.config.keystore.get_by_identity(key_identity).is_ok() {
+            return Ok(&mut self.config.keystore);
+        }
+
+        if let Some(external_keys) = self.config.external_keys.as_mut() {
+            if external_keys.get_by_identity(key_identity).is_ok() {
+                return Ok(external_keys);
+            }
+        }
+
+        Err(anyhow!(
+            "No keystore found for the provided key identity: {key_identity}"
+        ))
+    }
+
+    pub async fn sign_secure(
+        &self,
+        key_identity: &KeyIdentity,
+        data: &TransactionData,
+        intent: Intent,
+    ) -> Result<Signature, anyhow::Error> {
+        let keystore = self.get_keystore_by_identity(key_identity)?;
+        let sig = keystore.sign_secure(&data.sender(), data, intent).await?;
+        Ok(sig)
     }
 
     /// Sign a transaction with a key currently managed by the WalletContext

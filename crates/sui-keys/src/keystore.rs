@@ -142,13 +142,13 @@ pub trait AccountKeystore: Send + Sync {
     }
 
     /// Get address by its identity: a type which is either an address or an alias.
-    fn get_by_identity(&self, key_identity: KeyIdentity) -> Result<SuiAddress, anyhow::Error> {
+    fn get_by_identity(&self, key_identity: &KeyIdentity) -> Result<SuiAddress, anyhow::Error> {
         match key_identity {
-            KeyIdentity::Address(addr) => Ok(addr),
+            KeyIdentity::Address(addr) => Ok(*addr),
             KeyIdentity::Alias(alias) => Ok(*self
                 .addresses_with_alias()
                 .iter()
-                .find(|(_, a)| a.alias == alias)
+                .find(|(_, a)| a.alias == *alias)
                 .ok_or_else(|| anyhow!("Cannot resolve alias {alias} to an address"))?
                 .0),
         }

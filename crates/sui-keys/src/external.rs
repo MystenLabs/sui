@@ -1040,7 +1040,7 @@ mod tests {
         let external = load_external_keystore();
         let address = SuiAddress::from_str(ADDRESS).unwrap();
         let identity = KeyIdentity::Address(address);
-        let address = external.get_by_identity(identity).unwrap();
+        let address = external.get_by_identity(&identity).unwrap();
         assert_eq!(address.to_string(), ADDRESS);
     }
 

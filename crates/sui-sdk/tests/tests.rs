@@ -5,13 +5,18 @@ use tempfile::TempDir;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use sui_keys::key_derive::generate_new_key;
-use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::key_identity::KeyIdentity;
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
 use sui_macros::sim_test;
-use sui_sdk::verify_personal_message_signature::verify_personal_message_signature;
-use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{Ed25519SuiSignature, SuiKeyPair};
+use sui_sdk::{
+    verify_personal_message_signature::verify_personal_message_signature,
+    wallet_context::WalletContext,
+};
+use sui_types::base_types::{random_object_ref, SuiAddress};
+use sui_types::crypto::{Ed25519SuiSignature, SuiKeyPair, SuiSignature};
 use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
 use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::transaction::{ProgrammableTransaction, TransactionData, TransactionKind};
 use sui_types::{
     crypto::{get_key_pair, Signature},
     signature::GenericSignature,
@@ -133,4 +138,100 @@ async fn test_verify_signature_multisig() {
     let res =
         verify_personal_message_signature(generic_sig, "wrong msg".as_bytes(), address, None).await;
     assert!(res.is_err());
+}
+
+#[tokio::test]
+async fn test_get_wallet_key() {
+    // Test that we can get and sign with the wallet key from the "filebased" keystore.
+    let filebased = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
+    let external = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
+    let alias = filebased.aliases()[0].alias.clone();
+    let address = external.addresses()[0];
+    let alias_identity = KeyIdentity::Alias(alias.clone());
+
+    let mut wallet_context = WalletContext::new_for_tests(filebased, Some(external), None);
+
+    // get address for the alias
+    wallet_context
+        .get_identity_address(Some(alias_identity.clone()))
+        .unwrap();
+
+    // try to get a non-existing alias
+    wallet_context
+        .get_identity_address(Some(KeyIdentity::Alias("".to_string())))
+        .unwrap_err();
+
+    // get keystore by alias
+    wallet_context
+        .get_keystore_by_identity(&alias_identity)
+        .unwrap();
+    // get mutable keystore by alias
+    wallet_context
+        .get_keystore_by_identity_mut(&alias_identity)
+        .unwrap();
+
+    let transaction_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+        inputs: vec![],
+        commands: vec![],
+    });
+
+    let transaction =
+        TransactionData::new(transaction_kind, address, random_object_ref(), 1000, 1000);
+
+    let signature = wallet_context
+        .sign_secure(&alias_identity, &transaction, Intent::sui_transaction())
+        .await
+        .unwrap();
+
+    let intent_message = IntentMessage::new(Intent::sui_transaction(), transaction.clone());
+
+    signature
+        .verify_secure(&intent_message, address, SignatureScheme::ED25519)
+        .unwrap();
+
+    // Test that we can get and sign with the wallet key from the "external" keystore.
+    let filebased = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
+    let external = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
+    let alias = external.aliases()[0].alias.clone();
+    let address = external.addresses()[0];
+    let alias_identity = KeyIdentity::Alias(alias.clone());
+
+    let mut wallet_context = WalletContext::new_for_tests(filebased, Some(external), None);
+    // get address for the alias
+    wallet_context
+        .get_identity_address(Some(alias_identity.clone()))
+        .unwrap();
+
+    // try to get a non-existing alias
+    wallet_context
+        .get_identity_address(Some(KeyIdentity::Alias("".to_string())))
+        .unwrap_err();
+
+    // get keystore by alias
+    wallet_context
+        .get_keystore_by_identity(&alias_identity)
+        .unwrap();
+    // get mutable keystore by alias
+    wallet_context
+        .get_keystore_by_identity_mut(&alias_identity)
+        .unwrap();
+
+    let transaction_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+        inputs: vec![],
+        commands: vec![],
+    });
+
+    let transaction =
+        TransactionData::new(transaction_kind, address, random_object_ref(), 1000, 1000);
+
+    let signature = wallet_context
+        .sign_secure(&alias_identity, &transaction, Intent::sui_transaction())
+        .await
+        .unwrap();
+
+    let intent_message = IntentMessage::new(Intent::sui_transaction(), transaction.clone());
+
+    signature
+        .verify_secure(&intent_message, address, SignatureScheme::ED25519)
+        .unwrap();
 }
