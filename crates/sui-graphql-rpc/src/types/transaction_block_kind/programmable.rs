@@ -21,7 +21,7 @@ use sui_json_rpc_types::SuiArgument;
 use sui_types::transaction::{
     Argument as NativeArgument, CallArg as NativeCallArg, Command as NativeProgrammableTransaction,
     ObjectArg as NativeObjectArg, ProgrammableMoveCall as NativeMoveCallTransaction,
-    ProgrammableTransaction as NativeProgrammableTransactionBlock,
+    ProgrammableTransaction as NativeProgrammableTransactionBlock, SharedObjectMutability,
 };
 
 #[derive(Clone, Eq, PartialEq)]
@@ -440,6 +440,23 @@ impl TransactionInput {
                 address: id.into(),
                 initial_shared_version: initial_shared_version.value().into(),
                 mutable,
+            }),
+
+            N::Object(O::SharedObjectV2 {
+                id,
+                initial_shared_version,
+                mutability,
+            }) => I::SharedInput(SharedInput {
+                address: id.into(),
+                initial_shared_version: initial_shared_version.value().into(),
+                mutable: match mutability {
+                    SharedObjectMutability::Mutable => true,
+                    SharedObjectMutability::Immutable => false,
+                    SharedObjectMutability::NonExclusiveWrite => {
+                        // TODO: graphql should probably expose the full mutability enum
+                        true
+                    }
+                },
             }),
 
             N::Object(O::Receiving(oref)) => I::Receiving(Receiving {
