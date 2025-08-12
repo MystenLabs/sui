@@ -72,7 +72,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
     ) -> Self {
-        let mutable_input_refs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.exclusive_mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&[]);
         let deleted_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
