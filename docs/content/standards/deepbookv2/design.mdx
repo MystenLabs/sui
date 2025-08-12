@@ -1,15 +1,17 @@
 ---
-title: DeepBook Design
+title: DeepBookV2 Design
 sidebar_label: Design
+description: Learn about DeepBookV2's design, such as its pool and order book structures. 
+keywords: [ pool structure, object structure, shared object structure, shared object pools, order book structure, store orders, pool storing orders, how pools store orders, orderbook, placing orders, deepbookv2, how to place orders, deepbook design ]
 ---
 
 {@include: ../../snippets/deepbook-v2-dep.mdx}
 
 ## Pools {#pools}
 
-At the center of DeepBook is a hyper-efficient per-current pair shared-object pool structure. This architecture maximally utilizes Sui's Mysticeti consensus engine to minimize contention and achieve high throughput.
+At the center of DeepBook is a hyper-efficient per-current pair shared object pool structure. This architecture maximally utilizes Sui's Mysticeti consensus engine to minimize contention and achieve high throughput.
 
-For each base and quote asset trading pair, a globally shared pool is created to bookkeep open orders on the order book and handle placement, cancellation, and settlement of orders. Under this architecture, you can parallelize transactions involving different trading pairs to maximize throughput.
+For each base and quote asset trading pair, a globally shared pool is created for bookkeeping open orders on the order book and handle placement, cancellation, and settlement of orders. Under this architecture, you can parallelize transactions involving different trading pairs to maximize throughput.
 
 ```move
 struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
@@ -26,7 +28,7 @@ struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
     // Map from order id to price level for fast retrieval of orders upon canceling of orders.
     usr_open_orders: Table<ID, Table<u64, Order>>,
     // taker_fee_rate should be strictly greater than maker_rebate_rate.
-    // The difference between taker_fee_rate and maker_rabate_rate goes to the protocol.
+    // The difference between taker_fee_rate and maker_rebate_rate goes to the protocol.
     // 10^9 scaling
     taker_fee_rate: u64,
     // 10^9 scaling

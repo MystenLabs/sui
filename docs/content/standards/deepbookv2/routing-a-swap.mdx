@@ -1,14 +1,16 @@
 ---
 title: Routing a Swap
+description: DeepBook supports smart routing functionality using a Depth-First-Search that simulates how many tokens will be returned from each route.
+keywords: [ deepbookv3, deepbook, best route for swap, optimal swap route, swap routes, routing swaps, best swap route, dept-first-search, depth first search, test swaps, simulate swaps, swap maximum tokens, findBestRound, typescript sdk ]
 ---
 
 {@include: ../../snippets/deepbook-v2-dep.mdx}
 
-Follow these instructions to construct and execute a trade using a smart-routing swap.
+Follow these instructions to construct and execute a trade using a smart routing swap.
 
 ## Find the best route to swap {#swap-route}
 
-To use the smart routing functionality, one should first find the best route. The route uses a Depth-First-Search (DFS) algorithm to find all the routes in the swap pools and use dry-run to simulate how much token one can get from each route. The function will return the best route which can provide maximum tokens.
+To use the smart routing functionality, one should first find the best route. The route uses a Depth-First-Search (DFS) algorithm to find all the routes in the swap pools and use dry-run to simulate how many tokens one can get from each route. The function will return the best route which can provide maximum tokens.
 
 **Typescript SDK for invoking `findBestRoute`**
 
@@ -63,7 +65,7 @@ After users find the best route to swap the tokens, they can place the market or
  * @param amountIn: the amount of token you want to swap
  * @param currentAddress: your own address
  * @param path: the path you want to swap through
- * @param overrides: overriders for gas budget and transaction block, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for gas budget and transaction block, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public async placeMarketOrderWithSmartRouting(

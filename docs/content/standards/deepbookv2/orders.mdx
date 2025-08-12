@@ -1,13 +1,15 @@
 ---
-title: DeepBook Orders
+title: DeepBookV2 Orders
 sidebar_label: Orders
+description: DeepBook supports market orders, limit orders, order matching, and order tracking. Order storage is made hyper-efficient through pool stores, crit-bit trees, and instantaneous order filling.
+keywords: [ maker orders, taker orders, market orders, limit orders, order matching, order tracking, order storage, pool stores, critical bit, crit-bit trees, order filling, order matching, order tracking ]
 ---
 
 {@include: ../../snippets/deepbook-v2-dep.mdx}
 
 ## Order book structure {#order-book-structure}
 
-DeepBook adopts a hyper-efficient approach to store orders. Each pool stores the unfilled maker orders. Taker orders are filled instantaneously within the same transaction the order is submitted. Bid and ask orders are stored separately, each with a two-level nested crit-bit tree. The first level crit-bit tree is ordered using the price of the maker order, and the second level crit-bit tree is ordered using the order id of the maker order.
+DeepBook adopts a hyper-efficient approach to store orders. Each pool stores the unfilled maker orders. Taker orders are filled instantaneously within the same transaction the order is submitted. Bid and ask orders are stored separately, each with a two-level nested critical bit (crit-bit) tree. The first level crit-bit tree is ordered using the price of the maker order, and the second level crit-bit tree is ordered using the order id of the maker order.
 
 ## Placing orders {#placing-orders}
 

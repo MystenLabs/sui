@@ -1,5 +1,7 @@
 ---
 title: Trade and Swap
+description: Construct and execute token trades or swaps using DeepBookV3. 
+keywords: [ trade tokens, swap tokens, create a pool, construct trade, construct swap, make trade, make swap, typescript sdk, scaling precision, limit order, place order, place market order, deposit quote, cancel order, cancel single order, cancel batch order, create batch order ]
 ---
 
 {@include: ../../snippets/deepbook-v2-dep.mdx}
@@ -39,7 +41,7 @@ public fun create_pool<BaseAsset, QuoteAsset, SUI>(
  * @param lotSize: Minimal Lot Change Accuracy of this pool
  * @param token1: Full coin type(recommend) or coin name of the base asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC" for example
  * @param token2: Full coin type(recommend) of quote asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT" for example
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId and registryId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public createPool(
@@ -144,7 +146,7 @@ public fun create_account(ctx: &mut TxContext): AccountCap {
  * @description: Create and Transfer custodian account to user
  * @param currentAddress: current user address
  * @param needsTransfer: if needs transfer the cap to user, default true, if false, which means we need to use the cap in the next transaction.
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 async createAccount(
@@ -180,7 +182,7 @@ Traders could deposit base/quote assets to their custodian account, so they coul
 /// 0. `[pool]` Object ID refers to the pool containing the trading pair
 /// 1. `[coin]` Object ID of the base asset coin
 /// 2. `[account_cap]` Object ID of the account_cap authorizing the
-/// accessilility to the escrow account
+/// accessibility to the escrow account
 
 /// Returns none
 public fun deposit_base<BaseAsset, QuoteAsset>(
@@ -199,7 +201,7 @@ public fun deposit_base<BaseAsset, QuoteAsset>(
  * @param token1: Full coin type(recommend) or coin name of the base asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC" for example
  * @param token2: Full coin type(recommend) of quote asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT" for example
  * @param coin: Object id of coin to deposit
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public depositBase(
@@ -234,7 +236,7 @@ public depositBase(
 /// 0. `[pool]` Object ID refers to the pool containing the trading pair
 /// 1. `[coin]` Object ID of the coin
 /// 2. `[account_cap]` Object ID of the account_cap authorizing the
-/// accessilility to the escrow account
+/// accessibility to the escrow account
 
 /// Returns none
 public fun deposit_quote<BaseAsset, QuoteAsset>(
@@ -253,7 +255,7 @@ public fun deposit_quote<BaseAsset, QuoteAsset>(
  * @param token1: Full coin type(recommend) or coin name of the base asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC" for example
  * @param token2: Full coin type(recommend) of quote asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT" for example
  * @param coin: Object id of coin to deposit
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public depositQuote(
@@ -297,7 +299,7 @@ Ensure you have a custodian account with enough base/quote assets to trade. You 
 ///   5. `[restriction]` Object ID of the pool containing the trading pair
 ///   6. `[clock]` Object ID of global system clock
 ///   7. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 ///   8. `[ctx]` Information about the current transaction.
 
 /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order)
@@ -327,7 +329,7 @@ public fun place_limit_order<BaseAsset, QuoteAsset>(
  * @param expireTimestamp: expire timestamp of the limit order
  * @param restriction restrictions on limit orders, explain in doc for more details
  * @param accountCap: account cap for the limit order
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public placeLimitOrder(
@@ -401,7 +403,7 @@ public fun place_market_order<BaseAsset, QuoteAsset>(
  * @param tokenOut: Full coin type(recommend) or coin name of the asset one want to get "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC" for example
  * @param amountIn: amount of token to buy or sell
  * @param currentAddress: user address
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public async placeMarketOrder(
@@ -489,7 +491,7 @@ Cancel a limit order placed onto the CLOB. Abort if `order_id` is invalid or if 
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
 ///   1. `[order_id]` Order ID of the placed limit order
 ///   2. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns none
 public fun cancel_order<BaseAsset, QuoteAsset>(
@@ -508,7 +510,7 @@ public fun cancel_order<BaseAsset, QuoteAsset>(
  * @param token2: Full coin type(recommend) of quote asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC" for example
  * @param orderId: Order id to cancel corresponding order
  * @param accountCap: Object id of account capacity under usr address, created after invoking createAccount
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public async cancelOrder(
@@ -546,7 +548,7 @@ Cancel all limit orders under a certain account capacity.
 ///
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
 ///   1. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns none
 public fun cancel_all_orders<BaseAsset, QuoteAsset>(
@@ -563,7 +565,7 @@ public fun cancel_all_orders<BaseAsset, QuoteAsset>(
  * @param token1: Full coin type(recommend) of base asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::wbtc::WBTC" for example
  * @param token2: Full coin type(recommend) of quote asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT" for example
  * @param accountCap: Object id of account capacity under usr address, created after invoking createAccount
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public async cancelAllOrders(
@@ -599,7 +601,7 @@ For example, if we have the following `order_id` to price mapping, `{0: 100., 1:
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
 ///   1. `[order_ids]` List of object ID of the pool containing the trading pair
 ///   2. `[account_cap]` Object ID of the account_cap authorize the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns none
 public fun batch_cancel_order<BaseAsset, QuoteAsset>(
@@ -618,7 +620,7 @@ public fun batch_cancel_order<BaseAsset, QuoteAsset>(
  * @param token2: Full coin type(recommend) of quote asset "0x3d0d0ce17dcd3b40c2d839d96ce66871ffb40e1154a8dd99af72292b3d10d7fc::usdt::USDT" for example
  * @param orderIds: Order ids to cancel corresponding orders
  * @param accountCap: Object id of account capacity under usr address, created after invoking createAccount
- * @param overrides: overriders for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
+ * @param overrides: overrides for blockchain params. Like gas budget, transaction block and the provider, default we will set to the max gas budget, and create a new transaction block
  * @notice: the packageId should be set in configs.json, if it is not set, the transaction will fail.
  */
 public async batchCancelOrder(
