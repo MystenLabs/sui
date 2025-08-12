@@ -175,13 +175,8 @@ async fn test_get_wallet_key() {
         commands: vec![],
     });
 
-    let transaction = TransactionData::new(
-        transaction_kind,
-        address.clone(),
-        random_object_ref(),
-        1000,
-        1000,
-    );
+    let transaction =
+        TransactionData::new(transaction_kind, address, random_object_ref(), 1000, 1000);
 
     let signature = wallet_context
         .sign_secure(&alias_identity, &transaction, Intent::sui_transaction())
@@ -226,13 +221,8 @@ async fn test_get_wallet_key() {
         commands: vec![],
     });
 
-    let transaction = TransactionData::new(
-        transaction_kind,
-        address.clone(),
-        random_object_ref(),
-        1000,
-        1000,
-    );
+    let transaction =
+        TransactionData::new(transaction_kind, address, random_object_ref(), 1000, 1000);
 
     let signature = wallet_context
         .sign_secure(&alias_identity, &transaction, Intent::sui_transaction())
