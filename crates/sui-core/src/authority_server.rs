@@ -833,6 +833,12 @@ impl ValidatorService {
         Ok((responses, weight))
     }
 
+    #[instrument(
+        name = "ValidatorService::handle_submit_to_consensus_for_position",
+        level = "debug",
+        skip_all,
+        err
+    )]
     async fn handle_submit_to_consensus_for_position(
         &self,
         consensus_transactions: NonEmpty<ConsensusTransaction>,
