@@ -183,13 +183,12 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
+// Serialized ordinally - always append to end of enum
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     // V1: dedup by authority + sequence only (no digest)
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
-    // V2: dedup by authority + sequence + digest
-    CheckpointSignatureV2(AuthorityName, CheckpointSequenceNumber, CheckpointDigest),
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityName, u64 /* generation */),
     // Key must include both id and jwk, because honest validators could be given multiple jwks for
@@ -198,6 +197,8 @@ pub enum ConsensusTransactionKey {
     RandomnessDkgMessage(AuthorityName),
     RandomnessDkgConfirmation(AuthorityName),
     ExecutionTimeObservation(AuthorityName, u64 /* generation */),
+    // V2: dedup by authority + sequence + digest
+    CheckpointSignatureV2(AuthorityName, CheckpointSequenceNumber, CheckpointDigest),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -398,8 +399,6 @@ pub enum ConsensusTransactionKind {
     CertifiedTransaction(Box<CertifiedTransaction>),
     // V1: dedup by authority + sequence only
     CheckpointSignature(Box<CheckpointSignatureMessage>),
-    // V2: dedup by authority + sequence + digest
-    CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
 
     CapabilityNotification(AuthorityCapabilitiesV1),
@@ -420,6 +419,8 @@ pub enum ConsensusTransactionKind {
     UserTransaction(Box<Transaction>),
 
     ExecutionTimeObservation(ExecutionTimeObservation),
+    // V2: dedup by authority + sequence + digest
+    CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
 }
 
 impl ConsensusTransactionKind {
