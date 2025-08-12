@@ -40,6 +40,7 @@ sui-rpc.workspace = true
 mysten-metrics.workspace = true
 shared-crypto.workspace = true
 lru.workspace = true
+tonic.workspace = true
 
 move-core-types.workspace = true
 

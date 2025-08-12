@@ -122,10 +122,7 @@ async fn get_account_balances(
         coin_type: Some(coin_type.to_string()),
     };
 
-    let response = live_data_client
-        .get_balance(request)
-        .await
-        .map_err(|e| Error::DataError(format!("gRPC error: {}", e)))?;
+    let response = live_data_client.get_balance(request).await?;
 
     let balance = response
         .into_inner()
