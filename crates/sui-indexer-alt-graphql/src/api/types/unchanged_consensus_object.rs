@@ -5,7 +5,7 @@ use async_graphql::{Context, Enum, Object, SimpleObject, Union};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::ObjectDigest,
-    effects::UnchangedSharedKind as NativeUnchangedSharedKind,
+    effects::UnchangedConsensusKind as NativeUnchangedConsensusKind,
 };
 
 use crate::{
@@ -108,13 +108,13 @@ impl ConsensusObjectRead {
 impl UnchangedConsensusObject {
     pub(crate) fn from_native(
         scope: Scope,
-        native: (ObjectID, NativeUnchangedSharedKind),
+        native: (ObjectID, NativeUnchangedConsensusKind),
         execution_checkpoint: u64,
     ) -> Self {
         let (object_id, kind) = native;
 
         match kind {
-            NativeUnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
+            NativeUnchangedConsensusKind::ReadOnlyRoot((version, digest)) => {
                 Self::Read(ConsensusObjectRead {
                     scope,
                     object_id,
@@ -122,19 +122,19 @@ impl UnchangedConsensusObject {
                     digest,
                 })
             }
-            NativeUnchangedSharedKind::MutateConsensusStreamEnded(sequence_number) => {
+            NativeUnchangedConsensusKind::MutateConsensusStreamEnded(sequence_number) => {
                 Self::MutateConsensusStreamEnded(MutateConsensusStreamEnded {
                     address: Some(object_id.into()),
                     sequence_number: Some(sequence_number.into()),
                 })
             }
-            NativeUnchangedSharedKind::ReadConsensusStreamEnded(sequence_number) => {
+            NativeUnchangedConsensusKind::ReadConsensusStreamEnded(sequence_number) => {
                 Self::ReadConsensusStreamEnded(ReadConsensusStreamEnded {
                     address: Some(object_id.into()),
                     sequence_number: Some(sequence_number.into()),
                 })
             }
-            NativeUnchangedSharedKind::Cancelled(sequence_number) => {
+            NativeUnchangedConsensusKind::Cancelled(sequence_number) => {
                 let cancellation_reason = match sequence_number {
                     SequenceNumber::CANCELLED_READ => {
                         ConsensusObjectCancellationReason::CancelledRead
@@ -150,7 +150,7 @@ impl UnchangedConsensusObject {
                     cancellation_reason: Some(cancellation_reason),
                 })
             }
-            NativeUnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig(PerEpochConfig {
+            NativeUnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig(PerEpochConfig {
                 scope,
                 object_id,
                 execution_checkpoint,

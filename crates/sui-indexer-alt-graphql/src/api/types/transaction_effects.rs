@@ -338,7 +338,7 @@ impl EffectsContents {
             return Ok(None);
         };
 
-        let unchanged_consensus_objects = content.effects()?.unchanged_shared_objects();
+        let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
         let cursors = page.paginate_indices(unchanged_consensus_objects.len());
 
         let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);

@@ -53,10 +53,10 @@ module P0::m {
       }
       effects {
         status
-        unchangedSharedObjects {
+        unchangedConsensusObjects {
           nodes {
             __typename
-            ... on SharedObjectRead {
+            ... on ConsensusObjectRead {
               address
               version
               digest
@@ -71,7 +71,7 @@ module P0::m {
                 }
               }
             }
-            ... on SharedObjectDelete {
+            ... on ConsensusObjectStreamEnded {
               address
               version
               mutable

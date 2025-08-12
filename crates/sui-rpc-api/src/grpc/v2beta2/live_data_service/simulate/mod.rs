@@ -191,8 +191,10 @@ pub fn simulate_transaction(
                         }
                     }
 
-                    if mask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                        for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
+                    if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
+                        for unchanged_shared_object in
+                            effects.unchanged_consensus_objects.iter_mut()
+                        {
                             let Ok(object_id) =
                                 unchanged_shared_object.object_id().parse::<ObjectID>()
                             else {
