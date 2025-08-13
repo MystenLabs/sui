@@ -3,8 +3,8 @@ let action = (runtime) => {
     const filePath = path.join(
         __dirname,
         '35fsf',
+        '0xf2c3d',
         'bytecode',
-        'f2c3d',
         'global_assign_ref.mvb'
     );
     console.log(filePath);
