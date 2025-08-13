@@ -918,6 +918,10 @@ type MovePackage implements IAddressable & IObject {
 	The transaction that created this version of the object.
 	"""
 	previousTransaction: Transaction
+	"""
+	A table identifying which versions of a package introduced each of its types.
+	"""
+	typeOrigins: [TypeOrigin!]!
 }
 
 type MovePackageConnection {
@@ -1883,6 +1887,24 @@ type TxResult {
 	For nested results, the index within the result.
 	"""
 	ix: Int
+}
+
+"""
+Information about which previous versions of a package introduced its types.
+"""
+type TypeOrigin {
+	"""
+	Module defining the type.
+	"""
+	module: String!
+	"""
+	Name of the struct.
+	"""
+	struct: String!
+	"""
+	The storage ID of the package that first defined this type.
+	"""
+	definingId: SuiAddress!
 }
 
 """
