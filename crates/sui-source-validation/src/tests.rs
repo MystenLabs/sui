@@ -6,9 +6,6 @@ use move_core_types::account_address::AccountAddress;
 use std::collections::HashMap;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
-use sui_json_rpc_types::{
-    get_new_package_obj_from_response, get_new_package_upgrade_cap_from_response,
-};
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{make_publish_transaction, make_publish_transaction_with_deps};
@@ -531,7 +528,7 @@ async fn linkage_differs() -> anyhow::Result<()> {
         upgrade_package(context, b_v1.0, b_cap.0, b_src).await
     };
 
-    // Publish b-v2 a second time, to create a third version of the package that is othewise
+    // Publish b-v2 a second time, to create a third version of the package that is otherwise
     // byte-for-byte identical with the second version;
     let b_v3_fixtures = tempfile::tempdir()?;
     let b_v3 = {
@@ -747,8 +744,8 @@ fn sanitize_id(mut message: String, m: &HashMap<SuiAddress, &str>) -> String {
 async fn publish_package(context: &WalletContext, package: PathBuf) -> (ObjectRef, ObjectRef) {
     let txn = make_publish_transaction(context, package).await;
     let response = context.execute_transaction_must_succeed(txn).await;
-    let package = get_new_package_obj_from_response(&response).unwrap();
-    let cap = get_new_package_upgrade_cap_from_response(&response).unwrap();
+    let package = response.get_new_package_obj().unwrap();
+    let cap = response.get_new_package_upgrade_cap().unwrap();
     (package, cap)
 }
 
@@ -781,7 +778,7 @@ async fn upgrade_package(
 async fn publish_package_and_deps(context: &WalletContext, package: PathBuf) -> ObjectRef {
     let txn = make_publish_transaction_with_deps(context, package).await;
     let response = context.execute_transaction_must_succeed(txn).await;
-    get_new_package_obj_from_response(&response).unwrap()
+    response.get_new_package_obj().unwrap()
 }
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's
@@ -884,8 +881,5 @@ pub async fn upgrade_package_with_wallet(
 
     let resp = context.execute_transaction_must_succeed(transaction).await;
 
-    (
-        get_new_package_obj_from_response(&resp).unwrap(),
-        resp.digest,
-    )
+    (resp.get_new_package_obj().unwrap(), resp.digest)
 }

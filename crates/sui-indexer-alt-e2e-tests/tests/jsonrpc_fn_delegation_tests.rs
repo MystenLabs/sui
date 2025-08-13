@@ -12,7 +12,6 @@ use sui_indexer_alt_jsonrpc::{
     args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
 };
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
-use sui_json_rpc_types::get_new_package_obj_from_response;
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_swarm_config::genesis_config::AccountConfig;
@@ -567,9 +566,7 @@ async fn test_get_balance() {
         .execute_transaction_must_succeed(publish_transaction)
         .await;
 
-    let package_id = get_new_package_obj_from_response(&execution_result)
-        .unwrap()
-        .0;
+    let package_id = execution_result.get_new_package_obj().unwrap().0;
 
     // Test out the specified coin type.
     // Parse the coin type so we have the same string representation as the used by fullnode.
