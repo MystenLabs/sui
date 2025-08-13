@@ -180,7 +180,7 @@ Traders could deposit base/quote assets to their custodian account, so they coul
 /// 0. `[pool]` Object ID refers to the pool containing the trading pair
 /// 1. `[coin]` Object ID of the base asset coin
 /// 2. `[account_cap]` Object ID of the account_cap authorizing the
-/// accessilility to the escrow account
+/// accessibility to the escrow account
 
 /// Returns none
 public fun deposit_base<BaseAsset, QuoteAsset>(
@@ -234,7 +234,7 @@ public depositBase(
 /// 0. `[pool]` Object ID refers to the pool containing the trading pair
 /// 1. `[coin]` Object ID of the coin
 /// 2. `[account_cap]` Object ID of the account_cap authorizing the
-/// accessilility to the escrow account
+/// accessibility to the escrow account
 
 /// Returns none
 public fun deposit_quote<BaseAsset, QuoteAsset>(
@@ -297,7 +297,7 @@ Ensure you have a custodian account with enough base/quote assets to trade. You 
 ///   5. `[restriction]` Object ID of the pool containing the trading pair
 ///   6. `[clock]` Object ID of global system clock
 ///   7. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 ///   8. `[ctx]` Information about the current transaction.
 
 /// Returns (base quantity filled, quote quantity filled, whether a maker order is being placed, order id of the maker order)
@@ -489,7 +489,7 @@ Cancel a limit order placed onto the CLOB. Abort if `order_id` is invalid or if 
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
 ///   1. `[order_id]` Order ID of the placed limit order
 ///   2. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns none
 public fun cancel_order<BaseAsset, QuoteAsset>(
@@ -546,7 +546,7 @@ Cancel all limit orders under a certain account capacity.
 ///
 ///   0. `[pool]` Object ID refers to the pool of the trading pair
 ///   1. `[account_cap]` Object ID of the account_cap authorizing the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns none
 public fun cancel_all_orders<BaseAsset, QuoteAsset>(
@@ -599,7 +599,7 @@ For example, if we have the following `order_id` to price mapping, `{0: 100., 1:
 ///   0. `[pool]` Object ID refers to the pool containing the trading pair
 ///   1. `[order_ids]` List of object ID of the pool containing the trading pair
 ///   2. `[account_cap]` Object ID of the account_cap authorize the
-///       accessilility to the escrow account
+///       accessibility to the escrow account
 
 /// Returns none
 public fun batch_cancel_order<BaseAsset, QuoteAsset>(
