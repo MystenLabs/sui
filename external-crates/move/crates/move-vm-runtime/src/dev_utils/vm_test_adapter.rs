@@ -11,7 +11,7 @@ use crate::{
     },
     validation::verification::ast as verif_ast,
 };
-use move_binary_format::{errors::VMResult, file_format::CompiledModule};
+use move_binary_format::{errors::VMResult, CompiledModule};
 use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 
 // FIXME(cswords): support gas

@@ -8,15 +8,15 @@ use crate::{
         PartialVMError, PartialVMResult,
     },
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, DatatypeHandle,
-        EnumDefInstantiation, EnumDefinition, FieldHandle, FieldInstantiation, FunctionDefinition,
+        AbilitySet, Bytecode, CodeOffset, CodeUnit, Constant, DatatypeHandle, EnumDefInstantiation,
+        EnumDefinition, FieldHandle, FieldInstantiation, FunctionDefinition,
         FunctionDefinitionIndex, FunctionHandle, FunctionInstantiation, JumpTableInner, LocalIndex,
         ModuleHandle, Signature, SignatureToken, StructDefInstantiation, StructDefinition,
         StructFieldInformation, TableIndex, VariantDefinition, VariantHandle,
         VariantInstantiationHandle, VariantJumpTable,
     },
     internals::ModuleIndex,
-    IndexKind,
+    CompiledModule, IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
 

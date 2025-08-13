@@ -3,8 +3,8 @@
 
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
-    IndexKind,
+    file_format::{SignatureToken, StructFieldInformation, TableIndex},
+    CompiledModule, IndexKind,
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
 use move_vm_config::verifier::VerifierConfig;

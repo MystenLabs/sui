@@ -13,7 +13,7 @@ use colored::*;
 
 use move_binary_format::{
     errors::{Location, VMResult},
-    file_format::CompiledModule,
+    CompiledModule,
 };
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_compiler::{

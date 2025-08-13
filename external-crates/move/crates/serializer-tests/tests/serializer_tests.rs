@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::CompiledModule;
 use proptest::prelude::*;
 
 proptest! {

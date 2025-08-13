@@ -12,10 +12,8 @@ use crate::{
 use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,
-    },
-    IndexKind,
+    file_format::{FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex},
+    CompiledModule, IndexKind,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;

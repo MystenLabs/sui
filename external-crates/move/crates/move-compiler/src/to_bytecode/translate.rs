@@ -21,7 +21,7 @@ use crate::{
     shared::{unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
-use move_binary_format::file_format as F;
+use move_binary_format::{file_format as F, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::account_address::AccountAddress as MoveAddress;
 use move_ir_types::{ast as IR, location::*};
@@ -234,7 +234,7 @@ fn module(
         constants,
         functions,
     };
-    let deps: Vec<&F::CompiledModule> = vec![];
+    let deps: Vec<&CompiledModule> = vec![];
     let (mut module, source_map) =
         match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
             Ok(res) => res,
@@ -289,7 +289,7 @@ fn address_names<'a>(
 }
 
 fn module_function_infos(
-    compile_module: &F::CompiledModule,
+    compile_module: &CompiledModule,
     source_map: &SourceMap,
     collected_function_infos: &CollectedInfos,
 ) -> UniqueMap<FunctionName, FunctionInfo> {
@@ -301,7 +301,7 @@ fn module_function_infos(
 }
 
 fn function_info_map(
-    compile_module: &F::CompiledModule,
+    compile_module: &CompiledModule,
     source_map: &SourceMap,
     collected_function_infos: &CollectedInfos,
     idx: F::FunctionDefinitionIndex,

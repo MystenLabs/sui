@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![no_main]
+use move_binary_format::compiled_module::empty_module;
 use move_binary_format::file_format::{
-    empty_module, AbilitySet, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex,
-    FieldDefinition, FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
-    ModuleHandleIndex, Signature, SignatureIndex,
+    AbilitySet, CodeUnit, Constant, DatatypeHandle, DatatypeHandleIndex, FieldDefinition,
+    FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex,
+    Signature, SignatureIndex,
     SignatureToken::{Address, Bool, U128, U64},
     StructDefinition, StructFieldInformation, TypeSignature, Visibility,
 };
