@@ -114,7 +114,6 @@ pub async fn setup_indexer(
         ingestion,
         metrics_prefix,
         registry,
-        None, // TODO: return and configure indexer task
         cancel.clone(),
     )
     .await?;

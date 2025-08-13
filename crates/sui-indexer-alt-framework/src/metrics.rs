@@ -145,6 +145,8 @@ pub(crate) struct CheckpointLagMetricReporter {
 }
 
 impl IndexerMetrics {
+    // maybe we can have task as the prefix...? like the metrics_prefix?
+    // so we don't need to include task everywhere
     pub fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("indexer");
         let name = |n| format!("{prefix}_{n}");

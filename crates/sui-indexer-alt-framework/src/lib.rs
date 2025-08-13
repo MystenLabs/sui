@@ -38,9 +38,31 @@ pub mod task;
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]
 pub struct IndexerArgs {
-    /// Override for the checkpoint to start ingestion from -- useful for backfills. By default,
-    /// ingestion will start just after the lowest checkpoint watermark across all active
-    /// pipelines.
+    /// An optional task name configured on the indexer to support running one-off or temporary
+    /// tasks, like backfills. By default there is no task name, and if left empty, watermark rows
+    /// will be keyed by only the `pipeline`. If one is provided, the indexer will propagate the
+    /// task name to each pipeline such that watermark rows will record both the pipeline and task
+    /// values.
+    ///
+    /// Example: An indexer with task "backfill-2024-01" running pipelines "events" and "objects"
+    /// will create watermark entries for (pipeline="events", task="backfill-2024-01") and
+    /// (pipeline="objects", task="backfill-2024-01").
+    #[arg(long)]
+    pub task: Option<String>,
+
+    /// Override for the checkpoint to start ingestion from. The exact behavior is dependent on a
+    /// few factors:
+    ///
+    /// - If the pipeline + task has already been run and there is an existing watermark entry, this
+    ///   flag will be ignored (with a warning) unless `--skip-watermark` is also supplied.
+    /// - If `--skip-watermark` is supplied, the pipeline will write data without updating
+    ///   watermarks, as long as the checkpoints being handled are not before the reader's lower
+    ///   bound.
+    /// - If the pipeline + task has not run before, the watermark will be set up to expect this
+    ///   checkpoint as the next one, and the reader's lower bound will be set to this checkpoint.
+    ///
+    /// By default (when not specified), ingestion will start just after the lowest checkpoint
+    /// watermark across all active pipelines.
     #[arg(long)]
     pub first_checkpoint: Option<u64>,
 
@@ -54,17 +76,14 @@ pub struct IndexerArgs {
     #[arg(long, action = clap::ArgAction::Append)]
     pub pipeline: Vec<String>,
 
-    /// Don't write to the watermark tables for concurrent pipelines.
+    /// Don't write to the watermark tables for concurrent pipelines. When used with
+    /// `--first-checkpoint`, allows the pipeline to write data without updating watermarks, as long
+    /// as the checkpoints being handled are not before the reader's lower bound.
     #[arg(long)]
     pub skip_watermark: bool,
 }
 
 pub struct Indexer<S: Store> {
-    /// An optional task name configured on the indexer to support running one-off or temporary
-    /// tasks, like backfills. By default, there is no task name. If one is provided, the indexer
-    /// will write watermark rows for pipeline = `pipeline` and task = `task`.
-    task: Option<&'static str>,
-
     /// The storage backend that the indexer uses to write and query indexed data. This
     /// generic implementation allows for plugging in different storage solutions that implement the
     /// `Store` trait.
@@ -76,14 +95,38 @@ pub struct Indexer<S: Store> {
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
 
-    /// Optional override of the checkpoint lowerbound.
-    /// TODO: more doc comments on how this is used/ interacted with
+    /// An optional task name configured on the indexer to support running one-off or temporary
+    /// tasks, like backfills. By default there is no task name, and if left empty, watermark rows
+    /// will be keyed by only the `pipeline`. If one is provided, the indexer will propagate the
+    /// task name to each pipeline such that watermark rows will record both the pipeline and task
+    /// values.
+    ///
+    /// Example: An indexer with task "backfill-2024-01" running pipelines "events" and "objects"
+    /// will create watermark entries for (pipeline="events", task="backfill-2024-01") and
+    /// (pipeline="objects", task="backfill-2024-01").
+    task: Option<String>,
+
+    /// Override for the checkpoint to start ingestion from. The exact behavior is dependent on a
+    /// few factors:
+    ///
+    /// - If the pipeline + task has already been run and there is an existing watermark entry, this
+    ///   flag will be ignored (with a warning) unless `--skip-watermark` is also supplied.
+    /// - If `--skip-watermark` is supplied, the pipeline will write data without updating
+    ///   watermarks, as long as the checkpoints being handled are not before the reader's lower
+    ///   bound.
+    /// - If the pipeline + task has not run before, the watermark will be set up to expect this
+    ///   checkpoint as the next one, and the reader's lower bound will be set to this checkpoint.
+    ///
+    /// By default (when not specified), ingestion will start just after the lowest checkpoint
+    /// watermark across all active pipelines.
     first_checkpoint: Option<u64>,
 
     /// Optional override of the checkpoint upperbound.
     last_checkpoint: Option<u64>,
 
-    /// Don't write to the watermark tables for concurrent pipelines.
+    /// Don't write to the watermark tables for concurrent pipelines. When used with `first_checkpoint`,
+    /// allows the pipeline to write data without updating watermarks, as long as the checkpoints
+    /// being handled are not before the reader's lower bound.
     skip_watermark: bool,
 
     /// Optional filter for pipelines to run. If `None`, all pipelines added to the indexer will
@@ -131,7 +174,6 @@ impl<S: Store> Indexer<S> {
         ingestion_config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
-        task: Option<&'static str>,
         cancel: CancellationToken,
     ) -> Result<Self> {
         let IndexerArgs {
@@ -139,6 +181,7 @@ impl<S: Store> Indexer<S> {
             last_checkpoint,
             pipeline,
             skip_watermark,
+            task,
         } = indexer_args;
 
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
@@ -228,7 +271,7 @@ impl<S: Store> Indexer<S> {
             config,
             self.skip_watermark,
             self.store.clone(),
-            self.task,
+            self.task.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
@@ -335,10 +378,10 @@ impl<S: Store> Indexer<S> {
             .context("Failed to establish connection to store")?;
 
         let watermark = conn
-            .committer_watermark(P::NAME, self.task)
+            .committer_watermark(P::NAME, self.task.as_deref())
             .await
             .with_context(|| {
-                if let Some(task) = self.task {
+                if let Some(task) = self.task.as_deref() {
                     format!(
                         "Failed to get watermark for pipeline {} of task {}",
                         P::NAME,
@@ -415,7 +458,7 @@ impl<T: TransactionalStore> Indexer<T> {
             watermark,
             config,
             self.store.clone(),
-            self.task,
+            self.task.clone(),
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),
