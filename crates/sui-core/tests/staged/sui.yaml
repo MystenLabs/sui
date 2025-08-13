@@ -773,6 +773,12 @@ MoveObjectType_:
       Coin:
         NEWTYPE:
           TYPENAME: TypeTag
+    4:
+      SuiBalanceAccumulatorField: UNIT
+    5:
+      BalanceAccumulatorField:
+        NEWTYPE:
+          TYPENAME: TypeTag
 MovePackage:
   STRUCT:
     - id:
