@@ -74,6 +74,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
+use sui_types::storage::InputKey;
 use sui_types::traffic_control::{
     PolicyConfig, RemoteFirewallConfig, TrafficControlReconfigParams,
 };
@@ -1139,22 +1140,15 @@ impl AuthorityState {
             .start_timer();
         self.metrics.tx_orders.inc();
 
-        // timeout in tests can be reduced to exercise error paths, if QD properly retries
-        // failures to lock on objects waiting for future versions.
-        if epoch_store.protocol_config().mysticeti_fastpath() {
-            let timeout = if cfg!(msim) {
-                Duration::from_millis(100)
-            } else {
-                WAIT_FOR_FASTPATH_INPUT_TIMEOUT
-            };
-            if !self
-                .wait_for_fastpath_dependency_objects(&transaction, epoch_store.epoch(), timeout)
+        if epoch_store.protocol_config().mysticeti_fastpath()
+            && !self
+                .wait_for_fastpath_dependency_objects(&transaction, epoch_store.epoch())
                 .await?
-            {
-                debug!("fastpath input objects are still unavailable after waiting");
-                // Proceed with input checks to generate a proper error.
-            }
+        {
+            debug!("fastpath input objects are still unavailable after waiting");
+            // Proceed with input checks to generate a proper error.
         }
+
         self.handle_sign_transaction(epoch_store, transaction).await
     }
 
@@ -1303,22 +1297,45 @@ impl AuthorityState {
             .inc();
     }
 
-    /// Waits for fastpath (owned, package) dependency objects to become available,
-    /// until the specified max_wait timeout.
-    /// Returns true if all fastpath dependency objects are available, false otherwise.
+    /// Waits for fastpath (owned, package) dependency objects to become available.
+    /// Returns true if a chosen set of fastpath dependency objects are available,
+    /// returns false otherwise after an internal timeout.
     pub(crate) async fn wait_for_fastpath_dependency_objects(
         &self,
         transaction: &VerifiedTransaction,
         epoch: EpochId,
-        max_wait: Duration,
     ) -> SuiResult<bool> {
         let txn_data = transaction.data().transaction_data();
-        let fastpath_dependency_objects = txn_data.fastpath_dependency_objects()?;
-        if fastpath_dependency_objects.is_empty() {
+        let (move_objects, packages, receiving_objects) = txn_data.fastpath_dependency_objects()?;
+
+        // Gather and filter input objects to wait for.
+        let fastpath_dependency_objects: Vec<_> = move_objects
+            .into_iter()
+            .filter_map(|obj_ref| self.should_wait_for_dependency_object(obj_ref))
+            .chain(
+                packages
+                    .into_iter()
+                    .map(|package_id| InputKey::Package { id: package_id }),
+            )
+            .collect();
+        let receiving_keys: HashSet<_> = receiving_objects
+            .into_iter()
+            .filter_map(|receiving_obj_ref| {
+                self.should_wait_for_dependency_object(receiving_obj_ref)
+            })
+            .collect();
+        if fastpath_dependency_objects.is_empty() && receiving_keys.is_empty() {
             return Ok(true);
         }
-        // It is ok to not check receiving objects, unless it turns out to be a common failure.
-        let receiving_keys = HashSet::new();
+
+        // Use shorter wait timeout in simtests to exercise server-side error paths and
+        // client-side retry logic.
+        let max_wait = if cfg!(msim) {
+            Duration::from_millis(200)
+        } else {
+            WAIT_FOR_FASTPATH_INPUT_TIMEOUT
+        };
+
         match timeout(
             max_wait,
             self.get_object_cache_reader().notify_read_input_objects(
@@ -1334,6 +1351,42 @@ impl AuthorityState {
             // and allow the caller to skip the rest of input checks?
             Err(_) => Ok(false),
         }
+    }
+
+    /// Returns Some(inputKey) if the object reference should be waited on until it is
+    /// finalized, before proceeding to input checks.
+    ///
+    /// Incorrect decisions here should only affect user experience, not safety:
+    /// - Waiting unnecessarily adds latency to transaction signing and submission.
+    /// - Not waiting when needed may cause the transaction to be rejected because input object is unavailable.
+    fn should_wait_for_dependency_object(&self, obj_ref: ObjectRef) -> Option<InputKey> {
+        let (obj_id, cur_version, _digest) = obj_ref;
+        let Some(latest_obj_ref) = self
+            .get_object_cache_reader()
+            .get_latest_object_ref_or_tombstone(obj_id)
+        else {
+            // Object might not have been created.
+            return Some(InputKey::VersionedObject {
+                id: FullObjectID::new(obj_id, None),
+                version: cur_version,
+            });
+        };
+        let latest_digest = latest_obj_ref.2;
+        if latest_digest == ObjectDigest::OBJECT_DIGEST_DELETED {
+            // Do not wait for deleted object and rely on input check instead.
+            return None;
+        }
+        let latest_version = latest_obj_ref.1;
+        if cur_version <= latest_version {
+            // Do not wait for version that already exists or has been consumed.
+            // Let the input check to handle them and return the proper error.
+            return None;
+        }
+        // Wait for the object version to become available.
+        Some(InputKey::VersionedObject {
+            id: FullObjectID::new(obj_id, None),
+            version: cur_version,
+        })
     }
 
     /// Wait for a certificate to be executed.

@@ -69,7 +69,7 @@ use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
         consensus_tx_status_cache::NotifyReadConsensusTxStatusResult,
-        shared_object_version_manager::Schedulable, ExecutionEnv, WAIT_FOR_FASTPATH_INPUT_TIMEOUT,
+        shared_object_version_manager::Schedulable, ExecutionEnv,
     },
     checkpoints::CheckpointStore,
     execution_scheduler::SchedulingSource,
@@ -617,17 +617,8 @@ impl ValidatorService {
 
         // Use shorter wait timeout in simtests to exercise server-side error paths and
         // client-side retry logic.
-        let wait_for_fastpath_dependency_objects_timeout = if cfg!(msim) {
-            Duration::from_millis(100)
-        } else {
-            WAIT_FOR_FASTPATH_INPUT_TIMEOUT
-        };
         if !state
-            .wait_for_fastpath_dependency_objects(
-                &transaction,
-                epoch_store.epoch(),
-                wait_for_fastpath_dependency_objects_timeout,
-            )
+            .wait_for_fastpath_dependency_objects(&transaction, epoch_store.epoch())
             .await?
         {
             debug!(
