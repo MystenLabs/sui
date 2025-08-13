@@ -49,7 +49,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
     store: H::Store,
-    task: Option<&'static str>,
+    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -115,7 +115,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         continue;
                     };
 
-                    // TODO: how do we report task to this metric?
+                    // TODO: (wlmyng) how do we report task to this metric?
                     // Check if the pipeline's watermark needs to be updated
                     let guard = metrics
                         .watermark_gather_latency
@@ -201,7 +201,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         // for the first time, we should also update the low watermark.
                         match conn.set_committer_watermark(
                             H::NAME,
-                            task,
+                            task.as_deref(),
                             watermark,
                         ).await {
                             // If there's an issue updating the watermark, log it but keep going,

@@ -105,7 +105,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     next_checkpoint: u64,
     config: SequentialConfig,
     db: H::Store,
-    task: Option<&'static str>,
+    task: Option<String>,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,

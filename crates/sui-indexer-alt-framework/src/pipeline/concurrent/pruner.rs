@@ -98,11 +98,12 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
-    task: Option<&'static str>,
+    task: Option<String>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        let task = task.as_deref();
         let Some(config) = config else {
             info!(pipeline = H::NAME, task = task, "Skipping pruner task");
             return;
@@ -296,7 +297,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                                 elapsed,
                             );
 
-                            // TODO: how do we report task to this metric?
+                            // TODO: (wlmyng) how do we report task to this metric?
                             metrics
                                 .watermark_pruner_hi_in_db
                                 .with_label_values(&[H::NAME])
