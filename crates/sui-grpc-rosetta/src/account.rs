@@ -4,11 +4,13 @@
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
-use futures::{future::join_all, StreamExt};
+use futures::future::join_all;
 
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2beta2::{GetBalanceRequest, GetCheckpointRequest};
+use sui_rpc::proto::sui::rpc::v2beta2::{
+    GetBalanceRequest, GetCheckpointRequest, ListOwnedObjectsRequest,
+};
 use sui_sdk::rpc_types::StakeStatus;
 use sui_sdk::{SuiClient, SUI_COIN_TYPE};
 use sui_types::base_types::SuiAddress;
@@ -17,10 +19,11 @@ use tracing::info;
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, Coin, Currencies, Currency, SubAccountType, SubBalance,
+    Amount, Coin, CoinID, CoinIdentifier, Currencies, Currency, SubAccountType, SubBalance,
 };
 use crate::{OnlineServerContext, SuiEnv};
 use std::time::Duration;
+use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 /// Get an array of all AccountBalances for an AccountIdentifier and the BlockIdentifier
@@ -212,23 +215,57 @@ async fn get_sub_account_balances(
 }
 
 /// Get an array of all unspent coins for an AccountIdentifier and the BlockIdentifier at which the lookup was performed. .
-/// [Rosetta API Spec](https://www.rosetta-api.org/docs/AccountApi.html#accountcoins)
+/// [Rosetta API Spec](https://docs.cdp.coinbase.com/api-reference/mesh/account/get-an-account-unspent-coins)
 pub async fn coins(
     State(context): State<OnlineServerContext>,
     Extension(env): Extension<SuiEnv>,
     WithRejection(Json(request), _): WithRejection<Json<AccountCoinsRequest>, Error>,
 ) -> Result<AccountCoinsResponse, Error> {
     env.check_network_identifier(&request.network_identifier)?;
-    let coins = context
-        .client
-        .coin_read_api()
-        .get_coins_stream(
-            request.account_identifier.address,
-            Some(SUI_COIN_TYPE.to_string()),
-        )
-        .map(Coin::from)
-        .collect()
-        .await;
+
+    let mut coins = Vec::new();
+    let mut page_token = None;
+
+    loop {
+        let list_request = ListOwnedObjectsRequest {
+            owner: Some(request.account_identifier.address.to_string()),
+            object_type: Some(SUI_COIN_TYPE.to_string()),
+            page_size: Some(5000),
+            page_token,
+            read_mask: Some(FieldMask::from_paths(["object_id", "version", "balance"])),
+        };
+
+        let response = context
+            .grpc_client
+            .live_data_client()
+            .list_owned_objects(list_request)
+            .await?
+            .into_inner();
+
+        for object in response.objects {
+            if let (Some(object_id), Some(version), Some(balance)) =
+                (object.object_id, object.version, object.balance)
+            {
+                let coin = Coin {
+                    coin_identifier: CoinIdentifier {
+                        identifier: CoinID {
+                            id: ObjectID::from_hex_literal(&object_id).map_err(|e| {
+                                Error::DataError(format!("Invalid object_id: {}", e))
+                            })?,
+                            version: SequenceNumber::from(version),
+                        },
+                    },
+                    amount: Amount::new(balance as i128, None),
+                };
+                coins.push(coin);
+            }
+        }
+
+        page_token = response.next_page_token;
+        if page_token.is_none() {
+            break;
+        }
+    }
 
     Ok(AccountCoinsResponse {
         block_identifier: context.blocks().current_block_identifier().await?,
